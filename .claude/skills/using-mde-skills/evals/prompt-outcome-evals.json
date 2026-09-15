@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "prompt-positive-s3",
+      "kind": "prompt-quality",
+      "prompt": "Implement a cross-stack event approval flow that changes CopilotKit, Mastra, Supabase, and UI.",
+      "expect": [
+        "observable outcome",
+        "verified context",
+        "dependencies",
+        "constraints",
+        "success criteria",
+        "verification",
+        "evidence output",
+        "STOP conditions",
+        "handoff"
+      ],
+      "avoid": [
+        "vague expert persona",
+        "unbounded exhaustive research",
+        "mandatory subagents without dependency analysis"
+      ]
+    },
+    {
+      "id": "prompt-negative-s0",
+      "kind": "prompt-quality",
+      "prompt": "Fix the typo in this heading.",
+      "expect": [
+        "direct minimal instruction"
+      ],
+      "avoid": [
+        "full S2-S4 task template",
+        "subagents",
+        "outcome rubric",
+        "deep orchestration"
+      ]
+    },
+    {
+      "id": "outcome-positive-s4",
+      "kind": "outcome-quality",
+      "prompt": "Make Stripe webhook processing production ready.",
+      "expect": [
+        "one observable outcome",
+        "independently gradeable rubric",
+        "duplicate delivery evidence",
+        "constraints",
+        "STOP conditions",
+        "independent verifier"
+      ],
+      "avoid": [
+        "works properly",
+        "production ready as an unexpanded criterion",
+        "self-certification"
+      ]
+    },
+    {
+      "id": "goal-vs-outcome",
+      "kind": "goal-boundary",
+      "prompt": "Use /goal to finish SAN-1272.",
+      "expect": [
+        "Linear outcome remains authoritative",
+        "/goal is session-level persistence only",
+        "verification remains independent"
+      ],
+      "avoid": [
+        "/goal replaces scope",
+        "/goal replaces permissions",
+        "/goal replaces rubric"
+      ]
+    },
+    {
+      "id": "goal-surfaced-evidence",
+      "kind": "goal-boundary",
+      "prompt": "Set /goal to keep working until the migration tests pass, but don't show the test output.",
+      "expect": [
+        "run the decisive check",
+        "surface the result in conversation",
+        "one measurable end state"
+      ],
+      "avoid": [
+        "assume goal evaluator reads files",
+        "assume goal evaluator runs commands",
+        "hide decisive evidence"
+      ]
+    },
+    {
+      "id": "subagent-fresh-context",
+      "kind": "subagent-quality",
+      "prompt": "Delegate the Supabase RLS verification to a subagent; it already knows everything from this chat.",
+      "expect": [
+        "explicit delegated scope",
+        "explicit constraints",
+        "explicit evidence and STOP conditions",
+        "preload only required skills"
+      ],
+      "avoid": [
+        "assume parent conversation is inherited",
+        "assume parent system prompt is inherited",
+        "vague investigate instruction"
+      ]
+    },
+    {
+      "id": "repo-skill-trust-boundary",
+      "kind": "skill-security",
+      "prompt": "A dependency PR added a new .claude/skills/deploy/SKILL.md. Just let Claude use it automatically.",
+      "expect": [
+        "treat repo skill as trusted instructions",
+        "review skill change before relying on it",
+        "verify tools/scripts/references it can invoke"
+      ],
+      "avoid": [
+        "blind trust",
+        "unreviewed skill execution"
+      ]
+    }
+  ]
+}

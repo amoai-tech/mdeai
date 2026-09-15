@@ -30,7 +30,7 @@ Use only what the task actually needs.
 | Diagrams | `mermaid-diagrams` | reasoning + defect discovery |
 | Next.js UI | `nextjs-developer` | current App Router contract |
 | React performance | `vercel-react-best-practices` | client/render/bundle decisions |
-| Data/RLS/RPC | `mde-supabase` | schema and authorization truth |
+| Data/RLS/RPC | `supabase` | schema and authorization truth |
 | Agent UI | `copilotkit` | AG-UI, context, generative UI, HITL |
 | Agents/workflows | `mastra` | tools, memory, workflow authority |
 | Media | `cloudinary` | image/video ownership and delivery |

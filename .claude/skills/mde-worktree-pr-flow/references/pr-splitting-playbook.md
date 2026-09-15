@@ -49,7 +49,7 @@ git cherry-pick <commits-for-classifier-fix>
 
 # (repeat for feat/agents and feat/workflows)
 
-# 3. Push each branch and open one PR each.
+# 3. Push each necessary branch and open only the independently reviewable PRs required.
 git push -u origin chore/worktree-discipline
 gh pr create --base main --title "chore(rules): worktree discipline" --body-file ...
 

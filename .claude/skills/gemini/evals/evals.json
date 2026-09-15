@@ -1,0 +1,36 @@
+{
+  "skill_name": "gemini",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Switch the MDE Gemini model id used by @ai-sdk/google to a newer model.",
+      "expected_output": "Verifies current model availability and installed provider compatibility before changing the model string, then requires representative behavior tests.",
+      "files": [],
+      "expectations": [
+        "Does not trust remembered model names",
+        "Checks current official Gemini guidance/model availability",
+        "Treats the model change as a behavior change, not typecheck-only"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our Gemini structured output sometimes violates the expected schema. Diagnose the Gemini-specific path.",
+      "expected_output": "Inspects the current provider/schema/call site and validates actual runtime structured output and failure behavior.",
+      "files": [],
+      "expectations": [
+        "Checks the actual structured-output schema and provider contract",
+        "Requires runtime output validation",
+        "Preserves the existing provider boundary unless migration is in scope"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Change a Mastra workflow retry policy; Gemini configuration is unchanged.",
+      "expected_output": "Does not select Gemini as the owner.",
+      "files": [],
+      "expectations": [
+        "Does not route generic Mastra workflow logic to Gemini"
+      ]
+    }
+  ]
+}

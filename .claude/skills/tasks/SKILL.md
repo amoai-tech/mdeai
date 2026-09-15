@@ -1,11 +1,7 @@
 ---
 name: tasks
-description: >
-  Standard for creating, enriching, executing, and tracking MDE Linear SAN tasks.
-  Use for new task setup, task rewrites, legacy-to-MDE migrations, file/workflow plans,
-  progress trackers, executable Linear prompts, pre-commit quality gates, GitHub PR creation,
-  review-comment troubleshooting, and post-merge proof. Defines the task standard; it does not
-  replace task-verifier Done checks.
+description: >-
+  Use when creating, planning, executing, resuming, or completing a substantial MDE Linear SAN task.
 metadata:
   version: "2.0.0-mde.1"
 ---
@@ -28,6 +24,43 @@ task-verifier
 ```
 
 The Linear issue is the live task-specific execution runbook and progress source of truth.
+
+## Outcome + prompting contract
+
+When this task creates or materially changes a skill, also follow [`../using-mde-skills/references/skill-authoring-standard.md`](../using-mde-skills/references/skill-authoring-standard.md).
+
+For every substantial S2-S4 task, define the durable outcome and independently gradeable rubric before implementation. Use [`../using-mde-skills/references/outcome-rubric-standard.md`](../using-mde-skills/references/outcome-rubric-standard.md).
+
+Write substantial task instructions and handoffs using [`../using-mde-skills/references/prompting-standard.md`](../using-mde-skills/references/prompting-standard.md). Keep S0/S1 prompts proportionally smaller. `/goal` may extend a long-running session toward an already-defined outcome, but it never replaces Linear scope, permissions, STOP conditions, or independent verification. Because the `/goal` evaluator only sees surfaced conversation evidence, decisive test/build/runtime results must be reported explicitly.
+
+When delegation is useful, follow [`../using-mde-skills/references/subagent-standard.md`](../using-mde-skills/references/subagent-standard.md). Normal subagents do not inherit the parent system prompt or conversation context; pass all task-critical scope, constraints, evidence requirements, and STOP conditions explicitly.
+
+## Formal build orchestrator
+
+`tasks` is the build orchestrator for substantial MDE work. `using-mde-skills` only routes into this skill; it does not continue orchestrating after handoff.
+
+At task start:
+
+1. Classify complexity using `../using-mde-skills/routing.yaml`: **S0–S4**.
+2. For **S0**, do not use this orchestrator unless the user explicitly asks for a Linear task.
+3. For **S1**, keep one primary execution path and minimal supporting skills.
+4. For **S2–S4**, build a dependency-aware step graph using [orchestration-contract.md](references/orchestration-contract.md).
+5. Persist resumable state in Linear using [linear-handoff.md](references/linear-handoff.md).
+
+Use an adaptive control loop, not a fixed ceremony: **choose the next dependency-safe step → load the owning specialist → execute → observe evidence → update Linear → continue, reroute, or stop**.
+
+### Failure policy
+
+Follow the canonical policy in `../using-mde-skills/routing.yaml`:
+- transient network/rate-limit failures may retry up to the configured limit;
+- optional evidence sources may be skipped only with an explicit limitation;
+- failed decisive tests reroute to `systematic-debugging`;
+- schema/runtime, security/RLS, payment/duplicate-side-effect blockers abort the current implementation path;
+- destructive uncertainty requires user approval.
+
+### Safe parallelization
+
+Parallelize only independent steps whose dependencies are complete, which do not mutate the same source of truth, and which do not require one another's output. Discovery can often fan out; unresolved schema/API/interface chains must serialize.
 
 ## Source of truth
 
@@ -52,6 +85,7 @@ What changes: <2–4 plain-English lines>
 Real-world example: <actor → action → visible/durable result>
 Faster/better approach: <smallest safe proven path>
 Current status: <Todo / In Progress / Blocked + verified progress %>
+Complexity: <S0 / S1 / S2 / S3 / S4 + one-line reason>
 Tech stack touched: <only affected systems>
 Skills/MCPs: <only tools actually required and why>
 Production-ready when: <one observable success sentence>
@@ -84,8 +118,8 @@ Before commit, read [pre-commit.md](references/pre-commit.md), then choose the r
 For PR creation/troubleshooting, read [github-pr.md](references/github-pr.md), [review-comments.md](references/review-comments.md), [domain-routing.md](references/domain-routing.md), [research-evidence.md](references/research-evidence.md), and [github-actions.md](references/github-actions.md).
 For user-facing or AI-native workflows, read [user-journey-testing.md](references/user-journey-testing.md).
 For UI-heavy work, read [ui-review.md](references/ui-review.md).
-For every substantial task, also read `../mermaid-diagrams/SKILL.md` and use Mermaid as a reasoning/error-discovery gate, not only as presentation.
-After merge, read [post-merge.md](references/post-merge.md). Legacy `mde-task-lifecycle` and `pr-workflow` skills are compatibility aliases only; do not add them to new task skill lists.
+Load `../mermaid-diagrams/SKILL.md` only when architecture, ownership, state, sequence, dependencies, trust boundaries, or failure/recovery paths are non-trivial enough that a diagram can expose errors.
+After merge, read [post-merge.md](references/post-merge.md). `mde-task-lifecycle` is retired; `tasks` is the canonical task lifecycle.
 
 ## Explicit action vocabulary
 
@@ -120,7 +154,7 @@ If even migration batches cannot stay green independently, use an explicit integ
 - Before implementation, classify risk domains: auth/tenant, Supabase schema/migration, privileged DB function/RPC, consequential AI/HITL, external side effect/webhook, payment/publishing, production config, dependency/Action. Any high-risk domain requires Adversarial task-verifier coverage.
 - For Mastra work, also classify applicable risk domains: **agent registry/identity, model/provider, tool schema, tool authority, external side effect, RequestContext/tenant context, memory resource/thread scope, persistent storage, streaming/Stop/abort, workflow, suspend/resume, HITL approval, MCP, observability/evals, Mastra package-family change**. Tenant identity, memory ownership, consequential tools, approval/resume, callback/webhook continuation, persistent storage, cancellation, MCP auth, or package-family changes automatically require Adversarial task-verifier coverage.
 - Record verification ownership: **WHAT must be proven → task-verifier; HOW domain correctness is proven → owning domain skill; automated regression → test/CI owner.**
-- For Supabase/Postgres work, identify applicable proof classes before coding: catalog, behavioral, authorization/tenant, migration replay, performance/exposure, live read-only. Route the HOW to `mde-supabase`; never reconstruct an existing DB object from memory or task prose.
+- For Supabase/Postgres work, identify applicable proof classes before coding: catalog, behavioral, authorization/tenant, migration replay, performance/exposure, live read-only. Route the HOW to `supabase`; never reconstruct an existing DB object from memory or task prose.
 - For Mastra work, identify applicable proof classes before coding: registry/config, deterministic primitive, model behavior, authority/context, memory, persistence/restart, HITL artifact, resume/recovery, streaming/abort, side-effect idempotency, observability/evals, exact runtime. Route the HOW to `mastra`; do not let one proof class substitute for another.
 - Implement one file/group at a time; do not bulk-copy folders.
 - For legacy/reference migrations, classify mixed-responsibility files at the **symbol/behavior/invariant** level, not one blanket action per file. Pin immutable source SHAs and record current owner/source of truth, legacy risk, target, and proof for every reused behavior.
@@ -142,8 +176,8 @@ If even migration batches cannot stay green independently, use an explicit integ
 - Treat PR comments as hypotheses: classify, route to the owning domain skill/MCP, verify, then fix/reply/resolve with evidence.
 - Define affected business-critical user journeys and certify both system correctness and AI correctness when AI participates.
 - Named third-party testing/review tools are not MDE defaults unless this repository contains a pinned, reproducible setup or an explicit approved task owns the adoption decision. Explorbot is the currently selected exploratory-testing pilot; it is not a mandatory merge gate until a repository-owned path is approved.
-- Run a Mermaid reasoning pass before implementation: draw current state, target state, material boundaries, dependencies/blockers, and negative/recovery paths; use the diagram to identify missing owners, second sources of truth, auth/tenant gaps, HITL bypass, duplicate side effects, circular dependencies, unowned failures, and missing evidence.
-- For each substantive task section/file group, add the smallest diagram that exposes the relevant relationship/state/sequence or explicitly record `Diagram: N/A — no meaningful relationship/state/sequence to model`. Do not add decorative filler diagrams.
+- When architecture, state, ownership, sequence, trust boundaries, dependencies, or failure/recovery paths are materially non-trivial, use `mermaid-diagrams` before implementation to expose missing owners, duplicate side effects, auth/tenant gaps, circular dependencies, unowned failures, or missing evidence. Otherwise record `Mermaid: N/A — <reason>`.
+- Use the smallest diagram only for sections where it materially improves reasoning. Do not require a diagram per file/group and do not add decorative filler diagrams.
 - If code inspection disproves a planned diagram, update the diagram and Linear plan before coding; never force implementation to match a stale diagram.
 - Update Linear progress after every verified checkpoint.
 - If a completed checkpoint regresses, uncheck it and reduce the percentage.
@@ -171,5 +205,5 @@ A different agent must be able to resume from the Linear issue alone and know: c
 ## Core agent prompt
 
 ```text
-You are executing one substantial MDE Linear task. Read this skill, the Mermaid reasoning skill, and only the domain references applicable to the current phase. Verify current code/runtime before trusting task assumptions. Before coding, diagram current → target state, material ownership/trust boundaries, dependencies/blockers, and failure/recovery paths; use the diagrams to challenge the plan. For each substantive section/file group, add the smallest useful diagram or an explicit N/A reason. Keep the user outcome separate from the proposed implementation, use the smallest safe solution, and record evidence after each checkpoint. Use the owning domain skill/MCP for uncertain external contracts. For Mastra/legacy-reference work, classify behavior-level reuse and independent Mastra proof classes before coding. Do not speculate about files or APIs you have not inspected. Stop and update Linear when a STOP condition or diagrammed failure path invalidates the plan. Finish only when the observable Definition of Done and required post-merge proof are verified.
+You are executing one substantial MDE Linear task. Classify it S1–S4, use this skill as the build orchestrator, and load only the domain/reasoning skills needed for the current dependency-safe step. Verify current code/runtime before trusting task assumptions. For S2–S4 work, maintain explicit step inputs, outputs, dependencies, parallel-safety, and failure policy; persist the current orchestration handoff in Linear. Use Mermaid only when non-trivial architecture/state/sequence/dependencies/failure paths benefit from it. Keep the user outcome separate from the proposed implementation, use the smallest safe solution, and record evidence after each checkpoint. Stop or reroute when the canonical failure policy requires it. Finish only when the observable Definition of Done and required post-merge proof are verified.
 ```

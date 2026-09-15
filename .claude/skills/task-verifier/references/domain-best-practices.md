@@ -6,7 +6,7 @@ Only apply rows relevant to changed paths/ACs.
 
 ## Supabase / Postgres / Auth
 
-Load [`../../mde-supabase/SKILL.md`](../../mde-supabase/SKILL.md). This verifier checks **WHAT evidence exists**; `mde-supabase` owns the SQL/catalog/testing HOW.
+Load [`../../supabase/SKILL.md`](../../supabase/SKILL.md). This verifier checks **WHAT evidence exists**; `supabase` owns the SQL/catalog/testing HOW.
 
 - RLS/authorization is server-side for every tenant-owned durable object, with intended allow **and deny** role/tenant cases.
 - Grants and RLS are checked independently; function/RPC exposure is intentional and least-privilege.

@@ -1,19 +1,13 @@
 ---
 name: mermaid-diagrams
-description: >
-  Mermaid diagrams as an MDE engineering reasoning tool, not just presentation. Use on every substantial
-  Linear task and PR to model architecture, ownership, dependencies, user journeys, state, data, timing,
-  requirements, risks, blockers, and failure/recovery paths before coding and during verification. For each
-  substantive task section or file/workflow group, add the diagram that exposes the relevant relationships
-  or explicitly record `Diagram: N/A — no meaningful relationship/state/sequence to model`. Prefer the
-  smallest diagram that can reveal wrong assumptions, missing boundaries, red flags, failure points, or
-  verification gaps. Verify syntax against the installed/target Mermaid version and current official docs.
+description: >-
+  Use when architecture, ownership, state, sequence, dependencies, data flow, trust boundaries, or failure and recovery paths are difficult to understand from prose alone.
 version: "2.0.0-mde.2"
 ---
 
 # Mermaid — MDE engineering reasoning standard
 
-Mermaid is not decorative documentation. In MDE it is a **thinking, review, and defect-prevention tool**.
+Mermaid is not decorative documentation. In MDE it is a **selective thinking, review, and defect-prevention tool**. Do not load it for trivial edits where prose or the diff is clearer.
 
 Use diagrams to answer questions prose hides:
 
@@ -35,7 +29,7 @@ Mermaid's official purpose is to keep documentation closer to development using 
 
 ## Mandatory MDE diagram pass
 
-For every substantial `SAN-*` task:
+Use this skill when a substantial `SAN-*` task has non-trivial relationships, state, sequence, ownership, dependencies, trust boundaries, or failure/recovery paths:
 
 1. **Task overview:** include one diagram showing the end-to-end user/system outcome.
 2. **Architecture/ownership:** diagram every material boundary crossed by the task.

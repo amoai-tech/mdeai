@@ -1,6 +1,7 @@
 ---
 name: mde-maps
-description: "mdeai Google Maps: Places (New), ChatMap, Gemini grounding, MCP tools, keys, Mastra maps. Quick routing; legacy `google-maps` name archived (see `_archive/2026-05-14`). NOT for: Mapbox-only, pure GIS math, non-Google stacks, generic off-repo tutorials."
+description: >-
+  Use when MDE work changes or diagnoses Google Maps, Places, map state, markers, routes, location search, Maps grounding, or map-related keys.
 title: mde-maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist

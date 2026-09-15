@@ -1,6 +1,7 @@
 ---
 name: mde-vercel
-description: "Orchestrator for Vercel platform work — deploy operations (`vercel deploy`, preview/production, rolling releases, environment variables, domain config, deployment troubleshooting) and React/Next.js performance best practices from Vercel Engineering (Server Components, data fetching patterns, bundle optimization, caching, ISR, streaming, Core Web Vitals). Use when deploying to Vercel, troubleshooting a deployment, configuring envs/domains, or writing/reviewing/refactoring React/Next.js code for performance. Triggers: vercel, vercel deploy, preview deployment, production deployment, push live, vercel.ts, vercel.json, vercel env, react performance, next.js, server component, RSC, ISR, streaming, bundle size, core web vitals. Do NOT use for: non-Vercel hosting (Netlify, Cloudflare Pages) or React patterns unrelated to performance."
+description: >-
+  Use when deploying MDE to Vercel, configuring Vercel environments or domains, diagnosing Vercel deployments, or optimizing Next.js for Vercel runtime and performance.
 paths:
   - "vercel.json"
   - "vercel.ts"

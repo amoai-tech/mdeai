@@ -1,10 +1,11 @@
 ---
 name: lean-dev-flow
-description: Lean implementation loop for mdeapp (SAN-NNN) tasks. Use this skill whenever starting implementation of any Linear issue, choosing which tests to run, setting up or cleaning up a worktree, or when mde-task-lifecycle phases 3–4 feel heavy for the change at hand. Provides: the 7-step loop (read→implement→T1 test→typecheck→commit→push→PR), test-tier selection by change shape (T1 targeted ~2s / T2 domain ~5s / T3 floor ~3min), worktree bootstrap/audit/clean commands, local-vs-CI verification matrix, and structured evidence capture. ALWAYS invoke this before running `npm run floor` locally, spinning up the dev server for a backend-only change, or doing a full-suite test run after a single-file edit. Replaces the "lint-per-chunk + build-per-chunk + floor-before-commit" pattern that burns 2–3min per task cycle with no safety benefit.
+description: >-
+  Use when an active MDE implementation needs the fastest safe local feedback loop or a risk-matched test tier.
 title: lean-dev-flow — mdeapp lean implementation loop
 impact: HIGH
 impactDescription: Cuts per-task cycle overhead by eliminating floor-on-every-change, wrong test tier, stale worktrees, and silent verify-script failures
-tags: lean, mde-task-lifecycle, testing, worktree, vitest, verification, implementation, efficiency
+tags: lean, testing, vitest, verification, implementation, efficiency
 paths:
   - "mdeapp/src/**"
   - "mdeapp/e2e/**"
@@ -12,207 +13,28 @@ paths:
   - "mdeapp/workspace/**"
 ---
 
-# lean-dev-flow
+# Lean Development Flow
 
-**BLUF:** Five minutes of per-task friction accumulates to hours lost per cycle. This skill makes the inner loop as fast as it can be without dropping safety — by running the right verification at the right time instead of running everything every time.
+Use this skill only after the primary workflow (`tasks`, `systematic-debugging`, or `tdd`) has established what is being changed. Its job is to shorten feedback without weakening proof.
 
----
+## Decision rule
 
-## The 7-step lean loop
+- Tiny/local change: run the narrowest directly affected test or static check first.
+- Domain change: run affected domain tests plus type/lint checks that can catch interface breakage.
+- Cross-system, auth, payment, migration, or release-sensitive change: escalate to the broader gates defined by `testing` and `task-verifier`.
+- Do not run the full floor after every edit when a cheaper deterministic probe can disprove the change faster.
 
-Every task, every time. No detours.
+## Boundaries
 
-```
-1. READ       — Read only the files you will change + their existing test files
-2. IMPLEMENT  — Make the targeted change
-3. T1 TEST    — npm test -- --run src/path/to/file.test.ts  (~2s)
-4. TYPECHECK  — npx tsc --noEmit  (~5s, catches import drift)
-5. COMMIT     — git add <specific files> && git commit  (never git add -A)
-6. PUSH       — git push
-7. PR         — gh pr create
-```
+`tasks` owns the Linear execution lifecycle. `tdd` owns RED → GREEN → REFACTOR. `testing` owns test selection and execution details. `mde-worktree-pr-flow` owns Git/PR hygiene. `task-verifier` owns final independent certification.
 
-CI runs lint + build + full test suite. You don't need to reproduce CI locally — you need to be *confident* before pushing, which targeted tests + typecheck achieves faster and more reliably than floor.
+## Fast loop
 
----
+1. Inspect the exact changed boundary.
+2. Run the cheapest relevant failing/passing probe.
+3. Make one bounded change.
+4. Re-run that probe.
+5. Expand to domain tests if the boundary changed.
+6. Hand off to `testing` before commit/merge according to task risk.
 
-## Test tier selection
-
-**Pick the lowest tier that proves the claim.** Moving up a tier costs 2–3 extra minutes.
-
-| Tier | Command | When | Time |
-|------|---------|------|------|
-| **T1 — Targeted** | `npm test -- --run src/path/to/file.test.ts` | Single file changed | ~2s |
-| **T2 — Domain** | `npm test -- --run src/mastra/` (or `src/lib/`, `src/hooks/`) | Domain-wide impact (shared hook, Zod schema, concierge agent) | ~5s |
-| **T3 — Floor** | `npm run floor` | PR open time — once, not per commit | ~3min |
-
-**Tier decision rules:**
-
-| Change | Tier |
-|--------|------|
-| Added/edited a single test file | T1 (just that file) |
-| Changed a utility used in one place | T1 |
-| Changed a hook used by multiple components | T2 (`src/hooks/`) |
-| Changed concierge Zod schema | T2 (`src/mastra/`) |
-| Changed a shared lib (`src/lib/`) | T2 |
-| Changed a Next.js page or layout | T1 + Playwright smoke |
-| PR ready to open | T3 — one run, then CI takes over |
-| Docs/config only change | No test run needed |
-
-Full decision tree with edge cases → [references/test-tiers.md](references/test-tiers.md)
-
----
-
-## Verification matrix — what runs where
-
-Never reproduce what CI already owns.
-
-| Check | Pre-commit | Pre-push | CI (floor.yml) | Before Done |
-|-------|:---:|:---:|:---:|:---:|
-| T1 targeted vitest | ✅ | ✅ | — | — |
-| T2 domain vitest | — | ✅ if domain touched | — | — |
-| `tsc --noEmit` | — | ✅ | ✅ | — |
-| ESLint | — | — | ✅ | — |
-| `next build` | — | — | ✅ | — |
-| Full vitest suite | — | — | ✅ | — |
-| `npm audit` | — | — | ✅ | — |
-| `verify:console:boot` | — | — | — | ✅ UI changes |
-| `smoke:golden-queries` | — | — | — | ✅ AI path changes |
-| Playwright P0 smoke | — | — | — | ✅ user journey changes |
-| Prod synthetic smoke | — | — | Nightly | Release |
-
-**Server-dependent verify scripts** (`verify:console`, `verify:grounding`, `verify:rental-pins`, etc.) require `localhost:3001`. Before running any of them, confirm the server is alive:
-```bash
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/
-```
-If not 200, restart with `npm run dev:ui` first, then wait for "Ready in".
-
-Full matrix with rationale → [references/verification-matrix.md](references/verification-matrix.md)
-
----
-
-## What to skip
-
-Eliminating these patterns is the highest-ROI part of this skill.
-
-| Pattern | Cost | Replace with |
-|---------|------|-------------|
-| `npm run floor` before every commit | 3min/commit; CI does this | T1 before commit, T3 at PR time only |
-| `npm run lint` per chunk during coding | ~30s/run; CI catches it | Skip locally; fix when CI flags |
-| `npm run build` for a lib/hook change | 90s for a type question | `tsc --noEmit` (5s) |
-| Reading CLAUDE.md/sitemap.md every task | Context load waste | Read once; reference the specific section |
-| `git status` after every edit | Noise | Only before `git add` |
-| Re-reading a file after editing | Edit tool confirmed success | Don't re-read |
-| Starting dev server for backend-only change | 30s boot waste | Server needed only for UI/verify:* |
-| `git add -A` | Risks staging .env, WIP files | Always `git add <specific files>` |
-| Running full E2E for a non-UI change | 3–8min; nothing to prove | Skip; Playwright is for user journeys |
-
----
-
-## Worktree bootstrap
-
-Every branch gets an isolated worktree. Use `workspace/wt-san-NNN-slug/` — never work in the main worktree on a feature branch.
-
-```bash
-# Start a new task — creates branch + worktree from origin/main
-bash mdeapp/scripts/wt-new.sh <SAN-NNN> <slug>
-# Example: bash mdeapp/scripts/wt-new.sh 500 event-filter-ui
-# Creates: mdeapp/workspace/wt-san-500-event-filter-ui/
-# Branch:  ai/san-500-event-filter-ui
-
-# Audit all worktrees (shows stale/merged/dirty/unknown)
-bash mdeapp/scripts/wt-audit.sh
-
-# Remove merged/closed worktrees (interactive, confirms each)
-bash mdeapp/scripts/wt-clean.sh --stale
-```
-
-Canonical worktree root: `mdeapp/workspace/wt-san-NNN-slug/`
-
-**If the scripts don't exist yet** (check with `ls mdeapp/scripts/wt-new.sh`):
-1. Read [references/worktree-ops.md](references/worktree-ops.md) for the full 20-line script bodies.
-2. Create them: `bash mdeapp/scripts/wt-new.sh` takes ~2 min to write once.
-3. Until they exist, fall back to git directly:
-```bash
-git -C /home/sk/mdeai/mdeapp fetch origin main --quiet
-git -C /home/sk/mdeai/mdeapp worktree add workspace/wt-san-NNN-slug -b ai/san-NNN-slug origin/main
-```
-
----
-
-## Evidence capture
-
-Before flipping any task to Done, capture runtime-verified evidence. "I reviewed the code" is not evidence.
-
-**For test-only changes:**
-```bash
-npm test -- --run src/path/to/file.test.ts 2>&1 | grep -E "Tests|passed|failed"
-# Paste the "Tests N passed (N)" line into the task .md
-```
-
-**For UI/server changes:**
-```bash
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/  # confirm 200
-npm run verify:console:boot
-```
-
-**For API/agent path changes:**
-```bash
-npm run smoke:golden-queries
-```
-
-Evidence format for task `.md` (append to `## Verification` section):
-```markdown
-## Evidence — SAN-NNN
-- [x] Tests: N passed (`src/path/file.test.ts`, sha <abbrev>)
-- [x] GET /: HTTP 200 @ localhost:3001
-- [x] POST /api/copilotkit: HTTP 200
-- [x] [relevant smoke output line]
-```
-
-Structured evidence script template → [references/evidence-template.md](references/evidence-template.md)
-
----
-
-## Recommended package.json additions
-
-Add these to `mdeapp/package.json` `scripts`:
-
-```json
-"check":          "npm run typecheck && npm test -- --run",
-"floor:fast":     "concurrently --kill-others-on-fail 'npm run lint' 'npm run typecheck' 'npm test -- --run' && npm run build && npm run audit",
-"test:mastra":    "vitest run src/mastra/",
-"test:lib":       "vitest run src/lib/",
-"test:hooks":     "vitest run src/hooks/",
-"test:api":       "vitest run src/app/api/",
-"test:e2e:smoke": "npm run test:e2e:p0-focused"
-```
-
-`npm run check` = typecheck + full test suite, no build (~15s). Default for 80% of changes.
-`npm run floor:fast` = parallel lint+typecheck+tests, then serial build+audit (~45s vs ~3min sequential).
-
----
-
-## Integration with mde-task-lifecycle
-
-This skill operates inside phases 3 and 4. The lifecycle owns everything else.
-
-| Phase | mde-task-lifecycle owns | lean-dev-flow adds |
-|-------|------------------------|-------------------|
-| Phase 3 — Implement | Entry criteria, wiring plan, read-before-edit rule | 7-step loop replaces lint-per-chunk + build-per-chunk |
-| Phase 4 — Test | Which test types apply, failure triage, smoke steps | Tier selection (T1/T2/T3), local-vs-CI matrix |
-| Phase 5 — Ship | Bookkeeping, changelog, PR | Structured evidence format before Done flip |
-
----
-
-## Routing
-
-| Need | Route to |
-|------|----------|
-| Full task lifecycle (plan → research → ship) | `mde-task-lifecycle` |
-| Worktree/PR discipline and forensic cleanup | `mde-worktree-pr-flow` |
-| Vitest patterns (mocks, fixtures, RTL) | `vitest` skill |
-| Playwright setup, selectors, network mocking | `playwright-cli` skill |
-| Pre-ship gate full checklist | `/deploy-check` |
-| Debugging a failing test or build error | `systematic-debugging` |
-| Supabase migration safety | `mde-supabase` |
+Never trade correctness, security, tenant isolation, idempotency, or approval integrity for speed.

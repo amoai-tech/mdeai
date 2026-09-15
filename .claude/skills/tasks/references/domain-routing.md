@@ -4,7 +4,7 @@ Use the domain that owns the questioned behavior. Load the skill before changing
 
 | Finding / changed area | Skill | Strongest practical evidence |
 | -- | -- | -- |
-| Supabase/Postgres/RLS/RPC/tenant | `mde-supabase` | live read-only Supabase MCP + migrations + policies/indexes |
+| Supabase/Postgres/RLS/RPC/tenant | `supabase` | live read-only Supabase MCP + migrations + policies/indexes |
 | CopilotKit / AG-UI / interrupts / threads | `copilotkit` | installed package source/types + official docs/GitHub |
 | Mastra agents/tools/workflows/memory | `mastra` | current `src/mastra` + installed package source/types + official docs/GitHub |
 | Cloudinary media/upload/transforms | `cloudinary` | Cloudinary MCP/SDK + official docs + current MDE media ownership |
@@ -19,7 +19,7 @@ Use the domain that owns the questioned behavior. Load the skill before changing
 A finding can legitimately span two rows above — for example a Mastra tool that itself performs a Supabase write, or a CopilotKit event that carries tenant-scoped data. When it does:
 
 1. Load every domain skill the finding touches, not just the first match.
-2. The domain that owns the **final write or authorization boundary** decides the verdict. A Mastra tool that writes to Supabase is judged by `mde-supabase`'s authorization/RLS evidence, even though `mastra` owns the tool's routing/invocation correctness.
+2. The domain that owns the **final write or authorization boundary** decides the verdict. A Mastra tool that writes to Supabase is judged by `supabase`'s authorization/RLS evidence, even though `mastra` owns the tool's routing/invocation correctness.
 3. Record both domains' evidence in the finding, and name which one was decisive and why — do not silently pick one skill's answer and drop the other's relevant evidence.
 
 ## Domain investigation sequence

@@ -1,6 +1,7 @@
 ---
 name: mde-real-estate
-description: "Orchestrator for real-estate work on mdeai.co — V1 marketplace product, V2 MLS technical playbook, industry context, plus 3 specialized sub-agents (lead qualifier, neighborhood guide, property description). Use when building real-estate features, writing listings, qualifying leads, generating neighborhood guides, or making product/architectural decisions for the real-estate vertical. Triggers: real estate, MLS, listing, property, broker, agent, neighborhood guide, lead qualification, property description, mdeai real estate. Do NOT use for: short-term rental flows that live in `mde-task-lifecycle` or generic CRM tasks."
+description: >-
+  Use when MDE work changes real-estate or rental discovery, listings, leads, broker or host flows, neighborhood intelligence, viewing, or property-domain behavior.
 paths:
   - "src/**/*apartment*"
   - "src/**/*listing*"

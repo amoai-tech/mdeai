@@ -1,6 +1,7 @@
 ---
 name: wireframe
-description: Use when planning, auditing, redesigning, or specifying implementation-ready MDE screens, user journeys, wireframes, prototypes, Figma handoffs, Mermaid flows, responsive layouts, or AI/HITL interactions before implementation.
+description: >-
+  Use when an MDE screen, responsive flow, user journey, AI/HITL interaction, or implementation-ready UI contract needs to be planned or redesigned before coding.
 metadata:
   priority: 6
   pathPatterns:
@@ -65,7 +66,7 @@ Use this skill for:
 - Converting requirements into wireframe + component/data/state contracts.
 - Preparing a screen for Figma, implementation, Linear, or Playwright verification.
 
-Do not use it as a replacement for `tasks`, `nextjs-developer`, `copilotkit`, `mastra`, `mde-supabase`, `cloudinary`, or `task-verifier`. Route to those skills when implementation reaches their layer. `design-to-production` is intentionally not part of current MDE AI; do not reference it as an available skill.
+Do not use it as a replacement for `tasks`, `nextjs-developer`, `copilotkit`, `mastra`, `supabase`, `cloudinary`, or `task-verifier`. Route to those skills when implementation reaches their layer. `design-to-production` is intentionally not part of current MDE AI; do not reference it as an available skill.
 
 
 ## Tech stack and tool routing
@@ -217,7 +218,7 @@ Route implementation to the relevant skills only when needed:
 - `tasks` — canonical implementation, PR, CI, and post-merge workflow.
 - `nextjs-developer` — routes, App Router, server/client boundaries.
 - `vercel-react-best-practices` — React performance.
-- `mde-supabase` — tables, views, RPCs, RLS, types.
+- `supabase` — tables, views, RPCs, RLS, types.
 - `copilotkit` — agent UI, generative UI, context, approvals.
 - `mastra` — agents, tools, workflows, memory.
 - `task-verifier` — final Done gate.

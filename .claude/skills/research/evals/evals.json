@@ -1,0 +1,17 @@
+{
+  "skill_name": "research",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Research whether our installed Mastra version supports the workflow behavior we need.",
+      "expected_output": "Inspect installed/current MDE state first, then primary version-specific sources and decision implications.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Compare three APIs for event discovery and tell me which MDE should use.",
+      "expected_output": "Use primary current sources, compare relevant dimensions, distinguish facts/inference, and recommend a choice.",
+      "files": []
+    }
+  ]
+}

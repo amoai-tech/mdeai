@@ -1,0 +1,26 @@
+vendor: CopilotKit
+repository: https://github.com/CopilotKit/CopilotKit
+source_path: skills
+reviewed_commit: 8a7446186cd3e0d368ec885e61c5913f0918ef5d
+reviewed_at: 2026-09-15
+policy:
+  active_skill: copilotkit
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+sources:
+  core:
+    path: skills/copilotkit/SKILL.md
+    local: references/official/copilotkit/SKILL.md
+    sha256: 8f910089af420640f5863506963f1aaf54314b5316b36d24789680bc680e14b1
+  cli:
+    path: skills/copilotkit-cli/SKILL.md
+    local: references/official/copilotkit-cli/SKILL.md
+    sha256: 3a3708ff10e185c589c6d65b1be6c339268b3a2f5d6ed760bd66fd3138713fc9
+optional_upstream_skills:
+  - channels-setup
+  - copilotkit-channels
+  - inspector-docs
+  - inspector-workbench
+  - intelligence-docs
+  - setup-slack-channel

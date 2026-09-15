@@ -1,6 +1,6 @@
 ---
 title: RAG — PgVector storage
-description: Load when storing Mastra embeddings in Postgres/PgVector or Supabase vector tables. Verify against mde-supabase for RLS.
+description: Load when storing Mastra embeddings in Postgres/PgVector or Supabase vector tables. Verify against supabase for RLS.
 parent: mastra
 impact: MEDIUM
 impactDescription: PgVector store configuration

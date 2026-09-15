@@ -1,74 +1,53 @@
 ---
-name: mde-EXAMPLE
+name: example-skill
+description: >-
+  Use when a concrete set of trigger conditions for this skill applies.
 disable-model-invocation: true
-description: TEMPLATE — not a real skill. Copy this folder to `.claude/skills/mde-<domain>/` and remove `disable-model-invocation`. One-line WHAT + WHEN + at least 6 trigger phrases users would actually say. Trigger when the user says "phrase A", "phrase B", "phrase C", "phrase D", "phrase E", or "phrase F". Does NOT handle <out-of-scope topic 1> (use <other-skill>) or <out-of-scope topic 2> (use <other-skill>). Replaces the legacy skills <list>.
 ---
 
-# mde-EXAMPLE — superskill template
+# Example skill template
 
-> Copy this folder to `.claude/skills/mde-<domain>/` and fill in the four sections below. Keep this file ≤300 lines (PDF best practice: SKILL.md under 5,000 words). Move deep how-to to `references/`.
+> Copy this folder to `.claude/skills/<skill-name>/`. Keep the active `SKILL.md` concise and move deep material to `references/`.
 
----
+## Ownership
 
-## When to invoke
+State the exact responsibility this skill owns and the neighboring concerns it does not own.
 
-| Trigger phrase | Action |
-|----------------|--------|
-| "<obvious phrase 1>" | Route to `<topic-1>.md` |
-| "<obvious phrase 2>" | Route to `<topic-2>.md` |
-| "<paraphrased phrase>" | Route via decision tree below |
+## Source priority
 
-### Don't invoke for
+1. Current runtime/repository evidence.
+2. Version-matched official source or docs.
+3. MDE-specific invariants.
+4. Historical/reference material.
 
-- <Anti-trigger 1> → `<sibling-skill>`
-- <Anti-trigger 2> → `<sibling-skill>`
+## When to use
 
----
+List concrete symptoms, intents, technologies, and situations that make this skill relevant.
+Keep workflow instructions out of the frontmatter description.
 
-## Sub-modules at a glance
+## Boundaries
 
-| Module | Purpose | Specialist used |
-|--------|---------|-----------------|
-| [topic-1.md](topic-1.md) | <one line> | (none) |
-| [topic-2.md](topic-2.md) | <one line> | <other-skill> |
-| [topic-3.md](topic-3.md) | <one line> | (none) |
+Explain important exclusions and route them to the correct neighboring skill when useful.
+## Decision rules
 
----
+Put the reusable judgment here. Use imperative instructions and explain why important constraints exist.
+Keep volatile API details out of the main skill when they can be looked up or isolated in references.
 
-## Routing decision tree
+## Workflow
 
-```
-User intent
-  │
-  ├─ <decision 1>?
-  │   ├─ Yes → topic-1.md
-  │   └─ No  → continue
-  │
-  ├─ <decision 2>?
-  │   ├─ Yes → topic-2.md
-  │   └─ No  → topic-3.md
-```
+1. Inspect the current state before changing anything.
+2. Load only the reference needed for the current variant/problem.
+3. Make the smallest safe change consistent with the owning contract.
+4. Verify the affected behavior with objective evidence.
+5. Hand off to independent review/verification when risk requires it.
 
----
+## References
 
-## Quick links
+- `references/<topic>.md` — explain exactly when to read it.
+- `scripts/<helper>` — use for deterministic/repetitive checks.
+- `assets/<asset>` — use only when producing the related output.
 
-| Resource | Path |
-|----------|------|
-| Module 1 | [topic-1.md](topic-1.md) |
-| Module 2 | [topic-2.md](topic-2.md) |
-| Module 3 | [topic-3.md](topic-3.md) |
-| Deep reference | [references/<topic>.md](references/<topic>.md) |
+## Evaluation
 
----
-
-## Author checklist (delete before commit)
-
-- [ ] `name:` is kebab-case, ≤64 chars, no `claude` / `anthropic`
-- [ ] `description:` ≤1024 chars, includes WHAT + WHEN + 6+ trigger phrases + negative triggers
-- [ ] SKILL.md body ≤300 lines (1k–1.5k tokens loaded when triggered)
-- [ ] All deep how-to moved to `references/<topic>.md`
-- [ ] No `README.md` inside this folder (forbidden by spec)
-- [ ] PDF p.15 trigger test: 3 obvious + 3 paraphrased fire; 3 unrelated do NOT fire
-- [ ] Each sub-module has clear entry/exit and routes back to SKILL.md or onward
-- [ ] Originals soft-deprecated (`DEPRECATED <date> — superseded by mde-<domain>`) and `disable-model-invocation: true`
+Keep trigger evals separate from behavior evals.
+For material rewrites, compare the candidate against a no-skill or previous-skill baseline when the behavior is objectively testable.

@@ -26,7 +26,7 @@
 | **Detection guard** | `scripts/guard-worktree-context.sh` + Step 0 | Block nested worktree; `--allow-linked` = use current tree |
 | **Preflight integration** | `verify-clean.sh` calls gitignore guard | Cannot start "clean" work with leak paths |
 | **Weekly tidy** | `scripts/tidy-worktrees.sh` | `fetch --prune`, `worktree prune`, `remote prune origin` |
-| **Slice discipline** | `tasks/commit/june-4/COMMIT-PLAN.md` | Docs vs `mdeapp/` vs plan move — one PR per slice |
+| **Slice discipline** | `tasks/commit/june-4/COMMIT-PLAN.md` | Split only where docs/code/plan changes are independently reviewable or independently shippable; otherwise keep one outcome together |
 
 ---
 

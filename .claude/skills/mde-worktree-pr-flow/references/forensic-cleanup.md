@@ -73,7 +73,7 @@ No `git clean`, `git reset --hard`, `git worktree remove`, `git branch -D`, or `
 
 ## Phase 4 — PR split order (mdeai MVP)
 
-Ship **one PR per row** — see merge gate in `SKILL.md`.
+Ship the **fewest independently reviewable PRs**; combine rows that belong to one outcome and split only on real boundaries — see the merge gate in `SKILL.md`.
 
 | Order | PR | Why |
 |-------|-----|-----|
@@ -84,7 +84,7 @@ Ship **one PR per row** — see merge gate in `SKILL.md`.
 | 5 | Cursor evidence hooks | Tooling only |
 | 6 | Docs / worktree cleanup | Lowest prod impact |
 
-One PR = one intent. Never combine rows 1–3 in a single merge.
+One PR should remain reviewably coherent. Combine rows only when they implement one outcome; separate unrelated or independently risky/revertible intents.
 
 ## Phase 5 — Worktree removal gate
 

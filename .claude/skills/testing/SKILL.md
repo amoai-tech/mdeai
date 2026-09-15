@@ -1,6 +1,7 @@
 ---
 name: testing
-description: "mdeai testing: Vitest, Playwright, browser MCP, smoke, CI, evals. Use routing table. NOT for: TDD-only workflow (test-driven-development), MCP server failures (troubleshooting), dedicated load-test design."
+description: >-
+  Use when selecting, running, troubleshooting, or interpreting MDE Vitest, Playwright, smoke, CI, eval, or production tests.
 title: Testing — mdeai.co toolchain + Claude-assisted layers
 impact: HIGH
 impactDescription: Vitest/Playwright/MCP recipes + generic layers + evals
@@ -19,7 +20,7 @@ paths:
 
 ## When NOT to use
 
-- **Pure TDD discipline** as the only goal → **`test-driven-development`** skill
+- **Pure TDD discipline** as the only goal → **`tdd`** skill
 - **Chrome DevTools MCP won’t connect** → **`troubleshooting`** skill
 - **Load / soak testing** as the primary ask (no mdeai harness yet)—keep scope to shipped gates in CLAUDE.md
 
@@ -73,7 +74,7 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 | Stripe Link checkout end-to-end | Claude in Chrome | `mde-stripe`, `create-payment-credential` |
 | Shopify cart → checkout smoke | Claude in Chrome | `mde-stripe` (plus `mdeai-commerce.md`) |
 | AI-proposal card four-state visual verify | Claude Preview MCP | `testing` → [preview-mcp.md](preview-mcp.md) |
-| RLS / 403 debugging during a UI flow | chrome-devtools-mcp (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `mde-supabase`, `systematic-debugging` |
+| RLS / 403 debugging during a UI flow | chrome-devtools-mcp (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
 | Console-error sweep before commit | chrome-devtools-cli inside `/ship` step 3 | `testing` (this skill) |
 
 ---
@@ -91,9 +92,9 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 
 | User need | Open |
 |-----------|------|
-| Task lifecycle Phase 4 routing | [mde-task-lifecycle/testing.md](../mde-task-lifecycle/testing.md) |
-| TDD discipline (red/green/refactor) | **test-driven-development** skill |
-| Ship checklist + deploy gates | **mde-task-lifecycle** + `/deploy-check` command |
+| Task lifecycle Phase 4 routing | `tasks` + this testing skill |
+| TDD discipline (red/green/refactor) | **tdd** skill |
+| Ship checklist + deploy gates | `tasks` + `task-verifier` + current deploy/runtime checks |
 
 ---
 
@@ -104,7 +105,7 @@ Goal
  ├─ Only choosing framework / layer / CI shape for a greenfield app → testing-layers.md
  ├─ External guides + subagent checklist → resource-hub.md
  ├─ This repo (Vitest, Playwright, Preview MCP, npm scripts) → vitest.md / playwright.md / preview-mcp.md
- └─ Ship checklist + deploy gates → mde-task-lifecycle + /deploy-check
+ └─ Ship checklist + deploy gates → tasks + task-verifier + current deploy/runtime checks
 ```
 
 ---

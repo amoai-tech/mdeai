@@ -1,0 +1,17 @@
+vendor: Supabase
+repository: https://github.com/supabase/agent-skills
+source_path: skills
+reviewed_commit: 8331f910845103c08d51f6ca1d86ebb7d1f745e3
+reviewed_at: 2026-09-15
+policy:
+  active_skill: supabase
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+sources:
+  supabase:
+    local: references/official/supabase
+  postgres_best_practices:
+    local: references/official/supabase-postgres-best-practices
+combined_tree_sha256: 2ff8ccd710c90644c4d9a34848c1ee980a387be73e0dbce9992f6e45ef0ae212
+hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)

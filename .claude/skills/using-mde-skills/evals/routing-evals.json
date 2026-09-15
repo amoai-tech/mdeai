@@ -1,0 +1,431 @@
+{
+  "version": 2,
+  "cases": [
+    {
+      "id": "task-implement",
+      "prompt": "Implement SAN-1264 Stripe Connect payout end to end and update Linear as you go.",
+      "primary": "tasks",
+      "supporting": [
+        "tdd",
+        "testing"
+      ],
+      "avoid": [
+        "systematic-debugging"
+      ],
+      "complexity": "S3"
+    },
+    {
+      "id": "task-resume",
+      "prompt": "Continue SAN-1208 from its current handoff and finish the remaining implementation checkpoints.",
+      "primary": "tasks",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "task-verifier"
+      ],
+      "complexity": "S2"
+    },
+    {
+      "id": "debug-flaky",
+      "prompt": "This Playwright flow passes locally but fails randomly in CI. Find the root cause before changing code.",
+      "primary": "systematic-debugging",
+      "supporting": [
+        "testing",
+        "playwright-cli"
+      ],
+      "avoid": [
+        "tasks"
+      ],
+      "complexity": "S2"
+    },
+    {
+      "id": "debug-runtime",
+      "prompt": "The CopilotKit request suddenly returns 500 after yesterday\u2019s change. Diagnose it.",
+      "primary": "systematic-debugging",
+      "supporting": [
+        "copilotkit"
+      ],
+      "avoid": [
+        "code-review"
+      ],
+      "complexity": "S2"
+    },
+    {
+      "id": "skill-create",
+      "prompt": "Create a reusable Claude skill for Stripe webhook incident response and make sure its triggers are reliable.",
+      "primary": "writing-skills",
+      "supporting": [
+        "using-mde-skills"
+      ],
+      "avoid": [
+        "tasks"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "review-pr",
+      "prompt": "Review PR #204 against the Linear acceptance criteria and current repo standards.",
+      "primary": "code-review",
+      "supporting": [],
+      "avoid": [
+        "task-verifier"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "verify-done",
+      "prompt": "Is SAN-1264 actually production ready and safe to mark Done? Prove it from current evidence.",
+      "primary": "task-verifier",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "code-review"
+      ],
+      "complexity": "S4"
+    },
+    {
+      "id": "tdd-regression",
+      "prompt": "Fix the duplicate webhook bug test-first so the regression can never come back.",
+      "primary": "tdd",
+      "supporting": [
+        "systematic-debugging",
+        "testing"
+      ],
+      "avoid": [
+        "code-review"
+      ],
+      "complexity": "S4"
+    },
+    {
+      "id": "testing-only",
+      "prompt": "Which Vitest and Playwright checks should I run for this already-implemented rental filter change?",
+      "primary": "testing",
+      "supporting": [],
+      "avoid": [
+        "tdd"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "lean-loop",
+      "prompt": "The change is one parser file and one unit test. What is the fastest safe local feedback loop before I continue?",
+      "primary": "lean-dev-flow",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "task-verifier"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "worktree",
+      "prompt": "Create a clean worktree for this focused SAN task and tell me whether we need one PR or a split.",
+      "primary": "mde-worktree-pr-flow",
+      "supporting": [
+        "tasks"
+      ],
+      "avoid": [
+        "lean-dev-flow"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "research-api",
+      "prompt": "Verify from current official docs whether this Mastra workflow API supports durable resume in our installed version.",
+      "primary": "research",
+      "supporting": [
+        "mastra"
+      ],
+      "avoid": [
+        "tasks"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "domain-model",
+      "prompt": "We use booking, reservation, proposal, and booking_request inconsistently. Define the domain boundaries before we change schema.",
+      "primary": "domain-modeling",
+      "supporting": [
+        "supabase"
+      ],
+      "avoid": [
+        "codebase-design"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "module-design",
+      "prompt": "Should the booking orchestration live behind one deep module or remain split across these three adapters?",
+      "primary": "codebase-design",
+      "supporting": [
+        "domain-modeling"
+      ],
+      "avoid": [
+        "wireframe"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "wireframe",
+      "prompt": "Design the mobile event checkout flow including loading, empty, error, approval, and success states before coding.",
+      "primary": "wireframe",
+      "supporting": [
+        "mermaid-diagrams"
+      ],
+      "avoid": [
+        "codebase-design"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "mermaid",
+      "prompt": "Map the auth, approval, webhook, and retry sequence so we can see where duplicate writes can occur.",
+      "primary": "mermaid-diagrams",
+      "supporting": [],
+      "avoid": [
+        "wireframe"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "playwright",
+      "prompt": "Open the local app, reproduce the mobile map bug in a browser, capture screenshots, and inspect the failing journey.",
+      "primary": "playwright-cli",
+      "supporting": [
+        "systematic-debugging"
+      ],
+      "avoid": [
+        "testing"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "mastra",
+      "prompt": "Update the concierge Mastra workflow suspend/resume behavior and memory wiring.",
+      "primary": "mastra",
+      "supporting": [
+        "tdd"
+      ],
+      "avoid": [
+        "research"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "supabase",
+      "prompt": "Add an RLS policy and migration for event booking requests and verify deny cases.",
+      "primary": "supabase",
+      "supporting": [
+        "tdd",
+        "testing"
+      ],
+      "avoid": [
+        "mde-vercel"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "maps",
+      "prompt": "Fix map marker selection and Places detail enrichment for restaurant results.",
+      "primary": "mde-maps",
+      "supporting": [
+        "tdd",
+        "testing"
+      ],
+      "avoid": [
+        "mde-vercel"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "real-estate",
+      "prompt": "Change rental lead qualification and schedule-viewing behavior for brokers.",
+      "primary": "mde-real-estate",
+      "supporting": [
+        "supabase"
+      ],
+      "avoid": [
+        "mde-maps"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "vercel",
+      "prompt": "The Vercel production deployment fails during build and the preview works locally. Diagnose the Vercel-specific issue.",
+      "primary": "mde-vercel",
+      "supporting": [
+        "systematic-debugging"
+      ],
+      "avoid": [
+        "codebase-design"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "router-ambiguous",
+      "prompt": "This SAN task changes a Supabase RPC, Mastra tool, and a mobile approval screen. Which skills should we use and in what order?",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tasks",
+        "supabase",
+        "mastra",
+        "wireframe"
+      ],
+      "avoid": [
+        "mde-task-lifecycle"
+      ],
+      "complexity": "S2"
+    },
+    {
+      "id": "router-multi",
+      "prompt": "I need research, implementation, review, and production proof for a new payment workflow. Route the work without loading every skill at once.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "research",
+        "tasks",
+        "code-review",
+        "task-verifier"
+      ],
+      "avoid": [
+        "mde-task-lifecycle"
+      ],
+      "complexity": "S3"
+    },
+    {
+      "id": "complexity-s0",
+      "prompt": "Fix the typo in this already-known docs heading only.",
+      "primary": "using-mde-skills",
+      "supporting": [],
+      "avoid": [
+        "tasks",
+        "task-verifier"
+      ],
+      "complexity": "S0",
+      "expected_behavior": "route direct; no orchestration"
+    },
+    {
+      "id": "complexity-s1",
+      "prompt": "Change one known parser condition and run its targeted unit test.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tdd",
+        "testing"
+      ],
+      "avoid": [
+        "task-verifier"
+      ],
+      "complexity": "S1",
+      "expected_behavior": "single focused path"
+    },
+    {
+      "id": "complexity-s2",
+      "prompt": "Add a Supabase-backed form using an existing API contract and update its UI states.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tasks",
+        "supabase",
+        "wireframe",
+        "testing"
+      ],
+      "avoid": [],
+      "complexity": "S2",
+      "expected_behavior": "build orchestrator plus specialists"
+    },
+    {
+      "id": "complexity-s3",
+      "prompt": "Create a new booking workflow spanning schema, Mastra tool, approval UI, and persistence.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tasks",
+        "supabase",
+        "mastra",
+        "wireframe",
+        "testing"
+      ],
+      "avoid": [],
+      "complexity": "S3",
+      "expected_behavior": "dependency-aware orchestration"
+    },
+    {
+      "id": "complexity-s4",
+      "prompt": "Change payment webhook idempotency and RLS in production-critical booking flow.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tasks",
+        "supabase",
+        "systematic-debugging",
+        "task-verifier"
+      ],
+      "avoid": [],
+      "complexity": "S4",
+      "expected_behavior": "adversarial orchestration with hard stop conditions"
+    },
+    {
+      "id": "parallel-safe",
+      "prompt": "Research current Mastra resume docs and inspect the existing Supabase schema before planning the integration.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "research",
+        "mastra",
+        "supabase"
+      ],
+      "avoid": [],
+      "complexity": "S2",
+      "expected_behavior": "independent discovery may run in parallel"
+    },
+    {
+      "id": "parallel-unsafe",
+      "prompt": "Write the new migration, generated contract, API implementation, and UI against a schema we have not finalized yet.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "tasks",
+        "supabase"
+      ],
+      "avoid": [],
+      "complexity": "S3",
+      "expected_behavior": "serialize schema before dependent outputs"
+    },
+    {
+      "id": "failure-reroute",
+      "prompt": "Implementation is underway but the decisive integration test now fails unexpectedly.",
+      "primary": "using-mde-skills",
+      "supporting": [
+        "systematic-debugging",
+        "testing"
+      ],
+      "avoid": [
+        "task-verifier"
+      ],
+      "complexity": "S2",
+      "expected_behavior": "reroute to debugging before more implementation"
+    },
+    {
+      "id": "copilotkit-runtime-contract",
+      "prompt": "The CopilotKit v2 tool executes but its generative UI card does not render; inspect the frontend runtime and AG-UI action mapping.",
+      "primary": "copilotkit",
+      "supporting": [
+        "systematic-debugging"
+      ],
+      "avoid": [
+        "mastra"
+      ],
+      "complexity": "S1"
+    },
+    {
+      "id": "gemini-model-contract",
+      "prompt": "Change the Gemini model/provider used for structured output and verify the exact model and provider contract before coding.",
+      "primary": "gemini",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "mastra"
+      ],
+      "complexity": "S1",
+      "expected_behavior": "verify current official Gemini model/provider guidance and installed MDE provider before editing"
+    }
+  ]
+}

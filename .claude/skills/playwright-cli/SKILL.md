@@ -1,6 +1,7 @@
 ---
 name: playwright-cli
-description: Automate browser interactions, test web pages and work with Playwright tests.
+description: >-
+  Use when an MDE task requires interactive browser automation, Playwright-driven UI inspection, browser reproduction, screenshots, or end-to-end journey checks.
 allowed-tools: Bash(playwright-cli:*) Bash(npx:*) Bash(npm:*)
 ---
 

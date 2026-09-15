@@ -1,10 +1,8 @@
 ---
 name: task-verifier
-description: >
-  Adversarial independent evidence gate for MDE tasks and PRs. Use for task review, merge-safety,
-  failure-mode analysis, audits of completion claims, and before Linear Done. Consumes the canonical
-  `tasks` standard, exact current code/PR head, tests/CI/runtime, and affected domain skills. It tries
-  to disprove unsafe or incomplete claims rather than maintaining a parallel implementation lifecycle.
+description: >-
+  Use when independently deciding whether an MDE task, PR, merge, production-readiness claim, or Linear Done claim is supported by current evidence.
+context: fork
 metadata:
   version: "2.4.0"
 ---
@@ -132,7 +130,7 @@ Web search is the cheapest-proof-first list's *fallback*, used only when runtime
 5. **Adversarial pre-mortem:** identify likely failure points and record a failure-mode matrix: trigger, impact, protection, proof, status.
 6. **False-green gate:** ask whether all listed tests could pass while the operator/business outcome is still broken; convert plausible false greens into missing proof.
 7. **Domain best practices:** load only affected domain skills and run the relevant checks from [domain-best-practices.md](references/domain-best-practices.md).
-   - For material Supabase/Postgres changes, determine which independent proof classes apply: **catalog, behavioral, authorization/tenant, migration replay, performance/exposure, live read-only**. Do not substitute one proof class for another; use `mde-supabase/references/verification-matrix.md` for HOW.
+   - For material Supabase/Postgres changes, determine which independent proof classes apply: **catalog, behavioral, authorization/tenant, migration replay, performance/exposure, live read-only**. Do not substitute one proof class for another; use `supabase/references/verification-matrix.md` for HOW.
    - For material Mastra changes, determine which independent proof classes apply: **registry/config, deterministic primitive, model behavior, authority/context, memory, persistence/restart, HITL artifact, resume/recovery, streaming/abort, side-effect idempotency, observability/evals, exact runtime**. Do not substitute one proof class for another; use `mastra/references/testing-gates.md` for risk-matched proof and `mastra/references/user-journeys.md` when the operator/business flow is affected.
 8. **Negative/recovery:** verify malformed/empty/stale/large input, provider/network failure, retry, idempotency, partial failure, refresh/back/navigation, and unauthorized/cross-tenant behavior when applicable.
 9. **AI behavior:** for AI-native work test positive and negative behavior: should-act/should-not-act, correct/wrong tool, valid/invalid arguments, approval granted/rejected/absent, prompt-injection/excessive-agency attempts, and no durable write before approval.

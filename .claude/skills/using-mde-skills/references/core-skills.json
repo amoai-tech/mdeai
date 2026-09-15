@@ -1,0 +1,30 @@
+{
+  "core_skills": [
+    "using-mde-skills",
+    "tasks",
+    "systematic-debugging",
+    "writing-skills",
+    "code-review",
+    "task-verifier",
+    "tdd",
+    "testing",
+    "lean-dev-flow",
+    "mde-worktree-pr-flow",
+    "research",
+    "domain-modeling",
+    "codebase-design",
+    "wireframe",
+    "mermaid-diagrams",
+    "playwright-cli",
+    "mastra",
+    "supabase",
+    "mde-maps",
+    "mde-real-estate",
+    "mde-vercel",
+    "copilotkit",
+    "gemini"
+  ],
+  "retired": [
+    "mde-task-lifecycle"
+  ]
+}

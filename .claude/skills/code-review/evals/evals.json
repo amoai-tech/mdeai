@@ -1,0 +1,17 @@
+{
+  "skill_name": "code-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review this branch against main and SAN-123.",
+      "expected_output": "Pin merge-base/head, review spec fit and code quality, and cite current-head findings.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "CodeRabbit says this line is a blocker. Fix it.",
+      "expected_output": "Verify the bot claim against exact-head code before applying or dismissing it.",
+      "files": []
+    }
+  ]
+}

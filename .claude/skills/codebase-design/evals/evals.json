@@ -1,0 +1,17 @@
+{
+  "skill_name": "codebase-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Should we add a generic provider service around Supabase, Stripe, Maps and Cloudinary?",
+      "expected_output": "Challenge the abstraction; preserve provider semantics and prefer meaningful domain/provider seams.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Three callers repeat the same booking invariant.",
+      "expected_output": "Evaluate a deeper module that owns the invariant behind a small interface and test at the seam.",
+      "files": []
+    }
+  ]
+}

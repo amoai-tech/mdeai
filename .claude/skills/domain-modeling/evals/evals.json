@@ -1,0 +1,17 @@
+{
+  "skill_name": "domain-modeling",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We use booking, reservation and booking_request interchangeably. Clean this up.",
+      "expected_output": "Collect current meanings, test scenarios, define canonical concepts/invariants, and record migration implications.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "What is the difference between a host and partner in MDE?",
+      "expected_output": "Derive definitions from current code/schema/product truth and record unresolved ambiguity instead of guessing.",
+      "files": []
+    }
+  ]
+}

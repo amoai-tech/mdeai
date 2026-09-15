@@ -38,7 +38,7 @@ Before implementation, record: current setup, affected stack, existing code to r
 
 ## Skills / MCP / stack
 
-Name only the tools actually required. Example: `tasks` + `task-verifier` + `graphify`; add `mde-supabase`, `mastra`, `copilotkit`, GitHub/Linear/Supabase MCP, Playwright, Cloudinary, etc. only when the task crosses those boundaries. Also list the affected tech stack so the implementer knows which runtime/contracts must be verified.
+Name only the tools actually required. Example: `tasks` + `task-verifier` + `graphify`; add `supabase`, `mastra`, `copilotkit`, GitHub/Linear/Supabase MCP, Playwright, Cloudinary, etc. only when the task crosses those boundaries. Also list the affected tech stack so the implementer knows which runtime/contracts must be verified.
 
 ## Real-world workflow + Mermaid
 

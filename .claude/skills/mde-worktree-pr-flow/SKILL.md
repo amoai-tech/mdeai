@@ -1,6 +1,7 @@
 ---
 name: mde-worktree-pr-flow
-description: Use for worktrees, PRs, shipping, and cleanup. Enforces "small branch → focused PR → tested → merged → deployed → verified → next branch" — one worktree, one goal, one PR, merge gate (lint/build/test/floor/Vercel/prod), PR size limits, and forensic cleanup for messy state. Triggers include start worktree, open PR, split PR, audit/clean worktrees, one PR at a time, dirty worktrees.
+description: >-
+  Use when creating, auditing, cleaning, or shipping Git worktrees, branches, or pull requests for MDE.
 metadata:
   version: 0.4.0
   changelog: "v0.4.0 — guard-gitignore-worktrees (hard fail), guard-worktree-context (no nested trees), tidy-worktrees.sh; see references/worktree-safety-v040.md"
@@ -8,11 +9,11 @@ metadata:
 
 # mdeAI worktree + PR discipline
 
-**North star:** Small branch → focused PR → tested → merged → deployed → verified → next branch.
+**North star:** Small focused branch → fewest independently reviewable PRs → tested → merged → deployed → verified.
 
 No more big messy worktrees. **Ship clean slices only.**
 
-Operate on **one worktree at a time** and **one focused PR at a time**. Finish, verify, and merge the current change before starting the next.
+Operate on **one worktree per focused goal**. Create the **fewest independently reviewable PRs necessary**; keep fixes, tests, verification evidence, and task-owned docs in the same PR unless a real dependency, risk, ownership, or independent-shipping boundary requires a split.
 
 This skill has two modes:
 
@@ -212,7 +213,7 @@ Every change must follow:
 4. Add or update tests for that task.
 5. Run local verification.
 6. Push branch to GitHub.
-7. Open one focused PR.
+7. Open the fewest independently reviewable PRs needed for the focused goal.
 8. Verify GitHub checks and Vercel preview.
 9. Merge only after green checks.
 10. Pull latest `main`.
@@ -308,7 +309,7 @@ curl -fsSL -o /dev/null -w "%{http_code}\n" https://www.mdeai.co/  # must be 200
 
 0. **No new tree until the current tree is live on production and verified.**
 1. **One worktree active at a time** for new work. Sibling dirty worktrees must be surfaced before starting.
-2. **One focused PR per change.** Split before merging if scope exceeds the PR size table or mixes domains.
+2. **Fewest independently reviewable PRs.** Keep one focused goal together; split only when size, dependency, risk, ownership, revertability, or independent shipping requires it.
 3. **Never force-push `main`.** `--force-with-lease` only on your own feature branch.
 4. **Never stage `.env*`.** Credential rotation if committed.
 5. **Backup before any destructive command** (see Forensic cleanup mode).
@@ -364,7 +365,7 @@ Never remove a dirty worktree until **all** are true:
 
 ### PR priority order (mdeai) — ship in this sequence
 
-Do **not** fix everything in one branch. One PR per row.
+Do **not** mix unrelated intents in one branch. Group related rows when they form one reviewable outcome; split only on a real review/dependency/risk boundary.
 
 | Order | PR | Why |
 |-------|-----|-----|
@@ -430,7 +431,7 @@ npm run lint && npm run typecheck && npm run build && npm test   # (or: npm run 
 
 Typecheck passing ≠ feature working.
 
-### Step F — Ship one PR
+### Step F — Ship the focused change
 
 Satisfy the **merge gate** and **Focused PR shipping rule**. Minimum before push:
 
