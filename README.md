@@ -1,57 +1,120 @@
-# mdeapp
+# MDE AI
 
-The mdeai application — an AI-first, chat-first, map-first discovery and ticketing platform for Medellín. Built on Next.js 16 + CopilotKit 1.55.2 + Mastra + Gemini 3.5 Flash + Supabase.
+AI-first discovery, planning, booking, and local-commerce platform for Medellín.
 
-> Phase 1, Week 2. This repo is the **new** mdeai codebase. Legacy `/home/sk/mde/` freezes 2026-05-26 — see [`/home/sk/mde/FREEZE.md`](../../mde/FREEZE.md).
+Production: https://www.mdeai.co/  
+Repository: https://github.com/amoai-tech/mdeai  
+Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c
 
-**5-minute onboarding:** read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — it has the diagram, data-flow tables, invariants, and a "Where do I add X?" matrix.
+## Start here
 
-## Architecture
+- [Documentation index](docs/INDEX.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Current route inventory](sitemap.md)
+- [Product requirements](prd.md)
+- [Design system](DESIGN.MD)
+- [Skills index](index-skills.md)
 
-| Layer | Tech |
+For live task status, priorities, and execution order, use the **MDE AI Linear project** rather than old markdown task snapshots.
+
+## Stack
+
+| Layer | Technology |
 |---|---|
-| Frontend | Next.js 16 (App Router, React 19, Turbopack, Tailwind v4) |
-| AI chat shell | CopilotKit 1.55.2 (pinned — see `plan/prd/03-architecture.md` §12) |
-| AG-UI bridge | `@ag-ui/mastra` (beta) |
-| Agent runtime | Mastra (beta) — agents in `src/mastra/agents/` |
-| Model | Gemini 3.5 Flash via `@ai-sdk/google` (env: `GOOGLE_GENERATIVE_AI_API_KEY`) |
-| Data | Supabase project `zkwcbyxiwklihegjhuql` — reused from legacy mdeai (122 tables, RLS-tight) |
-| Maps | `@vis.gl/react-google-maps` + `@googlemaps/js-markerclusterer` (W5+) |
-| Payments | Stripe (W9+) |
+| Web | Next.js 16.2.6 · React 19.2.1 · TypeScript · Tailwind CSS 4 |
+| AI UI | CopilotKit 1.55.2 |
+| Agent runtime | Mastra + AG-UI |
+| Models | Gemini through `@ai-sdk/google` |
+| Data/Auth | Supabase |
+| Maps/Places | Google Maps · `@vis.gl/react-google-maps` |
+| Payments | Stripe |
+| Testing | Vitest · Playwright |
 
-## Project layout
+## Product surfaces
 
+The current application includes:
+
+- AI concierge and map experience
+- rentals browse + rental details
+- restaurants, cafés, nightlife, and venues
+- events discovery, event details, ticket checkout, and ticket wallet
+- host event workflows, analytics, and rental-host surfaces
+- partner signup and activation surfaces
+- internal event-booking operations
+
+See [`sitemap.md`](sitemap.md) for the source-backed page and API inventory generated from `src/app`.
+
+## Source-of-truth rules
+
+When sources disagree:
+
+1. **Code, tests, and migrations** define implementation truth.
+2. **`src/app`** defines Next.js route truth.
+3. **Linear — MDE AI** defines live task status and priority.
+4. Canonical docs explain architecture, product intent, and operating rules.
+5. Historical status snapshots are reference material only.
+
+See [`docs/INDEX.md`](docs/INDEX.md) for the documentation lifecycle and stale-doc cleanup map.
+
+## Local development
+
+Requirements:
+
+- Node.js 20+
+- npm
+- required environment variables in `.env.local`
+
+Install and run:
+
+```bash
+npm install
+npm run dev
 ```
-mdeapp/
-├── src/
-│   ├── app/
-│   │   ├── api/copilotkit/route.ts   ← CopilotRuntime + MastraAgent bridge
-│   │   ├── layout.tsx                ← <CopilotKit agent="pingAgent">
-│   │   ├── page.tsx                  ← W1 ping shell · W3+ Roberto host event · W6 Camila chat
-│   │   └── globals.css
-│   ├── components/                   ← shadcn cards land here from W2
-│   ├── lib/
-│   │   └── types.ts                  ← MdeState (W1) → EventDraftState (W3) → ...
-│   └── mastra/
-│       ├── index.ts                  ← Mastra({ agents: { pingAgent } })
-│       ├── agents/index.ts           ← pingAgent (W1), hostEventAgent (W3), ...
-│       └── tools/index.ts            ← empty W1; set_event_basics, set_venue, etc. W3+
-├── public/
-├── package.json                      ← pins CK 1.55.2 + Next 16.2.6 + Mastra beta
-└── next.config.ts                    ← serverExternalPackages: ["@copilotkit/runtime"]
+
+Development services:
+
+- Next.js UI: `http://localhost:3001`
+- Mastra dev server: port `4111`
+
+Useful checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run floor
+npm run test:e2e
 ```
 
-## Status
+`npm run floor` runs lint, typecheck, production build, Vitest, the Mastra check, and the critical npm-audit gate.
 
-- W1 — `pingAgent` proves CopilotKit ↔ AG-UI ↔ Mastra ↔ Gemini wiring (this week)
-- W3 — Roberto host event flow (HITL via `renderAndWaitForResponse`)
-- W5 — Maps + rentals
-- W6 — Camila chat + read-only map state
-- W9 — Stripe ticket flow
-- W10 — Cutover from legacy mde
+## Repository layout
 
-See `/home/sk/mdeai/plan/prd.md` for the full Phase 1 plan and `/home/sk/mdeai/tasks/INDEX.md` for current task status.
+```text
+src/
+├── app/          Next.js App Router pages and route handlers
+├── components/   Product and shared UI
+├── lib/          Application/domain helpers
+├── mastra/       Agents, workflows, tools, and AI runtime
+└── platform/     Shared platform contracts and cross-vertical infrastructure
+
+docs/             Architecture, testing, design, evidence, and historical docs
+plan/             Product/technical planning and PRD material
+supabase/         Database migrations and edge functions
+scripts/          Verification, smoke, audit, and maintenance scripts
+e2e/              Playwright journeys and release gates
+```
+
+## Documentation policy
+
+Do not maintain a second task tracker in Markdown.
+
+- Current work → Linear
+- Current routes → `src/app` + `sitemap.md`
+- Current architecture → canonical docs linked from `docs/INDEX.md`
+- Superseded status reports → archive, do not present as current truth
 
 ## License
 
-MIT (inherited from CopilotKit Mastra example, retained per their license).
+MIT.
