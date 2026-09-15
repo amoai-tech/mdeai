@@ -1,48 +1,31 @@
-# Task spec rubric (task-verifier)
+# Standard / Adversarial verification scoring
 
-Use when scoring `tasks/core/F*.md`, `tasks/agent/tasks/CTI-*.md`, or `tasks/openclaw/tasks/OCL-*.md` **before execution** (spec quality) and **after** (execution readiness).
+Use only when evidence is sufficiently complete. Scores summarize evidence; they never override a BLOCKER.
 
-## Letter grades
-
-| Grade | Spec score | Execution readiness |
+| Dimension | Weight | What is proved |
 |---|---:|---|
-| A | 90–100 | 90–100, zero blockers |
-| B | 80–89 | 80–89 |
-| C | 70–79 | 70–79 |
-| D | 60–69 | 60–69 |
-| F | &lt;60 | &lt;60 or any unresolved blocker |
+| Outcome / AC proof | 30 | every applicable AC maps to current evidence and real user/business outcome |
+| Implementation correctness | 20 | current code/architecture implements the required behavior without contradictory paths |
+| Test / verification evidence | 20 | risk-matched positive, negative, recovery, exact-head and runtime proof is current/reproducible |
+| Security / tenant / safety | 15 | authz, tenant, HITL, secrets, destructive-write and abuse boundaries when applicable |
+| Architecture / SSOT alignment | 10 | current runtime/code/Linear/task/domain ownership agree; no duplicate truth |
+| Process / skill compliance | 5 | applicable task/domain rules followed without ritual overhead |
 
-**Execution readiness** = spec score minus blocker penalties: each unresolved blockers −15 (cap at 0). If spec has blockers, readiness cannot exceed 70 until spec is patched.
+## Interpretation
 
-## Spec quality weights (100 pts)
+| Overall | Meaning |
+|---:|---|
+| 95–100 | Strongly verified for the current pre-merge scope; production-ready may be claimed only after required post-merge Production Verified evidence |
+| 90–94 | Ready for the next applicable gate; only minor non-blocking observations |
+| 80–89 | Needs fixes/evidence before Done |
+| <80 | Not ready |
 
-| Dimension | Weight | What to check |
-|---|---:|---|
-| Source-of-truth alignment | 20 | Matches CLAUDE.md, plan/prd, INDEX; no stale model IDs |
-| Disk/MCP accuracy | 25 | Schema, enum, file paths, beta API shapes probed |
-| DoD provability | 25 | Every AC has command + expected; anonymous/auth paths explicit |
-| Template completeness | 15 | Sections 1–10 per mde-task-lifecycle (see SKILL §6) |
-| Security / hooks | 15 | Service-role placement, RLS, hook carve-outs documented |
+Any unresolved **BLOCKER** = **Not ready regardless of score**.
 
-## Mastra port pack extras (F13–F20)
+Do not invent precision. If material evidence is incomplete, label the score **provisional** or omit it and lower verification confidence. A missing required AC/exact-head/security/post-merge proof cannot be hidden by averaging unrelated green checks.
 
-Score **−10** each if missing:
+## Agent prompt
 
-1. **Integration surface** table (CopilotKit vs Mastra HTTP `/chat`)
-2. **`useCoAgent` / `<CopilotKit agent>` key** matches `Mastra({ agents: { key } })`
-3. **`agent_type` enum** mapped to existing Postgres labels (no invented values)
-4. **`ai_runs` vs `mastra_ai_spans`** decision line
-5. **F13 `logAgentRunForTurn`** referenced for runtime DoD on F14–F19
-
-## Dependency slug normalization
-
-| INDEX / spec slug | Canonical file |
-|---|---|
-| `F09-supp` | `F09-floor-script-and-vitest.md` |
-| `F09` | `F09-floor-script-and-vitest.md` |
-
-Flag INDEX-only `F09-supp` as naming drift until INDEX is fixed.
-
-## Persona impact line (required in audit reports)
-
-One sentence per task: who notices the change on which surface (`/`, `/chat`, `/host/event/new`, Patricia dashboard).
+```text
+Score only what the evidence supports. A blocker overrides the numeric total. Never call work production-ready from a pre-merge score alone; require the applicable post-merge Production Verified evidence first. Penalize missing risk-matched proof and false-green exposure, not cosmetic style. If evidence is materially incomplete, mark the score provisional or omit it rather than inventing precision.
+```
