@@ -9,7 +9,7 @@ tags: google-maps, places-api, maps-links, gemini-grounding, mdeai, mastra, secu
 paths:
   - "src/**/*Map*"
   - "src/**/*map*"
-  - "my-mastra-app/src/mastra/tools/*place*"
+  - "src/mastra/tools/*place*"
   - "supabase/functions/*maps*/**"
   - "supabase/functions/*places*/**"
 ---
@@ -34,40 +34,20 @@ Historical Cursor/MCP files are not active local dependencies. Verify current Ma
 
 ---
 
-## Maps Code Assist MCP workflow
+## Official Google Maps upstream + MDE overlay
 
-Official: [developers.google.com/maps/ai/code-assist](https://developers.google.com/maps/ai/code-assist) · Source: [`github/maps/platform-ai/`](../../github/maps/platform-ai/) ([GEMINI.md](https://github.com/googlemaps/platform-ai/blob/main/GEMINI.md))
+**Decision:** Google’s official `google-maps-platform` skill is the pinned upstream/reference layer. This `maps` skill remains the only active MDE Maps skill. Do not install a second active top-level Maps skill in this repo.
 
-**Use hosted HTTP only** — `https://mapscodeassist.googleapis.com/mcp`. The npm package `@googlemaps/code-assist-mcp` is **deprecated 2026-07-01** per [platform-ai README](https://github.com/googlemaps/platform-ai).
+- Official docs: https://developers.google.com/maps/ai/agent-skills
+- Official source: https://github.com/googlemaps/agent-skills
+- Pinned reviewed copy: [`references/vendor/google-maps-platform/SKILL.md`](references/vendor/google-maps-platform/SKILL.md)
+- Reviewed upstream commit: `84f0e9a2527403a408a61b8705bea0c3900b76a8`
 
-| Step | MCP tool | When |
-|------|----------|------|
-| 1 | `retrieve-instructions` → `{ "name": "instructions" }` | **Always first** for any map/places/routes/geocoding task |
-| 2 | `retrieve-google-maps-platform-docs` → `{ "llmQuery", "filter?", "source": "mdeai-app" }` | Concrete API/mask/vis.gl questions |
+For Google Maps API/SDK implementation, read the pinned official skill first, then apply the MDE rules here. For changing facts such as API availability, deprecations, pricing, and regional coverage, verify current official Google documentation or Code Assist rather than historical MDE notes.
 
-**Not for production runtime** — no live `search_places`. For live geo tools use **Grounding Lite** (`mapstools.googleapis.com`) — [`references/maps-grounding.md`](references/maps-grounding.md) § Mode 2.
-
-Full setup: [`references/maps-ai-code-assist.md`](references/maps-ai-code-assist.md)
+MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orchestration; Maps/Places own geo truth; Gemini must not invent coordinates, place IDs, hours, or routes.
 
 ---
-
-## Canonical `github/maps/` clones (read-only)
-
-**Index:** [`github/maps/README.md`](../../github/maps/README.md) · **Scores:** [`index.md`](../../index.md) §4
-
-| Folder | Phase | mdeapp action |
-|--------|-------|---------------|
-| `react-google-maps/` | MVP | **npm** `@vis.gl/react-google-maps` — MAP-001 |
-| `codelab-maps-platform-101-react-js/` | MVP | AdvancedMarker + clusterer patterns |
-| `grounding-lite-mcp-sample-app/` | MVP | MAP-002 Mastra grounding |
-| `js-markerclusterer/` | MVP | **npm** `@googlemaps/markerclusterer` — MAP-009 |
-| `js-api-samples/` | All | Field masks, JS API samples |
-| `google-maps-services-js/` | MVP+ | Edge Places — MAP-004–005 |
-| `platform-ai/` | Dev | Code Assist MCP source only |
-| `ag-ui-adk-grounding-app/` | Post-MVP | UX reference — not Mastra |
-| `react-wrapper/` | — | **Do not use** (archived) |
-
-**Never** copy vendor `src/` into `mdeapp/` — read patterns, install npm packages.
 
 ## Quick routing
 
@@ -90,31 +70,10 @@ Full setup: [`references/maps-ai-code-assist.md`](references/maps-ai-code-assist
 | **Former `google-maps-api` skill** — `gmaps.py` + operator rules | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) + [`references/all-apis.md`](references/all-apis.md) |
 | **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
 
-### Consolidated sibling skills (read once)
-
-These top-level skills are **thin stubs** (or archived names) that point here — one maintenance surface for mdeai:
-
-| Symlink / folder | Role now |
-|-------------------|----------|
-| `google-maps` | **Archived** 2026-05-14 — skill folder removed; last `SKILL.md` under `_archive/2026-05-14/google-maps-stub/`. |
-| `google-maps-api` | Redirect stub only; **`gmaps.py`** lives in **`maps/scripts/`** (vendor README/plugin → `_archive/2026-05-14/google-maps-api-vendor/`). |
-| `react-google-maps` | Redirect only; vis.gl **reference/*.md** copied under `references/react-vis-gl/`. |
-
----
-
-## Offline Google documentation (local mirror)
-
-Google Maps / Grounding / MCP pages exported as Markdown live under **[`references/google-offline/`](references/google-offline/)** — each file has YAML `frontmatter` (`doc_type: google_offline_mirror`). Use for **local search** and **air-gapped** reading; they are **not** authoritative.
-
-- **Index + conflict rules:** [`references/official-docs-mirror.md`](references/official-docs-mirror.md)
-- **Do not** treat mirrors as SoT for billing, tool schemas, or launch gates — cross-check **live** `developers.google.com` and **`grounding-lite-mcp-sample-app`** when implementing **GROUNDING-001** / **057** / **065**.
-
----
-
 ## mdeAI environment
 
 ```
-VITE_GOOGLE_MAPS_API_KEY    — Frontend (browser) — Maps JS API, AdvancedMarkerElement
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API, AdvancedMarkerElement
 GOOGLE_PLACES_API_KEY       — Server-side only — Places API (New), enrichment scripts
 GOOGLE_MAPS_API_KEY         — Edge functions — Directions, Routes
 GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
@@ -122,7 +81,7 @@ GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
 
 **Medellín anchor:** `{ latitude: 6.2442, longitude: -75.5812 }` — default `locationBias` center and Maps grounding `latLng`.
 
-**Never put `GOOGLE_PLACES_API_KEY` in a `VITE_` var** — visible in browser DevTools.
+**Never expose `GOOGLE_PLACES_API_KEY` through a `NEXT_PUBLIC_*` variable** — it is server-side only.
 
 ---
 
@@ -287,7 +246,7 @@ const sessionToken = uuidv4(); // new UUID per search session
 
 | Key | Restrictions | APIs enabled |
 |-----|-------------|-------------|
-| `VITE_GOOGLE_MAPS_API_KEY` | HTTP referrers: mdeai.co/*, localhost:8080/* | Maps JavaScript API only |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API only |
 | `GOOGLE_PLACES_API_KEY` | Server IP | Places API (New) only |
 | `GOOGLE_MAPS_API_KEY` | Server IP | Directions API, Maps Static |
 | `GOOGLE_ROUTES_API_KEY` | Server IP | Routes API |
@@ -302,27 +261,20 @@ const sessionToken = uuidv4(); // new UUID per search session
 
 | Layer | mdeai use | Skill / task |
 |-------|-----------|----------------|
-| **Places API (New)** | Batch venue enrich → `place_id`, `maps_url`, lat/lng | **EVD-06** → [EVP-024](../../../tasks/events/EVP-024-mvp-places-enrichment.md) |
-| **Maps JS** | Camila’s event pins (`mapId` + `AdvancedMarker`) | [EVP-016](../../../tasks/events/EVP-016-mvp-event-maps-venue-integration.md) |
-| **ADK sidecar** | Freshness / `search_grounded_places` — not event inventory | [EVP-023](../../../tasks/events/EVP-023-mvp-adk-search-maps-agents.md) |
-| **Web grounding** | C-004 citations — Google Search, not Places catalog | [EVP-021](../../../tasks/events/EVP-021-mvp-google-search-grounding.md) |
+| **Places API (New)** | Batch venue enrich → `place_id`, `maps_url`, lat/lng | **EVD-06** → EVP-024 (historical) |
+| **Maps JS** | Camila’s event pins (`mapId` + `AdvancedMarker`) | EVP-016 (historical) |
+| **ADK sidecar** | Freshness / `search_grounded_places` — not event inventory | EVP-023 (historical) |
+| **Web grounding** | C-004 citations — Google Search, not Places catalog | EVP-021 (historical) |
 
-Plans: [10-event-discover-plan.md](../../../plan/events/event-discovery/10-event-discover-plan.md) · Routing: [event-discovery-skill-routing.md](../../../tasks/events/docs/event-discovery-skill-routing.md)
+Historical event-discovery task links were retired; resolve current work through Linear and the canonical `events` skill.
 
 **Golden rule:** Places enriches DB once; grounding answers live geo questions — never invent event listings from Maps.
 
 ---
 
-## MASTRA task references
+## Mastra handoff
 
-Canonical numbered specs live under `tasks/mastra/maps/tasks/` (`runtime/`, `grounding/`, `places/`, …). Index: [`tasks/mastra/maps/tasks/index-maps-tasks.md`](../../tasks/mastra/maps/tasks/index-maps-tasks.md) and [`places/README.md`](../../tasks/mastra/maps/tasks/places/README.md).
-
-| Task | File | Phase |
-|------|------|-------|
-| PLACES-005-010 | `tasks/mastra/maps/tasks/places/020-place-details-enrichment.md` | Phase 2 — enrichment |
-| GROUNDING-001 | `tasks/mastra/maps/tasks/grounding/010-grounded-search.md` | Phase 3 — grounding |
-| PLAN-001 | `tasks/mastra/maps/tasks/plans/001-geo-chat-production-plan.md` | Master roadmap |
-| Maps audit + PR order | `tasks/maps/07-mapsv2-tasks.md` | Forensic sequencing |
+For Maps-related Mastra work, use the canonical `mastra` skill plus current source and the live Linear task. Retired `tasks/mastra/maps/**` paths are not active instructions.
 
 ---
 
@@ -338,4 +290,4 @@ Canonical numbered specs live under `tasks/mastra/maps/tasks/` (`runtime/`, `gro
 | `AdvancedMarkerElement` not found | Add `'marker'` to `libraries` in js-api-loader |
 | Missing `mapId` | Required for AdvancedMarkerElement — set in Map constructor |
 | Frontend key 403 | Verify HTTP referrer restriction includes current origin |
-| API key in `VITE_` for Places API | Server-side keys must never be in `VITE_` vars |
+| Places server key in `NEXT_PUBLIC_*` | Server-side keys must never be browser-exposed |

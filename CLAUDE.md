@@ -7,7 +7,7 @@ Project guidance for Claude Code working in `/home/sk/mdeai`.
 - Repo root: `/home/sk/mdeai`
 - Remote: `https://github.com/amoai-tech/mdeai.git`
 - Package name: `mdeapp`
-- App source lives directly in this repository; there is no `/home/sk/mdeai/mdeapp/` child repo.
+- App source lives directly at the repository root.
 - Main stack: Next.js 16, React 19, CopilotKit 1.55.2 v2 APIs, Mastra, Supabase, Gemini, Google Maps, Playwright, Vitest.
 - `.claude/skills/` is the canonical project skill library.
 - Linear is the durable task/progress source of truth for substantial SAN work.
@@ -33,12 +33,15 @@ Stack skills:
 - `mastra`
 - `supabase`
 - `gemini`
-- `mde-maps` (rename to `maps` is planned; use current active name until that migration is complete)
+- `maps`
+- `stripe`
+- `nextjs`
+- `cloudinary`
 - `mde-vercel`
 
 Domain skills:
-- `mde-real-estate` (rename to `real-estate` is planned)
-- `events` and `stripe` must not be referenced until their canonical active skills exist.
+- `events`
+- `real-estate`
 
 Workflow skills:
 - `using-mde-skills`
