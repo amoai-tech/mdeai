@@ -33,8 +33,8 @@ This skill **routes; it does not implement, debug, review, test, or ship**. Make
 - **S0 — trivial:** direct edit/query; no orchestration.
 - **S1 — focused:** one primary skill; specialists only if required.
 - **S2 — multi-part:** primary orchestrator + a small specialist set.
-- **S3 — system change:** dependency-aware orchestration, explicit checkpoints and review.
-- **S4 — production critical:** S3 plus adversarial verification, failure/recovery proof, and strict stop conditions.
+- **S3 — system change:** dependency-aware cross-system work with explicit checkpoints and review, when no S4 risk trigger is present.
+- **S4 — production critical:** any payment, auth/RLS/tenant-boundary, security/secret, destructive production-data, irreversible publish, or duplicate external-side-effect risk. S4 takes precedence over breadth and requires adversarial verification, failure/recovery proof, and strict stop conditions.
 
 Never inflate S0/S1 work into a full lifecycle merely because skills exist.
 

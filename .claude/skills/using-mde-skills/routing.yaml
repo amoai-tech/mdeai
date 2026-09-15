@@ -29,16 +29,25 @@ complexity:
   S3:
     name: system-change
     orchestration: dependency-aware
+    rule: Cross-system or migration work with no S4 trigger.
     examples:
-    - new workflow
+    - new workflow across schema, agent, and UI without payment/security-critical writes
     - cross-domain refactor
-    - multi-step migration
+    - reversible multi-step migration
   S4:
     name: production-critical
     orchestration: adversarial
+    precedence: S4 wins whenever any trigger below is present, even if the change is otherwise small.
+    triggers:
+    - payments or financial side effects
+    - auth, RLS, tenant boundaries, or privilege changes
+    - secrets or security controls
+    - destructive or irreversible production-data changes
+    - externally visible publishing with irreversible consequences
+    - duplicate/retry-sensitive external side effects
     examples:
-    - payments
-    - auth/RLS
+    - payment webhook idempotency
+    - auth/RLS policy changes
     - destructive migration
     - publishing
     - production incident
