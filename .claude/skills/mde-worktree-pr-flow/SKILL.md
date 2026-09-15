@@ -259,7 +259,7 @@ If a diff exceeds these bounds, stop and split before push.
 
 ## Merge gate
 
-> **Lean default (ordinary task PR):** `npm run verify:task -- <TASK-ID>` exit 0 + PR-body runtime proof is the bar — see [`pull_request_template.md`](../../../mdeapp/.github/pull_request_template.md) and [`improve.md`](../../../tasks/notes/improve.md) §6. The full row-by-row gate below is the **release / persona-prod gate** — use it for persona-visible, DATA, or prod-verified tasks where proof must outlive the PR.
+> **Lean default (ordinary task PR):** `npm run verify:task -- <TASK-ID>` exit 0 + PR-body runtime proof is the bar — see [`pull_request_template.md`](../../../.github/pull_request_template.md) and legacy `tasks/notes/improve.md` evidence guidance. The full row-by-row gate below is the **release / persona-prod gate** — use it for persona-visible, DATA, or prod-verified tasks where proof must outlive the PR.
 
 A PR is **not done** until **every** row below is checked with paste-able evidence:
 
@@ -511,9 +511,9 @@ See `references/pr-splitting-playbook.md`.
 
 ## See also
 
-- [`tasks.md`](../../../tasks.md) — live task board + lean evidence policy
-- [`plan.md`](../../../plan.md) — platform-gate roadmap
-- [`tasks/notes/improve.md`](../../../tasks/notes/improve.md) — execution playbook (test pyramid §5, evidence §6)
-- [`mdeapp/.github/pull_request_template.md`](../../../mdeapp/.github/pull_request_template.md) — lean PR checklist
+- Linear is the live task board and evidence source of truth
+- Use the current Linear task/project for platform-gate sequencing
+- Historical `tasks/notes/improve.md` is not an active local dependency
+- [`.github/pull_request_template.md`](../../../.github/pull_request_template.md) — lean PR checklist
 - `references/forensic-cleanup.md`, `references/git-worktree-cheatsheet.md`, `references/pr-splitting-playbook.md`
 - [Git worktree docs](https://git-scm.com/docs/git-worktree)

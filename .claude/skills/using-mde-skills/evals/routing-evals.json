@@ -230,7 +230,7 @@
     {
       "id": "maps",
       "prompt": "Fix map marker selection and Places detail enrichment for restaurant results.",
-      "primary": "mde-maps",
+      "primary": "maps",
       "supporting": [
         "tdd",
         "testing"
@@ -243,12 +243,12 @@
     {
       "id": "real-estate",
       "prompt": "Change rental lead qualification and schedule-viewing behavior for brokers.",
-      "primary": "mde-real-estate",
+      "primary": "real-estate",
       "supporting": [
         "supabase"
       ],
       "avoid": [
-        "mde-maps"
+        "maps"
       ],
       "complexity": "S1"
     },
@@ -426,6 +426,115 @@
       ],
       "complexity": "S1",
       "expected_behavior": "verify current official Gemini model/provider guidance and installed MDE provider before editing"
+    },
+    {
+      "id": "stripe-payment-contract",
+      "prompt": "Verify and change Stripe webhook idempotency for ticket checkout without touching unrelated event logic.",
+      "primary": "stripe",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "supabase"
+      ],
+      "complexity": "S4",
+      "expected_behavior": "use Stripe payment/webhook contract and require independent verification for production-critical payment changes"
+    },
+    {
+      "id": "nextjs-route-contract",
+      "prompt": "Fix a Next.js App Router route handler caching and server/client boundary issue in the current app.",
+      "primary": "nextjs",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "mastra"
+      ],
+      "complexity": "S1",
+      "expected_behavior": "use installed Next.js version and current App Router behavior before editing"
+    },
+    {
+      "id": "cloudinary-media-contract",
+      "prompt": "Add a signed Cloudinary upload flow for host event media and verify that secrets remain server-side.",
+      "primary": "cloudinary",
+      "supporting": [
+        "events",
+        "testing"
+      ],
+      "avoid": [
+        "maps"
+      ],
+      "complexity": "S2",
+      "expected_behavior": "activate Cloudinary only for explicit media work and preserve server-side signing"
+    },
+    {
+      "id": "events-domain-contract",
+      "prompt": "Change event publish-state and ticket-tier rules without changing the payment provider implementation.",
+      "primary": "events",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "stripe"
+      ],
+      "complexity": "S1",
+      "expected_behavior": "keep event-domain invariants separate from payment and framework implementation"
+    },
+    {
+      "id": "stripe-payment",
+      "prompt": "Fix duplicate Stripe ticket webhook fulfillment so the same paid event cannot issue two tickets.",
+      "primary": "stripe",
+      "supporting": [
+        "events",
+        "systematic-debugging",
+        "testing"
+      ],
+      "avoid": [
+        "nextjs"
+      ],
+      "complexity": "S4",
+      "expected_behavior": "payment specialist owns Stripe contract; duplicate side effects require idempotency and independent verification"
+    },
+    {
+      "id": "nextjs-route",
+      "prompt": "Change one Next.js App Router route handler and verify its server/client and caching behavior.",
+      "primary": "nextjs",
+      "supporting": [
+        "testing"
+      ],
+      "avoid": [
+        "cloudinary"
+      ],
+      "complexity": "S1",
+      "expected_behavior": "use installed Next.js version and current route pattern"
+    },
+    {
+      "id": "cloudinary-media",
+      "prompt": "Add a signed Cloudinary upload path for event hero images without exposing the signing secret.",
+      "primary": "cloudinary",
+      "supporting": [
+        "events",
+        "nextjs"
+      ],
+      "avoid": [
+        "maps"
+      ],
+      "complexity": "S2",
+      "expected_behavior": "first confirm Cloudinary is intentionally being introduced, keep signing server-side"
+    },
+    {
+      "id": "events-domain",
+      "prompt": "Change event publish rules so a host cannot publish before required ticket and venue data are complete.",
+      "primary": "events",
+      "supporting": [
+        "supabase",
+        "testing"
+      ],
+      "avoid": [
+        "real-estate"
+      ],
+      "complexity": "S2",
+      "expected_behavior": "events owns domain transition; stack skills own persistence/framework details"
     }
   ]
 }

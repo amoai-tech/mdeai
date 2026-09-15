@@ -114,7 +114,7 @@ const browser = new AgentBrowser({
 | --- | --- |
 | Scrape listing pages | `mde-firecrawl` / Firecrawl tool guide |
 | E2E UI verification | `playwright-cli` skill · `tasks/testing/` |
-| Places / maps enrichment | `mde-maps` |
+| Places / maps enrichment | `maps` |
 | Event ingest DAG | [`workflows.md`](workflows.md) · EVP-022 (batch, not live browser) |
 
 | Artifact | Path |

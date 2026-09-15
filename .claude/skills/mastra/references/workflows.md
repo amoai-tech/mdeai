@@ -101,5 +101,5 @@ Package: `@mastra/core` — use `readMastraDocs` with `projectPath: /home/sk/mde
 | --- | --- |
 | Event discovery workflows (planned) | `tasks/events/EVP-022-mvp-event-discovery-workflow.md` |
 | Mastra PRD workflows | `tasks/prompts/mastra/` |
-| CopilotKit HITL (UI mirror of suspend) | `copilotkit-integrations` skill |
+| CopilotKit HITL (UI mirror of suspend) | `copilotkit` skill |
 | v1 workflow migration | https://mastra.ai/guides/migrations/upgrade-to-v1/workflows |

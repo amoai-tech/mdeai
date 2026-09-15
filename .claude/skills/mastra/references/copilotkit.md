@@ -1,6 +1,6 @@
 ---
 title: CopilotKit + Mastra (separate server)
-description: Load for Mastra standalone server + Next.js CopilotKit integration. NOT mdeapp Pattern 1 — use copilotkit-integrations mastra.md for mdeapp.
+description: Load for Mastra standalone server + Next.js CopilotKit integration. NOT mdeapp Pattern 1 — use the `copilotkit` Mastra bridge reference for mdeapp.
 parent: mastra
 impact: MEDIUM
 impactDescription: Split-stack CopilotKit guide

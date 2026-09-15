@@ -76,4 +76,4 @@ verified_at: 2026-05-17
 
 - [ai-edge-functions.md](ai-edge-functions.md) — Gemini models + operational rules
 - [edge-functions.md](../edge-functions.md) — Deno patterns, deploy, limits (long reference)
-- [`.claude/rules/edge-function-patterns.md`](../../../rules/edge-function-patterns.md) — mdeai HTTP lifecycle (non-Supabase-specific)
+- the current edge-function implementation and project security rules — mdeai HTTP lifecycle (non-Supabase-specific)

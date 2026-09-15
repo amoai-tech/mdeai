@@ -71,8 +71,8 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 | Lighthouse audit on a Vercel preview URL | chrome-devtools-mcp (`lighthouse_audit --mode navigation --device mobile`) | `mde-vercel` |
 | Bundle / Core Web Vitals trace | chrome-devtools-mcp | `mde-vercel`, `debug-optimize-lcp` |
 | Supabase email/OAuth sign-in regression | Claude in Chrome | `testing` → [playwright.md](playwright.md) |
-| Stripe Link checkout end-to-end | Claude in Chrome | `mde-stripe`, `create-payment-credential` |
-| Shopify cart → checkout smoke | Claude in Chrome | `mde-stripe` (plus `mdeai-commerce.md`) |
+| Stripe Link checkout end-to-end | Claude in Chrome | `stripe`, `create-payment-credential` |
+| Shopify cart → checkout smoke | Claude in Chrome | `stripe` (plus `mdeai-commerce.md`) |
 | AI-proposal card four-state visual verify | Claude Preview MCP | `testing` → [preview-mcp.md](preview-mcp.md) |
 | RLS / 403 debugging during a UI flow | chrome-devtools-mcp (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
 | Console-error sweep before commit | chrome-devtools-cli inside `/ship` step 3 | `testing` (this skill) |
@@ -83,7 +83,7 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 
 - Vitest entry: `npm run test` (run once) / `npm run test:watch`
 - Playwright is configured but no e2e tests exist yet (see CLAUDE.md "Known Issues")
-- Required-states pattern in [.claude/rules/style-guide.md](../../rules/style-guide.md): every data-fetching component handles loading/error/empty/success — tests must cover all four
+- Required-states pattern in the MDE UI state contract: every data-fetching component handles loading/error/empty/success — tests must cover all four
 - Preview server runs on port 8080 (`npm run dev`)
 
 ---
@@ -144,4 +144,4 @@ Full table + workflows → **testing-layers.md**.
 
 ## Skill composition note
 
-Authored using **[skill-creator](../skill-creator/SKILL.md)** conventions: thin **`SKILL.md`**, progressive disclosure via **`references/`**, explicit **anti-triggers** in YAML `description`.
+Authored using the shared **[skill-authoring standard](../using-mde-skills/references/skill-authoring-standard.md)**: thin **`SKILL.md`**, progressive disclosure via **`references/`**, explicit **anti-triggers** in YAML `description`.

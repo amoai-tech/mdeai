@@ -19,7 +19,7 @@ load_when: table list, schema overview, which tables exist, pgvector tables
 | **AI** | `conversations`, `messages`, `agent_jobs`, `ai_context`, `ai_runs` |
 | **System** | `notifications` |
 
-For pgvector-specific tables and hybrid search RPCs, see [`supabase/references/postgres/`](postgres/) and the [`pgvector`](../../pgvector/SKILL.md) skill.
+For pgvector-specific tables and hybrid search RPCs, see [`supabase/references/postgres/`](postgres/) and current database/vector implementation.
 
 For RLS coverage per table, run:
 ```sql

@@ -40,8 +40,8 @@ There is **no Anthropic / Claude API in production** — Claude is only used in 
 
 Do not reference these as deployed until `supabase/functions/<name>/` exists.
 
-**Auth:** `GEMINI_API_KEY` secret in Supabase dashboard (synced from Infisical — see [`mde-infisical/references/env-vars-mdeai.md`](../../mde-infisical/references/env-vars-mdeai.md)).
+**Auth:** `GEMINI_API_KEY` secret in Supabase dashboard (synced from Infisical — see the current secret-management configuration).
 
 **Full matrix** (tickets, webhooks, `verify_jwt`): [edge-functions-inventory.md](edge-functions-inventory.md).
 
-Operational rules: [`.claude/rules/edge-function-patterns.md`](../../../rules/edge-function-patterns.md) — CORS, JWT, Zod input validation, rate limits (10 AI / 30 search per min per user), 30 s Gemini timeout, log every run to `ai_runs`.
+Operational rules: the current edge-function implementation and project security rules — CORS, JWT, Zod input validation, rate limits (10 AI / 30 search per min per user), 30 s Gemini timeout, log every run to `ai_runs`.

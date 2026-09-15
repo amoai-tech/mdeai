@@ -2,62 +2,80 @@ version: 2
 mode: router-only
 adaptive_memory:
   enabled: false
-  rule: "Do not adapt routing from memory until measured observations are reviewed by a human."
+  rule: Do not adapt routing from memory until measured observations are reviewed by a human.
   observations_file: metrics/routing-observations.json
-
 complexity:
   S0:
     name: trivial
     orchestration: none
-    examples: ["typo", "known one-line config edit", "simple lookup"]
+    examples:
+    - typo
+    - known one-line config edit
+    - simple lookup
   S1:
     name: focused
     orchestration: single-primary
-    examples: ["isolated bug", "single module change", "run targeted tests"]
+    examples:
+    - isolated bug
+    - single module change
+    - run targeted tests
   S2:
     name: multi-part
     orchestration: primary-plus-specialists
-    examples: ["UI plus API", "Supabase-backed feature", "small cross-stack change"]
+    examples:
+    - UI plus API
+    - Supabase-backed feature
+    - small cross-stack change
   S3:
     name: system-change
     orchestration: dependency-aware
-    examples: ["new workflow", "cross-domain refactor", "multi-step migration"]
+    examples:
+    - new workflow
+    - cross-domain refactor
+    - multi-step migration
   S4:
     name: production-critical
     orchestration: adversarial
-    examples: ["payments", "auth/RLS", "destructive migration", "publishing", "production incident"]
-
+    examples:
+    - payments
+    - auth/RLS
+    - destructive migration
+    - publishing
+    - production incident
 hierarchy:
   router:
-    - using-mde-skills
+  - using-mde-skills
   orchestrators:
     build: tasks
     debug: systematic-debugging
     skill_authoring: writing-skills
   reasoning:
-    - research
-    - domain-modeling
-    - codebase-design
-    - wireframe
-    - mermaid-diagrams
+  - research
+  - domain-modeling
+  - codebase-design
+  - wireframe
+  - mermaid-diagrams
   implementation_quality:
-    - tdd
-    - testing
-    - lean-dev-flow
+  - tdd
+  - testing
+  - lean-dev-flow
   domain:
-    - mastra
-    - copilotkit
-    - supabase
-    - gemini
-    - mde-maps
-    - mde-real-estate
-    - mde-vercel
+  - mastra
+  - copilotkit
+  - supabase
+  - gemini
+  - maps
+  - real-estate
+  - stripe
+  - nextjs
+  - cloudinary
+  - events
+  - mde-vercel
   critics:
-    - code-review
-    - task-verifier
+  - code-review
+  - task-verifier
   shipping:
-    - mde-worktree-pr-flow
-
+  - mde-worktree-pr-flow
 routes:
   substantial_task:
     primary: tasks
@@ -77,29 +95,31 @@ routes:
   evidence_only:
     primary: research
     min_complexity: S1
-
 step_contract:
   required:
-    - step_id
-    - skill
-    - action
-    - inputs
-    - outputs
-    - depends_on
-    - can_parallel
-    - on_failure
-  on_failure_values: [retry, skip-with-limitation, reroute, abort, ask-user]
-
+  - step_id
+  - skill
+  - action
+  - inputs
+  - outputs
+  - depends_on
+  - can_parallel
+  - on_failure
+  on_failure_values:
+  - retry
+  - skip-with-limitation
+  - reroute
+  - abort
+  - ask-user
 parallelization:
   allow_when:
-    - "depends_on is empty or all dependencies are complete"
-    - "steps do not mutate the same source of truth"
-    - "one step does not require another step's output"
+  - depends_on is empty or all dependencies are complete
+  - steps do not mutate the same source of truth
+  - one step does not require another step's output
   deny_when:
-    - "schema/API/interface contract is not yet fixed"
-    - "steps share destructive or order-sensitive side effects"
-    - "a security, auth, payment, or migration invariant could be invalidated by ordering"
-
+  - schema/API/interface contract is not yet fixed
+  - steps share destructive or order-sensitive side effects
+  - a security, auth, payment, or migration invariant could be invalidated by ordering
 failure_policy:
   transient_network_or_rate_limit:
     action: retry
@@ -122,31 +142,30 @@ failure_policy:
     action: abort
   destructive_uncertainty:
     action: ask-user
-
 linear_handoff:
   owner: tasks
   required_fields:
-    - complexity
-    - current_phase
-    - completed_checkpoints
-    - current_outputs
-    - blockers
-    - next_action
-    - exact_head_sha
-    - evidence
-    - residual_risk
-  rule: "Linear is the persistent orchestration state for substantial SAN work; do not create a parallel execution-plan file unless the task specifically needs a design artifact."
-
+  - complexity
+  - current_phase
+  - completed_checkpoints
+  - current_outputs
+  - blockers
+  - next_action
+  - exact_head_sha
+  - evidence
+  - residual_risk
+  rule: Linear is the persistent orchestration state for substantial SAN work; do not create a parallel execution-plan file
+    unless the task specifically needs a design artifact.
 measurement:
   before_adaptive_memory: true
   required_observation_fields:
-    - timestamp
-    - request_summary
-    - predicted_primary
-    - actual_primary
-    - complexity
-    - supporting_predicted
-    - supporting_used
-    - routing_correction
-    - outcome
-    - notes
+  - timestamp
+  - request_summary
+  - predicted_primary
+  - actual_primary
+  - complexity
+  - supporting_predicted
+  - supporting_used
+  - routing_correction
+  - outcome
+  - notes
