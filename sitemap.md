@@ -1,210 +1,193 @@
 ---
-title: mdeai — Sitemap
-updated: 2026-06-06
-app: src/app/ (Next.js App Router, repo root)
+title: MDE AI — Current App Router Sitemap
+updated: 2026-09-15
+source: src/app
+source_sha: 1f56d9f4d9ce13b5a22a13b511c2d68cb0f32723
 prod: https://www.mdeai.co
 ---
 
-# mdeai Sitemap
+# MDE AI — Current App Router Sitemap
 
-## Legend
+This document is the current **source-backed route inventory** for `src/app`.
 
+Rules:
+
+- `src/app` is the source of truth for Next.js pages and route handlers.
+- Planned routes are **not** listed as if they exist. Track planned work in Linear.
+- Route groups such as `(broker)` organize source files but do not appear in the public URL.
+- This Markdown file is a product/developer route inventory. It is separate from a search-engine `sitemap.xml`.
+
+Current inventory: **57 route source files — 32 pages + 25 route handlers.**
+
+## 1. Product pages — 32
+
+### Consumer and discovery
+
+| Route | Source | Current behavior |
+|---|---|---|
+| `/` | `src/app/page.tsx` | Public home/discovery entry |
+| `/chat` | `src/app/chat/page.tsx` | Public AI concierge |
+| `/rentals` | `src/app/rentals/page.tsx` | Public rental browse |
+| `/rentals/[id]` | `src/app/rentals/[id]/page.tsx` | Public rental detail |
+| `/events` | `src/app/events/page.tsx` | Public events browse |
+| `/events/[slug]` | `src/app/events/[slug]/page.tsx` | Public event detail |
+| `/restaurants` | `src/app/restaurants/page.tsx` | Public restaurant browse |
+| `/cafes` | `src/app/cafes/page.tsx` | Public café browse |
+| `/nightlife` | `src/app/nightlife/page.tsx` | Public nightlife browse |
+| `/venues` | `src/app/venues/page.tsx` | Public venue/partner landing |
+| `/saved` | `src/app/saved/page.tsx` | Auth-protected saved items |
+| `/trips` | `src/app/trips/page.tsx` | Auth-protected trips |
+| `/trips/[id]` | `src/app/trips/[id]/page.tsx` | Auth-protected trip detail |
+
+### Tickets and account
+
+| Route | Source | Current behavior |
+|---|---|---|
+| `/login` | `src/app/login/page.tsx` | Public login |
+| `/signup` | `src/app/signup/page.tsx` | Public signup |
+| `/me/tickets` | `src/app/me/tickets/page.tsx` | Auth-protected ticket wallet |
+| `/me/tickets/[id]` | `src/app/me/tickets/[id]/page.tsx` | Auth-protected ticket + QR detail |
+
+### Host
+
+| Route | Source | Current behavior |
+|---|---|---|
+| `/host` | `src/app/host/page.tsx` | Host entry page |
+| `/host/dashboard` | `src/app/host/dashboard/page.tsx` | Auth-protected host dashboard |
+| `/host/analytics` | `src/app/host/analytics/page.tsx` | Auth-protected host analytics |
+| `/host/event/new` | `src/app/host/event/new/page.tsx` | Auth-protected event creation |
+| `/host/events` | `src/app/host/events/page.tsx` | Auth-protected host event list |
+| `/host/rentals` | `src/app/host/rentals/(broker)/page.tsx` | Auth-protected rental-host/broker entry |
+| `/host/rentals/dashboard` | `src/app/host/rentals/(broker)/dashboard/page.tsx` | Auth-protected rental-host dashboard |
+| `/host/rentals/listings` | `src/app/host/rentals/(broker)/listings/page.tsx` | Auth-protected rental listing management |
+| `/host/rentals/onboarding` | `src/app/host/rentals/onboarding/page.tsx` | Auth-protected rental-host onboarding |
+
+> `(broker)` is a Next.js route group and is omitted from the URL.
+
+### Partners and business
+
+| Route | Source | Current behavior |
+|---|---|---|
+| `/partners` | `src/app/partners/page.tsx` | Public partner hub |
+| `/partners/signup` | `src/app/partners/signup/page.tsx` | Public partner signup |
+| `/partners/rentals` | `src/app/partners/rentals/page.tsx` | Existing shell route |
+| `/sponsors` | `src/app/sponsors/page.tsx` | Existing shell route |
+| `/business/ai` | `src/app/business/ai/page.tsx` | Existing shell route |
+
+### Internal operations
+
+| Route | Source | Current behavior |
+|---|---|---|
+| `/admin/event-bookings` | `src/app/admin/event-bookings/page.tsx` | Event-booking operations page |
+
+## 2. Route handlers — 25
+
+### AI runtime and approvals
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/copilotkit/[[...path]]` | `src/app/api/copilotkit/[[...path]]/route.ts` | CopilotKit / Mastra runtime bridge |
+| `/api/approval-commit` | `src/app/api/approval-commit/route.ts` | Approved write/commit flow |
+| `/api/scorers` | `src/app/api/scorers/route.ts` | Scorer endpoint |
+| `/api/threads` | `src/app/api/threads/route.ts` | Conversation/thread endpoint |
+
+### Events
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/events/[id]/public` | `src/app/api/events/[id]/public/route.ts` | Public event retrieval |
+| `/api/events/proposal` | `src/app/api/events/proposal/route.ts` | Event proposal flow |
+| `/api/events/public` | `src/app/api/events/public/route.ts` | Public events endpoint |
+| `/api/events/search` | `src/app/api/events/search/route.ts` | Event search |
+| `/api/grounding/event-web` | `src/app/api/grounding/event-web/route.ts` | Web-grounded event discovery |
+
+### Places and discovery
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/grounded/search` | `src/app/api/grounded/search/route.ts` | Grounded discovery search |
+| `/api/places/detail` | `src/app/api/places/detail/route.ts` | Place detail lookup |
+| `/api/places/photo` | `src/app/api/places/photo/route.ts` | Place photo proxy |
+| `/api/restaurants/search` | `src/app/api/restaurants/search/route.ts` | Restaurant search |
+
+### Rentals and leads
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/rentals/search` | `src/app/api/rentals/search/route.ts` | Rental search |
+| `/api/leads/schedule-viewing` | `src/app/api/leads/schedule-viewing/route.ts` | Rental viewing/lead capture |
+| `/api/host/rentals/listings/[id]/detail` | `src/app/api/host/rentals/listings/[id]/detail/route.ts` | Host rental listing detail |
+| `/api/host/rentals/listings/publish` | `src/app/api/host/rentals/listings/publish/route.ts` | Host rental listing publish |
+
+### Partners and venue booking
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/partners/activate` | `src/app/api/partners/activate/route.ts` | Partner activation |
+| `/api/partners/venue-leads` | `src/app/api/partners/venue-leads/route.ts` | Partner venue leads |
+| `/api/venue-booking/request` | `src/app/api/venue-booking/request/route.ts` | Venue booking request |
+
+### Tickets and payments
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/tickets/checkout` | `src/app/api/tickets/checkout/route.ts` | Ticket checkout creation |
+| `/api/tickets/wallet` | `src/app/api/tickets/wallet/route.ts` | Ticket wallet data |
+
+> Ticket payment webhook processing is handled outside this Next.js route inventory when implemented as a Supabase Edge Function. There is no current `src/app/api/tickets/webhook/route.ts` in this source tree.
+
+### Admin
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/api/admin/event-bookings` | `src/app/api/admin/event-bookings/route.ts` | Admin event-booking API |
+
+### Auth handlers
+
+| Route | Source | Purpose |
+|---|---|---|
+| `/auth/callback` | `src/app/auth/callback/route.ts` | Supabase auth callback |
+| `/auth/signout` | `src/app/auth/signout/route.ts` | Sign out/session clear |
+
+## 3. Inventory summary
+
+| Type | Count |
+|---|---:|
+| Page routes | **32** |
+| Route handlers | **25** |
+| **Total route source files** | **57** |
+
+## 4. Removed stale claims
+
+The previous sitemap mixed implemented routes with roadmap URLs and contained claims that no longer match `src/app`.
+
+This regeneration removes those ambiguities, including the old claims that:
+
+- `/rentals` redirects to `/chat`
+- `/rentals/[id]` is missing
+- planned `/broker/*`, `/admin/*`, `/legal/*`, `/notifications`, `/onboarding`, and other roadmap URLs are already application routes
+- `/api/tickets/webhook` is a current Next.js route handler
+
+Future/planned URLs belong in the MDE AI Linear project until their corresponding `page.tsx` or `route.ts` exists.
+
+## 5. SEO sitemap status
+
+This file is **not** `/sitemap.xml`.
+
+A production search-engine sitemap and robots configuration should be implemented separately through Next.js metadata routes such as:
+
+```text
+src/app/sitemap.ts
+src/app/robots.ts
 ```
-✅  LIVE     route exists + functional (page.tsx / route.ts shipped, tested)
-⚠️  SHELL    route exists but barely implemented — broken or stub only
-🔵  MVP      planned for MVP launch (P0 = blocks launch · P1 = polish)
-⚫  POST     planned post-MVP (Phase 1 W6–W10)
-💫  PHASE 2  advanced / WhatsApp / Phase 2+
-```
 
----
+Do not add those URLs to this inventory until the source files exist.
 
-## Consumer — public-facing pages
+## Regeneration rule
 
-```
-/                                    ✅ LIVE    Marketing home — hero search, FAB, discovery rails (handoff → /chat)
-│
-├── /chat                            ✅ LIVE    Concierge — GeoChatShell (chat + cards + map); canonical AI surface
-│   ├── [overlay] venue-detail-sheet ✅ LIVE    Venue / rental / event detail slides over chat
-│   └── [overlay] schedule-viewing  ✅ LIVE    Camila books a rental viewing (HITL lead capture)
-│
-├── /rentals                         🔵 MVP P0  Redirects to `/chat` today — **REAL-011 (SAN-478)** ships catalog browse
-│   └── /rentals/[id]                ✅ LIVE    Rental detail page — SAN-1202 · RE-DES-007 (gallery·calendar·request-viewing)
-│
-├── /events                          ✅ LIVE    Public events catalog — **SCREEN-027 (SAN-518)** + **SAN-586** API · nav enabled (SAN-584)
-│   └── /events/[slug]               ✅ LIVE    Event detail — ticket tiers + Buy CTA
-│       └── [overlay] booking-checkout  ⚠️ SHELL   Stripe checkout (session works; webhook finalize missing)
-│
-├── /restaurants                     ✅ LIVE    Restaurant browse + filters (SAN-490)
-│   └── /restaurants/[slug]          ⚫ POST    Restaurant detail page
-│
-├── /cafes                           ✅ LIVE    Café browse catalog — **SAN-519** · nav enabled (SAN-584 cafés flip)
-│
-├── /nightlife                       ✅ LIVE    Nightlife browse — curated venue_anchors + chat panels (SCREEN-022)
-│   └── /nightlife/[slug]            ⚫ POST    Nightlife venue / event detail
-│
-├── /saved                           ✅ LIVE    Saved places + collections
-│
-├── /trips                           ⚠️ SHELL   Trips dashboard (page exists, incomplete)
-│   └── /trips/[id]                  ⚠️ SHELL   Trip workspace + itinerary panel
-│
-├── /me
-│   ├── /me/tickets                  ✅ LIVE    Ticket wallet — all purchases (Andrés)
-│   │   └── /me/tickets/[id]         ✅ LIVE    Single ticket + QR code (scan at door)
-│   └── /me/profile                  ⚫ POST    AI memory & personalization — view / edit / delete
-│
-├── /notifications                   💫 PHASE 2 In-app notification centre
-├── /onboarding                      ⚫ POST    Post-signup wizard (preferences + neighborhood)
-│
-├── /login                           ✅ LIVE    Login (functional, visual polish pending)
-├── /signup                          ✅ LIVE    Signup (functional, visual polish pending)
-│
-├── /about                           ⚫ POST    Marketing — about mdeai
-├── /partners                        🔵 MVP P1  Partner hub marketing page — type cards → host/venue/broker/sponsor/agency flows (SAN-692)
-│   ├── /partners/signup             ✅ LIVE    Typed partner signup wizard (?type=…) — SAN-723 merged (#115); calls SAN-665 activate API
-│   ├── /partners/rentals            ⚠️ SHELL   Placeholder (200, "coming soon") — Broker card target; full landing SAN-691
-│   ├── /partners/creator            ⚫ POST    Influencer / creator program (SAN-700)
-│   └── /partners/vendor             💫 PHASE 2 Marketplace vendor onboarding (SAN-698/702)
-├── /sponsors                        ⚠️ SHELL   Placeholder (200, "coming soon") — Sponsor card target; full landing SAN-664
-├── /business/ai                     ⚠️ SHELL   Placeholder (200, "coming soon") — Agency card target; full landing SAN-663 (child of /business SAN-726)
-│   ├── /business/social             ⚫ POST    Postiz social management (SAN-697)
-│   └── /business/event-marketing    ⚫ POST    Event marketing services (SAN-701)
-├── /venues                          ✅ LIVE    Venue landing (?v=restaurant|cafe|nightclub|space) — partner-hub venue verticals route here (SAN-661)
-│   └── /venues/features             ⚫ POST    Venue features deep-dive (SAN-703)
-├── /pricing                         ⚫ POST    Partner pricing across types (SAN-695)
-├── /contact                         ⚫ POST    Book a demo / sales (SAN-693)
-└── /legal
-    ├── /legal/privacy               ⚫ POST    Privacy policy
-    └── /legal/terms                 ⚫ POST    Terms of service
-```
+Whenever `src/app/**/page.tsx` or `src/app/**/route.ts` is added, removed, or moved:
 
----
-
-## Supply — host & broker
-
-```
-/host
-├── /host/dashboard                  ✅ LIVE    Roberto's "is my business healthy today?" home — figure-free AI daily briefing + KPI snapshot + needs-attention triage + quick links + concierge chat (**SAN-1194 · HOST-DASH-001 — Host Dashboard OS**); auth required (307 when logged out)
-├── /host/event/new                  ✅ LIVE    Roberto's AI publish wizard (HITL, CopilotKit)
-│   └── [overlay] approval-panel    ✅ LIVE    Roberto approves AI-drafted event before publish
-├── /host/events                     ✅ LIVE    Host event list — Roberto sees published events (**SAN-118**, **SAN-366**)
-└── /host/analytics                  ✅ LIVE    AI-native sales dashboard — KPI cards hydrate from deterministic `get_sales_insights` results via shared state (**SAN-729 · AIE-008 — Host Analytics Page + HostOpsCopilotBridge**)
-
-/broker                              ⚫ POST    Broker / venue operator dashboard
-├── /broker/leads                    ⚫ POST    Lead inbox (AI-drafted replies, HITL approve/send)
-├── /broker/listings                 ⚫ POST    Manage rental / venue listings
-└── /broker/payouts                  ⚫ POST    Commission + payout accounting
-```
-
----
-
-## Ops — internal / admin
-
-```
-/admin                               ⚫ POST    Patricia: ops command centre (W8)
-├── /admin/leads                     ⚫ POST    Leads CRM — pipeline (New → Contacted → Won/Lost)
-├── /admin/listings                  ⚫ POST    Listing approval queue (verify before going live)
-├── /admin/events                    ⚫ POST    Event moderation queue
-├── /admin/users                     ⚫ POST    User directory + AI memory viewer
-└── /admin/cost                      ⚫ POST    Gemini + Places spend panel (FieldMask / cost levers)
-```
-
----
-
-## Auth (internal — no UI page)
-
-```
-/auth
-├── /auth/callback                   ✅ LIVE    Supabase OAuth callback handler
-└── /auth/signout                    ✅ LIVE    Sign-out + session clear
-```
-
----
-
-## API routes
-
-```
-/api
-
-  ── AI runtime ──────────────────────────────────────────────────────────────────
-  /api/copilotkit/[[...path]]        ✅ LIVE    CopilotKit → Mastra bridge (all agent turns)
-  /api/approval-commit               ✅ LIVE    Roberto HITL — commit approved event draft
-
-  ── Events ──────────────────────────────────────────────────────────────────────
-  /api/events/[id]/public            ✅ LIVE    Fetch a published event by ID (RLS public)
-  /api/events/search                 ✅ LIVE    In-thread event search (Mastra tool)
-  /api/grounding/event-web           ✅ LIVE    Web-grounded event discovery (Gemini + Places)
-
-  ── Places / map ────────────────────────────────────────────────────────────────
-  /api/grounded/search               ✅ LIVE    Grounded place search (restaurants, cafés, nightlife)
-  /api/places/detail                 ✅ LIVE    Single place detail (Places API New, FieldMask-gated)
-  /api/places/photo                  ✅ LIVE    Photo proxy — avoids CORS on client
-
-  ── Rentals ─────────────────────────────────────────────────────────────────────
-  /api/rentals/search                ✅ LIVE    Rental search (Mastra tool → Supabase)
-
-  ── Restaurants ─────────────────────────────────────────────────────────────────
-  /api/restaurants/search            ✅ LIVE    Restaurant search + browse page (deploy pending)
-
-  ── Tickets / payments ──────────────────────────────────────────────────────────
-  /api/tickets/checkout              ✅ LIVE    Create Stripe checkout session → returns sessionUrl
-  /api/tickets/wallet                ✅ LIVE    List buyer's purchased tickets
-  /api/tickets/webhook               🔵 MVP P0  Stripe webhook → finalize order (EVP-003, blocked 🚨)
-
-  ── Leads ───────────────────────────────────────────────────────────────────────
-  /api/leads/schedule-viewing        ✅ LIVE    Camila submits a viewing request → leads table
-
-  ── Admin / broker (proposed) ───────────────────────────────────────────────────
-  /api/admin/approve-listing         ⚫ POST    Patricia approves a listing
-  /api/broker/leads                  ⚫ POST    Broker lead management
-
-  ── Phase 2 ─────────────────────────────────────────────────────────────────────
-  /api/whatsapp/webhook              💫 PHASE 2 WhatsApp Business API inbound handler
-  /api/ai/memory                     💫 PHASE 2 Read / update Camila's AI preference profile
-```
-
----
-
-## Phase 2 — WhatsApp transport
-
-```
-WhatsApp Business (+57 XXX)          💫 PHASE 2 Same Mastra brain, WhatsApp renderer
-  ├── Onboarding flow (interactive buttons)
-  ├── Rental / event / restaurant cards (≤3 picks per bubble — GuideGeek pattern)
-  ├── Location pins
-  ├── Voice note intake
-  └── Human handoff → Chatwoot (hot leads / payments)
-
-/whatsapp                            💫 PHASE 2 Web landing — scan QR or click to open WA chat
-```
-
----
-
-## Summary counts
-
-| Category | ✅ LIVE | ⚠️ SHELL | 🔵 MVP | ⚫ POST | 💫 P2 | Total |
-|----------|:------:|:-------:|:-----:|:------:|:-----:|------:|
-| Consumer pages | 9 | 2 | 3 | 6 | 2 | 23 |
-| Supply pages | 3 | — | — | 3 | — | 6 |
-| Ops pages | — | — | — | 5 | — | 5 |
-| Auth routes | 2 | — | — | — | — | 2 |
-| API routes | 12 | — | 1 | 2 | 2 | 17 |
-| Partner marketing | 1 | 3 | — | 7 | 1 | 12 |
-| **Total** | **27** | **5** | **4** | **23** | **5** | **65** |
-
----
-
-## Critical gaps — MVP launch blockers
-
-| Route / surface | Gap | Priority |
-|-----------------|-----|----------|
-| `ticket-payment-webhook` | Stripe finalize edge fn **deployed** (v33 ACTIVE, `verify_jwt=false`, idempotent, finalize RPC). Remaining: Stripe Dashboard event subscriptions + live checkout→finalize e2e proof | 🟡 verify |
-| `/chat` nav rail | `/chat` serves GeoChatShell (SAN-733); `/` is marketing entry with `?q=` handoff. Nav-rail on concierge shell | ✅ resolved |
-| Mobile bottom-sheet | SCREEN-018 mobile responsive shell shipped (SAN-489 Done, PR #51) | ✅ resolved |
-| `/rentals` display | Redirects to `/chat` — **SAN-478** ships catalog; sidebar greyed until Done | P0 |
-| `/restaurants` browse | Live on prod (SAN-490 + SAN-575 re-skin) | ✅ resolved |
-| `/events` browse | Live on prod (SAN-518 + SAN-586); Events nav enabled (SAN-584) | ✅ resolved |
-| `/cafes` browse | Live on prod (SAN-519); Cafés nav enabled (SAN-584 pattern) | ✅ resolved |
-| `/nightlife` browse | Live (SAN-491 + SAN-575 re-skin) | ✅ resolved |
-| `/host/events` | Live (SAN-118 + SAN-366 Step 0); auth required (307 when logged out) | ✅ resolved |
-| `/rentals/[id]` | Rental detail page doesn't exist — cards link nowhere | P1 |
+1. regenerate this inventory from `src/app`;
+2. verify route groups do not leak into public URLs;
+3. update route counts;
+4. keep roadmap-only URLs in Linear rather than this live inventory.
