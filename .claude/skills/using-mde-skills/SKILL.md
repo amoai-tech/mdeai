@@ -47,6 +47,14 @@ Never inflate S0/S1 work into a full lifecycle merely because skills exist.
 
 Contrast: schema + Mastra tool + approval UI + persistence with no critical write is S3; changing payment webhook idempotency or production RLS is S4.
 
+## Required support rules
+
+- Every substantial implementation route includes `testing`.
+- Every bug/failure route includes `testing`; browser-flake cases also include `playwright-cli` when the failure is in Playwright.
+- Every S4 route includes independent `task-verifier` unless `task-verifier` is already the execution owner.
+- Payment work includes `stripe`; auth/RLS work includes `supabase`; unexplained failure diagnosis includes `systematic-debugging`.
+- These are required dependencies, not optional suggestions. Do not omit them from a routing decision when their condition matches.
+
 ## Handoff rules
 
 - `tasks` is the formal build orchestrator.

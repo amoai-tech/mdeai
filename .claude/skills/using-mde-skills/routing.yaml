@@ -115,6 +115,20 @@ hierarchy:
   - task-verifier
   shipping:
   - mde-worktree-pr-flow
+required_support:
+  substantial_task:
+    always: [testing]
+  bug_or_failure:
+    always: [testing]
+  certify_done:
+    always: [testing]
+  S4:
+    always: [task-verifier]
+    rule: Every S4 route must include task-verifier unless task-verifier is already the execution_owner. Payment work also includes stripe; RLS/auth work includes supabase; unexplained failures include systematic-debugging.
+  payment:
+    always: [stripe]
+  auth_rls:
+    always: [supabase]
 routes:
   substantial_task:
     primary: tasks

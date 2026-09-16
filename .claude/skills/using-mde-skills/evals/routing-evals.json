@@ -1,14 +1,18 @@
 {
-  "version": 2,
+  "version": 3,
+  "schema": {
+    "primary_semantics": "execution_owner",
+    "router": "using-mde-skills",
+    "notes": "All eval cases score primary as execution_owner. S0 direct work uses primary=null. Router identity is scored separately by routing_output_schema."
+  },
   "cases": [
     {
       "id": "task-implement",
       "prompt": "Implement SAN-1264 Stripe Connect payout end to end and update Linear as you go.",
       "primary": "tasks",
       "supporting": [
-        "tdd",
-        "testing",
         "stripe",
+        "testing",
         "task-verifier"
       ],
       "avoid": [
@@ -299,7 +303,7 @@
     {
       "id": "complexity-s0",
       "prompt": "Fix the typo in this already-known docs heading only.",
-      "primary": "using-mde-skills",
+      "primary": null,
       "supporting": [],
       "avoid": [
         "tasks",

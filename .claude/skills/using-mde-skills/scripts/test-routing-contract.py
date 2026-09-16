@@ -23,6 +23,7 @@ assert cases['complexity-s1']['primary'] == 'tdd'
 assert cases['complexity-s2']['primary'] == 'tasks'
 assert cases['complexity-s3']['primary'] == 'tasks'
 assert cases['complexity-s4']['primary'] == 'tasks'
+assert cases['complexity-s0']['primary'] is None
 assert cases['complexity-s4']['complexity'] == 'S4'
 assert routing['complexity']['S3']['examples'][0].startswith('new workflow across')
 assert routing['complexity']['S4']['examples'][0].startswith('payment webhook')

@@ -113,7 +113,7 @@ data=json.loads((ROUTER/'evals/routing-evals.json').read_text()); cases=data.get
 for c in cases:
     pri=c.get('primary'); covered.add(pri)
     if c.get('complexity') not in {'S0','S1','S2','S3','S4'}: errors.append(f'eval {c.get("id")}: invalid/missing complexity {c.get("complexity")}')
-    if pri not in core: errors.append(f'eval {c.get("id")}: unknown primary {pri}')
+    if pri is not None and pri not in core: errors.append(f'eval {c.get("id")}: unknown primary {pri}')
     if not c.get('prompt'): errors.append(f'eval {c.get("id")}: empty prompt')
     active_names={x.name for x in ROOT.iterdir() if x.is_dir() and (x/'SKILL.md').exists()}
     for field in ['supporting','avoid']:
