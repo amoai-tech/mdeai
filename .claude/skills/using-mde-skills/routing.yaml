@@ -64,6 +64,64 @@ route_precedence:
 - evidence_only
 - skill_change
 - substantial_task
+decision_order:
+- detect_s4_trigger
+- classify_intent
+- select_execution_owner
+- attach_required_support
+- select_verifier
+
+intent_rules:
+  certify_done:
+    primary: task-verifier
+    complexity: S4
+  evidence_only:
+    primary: research
+    complexity: S1
+  review_existing_diff:
+    primary: code-review
+    complexity: S1
+  bug_or_failure:
+    primary: systematic-debugging
+    complexity: S2
+
+examples:
+  task-implement:
+    complexity: S4
+    primary: tasks
+    required_support: [stripe, testing, task-verifier]
+  debug-flaky:
+    complexity: S2
+    primary: systematic-debugging
+    required_support: [testing, playwright-cli]
+  review-pr:
+    complexity: S1
+    primary: code-review
+  verify-done:
+    complexity: S4
+    primary: task-verifier
+    required_support: [testing]
+  research-api:
+    complexity: S1
+    primary: research
+    required_support: [mastra]
+  complexity-s1:
+    complexity: S1
+    primary: tdd
+    required_support: [testing]
+  complexity-s2:
+    complexity: S2
+    primary: tasks
+    required_support: [supabase, wireframe, testing]
+  complexity-s3:
+    complexity: S3
+    primary: tasks
+    required_support: [supabase, mastra, wireframe, testing]
+  complexity-s4:
+    complexity: S4
+    primary: tasks
+    required_support: [supabase, systematic-debugging, task-verifier]
+
 routing_output_schema:
   fields:
   - complexity
@@ -120,6 +178,7 @@ required_support:
     always: [testing]
   bug_or_failure:
     always: [testing]
+    when_playwright_flake: [playwright-cli]
   certify_done:
     always: [testing]
   S4:
@@ -129,6 +188,8 @@ required_support:
     always: [stripe]
   auth_rls:
     always: [supabase]
+  unexplained_failure:
+    always: [systematic-debugging]
 routes:
   substantial_task:
     primary: tasks

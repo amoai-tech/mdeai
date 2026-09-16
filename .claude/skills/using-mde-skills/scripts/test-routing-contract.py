@@ -29,4 +29,19 @@ assert routing['complexity']['S3']['examples'][0].startswith('new workflow acros
 assert routing['complexity']['S4']['examples'][0].startswith('payment webhook')
 assert 'Domain skills support' in routing['ownership']['domain_rule']
 assert routing['ownership']['evidence_rule'].startswith('Pure evidence')
+
+# Task 21.9 deterministic routing invariants
+assert routing['decision_order'][0] == 'detect_s4_trigger'
+assert routing['intent_rules']['certify_done']['primary'] == 'task-verifier'
+assert routing['intent_rules']['evidence_only']['primary'] == 'research'
+assert routing['intent_rules']['review_existing_diff']['primary'] == 'code-review'
+assert routing['intent_rules']['bug_or_failure']['primary'] == 'systematic-debugging'
+assert 'task-verifier' in routing['required_support']['S4']['always']
+assert 'testing' in routing['required_support']['substantial_task']['always']
+assert 'playwright-cli' in routing['required_support']['bug_or_failure'].get('when_playwright_flake', [])
+assert routing['examples']['task-implement']['complexity'] == 'S4'
+assert routing['examples']['verify-done']['primary'] == 'task-verifier'
+assert routing['examples']['research-api']['primary'] == 'research'
+assert routing['examples']['complexity-s2']['primary'] == 'tasks'
+
 print('ROUTING CONTRACT TEST: PASS')

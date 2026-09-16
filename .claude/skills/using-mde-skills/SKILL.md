@@ -10,12 +10,13 @@ This skill **routes; it does not implement, debug, review, test, or ship**. Make
 
 ## Router contract
 
-1. Classify the request as **S0–S4** using `routing.yaml`.
-2. Keep the router identity separate from the execution owner: `using-mde-skills` classifies and hands off; the selected primary owner executes.
-3. Select the execution owner by intent precedence: certification → debugging → review → evidence/research → skill authoring → substantial build.
-4. Add only specialists required by the affected stack or unresolved ambiguity.
-5. Return the handoff order and any safe parallel branches.
-6. Do not execute the child workflow from this skill.
+1. **First pass: detect S4 triggers before choosing an owner.** If payment/financial side effects, auth/RLS/tenant boundaries, secrets/security controls, destructive production data, irreversible publishing, or duplicate/retry-sensitive external side effects are present, classify S4 immediately.
+2. Classify intent deterministically from `intent_rules` in `routing.yaml`: certification → debugging/failure → PR/diff review → evidence/research → skill authoring → substantial build.
+3. Keep the router identity separate from the execution owner: `using-mde-skills` classifies and hands off; the selected primary owner executes.
+4. Attach every machine-required specialist from `required_support` in `routing.yaml`; these are mandatory, not suggestions.
+5. Select the independent verifier after support selection. S4 always requires `task-verifier` and may not self-certify.
+6. Return the handoff order and any safe parallel branches.
+7. Do not execute the child workflow from this skill.
 
 ## Output contract
 
@@ -78,3 +79,15 @@ Use the policy in `routing.yaml`: transient failures may retry; optional evidenc
 Think before coding. Prefer the simplest viable solution. Make the smallest safe change. Define observable success before implementation. Current code/runtime evidence outranks stale plans.
 
 Read `routing.yaml` for the machine-readable registry and `references/routing-map.md` for human-readable boundaries.
+
+## Deterministic examples
+
+- Stripe Connect payout end to end → S4, owner `tasks`, support `stripe`, `testing`, verifier `task-verifier`.
+- Flaky Playwright CI failure → S2, owner `systematic-debugging`, support `testing`, `playwright-cli`.
+- Review an existing PR → S1, owner `code-review`.
+- Prove a task is production-ready → S4, owner `task-verifier`, support `testing`.
+- Verify current official Mastra API behavior → S1, owner `research`, support `mastra`.
+- One known parser behavior change + targeted unit test → S1, owner `tdd`, support `testing`.
+- Supabase-backed UI form using an existing API → S2, owner `tasks`, support `supabase`, `wireframe`, `testing`.
+- Schema + Mastra + approval UI + persistence without an S4 trigger → S3, owner `tasks`, support `supabase`, `mastra`, `wireframe`, `testing`.
+- Payment webhook idempotency + production RLS → S4, owner `tasks`, support `supabase`, `systematic-debugging`, verifier `task-verifier`.
