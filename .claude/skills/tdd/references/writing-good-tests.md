@@ -132,7 +132,7 @@ break when the mock changes, switch to an integration test with real
 components. **your human partner's question:** "Do we need to be using a
 mock here?"
 
-### Gate Function
+### Gate Function (Exercise the Real Thing)
 
 ```
 BEFORE adding a mock or test helper:

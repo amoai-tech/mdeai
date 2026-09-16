@@ -91,7 +91,7 @@ C4Context
 
 Zooms into the system to show containers (applications, databases, services).
 
-### Basic Syntax
+### Container Diagram Basic Syntax
 
 ```mermaid
 C4Container

@@ -18,18 +18,12 @@ echo "🔍 Searching for test that creates: $POLLUTION_CHECK"
 echo "Test pattern: $TEST_PATTERN"
 echo ""
 
-# Get list of test files (find . emits ./-prefixed paths, so accept the
-# pattern written with or without a leading ./)
+# Expand the caller's glob with bash's globstar so nested tests are discovered
+# reliably. nullglob makes a no-match pattern expand to zero files.
 TEST_PATTERN="${TEST_PATTERN#./}"
-# find -path can't match '**/' against zero directory levels, so a pattern
-# like src/**/*.test.ts would skip src/top.test.ts; also try the pattern
-# with '**/' collapsed to cover files directly under the base directory.
-TEST_FILES=$(find . \( -path "./$TEST_PATTERN" -o -path "./${TEST_PATTERN//\*\*\//}" \) | sort -u)
-if [ -z "$TEST_FILES" ]; then
-  TOTAL=0
-else
-  TOTAL=$(printf '%s\n' "$TEST_FILES" | wc -l | tr -d ' ')
-fi
+shopt -s globstar nullglob
+TEST_FILES=( $TEST_PATTERN )
+TOTAL=${#TEST_FILES[@]}
 
 echo "Found $TOTAL test files"
 echo ""
@@ -41,13 +35,17 @@ if [ -e "$POLLUTION_CHECK" ]; then
 fi
 
 COUNT=0
-for TEST_FILE in $TEST_FILES; do
+for TEST_FILE in "${TEST_FILES[@]}"; do
   COUNT=$((COUNT + 1))
 
   echo "[$COUNT/$TOTAL] Testing: $TEST_FILE"
 
-  # Run the test
-  npm test "$TEST_FILE" > /dev/null 2>&1 || true
+  # Run the test. Preserve runner failures so syntax/environment errors are not
+  # misreported as a clean polluter search.
+  set +e
+  npm test -- "$TEST_FILE" > /dev/null 2>&1
+  TEST_STATUS=$?
+  set -e
 
   # Check if pollution appeared
   if [ -e "$POLLUTION_CHECK" ]; then
@@ -63,6 +61,11 @@ for TEST_FILE in $TEST_FILES; do
     echo "  npm test $TEST_FILE    # Run just this test"
     echo "  cat $TEST_FILE         # Review test code"
     exit 1
+  fi
+
+  if [ "$TEST_STATUS" -ne 0 ]; then
+    echo "❌ Test runner failed for: $TEST_FILE (exit $TEST_STATUS)" >&2
+    exit "$TEST_STATUS"
   fi
 done
 
