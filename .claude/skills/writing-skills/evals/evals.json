@@ -1,0 +1,17 @@
+{
+  "skill_name": "writing-skills",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a new skill for reviewing Stripe webhooks.",
+      "expected_output": "Check overlap, write concise trigger-oriented metadata, progressive-disclosure structure, and eval prompts.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "This SKILL.md is 900 lines and repeats three reference guides. Improve it.",
+      "expected_output": "Move heavy material to references, preserve ownership, validate links/triggers, and reduce duplicated main-body context.",
+      "files": []
+    }
+  ]
+}

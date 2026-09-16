@@ -1,0 +1,17 @@
+{
+  "skill_name": "systematic-debugging",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A Next.js API route started returning 500 after a dependency update. Fix it quickly.",
+      "expected_output": "Reproduce and trace the failure before proposing a patch; isolate one hypothesis and add regression proof.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "A Playwright test is flaky about one run in ten.",
+      "expected_output": "Treat reruns as evidence, investigate timing/state pollution, and avoid sleep/retry-only fixes.",
+      "files": []
+    }
+  ]
+}
