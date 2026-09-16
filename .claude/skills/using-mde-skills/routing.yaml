@@ -10,8 +10,9 @@ complexity:
     orchestration: none
     examples:
     - typo
-    - known one-line config edit
+    - known one-line docs or non-behavioral config edit
     - simple lookup
+    rule: S0 is direct work with no child workflow. Any application-code behavior change is at least S1 even if it is one line.
   S1:
     name: focused
     orchestration: single-primary
@@ -51,6 +52,35 @@ complexity:
     - destructive migration
     - publishing
     - production incident
+ownership:
+  router: using-mde-skills
+  rule: Keep router identity separate from the execution owner; the router classifies and hands off, then exits.
+  domain_rule: Domain skills support the workflow owner unless the request is narrow and domain-only.
+  evidence_rule: Pure evidence gathering stays owned by research; domain skills provide subject-matter support.
+route_precedence:
+- certify_done
+- bug_or_failure
+- review_existing_diff
+- evidence_only
+- skill_change
+- substantial_task
+routing_output_schema:
+  fields:
+  - complexity
+  - router
+  - execution_owner
+  - supporting
+  - verifier
+  - subagents
+  - self_certify
+  - s4_trigger
+  rules:
+  - router is always using-mde-skills when this router is invoked
+  - execution_owner is exactly one route primary owner or null for S0 direct work
+  - supporting contains only additional skills required by the contract; never repeat router, execution_owner, or verifier
+  - verifier is task-verifier only when independent completion proof is required; otherwise null
+  - self_certify must be false for S4
+  - s4_trigger must name the explicit S4 trigger or be null
 hierarchy:
   router:
   - using-mde-skills

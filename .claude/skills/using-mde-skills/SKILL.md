@@ -11,10 +11,15 @@ This skill **routes; it does not implement, debug, review, test, or ship**. Make
 ## Router contract
 
 1. Classify the request as **S0–S4** using `routing.yaml`.
-2. Select one primary owner from the registered hierarchy.
-3. Add only specialists required by the affected stack or unresolved ambiguity.
-4. Return the handoff order and any safe parallel branches.
-5. Do not execute the child workflow from this skill.
+2. Keep the router identity separate from the execution owner: `using-mde-skills` classifies and hands off; the selected primary owner executes.
+3. Select the execution owner by intent precedence: certification → debugging → review → evidence/research → skill authoring → substantial build.
+4. Add only specialists required by the affected stack or unresolved ambiguity.
+5. Return the handoff order and any safe parallel branches.
+6. Do not execute the child workflow from this skill.
+
+## Output contract
+
+When asked to return a routing decision, use these fields exactly: `complexity`, `router`, `execution_owner`, `supporting`, `verifier`, `subagents`, `self_certify`, `s4_trigger`. `router` is `using-mde-skills`; `execution_owner` is the workflow owner. Never overload `primary` to mean both. Domain skills support the owner unless the request is narrow and domain-only.
 
 ## Primary owners
 
@@ -30,7 +35,7 @@ This skill **routes; it does not implement, debug, review, test, or ship**. Make
 
 ## Complexity gate
 
-- **S0 — trivial:** direct edit/query; no orchestration.
+- **S0 — trivial:** direct docs/non-behavioral config edit or lookup; no child workflow or subagent. Any application-code behavior change is at least S1, even when one line.
 - **S1 — focused:** one primary skill; specialists only if required.
 - **S2 — multi-part:** primary orchestrator + a small specialist set.
 - **S3 — system change:** dependency-aware cross-system work with explicit checkpoints and review, when no S4 risk trigger is present.
@@ -38,13 +43,18 @@ This skill **routes; it does not implement, debug, review, test, or ship**. Make
 
 Never inflate S0/S1 work into a full lifecycle merely because skills exist.
 
+**S4 is trigger-based, not breadth-based.** Multiple systems, persistence, a database, Mastra workflows, approval UI, or many skills do not by themselves make work S4. Use S4 only when an explicit `routing.yaml` S4 trigger is present. Otherwise broad cross-system work remains S3.
+
+Contrast: schema + Mastra tool + approval UI + persistence with no critical write is S3; changing payment webhook idempotency or production RLS is S4.
+
 ## Handoff rules
 
 - `tasks` is the formal build orchestrator.
 - `systematic-debugging` owns diagnosis until root cause is established.
 - `code-review` and `task-verifier` remain independent critics (`context: fork`).
 - `mde-worktree-pr-flow` owns Git mechanics only after the implementation/review path is known.
-- Domain skills explain **how** to work in their system; they do not replace the workflow owner.
+- Domain skills explain **how** to work in their system; they do not replace the workflow owner. Multi-part UI + API/data work is a substantial build owned by `tasks`, not a narrow domain-only request.
+- Pure evidence verification from current/official sources is owned by `research`; the relevant domain skill supports it rather than replacing it.
 - `mermaid-diagrams`, `wireframe`, `domain-modeling`, `codebase-design`, and `research` are conditional reasoning aids, not mandatory ceremony.
 
 ## Parallelization rule

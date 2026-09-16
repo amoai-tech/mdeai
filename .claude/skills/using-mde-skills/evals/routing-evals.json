@@ -7,12 +7,14 @@
       "primary": "tasks",
       "supporting": [
         "tdd",
-        "testing"
+        "testing",
+        "stripe",
+        "task-verifier"
       ],
       "avoid": [
         "systematic-debugging"
       ],
-      "complexity": "S3"
+      "complexity": "S4"
     },
     {
       "id": "task-resume",
@@ -309,9 +311,8 @@
     {
       "id": "complexity-s1",
       "prompt": "Change one known parser condition and run its targeted unit test.",
-      "primary": "using-mde-skills",
+      "primary": "tdd",
       "supporting": [
-        "tdd",
         "testing"
       ],
       "avoid": [
@@ -323,9 +324,8 @@
     {
       "id": "complexity-s2",
       "prompt": "Add a Supabase-backed form using an existing API contract and update its UI states.",
-      "primary": "using-mde-skills",
+      "primary": "tasks",
       "supporting": [
-        "tasks",
         "supabase",
         "wireframe",
         "testing"
@@ -337,9 +337,8 @@
     {
       "id": "complexity-s3",
       "prompt": "Create a new booking workflow spanning schema, Mastra tool, approval UI, and persistence.",
-      "primary": "using-mde-skills",
+      "primary": "tasks",
       "supporting": [
-        "tasks",
         "supabase",
         "mastra",
         "wireframe",
@@ -352,9 +351,8 @@
     {
       "id": "complexity-s4",
       "prompt": "Change payment webhook idempotency and RLS in production-critical booking flow.",
-      "primary": "using-mde-skills",
+      "primary": "tasks",
       "supporting": [
-        "tasks",
         "supabase",
         "systematic-debugging",
         "task-verifier"
