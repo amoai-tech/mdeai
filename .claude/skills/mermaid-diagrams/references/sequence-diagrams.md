@@ -235,8 +235,9 @@ sequenceDiagram
     Database-->>-AuthAPI: User record
 
     alt User not found
-        AuthAPI-->>Frontend: 404 User not found
-        Frontend-->>User: Show error
+        AuthAPI->>AuthAPI: Log detailed cause server-side
+        AuthAPI-->>Frontend: 401 Authentication failed
+        Frontend-->>User: Show generic login error
     else User found
         AuthAPI->>AuthAPI: Verify password hash
 
@@ -248,8 +249,9 @@ sequenceDiagram
                 AuthAPI->>EmailService: Send security alert
             end
 
-            AuthAPI-->>Frontend: 401 Invalid credentials
-            Frontend-->>User: Show error
+            AuthAPI->>AuthAPI: Log detailed cause server-side
+            AuthAPI-->>Frontend: 401 Authentication failed
+            Frontend-->>User: Show generic login error
         else Valid password
             AuthAPI->>AuthAPI: Generate JWT token
             AuthAPI->>+Redis: Store session
@@ -261,8 +263,8 @@ sequenceDiagram
                 AuthAPI->>Database: Log login event
             end
 
-            AuthAPI-->>-Frontend: 200 OK + JWT token
-            Frontend->>Frontend: Store token in localStorage
+            AuthAPI-->>-Frontend: 200 OK + HttpOnly, Secure, SameSite session cookie
+            Frontend->>Frontend: Keep session credential inaccessible to JavaScript
             Frontend-->>-User: Redirect to dashboard
 
             opt First login

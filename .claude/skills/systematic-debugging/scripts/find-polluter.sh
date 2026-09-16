@@ -34,16 +34,15 @@ fi
 echo "Found $TOTAL test files"
 echo ""
 
+if [ -e "$POLLUTION_CHECK" ]; then
+  echo "❌ Pollution already exists before the polluter search: $POLLUTION_CHECK" >&2
+  echo "   Remove or isolate the pre-existing pollution, then rerun." >&2
+  exit 2
+fi
+
 COUNT=0
 for TEST_FILE in $TEST_FILES; do
   COUNT=$((COUNT + 1))
-
-  # Skip if pollution already exists
-  if [ -e "$POLLUTION_CHECK" ]; then
-    echo "⚠️  Pollution already exists before test $COUNT/$TOTAL"
-    echo "   Skipping: $TEST_FILE"
-    continue
-  fi
 
   echo "[$COUNT/$TOTAL] Testing: $TEST_FILE"
 

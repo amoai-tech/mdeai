@@ -341,18 +341,25 @@ flowchart TD
     Edit -->|Shipping| Shipping
     Edit -->|Payment| Payment
 
-    Confirm -->|Yes| ProcessPayment[Process payment]
-    ProcessPayment --> PaymentResult{Payment successful?}
+    Confirm -->|Yes| CreateOrder[(Create pending order + stable idempotency key)]
+    CreateOrder --> ProcessPayment[Submit payment with idempotency key]
+    ProcessPayment --> PaymentResult{Provider outcome?}
 
-    PaymentResult -->|No| PaymentError[Show payment error]
-    PaymentError --> RetryPayment{Retry?}
-    RetryPayment -->|Yes| Payment
-    RetryPayment -->|No| Cancel([Order cancelled])
-
-    PaymentResult -->|Yes| CreateOrder[(Create order record)]
-    CreateOrder --> ReduceStock[Reduce inventory]
+    PaymentResult -->|Success| MarkPaid[(Persist paid state)]
+    MarkPaid --> ReduceStock[Reduce inventory]
     ReduceStock --> SendConfirmation[Send confirmation email]
     SendConfirmation --> Success([Order complete - Show confirmation])
+
+    PaymentResult -->|Definitive failure| PaymentError[Persist failed state + show payment error]
+    PaymentError --> RetryPayment{Retry requested?}
+    RetryPayment -->|Yes| ReuseKey[Reuse same durable order + idempotency key]
+    ReuseKey --> ProcessPayment
+    RetryPayment -->|No| Cancel([Order cancelled])
+
+    PaymentResult -->|Unknown/timeout| Reconcile[Query provider / reconcile unknown outcome]
+    Reconcile -->|Paid| MarkPaid
+    Reconcile -->|Not charged| RetryPayment
+    Reconcile -->|Still unknown| Hold[Keep pending; do not retry]
 
     style Start fill:#90EE90
     style Success fill:#90EE90

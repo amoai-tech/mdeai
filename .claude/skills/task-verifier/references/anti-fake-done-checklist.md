@@ -12,6 +12,7 @@ Use during **Standard** and **Adversarial** verification. Every applicable row r
 | False green | plausible ways for tests to pass while outcome fails are disproved |
 | Tests | risk-matched positive/negative/recovery/browser/SQL/runtime tests pass |
 | Security | auth/tenant/HITL/secrets/destructive-write boundaries proved when applicable |
+| Runtime proof | source/config changes have relevant localhost/runtime proof before a Done claim |
 | Retry/idempotency | side-effect retries/replays/partial failures cannot corrupt or duplicate durable state |
 | Supply chain | dependency/workflow changes are intentional, compatible, and safe when applicable |
 | Journey | complete business journey proved for user-facing work |

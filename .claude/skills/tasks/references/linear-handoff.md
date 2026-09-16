@@ -14,4 +14,4 @@ Evidence: <tests/CI/runtime proof>
 Residual risk: <known remaining risk>
 ```
 
-Update only after evidence changes. If a checkpoint regresses, move it back to incomplete and reduce progress. Do not create a second execution-plan file just to mirror this state.
+Update when execution state or evidence changes, including phase transitions, blockers, STOP decisions, and next action. If a checkpoint regresses, move it back to incomplete and reduce progress. Do not create a second execution-plan file just to mirror this state.

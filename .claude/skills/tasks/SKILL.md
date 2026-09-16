@@ -65,7 +65,7 @@ Parallelize only independent steps whose dependencies are complete, which do not
 ## Source of truth
 
 1. Current runtime/live state when applicable.
-2. Current `origin/main` code, tests, migrations, and `src/app`.
+2. Current code baseline after resolving the active PR base, parent branch, or merge-base. Use `origin/main` only when it is the relevant base or already contains inherited stacked-branch changes.
 3. Live Linear task for scope, acceptance criteria, ownership, priority, and status.
 4. Canonical current docs under `docs/`.
 5. Archived/historical/reference material last.
@@ -149,7 +149,7 @@ If even migration batches cannot stay green independently, use an explicit integ
 ## Required execution behavior
 
 - For substantial code work or cross-file dependency/blast-radius discovery, use Graphify first when `graphify-out/graph.json` exists: run `PATH="$HOME/.local/bin:$PATH" graphify query "<question>"`, then use `graphify path` / `graphify explain` for focused relationships and the wiki index for broad navigation. For a narrow docs/config-only task with an already-known target where Graphify adds no useful proof, use direct inspection and record `Graphify: N/A — <reason>`.
-- Inspect current clean `origin/main` before trusting the issue text.
+- Resolve the active PR base, parent branch, or merge-base before trusting the issue text or inherited implementation. Inspect clean `origin/main` only when it is the relevant base or already contains the inherited stacked changes.
 - Reuse the current MDE implementation before historical/reference code or custom code.
 - Before implementation, classify risk domains: auth/tenant, Supabase schema/migration, privileged DB function/RPC, consequential AI/HITL, external side effect/webhook, payment/publishing, production config, dependency/Action. Any high-risk domain requires Adversarial task-verifier coverage.
 - For Mastra work, also classify applicable risk domains: **agent registry/identity, model/provider, tool schema, tool authority, external side effect, RequestContext/tenant context, memory resource/thread scope, persistent storage, streaming/Stop/abort, workflow, suspend/resume, HITL approval, MCP, observability/evals, Mastra package-family change**. Tenant identity, memory ownership, consequential tools, approval/resume, callback/webhook continuation, persistent storage, cancellation, MCP auth, or package-family changes automatically require Adversarial task-verifier coverage.

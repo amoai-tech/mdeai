@@ -41,7 +41,7 @@ service {serviceId}({icon})[{title}] (in {parentId})?
 architecture-beta
     service api(server)[API Server]
     service db(database)[Database]
-    service cache(redis)[Cache] in api
+    service cache(database)[Cache] in api
 ```
 
 ### Edges
@@ -140,9 +140,9 @@ architecture-beta
     group internet(cloud)[Internet]
     group private_vpc(cloud)[Private VPC]
 
-    service lb(load_balancer)[Load Balancer] in internet
-    service api1(api)[API Server 1] in private_vpc
-    service api2(api)[API Server 2] in private_vpc
+    service lb(internet)[Load Balancer] in internet
+    service api1(server)[API Server 1] in private_vpc
+    service api2(server)[API Server 2] in private_vpc
     service db(database)[Primary Database] in private_vpc
     service replica(database)[Read Replica] in private_vpc
 

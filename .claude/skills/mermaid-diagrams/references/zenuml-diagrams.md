@@ -43,7 +43,7 @@ Special participant types:
 ### Synchronous (Blocking)
 ```mermaid
 zenuml
-    Client -> Server: request()
+    Client.request()
 ```
 
 ### Asynchronous (Non-blocking)
