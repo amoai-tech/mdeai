@@ -1,57 +1,199 @@
-# mdeapp
+# MDE AI
 
-The mdeai application — an AI-first, chat-first, map-first discovery and ticketing platform for Medellín. Built on Next.js 16 + CopilotKit 1.55.2 + Mastra + Gemini 3.5 Flash + Supabase.
+MDE AI is an AI-native discovery and concierge platform for Medellín. It combines conversational AI, maps, local discovery, bookings, ticketing, rentals, events, venues, restaurants, cafés/nightlife, trips, and partner workflows in one application.
 
-> Phase 1, Week 2. This repo is the **new** mdeai codebase. Legacy `/home/sk/mde/` freezes 2026-05-26 — see [`/home/sk/mde/FREEZE.md`](../../mde/FREEZE.md).
+Production: https://www.mdeai.co
 
-**5-minute onboarding:** read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — it has the diagram, data-flow tables, invariants, and a "Where do I add X?" matrix.
+## Start here
 
-## Architecture
-
-| Layer | Tech |
+| Need | Go to |
 |---|---|
-| Frontend | Next.js 16 (App Router, React 19, Turbopack, Tailwind v4) |
-| AI chat shell | CopilotKit 1.55.2 (pinned — see `plan/prd/03-architecture.md` §12) |
-| AG-UI bridge | `@ag-ui/mastra` (beta) |
-| Agent runtime | Mastra (beta) — agents in `src/mastra/agents/` |
-| Model | Gemini 3.5 Flash via `@ai-sdk/google` (env: `GOOGLE_GENERATIVE_AI_API_KEY`) |
-| Data | Supabase project `zkwcbyxiwklihegjhuql` — reused from legacy mdeai (122 tables, RLS-tight) |
-| Maps | `@vis.gl/react-google-maps` + `@googlemaps/js-markerclusterer` (W5+) |
-| Payments | Stripe (W9+) |
+| Documentation | [`docs/README.md`](docs/README.md) |
+| Current documentation audit/index | [`docs/index-docs.md`](docs/index-docs.md) |
+| Product documentation | [`docs/01-product/`](docs/01-product/) |
+| Architecture | [`docs/02-architecture/`](docs/02-architecture/) |
+| Platform and integrations | [`docs/03-platform/`](docs/03-platform/) |
+| Domain documentation | [`docs/04-domains/`](docs/04-domains/) |
+| Design | [`docs/05-design/`](docs/05-design/) |
+| Testing | [`docs/06-testing/`](docs/06-testing/) |
+| Operations | [`docs/07-operations/`](docs/07-operations/) |
+| Strategy | [`docs/08-strategy/`](docs/08-strategy/) |
+| Live work and priorities | [Linear — MDE AI](https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues) |
 
-## Project layout
+## Source of truth
 
-```
-mdeapp/
+Use these sources in this order:
+
+1. **Linear** — live task status, priority, ownership, and execution order.
+2. **Merged `main`** — shipped repository truth.
+3. **`src/app`** — implemented page and API route truth.
+4. **Code, migrations, package manifests, and tests** — implementation details and behavior.
+5. **Documentation** — explanation and guidance; docs must follow the sources above when they disagree.
+
+Do not use old task files, roadmap snapshots, stale commit SHAs, or archived documentation as current execution status.
+
+## Product
+
+MDE AI is built around a conversational concierge connected to structured product experiences rather than a standalone chatbot.
+
+Current application areas include:
+
+- AI concierge and chat
+- map-based local discovery
+- events and event detail flows
+- rentals and host/broker workflows
+- restaurants, cafés, and nightlife discovery
+- venues and venue booking workflows
+- trips and saved experiences
+- ticket checkout and ticket wallet flows
+- partner, sponsor, and business workflows
+
+The repository also contains supporting APIs, agent tools, grounding/search flows, authentication, analytics, testing, and operational tooling.
+
+## Core stack
+
+The versions below are taken from the repository package manifest on this branch.
+
+| Layer | Technology |
+|---|---|
+| Web app | Next.js `16.2.6`, React `19.2.1`, TypeScript |
+| Styling/UI | Tailwind CSS 4, Base UI, shadcn, Lucide |
+| AI UI/runtime bridge | CopilotKit `1.55.2`, AG-UI |
+| Agent runtime | Mastra beta |
+| Default AI model | Gemini `3.5 Flash` via `@ai-sdk/google` |
+| Data/auth | Supabase |
+| Maps/places | Google Maps via `@vis.gl/react-google-maps`, Google Places |
+| Commerce | Medusa SDK where applicable |
+| Payments | Stripe-backed application flows |
+| Testing | Vitest + Playwright |
+
+> Dependency versions change. Treat `package.json` and the lockfile as authoritative.
+
+## Repository layout
+
+```text
+mdeai/
 ├── src/
-│   ├── app/
-│   │   ├── api/copilotkit/route.ts   ← CopilotRuntime + MastraAgent bridge
-│   │   ├── layout.tsx                ← <CopilotKit agent="pingAgent">
-│   │   ├── page.tsx                  ← W1 ping shell · W3+ Roberto host event · W6 Camila chat
-│   │   └── globals.css
-│   ├── components/                   ← shadcn cards land here from W2
-│   ├── lib/
-│   │   └── types.ts                  ← MdeState (W1) → EventDraftState (W3) → ...
-│   └── mastra/
-│       ├── index.ts                  ← Mastra({ agents: { pingAgent } })
-│       ├── agents/index.ts           ← pingAgent (W1), hostEventAgent (W3), ...
-│       └── tools/index.ts            ← empty W1; set_event_basics, set_venue, etc. W3+
-├── public/
-├── package.json                      ← pins CK 1.55.2 + Next 16.2.6 + Mastra beta
-└── next.config.ts                    ← serverExternalPackages: ["@copilotkit/runtime"]
+│   ├── app/             # Next.js pages, layouts, route handlers and APIs
+│   ├── components/      # shared product/UI components
+│   ├── hooks/           # application hooks
+│   ├── lib/             # domain and integration logic
+│   └── mastra/          # agents, tools, model/runtime configuration
+├── supabase/            # database migrations and Supabase configuration
+├── e2e/                 # Playwright end-to-end tests
+├── scripts/             # verification, smoke, audit and maintenance scripts
+├── docs/                # product, architecture, platform and domain documentation
+├── public/              # static assets
+├── package.json
+└── README.md
 ```
 
-## Status
+## Local development
 
-- W1 — `pingAgent` proves CopilotKit ↔ AG-UI ↔ Mastra ↔ Gemini wiring (this week)
-- W3 — Roberto host event flow (HITL via `renderAndWaitForResponse`)
-- W5 — Maps + rentals
-- W6 — Camila chat + read-only map state
-- W9 — Stripe ticket flow
-- W10 — Cutover from legacy mde
+### Requirements
 
-See `/home/sk/mdeai/plan/prd.md` for the full Phase 1 plan and `/home/sk/mdeai/tasks/INDEX.md` for current task status.
+- Node.js 20 or newer
+- npm
+- required environment variables in `.env.local`
 
-## License
+Install dependencies:
 
-MIT (inherited from CopilotKit Mastra example, retained per their license).
+```bash
+npm install
+```
+
+Run the application and Mastra development runtime together:
+
+```bash
+npm run dev
+```
+
+Default local services:
+
+```text
+Next.js UI     http://localhost:3001
+Mastra         http://localhost:4111
+```
+
+Run only the UI:
+
+```bash
+npm run dev:ui
+```
+
+## Verification
+
+Use the repository checks before considering a change complete:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Full verification floor:
+
+```bash
+npm run floor
+```
+
+Useful focused commands include:
+
+```bash
+npm run test:mastra
+npm run test:lib
+npm run test:api
+npm run test:e2e
+npm run test:e2e:prod-synthetic
+```
+
+See [`docs/06-testing/`](docs/06-testing/) for the testing documentation as it is migrated into the canonical structure.
+
+## Documentation structure
+
+The documentation is being consolidated into:
+
+```text
+docs/
+├── README.md
+├── 01-product/
+├── 02-architecture/
+├── 03-platform/
+├── 04-domains/
+├── 05-design/
+├── 06-testing/
+├── 07-operations/
+├── 08-strategy/
+└── _archive/
+```
+
+Legacy documentation remains in place during the migration so useful history and evidence are not lost. Files are moved, merged, rewritten, or archived only after they are audited.
+
+## Development workflow
+
+- Use a dedicated branch/worktree for scoped work.
+- Keep `main` clean and synchronized with `origin/main`.
+- Keep PRs focused and reviewable.
+- Put live task status in Linear rather than duplicating it in Markdown.
+- Verify behavior with tests and runtime evidence, not documentation claims alone.
+- Preserve historical evidence before cleanup or archival.
+
+## Project tracking
+
+Live MDE AI work is tracked in Linear:
+
+https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
+
+Documentation migration work currently follows:
+
+```text
+Task 44 · Define Documentation Architecture
+Task 45 · Audit Docs Against Current Code
+Task 46 · Rewrite Core MDE Documentation
+Task 47 · Rewrite Domain Documentation
+Task 48 · Consolidate and Archive Legacy Docs
+Task 49 · Add Documentation Drift Prevention
+```
+
+The sequence above describes the documentation migration only. Linear remains authoritative for each task's actual current status.
