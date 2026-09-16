@@ -1,6 +1,6 @@
 ---
 title: Workspace SKILL.md and Agent Skills
-description: Load when authoring workspace SKILL.md trees or Agent Skills spec under my-mastra-app/workspace.
+description: Load when authoring Mastra workspace SKILL.md trees or Agent Skills-compatible workspace content.
 parent: mastra
 impact: MEDIUM
 impactDescription: SKILL folder layout and Mastra workspace wiring
@@ -8,7 +8,7 @@ tags: mastra, skills, workspace, agentskills
 ---
 
 > **Live docs:** [Workspace skills](https://mastra.ai/docs/workspace/skills) · [Creating a workspace (skills)](https://mastra.ai/docs/workspace/overview#creating-a-workspace)  
-> **mdeai `my-mastra-app`:** SKILL trees under [`workspace/skills/*/SKILL.md`](../../../../my-mastra-app/workspace/skills); Workspace config sets `skills: ['skills']` in [`src/mastra/workspaces.ts`](../../../../my-mastra-app/src/mastra/workspaces.ts). `SKILL.md` must begin at line 1 with YAML `name` and `description`; do not wrap the whole file in a markdown code fence (that breaks Mastra metadata parsing).
+> **MDE current app:** SKILL trees under `workspace/skills/*/SKILL.md` (only when that optional workspace exists); Workspace config sets `skills: ['skills']` in [`src/mastra/workspaces.ts`](../../../../src/mastra/workspaces.ts). `SKILL.md` must begin at line 1 with YAML `name` and `description`; do not wrap the whole file in a markdown code fence (that breaks Mastra metadata parsing).
 
 # Workspace skills
 

@@ -1,0 +1,48 @@
+{
+  "skill_name": "copilotkit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The /api/copilotkit stream is returning 500 after a runtime change. Diagnose the CopilotKit side without rewriting Mastra tools.",
+      "expected_output": "Routes to CopilotKit plus systematic debugging; verifies installed v2/runtime wiring and current official sources before proposing a change.",
+      "files": [],
+      "expectations": [
+        "Uses CopilotKit for the browser/runtime boundary",
+        "Verifies installed/current source rather than answering volatile API details from memory",
+        "Does not rewrite Mastra tool business logic"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A Mastra search tool executes successfully but the CopilotKit v2 card never renders. What should we verify?",
+      "expected_output": "Checks frontend action/tool registration against the Mastra tool-map key, AG-UI result flow, and rendered browser path.",
+      "files": [],
+      "expectations": [
+        "Checks the CopilotKit action/tool-name contract",
+        "Checks AG-UI/tool result handling",
+        "Requires browser-visible proof, not only a tool unit test"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The event host publishing rule needs to change from draft-only to draft-or-reviewed.",
+      "expected_output": "Does not select CopilotKit as the owner because this is a product-domain rule with no CopilotKit dependency.",
+      "files": [],
+      "expectations": [
+        "Does not treat CopilotKit as the primary owner",
+        "Routes to the relevant product/domain workflow instead"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Can we copy a CopilotKit main-branch example into our app? We are on @copilotkit/react-core 1.55.2.",
+      "expected_output": "Checks installed package/version and pinned/current official source first; preserves v2 import/runtime contract and refuses blind latest-main copying.",
+      "files": [],
+      "expectations": [
+        "Checks installed version before using examples",
+        "Does not blindly substitute latest-main API behavior",
+        "Preserves the v2 surface when applicable"
+      ]
+    }
+  ]
+}

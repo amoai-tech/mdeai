@@ -58,7 +58,7 @@ Official CopilotKit guide shows **standalone Mastra server** + `registerCopilotK
 
 **mdeapp Phase 1** uses **in-process** Pattern 1: `MastraAgent.getLocalAgents({ mastra })` in Next.js `/api/copilotkit` — **not** `:4111/chat`.
 
-Load: [`copilotkit-integrations` → mastra.md](../../copilotkit-integrations/references/integrations/mastra.md) before changing runtime wiring.
+Load: [`copilotkit-integrations` → mastra.md](../../copilotkit/references/mastra-bridge.md) before changing runtime wiring.
 
 If you deploy a **bundled** Mastra server with CopilotKit, externalize `@copilotkit/runtime` in bundler config (see official CopilotKit guide deployment section).
 

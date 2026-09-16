@@ -27,7 +27,7 @@ Use this file to jump from a **task or question** to the right **official URL ta
 | Studio UI, deploy Studio, Studio auth | [Studio](../links.md#studio) | — |
 | Editor (stored agents, prompts, tools) | [Editor](../links.md#editor-stored-agents-prompts-tools) | — |
 | Agent behavior, tools, output, supervisor, HITL-ish | [Agents](../links.md#agents) | [`embedded-docs.md`](embedded-docs.md) → Agent |
-| **CopilotKit + Mastra (official guide)** | [Guides — build your UI](../links.md#guides-build-your-ui) · [mdeai stack table](../links.md#mdeai-stack-not-in-supatabs-paste--load-first-for-this-repo) | [`../copilotkit-integrations/references/integrations/mastra.md`](../../copilotkit-integrations/references/integrations/mastra.md) for mdeapp Pattern 1 |
+| **CopilotKit + Mastra (official guide)** | [Guides — build your UI](../links.md#guides-build-your-ui) · [mdeai stack table](../links.md#mdeai-stack-not-in-supatabs-paste--load-first-for-this-repo) | [`../../copilotkit/references/mastra-bridge.md`](../../copilotkit/references/mastra-bridge.md) for mdeapp Pattern 1 |
 | A2A / ACP / supervisor (Phase 2 defer for mdeai) | [Agents](../links.md#agents) · [Supatabs Agents](../links.md#agents-1) | Document only — do not wire in Phase 1 concierge |
 | DAG steps, suspend/resume, errors, HITL | [Workflows](../links.md#workflows) · [Reference — workflows](../links.md#reference--workflows) | [`references/workflows.md`](workflows.md) · [`embedded-docs.md`](embedded-docs.md) → Workflow |
 | Message history, storage, recall | [Memory](../links.md#memory) · [Reference — memory](../links.md#reference--memory) | [`references/memory.md`](memory.md) · [`embedded-docs.md`](embedded-docs.md) → Memory |

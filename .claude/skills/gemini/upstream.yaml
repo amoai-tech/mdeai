@@ -1,0 +1,21 @@
+vendor: Google Gemini
+repository: https://github.com/google-gemini/gemini-skills
+source_path: skills
+reviewed_commit: 80dd31dda25bbe1410207df0adb3e0d591c2c634
+reviewed_at: 2026-09-15
+policy:
+  active_skill: gemini
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+sources:
+  api:
+    local: references/official/gemini-api-dev
+  live_api:
+    local: references/official/gemini-live-api-dev
+    activation: reference-only-until-adopted
+  omni_flash:
+    local: references/official/gemini-omni-flash-api
+    activation: reference-only-until-adopted
+combined_tree_sha256: 9cb960898d2a22bde524ac27ea08f2f5188ae5f54814ee99d5e7e20596d8d3e9
+hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)

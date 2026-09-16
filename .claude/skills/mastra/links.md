@@ -198,7 +198,7 @@ Concept docs above; **API reference** below. Use **`mastraDocs`** paths in the r
 | Migration — network to supervisor | https://mastra.ai/guides/migrations/network-to-supervisor |
 | Migration — upgrade to v1 (overview) | https://mastra.ai/guides/migrations/upgrade-to-v1/overview |
 
-**mdeai rentals V2 mapping:** [`tasks/real-estate/V2-real-estate.md/prd-real-estateV2.md`](../../../tasks/real-estate/V2-real-estate.md/prd-real-estateV2.md) §4.6–4.8 · [`roadmap.md`](../../../tasks/real-estate/V2-real-estate.md/roadmap.md) §6.1.
+**mdeai rentals V2 mapping:** historical real-estate V2 task docs (no longer active local dependencies).
 
 ---
 
@@ -783,7 +783,7 @@ Index: https://mastra.ai/reference/memory/
 | Migration | [`references/migration-guide.md`](references/migration-guide.md) |
 | Model strings helper | [`scripts/provider-registry.mjs`](scripts/provider-registry.mjs) |
 | Skill rules | [`SKILL.md`](SKILL.md) |
-| **Edit or fork this skill** (structure, frontmatter, triggers) | [`.agents/skills/skill-development/SKILL.md`](../../../.agents/skills/skill-development/SKILL.md) |
+| **Edit or fork this skill** (structure, frontmatter, triggers) | Anthropic skill-authoring guidance |
 
 ---
 

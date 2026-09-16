@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "evals": [
+    {
+      "prompt": "Handle a focused events change in MDE and identify the correct implementation boundary.",
+      "expected_output": "Uses events as the primary specialist and keeps unrelated domains out.",
+      "expectations": [
+        "inspects current repo state",
+        "uses current official docs for version-sensitive behavior",
+        "makes the smallest safe change"
+      ]
+    },
+    {
+      "prompt": "A bug appears near events, but the root cause is not known. What owns diagnosis?",
+      "expected_output": "Routes diagnosis to systematic-debugging while retaining the specialist for domain evidence.",
+      "expectations": [
+        "does not guess root cause",
+        "uses systematic-debugging for diagnosis",
+        "keeps specialist scope bounded"
+      ]
+    },
+    {
+      "prompt": "A production-critical events change is ready to ship. What proof is required?",
+      "expected_output": "Requires targeted tests and independent task verification before Done.",
+      "expectations": [
+        "requires current evidence",
+        "does not self-certify",
+        "uses task-verifier for completion proof"
+      ]
+    }
+  ]
+}
