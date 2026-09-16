@@ -79,8 +79,8 @@ def _request(url, method="GET", body=None, headers=None):
         try:
             err = json.loads(err)
             err = json.dumps(err, indent=2)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, TypeError) as parse_error:
+            print(f"Warning: failed to parse HTTP error response body: {parse_error}", file=sys.stderr)
         print(f"HTTP {e.code} Error:\n{err}", file=sys.stderr)
         sys.exit(1)
 
@@ -215,7 +215,12 @@ def cmd_distance_matrix(args):
     body = {
         "origins": [{"waypoint": {"address": o}} for o in args.origins],
         "destinations": [{"waypoint": {"address": d}} for d in args.destinations],
-        "travelMode": args.mode.upper() if args.mode else "DRIVE",
+        "travelMode": {
+            "driving": "DRIVE",
+            "walking": "WALK",
+            "bicycling": "BICYCLE",
+            "two_wheeler": "TWO_WHEELER",
+        }.get(args.mode, "DRIVE"),
     }
     fields = "originIndex,destinationIndex,duration,distanceMeters,status,condition"
     out(api_post_fieldmask(
@@ -516,7 +521,7 @@ def cmd_streetview(args):
     """Download a Street View static image."""
     params = {
         "size": args.size or "600x400",
-        "location": f"{args.lat},{args.lng}" if args.lat else args.location,
+        "location": f"{args.lat},{args.lng}" if args.lat is not None and args.lng is not None else args.location,
     }
     if args.heading is not None:
         params["heading"] = args.heading
@@ -541,7 +546,7 @@ def cmd_streetview(args):
 def cmd_static_map(args):
     """Download a static map image."""
     params = {
-        "center": f"{args.lat},{args.lng}" if args.lat else args.center,
+        "center": f"{args.lat},{args.lng}" if args.lat is not None and args.lng is not None else args.center,
         "zoom": args.zoom or 14,
         "size": args.size or "600x400",
         "maptype": args.maptype or "roadmap",
@@ -679,10 +684,10 @@ def cmd_embed_url(args):
     elif mode == "search":
         params["q"] = args.query
     elif mode == "view":
-        params["center"] = f"{args.lat},{args.lng}" if args.lat else args.center
+        params["center"] = f"{args.lat},{args.lng}" if args.lat is not None and args.lng is not None else args.center
         params["zoom"] = args.zoom or 14
     elif mode == "streetview":
-        params["location"] = f"{args.lat},{args.lng}" if args.lat else args.location
+        params["location"] = f"{args.lat},{args.lng}" if args.lat is not None and args.lng is not None else args.location
         if args.heading is not None:
             params["heading"] = args.heading
 

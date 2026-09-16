@@ -23,7 +23,7 @@ USING (
   realtime.topic() LIKE 'conversation:%:messages' AND
   EXISTS (
     SELECT 1 FROM public.conversations c
-    WHERE c.id::text = split_part(realtime.topic(), ':', 2)
+    WHERE c.id = split_part(realtime.topic(), ':', 2)::uuid
       AND c.user_id = (SELECT auth.uid())
   )
 );
@@ -45,7 +45,7 @@ USING (
   realtime.topic() LIKE 'trip:%' AND
   EXISTS (
     SELECT 1 FROM public.trips t
-    WHERE t.id::text = split_part(realtime.topic(), ':', 2)
+    WHERE t.id = split_part(realtime.topic(), ':', 2)::uuid
       AND t.user_id = (SELECT auth.uid())
   )
 );
@@ -67,7 +67,7 @@ USING (
   realtime.topic() LIKE 'job:%:status' AND
   EXISTS (
     SELECT 1 FROM public.agent_jobs j
-    WHERE j.id::text = split_part(realtime.topic(), ':', 2)
+    WHERE j.id = split_part(realtime.topic(), ':', 2)::uuid
       AND j.user_id = (SELECT auth.uid())
   )
 );
@@ -109,7 +109,7 @@ USING (
   realtime.topic() LIKE 'staff-checkin:%' AND
   EXISTS (
     SELECT 1 FROM public.events e
-    WHERE e.id::text = split_part(realtime.topic(), ':', 2)
+    WHERE e.id = split_part(realtime.topic(), ':', 2)::uuid
       AND e.organizer_id = (SELECT auth.uid())
   )
 );
@@ -135,7 +135,7 @@ USING (
   realtime.topic() LIKE 'host-event-dashboard:%' AND
   EXISTS (
     SELECT 1 FROM public.events e
-    WHERE e.id::text = split_part(realtime.topic(), ':', 2)
+    WHERE e.id = split_part(realtime.topic(), ':', 2)::uuid
       AND e.organizer_id = (SELECT auth.uid())
   )
 );
@@ -174,17 +174,17 @@ USING (
   CASE split_part(realtime.topic(), ':', 1)
     WHEN 'conversation' THEN EXISTS (
       SELECT 1 FROM public.conversations
-      WHERE id::text = split_part(realtime.topic(), ':', 2)
+      WHERE id = split_part(realtime.topic(), ':', 2)::uuid
         AND user_id = (SELECT auth.uid())
     )
     WHEN 'trip' THEN EXISTS (
       SELECT 1 FROM public.trips
-      WHERE id::text = split_part(realtime.topic(), ':', 2)
+      WHERE id = split_part(realtime.topic(), ':', 2)::uuid
         AND user_id = (SELECT auth.uid())
     )
     WHEN 'job' THEN EXISTS (
       SELECT 1 FROM public.agent_jobs
-      WHERE id::text = split_part(realtime.topic(), ':', 2)
+      WHERE id = split_part(realtime.topic(), ':', 2)::uuid
         AND user_id = (SELECT auth.uid())
     )
     WHEN 'user' THEN
