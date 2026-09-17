@@ -1,0 +1,109 @@
+{
+  "snapshot": "2026-09-17",
+  "project_ref": "zkwcbyxiwklihegjhuql",
+  "github_main_commit": "a9a9eb931ae602568b2be61904f2dee886c45ec4",
+  "owner_task": "SAN-1282 · Task 48.2H.1 · MDE-SB-001",
+  "method": "read-only: pg_class/pg_namespace/pg_policies/aclexplode/pg_default_acl/pg_trigger/pg_publication_tables/pg_extension/pg_db_role_setting",
+  "exposure": {
+    "hosted_pgrst_db_schemas": ["public", "sponsor"],
+    "repo_config_schemas_before": ["public", "graphql_public"],
+    "repo_config_schemas_after": ["public", "sponsor"],
+    "drift_resolution": "repo aligned to hosted truth on 2026-09-17 (supabase/config.toml [api] schemas). graphql_public is NOT exposed in production and pg_graphql is not installed (installed_version=null); sponsor IS exposed in production and was invisible to local dev and local advisor runs.",
+    "warning": "Advisors do NOT cover sponsor.* or vote.* — sponsor is exposed, so this is a real advisor blind spot"
+  },
+  "schemas": {
+    "public": {"base_tables": 132, "views": 4, "functions_total": 1000, "functions_app_owned": 107, "functions_extension_owned": 893, "policies": 346, "triggers": 71, "classification": "MDE application + extension-owned"},
+    "sponsor": {"base_tables": 10, "policies": 21, "exposed": true, "classification": "MDE application"},
+    "vote": {"base_tables": 10, "exposed": false, "classification": "auxiliary — findings here are LATENT, unreachable via PostgREST"},
+    "marketing": {"base_tables": 12, "exposed": false, "classification": "auxiliary"},
+    "openclaw": {"base_tables": 4, "exposed": false}, "outreach": {"base_tables": 6, "exposed": false},
+    "paperclip": {"base_tables": 5, "exposed": false}, "postiz": {"base_tables": 5, "exposed": false},
+    "hermes": {"base_tables": 5, "exposed": false},
+    "auth": {"base_tables": 27, "classification": "supabase-managed"},
+    "storage": {"base_tables": 8, "classification": "supabase-managed"},
+    "realtime": {"base_tables": 9, "classification": "supabase-managed (locked down upstream 2026-07-14)"},
+    "net": {"base_tables": 2, "classification": "supabase-managed (pg_net)"},
+    "cron": {"base_tables": 2, "classification": "supabase-managed (pg_cron)"},
+    "vault": {"base_tables": 1, "classification": "supabase-managed"},
+    "supabase_migrations": {"base_tables": 1, "classification": "supabase-managed"}
+  },
+  "owners": {"postgres": 188, "supabase_admin": 1, "note": "the supabase_admin table is spatial_ref_sys (PostGIS)"},
+  "rls": {
+    "public_tables_rls_disabled": 9,
+    "rls_disabled_objects": ["spatial_ref_sys (extension-owned, documented exception)", "fashionos_activity_log", "fashionos_companies", "fashionos_lead_events", "fashionos_leads", "fashionos_outreach_drafts", "fashionos_people", "fashionos_sources", "fashionos_workflow_runs"],
+    "rls_enabled_with_zero_policies": 0,
+    "policies_all_schemas": 518,
+    "policies_exposed_schemas": 367,
+    "policies_targeting_public_role": 84,
+    "policies_using_auth_role": 3,
+    "update_policies_missing_with_check": 13,
+    "multiple_permissive_groups_distinct": 33,
+    "multiple_permissive_groups_api_roles": 29,
+    "multiple_permissive_groups_authenticated": 24
+  },
+  "grants": {
+    "anon_public_tables_with_select": 100,
+    "anon_privileges_granted": ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER","MAINTAIN"],
+    "authenticated_privileges_granted": ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER","MAINTAIN"],
+    "service_role_public_tables": 132,
+    "public_role_grants": [{"table": "spatial_ref_sys", "privilege": "SELECT"}],
+    "tables_with_null_relacl": 0,
+    "tables_without_anon_grant": {"count": 32, "set": "the mastra_* tables", "precedent_migration": "20260517144706_mastra_public_tables_rls_lockdown.sql"},
+    "truncate_reachability": "NOT reachable via the Data API — PostgREST has no TRUNCATE verb and anon is not a login role. Least-privilege defect, not a live hole.",
+    "sponsor_anon_select": 0
+  },
+  "default_privileges": {
+    "warning": "ROOT CAUSE of recurring exposure — every new public object is born exposed unless revoked",
+    "grantors": ["postgres", "supabase_admin"],
+    "in_schema_public": {
+      "tables": "anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm, postgres=arwdDxtm",
+      "functions": "anon=X, authenticated=X, service_role=X, postgres=X",
+      "sequences": "anon=rwU, authenticated=rwU, service_role=rwU, postgres=rwU"
+    },
+    "in_schema_storage": {"grantor": "postgres", "tables": "anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm"},
+    "fix_requirement": "ALTER DEFAULT PRIVILEGES must be run FOR BOTH postgres AND supabase_admin, otherwise exposure regrows (owner: SB-003)"
+  },
+  "extensions": [
+    {"name": "postgis", "version": "3.3.7", "schema": "public", "lint": "extension_in_public", "resolution": "documented exception — not relocatable since 2.3", "functions_in_public": 744},
+    {"name": "vector", "version": "0.8.0", "schema": "public", "lint": "extension_in_public", "resolution": "documented exception — relocation risks existing vector(…) columns", "functions_in_public": 118},
+    {"name": "pg_trgm", "version": "1.6", "schema": "public", "lint": "extension_in_public", "functions_in_public": 31},
+    {"name": "pg_stat_statements", "version": "1.11", "schema": "extensions", "note": "qualify as extensions.pg_stat_statements"},
+    {"name": "pg_net", "version": "0.19.5", "schema": "extensions", "note": "owns net._http_response (bloat finding — exclude from SB-009)"},
+    {"name": "pg_cron", "version": "1.6.4", "schema": "pg_catalog"},
+    {"name": "index_advisor", "version": "0.2.0", "schema": "extensions", "note": "REUSE for SB-009 instead of custom heuristics"},
+    {"name": "hypopg", "version": "1.4.1", "schema": "extensions"},
+    {"name": "supabase_vault", "version": "0.3.1", "schema": "vault", "note": "holds cron secrets used by pg_cron job 2"},
+    {"name": "pgcrypto", "version": "1.3", "schema": "extensions"},
+    {"name": "citext", "version": "1.6", "schema": "extensions"},
+    {"name": "uuid-ossp", "version": "1.1", "schema": "extensions"},
+    {"name": "pgtap", "installed": false, "note": "AVAILABLE but NOT installed on hosted; pgTAP runs locally/CI only"}
+  ],
+  "triggers": {
+    "public_total": 71,
+    "realtime_producers": 9,
+    "realtime_producer_tables": ["trips", "trip_items", "proactive_suggestions", "event_attendees", "event_check_ins", "event_orders"],
+    "duplicate_trigger_families": ["trips (trigger_trips_broadcast + trips_realtime_broadcast → same topic trip:{id}:meta)", "trip_items (trigger_trip_items_broadcast + trip_items_realtime_broadcast → same topic trip:{id}:items)", "proactive_suggestions (trigger_suggestions_broadcast + trigger_broadcast_proactive_suggestions → same topic user:{id}:notifications)"],
+    "orphan_broadcast_functions_no_trigger": ["broadcast_vote_tally_changes", "broadcast_messages_changes", "broadcast_agent_jobs_changes", "realtime_broadcast_messages", "realtime_broadcast_agent_jobs"],
+    "publication_supabase_realtime": ["public.event_attendees", "public.event_check_ins", "public.event_orders", "public.leads", "vote.entity_tally"],
+    "realtime_messages_policies": {
+      "count": 3,
+      "names": ["rt_host_event_dashboard_select", "rt_staff_checkin_select", "rt_vote_tally_select"],
+      "missing_for": ["trip:*:meta", "trip:*:items", "user:*:notifications", "job:*:status"],
+      "inversion": "host-event-dashboard / staff-checkin / vote-tally producers send PUBLIC messages (realtime.send(..., false)) so their RLS policies are decorative; trip/user producers send PRIVATE (broadcast_changes is private by default) and have NO policy, so those messages are dropped"
+    }
+  },
+  "pg_cron_jobs": [
+    {"jobid": 2, "schedule": "*/5 * * * *", "target": "Edge Function lead-reminder-tick via net.http_post + vault secret", "warning": "load-bearing dependency on a LIVE-ONLY Edge Function with no repo source"},
+    {"jobid": 3, "schedule": "10 3 * * *", "target": "public.snapshot_analytics_events_daily(current_date - 1)"},
+    {"jobid": 8, "schedule": "*/5 * * * *", "target": "expire event_wait_list holds + fn_notify_next_in_line()"},
+    {"jobid": 10, "schedule": "0 4 * * *", "target": "delete agent_tool_calls older than 30 days"},
+    {"jobid": 16, "schedule": "0 6 * * *", "target": "mark stale conversations abandoned"},
+    {"jobid": 17, "schedule": "0 14 * * *", "target": "mark stale leads"}
+  ],
+  "classification": {
+    "KEEP": "131 of 132 public tables; 10 sponsor tables; public + sponsor policies",
+    "MOVE_PRIVATE": ["acting_landlord_ids", "has_role", "is_admin", "is_moderator", "partner_ids_for_user", "partner_is_active", "partner_organization_ids_for_user"],
+    "REMOVE_CANDIDATE": ["8 fashionos_* tables (SB-002)", "5 trigger-less broadcast functions", "1 legacy pg_notify realtime path"],
+    "UNKNOWN_PRESERVE": ["spatial_ref_sys", "postgis/vector/pg_trgm extension objects", "14 auxiliary tables in marketing/openclaw/outreach/paperclip/postiz", "all auth/storage/vault/net/cron/realtime managed objects", "35 live-only Edge Functions"]
+  }
+}

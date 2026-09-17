@@ -1,0 +1,174 @@
+{
+  "snapshot": "2026-09-17",
+  "project_ref": "zkwcbyxiwklihegjhuql",
+  "github_main_commit": "a9a9eb931ae602568b2be61904f2dee886c45ec4",
+  "method": "read-only: pg_proc (prosecdef, proconfig), pg_depend (deptype=e), has_function_privilege",
+  "owner_task": "SAN-1282 · Task 48.2H.1 · MDE-SB-001",
+  "totals": {
+    "public_definer_functions": 86,
+    "definer_functions_all_schemas": 94,
+    "public_all_functions": 1000,
+    "extension_owned_definer_in_public": 3,
+    "app_owned_definer_in_public": 83,
+    "app_owned_anon_executable": 38,
+    "app_owned_authenticated_executable": 62,
+    "advisor_reported_anon_executable": 39,
+    "advisor_reported_authenticated_executable": 65,
+    "mutable_search_path": 1
+  },
+  "advisor_discrepancy": {
+    "over_counted": [
+      "public.st_estimatedextent(text,text)",
+      "public.st_estimatedextent(text,text,text)",
+      "public.st_estimatedextent(text,text,text,boolean)"
+    ],
+    "over_counted_reason": "extension-owned PostGIS functions; excluded via pg_depend deptype='e'",
+    "under_counted": [
+      "sponsor.attribute_order()",
+      "sponsor.rollup_roi_daily()"
+    ],
+    "under_counted_reason": "anon-executable SECURITY DEFINER functions in the exposed sponsor schema; the Dashboard/CLI advisors only report public.*"
+  },
+  "classification": {
+    "MOVE_PRIVATE_revoking_execute_breaks_rls": {
+      "reason": "called from RLS policy expressions; pg_policies proves usage; relocate to a non-exposed `private` schema and re-point policies instead of revoking",
+      "functions": [
+        "acting_landlord_ids()",
+        "has_role(_user_id uuid, _role user_role)",
+        "is_admin()",
+        "is_moderator()",
+        "partner_ids_for_user()",
+        "partner_is_active(_partner_id uuid)",
+        "partner_organization_ids_for_user()"
+      ]
+    },
+    "REVOKE_NOW_trigger_only_wrongly_anon_executable": {
+      "reason": "used only as trigger functions; triggers fire as table owner and do not require EXECUTE",
+      "precedent": "bookings_validate_event_resource() already revoked by migration 20260610021420_san492_revoke_trigger_fn_execute",
+      "functions": [
+        "compute_lead_score()",
+        "enqueue_embedding_job()",
+        "fn_apply_approval_decision()",
+        "fn_audit_outbox()",
+        "fn_outbox_set_updated_at()",
+        "fn_outbox_suppression_check()",
+        "guard_booking_partner_decision()",
+        "handle_new_user()"
+      ]
+    },
+    "EXCLUDE_extension_owned": {
+      "functions": [
+        "st_estimatedextent(text,text)",
+        "st_estimatedextent(text,text,text)",
+        "st_estimatedextent(text,text,text,boolean)"
+      ],
+      "also_excluded_by_owner": "all functions owned by postgis / vector / pg_trgm installed in public"
+    },
+    "REVIEW_anon_executable_app_owned": {
+      "count": 28,
+      "note": "remainder of the 36 app-owned public anon-executable functions after removing the 7 MOVE_PRIVATE and the 8 REVOKE_NOW (overlap: none of the 8 are in the 7). Each must be individually justified or revoked in SB-003 Batch 0.",
+      "functions": [
+        "apartment_save_counts(apartment_ids uuid[])",
+        "check_rate_limit(p_key text, p_max integer, p_window_seconds integer)",
+        "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents integer)",
+        "decide_approval(p_request_id uuid, p_decision text, p_reason text)",
+        "fn_audit_agent_approval()",
+        "fn_audit_agent_run()",
+        "fn_join_wait_list(p_ticket_type_id uuid, p_user_id uuid, p_email text, p_phone text)",
+        "fn_record_conversion(p_subject_id uuid, p_subject_table text, p_conversion_type text, p_value_cents integer, p_user_id uuid, p_metadata jsonb)",
+        "get_anonymous_order(p_order_id uuid, p_access_token text)",
+        "get_landlord_public_profile(landlord_uuid uuid)",
+        "get_my_role()",
+        "insert_trip_item_for_user(p_trip_id uuid, p_item_type text, p_source_id uuid, p_title text, p_start_at timestamptz, p_end_at timestamptz)",
+        "is_suppressed(p_channel text, p_identifier text)",
+        "log_outbound_click(p_listing_id uuid, p_source_url text, p_affiliate_tag text, p_surface text)",
+        "pause_listing(p_apartment_id uuid)",
+        "publish_listing(p_apartment_id uuid)",
+        "redeem_promo_code(p_event_id uuid, p_code text, p_ticket_id uuid)",
+        "request_listing_publish(p_apartment_id uuid)",
+        "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)",
+        "ticket_validate_consume(p_qr_token text)",
+        "trigger_ai_embed()",
+        "update_conversation_on_message()"
+      ]
+    },
+    "AUTHENTICATED_ONLY_app_owned": {
+      "count": 26,
+      "functions": [
+        "approve_sponsor_application(p_application_id uuid, p_approved_by uuid)",
+        "broadcast_agent_jobs_changes()",
+        "broadcast_event_attendees_changes()",
+        "broadcast_event_dashboard_changes()",
+        "broadcast_messages_changes()",
+        "broadcast_proactive_suggestions_changes()",
+        "broadcast_suggestions_changes()",
+        "broadcast_trip_items_changes()",
+        "broadcast_trips_changes()",
+        "broadcast_vote_tally_changes()",
+        "bump_staff_link_version(p_event_id uuid)",
+        "event_attendees_paginated(p_event_id uuid, p_search text, p_limit integer, p_offset integer)",
+        "event_dashboard_summary(p_event_id uuid)",
+        "p1_schedule_tour_atomic(...)",
+        "p1_start_rental_application_atomic(...)",
+        "realtime_broadcast_agent_jobs()",
+        "realtime_broadcast_messages()",
+        "realtime_broadcast_trip_items()",
+        "realtime_broadcast_trips()",
+        "record_check_in(...)",
+        "ticket_checkout_cancel(p_order_id uuid)",
+        "ticket_payment_finalize(p_order_id uuid, p_payment_intent_id text)",
+        "ticket_payment_finalize_response(v_event events, v_order event_orders, v_ticket event_tickets)",
+        "ticket_payment_refund(p_order_id uuid)",
+        "ticket_payment_refund_v2(...)"
+      ]
+    },
+    "SERVICE_OR_TRIGGER_ONLY": {
+      "count": 21,
+      "functions": [
+        "activate_placements_if_ready(p_application_id uuid)",
+        "auto_create_landlord_inbox_from_message()",
+        "bookings_validate_event_resource()",
+        "claim_agent_job(p_worker_id text, p_job_types text[])",
+        "cleanup_expired_agent_jobs()",
+        "complete_agent_job(p_job_id uuid, p_result jsonb)",
+        "fail_agent_job(p_job_id uuid, p_error text)",
+        "fn_insert_conversation(p_data jsonb)",
+        "fn_notify_next_in_line(p_ticket_type_id uuid)",
+        "fn_record_tool_call_end(p_tool_call_id uuid, p_status text, p_output_json jsonb, p_error text)",
+        "fn_record_tool_call_start(...)",
+        "fn_update_conversation_intent(p_message_id text, p_intent text, p_confidence numeric, p_reply text)",
+        "fn_upsert_delivery_log(p_data jsonb)",
+        "outbox_claim(p_channel text, p_limit integer)",
+        "outbox_enqueue(...)",
+        "outbox_mark_failed(p_id uuid, p_error text, p_next_retry_at timestamptz)",
+        "outbox_mark_sent(p_id uuid, p_provider_id text)",
+        "release_stale_agent_job_locks(p_stale_threshold interval)",
+        "request_approval(...)",
+        "snapshot_analytics_events_daily(target_date date)",
+        "update_agent_job_progress(p_job_id uuid, p_progress integer, p_current_step text)"
+      ]
+    }
+  },
+  "other_schemas": {
+    "sponsor": [
+      "attribute_order()",
+      "rollup_roi_daily()"
+    ],
+    "vote": [
+      "recompute_entity_tally(p_entity_id uuid)",
+      "trigger_recompute_on_judge_score()",
+      "trigger_recompute_on_vote()"
+    ],
+    "vault": 2,
+    "pgbouncer": 1,
+    "note": "sponsor IS an exposed schema; vote is NOT. sponsor.* is the advisor blind spot."
+  },
+  "default_privileges_root_cause": {
+    "grantors": ["postgres", "supabase_admin"],
+    "schema": "public",
+    "tables": "anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm",
+    "functions": "anon=X, authenticated=X, service_role=X",
+    "sequences": "anon=rwU, authenticated=rwU, service_role=rwU",
+    "implication": "every new public object is born exposed unless revoked; the fix must run ALTER DEFAULT PRIVILEGES for BOTH grantors"
+  }
+}
