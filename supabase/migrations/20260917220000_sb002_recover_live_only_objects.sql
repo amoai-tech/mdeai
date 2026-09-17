@@ -224,6 +224,42 @@ create table if not exists public.delivery_receipts (
 );
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- 1b. Deferred foreign keys that an earlier guarded migration skipped
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 20260503130000_out_of_band_orphan_tables.sql creates this FK only when
+-- public.outbox ALREADY exists:
+--
+--     IF to_regclass('public.outbox') IS NOT NULL
+--        AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN
+--       ALTER TABLE public.approval_requests ADD CONSTRAINT ... ;
+--     END IF;
+--
+-- During a fresh replay `outbox` did not exist at that point — that absence is the
+-- very gap this migration closes — so the branch was skipped, the constraint was
+-- never created, and nothing later restored it. Production HAS it. Without it,
+-- approval_requests.outbox_id accepts ids that reference no outbox row.
+--
+-- This is the same class of loss for any guard whose target is one of the 8 tables
+-- recovered above. Audited: the only other guarded FKs target `marketing.*`
+-- (email_outbox_approval_id_fkey, email_outbox_campaign_id_fkey,
+-- email_outbox_post_id_fkey), which cannot be reproduced until the marketing schema
+-- is recovered — SB-002 Option 2.
+--
+-- Guarded so it stays a no-op on production, which already has the constraint.
+
+do $$
+begin
+  if to_regclass('public.outbox') is not null
+     and not exists (
+       select 1 from pg_constraint where conname = 'approval_requests_outbox_id_fkey'
+     ) then
+    alter table public.approval_requests
+      add constraint approval_requests_outbox_id_fkey
+      foreign key (outbox_id) references public.outbox(id);
+  end if;
+end $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- 2. Indexes
 -- ═══════════════════════════════════════════════════════════════════════════════
 

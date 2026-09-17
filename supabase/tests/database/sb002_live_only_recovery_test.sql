@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(24);
+select plan(25);
 
 -- ── the 8 recovered tables ────────────────────────────────────────────────────
 
@@ -126,6 +126,17 @@ select is(
     where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   1, 'authenticated CAN execute ticket_payment_refund_v2 (as in production)');
+
+-- ── referential integrity restored ────────────────────────────────────────────
+-- 20260503130000_out_of_band_orphan_tables.sql adds this FK only if public.outbox
+-- already exists, so a fresh replay silently skipped it. Production has it.
+
+select is(
+  (select count(*)::int from pg_constraint
+    where conname = 'approval_requests_outbox_id_fkey'
+      and confrelid = 'public.outbox'::regclass
+      and contype = 'f'),
+  1, 'approval_requests_outbox_id_fkey restored (guarded migration had skipped it)');
 
 select * from finish();
 rollback;
