@@ -6,13 +6,17 @@
 
 ---
 
-## 0. Correction register (v2 — supersedes v1)
+## 0. Correction register (v3 — supersedes v1 and v2)
 
-An external review (Codacy on PR #53) challenged the `partner_*` classification. On re-verification **the review was right and v1 of this document was wrong.**
+**v2 correction — the `partner_*` classification.** An external review (Codacy on PR #53) challenged it. On re-verification **the review was right and v1 of this document was wrong.**
 
 **Root cause of the error:** the comparison grep was case-sensitive — `grep -rlE "CREATE( OR REPLACE)? FUNCTION …"`. Migrations that write lowercase `create or replace function` were therefore invisible to the scan.
 
 **Impact: 9 false positives. The true missing-function count is 32, not 41.**
+
+**v3 correction — the reason the `hybrid_search_*` functions block the migration.** A second review round challenged the claim that `LANGUAGE sql` bodies are validated at `CREATE` time. That claim is **wrong as stated** — it depends on the body *form* and on `check_function_bodies`, not on the language. Verified against the live catalog and a controlled probe; the deferral still stands, for a different and now-documented reason. See §5.2.
+
+**v3 correction — the fourth `marketing` dependency** was reported as a count without naming it. It is `fn_update_conversation_intent`. The count "4" was right; the enumeration was incomplete. See §5.1.
 
 | Falsely reported missing | Actually created by |
 |---|---|
@@ -30,6 +34,8 @@ An external review (Codacy on PR #53) challenged the `partner_*` classification.
 1. ❌ *"Three of the missing functions are RLS helpers … so this gap blocks SB-003's helper relocation and SB-006's `partner_*` RLS work."* — **RETRACTED.** All three helpers are migration-owned and present in a fresh replay. **SB-003 and SB-006 are NOT blocked on recovering them.**
 2. ❌ *"`hybrid_search_*`/`semantic_search_*` … the migration would fail to apply."* — narrowed: only the **3 `hybrid_search_*`** reference `fts_content`. `semantic_search_*` use embeddings and are already in the repo.
 3. ❌ *"4 dead functions"* — corrected to **7** (§6).
+4. ❌ *"`LANGUAGE sql` bodies are validated at `CREATE` time."* — **wrong as a general rule.** `hybrid_search_*` use the string-constant body form (`prosqlbody IS NULL`, no `BEGIN ATOMIC`), which PostgreSQL parses at *execution* time. The migration nevertheless fails at apply because **`check_function_bodies` is `on`** (its default, and this project's setting). With that GUC `off`, creation succeeds and the failure moves to first invocation. Conclusion unchanged; reasoning corrected in §5.2.
+5. ❌ *"4 OpenClaw functions depend on `marketing`"* stated as a bare count — the fourth is `fn_update_conversation_intent`, now named in §1 and §5.1.
 
 The 8-table finding is **unaffected** — it was verified with `grep -qi` (case-insensitive) and cross-checked against live/replay catalogues.
 
@@ -42,8 +48,8 @@ The gap is **not** "8 tables + 41 functions". Three findings change what a catch
 | Finding | Consequence |
 |---|---|
 | **5 objects are missing from BOTH production and a fresh replay** | Their dependent functions are **already broken in production**. Recreating the tables would invent schema that was deliberately dropped. |
-| The **entire `marketing` schema (12 tables) is live-only** | 4 OpenClaw functions depend on it. Never created in Git. |
-| The **`fts_content` columns + GIN indexes are live-only** | `hybrid_search_*` are `LANGUAGE sql` → **validated at CREATE time** → they cannot be created until the columns exist. |
+| The **entire `marketing` schema (12 tables) is live-only** | 4 OpenClaw functions depend on it — `fn_insert_conversation`, `fn_upsert_delivery_log`, `fn_update_conversation_intent`, `fn_record_conversion`. Never created in Git. |
+| The **`fts_content` columns + GIN indexes are live-only** | The 3 `hybrid_search_*` reference them. `check_function_bodies = on` on this project, so the body is validated at `CREATE` and they cannot be created until the columns exist — see §5.2. |
 
 ---
 
@@ -108,13 +114,27 @@ Verified with **case-insensitive** matching against every migration, then each h
 
 ### 5.1 The entire `marketing` schema is live-only
 * Production: `marketing` present, **12 tables**. Fresh replay: absent, 0 tables. Repo: **no `CREATE SCHEMA marketing`** anywhere.
-* Depended on by `fn_insert_conversation` → `marketing.openclaw_conversations`; `fn_upsert_delivery_log` → `marketing.delivery_logs`; `fn_record_conversion` → `marketing.campaign_conversions`.
+* Depended on by 4 functions: `fn_insert_conversation` → `marketing.openclaw_conversations`; `fn_upsert_delivery_log` → `marketing.delivery_logs`; `fn_update_conversation_intent` → `marketing.openclaw_conversations`; `fn_record_conversion` → `marketing.campaign_conversions`. (Verified live with `prosrc ~ '\mmarketing\.'` across `public`/`sponsor`/`vote` — those 4 and no others.)
 * Also in production: `marketing.campaign_approvals` (an unindexed-FK advisor finding) and the duplicate index `openclaw_conversations_contact_phone_created_at_idx`.
 
 ### 5.2 `fts_content` columns and GIN indexes are live-only
 * Production: `events.fts_content` exists (and apartments/restaurants).
 * Repo: only a **comment** — `20260510000000_vdb01_hybrid_fts_search.sql` attributes the columns to a migration named `20260510_vdb01_fts_columns_and_indexes` that **does not exist**.
-* **Blocks 3 functions only:** `hybrid_search_events`, `hybrid_search_listings`, `hybrid_search_restaurants` are `LANGUAGE sql` and reference `e.fts_content` / `a.fts_content` / `r.fts_content`. PostgreSQL validates SQL bodies at CREATE time, so these cannot be created on a fresh replay until the columns exist. (`semantic_search_*` are unaffected — they use embeddings and are already migrated.)
+* **Blocks 3 functions only:** `hybrid_search_events`, `hybrid_search_listings`, `hybrid_search_restaurants` reference `e.fts_content` / `a.fts_content` / `r.fts_content`. `semantic_search_*` are unaffected — they use embeddings and are already migrated.
+* **Why the failure lands at `CREATE` (verified, not assumed).** An earlier draft of this document justified the deferral by saying "PostgreSQL validates `LANGUAGE sql` bodies at CREATE time". That is **not** correct as a general rule, and an external review was right to challenge it. These three use the **string-constant** body form, not the SQL-standard form: all three have `prosqlbody IS NULL` and none contains `BEGIN ATOMIC`. Per [`CREATE FUNCTION`](https://www.postgresql.org/docs/current/sql-createfunction.html), the SQL-standard form "is parsed at function definition time, the string constant form is parsed at execution time" — so the body form alone would **not** make the migration fail.
+
+  What actually makes it fail is the **`check_function_bodies`** setting, which defaults to `on` and **is `on` on this project** (`pg_settings`: `setting = on`, `source = default`). Under it PostgreSQL validates the body during `CREATE FUNCTION`.
+
+  Probe, PostgreSQL 17, four cases, default `check_function_bodies = on` except the last:
+
+  | Body form | `check_function_bodies` | `CREATE` | First invocation |
+  |---|---|---|---|
+  | `AS $$ … $$` | `on` | **fails** | — |
+  | `BEGIN ATOMIC … END` | `on` | **fails** | — |
+  | `AS $$ … $$` + `RETURNS TABLE` | `on` | **fails** | — |
+  | `AS $$ … $$` | `off` | succeeds | **fails** |
+
+  So on any default-configured Postgres — including production and the local stack — the catch-up migration fails at apply. Were `check_function_bodies` turned `off`, creation would succeed and the breakage would move to first invocation: same blast radius, later and quieter. Either way the functions cannot work until `fts_content` exists, so the deferral stands — but for the right reason.
 
 ---
 
@@ -137,7 +157,7 @@ These are **production defects, not migration gaps.** Reproducing them as-is pre
 
 ## 7. Why the catch-up migration was not authored
 
-1. **Authoring as scoped would fail** — the 3 `hybrid_search_*` are `LANGUAGE sql` and reference absent `fts_content`.
+1. **Authoring as scoped would fail at apply** — the 3 `hybrid_search_*` reference absent `fts_content`, and `check_function_bodies = on` validates the body during `CREATE FUNCTION` (§5.2).
 2. **It would require inventing schema** — 7 functions depend on objects dropped in *both* environments.
 3. **It would silently broaden scope** — `marketing` (12 tables) and the FTS columns are large, unreviewed, and absent from the brief.
 4. **The 8 tables cannot be made safe in isolation** — `outbox`'s trigger fails on every insert.
