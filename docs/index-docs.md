@@ -1,68 +1,141 @@
 ---
-title: mdeapp/docs — master index
-updated: 2026-06-10
-verified: 2026-06-10 (post PR #158 squash merge — 3,460 `docs/` paths tracked on `main`)
-rule: when a root-level file and a subdir file share a name, the subdir copy wins (relocation leftovers)
+title: MDE AI documentation index
+updated: 2026-09-16
+status: transitional index — Task 45 audit in progress
+source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
 
-# mdeapp/docs — master index
+# MDE AI documentation index
 
-> Git home for everything here is the **mdeapp repo** (the outer planning repo ignores `/mdeapp/`).
-> `tasks/events/` is also reachable from the outer workspace via the compat symlink
-> `/home/sk/mdeai/tasks/events` — same files either way.
-> Freshness dots: 🟢 synced 2026-06-09 · 🟡 days old, usable · 🔴 stale, verify before trusting.
+This file is the **current navigation index for the documentation that exists on `main`**.
+
+It is intentionally transitional. The repository still contains older June 2026 planning, task, audit, and architecture material that must be classified before the final `docs/INDEX.md` is created.
+
+## Source-of-truth rules
+
+1. **Linear MDE AI** owns live task status, priority, and execution order.
+2. **Merged `main`** owns shipped repository truth.
+3. **`src/app`** owns implemented route truth.
+4. **Code, migrations, package manifests, and tests** own implementation truth.
+5. Documentation explains the product and architecture; it must not override current code or Linear.
+6. Historical audits, evidence, and decisions should be archived rather than silently rewritten as current truth.
 
 ## Start here
 
-| Need | File | Fresh |
-|------|------|:-----:|
-| App architecture onboarding | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 🟢 |
-| Docs router (this repo's tasks) | [`tasks/README.md`](tasks/README.md) | 🟢 |
-| Events Platform — everything | [`tasks/events/`](tasks/events/) (see below) | 🟢 |
-| Local QA runbook | [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | 🟡 May 24 |
+| Need | Current location | Status |
+|---|---|---|
+| Repository documentation overview | [`README.md`](README.md) | Review/update |
+| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Review/rewrite into canonical architecture docs |
+| Local QA | [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | Review against current scripts/runtime |
+| Design system and UX | [`design/`](design/) | Active area; audit required |
+| Testing and evidence | [`testing/`](testing/) and [`tasks/testing/`](tasks/testing/) | Preserve; separate current guidance from historical evidence |
+| Product/task history | [`tasks/`](tasks/) | Historical/reference-heavy; Linear owns live execution |
 
-## Events Platform (SoT — moved here 2026-06-09)
+## Current top-level documentation areas
 
-| Doc | Owns | Fresh |
-|-----|------|:-----:|
-| [`tasks/events/todo.md`](tasks/events/todo.md) | Execution order; cites main `2835cf2`, draft PR #146, SAN-135/510/511 Done, 512–514 In Review | 🟢 |
-| [`tasks/events/index-events.md`](tasks/events/index-events.md) | Platform state (~46%), per-journey readiness, live counts | 🟢 |
-| [`tasks/events/changelog.md`](tasks/events/changelog.md) | Graded shipped-task history (grade + % correct per task) | 🟢 |
-| [`tasks/events/data/VENUE-DATA-MODEL.md`](tasks/events/data/VENUE-DATA-MODEL.md) | SAN-492 · EVT-033 schema SoT + Appendix A SQL | 🟢 |
-| [`tasks/events/data/data-model-audit.md`](tasks/events/data/data-model-audit.md) | **Current forensic audit** (85% · B; E0 anon-RLS trap + E1 seed gap — both must land before sign-off) | 🟢 |
-| [`tasks/events/data/ALL-EVENTS-DATA-MODEL.md`](tasks/events/data/ALL-EVENTS-DATA-MODEL.md) | All 15 live tables, FKs, RLS, ERD | 🟢 |
-| [`tasks/events/audit/`](tasks/events/audit/) | Audits 01–05 (04 = B1/B2/B3 structural; 05 = live data quality) | 🟢 |
-| ⚠ Root-level `06-*.md`, `04-*.md`, `VENUE-DATA-MODEL.md`, `ALL-EVENTS-…` in `tasks/events/` | Stale relocation duplicates — use the `audit/` / `data/` copies | 🔴 |
+| Area | Current location | Task 45 disposition |
+|---|---|---|
+| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | UPDATE / MERGE |
+| AI / agent architecture | [`intelligence/`](intelligence/), [`copilotkit-mastra/`](copilotkit-mastra/), [`ai-second-brain/`](ai-second-brain/) | AUDIT / MERGE into platform docs where current |
+| Events | [`events/`](events/), [`tasks/events/`](tasks/events/) | AUDIT / MERGE; separate current domain docs from task history |
+| Venues | [`tasks/venues/`](tasks/venues/) | AUDIT / MERGE; extract current venue domain truth from task-heavy material |
+| Nightlife | [`tasks/venues/`](tasks/venues/) | AUDIT / REWRITE; separate nightlife discovery/booking truth from shared venue task history |
+| Real estate / rentals | [`real-estate/`](real-estate/) | AUDIT / REWRITE |
+| Restaurants | [`restaurant/`](restaurant/) | AUDIT / REWRITE |
+| Partners / sponsors | [`partners/`](partners/) | AUDIT / REWRITE; protect active PR work |
+| Ecommerce | [`ecommerce/`](ecommerce/) | AUDIT; keep only current product direction |
+| Design / wireframes | [`design/`](design/), [`wireframes/`](wireframes/) | KEEP / REVIEW; archive superseded handoffs |
+| Platform / infrastructure | [`security/`](security/) | AUDIT / REWRITE; shared platform material also exists across task/domain docs and must be consolidated |
+| Product / PRD material | [`prd/`](prd/) | AUDIT / MERGE into canonical product docs |
+| Strategy / research | [`strategy/`](strategy/), [`research/`](research/), [`revenue-strategy.md`](revenue-strategy.md), [`revenue-strategy-v2.md`](revenue-strategy-v2.md), [`strategic-audit.md`](strategic-audit.md) | REVIEW; current strategy separate from historical research |
+| Testing / QA | [`testing/`](testing/), [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | KEEP / UPDATE |
+| Linear/task exports | [`linear/`](linear/), [`tasks/`](tasks/), [`task-backlog.md`](task-backlog.md) | ARCHIVE / POINTER; must not compete with Linear |
+| Audits | [`audits/`](audits/) | PRESERVE; label current vs historical |
+| Session/reference notes | [`notes/`](notes/), [`graphify-reference.md`](graphify-reference.md) | REVIEW / ARCHIVE where obsolete |
+| Upgrade notes | [`upgradeV2/`](upgradeV2/) | REVIEW; archive if migration is complete |
 
-## Task backlog (non-events)
+## Root docs inside `docs/`
 
-| Doc | Owns | Fresh |
-|-----|------|:-----:|
-| [`tasks/INDEX.md`](tasks/INDEX.md) | Slim status metrics | 🔴 updated 2026-06-02; still cites frozen MVP-EXECUTION |
-| [`tasks/MVP-REQUIRED.md`](tasks/MVP-REQUIRED.md) | MVP queue + ADV/post-MVP split | 🟡 |
-| [`tasks/progres.md`](tasks/progres.md) | Progress tracker (~78% audit) | 🔴 updated 2026-06-04 |
-| [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Task-file conventions | 🟡 |
-| Domain task dirs | `tasks/{payments,maps,ux,venues,restaurants,nightlife,real-estate,trips,partners,ecommerce,intelligence,testing,linear,…}` | varies — check each dir's index |
-| [`tasks/evidence/`](tasks/evidence/) + outer `tasks/testing/evidence/` | Runtime/prod proof per task (`SAN-NNN-*.md` + PNGs) | 🟢 |
+| File | Current action |
+|---|---|
+| [`README.md`](README.md) | UPDATE |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | REWRITE / MERGE into `docs/architecture/` |
+| [`dashboard.md`](dashboard.md) | REBUILD from current code + Linear |
+| [`index-docs.md`](index-docs.md) | CURRENT transitional index; supersede later with `docs/INDEX.md` |
+| [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | REVIEW / UPDATE |
+| [`task-backlog.md`](task-backlog.md) | ARCHIVE / replace with Linear pointer |
+| [`todo.md`](todo.md) | ARCHIVE / replace with Linear pointer |
+| [`changelog.md`](changelog.md) | KEEP as history; verify maintenance model |
+| [`strategic-audit.md`](strategic-audit.md) | REVIEW / snapshot-label |
+| [`revenue-strategy.md`](revenue-strategy.md) | REVIEW |
+| [`revenue-strategy-v2.md`](revenue-strategy-v2.md) | REVIEW / MERGE with current strategy |
+| [`graphify-reference.md`](graphify-reference.md) | REVIEW |
 
-## Domain & strategy docs
+## Target documentation architecture
 
-| Dir / doc | Owns | Fresh |
-|-----------|------|:-----:|
-| [`ecommerce/`](ecommerce/) | Medusa commerce direction (kept; single `medusa` skill) | 🟡 |
-| [`partners/`](partners/) | Partner stack (ptr001–014) docs | 🟡 |
-| [`linear/`](linear/) | Linear sync plans + queues | 🟡 |
-| [`wireframes/`](wireframes/) | Wire specs by screen | 🟡 |
-| [`prd/`](prd/) | PRD chunks (canonical PRD lives at outer `plan/prd.md`) | 🟡 |
-| [`audits/`](audits/) | `concierge-audit.md` · `launch-readiness.md` | 🟡 Jun 8 |
-| [`strategy/`](strategy/) + [`docs-vault/`](docs-vault/) | Bulk research vaults (≈9K files) — reference only, never SoT | ⚪ |
-| [`revenue-strategy.md`](revenue-strategy.md) / `-v2` · [`strategic-audit.md`](strategic-audit.md) · [`task-backlog.md`](task-backlog.md) | Strategy snapshots (Jun 4) | 🟡 |
-| [`copilotkit-mastra/`](copilotkit-mastra/) | Integration reference notes | 🟡 |
-| [`notes/`](notes/) | Session notes (June 8–9 chat/docs-rebase) | 🟢 |
-| [`dashboard.md`](dashboard.md) · [`graphify-reference.md`](graphify-reference.md) | One-off references | 🟡 |
+Task 44 defined the target structure below. **Do not bulk-move files into it until Task 45 finishes the audit.**
 
-## Known gaps (as of 2026-06-10)
+```text
+docs/
+├── INDEX.md
+├── architecture/
+├── product/
+├── platform/
+├── domains/
+├── design/
+├── strategy/
+├── testing/
+└── _archive/
+```
 
-1. 🟢 `docs/` restored on `main` via PR #158 (`6542210`) — **3,460** paths tracked; local-only notes/archives may sit untracked beside git (see [`index.md`](../index.md) restore table).
-2. 🔴 Stale root-level duplicates in `tasks/events/` (see ⚠ row) — delete after confirming subdir copies.
-3. 🔴 `tasks/INDEX.md` + `tasks/progres.md` predate recent merges — refresh or read `tasks/events/todo.md` + Linear instead.
+### Intended ownership
+
+- `architecture/` — system architecture, boundaries, durable decisions and lessons.
+- `product/` — current product definition and PRD-level intent; no live task queue.
+- `platform/` — shared CopilotKit, Mastra, Supabase, Gemini, Maps, Next.js, Stripe, Cloudinary and infrastructure guidance.
+- `domains/` — events, real estate/rentals, venues, restaurants/cafes/nightlife, trips, partners/sponsors, ecommerce where current.
+- `design/` — current design system, UX patterns and useful wireframes.
+- `strategy/` — current market/business/revenue strategy and selected research.
+- `testing/` — current QA, release, test and verification guidance.
+- `_archive/` — superseded plans, task exports, audits, snapshots and historical evidence.
+
+## Current audit rules
+
+During Task 45, classify important documents as:
+
+- **CURRENT** — accurate and canonical today.
+- **UPDATE** — useful structure/content but stale facts.
+- **MERGE** — useful content duplicated across multiple files.
+- **ARCHIVE** — historical or superseded, still worth preserving.
+- **REMOVE-CANDIDATE** — generated, temporary, empty or exact duplicate; delete only after proof.
+- **UNKNOWN-PRESERVE** — unclear ownership or value; keep until resolved.
+
+## Known stale patterns to remove from active docs
+
+Active documentation should not keep these as current truth:
+
+- old repository references such as `amo-tech-ai/mdeapp`;
+- assumptions that `/home/sk/mdeai/mdeapp` is the repository root;
+- retired skill names such as `mde-real-estate` and `mde-maps` once the canonical skill stack is merged;
+- hard-coded task status/order that duplicates Linear;
+- stale commit SHAs or readiness percentages presented as evergreen facts;
+- route claims that conflict with current `src/app`.
+
+Historical files under the future `_archive/` may preserve old names and paths when clearly labelled as historical.
+
+## Documentation work sequence
+
+```text
+Task 44 · Define Documentation Architecture            ✅ Done
+Task 45 · Audit Docs Against Current Code              ← current
+Task 46 · Rewrite Core MDE Documentation
+Task 47 · Rewrite Domain Documentation
+Task 48 · Consolidate and Archive Legacy Docs
+Task 49 · Add Documentation Drift Prevention
+```
+
+Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
+
+Repository: https://github.com/amoai-tech/mdeai
+
+Production: https://www.mdeai.co/
