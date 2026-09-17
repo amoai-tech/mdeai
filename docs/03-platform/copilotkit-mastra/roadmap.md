@@ -355,6 +355,16 @@ Mastra infrastructure storage and application authorization are separate concern
 
 ## Version strategy
 
+| Package | package.json | Installed | Latest official (2026-09-17) |
+|---|---|---:|---:|
+| `@mastra/core` | `beta` | 1.35.0 | 1.67.0 |
+| `mastra` | `beta` | 1.1.0-alpha.3 | 1.30.0 |
+| `@mastra/pg` | `^1.1.0-alpha.2` | 1.1.0-alpha.2 | 1.25.0 |
+| `@mastra/memory` | `beta` | 1.0.1-alpha.1 | 1.30.0 |
+| `@mastra/libsql` | `beta` | 1.1.0-alpha.2 | 1.23.0 |
+| `@mastra/client-js` | `beta` | 1.19.1 | 1.46.0 |
+| `@ag-ui/mastra` | `beta` | 0.2.1-beta.2 | 1.1.4 |
+
 Current audited installation is materially behind the current stable Mastra family, while package declarations use moving beta/alpha ranges. Safe sequence:
 
 1. pin the exact currently working package family;
