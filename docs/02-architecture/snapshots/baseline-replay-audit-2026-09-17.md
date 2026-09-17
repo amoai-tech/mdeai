@@ -50,7 +50,7 @@ Systematic scan, quote-tolerant (the initial dump uses `"public"."name"`):
 
 | Object class | Live | No `CREATE` in repo | Assessment |
 |---|---|---|---|
-| App-owned functions | 107 | **41** | ❌ genuine gap |
+| App-owned functions | 107 | **32** | ❌ genuine gap |
 | `public` tables | 132 | 41 | split ↓ |
 | — `mastra_*` tables | 32 | 32 | ✅ **by design** — `@mastra/pg` via `getMastraStorage()` auto-provisions its own store |
 | — `spatial_ref_sys` | 1 | 1 | ✅ **by design** — created by PostGIS |
@@ -69,15 +69,23 @@ Systematic scan, quote-tolerant (the initial dump uses `"public"."name"`):
 | `event_attendee_profiles` | ✅ | 1 | 1 |
 | `delivery_receipts` | ✅ | 1 | 0 |
 
-**Function-gap note (corrected after PR review).** The first-pass name scan reported 41 functions with no `CREATE` in Git, but that classifier produced false positives and must not be used as the canonical SB-002 count. In particular:
+**Function-gap note (corrected after PR review — supersedes the 41 count).** The first-pass scan reported **41** functions with no `CREATE` in Git. That classifier matched `CREATE FUNCTION` **case-sensitively**, so it missed every `create or replace function` written in lowercase. Re-run case-insensitively, **9 of the 41 are false positives**, and the genuine app-owned function gap is **32**:
 
-* `partner_ids_for_user()` and `partner_organization_ids_for_user()` are created in `20260606130400_ptr005_partner_scoping.sql`.
-* `partner_is_active()` is created in the venue-offerings migration (renamed in this PR to `20260610021146_san492_event_venue_offerings.sql`).
-* `bookings_validate_event_resource()` is also created in that venue-offerings migration before the recovered EXECUTE-revoke migration runs.
+| Function reported missing | Actually created by |
+|---|---|
+| `partner_ids_for_user()` | `20260606130400_ptr005_partner_rls_helpers_and_member_policies.sql` |
+| `partner_organization_ids_for_user()` | same |
+| `partner_is_active()` | `20260610021146_san492_event_venue_offerings.sql` |
+| `bookings_validate_event_resource()` | same — created there, *before* the recovered EXECUTE-revoke migration runs |
+| `guard_booking_partner_decision()` | `20260611073237_san502_guard_booking_partner_decision.sql` |
+| `semantic_search_events()` | `20260509205216_pgvector_semantic_search.sql` |
+| `semantic_search_listings()` | same |
+| `semantic_search_restaurants()` | same |
+| `touch_embedding_updated_at()` | same |
 
-Therefore these functions are **not missing baselines** and do **not** block SB-003/SB-006 for that reason. SB-002 owns the exact production-vs-replay function inventory and must classify each remaining candidate by full signature, not loose name matching.
+Therefore the three `partner_*` helpers are **not missing baselines**, and **nothing about them blocks SB-003 or SB-006**. The earlier statement to that effect is retracted. SB-002 owns the per-signature classification of the remaining **32** candidates.
 
-The broader finding still stands: production contains behavior not fully reproduced by a fresh replay, similar to the 35 live-only Edge Functions. The exact function count is intentionally deferred to the corrected SB-002 inventory.
+The broader finding still stands: production contains behavior not fully reproduced by a fresh replay, similar to the 35 live-only Edge Functions.
 
 ## 5. Fix applied — guarded the two revoke migrations
 
@@ -109,14 +117,14 @@ anon can exec is_admin: t        # RLS helper correctly retains EXECUTE
 | | Production | Fresh replay | Delta |
 |---|---|---|---|
 | `public` tables | 132 | **92** | 40 = 32 `mastra_*` (by design) + **8 genuine** |
-| `public` functions | 1,000 | 850 | delta includes extension-version differences plus application function gaps; exact app-owned gap requires SB-002 signature-based classification |
+| `public` functions | 1,000 | 850 | delta includes extension-version differences plus application function gaps; the app-owned share of that gap is **32** (per-signature classification in the SB-002 inventory) |
 | Migration ledger | 108 | 109 | see [`migration-drift.md`](./migration-drift.md) |
 
-A local environment built from Git today is **missing 8 application tables plus a still-to-be-corrected set of application functions**. The earlier 41-function name-based count included false positives, so SB-002 must reclassify by exact function signature and dependency before authoring any catch-up migration. This gap is **not** what was blocking replay.
+A local environment built from Git today is **missing 8 application tables and 32 application functions**. An earlier name-based scan put the function count at 41; that scan is retracted — it was case-sensitive and produced 9 false positives (see §4). This gap is **not** what was blocking replay.
 
 ## 7. Recommended follow-up (not yet done — needs approval)
 
-1. **SB-002: classify the 8 missing tables and exact application-function gap by full signature/dependency, then recover only objects proven migration-owned and intentionally present in production.** Do not treat the earlier 41-function name scan as authoritative.
+1. **SB-002: classify the 8 missing tables and the 32 missing functions by full signature/dependency, then recover only objects proven migration-owned and intentionally present in production.** The earlier 41-function name scan is retracted — do not use it.
 2. **Recover the 35 live-only Edge Functions** (`supabase functions download`) in the same wave — SB-008.
 3. **Fix `[db.seed]`**: `enabled = true` points at `./seed.sql`, which does not exist. Add the file or set `enabled = false` in the Gate-1 PR.
 4. **Wire the replay gate** in SB-010 Gate 1 now that replay is green.
