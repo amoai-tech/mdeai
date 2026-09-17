@@ -1,0 +1,50 @@
+{
+  "snapshot": "2026-09-17",
+  "project_ref": "zkwcbyxiwklihegjhuql",
+  "captured_via": "Supabase MCP get_advisors",
+  "observed_at": {
+    "security": "2026-09-17T05:16:58.084Z",
+    "performance": "2026-09-17T05:16:59.553Z"
+  },
+  "owner_task": "SAN-1282 · Task 48.2H.1 · MDE-SB-001",
+  "note": "Reference values only. Re-run at execution time. Do NOT remediate from this file — consume the fresh SB-001 inventory. Several counts are known to be misleading; see corrections.",
+  "security": {
+    "total_findings": 118,
+    "by_lint": {
+      "anon_security_definer_function_executable": { "level": "WARN", "count": 39, "correction": "app-owned is 36 — includes 3 PostGIS st_estimatedextent overloads; AND omits sponsor.attribute_order + sponsor.rollup_roi_daily. True app-owned anon-executable = 38." },
+      "authenticated_security_definer_function_executable": { "level": "WARN", "count": 65, "correction": "app-owned is 62" },
+      "rls_disabled_in_public": { "level": "ERROR", "count": 9, "objects": ["public.spatial_ref_sys", "public.fashionos_workflow_runs", "public.fashionos_companies", "public.fashionos_people", "public.fashionos_sources", "public.fashionos_leads", "public.fashionos_lead_events", "public.fashionos_outreach_drafts", "public.fashionos_activity_log"], "resolution": "8 fashionos_* removed by SB-002; spatial_ref_sys is PostGIS extension-owned and NOT relocatable — documented exception in SB-002/SB-006" },
+      "extension_in_public": { "level": "WARN", "count": 3, "objects": ["pg_trgm", "postgis", "vector"], "resolution": "documented exception — PostGIS not relocatable since 2.3; moving vector would jeopardise existing vector(…) columns" },
+      "function_search_path_mutable": { "level": "WARN", "count": 1, "objects": ["public.trigger_set_timestamps"], "resolution": "SB-003" },
+      "auth_leaked_password_protection": { "level": "WARN", "count": 1, "resolution": "PLAN-LIMITED — requires Pro Plan and above. Documented exception while on Free (SB-011)." }
+    }
+  },
+  "performance": {
+    "total_findings": 321,
+    "by_lint": {
+      "multiple_permissive_policies": { "level": "WARN", "count": 114, "correction": "INFLATED. Re-grouped by (schema, table, command, role) the real scope is 33 groups — 29 API-role, 24 authenticated. The advisor emits each finding once per role, including authenticator, cli_login_postgres, dashboard_user and supabase_privileged_role — none are end-user roles. Owner: SB-006." },
+      "duplicate_index": { "level": "WARN", "count": 6, "objects": ["sponsor.applications", "sponsor.contracts", "sponsor.invoices", "sponsor.placements", "marketing.openclaw_conversations x2"], "correction": "ZERO are in public. sponsor is exposed (4 matter); marketing is not (2 do not). Owner: SB-009." },
+      "unindexed_foreign_keys": { "level": "INFO", "count": 22, "correction": "Only 2 are in public (apartments.published_by, bookings.approved_by); 6 are fashionos_* (removed by SB-002); 14 are in marketing/openclaw/outreach/paperclip/postiz — non-MDE, not exposed. Owner: SB-009." },
+      "unused_index": { "level": "INFO", "count": 291, "correction": "NOT ACTIONABLE at current volume. Largest table is the PostGIS reference table spatial_ref_sys (8,500 rows); largest app table 1,131 rows; buffer cache hit 99.999% (4,227 disk reads vs 478,561,952 hits); stats_reset is null, so this is a lifetime measurement of a near-empty database. Treat as evidence only. Owner: SB-009." },
+      "no_primary_key": { "level": "INFO", "count": 1, "objects": ["public.mastra_workflow_snapshot"], "resolution": "Mastra-owned (38 rows) — do NOT add a PK without confirming Mastra compatibility. Owner: SB-009." },
+      "table_bloat": { "level": "INFO", "count": 1, "objects": ["net._http_response"], "resolution": "pg_net-owned, not MDE — exclude. Owner: SB-009 (no action)." }
+    }
+  },
+  "lints_that_did_NOT_fire": {
+    "auth_rls_initplan": "0 — auth.uid() is already wrapped as (select auth.uid()) ✅",
+    "rls_enabled_no_policy": "0 — every RLS-enabled public table has at least one policy ✅",
+    "policy_exists_rls_disabled": "0 ✅",
+    "rls_references_user_metadata": "0 ✅ — no authorization from user-editable metadata",
+    "security_definer_view": "0 ✅",
+    "auth_users_exposed": "0 ✅",
+    "auth_allow_anonymous_sign_ins": "0",
+    "sensitive_columns_exposed": "0",
+    "fkey_to_auth_unique": "0",
+    "insecure_queue_exposed_in_api": "0"
+  },
+  "advisor_coverage_gaps": [
+    "Advisors do NOT report sponsor.* or vote.* SECURITY DEFINER exposure, even though sponsor IS an exposed schema (pgrst.db_schemas = public,sponsor). sponsor.attribute_order and sponsor.rollup_roi_daily are anon-executable and invisible to the advisor.",
+    "No lint catches unwrapped custom helper calls in policy expressions (is_admin(), has_role(), is_moderator(), partner_*_for_user(), partner_is_active()) — see https://supabase.com/docs/guides/database/postgres/row-level-security-performance"
+  ],
+  "reachability_note": "sponsor is exposed via the Data API; vote, marketing, openclaw, outreach, paperclip and postiz are NOT. Findings in non-exposed schemas are latent (unreachable via PostgREST) and must be labelled as such rather than as live exposures."
+}
