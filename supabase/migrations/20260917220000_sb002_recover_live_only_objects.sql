@@ -1213,3 +1213,60 @@ create policy profiles_via_attendee on public.event_attendee_profiles
 drop policy if exists delivery_receipts_service_role_only on public.delivery_receipts;
 create policy delivery_receipts_service_role_only on public.delivery_receipts
   for all to service_role using (true) with check (true);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 6. Function EXECUTE privileges — reproduce production's ACLs exactly
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- REQUIRED, not decorative. `create or replace function` grants EXECUTE to PUBLIC by
+-- default, and this project's default privileges additionally grant anon /
+-- authenticated / service_role on new functions. Left alone, the 22 functions above
+-- would be MORE PERMISSIVE in a fresh replay than they are in production — silently
+-- re-opening exactly the grants that:
+--     20260606114106_revoke_anon_security_definer_rpcs.sql
+--     20260606114224_revoke_public_security_definer_rpcs.sql
+-- removed. Both run EARLIER (lower timestamp) than this migration, so they cannot see
+-- these functions. Each row below is the exact ACL read from production on 2026-09-17.
+--
+-- Some of these grants are permissive by modern standards — notably `decide_approval`
+-- and the trigger-only helpers are executable by PUBLIC/anon. That is production's real
+-- state, reproduced deliberately so this migration stays a no-op there and so a fresh
+-- replay does not differ from production. Tightening them is SB-003's job (it already
+-- tracks the 8 trigger-only functions still carrying anon EXECUTE); doing it here would
+-- both change production when applied and exceed SB-002's scope.
+
+do $acl$
+declare
+  r record;
+begin
+  for r in
+    select * from (values
+      ('public.approve_sponsor_application(uuid,uuid)',                        array['authenticated','service_role']),
+      ('public.decide_approval(uuid,text,text)',                               array['public','anon','authenticated','service_role']),
+      ('public.event_attendees_paginated(uuid,text,integer,integer)',          array['authenticated','service_role']),
+      ('public.event_dashboard_summary(uuid)',                                 array['authenticated','service_role']),
+      ('public.fn_insert_conversation(jsonb)',                                 array['service_role']),
+      ('public.fn_join_wait_list(uuid,uuid,text,text)',                        array['public','authenticated','service_role']),
+      ('public.fn_notify_next_in_line(uuid)',                                  array['service_role']),
+      ('public.fn_outbox_set_updated_at()',                                    array['public','anon','authenticated','service_role']),
+      ('public.fn_outbox_suppression_check()',                                 array['public','anon','authenticated','service_role']),
+      ('public.fn_update_conversation_intent(text,text,numeric,text)',         array['service_role']),
+      ('public.fn_upsert_delivery_log(jsonb)',                                 array['service_role']),
+      ('public.get_landlord_public_profile(uuid)',                             array['anon','authenticated','service_role']),
+      ('public.is_suppressed(text,text)',                                      array['public','anon','authenticated','service_role']),
+      ('public.outbox_claim(text,integer)',                                    array['service_role']),
+      ('public.outbox_enqueue(text,text,text,jsonb,uuid)',                     array['service_role']),
+      ('public.outbox_mark_failed(uuid,text,timestamp with time zone)',        array['service_role']),
+      ('public.outbox_mark_sent(uuid,text)',                                   array['service_role']),
+      ('public.redeem_promo_code(uuid,text,uuid)',                             array['public','anon','authenticated','service_role']),
+      ('public.request_approval(text,text,text,jsonb,text,text,uuid,integer)',  array['service_role']),
+      ('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])', array['authenticated','service_role']),
+      ('public.touch_updated_at()',                                            array['public','anon','authenticated','service_role']),
+      ('public.trigger_ai_embed()',                                            array['public','anon','authenticated','service_role'])
+    ) as t(sig, roles)
+  loop
+    -- The owner (`postgres`) is deliberately NOT in this revoke list; its own grant stays.
+    execute format('revoke all on function %s from public, anon, authenticated, service_role', r.sig);
+    execute format('grant execute on function %s to %s', r.sig, array_to_string(r.roles, ', '));
+  end loop;
+end
+$acl$;

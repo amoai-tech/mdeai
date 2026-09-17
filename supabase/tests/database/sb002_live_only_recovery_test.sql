@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(21);
+select plan(24);
 
 -- ── the 8 recovered tables ────────────────────────────────────────────────────
 
@@ -103,6 +103,29 @@ select lives_ok(
 select lives_ok(
   $$select public.is_suppressed('email', 'nobody@example.com')$$,
   'is_suppressed() runs against the recovered suppression_list');
+
+-- ── EXECUTE grants must match production, not PostgreSQL's defaults ───────────
+-- `create or replace function` grants EXECUTE to PUBLIC by default. The two
+-- revoke_*_security_definer_rpcs migrations run EARLIER than the recovery, so they
+-- cannot cover these functions. Without the explicit ACL block these assertions fail.
+
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'outbox_enqueue'
+      and has_function_privilege('anon', p.oid, 'EXECUTE')),
+  0, 'anon CANNOT execute outbox_enqueue (production grants service_role only)');
+
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'outbox_enqueue'
+      and has_function_privilege('public', p.oid, 'EXECUTE')),
+  0, 'PUBLIC CANNOT execute outbox_enqueue (default PUBLIC grant is revoked)');
+
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
+  1, 'authenticated CAN execute ticket_payment_refund_v2 (as in production)');
 
 select * from finish();
 rollback;
