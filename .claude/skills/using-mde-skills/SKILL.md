@@ -5,7 +5,7 @@ description: Route ambiguous MDE engineering requests to exactly one canonical e
 
 # Using MDE Skills
 
-Use this skill only when ownership is ambiguous. If one canonical domain or workflow skill is clearly responsible, invoke that skill directly and bypass this router.
+Use this skill only when ownership is ambiguous. If one canonical domain or workflow skill is clearly responsible, invoke that skill directly and bypass this router; S4 safety still applies, and the canonical execution owner must hand S4 work to `task-verifier` for independent verification before completion.
 
 ## Routing contract
 

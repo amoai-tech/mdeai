@@ -13,7 +13,7 @@ Portable repository guidance for coding agents working from the current Git chec
 
 ## Skill routing
 
-Use the narrowest owner directly:
+Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-skills` to choose exactly one canonical execution owner and then stop routing:
 
 - Simple domain/stack work → relevant specialist skill.
 - Substantial or ambiguous implementation → `tasks`.
@@ -25,7 +25,7 @@ Use the narrowest owner directly:
 - UI state/interaction design → `wireframe`.
 - Architecture/state/dependency visualization → `mermaid-diagrams`.
 
-SAN-1273 will add the lightweight routing layer later. Do not restore the retired `using-mde-skills` router or `mde-task-lifecycle` workflow.
+`using-mde-skills` is the active lightweight ambiguity router. Do not restore the retired `mde-task-lifecycle` workflow or the old PR #45 routing machinery. S4 safety applies even when ownership is obvious and the router is bypassed; the execution owner must use independent `task-verifier` verification before completion.
 
 ## Canonical skills
 
@@ -33,7 +33,7 @@ Stack: `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`,
 
 Domain: `events`, `real-estate`.
 
-Workflow: `tasks`, `systematic-debugging`, `testing`, `tdd`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
+Workflow: `using-mde-skills`, `tasks`, `systematic-debugging`, `testing`, `tdd`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
 
 ## Shared invariants
 
