@@ -64,7 +64,7 @@ Do not replace it with `useInterrupt` until a dedicated compatibility task prove
 |---|---|
 | Full docs | https://mastra.ai/docs |
 | Agents | https://mastra.ai/docs/agents/overview |
-| Tools | https://mastra.ai/docs/tools/overview |
+| Tools | https://mastra.ai/docs/agents/tools |
 | Workflows | https://mastra.ai/docs/workflows/overview |
 | Suspend/resume | https://mastra.ai/docs/workflows/suspend-and-resume |
 | Memory | https://mastra.ai/docs/memory/overview |
@@ -93,7 +93,7 @@ Before building custom developer tooling, inspect the built-in Mastra surfaces:
 | Need | Use first |
 |---|---|
 | Inspect/test agents | Studio Agents |
-| Direct tool test | Studio Tools |
+| Direct tool test | Studio Tools or `npx mastra api tool execute` |
 | Workflow execution/visualization | Studio Workflows |
 | Request context inspection | Studio Request Context |
 | Workspaces | Studio Workspaces |
@@ -113,7 +113,15 @@ npm run dev:agent
 
 which maps to `PORT=4111 mastra dev`.
 
-Do not create a custom prompt/tool/workflow admin screen until Studio/CLI has been evaluated and the real requirement is still unmet.
+For direct tool execution, current Mastra docs support:
+
+```bash
+npx mastra api tool execute <tool-id> '{"key":"value"}'
+```
+
+Use `npx mastra api tool execute --schema` to inspect the expected command schema before constructing unfamiliar inputs.
+
+Do not create a custom prompt/tool/workflow admin screen or temporary test script until Studio/CLI has been evaluated and the real requirement is still unmet.
 
 ## Real-world pattern selection
 
