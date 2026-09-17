@@ -273,6 +273,12 @@ Percentages follow the SAN-1299 rubric: 25% means spec/research exists; 50% impl
 
 Green means direct implementation/caller/test evidence for the workflow itself, not that every surrounding product journey is production-complete.
 
+## Canonical architecture diagrams
+
+See [`diagrams.md`](diagrams.md) for the current trust-boundary, request-lifecycle, workflow suspend/resume, storage-mode, and observability diagrams plus the Mermaid maintenance rules.
+
+The diagrams distinguish current behavior from proposed improvements: solid arrows are current behavior; dotted arrows are explicitly labeled recommendations.
+
 ## Mastra production architecture
 
 ```mermaid

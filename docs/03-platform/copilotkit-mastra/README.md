@@ -297,4 +297,5 @@ Mastra:
 - [`../../02-architecture/system-overview.md`](../../02-architecture/system-overview.md)
 - [`reference-pack.md`](reference-pack.md)
 - [`roadmap.md`](roadmap.md)
+- [`diagrams.md`](diagrams.md) — current trust boundaries, workflow lifecycle, storage and observability diagrams
 - [`../README.md`](../README.md)
