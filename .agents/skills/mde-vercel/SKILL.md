@@ -1,0 +1,1 @@
+../../../.claude/skills/mde-vercel/SKILL.md

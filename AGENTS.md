@@ -7,13 +7,19 @@ Portable repository guidance for coding agents working from the current Git chec
 - Remote: `https://github.com/amoai-tech/mdeai.git`.
 - Package/app source lives at the repository root.
 - Main stack: Next.js 16, React 19, CopilotKit 1.55.2 v2 APIs, Mastra, Supabase, Gemini, Google Maps, Cloudinary, Playwright, and Vitest.
-- `.claude/skills/` is the canonical project skill library.
+- `.claude/skills/` is the canonical project skill library. `.agents/skills/` exposes the same canonical skills to Codex via symlinks so both agents use one source of truth.
 - Linear is the durable task/progress source of truth for substantial SAN work.
 - Never rely on machine-specific absolute paths; resolve the current checkout root dynamically.
 
 ## Skill routing
 
 Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-skills` to choose exactly one canonical execution owner and then stop routing:
+
+Known domain beats generic workflow.
+
+If the request clearly names or belongs to a canonical domain skill, route directly to that domain even when the request contains words such as bug, broken, failing, error, debug, or troubleshoot.
+
+Use `systematic-debugging` only when the responsible domain/root cause is genuinely unknown.
 
 - Simple domain/stack work → relevant specialist skill.
 - Substantial or ambiguous implementation → `tasks`.
@@ -25,7 +31,7 @@ Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-sk
 - UI state/interaction design → `wireframe`.
 - Architecture/state/dependency visualization → `mermaid-diagrams`.
 
-`using-mde-skills` is the active lightweight ambiguity router. Do not restore the retired `mde-task-lifecycle` workflow or the old PR #45 routing machinery. S4 safety applies even when ownership is obvious and the router is bypassed; the execution owner must use independent `task-verifier` verification before completion.
+`using-mde-skills` is the active lightweight ambiguity router. Do not restore the retired `mde-task-lifecycle` workflow or the old PR #45 routing machinery. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
 
 ## Canonical skills
 

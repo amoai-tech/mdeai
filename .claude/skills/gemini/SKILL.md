@@ -1,7 +1,7 @@
 ---
 name: gemini
 description: >-
-  Use when MDE work changes or verifies Gemini models, Google AI SDK/provider usage, function calling, structured output, multimodal input/output, grounding, embeddings, research agents, streaming, or Gemini-specific failures. Do not use for generic Mastra orchestration, generic AI prompting, or Google Maps behavior unless Gemini is part of the implementation.
+  Use for any MDE request clearly involving Gemini, including models, Google AI SDK/provider usage, function calling, structured output, multimodal I/O, grounding, embeddings, research agents, streaming, and Gemini-specific bugs/errors/failures. A known Gemini failure stays with this domain owner rather than generic systematic-debugging; do not use for generic Mastra orchestration or unrelated Google Maps behavior.
 metadata:
   mde-version: "1.0.0"
   upstream-commit: "80dd31dda25bbe1410207df0adb3e0d591c2c634"

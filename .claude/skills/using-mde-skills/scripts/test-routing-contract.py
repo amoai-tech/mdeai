@@ -20,22 +20,24 @@ def route(prompt: str) -> str:
     text = prompt.lower()
     if any(retired in text for retired in RETIRED):
         return "__INVALID__"
-    if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
-        return "code-review"
-    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
-        return "task-verifier"
-    if any(term in text for term in ("do not know why", "unknown failure", "suddenly fails", "root cause")):
-        return "systematic-debugging"
-    if any(term in text for term in ("research", "official guidance", "evidence")):
-        return "research"
     direct = {
         "copilotkit": ("copilotkit",),
-        "stripe": ("stripe", "payment"),
+        "mastra": ("mastra",),
         "supabase": ("supabase", "rls", "tenant access"),
+        "gemini": ("gemini",),
+        "stripe": ("stripe", "payment"),
     }
     for owner, terms in direct.items():
         if any(term in text for term in terms):
             return owner
+    if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
+        return "code-review"
+    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
+        return "task-verifier"
+    if any(term in text for term in ("do not know why", "do not know which subsystem", "unknown failure", "suddenly fails", "root cause")):
+        return "systematic-debugging"
+    if any(term in text for term in ("research", "official guidance", "evidence")):
+        return "research"
     if any(term in text for term in ("implement", "across the repo", "remaining san-1273")):
         return "tasks"
     return "direct"
@@ -44,7 +46,7 @@ def route(prompt: str) -> str:
 require(SKILL.exists(), "router SKILL.md is missing")
 text = SKILL.read_text()
 cases = json.loads(EVALS.read_text())
-require(len(cases) == 10, f"expected 10 cases, found {len(cases)}")
+require(len(cases) >= 10, f"expected at least 10 cases, found {len(cases)}")
 
 required_rules = {
     "tasks": "ambiguous substantial",
@@ -71,4 +73,4 @@ for case in cases:
     if case["risk"] == "S4":
         require(case["requires_independent_verifier"] is True, f"S4 case {case['name']} lacks verifier")
 
-print("routing contract: PASS (10/10 cases)")
+print(f"routing contract: PASS ({len(cases)}/{len(cases)} cases)")

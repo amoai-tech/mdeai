@@ -1,7 +1,7 @@
 ---
 name: copilotkit
 description: >-
-  Use when MDE work involves CopilotKit, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools or actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, or the CopilotKit-to-Mastra bridge.
+  Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "8a7446186cd3e0d368ec885e61c5913f0918ef5d"

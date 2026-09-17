@@ -1,0 +1,1 @@
+../../../.claude/skills/nextjs/SKILL.md

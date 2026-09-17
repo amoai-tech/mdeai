@@ -1,7 +1,7 @@
 ---
 name: supabase
 description: >-
-  Use when MDE work involves Supabase Database, Auth, RLS, migrations, RPC/functions, Realtime, Storage, pgvector, Edge Functions, logs, live database behavior, or Supabase-backed Postgres schema, SQL, indexes, locking, performance, and tenant isolation.
+  Use for any MDE request clearly involving Supabase, including Database, Auth, RLS, migrations, RPC/functions, Realtime, Storage, pgvector, Edge Functions, logs, live database behavior, Postgres schema/SQL/indexes/locking/performance/tenant isolation, and Supabase-specific bugs/errors/failures. Known Supabase/RLS failures stay with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "8331f910845103c08d51f6ca1d86ebb7d1f745e3"

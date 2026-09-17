@@ -72,7 +72,9 @@ workspace/
 supabase/.temp/
 
 # IDE / agent tooling (repo-local)
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/skills/**
 .codex/
 .cursor/
 .gemini/

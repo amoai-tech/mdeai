@@ -1,11 +1,11 @@
 ---
 name: using-mde-skills
-description: Route ambiguous MDE engineering requests to exactly one canonical execution owner while preserving S4 independent verification. Use when the correct owner is not already obvious.
+description: Route ambiguous, non-trivial MDE engineering requests to exactly one canonical execution owner while preserving S4 independent verification. Use only when ownership is genuinely ambiguous; do not use for simple S0 explanation, reading, or factual questions that can be answered directly.
 ---
 
 # Using MDE Skills
 
-Use this skill only when ownership is ambiguous. If one canonical domain or workflow skill is clearly responsible, invoke that skill directly and bypass this router; S4 safety still applies, and the canonical execution owner must hand S4 work to `task-verifier` for independent verification before completion.
+Use this skill only when ownership is ambiguous and the request is non-trivial. Simple S0 explanation, reading, or factual questions should be answered directly without invoking this router. If one canonical domain or workflow skill is clearly responsible, invoke that skill directly and bypass this router; S4 safety still applies, and the canonical execution owner must hand S4 work to `task-verifier` for independent verification before completion.
 
 ## Routing contract
 
