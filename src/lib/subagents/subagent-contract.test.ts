@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDelegation, validateDelegationPrompt } from '../../../scripts/verify-subagent-contract.mjs';
+import { classifyDelegation, validateDelegationPrompt, verifyRepositoryContracts } from '../../../scripts/verify-subagent-contract.mjs';
 
 describe('MDE subagent delegation contract', () => {
   it('S0/S1 does not spawn unnecessarily', () => {
@@ -34,8 +34,6 @@ describe('MDE subagent delegation contract', () => {
   it('tightly sequential work stays with main agent', () => {
     expect(classifyDelegation({ level: 'S3', independent: false, isolated: false, verbose: false, narrowTools: false, tightlySequential: true }).delegate).toBe(false);
   });
-});
-
 
   it('S4 implementation and verifier use separate contexts', () => {
     const result = classifyDelegation({ level: 'S4', independent: true, isolated: true, verbose: false, narrowTools: false });
@@ -58,16 +56,24 @@ describe('MDE subagent delegation contract', () => {
     expect(result.stop).toBe(false);
   });
 
+  it('rejects malformed and missing prompt input', () => {
+    expect(validateDelegationPrompt(null)).toEqual({
+      ok: false,
+      missing: ['Outcome', 'Context', 'Scope', 'Inputs', 'Constraints', 'Evidence', 'STOP', 'Handoff'],
+      stop: true,
+    });
+    expect(validateDelegationPrompt({ Outcome: {}, Context: 0 })).toMatchObject({ ok: false, stop: true });
+  });
+});
+
 describe('repository ownership and isolation contracts', () => {
-  it('tasks owns delegation and router does not orchestrate workers', async () => {
-    const { verifyRepositoryContracts } = await import('../../../scripts/verify-subagent-contract.mjs');
+  it('tasks owns delegation and router does not orchestrate workers', () => {
     const result = verifyRepositoryContracts();
     expect(result.tasksOwnsDelegation).toBe(true);
     expect(result.routerDoesNotOrchestrate).toBe(true);
   });
 
-  it('reviewers/verifiers stay isolated and fresh-context safe', async () => {
-    const { verifyRepositoryContracts } = await import('../../../scripts/verify-subagent-contract.mjs');
+  it('reviewers/verifiers stay isolated and fresh-context safe', () => {
     const result = verifyRepositoryContracts();
     expect(result.reviewersReadOnly).toBe(true);
     expect(result.freshContextExplicit).toBe(true);
