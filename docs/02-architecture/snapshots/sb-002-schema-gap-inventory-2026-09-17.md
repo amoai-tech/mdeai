@@ -12,7 +12,7 @@ The task brief described the gap as *"at least these 8 tables"* plus *"approxima
 
 | Finding | Consequence |
 |---|---|
-| **6 objects are missing from BOTH production and a fresh replay** | Their dependent functions are **already broken in production**. Recreating them would invent schema. |
+| **5 objects are missing from BOTH production and a fresh replay** | Their dependent functions are **already broken in production**. Recreating them would invent schema. |
 | The **entire `marketing` schema (12 tables) is live-only** | 4 OpenClaw functions depend on it. Never created in Git. |
 | The **`fts_content` columns + GIN indexes** are live-only | `hybrid_search_*` are `LANGUAGE sql` → **validated at CREATE time** → the migration would fail without them. |
 | Live **plpgsql** functions reference those dropped objects | They can be created but are **dead code** — see §6. |
@@ -27,7 +27,7 @@ The task brief described the gap as *"at least these 8 tables"* plus *"approxima
 | **B** | Mastra runtime-auto-provisioned (`@mastra/pg` via `getMastraStorage()`) | **32 tables** — not a gap |
 | **C** | Extension-owned | `spatial_ref_sys` + PostGIS/vector/pg_trgm objects — not a gap |
 | **D** | Supabase platform/system-owned | `auth`, `storage`, `realtime`, `net`, `cron`, `vault` — not a gap |
-| **E** | **Unknown / newly discovered — preserve & investigate** | `marketing` schema + 12 tables; `fts_content` columns + GIN indexes on 3 tables; the 6 dropped-everywhere objects |
+| **E** | **Unknown / newly discovered — preserve & investigate** | `marketing` schema + 12 tables; `fts_content` columns + GIN indexes on 3 tables; the 5 dropped-everywhere objects |
 
 Object names were **not** used to infer category. Two examples of why: a loose grep falsely matched `email_outbox`/`wa_outbox` for `outbox`; and `agent_audit_log` reads as an MDE table but is absent from production.
 
