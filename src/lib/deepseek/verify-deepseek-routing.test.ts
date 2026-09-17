@@ -1,24 +1,32 @@
-import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { evaluateCase, runCases } from '../../../scripts/verify-deepseek-routing.mjs';
 
-const scriptPath = resolve('scripts/verify-deepseek-routing.mjs');
-
-describe('DeepSeek routing certification script', () => {
-  it('defines the required owner and S4 verifier probes', () => {
-    const source = readFileSync(scriptPath, 'utf8');
-    expect(source).toContain('copilotkit');
-    expect(source).toContain('systematic-debugging');
-    expect(source).toContain('supabase');
-    expect(source).toContain('task-verifier');
-    expect(source).toContain('mastra');
-    expect(source).toContain('gemini');
-    expect(source).toContain('stripe');
+describe('DeepSeek routing certification', () => {
+  it('evaluates only the final answer, not echoed prompt diagnostics', () => {
+    const probe = { name: 'copilotkit', prompt: 'prompt mentions copilotkit', owner: 'copilotkit', verifier: false };
+    const output = 'debug: prompt mentions copilotkit\ndsh: reasoning: wrong owner\nfinal answer: maps';
+    expect(evaluateCase(probe, 0, output)).toEqual({ ok: false, answer: 'maps' });
   });
 
-  it('fails closed when a probe output does not match expectations', () => {
-    const source = readFileSync(scriptPath, 'utf8');
-    expect(source).toMatch(/process\.exitCode\s*=\s*1/);
-    expect(source).toMatch(/expected/i);
+  it('accepts exact owner and verifier decisions', () => {
+    const s4 = { name: 'supabase-s4', prompt: 'x', owner: 'supabase', verifier: true };
+    expect(evaluateCase(s4, 0, 'dsh: reasoning: ...\nfinal answer: owner=supabase verifier=true')).toEqual({
+      ok: true,
+      answer: 'owner=supabase verifier=true',
+    });
+  });
+
+  it('aggregates failures across probes', async () => {
+    const probes = [
+      { name: 'a', prompt: 'a', owner: 'copilotkit', verifier: false },
+      { name: 'b', prompt: 'b', owner: 'mastra', verifier: false },
+    ];
+    const runner = vi.fn(async (probe: { name: string }) =>
+      probe.name === 'a' ? { status: 0, output: 'owner=copilotkit verifier=false' } : { status: 0, output: 'owner=gemini verifier=false' },
+    );
+    const result = await runCases(probes, runner);
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.failed).toBe(1);
+    expect(result.results.map((item) => item.ok)).toEqual([true, false]);
   });
 });
