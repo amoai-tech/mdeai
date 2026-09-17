@@ -1,51 +1,61 @@
 # MDE AI — System Architecture Overview
 
-This document explains the **current MDE AI architecture** from verified repository truth.
+This document explains the **current MDE AI architecture** from verified repository and live data truth.
 
 ## Source-of-truth rule
 
 Architecture claims must be checked against:
 
-1. merged GitHub `main`;
-2. current source code;
-3. `src/app` route structure;
-4. Supabase migrations/current schema evidence;
-5. current package manifests and tests;
-6. Linear only for live execution status and planned work.
+1. live runtime/data evidence where available;
+2. merged GitHub `main`;
+3. current source code;
+4. `src/app` route structure;
+5. live Supabase schema + merged migrations;
+6. current package manifests and tests;
+7. Linear only for live execution status and planned work.
 
-This document must not use old SHAs, local machine paths, stale percentages, or historical task descriptions as architecture truth.
+Do not use old SHAs, local machine paths, stale percentages, or historical task descriptions as architecture truth.
+
+Related data architecture: [`data-model.md`](data-model.md)
+
+---
 
 ## 1. Architecture Summary
 
 MDE AI is a **Next.js AI-native application** where structured product screens and conversational AI share the same backend capabilities.
 
-The current system separates responsibilities intentionally:
-
 | Layer | Primary responsibility |
 |---|---|
 | Next.js + React | Application shell, pages, route handlers, server/client boundaries |
 | CopilotKit / AG-UI | AI interaction layer between UI and agent runtime |
-| Mastra | Agents, tools, workflows, memory, orchestration |
-| Gemini | Model reasoning, structured generation, grounding where configured |
-| Supabase | Authentication, PostgreSQL data, RLS, persistence, server-side data access |
-| Google Maps / Places | Spatial display and place/location information |
-| Payment services | Checkout, payment confirmation, ticket/payment workflows where implemented |
+| Mastra | Agents, tools, workflows, memory, tracing, orchestration |
+| Gemini | Model reasoning, structured generation, embeddings, grounding where configured |
+| Supabase | Authentication, PostgreSQL data, RLS, persistence, vector data, server-side access |
+| Google Maps / Places | Spatial display and trusted place/location information |
+| Stripe/payment services | Checkout, payment confirmation, ticket/payment workflows where implemented |
 | Vitest + Playwright + verification scripts | Unit, integration, browser, smoke, and release proof |
 
-The central design rule is:
+The central rule is:
 
 > **AI coordinates work; deterministic application code owns trusted state changes.**
 
-## 2. High-Level System Map
+---
+
+## 2. High-Level System Context
 
 ```mermaid
 flowchart LR
     USER[User]
 
+    subgraph CLIENT[Browser / client]
+        UI[React UI]
+        MAP[Google Maps UI]
+    end
+
     subgraph APP[Next.js application]
-        UI[React pages and components]
-        API[Next.js route handlers]
-        CK[CopilotKit runtime]
+        PAGES[App Router pages]
+        API[Route handlers]
+        CK[CopilotKit endpoint]
     end
 
     subgraph AI[AI runtime]
@@ -56,76 +66,129 @@ flowchart LR
         GEMINI[Gemini]
     end
 
-    subgraph DATA[Data and identity]
-        AUTH[Supabase Auth]
-        DB[Supabase Postgres]
-        RLS[Row Level Security]
+    subgraph DATA[Supabase]
+        AUTH[Auth]
+        RLS[RLS / policies]
+        DB[(Postgres)]
+        VECTOR[(pgvector)]
+        MEMORY[Mastra persistence]
     end
 
-    subgraph GEO[Location services]
-        MAPS[Google Maps]
+    subgraph EXTERNAL[External services]
         PLACES[Google Places]
-    end
-
-    subgraph TX[Transactions]
-        PAY[Payment service]
-        WEBHOOK[Trusted webhook finalization]
+        PAY[Stripe / payments]
+        GROUND[Grounding / search sources]
     end
 
     USER --> UI
-    UI --> API
+    UI --> PAGES
     UI --> CK
-    CK --> MASTRA
+    UI --> MAP
+
+    PAGES --> API
     API --> AUTH
-    API --> DB
+    API --> RLS
+    CK --> AUTH
+    CK --> MASTRA
+
     MASTRA --> AGENTS
     AGENTS --> TOOLS
     AGENTS --> WF
     AGENTS --> GEMINI
-    TOOLS --> DB
+
+    TOOLS --> RLS
+    RLS --> DB
+    TOOLS --> VECTOR
+    MASTRA --> MEMORY
+
     TOOLS --> PLACES
-    UI --> MAPS
-    PLACES --> MAPS
-    DB --> RLS
+    TOOLS --> GROUND
     API --> PAY
-    PAY --> WEBHOOK
-    WEBHOOK --> DB
+    PAY --> API
 ```
 
-The diagram uses standard Mermaid flowchart syntax and subgraphs so the architecture remains editable as plain text. Official reference: https://mermaid.ai/open-source/syntax/flowchart.html
+This separates the major trust/runtime boundaries without pretending every call follows one path.
 
-## 3. Application Layer — Next.js + React
+---
+
+## 3. Runtime and Trust Boundaries
+
+```mermaid
+flowchart TD
+    subgraph BROWSER[Untrusted client boundary]
+        UI[UI state]
+        FORMS[Forms / approvals]
+        MAPSTATE[Map / selection state]
+    end
+
+    subgraph SERVER[Trusted application boundary]
+        NEXT[Next.js server]
+        COPILOT[CopilotKit runtime]
+        VALIDATE[Validation / authorization]
+        WEBHOOK[Webhook handlers]
+    end
+
+    subgraph AGENT[AI orchestration boundary]
+        MASTRA[Mastra]
+        TOOL[Tools]
+        FLOW[Workflows]
+    end
+
+    subgraph SUPA[Data boundary]
+        AUTH[Supabase Auth]
+        RLS[RLS]
+        PG[(Postgres)]
+    end
+
+    UI --> NEXT
+    FORMS --> NEXT
+    MAPSTATE --> COPILOT
+
+    NEXT --> VALIDATE
+    COPILOT --> VALIDATE
+    VALIDATE --> AUTH
+    VALIDATE --> MASTRA
+
+    MASTRA --> TOOL
+    MASTRA --> FLOW
+    TOOL --> RLS
+    FLOW --> RLS
+    RLS --> PG
+
+    WEBHOOK --> VALIDATE
+    VALIDATE --> PG
+```
+
+Rules:
+
+1. Browser state is never final authority for privileged mutations.
+2. Authentication establishes identity.
+3. RLS restricts row access.
+4. Server/tool validation enforces business transitions.
+5. AI output does not grant authorization.
+6. External payment confirmation must be verified in trusted server/webhook code.
+
+---
+
+## 4. Application Layer — Next.js + React
 
 The repository uses the Next.js App Router.
 
-`src/app` owns implemented route truth. Product documentation may describe route intent, but route existence must be verified from the source tree.
-
-Major current surface groups include:
+`src/app` owns implemented route truth. Current major surface groups include:
 
 - consumer discovery: `/`, `/chat`, `/events`, `/rentals`, `/restaurants`, `/cafes`, `/nightlife`, `/venues`;
-- personal state: `/saved`, `/trips`, `/me/tickets`;
+- personal context: `/saved`, `/trips`, `/me/tickets`;
 - identity: `/login`, `/signup`, auth callback/signout routes;
-- host/operator: `/host/*`, including events, analytics, rentals, and onboarding surfaces;
-- partner/sponsor surfaces: `/partners/*`, `/sponsors`;
+- host/operator: `/host/*`;
+- partner/sponsor: `/partners/*`, `/sponsors`;
 - admin: `/admin/event-bookings`;
 - APIs under `/api/*`, including CopilotKit, discovery, rentals, events, tickets, places, approvals, partners, and booking flows.
 
-### UI responsibility
+React owns presentation, local interaction state, maps/cards/forms, wizard steps, degraded states, and explicit user approval surfaces. It does **not** own payment truth, authorization, or irreversible backend state.
 
-React components own:
+---
 
-- presentation;
-- local interaction state;
-- maps/cards/forms;
-- wizard steps;
-- loading/empty/error/degraded states;
-- explicit user approvals.
-
-They should not be treated as the final authority for payment status, cross-user authorization, or irreversible backend state.
-
-## 4. Three-Panel Product Model
-
-The reusable interaction model is:
+## 5. Three-Panel Product Model
 
 > **Left = Context**  
 > **Main = Work**  
@@ -133,19 +196,24 @@ The reusable interaction model is:
 
 ```mermaid
 flowchart LR
-    LEFT[Left panel\nContext]
-    MAIN[Main panel\nWork]
-    RIGHT[Right panel\nIntelligence]
-    STATE[Shared application state]
+    LEFT[Left\nContext]
+    MAIN[Main\nWork]
+    RIGHT[Right\nIntelligence]
+    STATE[Shared UI / domain state]
     CK[CopilotKit]
     AGENT[Mastra agent]
+    TOOLS[Tools / workflows]
 
     LEFT --> STATE
     MAIN --> STATE
     RIGHT --> STATE
+
     STATE --> CK
     CK --> AGENT
+    AGENT --> TOOLS
+    TOOLS --> AGENT
     AGENT --> CK
+
     CK --> MAIN
     CK --> RIGHT
 ```
@@ -154,15 +222,17 @@ Typical responsibilities:
 
 - **Left / Context:** navigation, saved state, trips, threads, workflow context, filters.
 - **Main / Work:** chat, browse results, forms, dashboards, wizard steps, approvals, transactions.
-- **Right / Intelligence:** map, selected-item details, recommendations, comparisons, supporting evidence, next actions.
+- **Right / Intelligence:** map, selected-item details, recommendations, comparisons, evidence, next actions.
 
-The model should not force every page into three visible columns. It defines responsibility and state flow; mobile may collapse panels into sheets, tabs, drawers, or stacked views.
+This is a responsibility model, not a requirement for three visible desktop columns. Mobile may collapse panels into sheets, drawers, tabs, or stacked views.
 
-## 5. CopilotKit → Mastra Runtime
+---
 
-The implemented CopilotKit route runs through `/api/copilotkit/[[...path]]`.
+## 6. CopilotKit → Mastra Runtime
 
-The current request path includes:
+The implemented CopilotKit endpoint is `/api/copilotkit/[[...path]]`.
+
+Current `main` shows:
 
 - authorization guard;
 - distributed IP ceiling/rate limiting;
@@ -170,9 +240,8 @@ The current request path includes:
 - per-request Mastra `RequestContext`;
 - user/resource identity propagation;
 - local Mastra agent registration;
+- user-scoped Supabase context for host operations;
 - AI-run persistence after streamed responses.
-
-This means the AI runtime already exists. Future work should strengthen tool coverage, grounding, context propagation, evaluation, and failure handling rather than recreate the bridge.
 
 ### AI request sequence
 
@@ -180,107 +249,117 @@ This means the AI runtime already exists. Future work should strengthen tool cov
 sequenceDiagram
     actor User
     participant UI as Next.js UI
-    participant CK as CopilotKit endpoint
+    participant CK as CopilotKit
     participant Auth as Supabase Auth
     participant Mastra
     participant Agent
     participant Tool
-    participant Data as Supabase or external source
+    participant Data as Supabase / external source
+    participant Model as Gemini
 
-    User->>UI: Send request or take AI-enabled action
-    UI->>CK: Request with current interaction context
-    CK->>Auth: Resolve authenticated user when available
-    Auth-->>CK: User identity or anonymous context
-    CK->>Mastra: Build request context and invoke runtime
-    Mastra->>Agent: Route request to registered agent
-    Agent->>Tool: Call structured tool when data/action is needed
-    Tool->>Data: Read or perform validated operation
-    Data-->>Tool: Trusted result
-    Tool-->>Agent: Structured result
-    Agent-->>Mastra: Response and tool output
-    Mastra-->>CK: Stream result
-    CK-->>UI: Text, state, tool result, or generative UI
-    UI-->>User: Render structured outcome
+    User->>UI: Request / AI-enabled action
+    UI->>CK: Message + interaction context
+    CK->>Auth: Resolve user
+    Auth-->>CK: Identity or anonymous context
+    CK->>Mastra: Build RequestContext
+    Mastra->>Agent: Route/invoke
+    Agent->>Tool: Retrieve or prepare action
+    Tool->>Data: Read / validated operation
+    Data-->>Tool: Structured evidence/result
+    Tool-->>Agent: Tool result
+    Agent->>Model: Reason / explain from context
+    Model-->>Agent: Structured generation
+    Agent-->>CK: Stream response/tool state
+    CK-->>UI: Text + structured UI/state
+    UI-->>User: Render outcome
 ```
 
-Official Mermaid sequence-diagram reference: https://mermaid.ai/open-source/syntax/sequenceDiagram.html
+The runtime exists today. Architecture work should improve grounding, tool safety, state propagation, evaluation, and failure handling rather than recreate the bridge.
 
-## 6. Current Mastra Agents
+---
+
+## 7. Current Mastra Agents and Workflows
 
 Merged `main` exports these primary agents:
 
 | Agent | Responsibility |
 |---|---|
 | `routerAgent` | Intent/domain routing |
-| `conciergeAgent` | General MDE concierge interaction |
-| `rentalAgent` | Rental-domain reasoning and tools |
-| `eventAgent` | Event-domain reasoning and discovery |
-| `hostEventAgent` | Event-host creation/publishing assistance |
+| `conciergeAgent` | General concierge interaction |
+| `rentalAgent` | Rental-domain reasoning/tools |
+| `eventAgent` | Event reasoning/discovery |
+| `hostEventAgent` | Host event creation/publishing assistance |
 | `hostOpsAgent` | Host operational assistance |
-| `evaluationAgent` | Evaluation/quality-oriented agent behavior |
+| `evaluationAgent` | Evaluation/quality-oriented behavior |
 | `pingAgent` | Minimal runtime connectivity check |
 
-The architecture should prefer a **small number of capable agents plus explicit tools/workflows** rather than creating a new agent for every screen or feature.
-
-## 7. Current Mastra Workflows
-
-Merged `main` exports these workflows:
+Current workflows:
 
 | Workflow | Purpose |
 |---|---|
-| `rentalSearchWorkflow` | Multi-step rental search flow |
+| `rentalSearchWorkflow` | Multi-step rental search |
 | `eventDiscoveryWorkflow` | Event discovery orchestration |
 | `eventVenueBookingWorkflow` | Event/venue booking orchestration |
-| `salesInsightWorkflow` | Sales/operational insight workflow |
+| `salesInsightWorkflow` | Sales/operational insight |
 
-Use deterministic workflows when sequencing, validation, retries, approval, or business invariants matter more than open-ended agent reasoning.
+Prefer a **small number of capable agents + explicit tools + deterministic workflows** rather than one agent per screen.
+
+---
 
 ## 8. Model Layer — Gemini
 
-Gemini is the primary model family used through the AI SDK/Mastra integration.
+Gemini is used through the AI SDK/Mastra integration for reasoning and generation. The live database also confirms Gemini-backed embedding infrastructure.
 
-Model responsibilities may include:
+Appropriate model responsibilities include:
 
 - intent interpretation;
 - structured generation;
 - explanation;
-- ranking/reasoning where supported by retrieved evidence;
-- grounded responses;
-- drafting content for human review.
+- evidence-backed ranking/reasoning;
+- content drafting for human review;
+- embeddings/semantic retrieval support.
 
-Gemini must not become the source of truth for:
+Gemini must not become the source of truth for identity, authorization, payment completion, inventory state, place coordinates, or irreversible writes.
 
-- database identity;
-- payment completion;
-- authorization;
-- coordinates/place IDs not returned by trusted data;
-- inventory or booking state;
-- irreversible commits.
+---
 
-Those remain deterministic application/data responsibilities.
+## 9. Live Supabase Architecture
 
-## 9. Data Layer — Supabase
+Verified live Supabase project:
 
-Supabase is the primary application data and identity layer.
+```text
+project: zkwcbyxiwklihegjhuql
+name: medellin
+status: ACTIVE_HEALTHY
+Postgres: 17.6
+region: us-east-1
+```
 
-Current architectural responsibilities include:
+Supabase owns:
 
 - authentication;
-- PostgreSQL persistence;
+- PostgreSQL application state;
 - row-level security;
-- user-scoped server access;
-- product entities such as events, rentals, leads, tickets, threads, bookings, partner data, and operational records where represented by the current schema.
+- trips/saved context;
+- events/ticket commerce;
+- rentals/leads/showings;
+- partners/bookings;
+- approvals/outbox;
+- AI execution telemetry;
+- Mastra persistence;
+- search/grounding caches;
+- pgvector embeddings.
 
-### Trust boundary
+### Auth + RLS trust path
 
 ```mermaid
 flowchart TD
     CLIENT[Browser]
-    SERVER[Next.js server or trusted backend]
+    SERVER[Next.js / trusted backend]
     AUTH[Supabase Auth]
     RLS[Supabase RLS]
     DB[(Postgres)]
-    AI[Mastra tools]
+    AI[Mastra tool/workflow]
 
     CLIENT --> SERVER
     SERVER --> AUTH
@@ -289,154 +368,309 @@ flowchart TD
     AI --> RLS
     RLS --> DB
 
-    CLIENT -. no direct trust for privileged mutation .-> RLS
+    CLIENT -. privileged writes are not trusted directly .-> RLS
 ```
 
-Rules:
+Supabase principle:
 
-1. Authentication answers **who is acting**.
-2. RLS/data policies answer **which rows they may access**.
-3. Server/tool validation answers **whether the requested state transition is valid**.
-4. AI should never bypass these layers.
+> **Auth = who is acting; RLS = which rows may be accessed; validation = whether the state transition is allowed.**
 
-## 10. Maps and Places
+Full domain ERDs: [`data-model.md`](data-model.md)
 
-Google Maps/Places is the spatial/location layer.
+---
 
-Architecture responsibilities:
+## 10. Semantic Search / pgvector
 
-- map rendering;
-- markers/pins;
-- card ↔ pin synchronization;
-- selected-location context;
-- Places detail/photo/search integrations where implemented;
-- grounded place identifiers and coordinates.
+Live Supabase has the `vector` extension installed (`0.8.0`) and live embedding tables including:
 
-The model may explain or rank place results, but it should not fabricate coordinates or place identifiers.
+- `listing_embeddings` → `apartments`;
+- `event_embeddings` → `events`;
+- `restaurant_embeddings` → `restaurants`;
+- `query_embedding_cache`;
+- `embedding_jobs`.
 
-## 11. Transactions and Payments
+Therefore the base semantic retrieval layer is **implemented**, while deeper personalization and broader vector use may still be roadmap work.
 
-MDE contains event/ticket commerce flows and roadmap work for broader transactions.
+```mermaid
+flowchart LR
+    Q[User query]
+    SLOTS[Intent + slots]
+    QCACHE[Query embedding cache]
+    GEMBED[Gemini embedding]
 
-The architectural rule is:
+    ENTITIES[Canonical entities]
+    VECS[Entity embedding tables]
+    SIGNALS[Domain signal tables]
+    EVIDENCE[Grounding evidence]
 
-> **The client may start a transaction; trusted backend/payment confirmation owns final state.**
+    HYBRID[Hybrid retrieval / ranking]
+    RESULTS[Structured results]
+    LOGS[Search logs / AI runs]
+
+    Q --> SLOTS
+    SLOTS --> QCACHE
+    QCACHE -->|miss| GEMBED
+    GEMBED --> HYBRID
+    QCACHE -->|hit| HYBRID
+
+    ENTITIES --> VECS
+    VECS --> HYBRID
+    SIGNALS --> HYBRID
+    EVIDENCE --> HYBRID
+
+    HYBRID --> RESULTS
+    RESULTS --> LOGS
+```
+
+---
+
+## 11. Maps and Places
+
+Google Maps/Places is the spatial layer for map rendering, markers, card↔pin synchronization, selected-location context, and trusted place IDs/coordinates.
+
+The model may rank or explain places. It should not fabricate location identifiers or coordinates.
+
+### Discovery data flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Discovery UI
+    participant AI as Concierge / domain agent
+    participant Search as Search / grounding tools
+    participant Places as Google Places
+    participant DB as Supabase
+    participant Map as Google Map
+
+    User->>UI: Describe need
+    UI->>AI: Query + filters + map context
+    AI->>Search: Structured retrieval request
+    Search->>DB: Query canonical data/signals/cache
+    Search->>Places: Retrieve/enrich place data when required
+    DB-->>Search: Product data
+    Places-->>Search: Place evidence
+    Search-->>AI: Normalized ranked results
+    AI-->>UI: Results + explanation
+    UI->>Map: Render trusted coordinates/pins
+```
+
+---
+
+## 12. Events and Transaction Flow
+
+The browser may initiate commerce, but payment finalization belongs to trusted backend/provider paths.
 
 ```mermaid
 sequenceDiagram
     actor Buyer
     participant UI as MDE UI
     participant API as Trusted backend
-    participant Pay as Payment provider
-    participant Hook as Webhook handler
     participant DB as Supabase
+    participant Stripe
+    participant Hook as Verified webhook
 
-    Buyer->>UI: Confirm purchase
-    UI->>API: Request checkout
-    API->>DB: Validate product and current state
-    API->>Pay: Create payment session
-    Pay-->>UI: Checkout experience
-    Buyer->>Pay: Complete payment
-    Pay->>Hook: Signed payment event
-    Hook->>DB: Idempotent finalization
-    DB-->>UI: Paid order or ticket becomes available
+    Buyer->>UI: Select ticket and confirm
+    UI->>API: Checkout request
+    API->>DB: Validate event/ticket + reserve pending quantity
+    API->>Stripe: Create checkout/payment session
+    Stripe-->>Buyer: Checkout
+    Buyer->>Stripe: Complete payment
+    Stripe->>Hook: Signed payment event
+    Hook->>DB: Idempotent payment/order finalization
+    DB-->>UI: Paid order / attendee ticket available
 ```
 
-Important invariants:
+### Event order state model
 
-- browser success pages are not payment truth;
-- webhook/event processing must be idempotent;
-- retries must not create duplicate orders/tickets/bookings;
-- payment and database state must be reconcilable;
-- consequential AI-prepared actions should use explicit approval where appropriate.
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> paid: verified payment
+    pending --> cancelled: checkout cancelled/expired
+    paid --> partial_refund: partial refund
+    paid --> refunded: full refund
+    partial_refund --> refunded: remaining amount refunded
+    cancelled --> [*]
+    refunded --> [*]
+```
 
-## 12. Grounding and External Data
+Exact allowed transitions must remain enforced by current backend/database code, not by this diagram alone.
 
-Fresh local discovery may require external grounding or place/event sources.
+---
 
-The architecture should separate:
+## 13. Rental Data Flow
 
-1. **retrieval** — obtain current structured evidence;
-2. **normalization** — convert it into MDE contracts;
-3. **ranking/explanation** — AI may explain why evidence matches user intent;
-4. **rendering** — UI displays cards/maps/details;
-5. **action** — deterministic workflows perform writes/transactions.
+```mermaid
+sequenceDiagram
+    actor Renter
+    participant UI as Rentals UI / Chat
+    participant AI as CopilotKit + Mastra
+    participant Flow as rentalSearchWorkflow
+    participant DB as Supabase
+    participant Map as Maps
+    participant Write as Lead/showing path
 
-This prevents the model from being both researcher and source of truth.
+    Renter->>UI: Describe requirements
+    UI->>AI: Intent + filters + context
+    AI->>Flow: Structured rental search
+    Flow->>DB: Query apartments + signals + embeddings
+    DB-->>Flow: Candidate listings
+    Flow-->>AI: Ranked structured results
+    AI-->>UI: Cards + explanation
+    UI->>Map: Synchronize pins
+    Renter->>UI: Request viewing
+    UI->>Write: Submit validated lead
+    Write->>DB: Create/link lead
+    UI->>Write: Select viewing time
+    Write->>DB: Create showing linked to lead + apartment
+```
 
-## 13. Observability and Verification
+Live foreign keys confirm the `apartments → leads → showings` path and rental application links. See [`data-model.md`](data-model.md).
 
-The repository includes dedicated verification commands for:
+---
 
-- Supabase environment;
-- Maps environment and pin synchronization;
-- rental chat/intelligence;
-- grounding/attribution;
-- lead capture;
-- ticket checkout/paid proof;
-- Mastra integrity;
-- model/tool cost tracking;
-- production synthetic tests;
-- production journey tests;
-- desktop/mobile Playwright flows;
-- lint, typecheck, build, Vitest, and audit Floor gates.
+## 14. Human Approval and Side Effects
 
-Architecture changes are not complete merely because code compiles. The appropriate runtime path must be proven at the layer where it can actually fail.
+The live database contains `approval_requests`, `approval_decisions`, and `outbox` with relational links. HITL is therefore both a product principle and a persistence pattern.
 
-## 14. Security Boundaries
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant App as Trusted backend
+    participant Approval as approval_requests
+    actor Human
+    participant Outbox
+    participant External as External provider
 
-The architecture relies on layered controls:
+    Agent->>App: Propose consequential action
+    App->>Approval: Persist pending request
+    Approval-->>Human: Present action + risk/context
+    Human->>Approval: Approve / reject / request changes
+    alt approved
+        Approval->>Outbox: Release approved action
+        Outbox->>External: Perform side effect
+        External-->>Outbox: Delivery/provider result
+    else rejected or expired
+        Approval-->>App: Do not execute side effect
+    end
+```
 
-- authentication before identity-sensitive operations;
-- RLS for row-level access control;
-- user-scoped Mastra request context;
-- rate limiting around AI runtime endpoints;
-- server-side validation for state changes;
-- explicit HITL approval for sensitive AI-proposed actions;
-- trusted payment/webhook verification;
-- environment/secret separation;
-- regression tests for critical paths.
+Rule:
 
-A model response alone must never grant authorization.
+> **AI may propose. Deterministic authorization, approval, idempotency, and delivery code performs the side effect.**
 
-## 15. Implemented vs Planned
+---
 
-This document describes the architecture visible in merged `main`.
+## 15. Observability and AI Persistence
 
-Linear may contain future work such as:
+Current live Supabase includes:
 
-- stronger semantic retrieval / pgvector use;
-- expanded rental request/offer marketplace flows;
-- broader payments/payouts;
-- more complete host/partner operating systems;
-- additional proactive intelligence;
-- advanced automation.
+- `ai_runs`;
+- `mastra_threads`;
+- `mastra_messages`;
+- `mastra_workflow_snapshot`;
+- `mastra_ai_spans`;
+- `mastra_scorers`;
+- experiment/dataset/runtime support tables.
 
-Those are **planned capabilities until verified in merged code**. Their presence in Linear does not make them part of the current runtime architecture.
+```mermaid
+flowchart LR
+    REQ[AI request]
+    AGENT[Agent/workflow]
+    THREAD[Thread + messages]
+    SNAP[Workflow snapshot]
+    TRACE[AI spans]
+    SCORE[Scorers]
+    RUN[ai_runs]
 
-## 16. Architecture Decision Rules
+    REQ --> AGENT
+    AGENT --> THREAD
+    AGENT --> SNAP
+    AGENT --> TRACE
+    TRACE --> SCORE
+    AGENT --> RUN
+```
 
-When extending MDE:
+This supports continuity, tracing, evaluation, debugging, latency/token/cost analysis, and production evidence.
 
-1. Put UI/presentation in React/Next.js surfaces.
-2. Put AI interaction/state bridging in CopilotKit.
-3. Put agent reasoning, tools, workflows, and memory in Mastra.
-4. Put durable application data and authorization in Supabase.
-5. Put spatial truth in Maps/Places.
-6. Put model reasoning/generation in Gemini, backed by retrieved evidence.
-7. Put transaction finalization in trusted server/webhook paths.
-8. Keep human approval for consequential AI-generated changes where required.
-9. Prefer one canonical path for each write/state transition.
-10. Add an agent only when it has a durable responsibility boundary; otherwise add a tool/workflow to an existing owner.
+---
 
-## 17. Related Documentation
+## 16. Verification and Release Architecture
 
+The repository has targeted verification for Supabase, Maps, rental intelligence, grounding, lead capture, ticket checkout/paid proof, Mastra integrity, model/tool cost tracking, browser journeys, and production synthetic checks.
+
+Architecture changes are complete only when the actual failure boundary is tested.
+
+Examples:
+
+- schema/RLS change → database/security verification;
+- agent/tool change → focused agent/tool test + runtime smoke;
+- card/map state change → Playwright synchronization journey;
+- payment change → webhook/idempotency proof;
+- auth/context change → cross-user negative tests;
+- production integration → production synthetic evidence.
+
+---
+
+## 17. Security Boundaries and Live Drift
+
+Core MDE product tables inspected in the live Supabase project use RLS across identity-sensitive areas such as profiles, events, rentals, partners, bookings, event commerce, AI runtime persistence, approvals, and intelligence tables.
+
+### Live drift finding
+
+The same live `public` schema also contains multiple `fashionos_*` tables with RLS disabled. These are **not part of the canonical MDE architecture** and are excluded from MDE ERDs.
+
+They should be treated as a separate schema/security drift issue. Do not blindly enable RLS without first defining intended consumers and policies, because enabling RLS with no matching policy can break existing access.
+
+---
+
+## 18. Implemented vs Planned
+
+Implemented now includes:
+
+- CopilotKit ↔ Mastra runtime;
+- current agent/workflow set;
+- Supabase Auth/Postgres/RLS;
+- live pgvector extension and embedding tables;
+- event commerce schema;
+- rental search/lead/showing schema;
+- trips/saved/bookings persistence;
+- partners/venue supply schema;
+- approvals/outbox persistence;
+- AI/Mastra observability persistence.
+
+Linear may still contain future work for deeper personalization, expanded rental request/offer marketplace flows, broader payouts, more complete Host/Partner OS flows, proactive intelligence, and additional automation.
+
+A Linear issue is **planned work until merged code/live schema verifies it**.
+
+---
+
+## 19. Architecture Decision Rules
+
+1. UI/presentation belongs in React/Next.js.
+2. AI interaction/state bridging belongs in CopilotKit.
+3. Agent reasoning, tools, workflows, memory, and evaluation belong in Mastra.
+4. Durable application data and row authorization belong in Supabase.
+5. Semantic retrieval should use the existing vector infrastructure rather than parallel stores without a demonstrated need.
+6. Spatial truth belongs to trusted Maps/Places data.
+7. Model reasoning/generation must be backed by structured/retrieved evidence where factual correctness matters.
+8. Transaction finalization belongs in trusted server/webhook paths.
+9. Consequential AI-generated actions require deterministic authorization and HITL where appropriate.
+10. Prefer one canonical write/state-transition path.
+11. Add an agent only when it has a durable responsibility boundary; otherwise add a tool/workflow to an existing owner.
+12. Keep ERDs/domain diagrams focused and generated from real foreign keys.
+
+---
+
+## 20. Related Documentation
+
+- [`data-model.md`](data-model.md) — live Supabase ERDs and domain data flows
 - [`../../README.md`](../../README.md) — repository overview
 - [`../../prd.md`](../../prd.md) — product requirements
 - [`../../roadmap.md`](../../roadmap.md) — product strategy and sequencing
 - [`../README.md`](../README.md) — canonical documentation home
-- [`../03-platform/README.md`](../03-platform/README.md) — platform documentation area
-- [`../06-testing/README.md`](../06-testing/README.md) — testing documentation area
-- [`../07-operations/README.md`](../07-operations/README.md) — operations documentation area
+- [`../03-platform/README.md`](../03-platform/README.md) — platform documentation
+- [`../06-testing/README.md`](../06-testing/README.md) — testing documentation
+- [`../07-operations/README.md`](../07-operations/README.md) — operations documentation
 
 Mermaid documentation: https://mermaid.ai/open-source/intro/
