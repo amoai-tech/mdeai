@@ -205,9 +205,7 @@ Empty/full database tables get the same treatment: name **which persona's action
 ## Working in this repo
 
 - **Skill routing table:** [`index-skills.md`](index-skills.md) § Load by work type — **≤5 skills** per task.
-- **Default pack:** `mde-task-lifecycle` → then `copilotkit` / `copilotkit-integrations` (Mastra wiring), `mastra`, `gemini`, `mde-supabase`, `mde-maps`, `testing`, `task-verifier`, `mde-worktree-pr-flow`.
-- **Important:** `copilotkit-develop` is **v2**-oriented; mdeapp is **1.55.2** — use `copilotkit-integrations` + verbatim Mastra example, not v2 hook names.
-- **UI:** `shadcn`, `tailwind-best-practices` (symlink under `.claude/skills/`).
+- **Default pack:** `mde-task-lifecycle` → then `copilotkit`, `mastra`, `gemini`, `mde-supabase`, `mde-maps`, `testing`, `task-verifier`, `mde-worktree-pr-flow`.
 - Scan root: `.claude/skills/` (not `.agents/` alone). Archives: `.agents/skills/_archive/2026-05-19/MANIFEST.md`.
 - `.env.local` at repo root is the source of truth for keys. `mdeapp/.env.local` is a copy with Next.js-prefixed names (`NEXT_PUBLIC_*` for client-readable, `GOOGLE_GENERATIVE_AI_API_KEY` for the Gemini SDK).
 - Planning docs in `plan/prd/`, `plan/audit/`, `plan/diagrams/` are versioned (00–10). Read the dated/numbered ones for current direction. Legacy `docs/` may be superseded — cross-check with `plan/audit/01-plan-audit.md` execution log §11.
