@@ -26,11 +26,27 @@ supabase migration repair --status applied 20260611160000   # done 2026-09-17
 
 ⚠️ **Replay is green but the fresh schema is incomplete.** `supabase db reset` from zero now succeeds 109/109, but a rebuilt database is missing **8 application tables** (`outbox`, `event_stakeholders`, `event_vendors`, `event_promo_codes`, `event_order_refunds`, `suppression_list`, `event_attendee_profiles`, `delivery_receipts`) and **32 application functions**. An earlier scan reported **41**; it matched `CREATE FUNCTION` case-sensitively and produced **9 false positives**, so that count is retracted. The three `partner_*` RLS helpers and `bookings_validate_event_resource()` are among the false positives — they already have migration definitions, and **nothing about them blocks SB-003 or SB-006**. See [`../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md`](../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md) and the per-signature breakdown in [`../docs/02-architecture/snapshots/sb-002-schema-gap-inventory-2026-09-17.md`](../docs/02-architecture/snapshots/sb-002-schema-gap-inventory-2026-09-17.md).
 
-Also note `[db.seed] enabled = true` points at `./seed.sql`, which does not exist — a fresh `db reset` needs that file created or the flag turned off.
+`[db.seed]` is **disabled** (`enabled = false`). The repo ships no `supabase/seed.sql` — seed data is applied by the `data*` migrations — so a fresh `db reset` used to log `WARN: no files matched pattern: supabase/seed.sql`. It exited 0 regardless, but the flag is now off so local runs stay quiet and deterministic.
 
 **Not on remote (archived):** `migrations/_archive-not-on-remote/` — 2 legacy-only SQL files; do not push. Correctly ignored by `scripts/check-migration-timestamps.mjs`.
 
 **New DDL:** add `migrations/<timestamp>_<name>.sql` here only. Never edit or delete an applied migration — including `20260628050558_fashionos_lead_finder_mvp_namespaced`, which is retained as the provenance record for SB-002's compensating drop migration.
+
+## Local stack ports
+
+The local stack runs on **dedicated mdeai ports (5462x)**, not the Supabase defaults, so it cannot collide with another project's stack on 5432x. `supabase/config.toml` is the single source of truth:
+
+| Service | Config section | Port |
+|---|---|---|
+| API (Kong) | `[api]` | `54621` |
+| Postgres | `[db]` | `54622` |
+| Postgres shadow | `[db]` | `54620` |
+| Connection pooler | `[db.pooler]` | `54629` |
+| Studio | `[studio]` | `54623` |
+| Local SMTP | `[local_smtp]` | `54624` |
+| Analytics | `[analytics]` | `54627` |
+
+Do **not** hardcode these in a script. The gate scripts resolve the Postgres URL through [`scripts/lib/local-db-url.mjs`](../scripts/lib/local-db-url.mjs), which reads `[db] port` from `config.toml`, or honours a `SUPABASE_DB_URL` override for CI or a relocated stack. Change the port in one place and every gate follows.
 
 ## Seeds
 

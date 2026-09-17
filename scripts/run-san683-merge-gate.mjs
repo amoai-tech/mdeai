@@ -7,14 +7,25 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { resolveLocalDbUrl } from "./lib/local-db-url.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-// Local Supabase runs on dedicated mdeai ports (5462x) to avoid colliding with
-// other projects' local stacks. See supabase/config.toml [api]/[db].
-const DB =
-  process.env.SUPABASE_DB_URL ??
-  "postgresql://postgres:postgres@127.0.0.1:54622/postgres";
+
+// Local disposable DB only. Resolved from SUPABASE_DB_URL, falling back to the
+// [db] port in supabase/config.toml so the port is never duplicated in a script.
+let DB;
+try {
+  DB = resolveLocalDbUrl();
+} catch (err) {
+  console.error(
+    `FAIL cannot resolve the local Supabase database URL: ${err instanceof Error ? err.message : err}`,
+  );
+  console.error(
+    "Set SUPABASE_DB_URL, or run this from a full checkout that contains supabase/config.toml.",
+  );
+  process.exit(1);
+}
 
 const results = [];
 
