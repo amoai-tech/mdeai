@@ -7,14 +7,23 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { resolveLocalDbUrl } from "./lib/local-db-url.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqlPath = join(__dirname, "sql/partner-schema-gate.sql");
 
 // Local gate only — do not use DATABASE_URL from .env.local (points at remote pre-apply).
-const dbUrl =
-  process.env.SUPABASE_DB_URL ??
-  "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+// Resolved from SUPABASE_DB_URL, falling back to the [db] port in
+// supabase/config.toml so the port is never duplicated in a script.
+let dbUrl;
+try {
+  dbUrl = resolveLocalDbUrl();
+} catch (err) {
+  console.log(
+    `SKIP partner-schema gate (no local DB URL): ${err instanceof Error ? err.message : err}`,
+  );
+  process.exit(0);
+}
 
 const EXPECT = {
   partner_tables: 8,
