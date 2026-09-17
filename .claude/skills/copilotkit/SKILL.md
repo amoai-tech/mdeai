@@ -14,7 +14,7 @@ metadata:
 
 1. Inspect the installed MDE CopilotKit packages and current runtime/provider code.
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
-3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md` and run `npx copilotkit@latest verify --json` when safe and applicable.
+3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md` and run `npx copilotkit@4.10.0 verify --json` when safe and applicable.
 4. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
 5. Apply the MDE-specific invariants below.
 
