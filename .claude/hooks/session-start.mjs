@@ -22,12 +22,12 @@ const status = sh("git", ["status", "--porcelain"], { cwd: root });
 const dirty = status ? `${status.split("\n").length} changed file(s)` : "clean";
 const log = sh("git", ["log", "--oneline", "-3", "--no-decorate"], { cwd: root });
 
-const required = ["tasks", "copilotkit", "mastra", "supabase", "gemini"];
+const required = ["tasks", "task-verifier", "systematic-debugging", "testing", "tdd", "research", "code-review", "writing-skills", "wireframe", "mermaid-diagrams", "copilotkit", "mastra", "supabase", "gemini", "maps", "stripe", "nextjs", "cloudinary"];
 const missing = required.filter((name) => !existsSync(resolve(skillsRoot, name, "SKILL.md")));
-const requiredPaths = required.map((name) => resolve(skillsRoot, name));
-const brokenList = requiredPaths
-  .filter((skillPath) => existsSync(skillPath) && !existsSync(resolve(skillPath, "SKILL.md")))
-  .map((skillPath) => skillPath.split("/").pop());
+const brokenList = required.filter((name) => {
+  const skillPath = resolve(skillsRoot, name);
+  return existsSync(skillPath) && !existsSync(resolve(skillPath, "SKILL.md"));
+});
 
 const skillStatus = missing.length === 0 && brokenList.length === 0
   ? "canonical skill scan: OK"

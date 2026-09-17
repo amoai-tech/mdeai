@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sourceHook = resolve(here, "../session-start.mjs");
-const required = ["tasks", "copilotkit", "mastra", "supabase", "gemini"];
+const required = ["tasks", "task-verifier", "systematic-debugging", "testing", "tdd", "research", "code-review", "writing-skills", "wireframe", "mermaid-diagrams", "copilotkit", "mastra", "supabase", "gemini", "maps", "stripe", "nextjs", "cloudinary"];
 
 function run(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, encoding: "utf8" });
@@ -48,7 +48,7 @@ const repos = [];
 try {
   const clean = makeRepo(); repos.push(clean);
   const cleanOut = hook(clean);
-  assert.match(cleanOut, new RegExp(`- Repo: ${clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.ok(cleanOut.includes(`- Repo: ${clean}`));
   assert.match(cleanOut, /- Branch: main/);
   assert.match(cleanOut, /canonical skill scan: OK/);
   const commitLines = cleanOut.split("## Recent commits\n\n```\n")[1].split("\n```", 1)[0].trim().split("\n");

@@ -1,10 +1,10 @@
 # CLAUDE.md — MDE AI
 
-Project guidance for Claude Code working in `/home/sk/mdeai`.
+Project guidance for Claude Code working from the repository root.
 
 ## Repository truth
 
-- Repo root: `/home/sk/mdeai`
+- Repo root: the current Git checkout root
 - Remote: `https://github.com/amoai-tech/mdeai.git`
 - Package name: `mdeapp`
 - App source lives directly at the repository root.
