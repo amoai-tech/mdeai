@@ -134,7 +134,7 @@ Verified with **case-insensitive** matching against every migration, then each h
   | `AS $$ … $$` + `RETURNS TABLE` | `on` | **fails** | — |
   | `AS $$ … $$` | `off` | succeeds | **fails** |
 
-  So on any default-configured Postgres — including production and the local stack — the catch-up migration fails at apply. Were `check_function_bodies` turned `off`, creation would succeed and the breakage would move to first invocation: same blast radius, later and quieter. Either way the functions cannot work until `fts_content` exists, so the deferral stands — but for the right reason.
+  So on any default-configured Postgres the catch-up migration fails at apply. Both environments this matters for were checked directly rather than assumed: **production** reports `check_function_bodies = on` (`source = default`), and the **local stack's own image**, `public.ecr.aws/supabase/postgres:17.6.1.165`, also reports `on (source=default)` and rejects the string-body form at `CREATE`. Were the GUC turned `off`, creation would succeed and the breakage would move to first invocation: same blast radius, later and quieter. Either way the functions cannot work until `fts_content` exists, so the deferral stands — but for the right reason.
 
 ---
 
