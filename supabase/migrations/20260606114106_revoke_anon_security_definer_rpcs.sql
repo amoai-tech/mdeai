@@ -31,46 +31,48 @@
 --   decide_approval (internal is_admin() guard), insert_trip_item_for_user
 --   (internal auth.uid() null check), st_estimatedextent (PostGIS system).
 --   record_check_in: authenticated kept (staff check-in scanner may use auth session).
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SB-001 (2026-09-17) — REPLAY FIX
+-- The target functions exist in production but have NO `CREATE` statement anywhere
+-- in the repository, so `supabase db reset` from zero failed here with
+--   ERROR: function public.outbox_enqueue(text, text, text, jsonb, uuid) does not exist
+--   (SQLSTATE 42883)
+-- which is the root cause of the preview-branch MIGRATIONS_FAILED state.
+-- Guarding each revoke with to_regprocedure makes this migration idempotent and
+-- replay-safe. On production every object exists, so behaviour is UNCHANGED; on a
+-- fresh database the guard skips whatever is not there yet.
+-- Evidence: docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md
+-- Still outstanding (SB-003/SB-006): the 41 live-only functions and 8 live-only
+-- tables must be recovered into Git so a fresh replay yields a COMPLETE schema.
+-- ─────────────────────────────────────────────────────────────────────────────
 
--- ── Outbox pipeline (service_role only) ─────────────────────────────────────
-REVOKE EXECUTE ON FUNCTION public.outbox_enqueue(text, text, text, jsonb, uuid)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.outbox_claim(text, integer)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.outbox_mark_failed(uuid, text, timestamptz)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.outbox_mark_sent(uuid, text)
-  FROM anon, authenticated;
-
--- ── Agent telemetry (service_role only) ─────────────────────────────────────
-REVOKE EXECUTE ON FUNCTION public.fn_record_tool_call_start(uuid, text, integer, jsonb, text, uuid)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.fn_record_tool_call_end(uuid, text, jsonb, text)
-  FROM anon, authenticated;
-
--- ── HITL approval system (service_role only) ─────────────────────────────────
-REVOKE EXECUTE ON FUNCTION public.request_approval(text, text, text, jsonb, text, text, uuid, integer)
-  FROM anon, authenticated;
-
--- ── Event operations ─────────────────────────────────────────────────────────
--- record_check_in: anon revoked; authenticated kept (staff check-in scanner)
-REVOKE EXECUTE ON FUNCTION public.record_check_in(uuid, uuid, text, uuid, text, inet, text, jsonb)
-  FROM anon;
-
--- fn_notify_next_in_line: backend-only waitlist trigger
-REVOKE EXECUTE ON FUNCTION public.fn_notify_next_in_line(uuid)
-  FROM anon, authenticated;
-
--- ── OpenClaw marketing integration (service_role only) ────────────────────────
-REVOKE EXECUTE ON FUNCTION public.fn_insert_conversation(jsonb)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.fn_upsert_delivery_log(jsonb)
-  FROM anon, authenticated;
-
-REVOKE EXECUTE ON FUNCTION public.fn_update_conversation_intent(text, text, numeric, text)
-  FROM anon, authenticated;
+do $$
+declare
+  r record;
+begin
+  for r in
+    select * from (values
+      -- signature, roles to revoke from
+      ('public.outbox_enqueue(text,text,text,jsonb,uuid)',                     array['anon','authenticated']),
+      ('public.outbox_claim(text,integer)',                                    array['anon','authenticated']),
+      ('public.outbox_mark_failed(uuid,text,timestamptz)',                     array['anon','authenticated']),
+      ('public.outbox_mark_sent(uuid,text)',                                   array['anon','authenticated']),
+      ('public.fn_record_tool_call_start(uuid,text,integer,jsonb,text,uuid)',  array['anon','authenticated']),
+      ('public.fn_record_tool_call_end(uuid,text,jsonb,text)',                 array['anon','authenticated']),
+      ('public.request_approval(text,text,text,jsonb,text,text,uuid,integer)', array['anon','authenticated']),
+      -- record_check_in: anon revoked; authenticated intentionally kept
+      ('public.record_check_in(uuid,uuid,text,uuid,text,inet,text,jsonb)',     array['anon']),
+      ('public.fn_notify_next_in_line(uuid)',                                  array['anon','authenticated']),
+      ('public.fn_insert_conversation(jsonb)',                                 array['anon','authenticated']),
+      ('public.fn_upsert_delivery_log(jsonb)',                                 array['anon','authenticated']),
+      ('public.fn_update_conversation_intent(text,text,numeric,text)',         array['anon','authenticated'])
+    ) as t(sig, roles)
+  loop
+    if to_regprocedure(r.sig) is not null then
+      execute format('revoke execute on function %s from %s', r.sig, array_to_string(r.roles, ', '));
+    else
+      raise notice 'Skipping revoke; function not present in this database: %', r.sig;
+    end if;
+  end loop;
+end $$;

@@ -28,7 +28,7 @@ export interface MastraRunRecord {
   error_code?: string | null;
   /**
    * OBS-002b — coarse failure class, written to the first-class `error_type`
-   * column (migration 20260616120000) so ops can filter failures with an
+   * column (migration 20260616084031) so ops can filter failures with an
    * indexed query instead of digging through the `metadata` JSON blob.
    */
   error_type?: string | null;
