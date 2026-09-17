@@ -1,0 +1,36 @@
+{
+  "skill_name": "supabase",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Add an UPDATE policy to an org-owned bookings table so members can edit only rows in their organization.",
+      "expected_output": "Uses Supabase plus Postgres/RLS guidance, inspects current policy/schema, and proves both authorized and cross-tenant denied updates.",
+      "files": [],
+      "expectations": [
+        "Uses current Supabase/Postgres guidance",
+        "Covers both USING and WITH CHECK implications for UPDATE",
+        "Requires a cross-tenant deny case"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A migration adds a NOT NULL organization_id to a populated table. Make it production safe.",
+      "expected_output": "Inspects current migration conventions/data and plans ordering/backfill/constraint/index/replay proof instead of writing a blind one-step migration.",
+      "files": [],
+      "expectations": [
+        "Accounts for existing rows/backfill ordering",
+        "Uses repo migration conventions",
+        "Requires replay/schema proof"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Change a React card layout that reads static mock data and never talks to Supabase.",
+      "expected_output": "Does not route to Supabase.",
+      "files": [],
+      "expectations": [
+        "Does not select Supabase for database-independent UI work"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+vendor: Mastra
+repository: https://github.com/mastra-ai/skills
+source_path: skills/mastra
+reviewed_commit: 08428f9b47cdae1131d12cbd9f8e0886ff476211
+reviewed_at: 2026-09-15
+policy:
+  active_skill: mastra
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+source:
+  local: references/official/mastra
+  tree_sha256: 8724ea72ddd1ff318c93750188172286601f76f378dc07d016bcba53e3ca69c2
+optional_upstream_skills:
+- mastra-factory
+hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)

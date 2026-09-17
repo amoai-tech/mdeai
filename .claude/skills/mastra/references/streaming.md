@@ -101,6 +101,6 @@ Package: `@mastra/core` — use `readMastraDocs` with `projectPath: /home/sk/mde
 | Artifact | Path |
 | --- | --- |
 | CopilotKit runtime (AG-UI bridge) | `mdeapp/src/app/api/copilotkit/route.ts` |
-| CopilotKit integration skill | `copilotkit-integrations` → `references/integrations/mastra.md` |
+| CopilotKit integration skill | `copilotkit` → `references/mastra-bridge.md` |
 | Tool definitions (writer hooks) | `mdeapp/src/mastra/tools/**` |
 | AI SDK v5 bridge | `toAISdkV5Stream()` from `@mastra/ai-sdk` — see [overview](https://mastra.ai/docs/streaming/overview) |

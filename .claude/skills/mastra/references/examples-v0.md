@@ -81,5 +81,5 @@ Full index: [`browser.md`](browser.md)
 | Artifact | Path |
 | --- | --- |
 | Working memory today | `mdeapp/src/mastra/agents/` · `mdeapp/src/lib/types.ts` |
-| CopilotKit bridge (not AI SDK UI) | `copilotkit-integrations` skill |
+| CopilotKit bridge (not AI SDK UI) | `copilotkit` skill |
 | WhatsApp / channels | Deferred Phase 2 — PRD W7+ |
