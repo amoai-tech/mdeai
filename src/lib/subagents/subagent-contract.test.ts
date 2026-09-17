@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDelegation, validateDelegationPrompt, verifyRepositoryContracts } from '../../../scripts/verify-subagent-contract.mjs';
+import { extractDelegationPolicy, validateDelegationPrompt, verifyRepositoryContracts } from '../../../scripts/verify-subagent-contract.mjs';
 
 describe('MDE subagent delegation contract', () => {
   it('S0/S1 does not spawn unnecessarily', () => {
-    expect(classifyDelegation({ level: 'S0', independent: false, isolated: false, verbose: false, narrowTools: false })).toEqual({ delegate: false, count: 0 });
-    expect(classifyDelegation({ level: 'S1', independent: false, isolated: false, verbose: false, narrowTools: false })).toEqual({ delegate: false, count: 0 });
+    const policy = extractDelegationPolicy();
+    expect(policy.s0).toBe('none');
+    expect(policy.s1).toBe('main');
   });
 
   it('S2 isolated work can delegate one specialist', () => {
-    expect(classifyDelegation({ level: 'S2', independent: false, isolated: true, verbose: false, narrowTools: false })).toEqual({ delegate: true, count: 1 });
+    expect(extractDelegationPolicy().s2).toBe('one-isolated-specialist');
   });
 
-  it('S3 independent workstreams can delegate safely', () => {
-    expect(classifyDelegation({ level: 'S3', independent: true, isolated: false, verbose: false, narrowTools: false })).toEqual({ delegate: true, count: 2 });
+  it('S3/S4 fan out only dependency-independent workstreams', () => {
+    expect(extractDelegationPolicy().s3s4).toBe('independent-only');
   });
 
   it('S4 requires separate verifier context', () => {
-    const result = classifyDelegation({ level: 'S4', independent: false, isolated: false, verbose: false, narrowTools: false });
-    expect(result.verifierSeparate).toBe(true);
+    expect(verifyRepositoryContracts().separateVerifier).toBe(true);
   });
 
   it('delegation prompt requires all canonical fields', () => {
@@ -31,14 +31,12 @@ describe('MDE subagent delegation contract', () => {
     expect(validateDelegationPrompt({ Outcome: 'x' }).ok).toBe(false);
   });
 
-  it('tightly sequential work stays with main agent', () => {
-    expect(classifyDelegation({ level: 'S3', independent: false, isolated: false, verbose: false, narrowTools: false, tightlySequential: true }).delegate).toBe(false);
+  it('tightly sequential work stays serialized', () => {
+    expect(verifyRepositoryContracts().sequentialWorkSerialized).toBe(true);
   });
 
   it('S4 implementation and verifier use separate contexts', () => {
-    const result = classifyDelegation({ level: 'S4', independent: true, isolated: true, verbose: false, narrowTools: false });
-    expect(result.verifierSeparate).toBe(true);
-    expect(result.count).toBeGreaterThanOrEqual(1);
+    expect(verifyRepositoryContracts().separateVerifier).toBe(true);
   });
 
   it('fresh-context worker prompt is self-contained', () => {

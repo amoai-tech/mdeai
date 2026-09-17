@@ -4,32 +4,16 @@ import { pathToFileURL } from 'node:url';
 
 const REQUIRED_PROMPT_FIELDS = ['Outcome', 'Context', 'Scope', 'Inputs', 'Constraints', 'Evidence', 'STOP', 'Handoff'];
 
-export function classifyDelegation(input) {
-  const level = input.level;
-  if (input.tightlySequential || level === 'S0' || level === 'S1') {
-    return { delegate: false, count: 0, ...(level === 'S4' ? { verifierSeparate: true } : {}) };
-  }
-
-  if (level === 'S4') {
-    return {
-      delegate: Boolean(input.independent || input.isolated || input.verbose || input.narrowTools),
-      count: input.independent ? 2 : (input.isolated || input.verbose || input.narrowTools ? 1 : 0),
-      verifierSeparate: true,
-    };
-  }
-
-  if (level === 'S2') {
-    const delegate = Boolean(input.independent || input.isolated || input.verbose || input.narrowTools);
-    return { delegate, count: delegate ? 1 : 0 };
-  }
-
-  if (level === 'S3') {
-    if (input.independent) return { delegate: true, count: 2 };
-    const delegate = Boolean(input.isolated || input.verbose || input.narrowTools);
-    return { delegate, count: delegate ? 1 : 0 };
-  }
-
-  return { delegate: false, count: 0 };
+export function extractDelegationPolicy(root = process.cwd()) {
+  const path = `${root}/.claude/skills/tasks/references/shared/subagent-standard.md`;
+  if (!existsSync(path)) return { error: 'missing contract file: subagent-standard' };
+  const standard = readFileSync(path, 'utf8');
+  return {
+    s0: standard.includes('S0 work uses no subagent.') ? 'none' : 'unknown',
+    s1: standard.includes('S1 normally stays in the main agent.') ? 'main' : 'unknown',
+    s2: standard.includes('S2 may use one isolated specialist.') ? 'one-isolated-specialist' : 'unknown',
+    s3s4: standard.includes('S3/S4 may fan out only dependency-independent work.') ? 'independent-only' : 'unknown',
+  };
 }
 
 export function validateDelegationPrompt(prompt) {
@@ -77,11 +61,22 @@ export function verifyRepositoryContracts(root = process.cwd()) {
   };
 }
 
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  const checks = verifyRepositoryContracts();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const policy = extractDelegationPolicy();
+  const contracts = verifyRepositoryContracts();
+  const checks = {
+    s0NoSubagent: policy.s0 === 'none',
+    s1MainAgent: policy.s1 === 'main',
+    s2OneSpecialist: policy.s2 === 'one-isolated-specialist',
+    s3s4IndependentOnly: policy.s3s4 === 'independent-only',
+    ...Object.fromEntries(
+      Object.entries(contracts).filter(([key, value]) => key !== 'error' && typeof value === 'boolean'),
+    ),
+  };
   const failed = Object.entries(checks).filter(([, ok]) => !ok);
   if (failed.length) {
     for (const [name] of failed) console.error(`FAIL ${name}`);
+    if (contracts.error) console.error(contracts.error);
     process.exitCode = 1;
   } else {
     console.log(`subagent repository contract: PASS (${Object.keys(checks).length}/${Object.keys(checks).length})`);
