@@ -153,6 +153,8 @@ Verified with **case-insensitive** matching against every migration, then each h
 
 These are **production defects, not migration gaps.** Reproducing them as-is preserves the defects in every new environment; recreating the dropped tables would invent schema that was deliberately removed.
 
+**This set is not the same as the `marketing` dependents in §5.1, and the two must not be added together.** The **7 dead** functions fail because their target objects were dropped from *both* environments — the objects are gone everywhere. The **4 `marketing`** dependents fail because a schema that exists in production was never created in Git — the objects are gone only from a rebuilt environment. The sets overlap in exactly **one** function, `fn_record_conversion`, which is both (it writes `marketing.campaign_conversions` *and* reads `public.outbound_clicks`). So the union is **10 distinct functions**, not 11. Together with the 3 `hybrid_search_*` (blocked by `fts_content`, §5.2), that accounts for 13 of the 32 missing functions.
+
 ---
 
 ## 7. Why the catch-up migration was not authored
