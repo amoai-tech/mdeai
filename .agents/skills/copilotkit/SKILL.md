@@ -1,0 +1,1 @@
+../../../.claude/skills/copilotkit/SKILL.md

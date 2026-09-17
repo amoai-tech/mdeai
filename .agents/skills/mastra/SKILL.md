@@ -1,0 +1,1 @@
+../../../.claude/skills/mastra/SKILL.md

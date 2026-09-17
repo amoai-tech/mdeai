@@ -1,7 +1,7 @@
 ---
 name: copilotkit
 description: >-
-  Use when MDE work involves CopilotKit, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools or actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, or the CopilotKit-to-Mastra bridge.
+  Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "8a7446186cd3e0d368ec885e61c5913f0918ef5d"
@@ -14,7 +14,7 @@ metadata:
 
 1. Inspect the installed MDE CopilotKit packages and current runtime/provider code.
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
-3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md` and run `npx copilotkit@latest verify --json` when safe and applicable.
+3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md` and run `npx copilotkit@4.10.0 verify --json` when safe and applicable.
 4. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
 5. Apply the MDE-specific invariants below.
 

@@ -1,13 +1,13 @@
 ---
 name: copilotkit-cli
-description: "Use for the CopilotKit CLI — `npx copilotkit@latest`. Covers proving a project's wiring with `verify` before debugging anything by hand, scaffolding with `create`, signing in and selecting a hosted Intelligence project, agent-assisted onboarding of an existing app, generating type-safe agent ids, and importing thread history. Reach for `verify` first whenever a CopilotKit app is not working."
+description: "Use for the CopilotKit CLI — `npx copilotkit@4.10.0`. Covers proving a project's wiring with `verify` before debugging anything by hand, scaffolding with `create`, signing in and selecting a hosted Intelligence project, agent-assisted onboarding of an existing app, generating type-safe agent ids, and importing thread history. Reach for `verify` first whenever a CopilotKit app is not working."
 version: 1.0.0
 ---
 
 # CopilotKit CLI
 
 ```bash
-npx copilotkit@latest <command>
+npx copilotkit@4.10.0 <command>
 ```
 
 `--help` on any command prints its flags. The commands below are the ones worth knowing
@@ -16,7 +16,7 @@ before you start reading someone's project by hand.
 ## `verify` — do this before debugging
 
 ```bash
-npx copilotkit@latest verify --json
+npx copilotkit@4.10.0 verify --json
 ```
 
 One command replaces the manual survey. It settles up to eleven things: a hosted project is
@@ -74,7 +74,7 @@ Reach past it only once it is clean.
 ## Starting a project
 
 ```bash
-npx copilotkit@latest init          # `create` is an alias for it
+npx copilotkit@4.10.0 init          # `create` is an alias for it
 ```
 
 Prompts for a name and framework, scaffolds a starter, signs you in when needed, and connects
@@ -86,7 +86,7 @@ To add CopilotKit to an existing app, either follow the [quickstart](/quickstart
 the job to your coding agent:
 
 ```bash
-npx copilotkit@latest onboard start
+npx copilotkit@4.10.0 onboard start
 ```
 
 That runs an agent-guided flow over the repository you are already in, with checkpoints and
@@ -96,11 +96,11 @@ an app that already has CopilotKit.
 ## Signing in and picking a project
 
 ```bash
-npx copilotkit@latest login --json   # agent-readable JSON lines, no browser launch
-npx copilotkit@latest login          # interactive: opens a browser
-npx copilotkit@latest whoami         # who is signed in, and the active organization
-npx copilotkit@latest project select # pick or create a hosted project for this directory
-npx copilotkit@latest project list --json
+npx copilotkit@4.10.0 login --json   # agent-readable JSON lines, no browser launch
+npx copilotkit@4.10.0 login          # interactive: opens a browser
+npx copilotkit@4.10.0 whoami         # who is signed in, and the active organization
+npx copilotkit@4.10.0 project select # pick or create a hosted project for this directory
+npx copilotkit@4.10.0 project list --json
 ```
 
 Use `login --json` when you are driving the CLI. Bare `login` tries to open a browser, which

@@ -85,7 +85,7 @@ Worth knowing so a search has somewhere to land:
 
 ## Before you debug anything
 
-Run the CLI's wiring check first — `npx copilotkit@latest verify --json`. It settles up to
+Run the CLI's wiring check first — `npx copilotkit@4.10.0 verify --json`. It settles up to
 eleven things in one command and is almost always faster than reading the project. See the
 `copilotkit-cli` skill.
 
