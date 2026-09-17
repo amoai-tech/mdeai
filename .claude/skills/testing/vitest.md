@@ -1,6 +1,6 @@
 ---
 name: vitest-component-testing
-description: "Use when writing Vitest unit tests for React components in mdeai.co. Triggers: any new *.test.tsx file, any failing component test in JSDOM, any 'how do I test X component' question. Built on test-driven-development (skills.sh) + our actual test patterns from D2-D5."
+description: "Use when writing Vitest unit tests for React components in mdeai.co. Triggers: any new *.test.tsx file, any failing component test in JSDOM, any 'how do I test X component' question. Use `tdd` for the test-first implementation loop; this reference covers Vitest mechanics and MDE test patterns."
 metadata:
   source: https://skills.sh/ (test-driven-development)
   installed: 2026-04-29

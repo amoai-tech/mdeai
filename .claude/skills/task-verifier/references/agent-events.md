@@ -4,10 +4,10 @@ title: task-verifier — Events vertical (EVP)
 
 # Events task verification
 
-**Specs:** `tasks/events/tasks/{MVP,ADV,...}/EVP-*.md` (specs ARE nested under `tasks/events/tasks/`). Venue-booking specs: `tasks/events/specs/venue-booking/*` + canonical `tasks/venues/tasks/event-booking/VEB-*`.  
-**Index:** `tasks/events/tasks/INDEX.md` · **Legacy map:** `tasks/events/tasks/LEGACY-ID-MAP.md`  
-**Audit:** `tasks/events/audit/{01-audit-events-mvp,02-events-audit,03-events-tasks-audit}.md` (NOT `tasks/audit/32-*`, which never existed).  
-**PRD / roadmap:** `tasks/events/events-prd.md`, `tasks/events/events-roadmap.md`  
+**Specs:** `tasks/events/tasks/{MVP,ADV,...}/EVP-*.md` (specs ARE nested under `tasks/events/tasks/`). Venue-booking specs: `tasks/events/specs/venue-booking/*` + canonical `tasks/venues/tasks/event-booking/VEB-*`.
+**Index:** `tasks/events/tasks/INDEX.md` · **Legacy map:** `tasks/events/tasks/LEGACY-ID-MAP.md`
+**Audit:** `tasks/events/audit/{01-audit-events-mvp,02-events-audit,03-events-tasks-audit}.md` (NOT `tasks/audit/32-*`, which never existed).
+**PRD / roadmap:** `tasks/events/events-prd.md`, `tasks/events/events-roadmap.md`
 **Live execution:** `tasks/events/todo.md` + Linear `SAN-### · EVT-*/AIE-*` (EVP-* is the legacy spec scheme; map via LEGACY-ID-MAP — e.g. EVP-032 = SAN-135).
 
 ## ID scheme (2026-05-27)

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mdeai.local/schemas/orchestration-step.schema.json",
+  "title": "MDE Orchestration Step",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "step_id",
+    "skill",
+    "action",
+    "inputs",
+    "outputs",
+    "depends_on",
+    "can_parallel",
+    "on_failure"
+  ],
+  "properties": {
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "skill": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "can_parallel": {
+      "type": "boolean"
+    },
+    "on_failure": {
+      "enum": [
+        "retry",
+        "skip-with-limitation",
+        "reroute",
+        "abort",
+        "ask-user"
+      ]
+    }
+  }
+}

@@ -6,8 +6,8 @@ impact: HIGH
 # OpenClaw (OCL) task verification
 
 **Task specs:** `/home/sk/mdeai/tasks/openclaw/tasks/OCL-*.md`  
-**Sources hub:** [`tasks/openclaw/docs/sources.md`](../../../../tasks/openclaw/docs/sources.md)  
-**Index:** [`tasks/openclaw/index-ocl.md`](../../../../tasks/openclaw/index-ocl.md)
+**Sources hub:** use current OpenClaw source documentation.
+**Index:** use the current Linear/OpenClaw task index.
 
 ## Skills to load
 
