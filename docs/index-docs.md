@@ -35,15 +35,17 @@ It is intentionally transitional. The repository still contains older June 2026 
 
 | Area | Current location | Task 45 disposition |
 |---|---|---|
-| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md), [`diagrams/`](diagrams/) | UPDATE / MERGE |
+| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | UPDATE / MERGE |
 | AI / agent architecture | [`intelligence/`](intelligence/), [`copilotkit-mastra/`](copilotkit-mastra/), [`ai-second-brain/`](ai-second-brain/) | AUDIT / MERGE into platform docs where current |
 | Events | [`events/`](events/), [`tasks/events/`](tasks/events/) | AUDIT / MERGE; separate current domain docs from task history |
+| Venues | [`tasks/venues/`](tasks/venues/) | AUDIT / MERGE; extract current venue domain truth from task-heavy material |
+| Nightlife | [`tasks/venues/`](tasks/venues/) | AUDIT / REWRITE; separate nightlife discovery/booking truth from shared venue task history |
 | Real estate / rentals | [`real-estate/`](real-estate/) | AUDIT / REWRITE |
 | Restaurants | [`restaurant/`](restaurant/) | AUDIT / REWRITE |
 | Partners / sponsors | [`partners/`](partners/) | AUDIT / REWRITE; protect active PR work |
 | Ecommerce | [`ecommerce/`](ecommerce/) | AUDIT; keep only current product direction |
 | Design / wireframes | [`design/`](design/), [`wireframes/`](wireframes/) | KEEP / REVIEW; archive superseded handoffs |
-| Platform / infrastructure | [`platform/`](platform/), [`security/`](security/) | AUDIT / REWRITE |
+| Platform / infrastructure | [`security/`](security/) | AUDIT / REWRITE; shared platform material also exists across task/domain docs and must be consolidated |
 | Product / PRD material | [`prd/`](prd/) | AUDIT / MERGE into canonical product docs |
 | Strategy / research | [`strategy/`](strategy/), [`research/`](research/), [`revenue-strategy.md`](revenue-strategy.md), [`revenue-strategy-v2.md`](revenue-strategy-v2.md), [`strategic-audit.md`](strategic-audit.md) | REVIEW; current strategy separate from historical research |
 | Testing / QA | [`testing/`](testing/), [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | KEEP / UPDATE |
