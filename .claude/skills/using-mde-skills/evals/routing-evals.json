@@ -1,0 +1,12 @@
+[
+  {"name":"direct-owner","input":"Fix the CopilotKit generative UI rendering bug","expected_owner":"copilotkit","risk":"S2","requires_independent_verifier":false},
+  {"name":"ambiguous-implementation","input":"Implement the remaining SAN-1273 routing work across the repo","expected_owner":"tasks","risk":"S2","requires_independent_verifier":false},
+  {"name":"unknown-failure","input":"The build suddenly fails and we do not know why","expected_owner":"systematic-debugging","risk":"S2","requires_independent_verifier":false},
+  {"name":"research-only","input":"Research current official guidance for this dependency before changing code","expected_owner":"research","risk":"S1","requires_independent_verifier":false},
+  {"name":"pr-review","input":"Review this pull request diff for regressions","expected_owner":"code-review","risk":"S2","requires_independent_verifier":false},
+  {"name":"done-proof","input":"Verify this exact head is ready to merge","expected_owner":"task-verifier","risk":"S3","requires_independent_verifier":false},
+  {"name":"simple-s0","input":"Explain what this function does","expected_owner":"direct","risk":"S0","requires_independent_verifier":false},
+  {"name":"payment-s4","input":"Change Stripe payment retry behavior in production","expected_owner":"stripe","risk":"S4","requires_independent_verifier":true},
+  {"name":"auth-s4","input":"Change Supabase RLS tenant access rules","expected_owner":"supabase","risk":"S4","requires_independent_verifier":true},
+  {"name":"stale-owner","input":"Route this to mde-task-lifecycle","expected_owner":"__INVALID__","risk":"S1","requires_independent_verifier":false}
+]
