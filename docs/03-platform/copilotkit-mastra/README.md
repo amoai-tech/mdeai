@@ -74,9 +74,9 @@ MDE currently pins CopilotKit packages to `1.55.2`, while application React code
 
 Do not describe this as “v1-only.” The production rule is:
 
-> Keep the current pinned package version and `/v2` React API surface stable. Do not reintroduce bare v1 React imports into `src/**`, and do not upgrade CopilotKit packages opportunistically inside feature work.
+> Keep the current pinned package version and `/v2` React API surface stable. Do not reintroduce bare v1 React imports into `src/app/**` or `src/components/**`, and do not upgrade CopilotKit packages opportunistically inside feature work.
 
-`npm run check:mastra` already enforces the package pin and rejects bare v1 React imports in app/components.
+`npm run check:mastra` currently enforces the package pin and rejects bare v1 React imports in `src/app/**` and `src/components/**`. It does **not** prove all of `src/**` is free of bare-v1 imports. The broader CopilotKit audit command is currently broken because its referenced map script is missing; SAN-1300 owns that repair.
 
 ## Request context and authorization
 

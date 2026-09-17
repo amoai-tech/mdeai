@@ -237,3 +237,130 @@ Avoid:
 - https://github.com/mastra-ai/mastra
 - https://github.com/mastra-ai/template-agent-harness
 - https://github.com/mastra-ai/skills
+
+
+## Mastra forensic progress tracker — 2026-09-17
+
+Status legend: 🟢 completed + verified · 🟡 implemented/in progress, proof incomplete · 🔴 broken/blocked · 🔵 not started/required.
+
+| Order | Task | Status | % | Current proof | Missing / next action |
+|---:|---|:---:|---:|---|---|
+| 1 | SAN-1302 · MDE-MASTRA-UPGRADE-001 — package pin/upgrade | 🔵 | 25% | Declared/installed/latest versions audited | Pin exact baseline; isolated compatibility matrix |
+| 2 | SAN-547 · AUTH-009 — RequestContext isolation | 🟡 | 70% | Fresh RequestContext + user-scoped client implemented | User A/B/anonymous/concurrent proof |
+| 3 | SAN-1303 · MDE-MASTRA-PG-001 — Postgres hardening | 🟡 | 50% | Live schema/rows/RLS/grants audited | Schema/PK/pooler decision + cold-start proof |
+| 4 | SAN-548 · Cold-start persistence | 🟡 | 70% | Postgres persistence code + integration evidence | Current production continuity + cross-user proof |
+| 5 | SAN-1255 · EVOS-14 — Agent pruning | 🔵 | 25% | 8-agent registry audited | Trace/journey proof before removal |
+| 6 | SAN-1003 · MASTRA-RE-006 — Observability | 🔴 | 25% | Studio native observability verified | Restore current traces + ownership boundary |
+| 7 | SAN-856 · ai_runs token/cost/error capture | 🔴 | 25% | Live drift quantified | Repair usage/error capture + correlate traces |
+| 8 | SAN-1061 · MASTRA-RE-017 — Rental evals | 🔵 | 25% | Native eval surfaces verified | Dataset/experiment from existing scorers |
+| 9 | SAN-611 · AGT-17 — Golden queries | 🔵 | 25% | Corpus/scorers identified | Native experiment + failing fixture + CI |
+| 10 | SAN-606/593/596/598 · Runtime guardrails | 🔵 | 25% | Current processor APIs reviewed | Implement only proven safety gaps |
+| 11 | SAN-607 · Workflow compensation/errors | 🔵 | 25% | Affected write workflows identified | Compensation policy before new money/write flows |
+| 12 | SAN-1226 · Rental match workflow | 🔵 | 25% | Existing RentalSearchEngine reuse contract | Deterministic rank + explainable soft match |
+| 13 | SAN-597/610 · Memory + preference extraction | 🔵 | 25% | Scope defined | Privacy-safe resource schema then processors |
+| 14 | SAN-599/609/600/627 · Performance/streaming | 🔵 | 25% | Current patterns identified | Benchmark after P0/P1 correctness |
+
+Percentages follow the SAN-1299 rubric: 25% means spec/research exists; 50% implementation exists; 70% tests/integration proof; 85% localhost/Studio journey; 95% staging/production proof; 100% acceptance + production evidence.
+
+### Registered workflow inventory
+
+| Workflow | Registered | Current use | Reliability / persistence | Status |
+|---|:---:|---|---|:---:|
+| `salesInsightWorkflow` | yes | Host Ops analytics | deterministic numeric core + dedicated tests | 🟢 |
+| `eventVenueBookingWorkflow` | yes | admin booking review/resume | suspend/resume + Postgres durability evidence | 🟢 |
+| `rentalSearchWorkflow` | yes | router/Studio/demo-oriented path | tests exist; not canonical consumer runtime | 🟡 |
+| `eventDiscoveryWorkflow` | yes | discovery workflow available | simple DB/card pipeline; live fast paths may bypass it | 🟡 |
+
+Green means direct implementation/caller/test evidence for the workflow itself, not that every surrounding product journey is production-complete.
+
+## Mastra production architecture
+
+```mermaid
+flowchart LR
+  U[User] --> CK[CopilotKit]
+  CK --> API[/api/copilotkit]
+  API --> RC[Mastra RequestContext]
+  RC --> A[Approved Mastra Agent]
+  A --> T[Typed Tools]
+  A --> W[Deterministic Workflows]
+  T --> SB[User-scoped Supabase]
+  W --> SB
+  A --> M[Postgres Memory]
+  A --> O[Mastra Observability]
+  O --> ST[Mastra Studio]
+```
+
+## Tool vs workflow decision
+
+```mermaid
+flowchart TD
+  R[Requirement] --> Q{Single bounded capability?}
+  Q -->|yes| T[Mastra Tool]
+  Q -->|no| Q2{Multiple deterministic steps?}
+  Q2 -->|yes| W[Mastra Workflow]
+  Q2 -->|no| Q3{Needs reasoning/conversation?}
+  Q3 -->|yes| A[Existing Agent]
+  Q3 -->|no| C[Normal application code]
+```
+
+## Production verification ladder
+
+```mermaid
+flowchart LR
+  CODE[Implementation] --> TEST[Unit tests]
+  TEST --> STUDIO[Studio verification]
+  STUDIO --> INT[Integration test]
+  INT --> EVAL[Scorer / dataset]
+  EVAL --> E2E[User journey]
+  E2E --> PROD[Production proof]
+  PROD --> DONE[100% Done]
+```
+
+## Mastra production-readiness checklist
+
+- [x] Declared, installed, and latest Mastra versions documented.
+- [ ] Moving `beta`/alpha dependency strategy resolved by SAN-1302.
+- [ ] Explicit pin/upgrade decision recorded.
+- [x] All 8 registered agents inventoried.
+- [ ] Exposed agents allowlisted and unused agents removed/justified.
+- [x] All 4 registered workflows inventoried.
+- [ ] SAN-547 user A/B/anonymous/concurrent RequestContext isolation proven.
+- [x] Live Postgres Mastra persistence exists.
+- [ ] SAN-1303 storage schema/pooler/PK decision completed.
+- [ ] Vercel cold-start continuity proven on current production.
+- [x] Studio core routes verified on the installed stack.
+- [x] Native observability evaluated before custom dashboard work.
+- [ ] Current native traces/tool timings/errors restored and proven.
+- [ ] Token/cost/error capture repaired and correlated with native traces.
+- [ ] Scorers + datasets + experiments form a repeatable quality gate.
+- [ ] Workflow compensation/error policy documented for money/write workflows.
+- [x] `npm run check:mastra` passed on the audited checkout.
+- [x] `npm run test:mastra` passed: 293 passed / 12 skipped.
+- [x] `npm run typecheck` passed on the audited checkout.
+- [ ] Relevant Playwright journeys green for each changed product flow.
+- [ ] Production evidence linked for each task claiming 95–100%.
+- [x] SAN-588 marked historical/superseded; SAN-1299 is canonical.
+- [ ] SAN-1299 remains open until unchecked production gates are closed.
+
+## Supabase storage boundary
+
+Mastra infrastructure storage and application authorization are separate concerns:
+
+- `PostgresStore` uses trusted server-side `DATABASE_URL` infrastructure access.
+- user/domain reads and writes use user-scoped Supabase clients and RLS where authorization applies.
+- browser code must never receive Mastra database credentials or Supabase `service_role`.
+- live `public.mastra_*` tables currently use RLS/service-role-only access in the audited database.
+- `mastra_workflow_snapshot` was observed without a primary key; SAN-1303 owns exact-adapter verification and any migration.
+- moving Mastra storage to a private schema is an option to evaluate, not a change to make ad hoc.
+
+## Version strategy
+
+Current audited installation is materially behind the current stable Mastra family, while package declarations use moving beta/alpha ranges. Safe sequence:
+
+1. pin the exact currently working package family;
+2. prove the current baseline;
+3. run SAN-1302 in an isolated worktree;
+4. compare MDE-relevant APIs and storage behavior;
+5. upgrade the compatible package family together only if the matrix is green.
+
+Do not partially upgrade `@mastra/core`, `@mastra/pg`, memory/client, or AG-UI packages inside feature work.
