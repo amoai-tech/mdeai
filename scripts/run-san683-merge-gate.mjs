@@ -10,9 +10,11 @@ import pg from "pg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
+// Local Supabase runs on dedicated mdeai ports (5462x) to avoid colliding with
+// other projects' local stacks. See supabase/config.toml [api]/[db].
 const DB =
   process.env.SUPABASE_DB_URL ??
-  "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+  "postgresql://postgres:postgres@127.0.0.1:54622/postgres";
 
 const results = [];
 

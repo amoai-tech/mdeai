@@ -12,9 +12,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqlPath = join(__dirname, "sql/partner-schema-gate.sql");
 
 // Local gate only — do not use DATABASE_URL from .env.local (points at remote pre-apply).
+// Local Supabase runs on dedicated mdeai ports (5462x) to avoid colliding with
+// other projects' local stacks. See supabase/config.toml [api]/[db].
 const dbUrl =
   process.env.SUPABASE_DB_URL ??
-  "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+  "postgresql://postgres:postgres@127.0.0.1:54622/postgres";
 
 const EXPECT = {
   partner_tables: 8,
