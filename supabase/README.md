@@ -24,7 +24,7 @@ supabase migration repair --status applied 20260611160000   # done 2026-09-17
 
 **The hard gate is satisfied** — later epic tasks may now push migrations.
 
-⚠️ **Replay is green but the fresh schema is incomplete.** `supabase db reset` from zero now succeeds 109/109, but a rebuilt database is missing **8 application tables** (`outbox`, `event_stakeholders`, `event_vendors`, `event_promo_codes`, `event_order_refunds`, `suppression_list`, `event_attendee_profiles`, `delivery_receipts`) and **41 functions** that exist only in production — the same "live-only" gap as the 35 live-only Edge Functions. Three of those functions are RLS helpers, so this blocks SB-003 and SB-006. See [`../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md`](../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md).
+⚠️ **Replay is green but the fresh schema is incomplete.** `supabase db reset` from zero now succeeds 109/109, but a rebuilt database is missing **8 application tables** (`outbox`, `event_stakeholders`, `event_vendors`, `event_promo_codes`, `event_order_refunds`, `suppression_list`, `event_attendee_profiles`, `delivery_receipts`) plus an application-function gap that SB-002 must classify by **exact signature and dependency**. The earlier 41-function name scan included false positives: the three `partner_*` RLS helpers and `bookings_validate_event_resource()` already have migration definitions. See [`../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md`](../docs/02-architecture/snapshots/baseline-replay-audit-2026-09-17.md).
 
 Also note `[db.seed] enabled = true` points at `./seed.sql`, which does not exist — a fresh `db reset` needs that file created or the flag turned off.
 
