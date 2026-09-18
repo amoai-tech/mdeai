@@ -5,10 +5,14 @@
 --
 -- Run with: supabase test db
 --
--- Environment note: pg_cron is available in the Supabase image but is NOT installed by
--- any migration in this repo, so a database rebuilt from migrations alone has no `cron`
--- schema. The migration's P1 guard therefore takes its no-op path here, and the
--- unschedule itself is proven separately by
+-- Environment note (post SAN-1313 B1): pg_cron IS now installed canonically by
+--   supabase/migrations/20260918050339_san1313_install_pg_cron.sql
+-- so a database rebuilt from migrations DOES have a `cron` schema by the time these
+-- assertions run. Tests execute AFTER the whole migration chain, which is why `cron.job`
+-- is queryable here even though SAN-1306's own migration (20260918000849) ran earlier —
+-- while pg_cron did not yet exist — and therefore took its P1 no-op path.
+--
+-- The unschedule logic itself is still proven directly by
 --   scripts/san1306-rehearse-cron-unschedule.sql
 -- which installs pg_cron, schedules a stand-in job with the same name, runs the
 -- migration's exact block, and shows it removes the job idempotently.

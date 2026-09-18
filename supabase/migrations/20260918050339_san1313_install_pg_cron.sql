@@ -19,8 +19,38 @@
 
 create extension if not exists pg_cron with schema pg_catalog;
 
+-- `IF NOT EXISTS` is satisfied by ANY pre-existing installation, regardless of schema.
+-- If a target database already had pg_cron somewhere other than pg_catalog, the statement
+-- above would succeed while leaving `pg_extension.extnamespace` non-canonical — the
+-- migration would report success without enforcing the state it claims. Fail loudly
+-- rather than silently accepting a non-canonical install.
+--
+-- `ALTER EXTENSION ... SET SCHEMA` is deliberately NOT used: relocating an installed
+-- pg_cron is more disruptive than an actionable error, and the operator should decide.
+do $$
+declare
+  v_schema text;
+begin
+  select n.nspname into v_schema
+  from pg_extension e join pg_namespace n on n.oid = e.extnamespace
+  where e.extname = 'pg_cron';
+
+  if v_schema is distinct from 'pg_catalog' then
+    raise exception
+      'pg_cron is installed in schema "%" but this project requires pg_catalog. Relocate it (ALTER EXTENSION pg_cron SET SCHEMA pg_catalog) or drop and re-create it, then re-run this migration.',
+      v_schema;
+  end if;
+end $$;
+
 grant usage on schema cron to postgres;
 grant all privileges on all tables in schema cron to postgres;
+-- Sequences too. Measured 2026-09-18: postgres can ALREADY schedule without this — a
+-- `cron.schedule()` probe in a fresh replay succeeded even though
+-- `has_sequence_privilege('postgres','cron.jobid_seq','USAGE')` returned false, because
+-- postgres bypasses these ACLs. Granted anyway: it costs nothing, keeps the documented
+-- contract explicit, and means B2's `cron.schedule()` calls are not relying on an
+-- accident of role membership.
+grant all privileges on all sequences in schema cron to postgres;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- ORDERING NOTE — verified, and deliberately NOT "fixed" by editing history
