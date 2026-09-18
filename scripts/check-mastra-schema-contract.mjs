@@ -24,7 +24,7 @@
  *   node scripts/check-mastra-schema-contract.mjs --strict   # fail on drift
  *
  * Test hooks (used by the unit tests; never needed in CI):
- *   --contract <path>        alternate contract file
+ *   --contract <path|->       alternate contract file, or `-` to read stdin
  *   --installed-pg <ver>     override the detected @mastra/pg version
  *   --installed-core <ver>   override the detected @mastra/core version
  *
@@ -43,12 +43,23 @@ function argValue(flag) {
   return i !== -1 ? process.argv[i + 1] : undefined;
 }
 const strict = process.argv.includes("--strict");
-const contractPath = argValue("--contract") ?? path.join(ROOT, "scripts/mastra-schema-contract.json");
+const contractArg = argValue("--contract");
+/** `--contract -` reads the contract from stdin, so callers need no temp file. */
+const fromStdin = contractArg === "-";
+const contractPath = contractArg ?? path.join(ROOT, "scripts/mastra-schema-contract.json");
+const contractLabel = fromStdin ? "stdin" : path.relative(ROOT, contractPath);
+
+/** Every provisioned table lives in Mastra's own namespace. */
+const TABLE_NAME = /^mastra_[a-z0-9_]+$/;
 
 function installedVersion(pkg) {
   try {
-    const p = path.join(ROOT, "node_modules", ...pkg.split("/"), "package.json");
-    return JSON.parse(fs.readFileSync(p, "utf8")).version;
+    const nodeModules = path.join(ROOT, "node_modules");
+    // `pkg` is read from the contract file, so resolve it and prove the result is
+    // still inside node_modules: a crafted contract must not read arbitrary paths.
+    const manifest = path.resolve(nodeModules, ...String(pkg).split("/"), "package.json");
+    if (!manifest.startsWith(nodeModules + path.sep)) return null;
+    return JSON.parse(fs.readFileSync(manifest, "utf8")).version;
   } catch {
     return null;
   }
@@ -56,11 +67,11 @@ function installedVersion(pkg) {
 
 let contract;
 try {
-  contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+  contract = JSON.parse(fromStdin ? fs.readFileSync(0, "utf8") : fs.readFileSync(contractPath, "utf8"));
 } catch (error) {
-  console.error(`mastra-schema-contract: cannot read ${contractPath}: ${error.message}`);
-  process.exitCode = 1;
-  contract = null;
+  console.error(`mastra-schema-contract: cannot read ${contractLabel}: ${error.message}`);
+  // An unreadable contract is a gate failure in BOTH modes — never a silent pass.
+  process.exit(1);
 }
 
 if (contract) {
@@ -79,14 +90,23 @@ if (contract) {
 
   const tables = Array.isArray(contract.expectedTables) ? contract.expectedTables : [];
   const duplicates = tables.filter((t, i) => tables.indexOf(t) !== i);
+  // Reject names outside the namespace, so a contract cannot be padded or
+  // rewritten with plausible-looking tables from another schema.
+  const outsideNamespace = tables.filter((t) => typeof t !== "string" || !TABLE_NAME.test(t));
 
-  console.log(`mastra-schema-contract: ${path.relative(ROOT, contractPath)}`);
+  console.log(`mastra-schema-contract: ${contractLabel}`);
   console.log(`  adapter        ${contract.adapter}@${contract.adapterVersion}  (installed ${installedPg ?? "missing"})`);
   console.log(`  core           ${contract.core}@${contract.coreVersion}  (installed ${installedCore ?? "missing"})`);
   console.log(`  expected tables ${tables.length} public.mastra_* tables`);
 
   if (duplicates.length) {
     drift.push(`contract lists duplicate table names: ${[...new Set(duplicates)].join(", ")}`);
+  }
+  if (outsideNamespace.length) {
+    drift.push(
+      `contract lists ${outsideNamespace.length} name(s) outside the mastra_ namespace: ` +
+        [...new Set(outsideNamespace.map(String))].slice(0, 5).join(", "),
+    );
   }
   if (!tables.length) drift.push("contract lists no expected tables");
 
