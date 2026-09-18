@@ -6,7 +6,9 @@ export function createUserScopedClient(accessToken: string) {
   const env = getSupabaseServerAnonEnv();
   if (!env) {
     throw new Error(
-      "Missing SUPABASE_URL / SUPABASE_ANON_KEY for user-scoped client",
+      "Missing Supabase server credentials for user-scoped client: set SUPABASE_URL or " +
+        "NEXT_PUBLIC_SUPABASE_URL, and SUPABASE_ANON_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY " +
+        "or NEXT_PUBLIC_SUPABASE_ANON_KEY",
     );
   }
   return createClient(env.url, env.anonKey, {

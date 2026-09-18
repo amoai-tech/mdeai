@@ -22,8 +22,13 @@ import { describe, expect, it } from "vitest";
 
 const RESOLVER = "lib/supabase/server-env.ts";
 
-/** `process.env.SUPABASE_URL` and `process.env["SUPABASE_URL"]`. */
-const BARE_READ = /process\.env(?:\.SUPABASE_URL\b|\[["']SUPABASE_URL["']\])/;
+/**
+ * A bare read of either credential name, in dot or bracket form. Both are
+ * guarded: the URL *and* the anon key have `NEXT_PUBLIC_` fallbacks, so a direct
+ * read of either silently degrades the same way.
+ */
+const BARE_READ =
+  /process\.env(?:\.(?:SUPABASE_URL|SUPABASE_ANON_KEY)\b|\[["'](?:SUPABASE_URL|SUPABASE_ANON_KEY)["']\])/;
 
 const RAW_SOURCES = import.meta.glob("/src/**/*.{ts,tsx}", {
   query: "?raw",
