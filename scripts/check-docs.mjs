@@ -18,7 +18,7 @@ for (const name of deprecatedTopLevel) {
 
 const activeRoots = [
   "01-product", "02-architecture", "03-platform", "04-domains",
-  "05-design", "06-testing", "07-operations", "08-strategy",
+  "05-design", "06-testing", "07-operations", "08-strategy", "tasks",
 ].map((name) => path.join(docs, name));
 const activeFiles = [path.join(docs, "README.md"), path.join(docs, "index-docs.md")];
 
@@ -34,7 +34,7 @@ for (const rootDir of activeRoots) {
   activeFiles.push(...walk(rootDir).filter((file) => file.endsWith(".md")));
 }
 
-const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g;
+const linkPattern = /\[[^\]]*\]\(\s*<?([^\s)>]+)>?(?:\s+(?:"[^"]*"|\'[^\']*\'|\([^)]*\)))?\s*\)/g;
 for (const file of activeFiles) {
   if (!fs.existsSync(file)) continue;
   const text = fs.readFileSync(file, "utf8");
@@ -42,7 +42,19 @@ for (const file of activeFiles) {
     const raw = match[1].trim();
     const target = raw.split("#")[0];
     if (!target || target.includes("://") || target.startsWith("mailto:")) continue;
-    const resolved = path.resolve(path.dirname(file), decodeURIComponent(target));
+    let decoded;
+    try {
+      decoded = decodeURIComponent(target);
+    } catch {
+      errors.push(`${path.relative(root, file)} -> invalid URL encoding ${target}`);
+      continue;
+    }
+    const resolved = path.resolve(path.dirname(file), decoded);
+    const relativeToRoot = path.relative(root, resolved);
+    if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+      errors.push(`${path.relative(root, file)} -> link escapes repository ${target}`);
+      continue;
+    }
     if (!fs.existsSync(resolved)) {
       errors.push(`${path.relative(root, file)} -> missing ${target}`);
     }

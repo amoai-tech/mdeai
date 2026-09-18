@@ -27,10 +27,10 @@ This is the canonical navigation index for active MDE AI documentation on `main`
 | Architecture | [02-architecture/](02-architecture/) | Current |
 | Platform | [03-platform/](03-platform/) | Current / expanding |
 | Domains | [04-domains/](04-domains/) | Current / expanding |
-| Design | [05-design/](05-design/) | Current / migrating legacy content |
+| Design | [05-design/](05-design/) | Current |
 | Testing | [06-testing/](06-testing/) | Current / expanding |
 | Operations | [07-operations/](07-operations/) | Current / expanding |
-| Strategy | [08-strategy/](08-strategy/) | Current / consolidating |
+| Strategy | [08-strategy/](08-strategy/) | Current |
 | Historical material | [_archive/](_archive/) | Historical only |
 
 ## Canonical documentation architecture
@@ -87,7 +87,7 @@ Canonical homes:
 - [Partners and Sponsors](04-domains/partners/)
 - [Ecommerce](04-domains/ecommerce/)
 
-Legacy domain folders remain only while verified current content is being migrated.
+Legacy top-level domain folders have been consolidated or archived; numbered domain docs are canonical.
 
 ### Design
 [05-design/README.md](05-design/README.md)
@@ -174,7 +174,7 @@ Classify docs as:
 | Most task-history docs | ✅ Archived |
 | Feature audit/evidence/notes | ✅ Archived where clearly historical |
 | `strategy/design` exact duplicates | ✅ Removed after hash verification |
-| Legacy design/domain/platform consolidation | 🟡 In progress |
+| Legacy design/domain/platform consolidation | ✅ Done |
 | Drift-prevention checks | 🔵 Next |
 
 Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
