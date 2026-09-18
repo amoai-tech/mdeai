@@ -43,6 +43,7 @@ docs/
 ├── 06-testing/               # test strategy, release verification, QA
 ├── 07-operations/            # local dev, deployment, security, observability, runbooks
 ├── 08-strategy/              # business, market, revenue, research
+├── tasks/                    # durable task conventions only: INDEX.md + CONVENTIONS.md
 └── _archive/                 # superseded historical material
 ```
 
@@ -134,6 +135,10 @@ Use for reusable verification guidance:
 - evidence standards.
 
 Historical one-off evidence belongs in archive/evidence locations rather than the canonical testing guide.
+
+## Task conventions
+
+[`tasks/`](tasks/INDEX.md) is intentionally limited to `INDEX.md` and `CONVENTIONS.md`. Live task status belongs in Linear; task-specific evidence, plans, exports, and historical execution artifacts belong under `docs/_archive/`.
 
 ## 07 — Operations
 

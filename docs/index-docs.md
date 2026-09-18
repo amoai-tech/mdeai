@@ -47,7 +47,7 @@ docs/
 ├── 06-testing/
 ├── 07-operations/
 ├── 08-strategy/
-├── tasks/
+├── tasks/                  # INDEX.md and CONVENTIONS.md only
 └── _archive/
 ```
 
