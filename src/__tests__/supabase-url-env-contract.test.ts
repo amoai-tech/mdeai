@@ -1,27 +1,35 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
 
 /**
  * MDE-ENV-002 (SAN-1333) — regression guard.
  *
  * Production injects `NEXT_PUBLIC_SUPABASE_URL`, never a bare `SUPABASE_URL`.
- * Eleven modules used to read the bare name, so every concierge vertical got a
- * `null` Supabase client and silently served `MOCK_RENTALS`-style fixture data
- * behind HTTP 200:
+ * Twelve modules used to read the bare name, so every concierge vertical got a
+ * `null` Supabase client and silently served fixture data instead of real
+ * listings — the concierge rendered "No rentals matched" for queries that had
+ * matches:
  *
  *   [search-rentals] Supabase query failed, falling back to mock: Supabase client unavailable
  *
  * All server-side credential resolution must now go through
  * `src/lib/supabase/server-env.ts`, which accepts either name. This test fails
  * if a bare read is reintroduced anywhere in `src/`.
+ *
+ * Sources are collected with Vite's import glob rather than `node:fs`, so the
+ * scan needs no filesystem access and no dynamic path construction.
  */
 
-const SRC = path.resolve(process.cwd(), "src");
-const RESOLVER = path.join("lib", "supabase", "server-env.ts");
+const RESOLVER = "lib/supabase/server-env.ts";
 
 /** `process.env.SUPABASE_URL` and `process.env["SUPABASE_URL"]`. */
 const BARE_READ = /process\.env(?:\.SUPABASE_URL\b|\[["']SUPABASE_URL["']\])/;
+
+const RAW_SOURCES = import.meta.glob("/src/**/*.{ts,tsx}", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
 /** Modules that must resolve credentials through the shared helper. */
 const CONSUMERS = [
@@ -42,18 +50,20 @@ const CONSUMERS = [
 ];
 
 function isTestFile(rel: string): boolean {
-  return (
-    rel.includes(`${path.sep}__tests__${path.sep}`) ||
-    /\.(test|spec)\.tsx?$/.test(rel)
-  );
+  return rel.includes("__tests__/") || /\.(test|spec)\.tsx?$/.test(rel);
 }
 
-function sourceFiles(): string[] {
-  return fs
-    .readdirSync(SRC, { recursive: true, encoding: "utf8" })
-    .filter((entry) => /\.tsx?$/.test(entry) && !entry.endsWith(".d.ts"))
-    .filter((entry) => !isTestFile(entry))
-    .map((entry) => entry.split(path.sep).join(path.sep));
+/** `{ rel, body }` for every non-test source module under `src/`. */
+function sourceFiles(): { rel: string; body: string }[] {
+  return Object.entries(RAW_SOURCES)
+    .map(([abs, body]) => ({ rel: abs.replace(/^\/src\//, ""), body }))
+    .filter(({ rel }) => !isTestFile(rel) && !rel.endsWith(".d.ts"));
+}
+
+function readSource(rel: string): string {
+  const file = sourceFiles().find((f) => f.rel === rel);
+  if (!file) throw new Error(`source not found in glob: ${rel}`);
+  return file.body;
 }
 
 describe("server-side Supabase URL contract", () => {
@@ -62,21 +72,21 @@ describe("server-side Supabase URL contract", () => {
   });
 
   it("only server-env.ts reads the bare SUPABASE_URL name", () => {
-    const offenders = sourceFiles().filter((rel) =>
-      BARE_READ.test(fs.readFileSync(path.join(SRC, rel), "utf8")),
-    );
+    const offenders = sourceFiles()
+      .filter(({ body }) => BARE_READ.test(body))
+      .map(({ rel }) => rel)
+      .sort();
     expect(offenders).toEqual([RESOLVER]);
   });
 
   it("server-env.ts keeps the NEXT_PUBLIC_SUPABASE_URL fallback", () => {
-    const body = fs.readFileSync(path.join(SRC, RESOLVER), "utf8");
-    expect(body).toContain(
+    expect(readSource(RESOLVER)).toContain(
       "process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL",
     );
   });
 
   it.each(CONSUMERS)("%s resolves credentials through the shared helper", (rel) => {
-    const body = fs.readFileSync(path.join(SRC, rel), "utf8");
+    const body = readSource(rel);
     const usesHelper =
       body.includes("getSupabaseServerAnonEnv") ||
       body.includes("getSupabaseServiceEnv");
