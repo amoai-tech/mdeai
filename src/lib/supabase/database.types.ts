@@ -7433,15 +7433,6 @@ export type Database = {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: Json
       }
-      claim_agent_job: {
-        Args: { p_job_types?: string[]; p_worker_id: string }
-        Returns: string
-      }
-      cleanup_expired_agent_jobs: { Args: never; Returns: number }
-      complete_agent_job: {
-        Args: { p_job_id: string; p_result: Json }
-        Returns: boolean
-      }
       compute_ticket_total: {
         Args: {
           p_discount_cents?: number
@@ -7505,10 +7496,6 @@ export type Database = {
         Returns: Json
       }
       event_dashboard_summary: { Args: { p_event_id: string }; Returns: Json }
-      fail_agent_job: {
-        Args: { p_error: string; p_job_id: string }
-        Returns: boolean
-      }
       fn_insert_conversation: { Args: { p_data: Json }; Returns: string }
       fn_join_wait_list: {
         Args: {
@@ -8081,10 +8068,6 @@ export type Database = {
       redeem_promo_code: {
         Args: { p_code: string; p_event_id: string; p_ticket_id: string }
         Returns: Json
-      }
-      release_stale_agent_job_locks: {
-        Args: { p_stale_threshold?: string }
-        Returns: number
       }
       request_approval: {
         Args: {
@@ -8951,10 +8934,6 @@ export type Database = {
         }
       }
       unlockrows: { Args: { "": string }; Returns: number }
-      update_agent_job_progress: {
-        Args: { p_current_step?: string; p_job_id: string; p_progress: number }
-        Returns: boolean
-      }
       updategeometrysrid: {
         Args: {
           catalogn_name: string
