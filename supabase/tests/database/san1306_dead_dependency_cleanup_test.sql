@@ -95,15 +95,20 @@ select ok(
   'P0: tg_outbox_updated_at still fires on UPDATE');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- P1 — dead cron job gone; guard path safe where pg_cron is not installed
+-- P1 — dead cron job gone
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Plain-SQL documentation of the environment. Where pg_cron IS installed, the
--- migration has already unscheduled the job and the rehearsal script proves the
--- removal; asserting the reverse here would reference cron.job and fail to plan.
+-- pg_cron is now installed canonically by SAN-1313 B1
+-- (20260918050339_san1313_install_pg_cron.sql), which runs AFTER this task's migration
+-- during a replay. So `cron.job` exists at test time and the earlier "no cron schema in
+-- this environment" documentation is obsolete. Assert the real outcome instead.
+--
+-- Ordering note: this migration (20260918000849) still runs BEFORE pg_cron exists, so
+-- during replay its P1 guard legitimately takes the no-op path; B1 then installs the
+-- extension. Neither creates a cleanup job, so the job must be absent either way.
 select ok(
-  to_regclass('cron.job') is null,
-  'P1: no pg_cron schema in this environment — migration took the guarded no-op path');
+  not exists (select 1 from cron.job where jobname = 'agent_tool_calls_cleanup'),
+  'P1: agent_tool_calls_cleanup is ABSENT (pg_cron installed by SAN-1313 B1)');
 
 -- Idempotency: re-running the exact P1 block must be safe.
 -- Dynamic SQL for the same reason as the migration: a plain
