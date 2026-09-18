@@ -3,7 +3,7 @@
 
 [config]
 git_provider = "github"
-repo_context_files = ["AGENTS.md", "docs/pr-review-guidelines.md"]
+repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md"]
 repo_context_from_default_branch = true
 repo_context_max_lines = 500
 restricted_mode = true
