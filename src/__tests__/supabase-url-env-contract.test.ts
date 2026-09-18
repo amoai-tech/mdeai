@@ -84,10 +84,14 @@ describe("server-side Supabase URL contract", () => {
     expect(offenders).toEqual([RESOLVER]);
   });
 
-  it("server-env.ts keeps the NEXT_PUBLIC_SUPABASE_URL fallback", () => {
-    expect(readSource(RESOLVER)).toContain(
-      "process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL",
-    );
+  it("server-env.ts resolves both names through the blank-skipping helper", () => {
+    const body = readSource(RESOLVER);
+    expect(body).toContain("process.env.SUPABASE_URL");
+    expect(body).toContain("process.env.NEXT_PUBLIC_SUPABASE_URL");
+    expect(body).toContain("firstPresent(");
+    // `??` alone lets an empty Sensitive value stop the chain, which is exactly
+    // how production kept serving fixtures after the first fix.
+    expect(body).not.toMatch(/process\.env\.SUPABASE_URL\s*\?\?/);
   });
 
   it.each(CONSUMERS)("%s resolves credentials through the shared helper", (rel) => {
