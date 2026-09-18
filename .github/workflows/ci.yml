@@ -13,17 +13,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-
-      # TEMPORARY: this workflow exists on the default branch, so it is
-      # dispatchable now, which the new `vercel-access-check.yml` is not until it
-      # merges. Used once to prove VERCEL_TOKEN reaches the right team/project,
-      # then reverted.
-      - name: Verify Vercel credential access (temporary)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/check-vercel-access.mjs
+      - run: echo "Use .github/workflows/floor.yml — npm run floor is the required gate."
