@@ -1,7 +1,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { searchRestaurantsIntelligent } from "../intelligence-restaurant-search";
+import { hasLiveSupabase } from "./live-supabase-gate";
 
 /** Load mdeapp/.env.local when vitest runs without --env-file (CI skip path). */
 function loadEnvLocal() {
@@ -14,14 +15,6 @@ function loadEnvLocal() {
     }
   }
 }
-
-const hasLiveSupabase = () =>
-  Boolean(
-    (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-      (process.env.SUPABASE_ANON_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
-  );
 
 loadEnvLocal();
 
@@ -105,12 +98,42 @@ describe.skipIf(!hasLiveSupabase())("SEARCH-003 — Hybrid Restaurant Search + V
   }, 60_000);
 });
 
-describe("SEARCH-003 integration env gate", () => {
-  it("documents skip when Supabase env missing", () => {
-    if (!hasLiveSupabase()) {
-      expect(hasLiveSupabase()).toBe(false);
-      return;
-    }
+/**
+ * SAN-1314 regression guard for the live-suite gate.
+ *
+ * These assertions are deterministic and env-independent. They exist because the
+ * original gate activated the live suites whenever *any* `NEXT_PUBLIC_*` Supabase
+ * key was present in the workflow env, while the code under test reads the
+ * server-only `SUPABASE_URL` / `SUPABASE_ANON_KEY` contract. That mismatch made
+ * Floor run live production queries with a `null` client and fail with
+ * "expected 0 to be greater than or equal to N" instead of a config error.
+ */
+describe("live Supabase integration env gate", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("enables live certification only with the explicit opt-in and server-only credentials", () => {
+    vi.stubEnv("LIVE_SUPABASE_TESTS", "1");
+    vi.stubEnv("SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("SUPABASE_ANON_KEY", "server-anon");
     expect(hasLiveSupabase()).toBe(true);
+  });
+
+  it("ignores NEXT_PUBLIC_* keys, which the code under test never reads", () => {
+    vi.stubEnv("LIVE_SUPABASE_TESTS", "1");
+    vi.stubEnv("SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_ANON_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-anon");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+    expect(hasLiveSupabase()).toBe(false);
+  });
+
+  it("stays disabled without the explicit opt-in, even with full credentials", () => {
+    vi.stubEnv("LIVE_SUPABASE_TESTS", "");
+    vi.stubEnv("SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("SUPABASE_ANON_KEY", "server-anon");
+    expect(hasLiveSupabase()).toBe(false);
   });
 });

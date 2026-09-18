@@ -2,6 +2,9 @@
 name: Prod synthetic smoke
 
 on:
+  repository_dispatch:
+    types:
+      - vercel.deployment.success
   schedule:
     - cron: "0 9 * * *"
   workflow_dispatch:
@@ -17,14 +20,20 @@ jobs:
     name: prod 4-query smoke
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    if: ${{ vars.PROD_SMOKE_ENABLED == 'true' }}
+    if: ${{ vars.PROD_SMOKE_ENABLED == 'true' && (github.event_name != 'repository_dispatch' || github.event.client_payload.environment == 'production') }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout deployed commit
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
+
+      - name: Checkout main
+        if: ${{ github.event_name != 'repository_dispatch' }}
+        uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -43,14 +52,60 @@ jobs:
             exit 1
           fi
 
+      - name: Verify production runtime contract
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          INFO_JSON: ${{ runner.temp }}/copilotkit-info.json
+        run: |
+          set -euo pipefail
+          for path in / /events; do
+            code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}${path}")
+            test "$code" = "200" || { echo "::error::${path} returned ${code}, expected 200"; exit 1; }
+          done
+          # /api/copilotkit/info is POST-only. A GET is *correctly* rejected with 405
+          # (Allow: POST), so "not 5xx" was never a health signal: a 404 (route missing)
+          # or a 403 would have passed it just as happily.
+          #
+          # Assert the actual production contract instead:
+          #   1. GET  -> exactly 405 with Allow: POST  (protocol enforcement intact)
+          #   2. POST -> exactly 200, and the body must prove the runtime booted with the
+          #              pinned CopilotKit version and every expected agent registered.
+          get_code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}/api/copilotkit/info")
+          test "$get_code" = "405" || { echo "::error::GET /api/copilotkit/info returned ${get_code}, expected 405"; exit 1; }
+
+          post_code=$(curl --silent --show-error --location --write-out '%{http_code}' \
+            --output "${RUNNER_TEMP}/copilotkit-info.json" \
+            -X POST "${PROD_SMOKE_BASE_URL}/api/copilotkit/info" \
+            -H "Content-Type: application/json" -d '{"method":"info"}')
+          test "$post_code" = "200" || { echo "::error::POST /api/copilotkit/info returned ${post_code}, expected 200"; exit 1; }
+
+          node -e '
+            const info = require(process.env.INFO_JSON);
+            const expected = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
+            if (info.version !== "1.55.2") {
+              throw new Error(`unexpected CopilotKit version: ${info.version}`);
+            }
+            const missing = expected.filter((a) => !info.agents || !info.agents[a]);
+            if (missing.length) {
+              throw new Error(`runtime is missing agents: ${missing.join(", ")}`);
+            }
+            console.log(`copilotkit info ok: v${info.version}, agents ${Object.keys(info.agents).join(", ")}`);
+          '
+
       - name: Run prod synthetic smoke
         env:
           PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
           SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
           PROD_SMOKE_OUT_DIR: ${{ github.workspace }}/tmp/prod-synthetic-smoke
           PW_SKIP_WEBSERVER: "1"
-        run: |
-          npx playwright test e2e/prod-synthetic-smoke.spec.ts --project=chromium --workers=1
+        run: npm run test:e2e:prod-synthetic
+
+      - name: Run full production journey on manual certification
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          PW_SKIP_WEBSERVER: "1"
+        run: npm run test:e2e:prod-journey-j05-j20
 
       - name: Upload smoke artifacts
         if: always()

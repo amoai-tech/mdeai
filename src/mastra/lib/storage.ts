@@ -32,11 +32,25 @@ function setStorageGlobal(value: StorageSingleton | undefined) {
 function normalizeDatabaseUrl(): string | undefined {
   const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
-  return raw.replace(/^"|"$/g, "");
+  // Order matters: trim first, then strip wrapping quotes, then trim again. Stripping
+  // quotes first would leave them in place for a padded value like `  "postgres://…"  `.
+  //
+  // An empty/whitespace-only result is treated as *missing* rather than as a value:
+  // DATABASE_URL="   " is a misconfiguration, and passing it through would hand
+  // PostgresStore an invalid connection string instead of failing closed with the
+  // intended "DATABASE_URL is required in production" error.
+  const unquoted = raw.trim().replace(/^"|"$/g, "");
+  return unquoted.trim() || undefined;
 }
 
-/** True when Mastra thread memory should use Supabase Postgres (prod / explicit CI). */
+/** Next sets this while collecting/building routes; runtime requests never do. */
+export function isNextProductionBuild(): boolean {
+  return process.env.NEXT_PHASE === "phase-production-build";
+}
+
+/** True when Mastra thread memory should use Supabase Postgres at runtime. */
 export function shouldUsePostgresStorage(): boolean {
+  if (isNextProductionBuild()) return false;
   const connectionString = normalizeDatabaseUrl();
   if (!connectionString) return false;
   if (process.env.NODE_ENV === "production") return true;
@@ -45,6 +59,12 @@ export function shouldUsePostgresStorage(): boolean {
 }
 
 export function createMastraStorage(id: string) {
+  if (isNextProductionBuild()) {
+    return new LibSQLStore({ id, url: ":memory:" });
+  }
+  if (process.env.NODE_ENV === "production" && !normalizeDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required in production");
+  }
   if (shouldUsePostgresStorage()) {
     const connectionString = normalizeDatabaseUrl();
     return new PostgresStore({
@@ -52,6 +72,7 @@ export function createMastraStorage(id: string) {
       connectionString: connectionString!,
       max: 3,
       idleTimeoutMillis: 10_000,
+      disableInit: true,
     });
   }
   return new LibSQLStore({ id, url: ":memory:" });
@@ -60,13 +81,15 @@ export function createMastraStorage(id: string) {
 let sharedStorage: ReturnType<typeof createMastraStorage> | undefined;
 let storageModeLogged = false;
 
-function logStorageMode(mode: "postgres" | "libsql-dev") {
+function logStorageMode(mode: "postgres" | "libsql-dev" | "libsql-build") {
   const bucket = getStorageGlobal();
   if (bucket?.modeLogged || storageModeLogged) return;
   storageModeLogged = true;
   if (bucket) bucket.modeLogged = true;
   if (mode === "postgres") {
     console.info("[mastra-storage] using Postgres");
+  } else if (mode === "libsql-build") {
+    console.info("[mastra-storage] using ephemeral build storage");
   } else {
     console.info("[mastra-storage] using local dev LibSQL");
   }
@@ -81,7 +104,11 @@ export function getMastraStorage() {
     return cached.store;
   }
   if (!sharedStorage) {
-    const mode = shouldUsePostgresStorage() ? "postgres" : "libsql-dev";
+    const mode = isNextProductionBuild()
+      ? "libsql-build"
+      : shouldUsePostgresStorage()
+        ? "postgres"
+        : "libsql-dev";
     sharedStorage = createMastraStorage("mastra-storage");
     setStorageGlobal({ store: sharedStorage, modeLogged: false });
     logStorageMode(mode);

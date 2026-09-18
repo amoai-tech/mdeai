@@ -1,0 +1,85 @@
+# SAN-1314 — explicit live Supabase ranking certification.
+#
+# Why this workflow exists
+# ------------------------
+# `anchor-ranking.integration.test.ts` and `search-003-ranking.integration.test.ts`
+# assert real MDE ranking output (Semilla, Pergamino, Son Havana, Relato,
+# Sambombi, Mondongos, venue_signals joins). They query the live production
+# Supabase project, so they must NOT run inside Floor: a renamed café row or an
+# edited ranking signal would turn a required PR check red for reasons unrelated
+# to the change under review.
+#
+# Floor keeps them gated off (`LIVE_SUPABASE_TESTS` is never set there). This
+# workflow is the deliberate, separate certification path that actually exercises
+# them against the real project, so the coverage is not silently dropped.
+#
+# The gate also requires the server-only `SUPABASE_URL` / `SUPABASE_ANON_KEY`
+# contract the code under test reads — not `NEXT_PUBLIC_*`. Floor once ran these
+# suites because a `NEXT_PUBLIC_*` secret was present while the client resolved to
+# `null`; see `src/mastra/lib/__tests__/live-supabase-gate.ts`.
+name: Live integration (Supabase)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 10:00 UTC. Not a required PR check.
+    - cron: "0 10 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  live-supabase:
+    name: live supabase ranking
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Require live credentials
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL" || {
+            echo "::error::NEXT_PUBLIC_SUPABASE_URL secret is not configured"; exit 1;
+          }
+          test -n "$SUPABASE_ANON_KEY" || {
+            echo "::error::NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / NEXT_PUBLIC_SUPABASE_ANON_KEY secret is not configured"; exit 1;
+          }
+
+      - name: Assert the live target is the production project
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          # Safe: prints only the project ref, never the URL query or any key.
+          ref=$(node -e 'process.stdout.write(new URL(process.env.SUPABASE_URL).hostname.split(".")[0])')
+          echo "live Supabase project ref: $ref"
+          test "$ref" = "zkwcbyxiwklihegjhuql" || {
+            echo "::error::unexpected Supabase project ref '${ref}'"; exit 1;
+          }
+
+      - name: Live ranking certification
+        env:
+          LIVE_SUPABASE_TESTS: "1"
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npx vitest run \
+            src/mastra/lib/__tests__/anchor-ranking.integration.test.ts \
+            src/mastra/lib/__tests__/search-003-ranking.integration.test.ts
