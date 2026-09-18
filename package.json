@@ -49,7 +49,7 @@
     "check:mastra:schema:strict": "node scripts/check-mastra-schema-contract.mjs --strict",
     "check:mastra:schema:init": "node scripts/verify-mastra-schema-init.mjs",
     "check:function-acl": "node scripts/check-function-acl-optin.mjs",
-    "mastra:init": "node --env-file=.env.local scripts/init-mastra-schema.mjs",
+    "mastra:init": "node --env-file-if-exists=.env.local scripts/init-mastra-schema.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit": "npm audit --audit-level=high",
