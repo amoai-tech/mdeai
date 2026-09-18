@@ -6,7 +6,7 @@ const read = (path: string) =>
 
 const workflow = read(".github/workflows/pr-agent.yml");
 const config = read(".pr_agent.toml");
-const guidelines = read("docs/pr-review-guidelines.md");
+const guidelines = read("docs/06-testing/pr-review-guidelines.md");
 
 const skills = [
   ".claude/skills/copilotkit-review/SKILL.md",
@@ -35,7 +35,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
 
   it("keeps policy in repository config with trusted context and restricted mode", () => {
     expect(config).toContain('review_heading = "MDE PR Review"');
-    expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/pr-review-guidelines.md"]');
+    expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md"]');
     expect(config).toContain("repo_context_from_default_branch = true");
     expect(config).toContain("restricted_mode = true");
     expect(config).toContain("[ignore]");
