@@ -34,6 +34,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/pr-review-guidelines.md"]');
     expect(config).toContain("repo_context_from_default_branch = true");
     expect(config).toContain("restricted_mode = true");
+    expect(config).toContain("[ignore]");
+    expect(config).toContain('glob = [');
+    expect(config).toContain('"package-lock.json"');
+    expect(config).not.toContain("glob_patterns");
     expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
     expect(config).toContain("Failure scenario:");
     expect(config).toContain("Expected result:");

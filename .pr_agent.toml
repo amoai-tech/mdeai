@@ -14,6 +14,23 @@ propagate_tool_errors = true
 enabled = true
 max_skills_tokens = 8000
 
+
+[ignore]
+# PR-Agent v0.45.0 uses the current `glob` key.
+# Keep generated, dependency-lock, local database, and internal skill/docs noise
+# out of the LLM review budget so the bounded review calls focus on application code.
+glob = [
+  "docs/**",
+  "graphify-out/**",
+  "*.db",
+  "*.db-shm",
+  "*.db-wal",
+  "package-lock.json",
+  "commerce/mercur/node_modules/**",
+  ".claude/skills/**",
+  ".agents/**"
+]
+
 [pr_reviewer]
 review_heading = "MDE PR Review"
 require_score_review = true
