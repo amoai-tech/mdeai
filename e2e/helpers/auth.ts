@@ -84,10 +84,16 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
   throw lastErr instanceof Error ? lastErr : new Error("getTestSession failed");
 }
 
+/** Cookie scope for the session cookie — local dev server vs a real deployed host. */
+export type SessionCookieTarget = { host: string; secure: boolean };
+
+const LOCAL_COOKIE_TARGET: SessionCookieTarget = { host: "localhost", secure: false };
+
 /** Inject a Supabase session as the `sb-<ref>-auth-token` cookie (clears cookies first). */
 export async function injectSession(
   context: BrowserContext,
   session: Session,
+  target: SessionCookieTarget = LOCAL_COOKIE_TARGET,
 ): Promise<void> {
   const { url } = supabaseEnv();
   const ref = new URL(url!).hostname.split(".")[0];
@@ -104,10 +110,10 @@ export async function injectSession(
     {
       name: `sb-${ref}-auth-token`,
       value: payload,
-      domain: "localhost",
+      domain: target.host,
       path: "/",
       httpOnly: false,
-      secure: false,
+      secure: target.secure,
       sameSite: "Lax",
     },
   ]);
@@ -120,5 +126,28 @@ export async function signInAs(
 ): Promise<Session> {
   const session = await getTestSession(email);
   await injectSession(page.context(), session);
+  return session;
+}
+
+/**
+ * Sign a page in against an explicit origin (e.g. the deployed production URL).
+ *
+ * Uses the same dedicated QA account as `signInAs` and mints a real Supabase
+ * session through the admin API — no `E2E_BYPASS_AUTH`, so production
+ * authentication is never weakened. The cookie is scoped to the origin's host
+ * and marked `secure` for https targets.
+ */
+export async function signInAsOnOrigin(
+  page: Page,
+  origin: string,
+  email = QA_HOST_EMAIL,
+): Promise<Session> {
+  // Accept a bare host as well as a full origin; default to https.
+  const parsed = new URL(origin.includes("://") ? origin : `https://${origin}`);
+  const session = await getTestSession(email);
+  await injectSession(page.context(), session, {
+    host: parsed.hostname,
+    secure: parsed.protocol === "https:",
+  });
   return session;
 }

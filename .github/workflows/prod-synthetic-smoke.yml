@@ -107,6 +107,21 @@ jobs:
           PW_SKIP_WEBSERVER: "1"
         run: npm run test:e2e:prod-journey-j05-j20
 
+      # SAN-1314 — live signed-in proof. Runs even when the concierge synthetic
+      # smoke above fails, because a broken map panel must not hide whether
+      # authenticated users can still reach protected routes.
+      - name: Verify signed-out and signed-in protected route behavior
+        if: always()
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PW_SKIP_WEBSERVER: "1"
+        run: |
+          npx playwright test e2e/prod-signed-in-route.spec.ts --project=chromium --workers=1
+
       - name: Upload smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
