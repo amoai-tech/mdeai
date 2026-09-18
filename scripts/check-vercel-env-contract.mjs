@@ -163,9 +163,12 @@ function evaluate(envs) {
 
 async function loadEnvs() {
   if (inputFile) {
-    const parsed = JSON.parse(fs.readFileSync(inputFile, "utf8"));
+    // `--input -` reads metadata from stdin, so callers and tests can pipe JSON
+    // instead of writing a temporary file.
+    const fromStdin = inputFile === "-";
+    const parsed = JSON.parse(fromStdin ? fs.readFileSync(0, "utf8") : fs.readFileSync(inputFile, "utf8"));
     const list = Array.isArray(parsed) ? parsed : (parsed.envs ?? []);
-    return { source: `file:${inputFile}`, envs: list };
+    return { source: fromStdin ? "stdin" : `file:${inputFile}`, envs: list };
   }
 
   const token = readToken();

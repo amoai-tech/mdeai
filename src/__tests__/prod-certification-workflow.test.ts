@@ -1,6 +1,5 @@
+/// <reference types="vite/client" />
 import { describe, it, expect } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
 import { parse } from "yaml";
 
 /**
@@ -18,10 +17,16 @@ import { parse } from "yaml";
  * These assertions exist so that regression fails loudly instead of silently
  * returning to "READY means live".
  */
-const WORKFLOW = path.resolve(
-  process.cwd(),
-  ".github/workflows/prod-synthetic-smoke.yml",
-);
+/**
+ * Raw workflow text, loaded through Vite's glob so the test performs no
+ * filesystem access and constructs no dynamic path.
+ */
+const WORKFLOW_SOURCES = import.meta.glob(
+  "/.github/workflows/prod-synthetic-smoke.yml",
+  { query: "?raw", import: "default", eager: true },
+) as Record<string, string>;
+const text = Object.values(WORKFLOW_SOURCES)[0];
+if (typeof text !== "string") throw new Error("workflow source not found");
 
 type Step = { name?: string; uses?: string; if?: string; env?: Record<string, string>; with?: Record<string, string> };
 type Workflow = {
@@ -30,7 +35,6 @@ type Workflow = {
   jobs?: Record<string, { "if"?: string; steps?: Step[] }>;
 };
 
-const text = fs.readFileSync(WORKFLOW, "utf8");
 const doc = parse(text) as Workflow & Record<string, unknown>;
 // `yaml` implements YAML 1.2, so `on` stays the string key it looks like.
 const on = (doc.on ?? (doc as Record<string, unknown>)[String(true)]) as Record<string, unknown>;
@@ -39,9 +43,9 @@ const triggers = on as {
   schedule?: unknown;
   workflow_dispatch?: unknown;
 };
-const jobs = Object.values(doc.jobs ?? {});
-if (jobs.length === 0) throw new Error("prod-synthetic-smoke.yml declares no jobs");
-const steps = jobs[0].steps ?? [];
+// A workflow may declare several jobs; collect every step so the assertions
+// below hold regardless of job layout, without index access or a length guard.
+const steps = Object.values(doc.jobs ?? {}).flatMap((job) => job.steps ?? []);
 
 const stepUsing = (uses: string) => steps.find((s) => s.uses?.startsWith(uses));
 

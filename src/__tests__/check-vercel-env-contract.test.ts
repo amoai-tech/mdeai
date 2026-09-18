@@ -1,7 +1,5 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 /**
@@ -10,25 +8,17 @@ import path from "node:path";
  * The script diagnoses the SAN-1322 root cause from environment *metadata*
  * (`NEXT_PUBLIC_*` stored as a Secret cannot reach the client build) before a
  * production deployment is attempted. These tests drive the real script offline
- * via `--input`, so they are deterministic and never touch the network or print
- * a value.
+ * by piping metadata on stdin, so they are deterministic, touch no filesystem and
+ * never print a value.
  */
 const SCRIPT = path.resolve(process.cwd(), "scripts/check-vercel-env-contract.mjs");
-const tmpDirs: string[] = [];
-
-afterAll(() => {
-  for (const dir of tmpDirs) fs.rmSync(dir, { recursive: true, force: true });
-});
 
 type EnvEntry = { key: string; type: string; target: string[] };
 
 function withInput(envs: EnvEntry[], args: string[] = []) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vercel-env-"));
-  tmpDirs.push(dir);
-  const file = path.join(dir, "env.json");
-  fs.writeFileSync(file, JSON.stringify(envs));
-  const result = spawnSync(process.execPath, [SCRIPT, "--input", file, ...args], {
+  const result = spawnSync(process.execPath, [SCRIPT, "--input", "-", ...args], {
     encoding: "utf8",
+    input: JSON.stringify(envs),
     env: { NODE_ENV: "test", PATH: process.env.PATH ?? "" } as NodeJS.ProcessEnv,
   });
   return { status: result.status, out: `${result.stdout}${result.stderr}` };

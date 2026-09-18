@@ -1,6 +1,5 @@
+/// <reference types="vite/client" />
 import { describe, it, expect } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
 
 /**
  * SAN-1330 — the production build must not be allowed to skip type checking.
@@ -14,7 +13,14 @@ import path from "node:path";
  * `Running TypeScript ... Finished TypeScript in 9.5s ...` and exits 0, so the
  * old "@mastra/memory beta types are unstable" justification is stale.
  */
-const rawConfig = fs.readFileSync(path.resolve(process.cwd(), "next.config.ts"), "utf8");
+/** Raw config text via Vite's glob — no filesystem access, no dynamic path. */
+const CONFIG_SOURCES = import.meta.glob("/next.config.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const rawConfig = Object.values(CONFIG_SOURCES)[0];
+if (typeof rawConfig !== "string") throw new Error("next.config.ts source not found");
 
 /** Strip comments so explanatory prose about the old flag is not matched. */
 const config = rawConfig
