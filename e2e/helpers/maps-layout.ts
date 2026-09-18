@@ -162,8 +162,8 @@ export async function ensureChatInputVisible(page: Page) {
   await input.waitFor({ state: "visible", timeout: 15_000 });
 }
 
-/** Playwright helper — type into the concierge composer and submit (multi-strategy send cascade). */
-export async function sendConciergeMessage(page: Page, text: string) {
+/** One fill plus one submit attempt (multi-strategy send cascade). */
+async function submitConciergeMessageOnce(page: Page, text: string) {
   await ensureChatInputVisible(page);
   const input = page
     .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
@@ -228,6 +228,39 @@ export async function sendConciergeMessage(page: Page, text: string) {
   }
 
   await input.press("Enter");
+}
+
+/**
+ * Type into the concierge composer and submit.
+ *
+ * Retries once. On production the first submit after a page load can be silently
+ * dropped: the composer keeps its text and no `/api/copilotkit` POST is made, so a
+ * caller that only counts cards reports a false product failure. Rentals and events
+ * tolerated that solely because their wait helpers resend the message; verticals
+ * without one (restaurants, cafés) failed the prod smoke with zero cards while the
+ * product itself was healthy.
+ *
+ * An emptied composer is the only observable proof that CopilotKit accepted the
+ * message, so that is what decides whether the retry is needed.
+ */
+export async function sendConciergeMessage(page: Page, text: string) {
+  await submitConciergeMessageOnce(page, text);
+  if (await composerCleared(page, 6_000)) return;
+  await submitConciergeMessageOnce(page, text);
+  await composerCleared(page, 6_000);
+}
+
+/** CopilotKit clears the composer once it accepts a message. */
+async function composerCleared(page: Page, timeout: number): Promise<boolean> {
+  const input = page
+    .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
+    .first();
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if ((await input.inputValue().catch(() => "")) === "") return true;
+    await page.waitForTimeout(250);
+  }
+  return false;
 }
 
 export async function waitForRentalCards(page: Page) {
