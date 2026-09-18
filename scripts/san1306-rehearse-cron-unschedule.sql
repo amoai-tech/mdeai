@@ -7,14 +7,20 @@
 -- therefore takes its no-op path during `supabase db reset`, and the unschedule itself
 -- cannot be observed there. This script closes that verification gap.
 --
--- It installs pg_cron, schedules a stand-in job with the identical name and schedule,
--- runs the migration's EXACT block, and proves:
---   1. the job is removed
---   2. the block is idempotent (re-running is safe)
---   3. cron execution history is preserved
+-- What this PROVES
+--   * the migration's exact block removes a job named 'agent_tool_calls_cleanup'
+--   * re-running that block is a clean no-op (idempotency)
 --
--- Rehearsal only. It runs in a transaction and ROLLS BACK, so it leaves no trace and
--- must never be pointed at production.
+-- What this does NOT prove — do not claim it from this output
+--   * historical row preservation. This environment has no cron execution history, so
+--     the old script's "history rows preserved: 0" line was vacuous: zero before and
+--     zero after look identical whether or not anything was preserved.
+--     Verify history against PRODUCTION instead, capturing jobid + row count in
+--     cron.job_run_details BEFORE and AFTER the release and comparing them.
+--
+-- Every expectation below raises on failure, so this is a test rather than a printout.
+--
+-- Rehearsal only. Runs in a transaction and ROLLS BACK; never point it at production.
 --
 -- Usage: docker exec -i supabase_db_mdeapp psql -U postgres -d postgres \
 --          -v ON_ERROR_STOP=1 -f - < scripts/san1306-rehearse-cron-unschedule.sql
@@ -23,14 +29,35 @@ begin;
 
 create extension if not exists pg_cron;
 
+-- ── step 0: nothing scheduled yet ────────────────────────────────────────────
+do $$
+declare v int;
+begin
+  select count(*) into v from cron.job where jobname = 'agent_tool_calls_cleanup';
+  if v <> 0 then
+    raise exception 'step 0 FAILED: expected 0 pre-existing jobs, found %', v;
+  end if;
+  raise notice 'step 0 PASS — 0 jobs named agent_tool_calls_cleanup before scheduling';
+end $$;
+
 select cron.schedule(
   'agent_tool_calls_cleanup',
   '0 4 * * *',
   $$DELETE FROM public.agent_tool_calls WHERE created_at < now() - interval '30 days'$$
 );
 
-select 'step 1 — scheduled: ' || count(*)::text || ' job(s) named agent_tool_calls_cleanup'
-from cron.job where jobname = 'agent_tool_calls_cleanup';
+-- ── step 1: the stand-in job exists ──────────────────────────────────────────
+do $$
+declare v int;
+begin
+  select count(*) into v from cron.job where jobname = 'agent_tool_calls_cleanup';
+  if v <> 1 then
+    raise exception 'step 1 FAILED: expected exactly 1 scheduled job, found %', v;
+  end if;
+  raise notice 'step 1 PASS — 1 job scheduled (schedule=%, command targets the absent table=%)',
+    (select schedule from cron.job where jobname = 'agent_tool_calls_cleanup'),
+    (select command like '%agent_tool_calls%' from cron.job where jobname = 'agent_tool_calls_cleanup');
+end $$;
 
 -- ═══ the exact P1 block from 20260918000849_san1306_dead_production_dependencies.sql ═══
 -- Note the dynamic SQL: PL/pgSQL plans an `if to_regclass('cron.job') is not null and
@@ -52,10 +79,18 @@ begin
   end if;
 end $$;
 
-select 'step 2 — after unschedule: ' || count(*)::text || ' job(s) remain'
-from cron.job where jobname = 'agent_tool_calls_cleanup';
+-- ── step 2: the job is gone ──────────────────────────────────────────────────
+do $$
+declare v int;
+begin
+  select count(*) into v from cron.job where jobname = 'agent_tool_calls_cleanup';
+  if v <> 0 then
+    raise exception 'step 2 FAILED: expected the job to be removed, found %', v;
+  end if;
+  raise notice 'step 2 PASS — job removed by the migration''s exact block';
+end $$;
 
--- ═══ idempotency: running it again must be a clean no-op ═══
+-- ── step 3: re-running is a clean no-op (idempotency) ────────────────────────
 do $$
 declare
   v_exists boolean;
@@ -72,11 +107,20 @@ begin
   end if;
 end $$;
 
-select 'step 3 — after re-run: ' || count(*)::text || ' job(s) remain (idempotent)'
-from cron.job where jobname = 'agent_tool_calls_cleanup';
+do $$
+declare v int;
+begin
+  select count(*) into v from cron.job where jobname = 'agent_tool_calls_cleanup';
+  if v <> 0 then
+    raise exception 'step 3 FAILED: re-run changed state, found %', v;
+  end if;
+  raise notice 'step 3 PASS — re-running the block is idempotent';
+end $$;
 
--- unschedule removes the job but preserves historical execution records
-select 'step 4 — cron.job_run_details rows preserved: ' || count(*)::text
-from cron.job_run_details;
+-- Bare `raise` is only valid inside PL/pgSQL, hence the DO wrapper.
+do $$
+begin
+  raise notice 'P1 rehearsal complete: removal + idempotency proven. History preservation must be verified against production.';
+end $$;
 
 rollback;

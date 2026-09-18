@@ -17,7 +17,7 @@
 -- DO block does not register reliably and corrupts TAP numbering.
 begin;
 
-select plan(16);
+select plan(17);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- P0 — broken outbox audit trigger removed, the other two preserved
@@ -31,6 +31,12 @@ select ok(
      where n.nspname = 'public' and c.relname = 'outbox'
        and tg.tgname = 'tg_audit_outbox' and not tg.tgisinternal),
   'P0: tg_audit_outbox is ABSENT (was breaking every outbox INSERT)');
+
+-- The function was the trigger's sole dependent object and can never succeed against
+-- the absent agent_audit_log, so it is dropped rather than left orphaned.
+select ok(
+  to_regprocedure('public.fn_audit_outbox()') is null,
+  'P0: orphaned fn_audit_outbox() DROPPED (zero callers after the trigger removal)');
 
 select ok(
   exists (
