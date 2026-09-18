@@ -24,6 +24,9 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).toContain("Select trusted MDE review skills");
     expect(workflow).toContain('github_action_config.auto_improve: "false"');
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(workflow).toContain('GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}');
+    expect(workflow).toContain('config.model: "gemini/gemini-3.8-flash"');
+    expect(workflow).not.toContain("OPENAI_KEY:");
   });
 
   it("keeps policy in repository config with trusted context and restricted mode", () => {
