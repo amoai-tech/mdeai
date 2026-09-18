@@ -118,7 +118,7 @@ anon can exec is_admin: t        # RLS helper correctly retains EXECUTE
 |---|---|---|---|
 | `public` tables | 132 | **92** | 40 = 32 `mastra_*` (by design) + **8 genuine** |
 | `public` functions | 1,000 | 850 | delta includes extension-version differences plus application function gaps; the app-owned share of that gap is **32** (per-signature classification in the SB-002 inventory) |
-| Migration ledger | 108 | 109 | see [`migration-drift.md`](./migration-drift.md) |
+| Migration ledger | 108 | 109 | see [`migration-drift.md`](../migration-drift.md) |
 
 A local environment built from Git today is **missing 8 application tables and 32 application functions**. An earlier name-based scan put the function count at 41; that scan is retracted — it was case-sensitive and produced 9 false positives (see §4). This gap is **not** what was blocking replay.
 

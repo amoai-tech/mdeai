@@ -27,10 +27,10 @@ This is the canonical navigation index for active MDE AI documentation on `main`
 | Architecture | [02-architecture/](02-architecture/) | Current |
 | Platform | [03-platform/](03-platform/) | Current / expanding |
 | Domains | [04-domains/](04-domains/) | Current / expanding |
-| Design | [05-design/](05-design/) | Current / migrating legacy content |
+| Design | [05-design/](05-design/) | Current |
 | Testing | [06-testing/](06-testing/) | Current / expanding |
 | Operations | [07-operations/](07-operations/) | Current / expanding |
-| Strategy | [08-strategy/](08-strategy/) | Current / consolidating |
+| Strategy | [08-strategy/](08-strategy/) | Current |
 | Historical material | [_archive/](_archive/) | Historical only |
 
 ## Canonical documentation architecture
@@ -87,7 +87,7 @@ Canonical homes:
 - [Partners and Sponsors](04-domains/partners/)
 - [Ecommerce](04-domains/ecommerce/)
 
-Legacy domain folders remain only while verified current content is being migrated.
+Legacy top-level domain folders have been consolidated or archived; numbered domain docs are canonical.
 
 ### Design
 [05-design/README.md](05-design/README.md)
@@ -129,23 +129,13 @@ These have been archived under:
 
 Only exact duplicate files were removed outright. Non-duplicate historical material is preserved for reference.
 
-## Active legacy areas still awaiting consolidation
+## Legacy consolidation status
 
-These remain active temporarily because they contain non-duplicate material that must be reviewed before migration:
+The former top-level legacy trees for strategy, partners, design, ecommerce, Linear exports, PRDs, real estate, restaurants, research, wireframes, CopilotKit/Mastra planning, and AI Second Brain are no longer active documentation.
 
-- `docs/design/`
-- `docs/ecommerce/`
-- `docs/partners/`
-- `docs/prd/`
-- `docs/real-estate/`
-- `docs/restaurant/`
-- `docs/research/`
-- `docs/strategy/`
-- `docs/wireframes/`
-- `docs/copilotkit-mastra/`
-- `docs/ai-second-brain/`
+Durable current material was moved into the numbered canonical structure. Historical, task-specific, dated research, audits, prompts, and superseded plans are preserved under `docs/_archive/`.
 
-Do not treat these legacy locations as authoritative when they conflict with canonical docs, merged code, or Linear.
+A repository check prevents deprecated top-level documentation trees from being recreated and validates relative links in active canonical Markdown.
 
 ## Stale-content rules
 
@@ -184,7 +174,7 @@ Classify docs as:
 | Most task-history docs | ✅ Archived |
 | Feature audit/evidence/notes | ✅ Archived where clearly historical |
 | `strategy/design` exact duplicates | ✅ Removed after hash verification |
-| Legacy design/domain/platform consolidation | 🟡 In progress |
+| Legacy design/domain/platform consolidation | ✅ Done |
 | Drift-prevention checks | 🔵 Next |
 
 Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
