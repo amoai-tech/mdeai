@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(82);
+select plan(86);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A. The 21 columns exist (production has them; replay did not)
@@ -188,10 +188,32 @@ select is(
   'CREATE INDEX idx_leads_pipeline ON public.leads USING btree (pipeline_stage, score DESC NULLS LAST)',
   'F: idx_leads_pipeline matches production exactly');
 
-select has_index('public', 'leads', 'idx_leads_hot', 'F: idx_leads_hot exists (reads hot_lead_alerted)');
-select has_index('public', 'user_preferences', 'idx_user_preferences_neighborhoods', 'F: idx_user_preferences_neighborhoods exists (gin on preferred_neighborhoods)');
+-- Partial indexes and non-btree access methods are exactly where PostgreSQL
+-- normalisation could silently diverge from production, so every index here is
+-- asserted by its full definition rather than by name alone.
+select has_index('public', 'leads', 'idx_leads_hot', 'F: idx_leads_hot exists');
+select is(
+  (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'idx_leads_hot'),
+  $$CREATE INDEX idx_leads_hot ON public.leads USING btree (created_at DESC) WHERE ((score >= (80)::numeric) AND (hot_lead_alerted = false))$$,
+  'F: idx_leads_hot matches production exactly (partial predicate as normalised)');
+
+select has_index('public', 'user_preferences', 'idx_user_preferences_neighborhoods', 'F: idx_user_preferences_neighborhoods exists');
+select is(
+  (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'idx_user_preferences_neighborhoods'),
+  'CREATE INDEX idx_user_preferences_neighborhoods ON public.user_preferences USING gin (preferred_neighborhoods)',
+  'F: idx_user_preferences_neighborhoods matches production exactly (gin access method)');
+
 select has_index('public', 'event_orders', 'event_orders_buyer_anon_idx', 'F: event_orders_buyer_anon_idx exists');
+select is(
+  (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'event_orders_buyer_anon_idx'),
+  'CREATE INDEX event_orders_buyer_anon_idx ON public.event_orders USING btree (buyer_anon_id) WHERE (buyer_anon_id IS NOT NULL)',
+  'F: event_orders_buyer_anon_idx matches production exactly (partial predicate)');
+
 select has_index('public', 'event_orders', 'idx_event_orders_promo_code_id', 'F: idx_event_orders_promo_code_id exists');
+select is(
+  (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'idx_event_orders_promo_code_id'),
+  'CREATE INDEX idx_event_orders_promo_code_id ON public.event_orders USING btree (promo_code_id)',
+  'F: idx_event_orders_promo_code_id matches production exactly');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- G. The production-only scoring trigger
