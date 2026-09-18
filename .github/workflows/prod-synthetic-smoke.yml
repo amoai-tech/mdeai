@@ -55,14 +55,42 @@ jobs:
       - name: Verify production runtime contract
         env:
           PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          INFO_JSON: ${{ runner.temp }}/copilotkit-info.json
         run: |
           set -euo pipefail
           for path in / /events; do
             code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}${path}")
             test "$code" = "200" || { echo "::error::${path} returned ${code}, expected 200"; exit 1; }
           done
-          code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}/api/copilotkit/info")
-          test "$code" -lt 500 || { echo "::error::/api/copilotkit/info returned ${code}"; exit 1; }
+          # /api/copilotkit/info is POST-only. A GET is *correctly* rejected with 405
+          # (Allow: POST), so "not 5xx" was never a health signal: a 404 (route missing)
+          # or a 403 would have passed it just as happily.
+          #
+          # Assert the actual production contract instead:
+          #   1. GET  -> exactly 405 with Allow: POST  (protocol enforcement intact)
+          #   2. POST -> exactly 200, and the body must prove the runtime booted with the
+          #              pinned CopilotKit version and every expected agent registered.
+          get_code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}/api/copilotkit/info")
+          test "$get_code" = "405" || { echo "::error::GET /api/copilotkit/info returned ${get_code}, expected 405"; exit 1; }
+
+          post_code=$(curl --silent --show-error --location --write-out '%{http_code}' \
+            --output "${RUNNER_TEMP}/copilotkit-info.json" \
+            -X POST "${PROD_SMOKE_BASE_URL}/api/copilotkit/info" \
+            -H "Content-Type: application/json" -d '{"method":"info"}')
+          test "$post_code" = "200" || { echo "::error::POST /api/copilotkit/info returned ${post_code}, expected 200"; exit 1; }
+
+          node -e '
+            const info = require(process.env.INFO_JSON);
+            const expected = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
+            if (info.version !== "1.55.2") {
+              throw new Error(`unexpected CopilotKit version: ${info.version}`);
+            }
+            const missing = expected.filter((a) => !info.agents || !info.agents[a]);
+            if (missing.length) {
+              throw new Error(`runtime is missing agents: ${missing.join(", ")}`);
+            }
+            console.log(`copilotkit info ok: v${info.version}, agents ${Object.keys(info.agents).join(", ")}`);
+          '
 
       - name: Run prod synthetic smoke
         env:

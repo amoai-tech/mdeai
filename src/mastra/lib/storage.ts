@@ -32,7 +32,15 @@ function setStorageGlobal(value: StorageSingleton | undefined) {
 function normalizeDatabaseUrl(): string | undefined {
   const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
-  return raw.replace(/^"|"$/g, "");
+  // Order matters: trim first, then strip wrapping quotes, then trim again. Stripping
+  // quotes first would leave them in place for a padded value like `  "postgres://…"  `.
+  //
+  // An empty/whitespace-only result is treated as *missing* rather than as a value:
+  // DATABASE_URL="   " is a misconfiguration, and passing it through would hand
+  // PostgresStore an invalid connection string instead of failing closed with the
+  // intended "DATABASE_URL is required in production" error.
+  const unquoted = raw.trim().replace(/^"|"$/g, "");
+  return unquoted.trim() || undefined;
 }
 
 /** Next sets this while collecting/building routes; runtime requests never do. */

@@ -37,6 +37,35 @@ describe("createMastraStorage", () => {
     );
   });
 
+  it("fails closed when DATABASE_URL is whitespace-only in production", () => {
+    // Regression: normalizeDatabaseUrl used to return the untrimmed whitespace string,
+    // which passed the presence check and built a PostgresStore from an invalid URL.
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "   ");
+    expect(() => createMastraStorage("test-prod-blank-db")).toThrow(
+      "DATABASE_URL is required in production",
+    );
+  });
+
+  it("fails closed when DATABASE_URL normalises to empty quotes in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", '""');
+    expect(() => createMastraStorage("test-prod-quoted-blank")).toThrow(
+      "DATABASE_URL is required in production",
+    );
+  });
+
+  it("trims a padded, quote-wrapped DATABASE_URL and still selects Postgres", () => {
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv(
+      "DATABASE_URL",
+      '  "postgresql://postgres.test:secret@aws-1-us-east-1.pooler.supabase.com:6543/postgres"  ',
+    );
+    const store = createMastraStorage("test-padded-db");
+    expect(store.constructor.name).toBe("PostgresStore");
+  });
+
   it("uses ephemeral storage during the Next production build without DATABASE_URL", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PHASE", "phase-production-build");
