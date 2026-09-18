@@ -47,8 +47,22 @@ docs/
 ├── 06-testing/
 ├── 07-operations/
 ├── 08-strategy/
+├── tasks/                  # INDEX.md and CONVENTIONS.md only
 └── _archive/
 ```
+
+
+## Allowed top-level documentation
+
+Active documentation at `docs/` root is intentionally limited to:
+
+- `README.md`
+- `index-docs.md`
+- numbered canonical directories `01-product/` through `08-strategy/`
+- `tasks/` for durable task authoring conventions only
+- `_archive/` for historical material
+
+Other top-level documentation files or directories are drift and must move into a numbered canonical home or `_archive/`.
 
 ## Current canonical areas
 
@@ -175,7 +189,7 @@ Classify docs as:
 | Feature audit/evidence/notes | ✅ Archived where clearly historical |
 | `strategy/design` exact duplicates | ✅ Removed after hash verification |
 | Legacy design/domain/platform consolidation | ✅ Done |
-| Drift-prevention checks | 🔵 Next |
+| Drift-prevention checks | ✅ Active (`npm run check:docs`) |
 
 Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
 

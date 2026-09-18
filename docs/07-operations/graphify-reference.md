@@ -6,7 +6,7 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 **Venv:** `~/.venvs/graphify`  
 **Output:** `mdeapp/graphify-out/` (gitignored)  
 **Builder:** `scripts/graphify-run.sh` (thin wrapper over the `graphify` CLI)  
-**Current baseline:** [`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](ai-second-brain/GRAPHIFY-BASELINE.md)
+**Current baseline:** [`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md)
 
 ---
 
@@ -131,7 +131,7 @@ This takes ~1 minute (AST-only, **$0, no LLM**). It:
 
 Regenerate the HTML viz with `bash scripts/graphify-run.sh tree` → `graphify-out/GRAPH_TREE.html`.
 Current measured node/edge/build-time numbers live in
-[`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](ai-second-brain/GRAPHIFY-BASELINE.md).
+[`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md).
 
 **When to rebuild:**
 - After significant new code (new features, major refactors)
@@ -168,7 +168,7 @@ graphify update src/
 
 To change what is indexed, edit `.graphifyignore` (the include/exclude contract) — not a
 script constant. Corpus counts above are historical Phase-1/2 figures; see
-[`GRAPHIFY-BASELINE.md`](ai-second-brain/GRAPHIFY-BASELINE.md) for the current measured corpus.
+[`GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md) for the current measured corpus.
 
 ---
 
@@ -248,7 +248,7 @@ These are the audited findings. See the full report at `docs/graphify-audit-2026
 | `use-venue-booking-status.ts` queries `venue_booking_requests` with no user filter | **Cleared 2026-06-09** — RLS policy `venue_booking_select_own` enforces `user_id = auth.uid()` at DB level; no code change needed |
 | `use-session.ts` calls Supabase directly | Safe | Auth-only calls, no data tables |
 | `CONCIERGE_MODEL` etc. in `models.ts` | **Done 2026-06-09** — deleted 4 dead exports; `FLASH_MODEL` kept (9 importers) |
-| `getSupabaseClient()` in 5 Mastra tool files | **Done 2026-06-09** — extracted to [`src/mastra/lib/supabase-client.ts`](../src/mastra/lib/supabase-client.ts), 8 callers updated |
+| `getSupabaseClient()` helpers | Historical Graphify snapshot only. Current `main` keeps per-tool Supabase helpers in Mastra search tools; verify current code before relying on this row. |
 
 ---
 

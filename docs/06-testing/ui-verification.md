@@ -10,8 +10,7 @@
 (no task flips Done without a clean `npm run dev` boot + the surface responding) and the
 `mde-worktree-pr-flow` merge gate.
 
-See also (in `docs/testing/`): [`INDEX.md`](INDEX.md),
-[`00-agent-testing-mandate.md`](00-agent-testing-mandate.md), and the persona smoke specs.
+See also [README.md](README.md) for the canonical testing documentation map.
 
 ---
 

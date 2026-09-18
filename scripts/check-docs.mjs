@@ -10,17 +10,45 @@ const deprecatedTopLevel = [
 ];
 
 const errors = [];
-for (const name of deprecatedTopLevel) {
-  if (fs.existsSync(path.join(docs, name))) {
+const allowedTopLevel = new Set([
+  "README.md", "index-docs.md", "01-product", "02-architecture",
+  "03-platform", "04-domains", "05-design", "06-testing",
+  "07-operations", "08-strategy", "tasks", "_archive",
+]);
+
+for (const entry of fs.readdirSync(docs, { withFileTypes: true })) {
+  const name = entry.name;
+  if (name.startsWith(".") && !allowedTopLevel.has(name)) continue;
+  if (allowedTopLevel.has(name)) continue;
+
+  if (deprecatedTopLevel.includes(name)) {
     errors.push(`deprecated active docs tree recreated: docs/${name}/`);
+  } else {
+    errors.push(`noncanonical top-level docs entry: docs/${name}${entry.isDirectory() ? "/" : ""}`);
+  }
+}
+
+
+const allowedTaskFiles = new Set(["INDEX.md", "CONVENTIONS.md"]);
+const tasksDir = path.join(docs, "tasks");
+if (fs.existsSync(tasksDir)) {
+  for (const entry of fs.readdirSync(tasksDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !allowedTaskFiles.has(entry.name)) {
+      errors.push(`noncanonical docs/tasks entry: docs/tasks/${entry.name}${entry.isDirectory() ? "/" : ""}`);
+    }
   }
 }
 
 const activeRoots = [
   "01-product", "02-architecture", "03-platform", "04-domains",
-  "05-design", "06-testing", "07-operations", "08-strategy", "tasks",
+  "05-design", "06-testing", "07-operations", "08-strategy",
 ].map((name) => path.join(docs, name));
-const activeFiles = [path.join(docs, "README.md"), path.join(docs, "index-docs.md")];
+const activeFiles = [
+  path.join(docs, "README.md"),
+  path.join(docs, "index-docs.md"),
+  path.join(tasksDir, "INDEX.md"),
+  path.join(tasksDir, "CONVENTIONS.md"),
+];
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
