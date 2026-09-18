@@ -5,10 +5,14 @@
 --
 -- Run with: supabase test db
 --
--- Environment note: pg_cron is available in the Supabase image but is NOT installed by
--- any migration in this repo, so a database rebuilt from migrations alone has no `cron`
--- schema. The migration's P1 guard therefore takes its no-op path here, and the
--- unschedule itself is proven separately by
+-- Environment note (post SAN-1313 B1): pg_cron IS now installed canonically by
+--   supabase/migrations/20260918050339_san1313_install_pg_cron.sql
+-- so a database rebuilt from migrations DOES have a `cron` schema by the time these
+-- assertions run. Tests execute AFTER the whole migration chain, which is why `cron.job`
+-- is queryable here even though SAN-1306's own migration (20260918000849) ran earlier —
+-- while pg_cron did not yet exist — and therefore took its P1 no-op path.
+--
+-- The unschedule logic itself is still proven directly by
 --   scripts/san1306-rehearse-cron-unschedule.sql
 -- which installs pg_cron, schedules a stand-in job with the same name, runs the
 -- migration's exact block, and shows it removes the job idempotently.
@@ -95,15 +99,20 @@ select ok(
   'P0: tg_outbox_updated_at still fires on UPDATE');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- P1 — dead cron job gone; guard path safe where pg_cron is not installed
+-- P1 — dead cron job gone
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Plain-SQL documentation of the environment. Where pg_cron IS installed, the
--- migration has already unscheduled the job and the rehearsal script proves the
--- removal; asserting the reverse here would reference cron.job and fail to plan.
+-- pg_cron is now installed canonically by SAN-1313 B1
+-- (20260918050339_san1313_install_pg_cron.sql), which runs AFTER this task's migration
+-- during a replay. So `cron.job` exists at test time and the earlier "no cron schema in
+-- this environment" documentation is obsolete. Assert the real outcome instead.
+--
+-- Ordering note: this migration (20260918000849) still runs BEFORE pg_cron exists, so
+-- during replay its P1 guard legitimately takes the no-op path; B1 then installs the
+-- extension. Neither creates a cleanup job, so the job must be absent either way.
 select ok(
-  to_regclass('cron.job') is null,
-  'P1: no pg_cron schema in this environment — migration took the guarded no-op path');
+  not exists (select 1 from cron.job where jobname = 'agent_tool_calls_cleanup'),
+  'P1: agent_tool_calls_cleanup is ABSENT (pg_cron installed by SAN-1313 B1)');
 
 -- Idempotency: re-running the exact P1 block must be safe.
 -- Dynamic SQL for the same reason as the migration: a plain
