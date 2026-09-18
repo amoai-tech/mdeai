@@ -101,5 +101,9 @@ try {
   );
   process.exitCode = 1;
 } finally {
+  // Both of these hold open handles: the pg Client and the PostgresStore's own
+  // pool. Leaving either unclosed keeps the event loop alive, so the script would
+  // print its verdict and then hang instead of exiting — unusable in CI.
   await client.end().catch(() => undefined);
+  await store.close().catch(() => undefined);
 }
