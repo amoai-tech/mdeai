@@ -5,15 +5,6 @@ const baseURL =
   process.env.SMOKE_BASE_URL ||
   "http://localhost:3001";
 
-/**
- * SAN-1330 — Vercel deployment URLs are SSO-protected
- * (`ssoProtection: all_except_custom_domains`), so pre-promotion certification
- * runs against a staged deployment that requires the automation bypass. Only
- * applied when the secret is present, so local and live-domain runs are
- * unaffected.
- */
-const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -26,14 +17,9 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    ...(bypassSecret
-      ? {
-          extraHTTPHeaders: {
-            "x-vercel-protection-bypass": bypassSecret,
-            "x-vercel-set-bypass-cookie": "true",
-          },
-        }
-      : {}),
+    // The Vercel automation bypass is applied per-origin by
+    // `e2e/fixtures/vercel-bypass.ts` — never as a context-wide header, which
+    // would leak the credential to third-party origins.
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

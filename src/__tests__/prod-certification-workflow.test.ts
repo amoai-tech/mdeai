@@ -109,3 +109,32 @@ describe("prod certification workflow — staged deployment handling", () => {
     expect(text).toContain("vars.PROD_SMOKE_BASE_URL");
   });
 });
+
+describe("prod certification workflow — never silently skips certification", () => {
+  // Collected without index access or optional chaining, so this stays valid for
+  // any job layout.
+  const jobGuards = Object.values(doc.jobs ?? {})
+    .map((j) => j.if ?? "")
+    .join("\n");
+
+  it("starts the job for a production dispatch regardless of PROD_SMOKE_ENABLED", () => {
+    // Gating the whole job on the variable meant a missing or misspelled value
+    // skipped certification and left a required Deployment Check unresolved.
+    expect(jobGuards).toContain("github.event_name == 'repository_dispatch'");
+    expect(jobGuards).toContain("client_payload.environment == 'production'");
+    expect(jobGuards).not.toMatch(/^\$\{\{\s*vars\.PROD_SMOKE_ENABLED/);
+  });
+
+  it("fails a dispatch loudly when PROD_SMOKE_ENABLED is not exactly 'true'", () => {
+    expect(steps.some((s) => s.name === "Validate production smoke configuration")).toBe(true);
+    expect(text).toContain("PROD_SMOKE_ENABLED must be exactly 'true'");
+  });
+
+  it("verifies the Vercel public-variable contract before certifying", () => {
+    // A NEXT_PUBLIC_* stored as Secret/Sensitive compiles to `undefined` in the
+    // client bundle while Vercel still reports READY, so the metadata contract
+    // must be checked on the certification path rather than by hand.
+    expect(steps.some((s) => s.name === "Verify Vercel public-variable contract")).toBe(true);
+    expect(text).toContain("check-vercel-env-contract.mjs");
+  });
+});

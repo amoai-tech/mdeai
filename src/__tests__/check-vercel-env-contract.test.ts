@@ -137,6 +137,34 @@ describe("vercel-env-contract — every NEXT_PUBLIC_* must be Config", () => {
     expect(status).toBe(0);
   });
 
+  it("prefers a Config fallback over a Secret primary", () => {
+    // The runtime resolves by name: a Secret publishable key is `undefined` in
+    // the bundle, so a Config legacy anon key still works. Flagging the primary
+    // alone would block a deployment that functions correctly.
+    const { status, out } = withInput([
+      GOOD[0],
+      { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", type: "sensitive", target: ["production"] },
+      { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", type: "encrypted", target: ["production"] },
+      GOOD[2],
+      GOOD[3],
+    ]);
+    expect(out).toContain("ok      NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
+  });
+
+  it("still fails when every candidate for a required name is a Secret", () => {
+    const { status, out } = withInput([
+      GOOD[0],
+      { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", type: "sensitive", target: ["production"] },
+      { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", type: "sensitive", target: ["production"] },
+      GOOD[2],
+      GOOD[3],
+    ]);
+    expect(out).toContain("SECRET");
+    expect(status).toBe(1);
+  });
+
   it("does not report a required fallback name whose primary is satisfied", () => {
     // The publishable key meets the contract, so the legacy alias must not be
     // counted as a second failure.

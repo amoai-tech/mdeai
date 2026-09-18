@@ -134,7 +134,11 @@ function evaluate(envs) {
 
   const findings = [];
   for (const spec of REQUIRED_PUBLIC) {
-    const match = find(spec.key) ?? (spec.oneOf ?? []).map(find).find(Boolean);
+    // A fallback name satisfies the contract when its type is usable. Prefer the
+    // first Config candidate, otherwise a Secret primary would mask a working
+    // Config fallback — the runtime resolves by name and would still work.
+    const candidates = [spec.key, ...(spec.oneOf ?? [])].map(find).filter(Boolean);
+    const match = candidates.find((e) => !SECRET_TYPES.has(e.type)) ?? candidates[0];
     if (!match) {
       findings.push({ key: spec.key, kind: "missing", detail: "not set for Production" });
       continue;
@@ -161,12 +165,40 @@ function evaluate(envs) {
   return findings;
 }
 
+/**
+ * Follow Vercel's `pagination.next` cursor.
+ *
+ * `/v9/projects` paginates (default 20, `limit` capped at 100), so a team with
+ * more projects than one page would otherwise look like it does not contain the
+ * target project. Non-200 responses are surfaced rather than swallowed: a
+ * transient failure previously reported as "team not found", which pointed
+ * debugging in the wrong direction.
+ */
+async function apiGetAll(token, buildPath, collectionKey) {
+  const items = [];
+  let until;
+  for (let page = 0; page < 50; page++) {
+    const path = buildPath(until);
+    const { status, json } = await apiGet(token, path);
+    if (status !== 200) throw new Error(`Vercel API ${path} returned HTTP ${status}`);
+    items.push(...(json[collectionKey] ?? []));
+    const next = json.pagination?.next;
+    if (!next) return items;
+    until = next;
+  }
+  throw new Error(`Vercel API ${collectionKey} pagination did not terminate after 50 pages`);
+}
+
 async function loadEnvs() {
   if (inputFile) {
     // `--input -` reads metadata from stdin, so callers and tests can pipe JSON
     // instead of writing a temporary file.
     const fromStdin = inputFile === "-";
-    const parsed = JSON.parse(fromStdin ? fs.readFileSync(0, "utf8") : fs.readFileSync(inputFile, "utf8"));
+    const parsed = JSON.parse(
+      fromStdin
+        ? fs.readFileSync(0, "utf8")
+        : fs.readFileSync(path.resolve(inputFile), "utf8"),
+    );
     const list = Array.isArray(parsed) ? parsed : (parsed.envs ?? []);
     return { source: fromStdin ? "stdin" : `file:${inputFile}`, envs: list };
   }
@@ -178,16 +210,28 @@ async function loadEnvs() {
     );
   }
 
-  const teams = (await apiGet(token, "/v2/teams")).json.teams ?? [];
-  const team = teams.find((t) => t.slug === scopeSlug);
+  const teamsRes = await apiGet(token, "/v2/teams");
+  if (teamsRes.status !== 200) {
+    throw new Error(`Vercel API /v2/teams returned HTTP ${teamsRes.status}`);
+  }
+  const team = (teamsRes.json.teams ?? []).find((t) => t.slug === scopeSlug);
   if (!team) throw new Error(`team '${scopeSlug}' not found for these credentials`);
 
-  const projects = (await apiGet(token, `/v9/projects?limit=50&teamId=${team.id}`)).json.projects ?? [];
+  const projects = await apiGetAll(
+    token,
+    (until) => `/v9/projects?limit=100&teamId=${team.id}${until ? `&until=${until}` : ""}`,
+    "projects",
+  );
   const project = projects.find((p) => p.name === projectName);
   if (!project) throw new Error(`project '${projectName}' not found in team '${scopeSlug}'`);
 
-  // No decrypt: we only need key/type/target metadata, never values.
-  const envs = (await apiGet(token, `/v9/projects/${project.id}/env?teamId=${team.id}`)).json.envs ?? [];
+  // No decrypt: we only need key/type/target metadata, never values. The env
+  // endpoint returns the full list today, but follow the cursor if it appears.
+  const envs = await apiGetAll(
+    token,
+    (until) => `/v9/projects/${project.id}/env?teamId=${team.id}${until ? `&until=${until}` : ""}`,
+    "envs",
+  );
   return { source: `${scopeSlug}/${projectName}`, envs };
 }
 
@@ -196,9 +240,11 @@ const findings = evaluate(envs);
 
 console.log(`vercel-env-contract: ${source}`);
 for (const spec of REQUIRED_PUBLIC) {
-  const match = envs.find(
-    (e) => (e.key === spec.key || (spec.oneOf ?? []).includes(e.key)) && (e.target ?? []).includes("production"),
-  );
+  // Same preference as `evaluate`, so the report and the findings always agree.
+  const candidates = [spec.key, ...(spec.oneOf ?? [])]
+    .map((key) => envs.find((e) => e.key === key && (e.target ?? []).includes("production")))
+    .filter(Boolean);
+  const match = candidates.find((e) => !SECRET_TYPES.has(e.type)) ?? candidates[0];
   if (!match) console.log(`  MISSING ${spec.key}`);
   else if (SECRET_TYPES.has(match.type)) console.log(`  SECRET  ${match.key} (type=${match.type})`);
   else console.log(`  ok      ${match.key} (type=${match.type})`);

@@ -41,7 +41,12 @@ jobs:
     name: prod 4-query smoke
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    if: ${{ vars.PROD_SMOKE_ENABLED == 'true' && (github.event_name != 'repository_dispatch' || github.event.client_payload.environment == 'production') }}
+    # A production dispatch must ALWAYS start this job: the
+    # `production-certification` status is published by a step below, so gating
+    # the whole job on PROD_SMOKE_ENABLED meant a missing or misspelled variable
+    # skipped certification entirely and left a required Vercel Deployment Check
+    # permanently unresolved, with no explanation.
+    if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.environment == 'production') || (github.event_name != 'repository_dispatch' && vars.PROD_SMOKE_ENABLED == 'true') }}
 
     steps:
       # Publishes the `production-certification` commit status for the dispatched
@@ -57,6 +62,19 @@ jobs:
           name: production-certification
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Fail loudly rather than certifying nothing. Without this, a dispatch with
+      # PROD_SMOKE_ENABLED unset would publish no usable certification.
+      - name: Validate production smoke configuration
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          PROD_SMOKE_ENABLED: ${{ vars.PROD_SMOKE_ENABLED }}
+        run: |
+          if [ "${PROD_SMOKE_ENABLED}" != "true" ]; then
+            echo "::error::PROD_SMOKE_ENABLED must be exactly 'true' for production dispatches (got '${PROD_SMOKE_ENABLED}')."
+            echo "::error::Set it under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+
       - name: Checkout deployed commit
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
@@ -70,6 +88,18 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
+
+      # SAN-1330 — a misclassified public variable cannot be caught from the
+      # build alone: Vercel stores NEXT_PUBLIC_* as Secret/Sensitive, compiles it
+      # into the client bundle as `undefined`, and still reports READY. Inspect
+      # the project's env *metadata* before certifying anything.
+      #
+      # Runs before `npm ci` because the script needs only Node built-ins. A
+      # missing VERCEL_TOKEN fails here rather than silently skipping the gate.
+      - name: Verify Vercel public-variable contract
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/check-vercel-env-contract.mjs --project mdeai --scope amo1000
 
       - name: Install
         run: npm ci
