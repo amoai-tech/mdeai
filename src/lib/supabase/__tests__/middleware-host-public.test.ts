@@ -58,6 +58,14 @@ describe("Supabase proxy session gate", () => {
     expect(new URL(wallet.headers.get("location")!).pathname).toBe("/login");
   });
 
+  it("protects trips and the host event wizard while /host stays public", async () => {
+    for (const path of ["/trips", "/trips/t_123", "/host/event/new"]) {
+      const response = await updateSession(request(path));
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    }
+  });
+
   it("relays a root auth code to /auth/callback", async () => {
     const response = await updateSession(request("/?code=abc123"));
     const location = new URL(response.headers.get("location")!);
