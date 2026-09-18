@@ -22,9 +22,26 @@ describe("createMastraStorage", () => {
     expect(store.constructor.name).toBe("PostgresStore");
   });
 
-  it("uses in-memory LibSQL when DATABASE_URL is absent", () => {
+  it("uses in-memory LibSQL when DATABASE_URL is absent in development", () => {
+    vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("DATABASE_URL", "");
     const store = createMastraStorage("test-mem");
+    expect(store.constructor.name).toBe("LibSQLStore");
+  });
+
+  it("fails closed when DATABASE_URL is absent in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "");
+    expect(() => createMastraStorage("test-prod-missing-db")).toThrow(
+      "DATABASE_URL is required in production",
+    );
+  });
+
+  it("uses ephemeral storage during the Next production build without DATABASE_URL", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    vi.stubEnv("DATABASE_URL", "");
+    const store = createMastraStorage("test-build");
     expect(store.constructor.name).toBe("LibSQLStore");
   });
 

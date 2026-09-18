@@ -76,12 +76,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
   if (
-    !user &&
+    !claims &&
     isProtectedPath(request.nextUrl.pathname) &&
     process.env.E2E_BYPASS_AUTH !== "1"
   ) {

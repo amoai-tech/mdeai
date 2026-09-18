@@ -83,7 +83,7 @@ describe("mdeapp smoke", () => {
       "src/lib/supabase/client.ts",
       "src/lib/supabase/server.ts",
       "src/lib/supabase/middleware.ts",
-      "src/middleware.ts",
+      "src/proxy.ts",
       "src/app/login/page.tsx",
       "src/app/signup/page.tsx",
       "src/app/auth/callback/route.ts",

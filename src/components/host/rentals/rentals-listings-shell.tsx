@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import type { BrokerListingDetail } from "@/lib/rentals/broker-listing-detail";
 import {
@@ -25,6 +26,7 @@ export function RentalsListingsShell({
   initialListings,
   loadError,
 }: RentalsListingsShellProps) {
+  const router = useRouter();
   const [listings, setListings] = useState(initialListings);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<BrokerListingStatusFilter>("all");
@@ -110,7 +112,7 @@ export function RentalsListingsShell({
             label: "Start onboarding",
             testId: "rentals-listings-onboarding",
             onClick: () => {
-              window.location.href = "/host/rentals/onboarding";
+              router.push("/host/rentals/onboarding");
             },
           },
         ]}
