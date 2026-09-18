@@ -129,23 +129,13 @@ These have been archived under:
 
 Only exact duplicate files were removed outright. Non-duplicate historical material is preserved for reference.
 
-## Active legacy areas still awaiting consolidation
+## Legacy consolidation status
 
-These remain active temporarily because they contain non-duplicate material that must be reviewed before migration:
+The former top-level legacy trees for strategy, partners, design, ecommerce, Linear exports, PRDs, real estate, restaurants, research, wireframes, CopilotKit/Mastra planning, and AI Second Brain are no longer active documentation.
 
-- `docs/design/`
-- `docs/ecommerce/`
-- `docs/partners/`
-- `docs/prd/`
-- `docs/real-estate/`
-- `docs/restaurant/`
-- `docs/research/`
-- `docs/strategy/`
-- `docs/wireframes/`
-- `docs/copilotkit-mastra/`
-- `docs/ai-second-brain/`
+Durable current material was moved into the numbered canonical structure. Historical, task-specific, dated research, audits, prompts, and superseded plans are preserved under `docs/_archive/`.
 
-Do not treat these legacy locations as authoritative when they conflict with canonical docs, merged code, or Linear.
+A repository check prevents deprecated top-level documentation trees from being recreated and validates relative links in active canonical Markdown.
 
 ## Stale-content rules
 

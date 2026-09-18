@@ -79,7 +79,8 @@
     "test:mastra": "vitest run src/mastra/",
     "test:lib": "vitest run src/lib/",
     "test:hooks": "vitest run src/hooks/",
-    "test:api": "vitest run src/app/api/"
+    "test:api": "vitest run src/app/api/",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@ag-ui/client": "0.0.52",
