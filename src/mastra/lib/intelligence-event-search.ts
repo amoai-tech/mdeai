@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
 import {
@@ -57,10 +58,9 @@ export type IntelligenceEventResult = EventCard & {
 };
 
 function getAnonClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
+  const env = getSupabaseServerAnonEnv();
+  if (!env) return null;
+  return createClient(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
