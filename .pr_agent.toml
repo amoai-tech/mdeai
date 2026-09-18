@@ -17,10 +17,9 @@ max_skills_tokens = 8000
 
 [ignore]
 # PR-Agent v0.45.0 uses the current `glob` key.
-# Keep generated, dependency-lock, local database, and internal skill/docs noise
-# out of the LLM review budget so the bounded review calls focus on application code.
+# Keep generated, dependency-lock, local database, and internal agent noise
+# out of the LLM review budget. Trusted review policy under docs/ remains reviewable.
 glob = [
-  "docs/**",
   "graphify-out/**",
   "*.db",
   "*.db-shm",

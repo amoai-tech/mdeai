@@ -18,16 +18,16 @@ const skills = [
 
 describe("SAN-1312 PR-Agent review contract", () => {
   it("pins PR-Agent and loads reviewer instructions only from the trusted base", () => {
-    expect(workflow).toContain("the-pr-agent/pr-agent@f3b385ea2927247ddcff2fe252472380b9c8f5fc # v0.45.0");
+    expect(workflow).toContain("docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0");
     expect(workflow).toContain("ref: ${{ github.event.pull_request.base.sha }}");
     expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("Select trusted MDE review skills");
     expect(workflow).toContain('github_action_config.auto_improve: "false"');
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
-    expect(workflow).toContain('OPENAI__API_BASE: "https://integrate.api.nvidia.com/v1"');
-    expect(workflow).toContain('OPENAI__KEY: ${{ secrets.NVIDIA_API_KEY }}');
-    expect(workflow).toContain('config.model: "openai/nvidia/nemotron-3-ultra-550b-a55b"');
-    expect(workflow).toContain(`config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'`);
+    expect(workflow).toContain('NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"');
+    expect(workflow).toContain('NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
+    expect(workflow).toContain('config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"');
+    expect(workflow).toContain(`config.fallback_models: '["nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b"]'`);
     expect(workflow).toContain('config.custom_model_max_tokens: "32000"');
     expect(workflow).not.toContain("GOOGLE_AI_STUDIO");
     expect(workflow).not.toContain("gemini/");
@@ -41,6 +41,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain("[ignore]");
     expect(config).toContain('glob = [');
     expect(config).toContain('"package-lock.json"');
+    expect(config).not.toContain('"docs/**"');
     expect(config).not.toContain("glob_patterns");
     expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
     expect(config).toContain("Failure scenario:");

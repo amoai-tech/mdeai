@@ -54,13 +54,13 @@ jobs:
           echo "max_tokens=8000" >> "$GITHUB_OUTPUT"
 
       - name: Review pull request
-        uses: the-pr-agent/pr-agent@f3b385ea2927247ddcff2fe252472380b9c8f5fc # v0.45.0
+        uses: docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI__API_BASE: "https://integrate.api.nvidia.com/v1"
-          OPENAI__KEY: ${{ secrets.NVIDIA_API_KEY }}
-          config.model: "openai/nvidia/nemotron-3-ultra-550b-a55b"
-          config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'
+          NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
+          config.fallback_models: '["nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b"]'
           config.custom_model_max_tokens: "32000"
           config.propagate_tool_errors: "true"
           skills.enabled: ${{ steps.reviewer-skills.outputs.enabled }}
