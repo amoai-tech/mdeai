@@ -43,3 +43,48 @@ jobs:
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  # SAN-1321 — the version contract proves the *installed* adapter is paired
+  # correctly; this proves that adapter actually provisions the committed schema.
+  # Without a real database a regression in the initializer would leave every
+  # other gate green, which is exactly how a fresh environment ended up with only
+  # 8 of 32 tables.
+  mastra-schema-init:
+    name: mastra-schema-init
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Disposable database: the job provisions it from empty every run.
+      - name: Provision the Mastra schema on a fresh database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: npm run check:mastra:schema:init
+
+      - name: Prove the initializer is idempotent
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: npm run check:mastra:schema:init
