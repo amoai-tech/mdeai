@@ -58,7 +58,12 @@ const CONTRACT_SOURCES = import.meta.glob("/scripts/mastra-schema-contract.json"
   import: "default",
   eager: true,
 }) as Record<string, string>;
-const committedContract = JSON.parse(Object.values(CONTRACT_SOURCES)[0]) as {
+// Fail loudly if the glob ever resolves nothing, rather than parsing `undefined`.
+const committedRaw = Object.values(CONTRACT_SOURCES)[0];
+if (typeof committedRaw !== "string") {
+  throw new Error("committed contract not found via import.meta.glob");
+}
+const committedContract = JSON.parse(committedRaw) as {
   expectedTables: string[];
   adapterVersion: string;
   coreVersion: string;
