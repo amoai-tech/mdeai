@@ -33,17 +33,7 @@
  *
  * Server-only: do not import from client components.
  */
-
-/** First candidate that is actually present, trimmed; blank counts as absent. */
-export function firstPresent(
-  ...candidates: (string | undefined)[]
-): string | undefined {
-  for (const candidate of candidates) {
-    const value = candidate?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
+import { firstPresent } from "@/lib/first-present";
 
 /** Server-only name first, then the name Vercel actually injects. */
 export function getSupabaseServerUrl(): string | undefined {

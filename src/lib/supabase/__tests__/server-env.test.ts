@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { firstPresent } from "@/lib/first-present";
 import {
-  firstPresent,
   getSupabaseServerAnonEnv,
   getSupabaseServerAnonKey,
   getSupabaseServerUrl,

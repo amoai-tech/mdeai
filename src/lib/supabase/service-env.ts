@@ -1,4 +1,5 @@
-import { firstPresent, getSupabaseServerUrl } from "./server-env";
+import { firstPresent } from "@/lib/first-present";
+import { getSupabaseServerUrl } from "./server-env";
 
 /**
  * Server-only Supabase credentials for privileged writes (e.g. ai_runs).

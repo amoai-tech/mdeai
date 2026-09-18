@@ -94,6 +94,17 @@ describe("server-side Supabase URL contract", () => {
     expect(body).not.toMatch(/process\.env\.SUPABASE_URL\s*\?\?/);
   });
 
+  it("env.ts resolves public credentials through the blank-skipping helper", () => {
+    // getSupabaseEnv() feeds the browser client, middleware and SSR, and throws
+    // on a missing value — so a blank publishable key must fall through to the
+    // legacy anon key instead of being returned and throwing.
+    const body = readSource("lib/supabase/env.ts");
+    expect(body).toContain("firstPresent(");
+    expect(body).not.toMatch(
+      /process\.env\.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\s*\?\?/,
+    );
+  });
+
   it.each(CONSUMERS)("%s resolves credentials through the shared helper", (rel) => {
     const body = readSource(rel);
     const usesHelper =

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   restaurantSchema,
   searchRestaurantsTool,
@@ -26,6 +26,15 @@ function withNoSupabaseCredentials() {
   vi.resetModules();
 }
 
+/**
+ * Restore in a hook, not at the end of each test: an assertion or awaited call
+ * that throws would otherwise skip the manual cleanup and leak blank Supabase
+ * credentials into later tests, turning one failure into order-dependent ones.
+ */
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("searchRestaurants fallback + envelope", () => {
   it("MA-P0-05 returns curated fallback when Supabase client unavailable", async () => {
     withNoSupabaseCredentials();
@@ -36,7 +45,6 @@ describe("searchRestaurants fallback + envelope", () => {
     expect(out.source).toBe("fallback");
     expect(out.results.length).toBeGreaterThan(0);
     expect(out.results.every((r) => restaurantSchema.safeParse(r).success)).toBe(true);
-    vi.unstubAllEnvs();
   });
 
   it("MA-P0-07 envelope includes results, total, and source", async () => {
@@ -50,7 +58,6 @@ describe("searchRestaurants fallback + envelope", () => {
       total: expect.any(Number),
       source: "fallback",
     });
-    vi.unstubAllEnvs();
   });
 });
 
@@ -82,6 +89,5 @@ describe("searchRestaurantsTool execute", () => {
       total: expect.any(Number),
       source: "fallback",
     });
-    vi.unstubAllEnvs();
   });
 });
