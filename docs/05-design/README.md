@@ -1,5 +1,14 @@
 # Design
 
-Current design system, UX patterns, navigation, responsive behavior, and useful wireframes.
+Canonical home for current MDE AI design guidance.
 
-Superseded design handoffs should move to the archive after verification rather than remain mixed with current guidance.
+## Current documents
+- [Design system](design-system.md)
+- [Foundations](foundations.md)
+- [Design process](design-process.md)
+- [Component mapping](component-mapping.md)
+- [Images](images.md)
+- [Marketing pages](marketing-pages.md)
+- [Concierge direction](concierge-direction.md)
+
+Current visual references and wireframes live under `screens/`. Historical design tasks, audits, inventories, duplicate wireframes, superseded plans, and migrated files with unresolved legacy links are archived under `docs/_archive/`.
