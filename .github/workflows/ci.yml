@@ -13,4 +13,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: echo "Use .github/workflows/floor.yml — npm run floor is the required gate."
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # TEMPORARY: proves VERCEL_AUTOMATION_BYPASS_SECRET authenticates a staged
+      # (SSO-protected) deployment. A write-only secret can only be verified from
+      # CI, and this workflow already exists on the default branch, so it is the
+      # one place dispatchable today. Reverted in the next commit.
+      - name: Verify staged-deployment bypass (temporary)
+        env:
+          BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          TARGET: https://mdeai-lfi6wkxth-amo1000.vercel.app
+        run: |
+          set -euo pipefail
+          test -n "$BYPASS" || { echo "::error::VERCEL_AUTOMATION_BYPASS_SECRET is not configured"; exit 1; }
+          plain=$(curl -s -o /dev/null -w '%{http_code}' "$TARGET")
+          echo "no bypass      : HTTP $plain"
+          test "$plain" = "302" || { echo "::error::expected the SSO gate (302) without the bypass, got $plain"; exit 1; }
+          auth=$(curl -s -o /dev/null -w '%{http_code}' -H "x-vercel-protection-bypass: ${BYPASS}" "$TARGET")
+          echo "with bypass    : HTTP $auth"
+          test "$auth" = "200" || { echo "::error::the bypass did not authenticate the staged deployment (got $auth)"; exit 1; }
+          echo "bypass OK — staged deployment authenticated"
