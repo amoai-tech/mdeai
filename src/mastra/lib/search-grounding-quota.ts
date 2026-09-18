@@ -1,5 +1,6 @@
 import { isSearchGroundingEnabled } from "@/lib/is-search-grounding-enabled";
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServiceEnv } from "@/lib/supabase/service-env";
 
 const DEFAULT_DAILY_CAP = 50;
 
@@ -22,13 +23,12 @@ export async function incrementAndCheckSearchGroundingQuota(): Promise<SearchGro
     return { allowed: false, reason: "disabled" };
   }
 
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
+  const env = getSupabaseServiceEnv();
+  if (!env) {
     return { allowed: true };
   }
 
-  const supabase = createClient(url, key, {
+  const supabase = createClient(env.url, env.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

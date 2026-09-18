@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { searchRentals } from "@/mastra/tools/search-rentals";
 
 /**
@@ -39,10 +40,9 @@ const UUID_RE =
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
 const getClient = () => {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
+  const env = getSupabaseServerAnonEnv();
+  if (!env) return null;
+  return createClient(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 };

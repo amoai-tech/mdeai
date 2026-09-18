@@ -1,5 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -160,10 +161,9 @@ let _client: ReturnType<typeof createClient> | null = null;
 
 function getSupabaseClient() {
   if (_client) return _client;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  _client = createClient(url, key, {
+  const env = getSupabaseServerAnonEnv();
+  if (!env) return null;
+  _client = createClient(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   return _client;

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchRentals } from "@/mastra/tools/search-rentals";
 import { getRentalDetail, mapApartmentRowToDetail } from "../get-rental-detail";
 
@@ -6,10 +6,38 @@ vi.mock("@/mastra/tools/search-rentals", () => ({
   searchRentals: vi.fn(),
 }));
 
+/**
+ * `getRentalDetail` only falls back to the mock catalogue when **no** Supabase
+ * credential name resolves. MDE-ENV-002 made the server accept the public names
+ * too, so clearing the server-only pair is no longer sufficient — CI sets
+ * `NEXT_PUBLIC_SUPABASE_URL`, which would otherwise build a real client.
+ */
+const CREDENTIAL_NAMES = [
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+] as const;
+
+const env = process.env as Record<string, string | undefined>;
+const savedCredentials = new Map<string, string | undefined>();
+
 beforeEach(() => {
-  delete process.env.SUPABASE_URL;
-  delete process.env.SUPABASE_ANON_KEY;
+  savedCredentials.clear();
+  for (const name of CREDENTIAL_NAMES) {
+    savedCredentials.set(name, env[name]);
+    delete env[name];
+  }
   vi.mocked(searchRentals).mockReset();
+});
+
+afterEach(() => {
+  for (const [name, value] of savedCredentials) {
+    if (value === undefined) delete env[name];
+    else env[name] = value;
+  }
+  savedCredentials.clear();
 });
 
 describe("SAN-1202 · mapApartmentRowToDetail", () => {
