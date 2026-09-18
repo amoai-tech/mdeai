@@ -48,12 +48,12 @@ Before broad repository searching on substantial code tasks:
 1. Check whether `graphify-out/graph.json` exists and is current.
 2. Prefer Graphify for exact symbols, dependency paths, affected-code discovery, and blast-radius analysis.
 3. Use `npm run graphify:query -- "<question>"`, `npm run graphify:explain -- "<symbol>"`, and `npm run graphify:path -- "<A>" "<B>"` before broad raw-file search when they fit the question.
-4. Use normal search when the question is conceptual, Graphify has no useful match, or runtime behavior must be verified.
-5. Never treat static graph results alone as proof that code is dead or safe to delete.
+4. Fall back to normal search when the question is conceptual, Graphify has no useful match, runtime behavior needs verification, or direct source evidence is more appropriate.
+5. Treat static graph results as navigation evidence rather than sufficient deletion proof; confirm risky conclusions against source, runtime behavior, and relevant tests.
 
 ## Ponytail engineering rule
 
-Before writing custom code, stop at the first rung that safely solves the task: skip unnecessary work; reuse existing repository code; prefer the standard library or native platform; reuse an installed dependency; use a small direct change; only then add the minimum new implementation required. Never reduce validation, error handling, security, accessibility, data integrity, or required tests merely to reduce code size.
+Before writing custom code, prefer the earliest rung that safely satisfies the task: skip unnecessary work; reuse existing repository code; prefer the standard library or native platform; reuse an installed dependency; use a small direct change; only then add the minimum new implementation required. Preserve required validation, error handling, security, accessibility, data integrity, and tests rather than trading them away merely to reduce code size.
 
 ## Shared invariants
 
