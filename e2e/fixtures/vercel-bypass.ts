@@ -28,20 +28,19 @@ export const test = base.extend({
     if (bypassSecret && baseURL) {
       try {
         const origin = new URL(baseURL).origin;
-        // A RegExp, not a glob: `origin/**` does not reliably match the bare
-        // origin (`https://host/`), so a glob would silently skip the very first
-        // navigation — the one that must carry the bypass.
-        const sameOrigin = new RegExp(
-          `^${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(/|$)`,
-        );
-        await page.context().route(sameOrigin, (route) =>
-          route.continue({
-            headers: {
-              ...route.request().headers(),
-              "x-vercel-protection-bypass": bypassSecret,
-              "x-vercel-set-bypass-cookie": "true",
-            },
-          }),
+        // A URL predicate, not a glob or a constructed RegExp. A glob
+        // (`${origin}/**`) does not match the bare origin, so it silently skipped
+        // the very first navigation — the one that must carry the bypass.
+        await page.context().route(
+          (url) => url.origin === origin,
+          (route) =>
+            route.continue({
+              headers: {
+                ...route.request().headers(),
+                "x-vercel-protection-bypass": bypassSecret,
+                "x-vercel-set-bypass-cookie": "true",
+              },
+            }),
         );
       } catch {
         // Unparseable baseURL: fall through and run without the bypass.
