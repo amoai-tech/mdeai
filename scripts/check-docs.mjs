@@ -10,6 +10,18 @@ const deprecatedTopLevel = [
 ];
 
 const errors = [];
+const allowedTopLevel = new Set([
+  "README.md", "index-docs.md", "01-product", "02-architecture",
+  "03-platform", "04-domains", "05-design", "06-testing",
+  "07-operations", "08-strategy", "tasks", "_archive", ".obsidian",
+]);
+
+for (const entry of fs.readdirSync(docs, { withFileTypes: true })) {
+  if (!allowedTopLevel.has(entry.name)) {
+    errors.push(`noncanonical top-level docs entry: docs/${entry.name}${entry.isDirectory() ? "/" : ""}`);
+  }
+}
+
 for (const name of deprecatedTopLevel) {
   if (fs.existsSync(path.join(docs, name))) {
     errors.push(`deprecated active docs tree recreated: docs/${name}/`);
