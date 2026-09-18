@@ -127,7 +127,16 @@ const widened = Object.keys(current).filter(
     Object.entries(current[k]).some(([role, val]) => val && !baseline[k][role]),
 );
 
-console.log(`function-acl gate: ${Object.keys(current).length} exposed, ${Object.keys(baseline).length} baselined`);
+// Report the UNTRUSTED surface explicitly. Entry count alone is a weak signal: nearly every
+// RPC legitimately keeps `authenticated`, so the baseline length barely moves even when real
+// exposure is removed. The PUBLIC/anon counts are what Batch 0A/0B actually drive down.
+const pubCount = Object.values(current).filter((v) => v.public).length;
+const anonCount = Object.values(current).filter((v) => v.anon).length;
+console.log(
+  `function-acl gate: ${Object.keys(current).length} reachable, ` +
+    `${pubCount} PUBLIC-executable, ${anonCount} anon-executable ` +
+    `(${Object.keys(baseline).length} baselined)`,
+);
 
 let failed = false;
 
