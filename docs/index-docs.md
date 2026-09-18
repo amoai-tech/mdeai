@@ -1,138 +1,191 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-16
-status: transitional index — Task 45 audit in progress
+updated: 2026-09-18
+status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
 
 # MDE AI documentation index
 
-This file is the **current navigation index for the documentation that exists on `main`**.
-
-It is intentionally transitional. The repository still contains older June 2026 planning, task, audit, and architecture material that must be classified before the final `docs/INDEX.md` is created.
+This is the canonical navigation index for active MDE AI documentation on `main`.
 
 ## Source-of-truth rules
 
-1. **Linear MDE AI** owns live task status, priority, and execution order.
-2. **Merged `main`** owns shipped repository truth.
-3. **`src/app`** owns implemented route truth.
-4. **Code, migrations, package manifests, and tests** own implementation truth.
-5. Documentation explains the product and architecture; it must not override current code or Linear.
-6. Historical audits, evidence, and decisions should be archived rather than silently rewritten as current truth.
+1. Linear MDE AI owns live task status, priority, and execution order.
+2. Merged `main` owns shipped repository truth.
+3. `src/app` owns implemented route truth.
+4. Code, migrations, package manifests, and tests own implementation truth.
+5. Active docs explain current product, architecture, operations, and strategy.
+6. Historical audits, task exports, evidence, notes, and superseded plans belong under `docs/_archive/`.
 
 ## Start here
 
-| Need | Current location | Status |
+| Need | Canonical location | Status |
 |---|---|---|
-| Repository documentation overview | [`README.md`](README.md) | Review/update |
-| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Review/rewrite into canonical architecture docs |
-| Local QA | [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | Review against current scripts/runtime |
-| Design system and UX | [`design/`](design/) | Active area; audit required |
-| Testing and evidence | [`testing/`](testing/) and [`tasks/testing/`](tasks/testing/) | Preserve; separate current guidance from historical evidence |
-| Product/task history | [`tasks/`](tasks/) | Historical/reference-heavy; Linear owns live execution |
+| Documentation overview | [README.md](README.md) | Current |
+| Product | [01-product/](01-product/) | Current / expanding |
+| Architecture | [02-architecture/](02-architecture/) | Current |
+| Platform | [03-platform/](03-platform/) | Current / expanding |
+| Domains | [04-domains/](04-domains/) | Current / expanding |
+| Design | [05-design/](05-design/) | Current / migrating legacy content |
+| Testing | [06-testing/](06-testing/) | Current / expanding |
+| Operations | [07-operations/](07-operations/) | Current / expanding |
+| Strategy | [08-strategy/](08-strategy/) | Current / consolidating |
+| Historical material | [_archive/](_archive/) | Historical only |
 
-## Current top-level documentation areas
-
-| Area | Current location | Task 45 disposition |
-|---|---|---|
-| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) | UPDATE / MERGE |
-| AI / agent architecture | [`intelligence/`](intelligence/), [`copilotkit-mastra/`](copilotkit-mastra/), [`ai-second-brain/`](ai-second-brain/) | AUDIT / MERGE into platform docs where current |
-| Events | [`events/`](events/), [`tasks/events/`](tasks/events/) | AUDIT / MERGE; separate current domain docs from task history |
-| Venues | [`tasks/venues/`](tasks/venues/) | AUDIT / MERGE; extract current venue domain truth from task-heavy material |
-| Nightlife | [`tasks/venues/`](tasks/venues/) | AUDIT / REWRITE; separate nightlife discovery/booking truth from shared venue task history |
-| Real estate / rentals | [`real-estate/`](real-estate/) | AUDIT / REWRITE |
-| Restaurants | [`restaurant/`](restaurant/) | AUDIT / REWRITE |
-| Partners / sponsors | [`partners/`](partners/) | AUDIT / REWRITE; protect active PR work |
-| Ecommerce | [`ecommerce/`](ecommerce/) | AUDIT; keep only current product direction |
-| Design / wireframes | [`design/`](design/), [`wireframes/`](wireframes/) | KEEP / REVIEW; archive superseded handoffs |
-| Platform / infrastructure | [`security/`](security/) | AUDIT / REWRITE; shared platform material also exists across task/domain docs and must be consolidated |
-| Product / PRD material | [`prd/`](prd/) | AUDIT / MERGE into canonical product docs |
-| Strategy / research | [`strategy/`](strategy/), [`research/`](research/), [`revenue-strategy.md`](revenue-strategy.md), [`revenue-strategy-v2.md`](revenue-strategy-v2.md), [`strategic-audit.md`](strategic-audit.md) | REVIEW; current strategy separate from historical research |
-| Testing / QA | [`testing/`](testing/), [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | KEEP / UPDATE |
-| Linear/task exports | [`linear/`](linear/), [`tasks/`](tasks/), [`task-backlog.md`](task-backlog.md) | ARCHIVE / POINTER; must not compete with Linear |
-| Audits | [`audits/`](audits/) | PRESERVE; label current vs historical |
-| Session/reference notes | [`notes/`](notes/), [`graphify-reference.md`](graphify-reference.md) | REVIEW / ARCHIVE where obsolete |
-| Upgrade notes | [`upgradeV2/`](upgradeV2/) | REVIEW; archive if migration is complete |
-
-## Root docs inside `docs/`
-
-| File | Current action |
-|---|---|
-| [`README.md`](README.md) | UPDATE |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | REWRITE / MERGE into `docs/architecture/` |
-| [`dashboard.md`](dashboard.md) | REBUILD from current code + Linear |
-| [`index-docs.md`](index-docs.md) | CURRENT transitional index; supersede later with `docs/INDEX.md` |
-| [`localhost-qa-runbook.md`](localhost-qa-runbook.md) | REVIEW / UPDATE |
-| [`task-backlog.md`](task-backlog.md) | ARCHIVE / replace with Linear pointer |
-| [`todo.md`](todo.md) | ARCHIVE / replace with Linear pointer |
-| [`changelog.md`](changelog.md) | KEEP as history; verify maintenance model |
-| [`strategic-audit.md`](strategic-audit.md) | REVIEW / snapshot-label |
-| [`revenue-strategy.md`](revenue-strategy.md) | REVIEW |
-| [`revenue-strategy-v2.md`](revenue-strategy-v2.md) | REVIEW / MERGE with current strategy |
-| [`graphify-reference.md`](graphify-reference.md) | REVIEW |
-
-## Target documentation architecture
-
-Task 44 defined the target structure below. **Do not bulk-move files into it until Task 45 finishes the audit.**
+## Canonical documentation architecture
 
 ```text
 docs/
-├── INDEX.md
-├── architecture/
-├── product/
-├── platform/
-├── domains/
-├── design/
-├── strategy/
-├── testing/
+├── README.md
+├── index-docs.md
+├── 01-product/
+├── 02-architecture/
+├── 03-platform/
+├── 04-domains/
+├── 05-design/
+├── 06-testing/
+├── 07-operations/
+├── 08-strategy/
 └── _archive/
 ```
 
-### Intended ownership
+## Current canonical areas
 
-- `architecture/` — system architecture, boundaries, durable decisions and lessons.
-- `product/` — current product definition and PRD-level intent; no live task queue.
-- `platform/` — shared CopilotKit, Mastra, Supabase, Gemini, Maps, Next.js, Stripe, Cloudinary and infrastructure guidance.
-- `domains/` — events, real estate/rentals, venues, restaurants/cafes/nightlife, trips, partners/sponsors, ecommerce where current.
-- `design/` — current design system, UX patterns and useful wireframes.
-- `strategy/` — current market/business/revenue strategy and selected research.
-- `testing/` — current QA, release, test and verification guidance.
-- `_archive/` — superseded plans, task exports, audits, snapshots and historical evidence.
+### Product
+[01-product/README.md](01-product/README.md)
 
-## Current audit rules
+Use for current product definition, user journeys, PRD-level intent, and durable roadmap intent. Do not maintain a competing live task queue here.
 
-During Task 45, classify important documents as:
+### Architecture
+[02-architecture/README.md](02-architecture/README.md)
 
-- **CURRENT** — accurate and canonical today.
-- **UPDATE** — useful structure/content but stale facts.
-- **MERGE** — useful content duplicated across multiple files.
-- **ARCHIVE** — historical or superseded, still worth preserving.
-- **REMOVE-CANDIDATE** — generated, temporary, empty or exact duplicate; delete only after proof.
-- **UNKNOWN-PRESERVE** — unclear ownership or value; keep until resolved.
+Current architecture includes:
+- [system-overview.md](02-architecture/system-overview.md)
+- [data-model.md](02-architecture/data-model.md)
+- [schema-ownership.md](02-architecture/schema-ownership.md)
+- [migration-drift.md](02-architecture/migration-drift.md)
+- [edge-functions.md](02-architecture/edge-functions.md)
 
-## Known stale patterns to remove from active docs
+Dated evidence belongs under [02-architecture/snapshots/](02-architecture/snapshots/).
 
-Active documentation should not keep these as current truth:
+### Platform
+[03-platform/README.md](03-platform/README.md)
+
+Use for shared Next.js, CopilotKit, Mastra, Supabase, Gemini, Maps, Stripe, Cloudinary, and runtime integration guidance.
+
+### Domains
+[04-domains/README.md](04-domains/README.md)
+
+Canonical homes:
+- [Events](04-domains/events/)
+- [Venues](04-domains/venues/)
+- [Rentals](04-domains/rentals/)
+- [Restaurants](04-domains/restaurants/)
+- [Cafes and Nightlife](04-domains/cafes-nightlife/)
+- [Trips](04-domains/trips/)
+- [Partners and Sponsors](04-domains/partners/)
+- [Ecommerce](04-domains/ecommerce/)
+
+Legacy domain folders remain only while verified current content is being migrated.
+
+### Design
+[05-design/README.md](05-design/README.md)
+
+Use for current design-system rules, UX patterns, navigation, responsive behavior, and current wireframes.
+
+### Testing
+[06-testing/README.md](06-testing/README.md)
+
+Use for reusable test guidance, QA, release verification, and production smoke procedures.
+
+### Operations
+[07-operations/README.md](07-operations/README.md)
+
+Use for local development, deployment, security operations, observability, runbooks, and troubleshooting.
+
+### Strategy
+[08-strategy/README.md](08-strategy/README.md)
+
+Use for current business, market, revenue, and experiment strategy. Historical research belongs in the archive.
+
+## Legacy migration status
+
+The following content is no longer active documentation:
+
+- `docs/dashboard.md`
+- `docs/task-backlog.md`
+- `docs/todo.md`
+- `docs/linear/`
+- most of `docs/tasks/`
+- `docs/notes/`
+- `docs/upgradeV2/`
+- historical feature audit/evidence/note folders
+- exact duplicate files formerly under `docs/strategy/design/`
+
+These have been archived under:
+
+`docs/_archive/legacy-active-docs-2026-09-18/`
+
+Only exact duplicate files were removed outright. Non-duplicate historical material is preserved for reference.
+
+## Active legacy areas still awaiting consolidation
+
+These remain active temporarily because they contain non-duplicate material that must be reviewed before migration:
+
+- `docs/design/`
+- `docs/ecommerce/`
+- `docs/partners/`
+- `docs/prd/`
+- `docs/real-estate/`
+- `docs/restaurant/`
+- `docs/research/`
+- `docs/strategy/`
+- `docs/wireframes/`
+- `docs/copilotkit-mastra/`
+- `docs/ai-second-brain/`
+
+Do not treat these legacy locations as authoritative when they conflict with canonical docs, merged code, or Linear.
+
+## Stale-content rules
+
+Active docs must not present these as current truth:
 
 - old repository references such as `amo-tech-ai/mdeapp`;
 - assumptions that `/home/sk/mdeai/mdeapp` is the repository root;
-- retired skill names such as `mde-real-estate` and `mde-maps` once the canonical skill stack is merged;
-- hard-coded task status/order that duplicates Linear;
-- stale commit SHAs or readiness percentages presented as evergreen facts;
+- retired skill names such as `mde-real-estate` and `mde-maps`;
+- hard-coded live task status/order that duplicates Linear;
+- stale commit SHAs/readiness percentages presented as evergreen facts;
 - route claims that conflict with current `src/app`.
 
-Historical files under the future `_archive/` may preserve old names and paths when clearly labelled as historical.
+Historical archived files may preserve old names, paths, and status snapshots when clearly historical.
 
-## Documentation work sequence
+## Documentation decision rules
 
-```text
-Task 44 · Define Documentation Architecture            ✅ Done
-Task 45 · Audit Docs Against Current Code              ← current
-Task 46 · Rewrite Core MDE Documentation
-Task 47 · Rewrite Domain Documentation
-Task 48 · Consolidate and Archive Legacy Docs
-Task 49 · Add Documentation Drift Prevention
-```
+Classify docs as:
+
+- CURRENT — accurate and canonical today.
+- UPDATE — useful but contains stale facts.
+- MERGE — useful content duplicated across multiple files.
+- ARCHIVE — historical/superseded but still worth preserving.
+- REMOVE — exact duplicate, generated, temporary, or empty with proof.
+- UNKNOWN-PRESERVE — unclear value; keep until resolved.
+
+## Cleanup progress
+
+| Area | Status |
+|---|---|
+| Canonical folder structure | ✅ Done |
+| Architecture docs | ✅ Current |
+| Root live-status docs | ✅ Archived |
+| Linear exports | ✅ Archived |
+| Session notes | ✅ Archived |
+| UpgradeV2 history | ✅ Archived |
+| Most task-history docs | ✅ Archived |
+| Feature audit/evidence/notes | ✅ Archived where clearly historical |
+| `strategy/design` exact duplicates | ✅ Removed after hash verification |
+| Legacy design/domain/platform consolidation | 🟡 In progress |
+| Drift-prevention checks | 🔵 Next |
 
 Linear project: https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues
 
