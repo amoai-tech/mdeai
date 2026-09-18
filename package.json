@@ -14,6 +14,7 @@
     "check:env": "node scripts/check-env-contract.mjs --mode=build",
     "check:env:ci": "node scripts/check-env-contract.mjs --mode=build --strict",
     "check:env:runtime": "node scripts/check-env-contract.mjs --mode=runtime",
+    "check:env:vercel": "node scripts/check-vercel-env-contract.mjs",
     "lint": "eslint src e2e scripts next.config.ts playwright.config.ts eslint.config.mjs --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
