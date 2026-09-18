@@ -105,18 +105,35 @@ describe("vercel-env-contract — the SAN-1322 condition", () => {
 });
 
 describe("vercel-env-contract — every NEXT_PUBLIC_* must be Config", () => {
-  it("flags a NEXT_PUBLIC_* outside the required contract stored as Sensitive", () => {
-    // Production really stores NEXT_PUBLIC_SITE_URL as Sensitive, so it is
-    // compiled into the client bundle as `undefined`.
+  it("advises, but does not fail, on a NEXT_PUBLIC_* outside the contract stored as Sensitive", () => {
+    // Metadata cannot tell whether a name is read by the client, read only on the
+    // server, or unused — so it must not block a release. In this repo
+    // NEXT_PUBLIC_SITE_URL is server-only and NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY
+    // is unused.
     const { status, out } = withInput([
       ...GOOD,
       { key: "NEXT_PUBLIC_SITE_URL", type: "sensitive", target: ["production", "preview"] },
     ]);
-    expect(out).toContain("other NEXT_PUBLIC_* stored as Secret");
-    expect(out).toContain("SECRET  NEXT_PUBLIC_SITE_URL (type=sensitive)");
-    expect(out).toContain("PUBLIC-SECRET: NEXT_PUBLIC_SITE_URL");
-    expect(out).toContain("FAIL — 1 problem(s)");
-    expect(status).toBe(1);
+    expect(out).toContain("advisory");
+    expect(out).toContain("REVIEW  NEXT_PUBLIC_SITE_URL (type=sensitive)");
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
+  });
+
+  it("passes the real production shape: contract satisfied with two advisories", () => {
+    const { status, out } = withInput([
+      ...GOOD,
+      { key: "NEXT_PUBLIC_SITE_URL", type: "sensitive", target: ["production", "preview"] },
+      {
+        key: "NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY",
+        type: "sensitive",
+        target: ["production", "preview"],
+      },
+    ]);
+    expect(out).toContain("REVIEW  NEXT_PUBLIC_SITE_URL");
+    expect(out).toContain("REVIEW  NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY");
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
   });
 
   it("accepts an extra NEXT_PUBLIC_* stored as Config", () => {

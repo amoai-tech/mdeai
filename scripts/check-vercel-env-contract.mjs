@@ -102,32 +102,42 @@ function apiGet(token, reqPath) {
 }
 
 /**
- * Generic form of the SAN-1322 outage.
+ * Advisory sweep for `NEXT_PUBLIC_*` names *outside* the declared contract.
  *
- * Every `NEXT_PUBLIC_*` name is compiled into the browser bundle at build time,
- * and Vercel can only inline a Config (`encrypted`/`plain`) value. A Secret or
- * Sensitive value is never inlined, so the client silently receives `undefined`
- * and the feature breaks while the deployment still reports READY.
+ * A `NEXT_PUBLIC_*` value is inlined into the browser bundle at build time, and
+ * for this project a Sensitive value did not reach the build: the SAN-1322
+ * outage shipped because `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` was Sensitive, so the
+ * client bundle compiled it to `undefined` while Vercel still reported READY.
  *
- * `REQUIRED_PUBLIC` only covers the names the app is known to need today. This
- * catches the rest, because production also stored `NEXT_PUBLIC_SITE_URL`,
- * `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY`
- * as Sensitive — each one silently unavailable to the client.
+ * That evidence is specific to names the **client** reads. Vercel documents
+ * Sensitive values as readable by application code at runtime, so a Sensitive
+ * `NEXT_PUBLIC_*` that is only read on the server — `NEXT_PUBLIC_SITE_URL` is
+ * read by `src/lib/auth/site-url.ts` from server modules only — or not read at
+ * all (`NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY`) is harmless.
+ *
+ * Env metadata cannot distinguish those cases, and never exposes values, so this
+ * is an advisory rather than a failure. Only the declared contract in
+ * `REQUIRED_PUBLIC` — the names the client genuinely needs — fails the gate.
  */
-function publicSecretFindings(envs) {
+function publicSecretAdvisories(envs) {
   return envs
     .filter((e) => (e.target ?? []).includes("production"))
     .filter((e) => String(e.key).startsWith("NEXT_PUBLIC_"))
     .filter((e) => SECRET_TYPES.has(e.type))
+    .filter((e) => !REQUIRED_PUBLIC_KEYS.has(e.key))
     .map((e) => ({
       key: e.key,
       type: e.type,
       kind: "public-secret",
-      detail: `type=${e.type} — NEXT_PUBLIC_* is inlined at build time, so a secret type compiles it to undefined in the client bundle`,
+      detail: `type=${e.type} — not in the declared client contract; verify the value reaches the client build if any browser code reads it`,
     }));
 }
 
-/** envs: [{ key, type, target: [] }] — no values. */
+/**
+ * The gate itself: only the declared client-build contract can fail a release.
+ *
+ * envs: [{ key, type, target: [] }] — no values.
+ */
 function evaluate(envs) {
   const targetsProduction = (e) => (e.target ?? []).includes("production");
   const find = (key) => envs.find((e) => e.key === key && targetsProduction(e));
@@ -150,15 +160,6 @@ function evaluate(envs) {
         kind: "secret",
         detail: `type=${match.type} — a public variable must be Config (encrypted/plain) or it will not reach the client build`,
       });
-    }
-  }
-
-  // Anything the required contract mentions is already governed above; only
-  // names outside it need the generic sweep, so nothing is reported twice.
-  const seen = new Set(findings.map((f) => f.key));
-  for (const finding of publicSecretFindings(envs)) {
-    if (!REQUIRED_PUBLIC_KEYS.has(finding.key) && !seen.has(finding.key)) {
-      findings.push(finding);
     }
   }
 
@@ -250,16 +251,17 @@ for (const spec of REQUIRED_PUBLIC) {
   else console.log(`  ok      ${match.key} (type=${match.type})`);
 }
 
-// Every other NEXT_PUBLIC_* stored as Secret is silently undefined in the browser.
-const otherPublicSecrets = publicSecretFindings(envs).filter(
-  (f) => !REQUIRED_PUBLIC_KEYS.has(f.key),
-);
-if (otherPublicSecrets.length) {
+// Names outside the declared contract. Sensitive here is worth a look, not a
+// failure: the value may be read only on the server, or not read at all, and
+// metadata cannot tell us which. This never changes the exit code.
+const advisories = publicSecretAdvisories(envs);
+if (advisories.length) {
   console.log("");
-  console.log("  other NEXT_PUBLIC_* stored as Secret (never inlined into the client build):");
-  for (const finding of otherPublicSecrets) {
-    console.log(`  SECRET  ${finding.key} (type=${finding.type})`);
+  console.log("  advisory — NEXT_PUBLIC_* outside the declared client contract, stored as Secret:");
+  for (const advisory of advisories) {
+    console.log(`  REVIEW  ${advisory.key} (type=${advisory.type})`);
   }
+  console.log("          Only a problem if browser code reads it; the client build then sees undefined.");
 }
 
 if (findings.length === 0) {
