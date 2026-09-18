@@ -24,9 +24,13 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).toContain("Select trusted MDE review skills");
     expect(workflow).toContain('github_action_config.auto_improve: "false"');
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
-    expect(workflow).toContain('GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}');
-    expect(workflow).toContain('config.model: "gemini/gemini-3.8-flash"');
-    expect(workflow).not.toContain("OPENAI_KEY:");
+    expect(workflow).toContain('OPENAI__API_BASE: "https://integrate.api.nvidia.com/v1"');
+    expect(workflow).toContain('OPENAI__KEY: ${{ secrets.NVIDIA_API_KEY }}');
+    expect(workflow).toContain('config.model: "openai/nvidia/nemotron-3-ultra-550b-a55b"');
+    expect(workflow).toContain(`config.fallback_models: '["openai/nvidia/nemotron-3-super-120b-a12b"]'`);
+    expect(workflow).toContain('config.custom_model_max_tokens: "32000"');
+    expect(workflow).not.toContain("GOOGLE_AI_STUDIO");
+    expect(workflow).not.toContain("gemini/");
   });
 
   it("keeps policy in repository config with trusted context and restricted mode", () => {
