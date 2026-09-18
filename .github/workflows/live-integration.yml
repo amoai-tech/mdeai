@@ -73,6 +73,36 @@ jobs:
             echo "::error::unexpected Supabase project ref '${ref}'"; exit 1;
           }
 
+      # SAN-1333 — a zero-result search looks identical to a broken search. Assert
+      # the data the rental search depends on actually exists, so an empty table is
+      # reported as a data problem rather than a search/UI regression. This belongs
+      # here, next to the other live checks, not in the deterministic Floor.
+      - name: Require published rental listings to exist
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SERVICE_KEY" || {
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY secret is not configured"; exit 1;
+          }
+          headers=$(curl --silent --show-error --fail -D - -o /dev/null \
+            --get "${SUPABASE_URL}/rest/v1/apartments" \
+            --data-urlencode "select=id" \
+            --data-urlencode "status=eq.active" \
+            --data-urlencode "moderation_status=eq.approved" \
+            --data-urlencode "listing_workflow_status=eq.published" \
+            -H "apikey: ${SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_KEY}" \
+            -H "Prefer: count=exact" \
+            -H "Range: 0-0")
+          count=$(printf '%s' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-range:"{split($2,a,"/"); print a[2]}')
+          echo "published rental listings: ${count:-unknown}"
+          if [ -z "${count}" ] || [ "${count}" -lt 1 ]; then
+            echo "::error::no active+approved+published apartments — every rental search will return zero results"
+            exit 1
+          fi
+
       - name: Live ranking certification
         env:
           LIVE_SUPABASE_TESTS: "1"
