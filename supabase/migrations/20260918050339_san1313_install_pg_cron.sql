@@ -42,15 +42,28 @@ begin
   end if;
 end $$;
 
+-- Matches the official Supabase pg_cron install contract exactly:
+--   https://supabase.com/docs/guides/cron/install
+--
+-- Sequence privileges are deliberately NOT granted:
+--   1. Supabase's documented install omits them; deviating mutates ACLs for no gain.
+--   2. Measured 2026-09-18: `cron.schedule()` SUCCEEDS in a fresh replay while
+--      `has_sequence_privilege('postgres','cron.jobid_seq','USAGE')` is false, because
+--      scheduling goes through the cron schema's own functions rather than a direct
+--      INSERT into cron.job. The privilege is not needed functionally.
+--   3. The grant is INEFFECTIVE, not merely unnecessary. The cron sequences are owned by
+--      `supabase_admin`, and `postgres` is neither superuser, nor a member of that role,
+--      nor a holder of GRANT OPTION on them — so PostgreSQL grants nothing. Verified
+--      locally:
+--          WARNING:  no privileges were granted for "jobid_seq"
+--          WARNING:  no privileges were granted for "runid_seq"
+--          GRANT
+--          has_sequence_privilege('postgres','cron.jobid_seq','USAGE') -> still false
+--      For the record: this does NOT abort a migration — PostgreSQL warns and continues,
+--      so it is dead SQL implying a guarantee it does not provide, not a failure risk.
+--      Removed on those grounds, and to keep the install contract exact.
 grant usage on schema cron to postgres;
 grant all privileges on all tables in schema cron to postgres;
--- Sequences too. Measured 2026-09-18: postgres can ALREADY schedule without this — a
--- `cron.schedule()` probe in a fresh replay succeeded even though
--- `has_sequence_privilege('postgres','cron.jobid_seq','USAGE')` returned false, because
--- postgres bypasses these ACLs. Granted anyway: it costs nothing, keeps the documented
--- contract explicit, and means B2's `cron.schedule()` calls are not relying on an
--- accident of role membership.
-grant all privileges on all sequences in schema cron to postgres;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- ORDERING NOTE — verified, and deliberately NOT "fixed" by editing history
