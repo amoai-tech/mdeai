@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(86);
+select plan(98);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A. The 21 columns exist (production has them; replay did not)
@@ -222,6 +222,13 @@ select is(
 select has_trigger('public', 'leads', 'trg_compute_lead_score', 'G: trg_compute_lead_score exists');
 select trigger_is('public', 'leads', 'trg_compute_lead_score', 'public', 'compute_lead_score',
                   'G: trg_compute_lead_score calls public.compute_lead_score()');
+-- trigger_is above checks the function only; the UPDATE OF column list and the BEFORE
+-- timing are part of the recovered contract too, so assert the definition verbatim.
+select is(
+  (select pg_get_triggerdef(oid) from pg_trigger
+    where tgrelid = 'public.leads'::regclass and tgname = 'trg_compute_lead_score'),
+  'CREATE TRIGGER trg_compute_lead_score BEFORE INSERT OR UPDATE OF email, phone, budget_min, budget_max, metadata ON public.leads FOR EACH ROW EXECUTE FUNCTION compute_lead_score()',
+  'G: trg_compute_lead_score matches the production definition exactly');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- H. Scope guards — Increment A must not overreach
@@ -245,6 +252,75 @@ select is(
     where table_schema = 'public'
       and (table_name, column_name) in (('event_embeddings','id'), ('listing_embeddings','id'), ('restaurant_embeddings','id'))),
   0, 'H: embedding surrogate id columns NOT added (Increment B owns them)');
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- I. Behavioural proof — the recovered scoring trigger actually fires and recomputes
+--
+-- Sections A–H prove the trigger EXISTS with the right definition. They do not prove
+-- it does anything. That distinction is the whole point here: before Increment A a
+-- fresh replay had compute_lead_score() and NO trigger at all, so lead scoring
+-- silently never ran. Asserting the behaviour, not just the object, is what makes
+-- this recovery meaningful.
+--
+-- Weights read from the function body: email 30, phone 40, budget 20
+-- (budget_min OR budget_max), metadata.move_in_date 20,
+-- metadata.ready_to_apply == 'true' 50. Maximum 160.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- I1. Maximal signal set -> 160
+insert into public.leads (email, phone, budget_min, budget_max, metadata)
+values ('san1304a-max@example.test', '+573000000001', 1000000, 2000000,
+        '{"move_in_date":"2026-10-01","ready_to_apply":"true"}'::jsonb);
+
+select is((select score from public.leads where email = 'san1304a-max@example.test'),
+          160.00, 'I: full signal set scores 160');
+select is((select score_breakdown from public.leads where email = 'san1304a-max@example.test'),
+          '{"email":30,"phone":40,"budget":20,"move_in_date":20,"ready_to_apply":50}'::jsonb,
+          'I: full signal set records every component');
+
+-- I2. Email alone -> 30
+insert into public.leads (email) values ('san1304a-min@example.test');
+select is((select score from public.leads where email = 'san1304a-min@example.test'),
+          30.00, 'I: email alone scores 30');
+select is((select score_breakdown from public.leads where email = 'san1304a-min@example.test'),
+          '{"email":30}'::jsonb, 'I: email alone records only the email component');
+
+-- I3. budget_min alone satisfies the OR even with budget_max NULL -> 30 + 20
+insert into public.leads (email, budget_min) values ('san1304a-budget@example.test', 500000);
+select is((select score from public.leads where email = 'san1304a-budget@example.test'),
+          50.00, 'I: budget_min alone earns the budget component (OR semantics)');
+
+-- I4. metadata.move_in_date alone -> 30 + 20
+insert into public.leads (email, metadata)
+values ('san1304a-movein@example.test', '{"move_in_date":"2026-11-01"}'::jsonb);
+select is((select score from public.leads where email = 'san1304a-movein@example.test'),
+          50.00, 'I: metadata.move_in_date scores 20');
+
+-- I5. UPDATE recomputes from scratch — no accumulation, no staleness
+update public.leads set phone = '+573000000002' where email = 'san1304a-min@example.test';
+select is((select score from public.leads where email = 'san1304a-min@example.test'),
+          70.00, 'I: UPDATE adding phone recomputes 30 -> 70');
+
+update public.leads set metadata = '{"ready_to_apply":"true"}'::jsonb
+  where email = 'san1304a-min@example.test';
+select is((select score from public.leads where email = 'san1304a-min@example.test'),
+          120.00, 'I: UPDATE adding ready_to_apply recomputes 70 -> 120');
+select is((select score_breakdown from public.leads where email = 'san1304a-min@example.test'),
+          '{"email":30,"phone":40,"ready_to_apply":50}'::jsonb,
+          'I: recomputed breakdown replaces the old one entirely');
+
+-- I6. Clearing a signal subtracts it -> 120 - 40
+update public.leads set phone = null where email = 'san1304a-min@example.test';
+select is((select score from public.leads where email = 'san1304a-min@example.test'),
+          80.00, 'I: UPDATE clearing phone recomputes 120 -> 80 (no carry-over)');
+
+-- I7. Column scoping is part of the contract: the trigger fires only for
+--     email/phone/budget_min/budget_max/metadata. Writing a sentinel score and then
+--     changing an unrelated column proves it did not fire.
+update public.leads set score = 999 where email = 'san1304a-min@example.test';
+update public.leads set status = 'contacted' where email = 'san1304a-min@example.test';
+select is((select score from public.leads where email = 'san1304a-min@example.test'),
+          999.00, 'I: unrelated-column UPDATE does not recompute (trigger stays column-scoped)');
 
 select * from finish();
 rollback;
