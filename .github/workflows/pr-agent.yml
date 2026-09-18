@@ -3,21 +3,70 @@ name: PR Agent
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  pr_agent_job:
-    if: ${{ github.event.sender.type != 'Bot' }}
+  review:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.sender.type != 'Bot' &&
+      github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: PR Agent
-        uses: the-pr-agent/pr-agent@v0.36.0
+      - name: Checkout trusted repository files for PR-Agent skills
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Select trusted MDE review skills
+        id: reviewer-skills
+        shell: bash
+        run: |
+          required=(
+            .claude/skills/copilotkit-review/SKILL.md
+            .claude/skills/mastra-review/SKILL.md
+            .claude/skills/supabase-review/SKILL.md
+            .claude/skills/maps-review/SKILL.md
+            .claude/skills/stripe-review/SKILL.md
+          )
+          for file in "${required[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo 'paths=[]' >> "$GITHUB_OUTPUT"
+              echo "max_tokens=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo 'paths=["/github/workspace/.claude/skills/copilotkit-review","/github/workspace/.claude/skills/mastra-review","/github/workspace/.claude/skills/supabase-review","/github/workspace/.claude/skills/maps-review","/github/workspace/.claude/skills/stripe-review"]' >> "$GITHUB_OUTPUT"
+          echo "max_tokens=8000" >> "$GITHUB_OUTPUT"
+
+      - name: Review pull request
+        uses: docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"
+          config.fallback_models: '["nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b"]'
+          config.custom_model_max_tokens: "32000"
+          config.propagate_tool_errors: "true"
+          skills.enabled: ${{ steps.reviewer-skills.outputs.enabled }}
+          skills.paths: ${{ steps.reviewer-skills.outputs.paths }}
+          skills.max_skills_tokens: ${{ steps.reviewer-skills.outputs.max_tokens }}
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "false"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
