@@ -23,6 +23,9 @@ Use this order when documents disagree:
 | Product requirements | [`../prd.md`](../prd.md) |
 | Product strategy and sequencing | [`../roadmap.md`](../roadmap.md) |
 | System architecture | [`02-architecture/system-overview.md`](02-architecture/system-overview.md) |
+| CopilotKit + Mastra platform | [`03-platform/copilotkit-mastra/README.md`](03-platform/copilotkit-mastra/README.md) |
+| CopilotKit + Mastra official reference pack | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) |
+| CopilotKit + Mastra technical roadmap | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) |
 | Documentation migration/audit status | [`index-docs.md`](index-docs.md) |
 | Live execution status | [Linear — MDE AI](https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues) |
 
@@ -34,6 +37,7 @@ docs/
 ├── 01-product/               # product behavior, journeys, requirements
 ├── 02-architecture/          # system architecture and durable decisions
 ├── 03-platform/              # shared technology and platform capabilities
+│   └── copilotkit-mastra/    # canonical agent UI/runtime integration docs
 ├── 04-domains/               # events, rentals, venues, discovery, trips, partners
 ├── 05-design/                # design system, UX patterns, responsive behavior
 ├── 06-testing/               # test strategy, release verification, QA
@@ -78,12 +82,18 @@ Shared platform capabilities such as:
 
 - Next.js + React;
 - CopilotKit / AG-UI;
-- Mastra agents, tools, workflows, and memory;
+- Mastra agents, tools, workflows, memory, evaluation, and observability;
 - Supabase Auth/Postgres/RLS;
 - Gemini;
 - Google Maps / Places;
 - payment and commerce integrations;
 - shared observability and runtime services.
+
+Canonical CopilotKit + Mastra package:
+
+- [`copilotkit-mastra/README.md`](03-platform/copilotkit-mastra/README.md) — current runtime contract;
+- [`copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) — official docs/examples/templates;
+- [`copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) — durable capability sequencing.
 
 Platform docs describe capabilities and boundaries, not feature backlog.
 
