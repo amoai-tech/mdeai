@@ -41,6 +41,20 @@ Domain: `events`, `real-estate`.
 
 Workflow: `using-mde-skills`, `tasks`, `systematic-debugging`, `testing`, `tdd`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
 
+## Graphify repo intelligence
+
+Before broad repository searching on substantial code tasks:
+
+1. Check whether `graphify-out/graph.json` exists and is current.
+2. Prefer Graphify for exact symbols, dependency paths, affected-code discovery, and blast-radius analysis.
+3. Use `npm run graphify:query -- "<question>"`, `npm run graphify:explain -- "<symbol>"`, and `npm run graphify:path -- "<A>" "<B>"` before broad raw-file search when they fit the question.
+4. Use normal search when the question is conceptual, Graphify has no useful match, or runtime behavior must be verified.
+5. Never treat static graph results alone as proof that code is dead or safe to delete.
+
+## Ponytail engineering rule
+
+Before writing custom code, stop at the first rung that safely solves the task: skip unnecessary work; reuse existing repository code; prefer the standard library or native platform; reuse an installed dependency; use a small direct change; only then add the minimum new implementation required. Never reduce validation, error handling, security, accessibility, data integrity, or required tests merely to reduce code size.
+
 ## Shared invariants
 
 Do not duplicate detailed operating rules here when a canonical skill owns them. Load the relevant skill and follow its current instructions.
