@@ -39,8 +39,9 @@ const triggers = on as {
   schedule?: unknown;
   workflow_dispatch?: unknown;
 };
-const job = Object.values(doc.jobs ?? {})[0];
-const steps = job?.steps ?? [];
+const jobs = Object.values(doc.jobs ?? {});
+if (jobs.length === 0) throw new Error("prod-synthetic-smoke.yml declares no jobs");
+const steps = jobs[0].steps ?? [];
 
 const stepUsing = (uses: string) => steps.find((s) => s.uses?.startsWith(uses));
 

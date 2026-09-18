@@ -114,6 +114,51 @@ describe("vercel-env-contract — the SAN-1322 condition", () => {
   });
 });
 
+describe("vercel-env-contract — every NEXT_PUBLIC_* must be Config", () => {
+  it("flags a NEXT_PUBLIC_* outside the required contract stored as Sensitive", () => {
+    // Production really stores NEXT_PUBLIC_SITE_URL as Sensitive, so it is
+    // compiled into the client bundle as `undefined`.
+    const { status, out } = withInput([
+      ...GOOD,
+      { key: "NEXT_PUBLIC_SITE_URL", type: "sensitive", target: ["production", "preview"] },
+    ]);
+    expect(out).toContain("other NEXT_PUBLIC_* stored as Secret");
+    expect(out).toContain("SECRET  NEXT_PUBLIC_SITE_URL (type=sensitive)");
+    expect(out).toContain("PUBLIC-SECRET: NEXT_PUBLIC_SITE_URL");
+    expect(out).toContain("FAIL — 1 problem(s)");
+    expect(status).toBe(1);
+  });
+
+  it("accepts an extra NEXT_PUBLIC_* stored as Config", () => {
+    const { status, out } = withInput([
+      ...GOOD,
+      { key: "NEXT_PUBLIC_SITE_URL", type: "encrypted", target: ["production"] },
+    ]);
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
+  });
+
+  it("ignores a preview-only NEXT_PUBLIC_* secret", () => {
+    const { status, out } = withInput([
+      ...GOOD,
+      { key: "NEXT_PUBLIC_SITE_URL", type: "sensitive", target: ["preview"] },
+    ]);
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
+  });
+
+  it("does not report a required fallback name whose primary is satisfied", () => {
+    // The publishable key meets the contract, so the legacy alias must not be
+    // counted as a second failure.
+    const { status, out } = withInput([
+      ...GOOD,
+      { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", type: "sensitive", target: ["production"] },
+    ]);
+    expect(out).toContain("vercel-env-contract: OK");
+    expect(status).toBe(0);
+  });
+});
+
 describe("vercel-env-contract — report safety", () => {
   it("prints names and types but never a value", () => {
     const secretValue = "supersecret-value-must-not-appear";

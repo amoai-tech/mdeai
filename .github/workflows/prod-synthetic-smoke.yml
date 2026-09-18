@@ -47,9 +47,12 @@ jobs:
       # Publishes the `production-certification` commit status for the dispatched
       # SHA from its post step, based on the final workflow outcome. Must be an
       # early step, and only for repository_dispatch (one status per deployment).
+      # Pinned to the commit `v1` resolves to, matching the checkout action below.
+      # A movable tag on a third-party action is a supply-chain risk: whoever
+      # controls the tag controls code that runs with `statuses: write`.
       - name: Publish deployment certification status
         if: ${{ github.event_name == 'repository_dispatch' }}
-        uses: vercel/repository-dispatch/actions/status@v1
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: production-certification
           github_token: ${{ secrets.GITHUB_TOKEN }}

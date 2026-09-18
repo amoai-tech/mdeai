@@ -56,6 +56,15 @@ const REQUIRED_PUBLIC = [
 /** Vercel types that cannot satisfy a public, build-time-inlined variable. */
 const SECRET_TYPES = new Set(["secret", "sensitive"]);
 
+/**
+ * Every name the required contract mentions — primary or fallback. The required
+ * loop already governs these, so the generic sweep below ignores them and only
+ * reports `NEXT_PUBLIC_*` names outside the contract.
+ */
+const REQUIRED_PUBLIC_KEYS = new Set(
+  REQUIRED_PUBLIC.flatMap((spec) => [spec.key, ...(spec.oneOf ?? [])]),
+);
+
 function readToken() {
   if (process.env.VERCEL_TOKEN) return process.env.VERCEL_TOKEN;
   const candidates = [
@@ -92,6 +101,32 @@ function apiGet(token, reqPath) {
   });
 }
 
+/**
+ * Generic form of the SAN-1322 outage.
+ *
+ * Every `NEXT_PUBLIC_*` name is compiled into the browser bundle at build time,
+ * and Vercel can only inline a Config (`encrypted`/`plain`) value. A Secret or
+ * Sensitive value is never inlined, so the client silently receives `undefined`
+ * and the feature breaks while the deployment still reports READY.
+ *
+ * `REQUIRED_PUBLIC` only covers the names the app is known to need today. This
+ * catches the rest, because production also stored `NEXT_PUBLIC_SITE_URL`,
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY`
+ * as Sensitive — each one silently unavailable to the client.
+ */
+function publicSecretFindings(envs) {
+  return envs
+    .filter((e) => (e.target ?? []).includes("production"))
+    .filter((e) => String(e.key).startsWith("NEXT_PUBLIC_"))
+    .filter((e) => SECRET_TYPES.has(e.type))
+    .map((e) => ({
+      key: e.key,
+      type: e.type,
+      kind: "public-secret",
+      detail: `type=${e.type} — NEXT_PUBLIC_* is inlined at build time, so a secret type compiles it to undefined in the client bundle`,
+    }));
+}
+
 /** envs: [{ key, type, target: [] }] — no values. */
 function evaluate(envs) {
   const targetsProduction = (e) => (e.target ?? []).includes("production");
@@ -107,11 +142,22 @@ function evaluate(envs) {
     if (SECRET_TYPES.has(match.type)) {
       findings.push({
         key: match.key,
+        type: match.type,
         kind: "secret",
         detail: `type=${match.type} — a public variable must be Config (encrypted/plain) or it will not reach the client build`,
       });
     }
   }
+
+  // Anything the required contract mentions is already governed above; only
+  // names outside it need the generic sweep, so nothing is reported twice.
+  const seen = new Set(findings.map((f) => f.key));
+  for (const finding of publicSecretFindings(envs)) {
+    if (!REQUIRED_PUBLIC_KEYS.has(finding.key) && !seen.has(finding.key)) {
+      findings.push(finding);
+    }
+  }
+
   return findings;
 }
 
@@ -153,6 +199,18 @@ for (const spec of REQUIRED_PUBLIC) {
   if (!match) console.log(`  MISSING ${spec.key}`);
   else if (SECRET_TYPES.has(match.type)) console.log(`  SECRET  ${match.key} (type=${match.type})`);
   else console.log(`  ok      ${match.key} (type=${match.type})`);
+}
+
+// Every other NEXT_PUBLIC_* stored as Secret is silently undefined in the browser.
+const otherPublicSecrets = publicSecretFindings(envs).filter(
+  (f) => !REQUIRED_PUBLIC_KEYS.has(f.key),
+);
+if (otherPublicSecrets.length) {
+  console.log("");
+  console.log("  other NEXT_PUBLIC_* stored as Secret (never inlined into the client build):");
+  for (const finding of otherPublicSecrets) {
+    console.log(`  SECRET  ${finding.key} (type=${finding.type})`);
+  }
 }
 
 if (findings.length === 0) {
