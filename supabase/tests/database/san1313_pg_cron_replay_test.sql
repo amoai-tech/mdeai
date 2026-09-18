@@ -2,7 +2,13 @@
 --
 -- Proves the extension and schema exist after a fresh replay, that the documented
 -- privileges are present, and — equally important — that B1 changed NOTHING else:
--- no agent_jobs table, no agent_jobs functions touched, and no schedules introduced.
+-- no agent_jobs table and no schedules introduced.
+--
+-- CROSS-TASK EDIT (2026-09-18): assertion 7 originally pinned "the 8 dead agent_jobs
+-- functions are still present", which was B1's way of proving it had not overreached.
+-- SAN-1313 Migration A now deliberately drops those 8, so the replay contract has been
+-- flipped to the post-Migration-A truth: 0 remain. Migration A owns that outcome; this
+-- file still pins that B1 itself created none of them and resurrected no table.
 --
 -- Run with: supabase test db
 begin;
@@ -50,7 +56,7 @@ select is(
                                 'cleanup_expired_agent_jobs','release_stale_agent_job_locks',
                                 'update_agent_job_progress','broadcast_agent_jobs_changes',
                                 'realtime_broadcast_agent_jobs'])),
-  8, 'B1: the 8 dead agent_jobs functions are UNTOUCHED (still 8; dropping is Migration A)');
+  0, 'B1/A: 0 dead agent_jobs functions remain (B1 added none; Migration A dropped all 8)');
 
 select is(
   (select count(*)::int from cron.job),
