@@ -27,7 +27,6 @@ glob = [
   "*.db-wal",
   "package-lock.json",
   "commerce/mercur/node_modules/**",
-  ".claude/skills/**",
   ".agents/**"
 ]
 
