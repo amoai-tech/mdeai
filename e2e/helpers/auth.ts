@@ -142,7 +142,8 @@ export async function signInAsOnOrigin(
   origin: string,
   email = QA_HOST_EMAIL,
 ): Promise<Session> {
-  const parsed = new URL(origin);
+  // Accept a bare host as well as a full origin; default to https.
+  const parsed = new URL(origin.includes("://") ? origin : `https://${origin}`);
   const session = await getTestSession(email);
   await injectSession(page.context(), session, {
     host: parsed.hostname,

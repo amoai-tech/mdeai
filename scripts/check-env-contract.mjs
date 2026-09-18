@@ -92,7 +92,8 @@ const isProductionBuild = mode === "build" && vcelEnv === "production";
 const strict = mode === "runtime" || isProductionBuild || forceStrict;
 
 const required = mode === "build" ? BUILD_CLIENT : RUNTIME;
-const optionalForMode = mode === "build" ? BUILD_CLIENT.filter((s) => s.productionOnly) : [];
+// The tier this invocation does not enforce, reported for operator context.
+const otherTier = mode === "build" ? RUNTIME : BUILD_CLIENT;
 
 const failures = [];
 const warnings = [];
@@ -119,10 +120,13 @@ for (const spec of required) {
   }
 }
 
-if (optionalForMode.length && mode === "runtime") {
-  console.log("");
-  console.log("not required in this mode (checked at build time):");
-  for (const spec of optionalForMode) console.log(`  prod    ${spec.name}`);
+console.log("");
+console.log(
+  `not enforced in this mode (${mode === "build" ? "runtime server" : "build-time client"} tier):`,
+);
+for (const spec of otherTier) {
+  const note = mode === "build" ? "checked at deploy/ops time" : "already compiled into the build";
+  console.log(`  ${present(spec.name) ? "set " : "unset"}   ${spec.name} — ${note}`);
 }
 
 console.log("");
