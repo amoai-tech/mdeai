@@ -1,5 +1,11 @@
 # Ecommerce
 
-Canonical home for current Ecommerce domain documentation where the feature is active or intentionally planned.
+Canonical documentation for MDE AI commerce and marketplace behavior. Linear owns live implementation tasks and priorities.
 
-Separate implemented capabilities from future marketplace strategy.
+## Current documents
+- [Product](product.md)
+- [Architecture](architecture.md)
+- [API contract](api-contract.md)
+- [Environment](environment.md)
+
+Historical commerce task specs, audits, repository reviews, recipes, superseded roadmaps, and material requiring link/content reconciliation are archived under `docs/_archive/`.

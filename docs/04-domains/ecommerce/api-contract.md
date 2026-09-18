@@ -2,8 +2,8 @@
 
 **Task:** SAN-725 · ECOM-C-022  
 **Decision:** **Option B — Policy** (no `*seller.reviews*` until reviews are seeded)  
-**ADR:** [001-standalone-mercur.md](../adr/001-standalone-mercur.md)  
-**Evidence:** [ecom-c-022-seller-reviews-field-mask.md](../evidence/2026-06-08/ecom-c-022-seller-reviews-field-mask.md)
+**ADR:** [001-standalone-mercur.md](architecture.md)  
+**Evidence:** [ecom-c-022-seller-reviews-field-mask.md](../../_archive/legacy-active-docs-2026-09-18/feature-history/ecommerce/evidence/2026-06-08/ecom-c-022-seller-reviews-field-mask.md)
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-06-07  
-**Linear:** [SAN-629](https://linear.app/sanjiovani/issue/SAN-629) · **Gate:** [ECOM-C-018](../tasks/ECOM-C-018-core-commerce-exit-gate.md)
+**Linear:** [SAN-629](https://linear.app/sanjiovani/issue/SAN-629) · **Gate:** [ECOM-C-018](../../_archive/legacy-active-docs-2026-09-18/consolidation-task-128/ecommerce/tasks/ECOM-C-018-core-commerce-exit-gate.md)
 
 ## Context
 
