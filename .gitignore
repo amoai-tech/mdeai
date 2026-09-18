@@ -1,7 +1,12 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+# Unanchored by design: with `output: "standalone"` in next.config.ts, `next build`
+# file-traces dependencies and copies them to `<project>/<checkout-name>/node_modules/...`
+# whenever the checkout's own node_modules resolves outside the project directory
+# (e.g. a linked worktree whose node_modules is a symlink). Those copies are build
+# output and must never be committed.
+node_modules
 /.pnp
 .pnp.*
 .yarn/*

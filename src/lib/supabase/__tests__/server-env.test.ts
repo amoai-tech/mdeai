@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { firstPresent } from "@/lib/first-present";
 import {
   getSupabaseServerAnonEnv,
   getSupabaseServerAnonKey,
@@ -136,5 +137,61 @@ describe("getSupabaseServiceEnv", () => {
       url: PUBLIC_URL,
       serviceRoleKey: SECRET_KEY,
     });
+  });
+
+  it("falls through a blank privileged key", () => {
+    env.NEXT_PUBLIC_SUPABASE_URL = PUBLIC_URL;
+    env.SUPABASE_SERVICE_ROLE_KEY = "";
+    env.SUPABASE_SECRET_KEY = SECRET_KEY;
+    expect(getSupabaseServiceEnv()).toEqual({
+      url: PUBLIC_URL,
+      serviceRoleKey: SECRET_KEY,
+    });
+  });
+});
+
+/**
+ * Regression: a Sensitive Vercel variable can be present with an EMPTY value, and
+ * `"" ?? fallback` returns `""`. The first version of this module used `??`, so an
+ * empty `SUPABASE_ANON_KEY` stopped the chain before the inlined publishable key
+ * and production kept serving fixtures behind HTTP 200.
+ */
+describe("blank and whitespace values count as absent", () => {
+  it("falls through an empty SUPABASE_ANON_KEY to the publishable key", () => {
+    env.SUPABASE_ANON_KEY = "";
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = PUBLISHABLE;
+    expect(getSupabaseServerAnonKey()).toBe(PUBLISHABLE);
+  });
+
+  it("falls through a whitespace-only SUPABASE_ANON_KEY", () => {
+    env.SUPABASE_ANON_KEY = "   ";
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = PUBLISHABLE;
+    expect(getSupabaseServerAnonKey()).toBe(PUBLISHABLE);
+  });
+
+  it("falls through an empty SUPABASE_URL to the public url", () => {
+    env.SUPABASE_URL = "";
+    env.NEXT_PUBLIC_SUPABASE_URL = PUBLIC_URL;
+    expect(getSupabaseServerUrl()).toBe(PUBLIC_URL);
+  });
+
+  it("resolves the exact production shape: blank sensitive names, public Config present", () => {
+    // Vercel: SUPABASE_ANON_KEY present but empty; NEXT_PUBLIC_* inlined literals.
+    env.SUPABASE_URL = "";
+    env.SUPABASE_ANON_KEY = "";
+    env.NEXT_PUBLIC_SUPABASE_URL = PUBLIC_URL;
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = PUBLISHABLE;
+    expect(getSupabaseServerAnonEnv()).toEqual({ url: PUBLIC_URL, anonKey: PUBLISHABLE });
+  });
+
+  it("trims surrounding whitespace from a usable value", () => {
+    env.NEXT_PUBLIC_SUPABASE_URL = PUBLIC_URL;
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = `  ${PUBLISHABLE}  `;
+    expect(getSupabaseServerAnonEnv()).toEqual({ url: PUBLIC_URL, anonKey: PUBLISHABLE });
+  });
+
+  it("firstPresent skips blanks and returns undefined when all are blank", () => {
+    expect(firstPresent("", "  ", undefined, "value")).toBe("value");
+    expect(firstPresent("", "   ", undefined)).toBeUndefined();
   });
 });

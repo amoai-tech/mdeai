@@ -18,12 +18,26 @@
  * into the browser bundle by design — so server code accepts either name. This
  * mirrors the fallback that `service-env.ts` and `user-scoped.ts` already used.
  *
+ * Blank values
+ * ------------
+ * `??` is not sufficient for a fallback chain fed by Vercel. A Sensitive variable
+ * can be present with an *empty* value, and `"" ?? fallback` returns `""`, which
+ * is falsy — so the chain stops on a blank instead of falling through to a
+ * usable value. That is exactly how the first version of this module still
+ * returned `null` in production: `SUPABASE_ANON_KEY` exists in Vercel with an
+ * empty value, so the inlined publishable key was never reached and every
+ * search kept serving fixtures behind HTTP 200.
+ *
+ * `firstPresent` therefore skips blank and whitespace-only values, matching the
+ * `DATABASE_URL` hardening in `src/mastra/lib/storage.ts`.
+ *
  * Server-only: do not import from client components.
  */
+import { firstPresent } from "@/lib/first-present";
 
 /** Server-only name first, then the name Vercel actually injects. */
 export function getSupabaseServerUrl(): string | undefined {
-  return process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return firstPresent(process.env.SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_URL);
 }
 
 /**
@@ -31,10 +45,10 @@ export function getSupabaseServerUrl(): string | undefined {
  * `getSupabaseEnv()` in `env.ts` and `service-env.ts`.
  */
 export function getSupabaseServerAnonKey(): string | undefined {
-  return (
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  return firstPresent(
+    process.env.SUPABASE_ANON_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
 }
 
