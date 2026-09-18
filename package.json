@@ -42,6 +42,7 @@
     "verify:task": "node scripts/verify-task.mjs",
     "verify:partner-schema": "node --env-file=.env.local scripts/verify-partner-schema-gate.mjs",
     "check:mastra": "node scripts/check-mastra.mjs",
+    "check:function-acl": "node scripts/check-function-acl-optin.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit": "npm audit --audit-level=high",
