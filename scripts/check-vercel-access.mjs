@@ -58,7 +58,7 @@ async function apiGet(path) {
 }
 
 const failures = [];
-function require(condition, message) {
+function must(condition, message) {
   if (!condition) failures.push(message);
   return condition;
 }
@@ -70,7 +70,7 @@ try {
   console.log("vercel-access-check");
   console.log(`  teams visible to this credential : ${teams.length}`);
 
-  if (!require(team, `team '${TEAM_SLUG}' is not visible to this credential`)) {
+  if (!must(team, `team '${TEAM_SLUG}' is not visible to this credential`)) {
     // Nothing further is meaningful without the team.
     console.log("");
     for (const f of failures) console.error(`  FAIL: ${f}`);
@@ -78,7 +78,7 @@ try {
   }
 
   console.log(`  team '${TEAM_SLUG}' id              : ${team.id}`);
-  require(
+  must(
     team.id === EXPECTED_TEAM_ID,
     `team '${TEAM_SLUG}' is ${team.id}, expected ${EXPECTED_TEAM_ID}`,
   );
@@ -87,7 +87,7 @@ try {
   const project = projects.find((p) => p.id === EXPECTED_PROJECT_ID);
   console.log(`  projects in team                 : ${projects.length}`);
 
-  if (!require(project, `project ${EXPECTED_PROJECT_ID} is not visible in team '${TEAM_SLUG}'`)) {
+  if (!must(project, `project ${EXPECTED_PROJECT_ID} is not visible in team '${TEAM_SLUG}'`)) {
     console.log("");
     for (const f of failures) console.error(`  FAIL: ${f}`);
     process.exit(1);
@@ -96,11 +96,11 @@ try {
   console.log(`  project id                       : ${project.id}`);
   console.log(`  project name                     : ${project.name}`);
   console.log(`  framework                        : ${project.framework}`);
-  require(
+  must(
     project.name === PROJECT_NAME,
     `project name is '${project.name}', expected '${PROJECT_NAME}'`,
   );
-  require(
+  must(
     project.framework === EXPECTED_FRAMEWORK,
     `framework is '${project.framework}', expected '${EXPECTED_FRAMEWORK}' (a 'vite' project named mdeai exists in another account)`,
   );
@@ -109,7 +109,7 @@ try {
   const detail = await apiGet(`/v9/projects/${project.id}/domains?teamId=${team.id}`);
   const domains = (detail.domains ?? []).map((d) => d.name);
   console.log(`  domains                          : ${domains.join(", ") || "(none)"}`);
-  require(
+  must(
     domains.includes(EXPECTED_DOMAIN),
     `project does not own '${EXPECTED_DOMAIN}'`,
   );
@@ -118,7 +118,7 @@ try {
     `/v6/deployments?projectId=${project.id}&teamId=${team.id}&target=production&limit=1`,
   );
   const current = (deployments ?? [])[0];
-  if (!require(current, "no Production deployment found for this project")) {
+  if (!must(current, "no Production deployment found for this project")) {
     console.log("");
     for (const f of failures) console.error(`  FAIL: ${f}`);
     process.exit(1);
@@ -134,11 +134,11 @@ try {
   console.log(`    git ref                        : ${current.meta?.githubCommitRef ?? "(none)"}`);
   console.log(`    created                        : ${new Date(current.created).toISOString()}`);
 
-  require(current.state === "READY", `current Production deployment is ${current.state}, not READY`);
+  must(current.state === "READY", `current Production deployment is ${current.state}, not READY`);
 
   if (expectSha) {
     console.log(`    expected sha                   : ${expectSha}`);
-    require(
+    must(
       sha === expectSha,
       `Production is serving ${sha}, expected ${expectSha} — refusing to certify a stale deployment`,
     );
