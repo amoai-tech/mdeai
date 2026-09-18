@@ -250,17 +250,33 @@ export async function sendConciergeMessage(page: Page, text: string) {
   await composerCleared(page, 6_000);
 }
 
-/** CopilotKit clears the composer once it accepts a message. */
+/**
+ * CopilotKit clears the composer once it accepts a message, so an empty composer
+ * is the acceptance signal.
+ *
+ * Native `expect` assertions retry for us and — critically — they *fail* rather
+ * than pass when the element is unreadable (detached, or not a form control).
+ * Reading the value as `inputValue().catch(() => "")` inverted that: an
+ * unavailable composer looked empty, an empty composer looked accepted, and the
+ * retry was skipped — so the dropped submit this helper exists to catch could
+ * still pass unnoticed. Unreadable must mean "not accepted", never "sent".
+ */
 async function composerCleared(page: Page, timeout: number): Promise<boolean> {
   const input = page
     .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
     .first();
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    if ((await input.inputValue().catch(() => "")) === "") return true;
-    await page.waitForTimeout(250);
+  // The shared selector also matches `role="textbox"`, which can be a
+  // contenteditable element that `toHaveValue` rejects.
+  const isFormControl = await input
+    .evaluate((el) => ["TEXTAREA", "INPUT"].includes(el.tagName))
+    .catch(() => false);
+  try {
+    if (isFormControl) await expect(input).toHaveValue("", { timeout });
+    else await expect(input).toHaveText("", { timeout });
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 export async function waitForRentalCards(page: Page) {
@@ -397,13 +413,20 @@ export const RESTAURANT_FAST_PATH_QUERY = "suggest restaurants medellin";
 export async function waitForRestaurantCards(page: Page) {
   const panel = page.locator('[data-testid="restaurant-fast-path-panel"]');
   const card = page.locator('[data-testid="restaurant-card"]').first();
-  try {
+  const waitForCards = async () => {
     await panel.waitFor({ state: "visible", timeout: 90_000 });
     await card.waitFor({ state: "visible", timeout: 30_000 });
+  };
+  try {
+    await waitForCards();
   } catch {
-    throw new Error(
-      "Restaurant fast-path cards did not render — ensure UX-036 feat slice is on disk and dev server restarted.",
-    );
+    // Same recovery shape as waitForRentalCards/waitForEventCards. A fast-path
+    // turn issues no CopilotKit request, so a dropped submit surfaces here as
+    // missing cards rather than as an agent error. If this second attempt also
+    // times out, the caller sees Playwright's own timeout, which says what was
+    // missing — no local-dev advice that is meaningless against production.
+    await sendConciergeMessage(page, RESTAURANT_FAST_PATH_QUERY);
+    await waitForCards();
   }
 }
 
