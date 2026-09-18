@@ -31,3 +31,21 @@ npm run test:mastra
 ```
 
 Also run repository-relative Markdown link validation over all changed documentation files.
+
+## Post-rebase verification — 2026-09-18
+
+Rebased the PR branch onto current `origin/main` (`2a5d3995c1558581c4913465c0efa22c769e9907`) with no conflicts, then reran the repository floor locally.
+
+Fresh results:
+
+- `git diff origin/main...HEAD --check` — PASS
+- `npm run floor` — PASS / exit 0
+  - lint — PASS
+  - typecheck — PASS
+  - production build — PASS
+  - full Vitest suite — 233 files passed / 2 skipped; 1,259 tests passed / 12 skipped
+  - `check:mastra` — PASS
+  - `npm audit --audit-level=critical` — PASS (0 critical; lower-severity findings remain outside this docs-only PR)
+- `npm run test:mastra` — 54 files passed / 2 skipped; 293 tests passed / 12 skipped
+
+Known non-blocking build warning remains: Next.js reports the `middleware` convention as deprecated in favor of `proxy`; this PR does not modify runtime routing.
