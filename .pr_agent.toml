@@ -3,7 +3,7 @@
 
 [config]
 git_provider = "github"
-repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md"]
+repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md", "package.json"]
 repo_context_from_default_branch = true
 repo_context_max_lines = 500
 restricted_mode = true
@@ -12,7 +12,7 @@ propagate_tool_errors = true
 
 [skills]
 enabled = true
-max_skills_tokens = 8000
+max_skills_tokens = 6000
 
 
 [ignore]
@@ -40,35 +40,45 @@ require_merge_recommendation = true
 require_priority_files = true
 publish_error_details = true
 persistent_comment = true
-persistent_finding_state = false
+persistent_finding_state = true
 num_max_findings = 6
 enable_review_coverage_footer = true
 enable_large_pr_chunking = true
 max_number_of_calls = 3
+minimal_commits_for_incremental_review = 0
+minimal_minutes_for_incremental_review = 0
 extra_instructions = """
-Act as a forensic senior engineer reviewing production MDE code.
+Act as a forensic senior engineer reviewing production MDE code. Deterministic CI and human review remain authoritative.
 
-Prioritize only material findings: correctness defects; authentication, authorization, RLS, tenant or user isolation failures; data-integrity or migration failures; CI/build/test failures; broken retry, replay or idempotency behavior; Mastra RequestContext, workflow, HITL, memory or persistence defects; CopilotKit/AG-UI runtime regressions; Google Maps/Places grounding, key-boundary or billable-call regressions; Stripe payment/webhook safety defects; Next.js server/client or secret-boundary violations; and missing deterministic proof for high-risk changes.
+Apply these universal checks in order on every PR: Outcome, Truth, Reuse, Architecture, Security, Data integrity, Failure modes, Integration correctness, Real workflow, Proof. Verify the requested outcome against current repository evidence; distrust stale PR prose. Inspect unchanged surrounding callers, contracts, tests, and configuration when needed to prove integration behavior, but report only defects introduced or exposed by this PR.
 
-Do not report style-only suggestions, subjective preferences, speculative problems without a realistic failure scenario, or issues unrelated to changed code.
+Before safe_to_merge, perform an adversarial falsification pass: assume the PR is subtly wrong and try to falsify its claims. Search for false-green tests, silent skips, exit-code mistakes, missing negative tests, stale assumptions, permission checks in the wrong layer, retry/replay/concurrency duplicate effects, partial writes, and incorrectly named env vars, APIs, RPCs, webhooks, events, provider IDs, or schemas.
 
-Use changes_required only when at least one material finding proves a changed-code defect, violated safety or compatibility invariant, failed required deterministic proof, or realistic production failure that must be fixed before merge. Keep advisory observations out of key_issues_to_review.
+A green test is evidence only when it exercises the changed failure path. Missing deterministic negative proof is material for security, authorization/RLS, payments, migrations, release/deployment gates, and irreversible side effects.
+
+Prioritize findings in this order: Security → data integrity → auth/RLS/tenancy → production blockers → broken user journeys → integrations/payments → reliability/retries/concurrency → version/API/configuration → performance/cost → cleanup. Do not report style-only suggestions, subjective preferences, or speculative problems without a realistic failure scenario.
+
+Use changes_required only when at least one material finding proves a changed-code defect, violated safety/compatibility invariant, failed required deterministic proof, or realistic production failure that must be fixed before merge. Keep advisory observations out of key_issues_to_review.
 
 Reviewer skills are loaded only from github.event.pull_request.base.sha; do not flag that trusted-base checkout as a defect. Never trust browser-supplied user, tenant, thread, run, payment, place, or resource identifiers as authorization by themselves. Do not invent repository state, API behavior, coordinates, place IDs, commands, or test results.
 
-For EVERY finding, structure issue_content exactly with these sections:
+For dependency/API/version claims, use only evidence present in the diff or trusted repository context such as package.json. If proof requires running code, reading package internals not in context, or browsing external docs, request deterministic verification instead of asserting a merge-blocking incompatibility.
+
+For EVERY finding, structure issue_content with these sections:
 Severity: BLOCKER | HIGH | MEDIUM | LOW
-Problem: State the concrete defect in plain English.
-Why it matters: Describe the actual user, security, data, cost, CI, payment, or production consequence.
-Evidence: Identify the changed code, configuration, test, or invariant that proves the concern.
-Failure scenario: Describe the smallest realistic sequence that triggers the problem.
-Fix: Give the smallest safe implementation fix, preferring existing MDE patterns and verified current APIs.
-Verification: Give the cheapest decisive existing test or repository command proving the fix.
-Expected result: State the observable result that proves the defect is fixed.
+Problem: concrete defect.
+Impact: actual user/security/data/cost/CI/payment/production consequence.
+Root cause: why the defect exists.
+Evidence: changed code/config/test/invariant proving the concern.
+Failure scenario: smallest realistic trigger sequence.
+Fix: smallest safe implementation fix using existing MDE patterns.
+Test: cheapest decisive deterministic verification.
+Expected result: observable proof the defect is fixed.
+Status: changes_required or advisory.
 
-For BLOCKER or HIGH findings, explain why the PR must not merge before resolution. For authorization or RLS findings, include a User A vs User B or tenant A vs tenant B denial proof. For payment/replay findings, require duplicate-delivery or retry proof. For Maps/Places findings, distinguish grounded provider data from invented data and identify avoidable billable calls. For dependency/API findings, verify installed package source/types or current official documentation before asserting incompatibility.
+For BLOCKER/HIGH findings, explain why merge must wait. For authorization/RLS findings, require User A vs User B or tenant A vs tenant B denial proof. For payment/replay findings, require duplicate-delivery or retry proof. For Maps/Places findings, distinguish grounded provider data from invented data and identify avoidable billable calls.
 
-Rank findings by severity and production impact. Return at most 6 material findings. Deterministic CI and human review remain authoritative.
+Return at most 6 material findings.
 """
 
 [pr_code_suggestions]

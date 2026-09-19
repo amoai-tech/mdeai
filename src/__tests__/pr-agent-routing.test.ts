@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+import { selectSkills } from "../../scripts/select-pr-agent-skills.mjs";
+
+const names = (files: string[]) => selectSkills(files).skills;
+
+describe("SAN-1312 PR-Agent changed-file routing", () => {
+  it("always loads universal code review and no irrelevant specialist for docs", () => {
+    expect(names(["README.md"])).toEqual(["code-review"]);
+  });
+
+  it("routes Supabase changes", () => {
+    expect(names(["supabase/migrations/202609190001_test.sql"])).toEqual([
+      "code-review",
+      "supabase-review",
+    ]);
+  });
+
+  it("routes Mastra changes", () => {
+    expect(names(["src/mastra/agents/concierge.ts"])).toEqual([
+      "code-review",
+      "mastra-review",
+    ]);
+  });
+
+  it("routes CopilotKit API changes with Next.js review", () => {
+    expect(names(["src/app/api/copilotkit/route.ts"])).toEqual([
+      "code-review",
+      "copilotkit-review",
+      "nextjs-review",
+    ]);
+  });
+
+  it("routes Maps and Stripe changes independently", () => {
+    expect(names(["src/components/map/MapView.tsx"])).toContain("maps-review");
+    expect(names(["src/lib/stripe/webhook.ts"])).toContain("stripe-review");
+  });
+
+  it("routes CI workflow changes to CI review", () => {
+    expect(names([".github/workflows/floor.yml"])).toEqual([
+      "code-review",
+      "ci-review",
+    ]);
+  });
+
+  it("loads broad specialists for package dependency changes", () => {
+    const result = names(["package.json"]);
+    for (const skill of [
+      "copilotkit-review",
+      "mastra-review",
+      "supabase-review",
+      "maps-review",
+      "stripe-review",
+      "nextjs-review",
+    ]) {
+      expect(result).toContain(skill);
+    }
+  });
+
+  it("caps the specialist context budget", () => {
+    expect(selectSkills(["README.md"]).maxTokens).toBeLessThanOrEqual(2000);
+    expect(selectSkills(["package.json"]).maxTokens).toBeLessThanOrEqual(6000);
+  });
+});

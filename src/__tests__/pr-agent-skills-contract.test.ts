@@ -7,13 +7,17 @@ const read = (path: string) =>
 const workflow = read(".github/workflows/pr-agent.yml");
 const config = read(".pr_agent.toml");
 const guidelines = read("docs/06-testing/pr-review-guidelines.md");
+const routing = read("scripts/select-pr-agent-skills.mjs");
 
 const skills = [
+  ".claude/skills/code-review/SKILL.md",
   ".claude/skills/copilotkit-review/SKILL.md",
   ".claude/skills/mastra-review/SKILL.md",
   ".claude/skills/supabase-review/SKILL.md",
   ".claude/skills/maps-review/SKILL.md",
   ".claude/skills/stripe-review/SKILL.md",
+  ".claude/skills/ci-review/SKILL.md",
+  ".claude/skills/nextjs-review/SKILL.md",
 ];
 
 describe("SAN-1312 PR-Agent review contract", () => {
@@ -35,7 +39,8 @@ describe("SAN-1312 PR-Agent review contract", () => {
 
   it("keeps policy in repository config with trusted context and restricted mode", () => {
     expect(config).toContain('review_heading = "MDE PR Review"');
-    expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md"]');
+    expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md", "package.json"]');
+    expect(config).toContain("persistent_finding_state = true");
     expect(config).toContain("repo_context_from_default_branch = true");
     expect(config).toContain("restricted_mode = true");
     expect(config).toContain("[ignore]");
@@ -47,6 +52,8 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain("Failure scenario:");
     expect(config).toContain("Expected result:");
     expect(config).toContain("Deterministic CI and human review remain authoritative");
+    expect(config).toContain("adversarial");
+    expect(config).toContain("falsify");
   });
 
   it("keeps the compact MDE stack review contract", () => {
@@ -54,6 +61,8 @@ describe("SAN-1312 PR-Agent review contract", () => {
       expect(guidelines).toContain(domain);
     }
     expect(guidelines).toContain("User A vs User B denial proof");
+    expect(guidelines).toContain("A green test is evidence only if it exercises the changed failure path");
+    expect(guidelines).toContain("falsify");
   });
 
   it("ships all required review-only specialist skills", () => {
@@ -62,17 +71,30 @@ describe("SAN-1312 PR-Agent review contract", () => {
       const body = read(path);
       expect(body).toContain("Source of truth");
       expect(body).toContain("Review invariants");
-      expect(workflow).toContain("/github/workspace/" + path.replace("/SKILL.md", ""));
+      expect(routing).toContain(path.replace(".claude/skills/", "").replace("/SKILL.md", ""));
     }
   });
 
   it("protects high-risk domain invariants from silent removal", () => {
-    expect(read(skills[0])).toContain("Browser-supplied user, tenant, thread, run, page, or resource IDs are not authorization");
-    expect(read(skills[0])).toContain("npm run typecheck");
-    expect(read(skills[1])).toContain("RequestContext carries request metadata; it is not authorization by itself");
-    expect(read(skills[2])).toContain("User A must not read, update, delete or create data as User B");
-    expect(read(skills[3])).toContain("Do not invent or transform ungrounded");
-    expect(read(skills[3])).toContain("field mask");
-    expect(read(skills[4])).toContain("duplicate delivery must not duplicate tickets");
+    expect(read(skills[1])).toContain("Browser-supplied user, tenant, thread, run, page, or resource IDs are not authorization");
+    expect(read(skills[1])).toContain("npm run typecheck");
+    expect(read(skills[2])).toContain("RequestContext carries request metadata; it is not authorization by itself");
+    expect(read(skills[3])).toContain("User A must not read, update, delete or create data as User B");
+    expect(read(skills[4])).toContain("Do not invent or transform ungrounded");
+    expect(read(skills[4])).toContain("field mask");
+    expect(read(skills[5])).toContain("duplicate delivery must not duplicate tickets");
+    expect(read(skills[6])).toContain("silent skip");
+    expect(read(skills[7])).toContain("package.json");
+  });
+
+  it("uses incremental push review without full synchronize review", () => {
+    expect(workflow).toContain('github_action_config.handle_push_trigger: "true"');
+    expect(workflow).toContain(`github_action_config.push_commands: '["/review -i"]'`);
+    expect(workflow).toContain(`github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'`);
+    expect(workflow).toContain("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3");
+    expect(workflow).toContain("scripts/select-pr-agent-skills.mjs");
+    expect(workflow).toContain("trusted PR-Agent routing script missing from base branch");
+    expect(routing).toContain("required trusted PR-Agent skill missing");
+    expect(workflow).not.toContain("max_tokens=8000");
   });
 });

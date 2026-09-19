@@ -15,6 +15,10 @@ Review the actual diff against both the repository contract and the task/spec. F
 
 `code-review` reviews implementation quality and spec fit. `task-verifier` independently decides whether the task/PR is actually complete and production-safe. Do not duplicate the verifier's full release gate here.
 
+## Source of truth
+
+Changed code/tests, the exact task/spec, trusted repository policy, and relevant surrounding contracts are the evidence hierarchy. PR prose is not authoritative when it conflicts with current code.
+
 ## Review inputs
 
 Resolve before reviewing:
@@ -26,6 +30,22 @@ Resolve before reviewing:
 - current tests/CI for the same head.
 
 If the fixed point is ambiguous, use the PR merge-base when reviewing a PR; otherwise state the comparison chosen.
+
+## Review invariants
+
+Apply this universal order to every PR:
+1. Outcome — does the change produce the intended user/business result?
+2. Truth — verify current repository/runtime/config facts; distrust stale prose.
+3. Reuse — prefer existing code/platform/SDK capabilities over duplication.
+4. Architecture — verify ownership and one source of truth.
+5. Security — auth, authorization, RLS, tenancy, secrets, privilege boundaries.
+6. Data integrity — duplicates, races, replay, partial writes, stale relationships.
+7. Failure modes — invalid input, timeout, retry, cancellation, dependency/partial failure.
+8. Integration correctness — versions, env/API/RPC/schema/webhook/event identifiers.
+9. Real workflow — trace the affected end-to-end user/system journey.
+10. Proof — tests/build/E2E/pgTAP must actually exercise the changed behavior.
+
+Before declaring a change safe, run an adversarial falsification pass: assume the PR is subtly wrong and try to prove it through silent skips, false-green tests, exit-code mistakes, stale assumptions, misplaced permission checks, retry/replay races, wrong identifiers, or missing negative tests. Inspect unchanged surrounding callers/contracts when needed, but report only defects introduced or exposed by this PR.
 
 ## Two-axis review
 
