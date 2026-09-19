@@ -1,0 +1,97 @@
+# SAN-1284 — enforce the Postgres RPC ACL / RLS contract in CI.
+#
+# Until now the two things that actually protect this contract only ever ran on a laptop:
+#
+#   * `supabase test db`          — pgTAP, including the runtime role-boundary assertions that
+#                                   call each privileged RPC AS `anon` / `authenticated` /
+#                                   `service_role` and assert the real refusal (42501).
+#   * `npm run check:function-acl` — the drift gate that fails when a public function becomes
+#                                   executable by an end-user role without being baselined.
+#
+# Batch 0A made function EXECUTE opt-in and Batch 0B narrowed the money-path and rental RPCs to
+# service_role. Neither guarantee is worth anything if nothing runs the checks, so this workflow
+# replays every migration on a throwaway local stack and runs both gates.
+#
+# Promote `supabase-acl` to a required status check once it has proven stable.
+name: Supabase ACL gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/check-function-acl-optin.mjs"
+      - "scripts/function-acl-baseline.json"
+      - "scripts/lib/local-db-url.mjs"
+      - ".github/workflows/supabase-acl.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/check-function-acl-optin.mjs"
+      - "scripts/function-acl-baseline.json"
+      - "scripts/lib/local-db-url.mjs"
+      - ".github/workflows/supabase-acl.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # supabase/config.toml references these via env(...) in sections that are enabled for local
+  # development (studio, experimental) or merely declared (twilio, apple). The CLI substitutes
+  # at start time, so the local stack needs the names present. None of these reach a real
+  # provider in CI: the stack is throwaway and no test calls out to one.
+  OPENAI_API_KEY: ci-placeholder
+  S3_HOST: ci-placeholder
+  S3_REGION: ci-placeholder
+  S3_ACCESS_KEY: ci-placeholder
+  S3_SECRET_KEY: ci-placeholder
+  SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN: ci-placeholder
+  SUPABASE_AUTH_EXTERNAL_APPLE_SECRET: ci-placeholder
+
+jobs:
+  supabase-acl:
+    name: supabase-acl
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Install
+        run: npm ci
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Replay every migration from scratch
+        run: supabase db reset
+
+      - name: pgTAP — schema, ACL and runtime role-boundary assertions
+        run: supabase test db
+
+      # The gate is designed to SKIP when it cannot reach a local DB, which keeps it usable for
+      # developers without a stack running. That behaviour must never be allowed to masquerade as
+      # a pass in CI, so a skip is treated as a failure here.
+      - name: Function ACL drift gate (must not skip)
+        run: |
+          set -o pipefail
+          npm run check:function-acl | tee acl-gate.log
+          if grep -q '^SKIP' acl-gate.log; then
+            echo "::error::ACL drift gate skipped — it did not reach the local database, so it proved nothing."
+            exit 1
+          fi
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop --no-backup || true
