@@ -6,7 +6,7 @@ description: >-
 
 # Next.js
 
-Own Next.js framework behavior for the MDE application. Current installed version is Next.js 16.2.6.
+Own Next.js framework behavior for the MDE application. Resolve the exact installed version from `package.json`; do not hardcode it here.
 
 ## Source order
 

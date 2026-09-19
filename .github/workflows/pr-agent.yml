@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
+  actions: read
   contents: read
   issues: write
   pull-requests: write
@@ -30,28 +31,50 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
+      - name: Read changed filenames
+        id: changed-files
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            core.setOutput("files", JSON.stringify(files.map((file) => file.filename)));
+
       - name: Select trusted MDE review skills
         id: reviewer-skills
         shell: bash
+        env:
+          CHANGED_FILES_JSON: ${{ steps.changed-files.outputs.files }}
         run: |
-          required=(
-            .claude/skills/copilotkit-review/SKILL.md
-            .claude/skills/mastra-review/SKILL.md
-            .claude/skills/supabase-review/SKILL.md
-            .claude/skills/maps-review/SKILL.md
-            .claude/skills/stripe-review/SKILL.md
-          )
-          for file in "${required[@]}"; do
-            if [[ ! -f "$file" ]]; then
-              echo "enabled=false" >> "$GITHUB_OUTPUT"
-              echo 'paths=[]' >> "$GITHUB_OUTPUT"
-              echo "max_tokens=0" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          done
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-          echo 'paths=["/github/workspace/.claude/skills/copilotkit-review","/github/workspace/.claude/skills/mastra-review","/github/workspace/.claude/skills/supabase-review","/github/workspace/.claude/skills/maps-review","/github/workspace/.claude/skills/stripe-review"]' >> "$GITHUB_OUTPUT"
-          echo "max_tokens=8000" >> "$GITHUB_OUTPUT"
+          if [[ -f scripts/select-pr-agent-skills.mjs ]]; then
+            node scripts/select-pr-agent-skills.mjs >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Rollout bootstrap only: this PR adds the trusted routing script, but the
+          # base-SHA checkout cannot execute code that is not trusted on main yet.
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          const files = JSON.parse(process.env.CHANGED_FILES_JSON ?? "[]");
+          if (!files.includes("scripts/select-pr-agent-skills.mjs")) {
+            throw new Error("trusted PR-Agent routing script missing from base branch");
+          }
+          const trusted = [
+            "code-review",
+            "copilotkit-review",
+            "mastra-review",
+            "supabase-review",
+            "maps-review",
+            "stripe-review",
+          ];
+          console.log("enabled=true");
+          console.log(`paths=${JSON.stringify(trusted.map((skill) => `/github/workspace/.claude/skills/${skill}`))}`);
+          console.log("max_tokens=6000");
+          NODE
 
       - name: Review pull request
         uses: docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0
@@ -69,4 +92,41 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
+          github_action_config.handle_push_trigger: "true"
+          github_action_config.push_commands: '["/review -i"]'
+  verify-review-result:
+    name: verify-review-result
+    needs: review
+    if: needs.review.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require a fresh PR-Agent review result
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const marker = context.payload.action === "synchronize"
+              ? "<!-- pr-agent:review:incremental -->"
+              : "<!-- pr-agent:review:full -->";
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const startedAt = new Date(run.run_started_at).getTime();
+            const fresh = comments.some((comment) =>
+              comment.user?.login === "github-actions[bot]" &&
+              comment.body?.includes(marker) &&
+              new Date(comment.updated_at).getTime() >= startedAt
+            );
+            if (!fresh) {
+              core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
+            }
