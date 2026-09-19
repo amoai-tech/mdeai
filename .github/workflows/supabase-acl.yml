@@ -79,6 +79,11 @@ jobs:
       - name: Start local Supabase stack
         run: supabase start
 
+      # `supabase start` does apply the migrations on a fresh runner, so this step is redundant in
+      # the strict sense. It is kept deliberately: this workflow exists to prove that the
+      # migrations replay cleanly from scratch, and `db reset` states that guarantee explicitly
+      # rather than depending on the CLI's init side effect. It costs ~30s and the workflow only
+      # runs when supabase/** changes, so the explicitness is worth more than the saving.
       - name: Replay every migration from scratch
         run: supabase db reset
 
@@ -88,11 +93,16 @@ jobs:
       # The gate is designed to SKIP when it cannot reach a local DB, which keeps it usable for
       # developers without a stack running. That behaviour must never be allowed to masquerade as
       # a pass in CI, so a skip is treated as a failure here.
+      #
+      # `2>&1` folds npm's own stderr into the log so the captured output is complete.
+      # The match is on the full "SKIP function-acl gate" prefix rather than an anchored `^SKIP`:
+      # it still fires if the line is indented or prefixed by npm, and cannot be fooled into
+      # passing by that, while staying specific enough not to match unrelated text.
       - name: Function ACL drift gate (must not skip)
         run: |
           set -o pipefail
-          npm run check:function-acl | tee acl-gate.log
-          if grep -q '^SKIP' acl-gate.log; then
+          npm run check:function-acl 2>&1 | tee acl-gate.log
+          if grep -q 'SKIP function-acl gate' acl-gate.log; then
             echo "::error::ACL drift gate skipped — it did not reach the local database, so it proved nothing."
             exit 1
           fi
