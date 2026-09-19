@@ -8,11 +8,15 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["README.md"])).toEqual(["code-review"]);
   });
 
-  it("routes Supabase changes", () => {
-    expect(names(["supabase/migrations/202609190001_test.sql"])).toEqual([
-      "code-review",
-      "supabase-review",
-    ]);
+  it("routes Supabase migrations and MDE auth/session boundaries", () => {
+    for (const file of [
+      "supabase/migrations/202609190001_test.sql",
+      "src/lib/supabase/client.ts",
+      "src/app/auth/callback/route.ts",
+      "src/proxy.ts",
+    ]) {
+      expect(names([file])).toContain("supabase-review");
+    }
   });
 
   it("routes Mastra changes", () => {
