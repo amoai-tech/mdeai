@@ -9,12 +9,15 @@ const DOMAIN_PACKAGES = {
   mastra: ["@mastra/core", "@mastra/pg", "mastra"],
   copilotkit: ["@copilotkit/runtime", "@copilotkit/react-core", "@ag-ui/client", "@ag-ui/mastra"],
   maps: ["@googlemaps/places", "@vis.gl/react-google-maps", "@googlemaps/markerclusterer"],
+  // MDE currently integrates payment/checkout flows without a direct Stripe SDK package.
+  // Keep the domain reviewable, but do not require nonexistent package-version evidence.
   stripe: [],
   ci: [],
 };
 
 const DOMAIN_MATCHERS = {
   nextjs: (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
+  // src/proxy.ts delegates MDE's request/session boundary to the Supabase auth middleware.
   supabase: (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
   mastra: (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   copilotkit: (p) => /copilotkit|ag-ui/i.test(p),
@@ -24,6 +27,8 @@ const DOMAIN_MATCHERS = {
 };
 
 export function validateLockfile(lockfile, label = "lockfile") {
+  // MDE's committed package manager contract is npm package-lock v3. Unsupported
+  // formats intentionally fall back to advisory evidence in the workflow.
   if (lockfile?.lockfileVersion !== 3 || !lockfile.packages || typeof lockfile.packages !== "object") {
     throw new Error(`${label} must be npm package-lock v3 with a packages map`);
   }
