@@ -19,6 +19,10 @@ Inspect surrounding repository contracts when needed, while keeping findings sco
 
 A green test is evidence only if it exercises the changed failure path. For security/RLS/payments/migrations/deployment gates, missing deterministic negative proof is material.
 
+## Verdict consistency
+
+`changes_required` requires at least one concrete material finding or security defect that the PR must fix before merge. If there are no material findings and no security concerns, the merge recommendation must be `safe_to_merge`. Missing relevant tests may be reported as advisory evidence quality, but by itself must not create `changes_required` for a clean low-risk change.
+
 ## Stack checks
 
 - CopilotKit: verify MDE's installed runtime/React APIs, same-origin /api/copilotkit, AG-UI transport, registered agent identity, thread/run isolation, and Mastra bridge behavior.
