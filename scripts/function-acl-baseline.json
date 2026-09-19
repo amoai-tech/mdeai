@@ -214,16 +214,6 @@
     "anon": true,
     "authenticated": true
   },
-  "p1_schedule_tour_atomic(p_user_id uuid, p_idempotency_key text, p_neighborhood_id uuid, p_source text, p_email text, p_phone text, p_notes text, p_lead_metadata jsonb, p_apartment_id uuid, p_scheduled_at timestamp with time zone, p_renter_notes text, p_showing_metadata jsonb)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "p1_start_rental_application_atomic(p_user_id uuid, p_idempotency_key text, p_neighborhood_id uuid, p_source text, p_notes text, p_lead_metadata jsonb, p_apartment_id uuid, p_application_metadata jsonb)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
   "partner_ids_for_user()": {
     "public": true,
     "anon": true,
@@ -299,29 +289,9 @@
     "anon": true,
     "authenticated": true
   },
-  "ticket_checkout_cancel(p_order_id uuid)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
     "anon": true,
-    "authenticated": true
-  },
-  "ticket_payment_finalize(p_order_id uuid, p_payment_intent_id text)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "ticket_payment_finalize_response(v_event events, v_order event_orders, v_ticket event_tickets)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "ticket_payment_refund(p_order_id uuid)": {
-    "public": false,
-    "anon": false,
     "authenticated": true
   },
   "ticket_payment_refund_v2(p_order_id uuid, p_amount_cents integer, p_reason text, p_stripe_refund_id text, p_initiated_by uuid, p_initiated_via text, p_attendee_ids uuid[])": {

@@ -1,8 +1,19 @@
--- SAN-1284 · Batch 0B regression suite — money-path + rental RPC ACLs aligned to production
+-- SAN-1284 · Batch 0B regression suite — money-path + rental RPC risk surface
 --
 -- The measured defect: a fresh replay granted anon EXECUTE on all eight of these where
--- production denies it. `authenticated` and `service_role` were already identical, so this
--- batch only ever REMOVES anon/PUBLIC access — it never needs to add a grant.
+-- production denies it. `acting_landlord_ids` was worse and granted PUBLIC as well.
+--
+-- THE CONTRACT THIS SUITE LOCKS IN
+--   service_role only      : ticket_payment_refund, ticket_payment_finalize,
+--                            ticket_payment_finalize_response, ticket_checkout_cancel,
+--                            p1_schedule_tour_atomic, p1_start_rental_application_atomic
+--   authenticated retained : acting_landlord_ids (RLS helper — SAN-1287 owns repointing),
+--                            bump_staff_link_version (explicit grant + internal ownership check)
+--
+-- `authenticated` is asserted FALSE explicitly for the six service-only functions. That is the
+-- point of this revision: the old ACL came from the historical default ACL stamped at CREATE
+-- FUNCTION time, and `REVOKE ... FROM PUBLIC` could not remove it. Asserting the absence of the
+-- role grant is what makes the least-privilege contract real rather than inherited.
 --
 -- NULL-SAFETY: each block proves the function OID resolves first, so a renamed or missing
 -- function fails loudly rather than making the privilege assertions vacuously pass.
@@ -14,13 +25,12 @@ select plan(42);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Money path — ticket payment / checkout
--- Required contract (matches production): PUBLIC denied, anon denied,
--- authenticated allowed, service_role allowed.
+-- Required contract: PUBLIC denied, anon denied, authenticated denied, service_role allowed.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select ok(to_regprocedure('public.ticket_payment_refund(uuid)') is not null, 'R: ticket_payment_refund resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.ticket_payment_refund(uuid)'), 'EXECUTE'), false, 'R: ticket_payment_refund NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund(uuid)'), 'EXECUTE'), true, 'R: ticket_payment_refund keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund(uuid)'), 'EXECUTE'), false, 'R: ticket_payment_refund NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.ticket_payment_refund(uuid)'), 'EXECUTE'), true, 'R: ticket_payment_refund keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
@@ -28,7 +38,7 @@ select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault
 
 select ok(to_regprocedure('public.ticket_payment_finalize(uuid,text)') is not null, 'R: ticket_payment_finalize resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.ticket_payment_finalize(uuid,text)'), 'EXECUTE'), false, 'R: ticket_payment_finalize NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_finalize(uuid,text)'), 'EXECUTE'), true, 'R: ticket_payment_finalize keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_finalize(uuid,text)'), 'EXECUTE'), false, 'R: ticket_payment_finalize NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.ticket_payment_finalize(uuid,text)'), 'EXECUTE'), true, 'R: ticket_payment_finalize keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
@@ -36,7 +46,7 @@ select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault
 
 select ok(to_regprocedure('public.ticket_payment_finalize_response(events,event_orders,event_tickets)') is not null, 'R: ticket_payment_finalize_response resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.ticket_payment_finalize_response(events,event_orders,event_tickets)'), 'EXECUTE'), false, 'R: ticket_payment_finalize_response NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_finalize_response(events,event_orders,event_tickets)'), 'EXECUTE'), true, 'R: ticket_payment_finalize_response keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_finalize_response(events,event_orders,event_tickets)'), 'EXECUTE'), false, 'R: ticket_payment_finalize_response NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.ticket_payment_finalize_response(events,event_orders,event_tickets)'), 'EXECUTE'), true, 'R: ticket_payment_finalize_response keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
@@ -44,21 +54,21 @@ select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault
 
 select ok(to_regprocedure('public.ticket_checkout_cancel(uuid)') is not null, 'R: ticket_checkout_cancel resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.ticket_checkout_cancel(uuid)'), 'EXECUTE'), false, 'R: ticket_checkout_cancel NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_checkout_cancel(uuid)'), 'EXECUTE'), true, 'R: ticket_checkout_cancel keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_checkout_cancel(uuid)'), 'EXECUTE'), false, 'R: ticket_checkout_cancel NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.ticket_checkout_cancel(uuid)'), 'EXECUTE'), true, 'R: ticket_checkout_cancel keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
              from pg_proc p where p.oid = to_regprocedure('public.ticket_checkout_cancel(uuid)')), false, 'R: ticket_checkout_cancel no PUBLIC');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- Rental atomic writes
+-- Rental atomic writes — service_role only until SAN-1286
 -- ACL only. SAN-1286 still owns proving p_user_id = auth.uid(); this batch deliberately
 -- does not touch the bodies.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select ok(to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)') is not null, 'R: p1_schedule_tour_atomic resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), true, 'R: p1_schedule_tour_atomic keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), true, 'R: p1_schedule_tour_atomic keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
@@ -66,14 +76,14 @@ select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault
 
 select ok(to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)') is not null, 'R: p1_start_rental_application_atomic resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)'), 'EXECUTE'), false, 'R: p1_start_rental_application_atomic NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)'), 'EXECUTE'), true, 'R: p1_start_rental_application_atomic keeps authenticated');
+select is(has_function_privilege('authenticated', to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)'), 'EXECUTE'), false, 'R: p1_start_rental_application_atomic NOT authenticated');
 select is(has_function_privilege('service_role', to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)'), 'EXECUTE'), true, 'R: p1_start_rental_application_atomic keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
              from pg_proc p where p.oid = to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)')), false, 'R: p1_start_rental_application_atomic no PUBLIC');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- RLS helper + staff authorization
+-- RLS helper + staff authorization — authenticated access is INTENTIONAL here
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select ok(to_regprocedure('public.acting_landlord_ids()') is not null, 'R: acting_landlord_ids resolves');
