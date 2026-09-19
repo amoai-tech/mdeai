@@ -122,11 +122,19 @@ jobs:
               per_page: 100,
             });
             const startedAt = new Date(run.run_started_at).getTime();
-            const fresh = comments.some((comment) =>
-              comment.user?.login === "github-actions[bot]" &&
-              comment.body?.includes(marker) &&
-              new Date(comment.updated_at).getTime() >= startedAt
-            );
+            const fresh = comments.some((comment) => {
+              const body = comment.body ?? "";
+              const canonical = body.includes(marker);
+              const standalone =
+                body.includes("## Standalone PR Review") &&
+                body.includes("PR-Agent could not safely update the persistent review") &&
+                body.includes("## MDE PR Review");
+              return (
+                comment.user?.login === "github-actions[bot]" &&
+                (canonical || standalone) &&
+                new Date(comment.updated_at).getTime() >= startedAt
+              );
+            });
             if (!fresh) {
               core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
             }
