@@ -59,6 +59,27 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     expect(result.markdown).toContain("`@supabase/supabase-js`: 2.105.0 → 2.106.1");
   });
 
+  it("grounds the PR #76 proxy/getClaims regression in exact versions", async () => {
+    const { buildEvidence } = await loadBuilder();
+    const versions = lock({
+      "next": "16.3.5",
+      "@supabase/supabase-js": "2.106.1",
+      "@supabase/ssr": "0.10.3",
+    });
+    const result = buildEvidence({
+      baseSha: "base123",
+      headSha: "head456",
+      changedFiles: ["src/proxy.ts", "src/lib/supabase/middleware.ts"],
+      baseLock: versions,
+      headLock: versions,
+    });
+
+    expect(result.status).toBe("VERIFIED");
+    expect(result.domains).toEqual(["nextjs", "supabase"]);
+    expect(result.markdown).toContain("`next`: 16.3.5 → 16.3.5");
+    expect(result.markdown).toContain("`@supabase/supabase-js`: 2.106.1 → 2.106.1");
+  });
+
   it("fails closed when required evidence cannot be resolved", async () => {
     const { buildEvidence } = await loadBuilder();
     const result = buildEvidence({

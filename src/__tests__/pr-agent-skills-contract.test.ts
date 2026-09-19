@@ -114,6 +114,8 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(workflow).toContain("Checkout PR head lockfile as untrusted data");
     expect(workflow).toContain("scripts/pr-agent/build-evidence.mjs");
     expect(workflow).toContain("test -s .pr-agent/evidence.md");
+    expect(workflow).toContain("if ! node scripts/pr-agent/build-evidence.mjs");
+    expect(workflow).toContain("Evidence generation failed; framework/API claims are advisory only.");
     expect(workflow).toContain('ARTIFACT_PATH: ".pr-agent/evidence.md"');
     expect(config).toContain("[artifacts]");
     expect(config).toContain('artifact_label = "MDE exact-version verification evidence"');
@@ -124,5 +126,20 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(config).toContain("VERIFIED");
     expect(config).toContain("NEEDS VERIFICATION");
     expect(config).toContain("cannot independently block merge");
+  });
+});
+
+describe("SAN-1332 skill-budget checkpoint", () => {
+  it("keeps every package.json review skill inside the configured budget", () => {
+    const selected = [
+      "code-review", "copilotkit-review", "mastra-review", "supabase-review",
+      "maps-review", "stripe-review", "nextjs-review",
+    ];
+    const conservativeTokens = selected.reduce((sum, name) => {
+      const body = read(`.claude/skills/${name}/SKILL.md`);
+      return sum + Math.ceil(body.length / 3);
+    }, 0);
+    expect(conservativeTokens).toBeLessThanOrEqual(6000);
+    expect(routing).toContain("return 6000");
   });
 });
