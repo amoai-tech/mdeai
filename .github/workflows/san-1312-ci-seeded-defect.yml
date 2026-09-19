@@ -1,0 +1,20 @@
+name: SAN-1312 CI seeded defect
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seeded-defect:
+    runs-on: ubuntu-latest
+    steps:
+      # Intentional certification defects: mutable action tag + false-green pipeline.
+      # This disposable PR must never be merged.
+      - uses: actions/checkout@v5
+      - name: False-green gate
+        shell: bash
+        run: |
+          false | tee /tmp/san-1312-gate.log
+          echo "gate passed"
