@@ -1,0 +1,112 @@
+# SAN-1284 — enforce the Postgres RPC ACL / RLS contract in CI.
+#
+# Until now the two things that actually protect this contract only ever ran on a laptop:
+#
+#   * `supabase test db`          — pgTAP, including the runtime role-boundary assertions that
+#                                   call each privileged RPC AS `anon` / `authenticated` /
+#                                   `service_role` and assert the real refusal (42501).
+#   * `npm run check:function-acl` — the drift gate that fails when a public function becomes
+#                                   executable by an end-user role without being baselined.
+#
+# Batch 0A made function EXECUTE opt-in and Batch 0B narrowed the money-path and rental RPCs to
+# service_role. Neither guarantee is worth anything if nothing runs the checks, so this workflow
+# replays every migration on a throwaway local stack and runs both gates.
+#
+# Promote `supabase-acl` to a required status check once it has proven stable.
+name: Supabase ACL gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/check-function-acl-optin.mjs"
+      - "scripts/function-acl-baseline.json"
+      - "scripts/lib/local-db-url.mjs"
+      - ".github/workflows/supabase-acl.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/check-function-acl-optin.mjs"
+      - "scripts/function-acl-baseline.json"
+      - "scripts/lib/local-db-url.mjs"
+      - ".github/workflows/supabase-acl.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # supabase/config.toml references these via env(...) in sections that are enabled for local
+  # development (studio, experimental) or merely declared (twilio, apple). The CLI substitutes
+  # at start time, so the names must be present for the config to parse.
+  #
+  # They are deliberately EMPTY, not placeholder strings: nothing in this job talks to OpenAI,
+  # S3, Twilio or Apple, and a literal that looks like a credential is exactly what secret
+  # scanners flag. An empty value satisfies the substitution without pretending to be a secret.
+  OPENAI_API_KEY: ""
+  S3_HOST: ""
+  S3_REGION: ""
+  S3_ACCESS_KEY: ""
+  S3_SECRET_KEY: ""
+  SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN: ""
+  SUPABASE_AUTH_EXTERNAL_APPLE_SECRET: ""
+
+jobs:
+  supabase-acl:
+    name: supabase-acl
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Pinned to a full commit SHA (v1.7.1). A moving major tag is a mutable reference, so a
+      # compromised or force-pushed tag would silently run arbitrary code in this job.
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+        with:
+          version: 2.117.0
+
+      - name: Install
+        run: npm ci
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      # `supabase start` does apply the migrations on a fresh runner, so this step is redundant in
+      # the strict sense. It is kept deliberately: this workflow exists to prove that the
+      # migrations replay cleanly from scratch, and `db reset` states that guarantee explicitly
+      # rather than depending on the CLI's init side effect. It costs ~30s and the workflow only
+      # runs when supabase/** changes, so the explicitness is worth more than the saving.
+      - name: Replay every migration from scratch
+        run: supabase db reset
+
+      - name: pgTAP — schema, ACL and runtime role-boundary assertions
+        run: supabase test db
+
+      # The gate is designed to SKIP when it cannot reach a local DB, which keeps it usable for
+      # developers without a stack running. That behaviour must never be allowed to masquerade as
+      # a pass in CI, so a skip is treated as a failure here.
+      #
+      # `2>&1` folds npm's own stderr into the log so the captured output is complete.
+      # The match is on the full "SKIP function-acl gate" prefix rather than an anchored `^SKIP`:
+      # it still fires if the line is indented or prefixed by npm, and cannot be fooled into
+      # passing by that, while staying specific enough not to match unrelated text.
+      - name: Function ACL drift gate (must not skip)
+        run: |
+          set -o pipefail
+          npm run check:function-acl 2>&1 | tee acl-gate.log
+          if grep -q 'SKIP function-acl gate' acl-gate.log; then
+            echo "::error::ACL drift gate skipped — it did not reach the local database, so it proved nothing."
+            exit 1
+          fi
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop --no-backup || true
