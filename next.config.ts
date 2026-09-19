@@ -6,9 +6,16 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   serverExternalPackages: ["@copilotkit/runtime"],
+  // SAN-1330 — type errors must fail the production build, not ship past it.
+  //
+  // This used to be `ignoreBuildErrors: true` with the note "@mastra/memory beta
+  // packages have unstable types that break strict checking". That is no longer
+  // true: with the flag removed the production build runs "Running TypeScript …
+  // Finished TypeScript in 9.5s" and exits 0. Vercel only ran `npm run build`, so
+  // the flag meant a type regression could reach production while Floor (which
+  // runs `typecheck` separately) stayed green.
   typescript: {
-    // @mastra/memory beta packages have unstable types that break strict checking
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     remotePatterns: [

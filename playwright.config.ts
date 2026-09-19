@@ -17,6 +17,9 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    // The Vercel automation bypass is applied per-origin by
+    // `e2e/fixtures/vercel-bypass.ts` — never as a context-wide header, which
+    // would leak the credential to third-party origins.
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
