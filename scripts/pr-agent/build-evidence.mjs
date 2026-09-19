@@ -34,8 +34,17 @@ export function validateLockfile(lockfile, label = "lockfile") {
   }
 }
 
+const SAFE_VERSION = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/;
+
+function readPackageVersion(lockfile, packageName) {
+  const raw = lockfile?.packages?.[`node_modules/${packageName}`]?.version;
+  if (raw == null) return { version: null, unsafe: false };
+  if (typeof raw !== "string" || !SAFE_VERSION.test(raw)) return { version: null, unsafe: true };
+  return { version: raw, unsafe: false };
+}
+
 export function resolvePackageVersion(lockfile, packageName) {
-  return lockfile?.packages?.[`node_modules/${packageName}`]?.version ?? null;
+  return readPackageVersion(lockfile, packageName).version;
 }
 
 export function detectDomains(files) {
@@ -58,24 +67,31 @@ export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLo
   validateLockfile(headLock, "head lockfile");
   const domains = detectDomains(changedFiles);
   const missing = [];
+  const unsafe = [];
   const versionLines = [];
+  const versionSensitiveDomains = domains.filter((domain) => DOMAIN_PACKAGES[domain].length > 0);
 
   for (const domain of domains) {
     const packages = DOMAIN_PACKAGES[domain];
     let resolved = 0;
     for (const packageName of packages) {
-      const baseVersion = resolvePackageVersion(baseLock, packageName);
-      const headVersion = resolvePackageVersion(headLock, packageName);
-      if (!baseVersion && !headVersion) continue;
+      const base = readPackageVersion(baseLock, packageName);
+      const head = readPackageVersion(headLock, packageName);
+      if (base.unsafe || head.unsafe) {
+        unsafe.push(`${domain}:${packageName}`);
+        continue;
+      }
+      if (!base.version && !head.version) continue;
       resolved += 1;
-      const before = baseVersion ?? "not present";
-      const after = headVersion ?? "not present";
+      const before = base.version ?? "not present";
+      const after = head.version ?? "not present";
       versionLines.push(`- \`${packageName}\`: ${before} → ${after}`);
     }
     if (packages.length && resolved === 0) missing.push(domain);
   }
 
-  const status = missing.length ? "NEEDS VERIFICATION" : "VERIFIED";
+  const noVersionContract = domains.length > 0 && versionSensitiveDomains.length === 0;
+  const status = missing.length || unsafe.length || noVersionContract ? "NEEDS VERIFICATION" : "VERIFIED";
   const lines = [
     "# MDE PR-Agent Evidence",
     "",
@@ -89,6 +105,16 @@ export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLo
     "## Exact resolved package versions",
     ...(versionLines.length ? versionLines : ["- No version-sensitive framework packages detected."]),
   ];
+
+  if (noVersionContract) {
+    lines.push("", "No version-sensitive package contract for touched domains; version evidence remains NEEDS VERIFICATION.");
+  }
+
+  if (unsafe.length) {
+    lines.push("", "## Unsafe exact version metadata");
+    for (const item of unsafe) lines.push(`- ${item}`);
+    lines.push("", "Unsafe PR-controlled version metadata is never injected into trusted reviewer context.");
+  }
 
   if (missing.length) {
     lines.push("", "## Missing exact version evidence");
