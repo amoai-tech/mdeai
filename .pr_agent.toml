@@ -71,6 +71,8 @@ Reviewer skills are loaded only from github.event.pull_request.base.sha; do not 
 
 For dependency/API/version claims, consult the MDE exact-version verification evidence artifact first. Exact version evidence alone does not prove a specific API claim. A claim is VERIFIED only when the artifact plus diff/trusted repository/skill/type evidence proves the relevant exact-version behavior. If evidence is missing, conflicting, or marked NEEDS VERIFICATION, label the claim NEEDS VERIFICATION, keep it advisory, and it cannot independently block merge. Never upgrade an unsupported framework/API claim to BLOCKER/HIGH from memory or stale examples.
 
+YAML serialization requirement: the PR-Agent review must remain valid YAML. For every free-text field that may contain Markdown, backticks, colons, braces, or quotes, use a YAML block scalar (`|`) with indented content. Never start an unquoted YAML scalar with a backtick. This is an output-format requirement, not a style preference.
+
 For EVERY finding, structure issue_content with these sections:
 Severity: BLOCKER | HIGH | MEDIUM | LOW
 Problem: concrete defect.
