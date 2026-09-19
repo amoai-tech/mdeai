@@ -22,7 +22,13 @@ jobs:
       github.event.sender.type != 'Bot' &&
       github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The review model is a 550B-parameter endpoint (see config.model below) and
+    # `publish_output_no_suggestions` still sends the full diff. At a 10-minute cap
+    # a large PR is cancelled mid-review, which surfaces as a red `review` check
+    # even though nothing is wrong with the code under review — PR #82 was
+    # cancelled at 10m13s and PR #81 failed at 4m28s on the same class of run.
+    # Repeated re-runs "fix" it only by luck. Give the job room to finish instead.
+    timeout-minutes: 25
 
     steps:
       - name: Checkout trusted repository files for PR-Agent skills
