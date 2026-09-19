@@ -14,11 +14,11 @@ const SPECIALISTS = [
 ];
 
 const matches = {
-  "supabase-review": (p) => /(^supabase\/|supabase|rls|rpc|database|db-)/i.test(p),
+  "supabase-review": (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.)/i.test(p),
   "mastra-review": (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   "copilotkit-review": (p) => /copilotkit|ag-ui/i.test(p),
   "maps-review": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
-  "stripe-review": (p) => /stripe|checkout|payment|webhook|refund/i.test(p),
+  "stripe-review": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
   "nextjs-review": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
   "ci-review": (p) => /^\.github\/workflows\//.test(p) || /^scripts\/(check|verify|smoke)-/i.test(p),
 };

@@ -42,6 +42,17 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     ]);
   });
 
+  it("does not route generic names to unrelated specialists", () => {
+    expect(names(["docs/database-design.md"])).toEqual(["code-review"]);
+    expect(names(["src/components/PaymentForm.tsx"])).toEqual(["code-review"]);
+    expect(names(["src/components/MapboxWrapper.tsx"])).toEqual(["code-review"]);
+  });
+
+  it("still routes MDE ticket checkout paths that are Stripe-backed", () => {
+    expect(names(["src/app/api/tickets/checkout/route.ts"])).toContain("stripe-review");
+    expect(names(["src/lib/tickets/submit-ticket-checkout.ts"])).toContain("stripe-review");
+  });
+
   it("loads broad specialists for package dependency changes", () => {
     const result = names(["package.json"]);
     for (const skill of [
