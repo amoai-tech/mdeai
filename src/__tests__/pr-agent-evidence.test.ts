@@ -83,6 +83,32 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     expect(result.markdown).toContain("`@supabase/supabase-js`: 2.106.1 → 2.106.1");
   });
 
+  it("rejects unsupported lockfile formats explicitly", async () => {
+    const { buildEvidence } = await loadBuilder();
+    expect(() => buildEvidence({
+      baseSha: "base123", headSha: "head456", changedFiles: ["src/proxy.ts"],
+      baseLock: { lockfileVersion: 2, packages: {} },
+      headLock: lock({ "next": "16.3.5" }),
+    })).toThrow("npm package-lock v3");
+  });
+
+  it("handles empty and unusual filenames without inventing domains", async () => {
+    const { detectDomains } = await loadBuilder();
+    expect(detectDomains([])).toEqual([]);
+    expect(detectDomains(["docs/[odd] file → notes.md"])).toEqual([]);
+  });
+
+  it("does not require package evidence for Stripe when MDE has no Stripe SDK", async () => {
+    const { buildEvidence } = await loadBuilder();
+    const result = buildEvidence({
+      baseSha: "base123", headSha: "head456", changedFiles: ["src/lib/stripe-webhook.ts"],
+      baseLock: lock({}), headLock: lock({}),
+    });
+    expect(result.domains).toEqual(["stripe"]);
+    expect(result.status).toBe("VERIFIED");
+    expect(result.missing).toEqual([]);
+  });
+
   it("fails closed when required evidence cannot be resolved", async () => {
     const { buildEvidence } = await loadBuilder();
     const result = buildEvidence({

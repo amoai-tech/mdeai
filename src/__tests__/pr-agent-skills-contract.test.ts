@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { getEncoding } from "js-tiktoken";
 
 const read = (path: string) =>
   readFileSync(path, "utf8");
@@ -116,6 +117,7 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(workflow).toContain("test -s .pr-agent/evidence.md");
     expect(workflow).toContain("if ! node scripts/pr-agent/build-evidence.mjs");
     expect(workflow).toContain("Evidence generation failed; framework/API claims are advisory only.");
+    expect(workflow).toContain("PR head package-lock.json missing or empty");
     expect(workflow).toContain('ARTIFACT_PATH: ".pr-agent/evidence.md"');
     expect(config).toContain("[artifacts]");
     expect(config).toContain('artifact_label = "MDE exact-version verification evidence"');
@@ -137,11 +139,12 @@ describe("SAN-1332 skill-budget checkpoint", () => {
       "code-review", "copilotkit-review", "mastra-review", "supabase-review",
       "maps-review", "stripe-review", "nextjs-review",
     ];
-    const conservativeTokens = selected.reduce((sum, name) => {
-      const body = read(`.claude/skills/${name}/SKILL.md`);
-      return sum + Math.ceil(body.length / 3);
-    }, 0);
-    expect(conservativeTokens).toBeLessThanOrEqual(6000);
+    const rendered = selected.map((name) => read(`.claude/skills/${name}/SKILL.md`)).join("\n\n---\n\n");
+    const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {
+      const encoding = getEncoding(encodingName);
+      return encoding.encode(rendered).length;
+    });
+    expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(6000);
     expect(routing).toContain("return 6000");
   });
 });

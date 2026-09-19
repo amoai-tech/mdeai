@@ -23,6 +23,12 @@ const DOMAIN_MATCHERS = {
   ci: (p) => /^\.github\/workflows\//.test(p) || /^scripts\/(check|verify|smoke)-/i.test(p),
 };
 
+export function validateLockfile(lockfile, label = "lockfile") {
+  if (lockfile?.lockfileVersion !== 3 || !lockfile.packages || typeof lockfile.packages !== "object") {
+    throw new Error(`${label} must be npm package-lock v3 with a packages map`);
+  }
+}
+
 export function resolvePackageVersion(lockfile, packageName) {
   return lockfile?.packages?.[`node_modules/${packageName}`]?.version ?? null;
 }
@@ -43,6 +49,8 @@ export function detectDomains(files) {
   return DOMAIN_ORDER.filter((domain) => selected.has(domain));
 }
 export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLock }) {
+  validateLockfile(baseLock, "base lockfile");
+  validateLockfile(headLock, "head lockfile");
   const domains = detectDomains(changedFiles);
   const missing = [];
   const versionLines = [];
