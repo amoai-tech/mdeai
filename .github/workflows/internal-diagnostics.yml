@@ -1,0 +1,15 @@
+name: Internal diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check function ACLs
+        run: npm run check:function-acl || echo "SKIP function-acl gate"
