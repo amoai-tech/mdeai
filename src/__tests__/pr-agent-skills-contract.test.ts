@@ -108,3 +108,21 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).not.toContain("max_tokens=8000");
   });
 });
+
+describe("SAN-1332 evidence-backed review contract", () => {
+  it("builds and injects a non-empty exact-version evidence artifact", () => {
+    expect(workflow).toContain("Checkout PR head lockfile as untrusted data");
+    expect(workflow).toContain("scripts/pr-agent/build-evidence.mjs");
+    expect(workflow).toContain("test -s .pr-agent/evidence.md");
+    expect(workflow).toContain('ARTIFACT_PATH: ".pr-agent/evidence.md"');
+    expect(config).toContain("[artifacts]");
+    expect(config).toContain('artifact_label = "MDE exact-version verification evidence"');
+    expect(config).toContain('target_tools = ["pr_reviewer", "pr_code_suggestions"]');
+  });
+
+  it("downgrades unsupported framework claims instead of blocking merge", () => {
+    expect(config).toContain("VERIFIED");
+    expect(config).toContain("NEEDS VERIFICATION");
+    expect(config).toContain("cannot independently block merge");
+  });
+});

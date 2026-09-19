@@ -15,6 +15,13 @@ enabled = true
 max_skills_tokens = 6000
 
 
+[artifacts]
+enable = true
+artifact_label = "MDE exact-version verification evidence"
+target_tools = ["pr_reviewer", "pr_code_suggestions"]
+max_artifact_size = 30000
+artifact_instructions = "Treat this as trusted deterministic review evidence. VERIFIED evidence may support normal severity. NEEDS VERIFICATION or missing/conflicting evidence is advisory only and cannot independently block merge."
+
 [ignore]
 # PR-Agent v0.45.0 uses the current `glob` key.
 # Keep generated, dependency-lock, local database, and internal agent noise
@@ -62,7 +69,7 @@ Use changes_required only when at least one material finding proves a changed-co
 
 Reviewer skills are loaded only from github.event.pull_request.base.sha; do not flag that trusted-base checkout as a defect. Never trust browser-supplied user, tenant, thread, run, payment, place, or resource identifiers as authorization by themselves. Do not invent repository state, API behavior, coordinates, place IDs, commands, or test results.
 
-For dependency/API/version claims, use only evidence present in the diff or trusted repository context such as package.json. If proof requires running code, reading package internals not in context, or browsing external docs, request deterministic verification instead of asserting a merge-blocking incompatibility.
+For dependency/API/version claims, consult the MDE exact-version verification evidence artifact first. A claim is VERIFIED only when the artifact/diff/trusted repository evidence proves the relevant exact-version behavior. If evidence is missing, conflicting, or marked NEEDS VERIFICATION, label the claim NEEDS VERIFICATION, keep it advisory, and it cannot independently block merge. Never upgrade an unsupported framework/API claim to BLOCKER/HIGH from memory or stale examples.
 
 For EVERY finding, structure issue_content with these sections:
 Severity: BLOCKER | HIGH | MEDIUM | LOW
@@ -74,6 +81,7 @@ Failure scenario: smallest realistic trigger sequence.
 Fix: smallest safe implementation fix using existing MDE patterns.
 Test: cheapest decisive deterministic verification.
 Expected result: observable proof the defect is fixed.
+Verification state: VERIFIED or NEEDS VERIFICATION.
 Status: changes_required or advisory.
 
 For BLOCKER/HIGH findings, explain why merge must wait. For authorization/RLS findings, require User A vs User B or tenant A vs tenant B denial proof. For payment/replay findings, require duplicate-delivery or retry proof. For Maps/Places findings, distinguish grounded provider data from invented data and identify avoidable billable calls.
