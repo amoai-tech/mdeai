@@ -122,11 +122,18 @@ jobs:
               per_page: 100,
             });
             const startedAt = new Date(run.run_started_at).getTime();
-            const fresh = comments.some((comment) =>
+            const freshComment = comments.find((comment) =>
               comment.user?.login === "github-actions[bot]" &&
               comment.body?.includes(marker) &&
               new Date(comment.updated_at).getTime() >= startedAt
             );
-            if (!fresh) {
+            if (!freshComment) {
               core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
+              return;
+            }
+            const contradictoryCleanVerdict =
+              freshComment.body?.includes("<strong>No major issues detected</strong>") &&
+              freshComment.body?.includes("<strong>Merge recommendation</strong>: Changes required");
+            if (contradictoryCleanVerdict) {
+              core.setFailed("PR-Agent published a contradictory clean review with Changes required");
             }
