@@ -70,7 +70,7 @@ jobs:
               --head-sha "$HEAD_SHA" \
               --changed-files "$CHANGED_FILES_JSON" \
               --output .pr-agent/evidence.md; then
-              printf '# MDE PR-Agent Evidence\n\nStatus: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nEvidence generation failed; framework/API claims are advisory only.\n' \
+              printf '# MDE PR-Agent Evidence\n\nVersion evidence: **NEEDS VERIFICATION**\nAPI claim default: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nEvidence generation failed; framework/API claims are advisory only.\n' \
                 "$BASE_SHA" "$HEAD_SHA" > .pr-agent/evidence.md
             fi
           else
@@ -78,7 +78,7 @@ jobs:
               echo "trusted PR-Agent evidence builder missing from base branch" >&2
               exit 1
             fi
-            printf '# MDE PR-Agent Evidence\n\nStatus: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nRollout bootstrap: trusted-base evidence builder is not available yet. Framework/API claims are advisory only.\n' \
+            printf '# MDE PR-Agent Evidence\n\nVersion evidence: **NEEDS VERIFICATION**\nAPI claim default: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nRollout bootstrap: trusted-base evidence builder is not available yet. Framework/API claims are advisory only.\n' \
               "$BASE_SHA" "$HEAD_SHA" > .pr-agent/evidence.md
           fi
           test -s .pr-agent/evidence.md
@@ -121,7 +121,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARTIFACT_PATH: ".pr-agent/evidence.md"
-          ARTIFACT_INSTRUCTIONS: "Use this trusted evidence for framework/API/version claims. If evidence is missing, conflicting, or NEEDS VERIFICATION, keep that claim advisory and non-blocking."
+          ARTIFACT_INSTRUCTIONS: "Use this trusted artifact as exact-version evidence, not standalone API proof. A framework/API claim is VERIFIED only when trusted diff/repository/skill/type evidence also proves the behavior; otherwise keep it NEEDS VERIFICATION, advisory, and non-blocking."
           NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"
           NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"

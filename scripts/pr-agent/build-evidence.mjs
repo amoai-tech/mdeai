@@ -66,7 +66,9 @@ export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLo
   const lines = [
     "# MDE PR-Agent Evidence",
     "",
-    `Status: **${status}**`,
+    `Version evidence: **${status}**`,
+    "API claim default: **NEEDS VERIFICATION**",
+    "Exact version evidence alone does not prove a specific API claim. A claim becomes VERIFIED only when trusted diff/repository/skill/type evidence proves that behavior for the resolved version.",
     `Base SHA: \`${baseSha}\``,
     `Head SHA: \`${headSha}\``,
     `Touched domains: ${domains.length ? domains.join(", ") : "none"}`,

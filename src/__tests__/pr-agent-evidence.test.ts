@@ -53,6 +53,8 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     });
 
     expect(result.status).toBe("VERIFIED");
+    expect(result.markdown).toContain("Version evidence: **VERIFIED**");
+    expect(result.markdown).toContain("API claim default: **NEEDS VERIFICATION**");
     expect(result.markdown).toContain("Base SHA: `base123`");
     expect(result.markdown).toContain("Head SHA: `head456`");
     expect(result.markdown).toContain("`next`: 16.3.4 → 16.3.5");
@@ -75,6 +77,7 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     });
 
     expect(result.status).toBe("VERIFIED");
+    expect(result.markdown).toContain("API claim default: **NEEDS VERIFICATION**");
     expect(result.domains).toEqual(["nextjs", "supabase"]);
     expect(result.markdown).toContain("`next`: 16.3.5 → 16.3.5");
     expect(result.markdown).toContain("`@supabase/supabase-js`: 2.106.1 → 2.106.1");
@@ -91,6 +94,8 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     });
 
     expect(result.status).toBe("NEEDS VERIFICATION");
+    expect(result.markdown).toContain("Version evidence: **NEEDS VERIFICATION**");
+    expect(result.markdown).toContain("API claim default: **NEEDS VERIFICATION**");
     expect(result.markdown).toContain("Missing exact version evidence");
   });
 });

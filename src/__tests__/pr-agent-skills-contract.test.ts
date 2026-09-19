@@ -126,6 +126,8 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(config).toContain("VERIFIED");
     expect(config).toContain("NEEDS VERIFICATION");
     expect(config).toContain("cannot independently block merge");
+    expect(config).toContain("Exact version evidence alone does not prove a specific API claim");
+    expect(read(skills[7])).toContain("`src/proxy.ts`");
   });
 });
 
