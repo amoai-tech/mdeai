@@ -145,7 +145,8 @@ describe("SAN-1332 skill-budget checkpoint", () => {
       return encoding.encode(rendered).length;
     });
     expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(6000);
-    expect(read("package.json")).toContain('"js-tiktoken": "1.0.21"');
+    const packageJson = JSON.parse(read("package.json")) as { devDependencies?: Record<string, string> };
+    expect(packageJson.devDependencies?.["js-tiktoken"]).toBe("1.0.21");
     expect(routing).toContain("return 6000");
   });
 });
