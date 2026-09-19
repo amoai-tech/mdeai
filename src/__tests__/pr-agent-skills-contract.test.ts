@@ -85,6 +85,9 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[5])).toContain("duplicate delivery must not duplicate tickets");
     expect(read(skills[6])).toContain("silent skip");
     expect(read(skills[7])).toContain("package.json");
+    expect(read(skills[7])).toContain("Next.js 16");
+    expect(read(skills[7])).toContain("await cookies()");
+    expect(read(skills[7])).toContain("Async Request APIs");
   });
 
   it("uses incremental push review without full synchronize review", () => {
