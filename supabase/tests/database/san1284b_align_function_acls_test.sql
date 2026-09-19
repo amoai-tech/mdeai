@@ -18,10 +18,15 @@
 -- NULL-SAFETY: each block proves the function OID resolves first, so a renamed or missing
 -- function fails loudly rather than making the privilege assertions vacuously pass.
 --
+-- The final section goes past catalog inspection: it calls each function AS the real role
+-- inside this transaction and asserts the actual refusal (SQLSTATE 42501). The suite therefore
+-- fails if a role can still reach a body it should not, even if the ACL of a function reads
+-- correctly for some other reason.
+--
 -- Run with: supabase test db
 begin;
 
-select plan(42);
+select plan(58);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Money path — ticket payment / checkout
@@ -101,6 +106,41 @@ select is(has_function_privilege('service_role', to_regprocedure('public.bump_st
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
              from pg_proc p where p.oid = to_regprocedure('public.bump_staff_link_version(uuid)')), false, 'R: bump_staff_link_version no PUBLIC');
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- RUNTIME AUTHORIZATION BOUNDARY
+-- Each call below runs as the real role, so it fails with insufficient_privilege (42501)
+-- BEFORE the function body is entered. Probe arguments are intentional: the deny assertions
+-- must not depend on the argument data. For the allow-side calls (the two keep-open
+-- functions) the assertion matches the body's OWN error, which proves the permission gate
+-- opened and the function's internal guard ran.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- anon must not reach ANY of the eight bodies.
+set local role anon;
+select throws_ok($$select public.ticket_payment_refund('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: anon DENIED ticket_payment_refund');
+select throws_ok($$select public.ticket_payment_finalize('00000000-0000-0000-0000-000000000000'::uuid,'pi_probe')$$, '42501', null, 'X: anon DENIED ticket_payment_finalize');
+select throws_ok($$select public.ticket_payment_finalize_response(null::public.events,null::public.event_orders,null::public.event_tickets)$$, '42501', null, 'X: anon DENIED ticket_payment_finalize_response');
+select throws_ok($$select public.ticket_checkout_cancel('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: anon DENIED ticket_checkout_cancel');
+select throws_ok($$select public.p1_schedule_tour_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::text,null::text,null::jsonb,null::uuid,null::timestamptz,null::text,null::jsonb)$$, '42501', null, 'X: anon DENIED p1_schedule_tour_atomic');
+select throws_ok($$select public.p1_start_rental_application_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::jsonb,null::uuid,null::jsonb)$$, '42501', null, 'X: anon DENIED p1_start_rental_application_atomic');
+select throws_ok($$select public.acting_landlord_ids()$$, '42501', null, 'X: anon DENIED acting_landlord_ids');
+select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: anon DENIED bump_staff_link_version');
+reset role;
+
+-- authenticated must not reach the six service-only bodies.
+set local role authenticated;
+select throws_ok($$select public.ticket_payment_refund('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: authenticated DENIED ticket_payment_refund');
+select throws_ok($$select public.ticket_payment_finalize('00000000-0000-0000-0000-000000000000'::uuid,'pi_probe')$$, '42501', null, 'X: authenticated DENIED ticket_payment_finalize');
+select throws_ok($$select public.ticket_payment_finalize_response(null::public.events,null::public.event_orders,null::public.event_tickets)$$, '42501', null, 'X: authenticated DENIED ticket_payment_finalize_response');
+select throws_ok($$select public.ticket_checkout_cancel('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: authenticated DENIED ticket_checkout_cancel');
+select throws_ok($$select public.p1_schedule_tour_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::text,null::text,null::jsonb,null::uuid,null::timestamptz,null::text,null::jsonb)$$, '42501', null, 'X: authenticated DENIED p1_schedule_tour_atomic');
+select throws_ok($$select public.p1_start_rental_application_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::jsonb,null::uuid,null::jsonb)$$, '42501', null, 'X: authenticated DENIED p1_start_rental_application_atomic');
+
+-- ...but it MUST still reach the two intentional contracts.
+select lives_ok($$select public.acting_landlord_ids()$$, 'X: authenticated ALLOWED acting_landlord_ids (RLS helper)');
+select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, 'P0001', 'NOT_ORGANIZER', 'X: authenticated ALLOWED bump_staff_link_version, internal ownership guard rejects non-organizer');
+reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Scope guards — this batch must not create or touch anything else
