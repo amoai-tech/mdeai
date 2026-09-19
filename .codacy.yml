@@ -1,0 +1,19 @@
+---
+# This repository is PostgreSQL-only (Supabase migrations, pgTAP tests, seeds).
+#
+# TSQLLint is the SQL Server linter. Its rules reported here —
+#   * Expected SET ANSI_NULLS ON near top of file
+#   * Expected SET NOCOUNT ON near top of file
+#   * Expected SET QUOTED_IDENTIFIER ON near top of file
+#   * Expected SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED near top of file
+# — are T-SQL directives with no PostgreSQL equivalent. Applied to a Postgres migration they
+# are false positives, and they fire on every new migration file, which is why they recurred
+# across SAN-1284 migrations.
+#
+# A tool cannot be enabled/disabled from this file (that is the Code patterns page), so the
+# correct lever is a per-tool path exclusion. SQLint — the PostgreSQL linter — is deliberately
+# left enabled so Postgres SQL is still analysed; only the SQL Server linter is scoped out.
+engines:
+  tsqllint:
+    exclude_paths:
+      - "**.sql"
