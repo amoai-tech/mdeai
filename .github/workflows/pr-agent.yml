@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
+  actions: read
   contents: read
   issues: write
   pull-requests: write
@@ -94,3 +95,38 @@ jobs:
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
           github_action_config.handle_push_trigger: "true"
           github_action_config.push_commands: '["/review -i"]'
+  verify-review-result:
+    name: verify-review-result
+    needs: review
+    if: needs.review.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require a fresh PR-Agent review result
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const marker = context.payload.action === "synchronize"
+              ? "<!-- pr-agent:review:incremental -->"
+              : "<!-- pr-agent:review:full -->";
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const startedAt = new Date(run.run_started_at).getTime();
+            const fresh = comments.some((comment) =>
+              comment.user?.login === "github-actions[bot]" &&
+              comment.body?.includes(marker) &&
+              new Date(comment.updated_at).getTime() >= startedAt
+            );
+            if (!fresh) {
+              core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
+            }

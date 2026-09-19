@@ -9,14 +9,25 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
   });
 
   it("routes Supabase migrations and MDE auth/session boundaries", () => {
-    for (const file of [
-      "supabase/migrations/202609190001_test.sql",
-      "src/lib/supabase/client.ts",
-      "src/app/auth/callback/route.ts",
-      "src/proxy.ts",
-    ]) {
-      expect(names([file])).toContain("supabase-review");
-    }
+    expect(names(["supabase/migrations/202609190001_test.sql"])).toEqual([
+      "code-review",
+      "supabase-review",
+    ]);
+    expect(names(["src/lib/supabase/client.ts"])).toEqual([
+      "code-review",
+      "supabase-review",
+    ]);
+    expect(names(["src/app/auth/callback/route.ts"])).toEqual([
+      "code-review",
+      "supabase-review",
+      "nextjs-review",
+    ]);
+    expect(names(["src/proxy.ts"])).toEqual([
+      "code-review",
+      "supabase-review",
+      "nextjs-review",
+    ]);
+    expect(names(["src/proxy.test.ts"])).not.toContain("supabase-review");
   });
 
   it("routes Mastra changes", () => {

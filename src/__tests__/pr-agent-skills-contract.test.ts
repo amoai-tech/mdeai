@@ -95,6 +95,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).toContain("scripts/select-pr-agent-skills.mjs");
     expect(workflow).toContain("trusted PR-Agent routing script missing from base branch");
     expect(routing).toContain("required trusted PR-Agent skill missing");
+    expect(workflow).toContain("verify-review-result:");
+    expect(workflow).toContain("getWorkflowRun");
+    expect(workflow).toContain("pr-agent:review:incremental");
+    expect(workflow).toContain("PR-Agent did not publish a fresh review for this workflow run");
     expect(workflow).not.toContain("max_tokens=8000");
   });
 });
