@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "node:fs";
-import { Script } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { getEncoding } from "js-tiktoken";
 
@@ -10,20 +9,8 @@ const workflow = read(".github/workflows/pr-agent.yml");
 const config = read(".pr_agent.toml");
 const guidelines = read("docs/06-testing/pr-review-guidelines.md");
 const routing = read("scripts/select-pr-agent-skills.mjs");
-
-function workflowScript(stepName: string) {
-  const step = workflow.split(`      - name: ${stepName}\n`)[1];
-  if (!step) throw new Error(`workflow step not found: ${stepName}`);
-  const script = step.split("          script: |\n")[1];
-  if (!script) throw new Error(`workflow script not found: ${stepName}`);
-  const lines: string[] = [];
-  for (const line of script.split("\n")) {
-    if (line.startsWith("            ")) lines.push(line.slice(12));
-    else if (line.trim() === "") lines.push("");
-    else break;
-  }
-  return lines.join("\n");
-}
+const reviewPolicy = read("scripts/pr-agent/review-policy.mjs");
+const evidenceBuilder = read("scripts/pr-agent/build-evidence.mjs");
 
 const skills = [
   ".claude/skills/code-review/SKILL.md",
@@ -37,20 +24,16 @@ const skills = [
 ];
 
 describe("SAN-1312 PR-Agent review contract", () => {
-  it("pins PR-Agent and loads reviewer instructions only from the trusted base", () => {
-    expect(workflow).toContain("docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0");
-    expect(workflow).toContain("ref: ${{ github.event.pull_request.base.sha }}");
-    expect(workflow).toContain("persist-credentials: false");
-    expect(workflow).toContain("Select trusted MDE review skills");
-    expect(workflow).toContain('github_action_config.auto_improve: "false"');
+  it("delegates runtime to the immutable shared core and keeps the caller trust boundary", () => {
+    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@a3c9600de7a31184266fade8387359ccbb8e6d68");
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
-    expect(workflow).toContain('NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"');
-    expect(workflow).toContain('NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
-    expect(workflow).toContain('config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"');
-    expect(workflow).toContain(`config.fallback_models: '["nvidia_nim/nvidia/nemotron-3.5-lightning-30b-a3b"]'`);
-    expect(workflow).toContain('config.custom_model_max_tokens: "32000"');
-    expect(workflow).not.toContain("GOOGLE_AI_STUDIO");
-    expect(workflow).not.toContain("gemini/");
+    expect(workflow).toContain('NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
+    expect(workflow).toContain("actions: read");
+    expect(workflow).toContain("contents: read");
+    expect(workflow).toContain("issues: write");
+    expect(workflow).toContain("pull-requests: write");
+    expect(workflow).not.toContain("docker://pragent/pr-agent");
+    expect(workflow).not.toContain("NVIDIA_NIM_API_BASE");
   });
 
   it("keeps policy in repository config with trusted context and restricted mode", () => {
@@ -111,48 +94,30 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[7])).toContain("Async Request APIs");
   });
 
-  it("keeps the embedded base-aware verifier script syntactically valid", () => {
-    const script = workflowScript("Require a fresh base-aware PR-Agent review result");
-    expect(() => new Script(
-      `(async function(github, context, core, process, require) {\n${script}\n})`,
-    )).not.toThrow();
+  it("keeps the repo-local base-aware review-policy contract", () => {
+    expect(reviewPolicy).toContain("export const CERT_HISTORY_MARKER");
+    expect(reviewPolicy).toContain("export function selectReviewCommand");
+    expect(reviewPolicy).toContain("export function verifyReviewResult");
+    expect(reviewPolicy).toContain("export function appendCertification");
+    expect(reviewPolicy).toContain("pr-agent:review:incremental");
+    expect(reviewPolicy).toContain("pr-agent:review:full");
+    expect(reviewPolicy).toContain("mde-pr-agent-cert base=");
   });
 
-  it("uses base-aware full or incremental review and verifies the exact review mode", () => {
-    expect(workflow).toContain('github_action_config.handle_push_trigger: "true"');
-    expect(workflow).toContain("steps.review-mode.outputs.push_commands");
-    expect(workflow).toContain(`github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'`);
-    expect(workflow).toContain("Select full or incremental review from certified base context");
-    expect(workflow).toContain("scripts/pr-agent/review-policy.mjs");
-    expect(workflow).toContain("mde-pr-agent-cert base=");
-    expect(workflow).toContain("REVIEW_COMMAND: ${{ needs.review.outputs.review_command }}");
-    expect(workflow).toContain("Require a fresh base-aware PR-Agent review result");
-    expect(workflow).toContain("scripts/select-pr-agent-skills.mjs");
-    expect(workflow).toContain("trusted PR-Agent routing script missing from base branch");
+  it("keeps repo-local routing while shared core owns review orchestration", () => {
+    expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(routing).toContain("required trusted PR-Agent skill missing");
-    expect(workflow).toContain("verify-review-result:");
-    expect(workflow).toContain("getWorkflowRun");
-    expect(workflow).toContain("pr-agent:review:incremental");
-    expect(workflow).toContain("pr-agent:review:full");
-    expect(workflow).toContain("PR-Agent did not publish a fresh review valid for the current base context");
-    expect(workflow).toContain("Standalone PR Review");
-    expect(workflow).toContain("PR-Agent could not safely update the persistent review");
-    expect(workflow).toContain('body.includes("## MDE PR Review")');
-    expect(workflow).toContain("const maxAttempts = 10");
-    expect(workflow).toContain("await new Promise((resolve) => setTimeout(resolve, 10000))");
+    expect(routing).toContain("return 6000;");
+    expect(routing).toContain("max_tokens=${result.maxTokens}");
     expect(workflow).not.toContain("max_tokens=8000");
   });
 });
 
 describe("SAN-1332 evidence-backed review contract", () => {
-  it("builds and injects a non-empty exact-version evidence artifact", () => {
-    expect(workflow).toContain("Checkout PR head lockfile as untrusted data");
-    expect(workflow).toContain("scripts/pr-agent/build-evidence.mjs");
-    expect(workflow).toContain("test -s .pr-agent/evidence.md");
-    expect(workflow).toContain("if ! node scripts/pr-agent/build-evidence.mjs");
-    expect(workflow).toContain("Evidence generation failed; framework/API claims are advisory only.");
-    expect(workflow).toContain("PR head package-lock.json missing or empty");
-    expect(workflow).toContain('ARTIFACT_PATH: ".pr-agent/evidence.md"');
+  it("keeps repo-local exact-version evidence while shared core owns injection", () => {
+    expect(evidenceBuilder).toContain("export function buildEvidence");
+    expect(evidenceBuilder).toContain('args["changed-files-file"]');
+    expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(config).toContain("[artifacts]");
     expect(config).toContain('artifact_label = "MDE exact-version verification evidence"');
     expect(config).toContain('target_tools = ["pr_reviewer", "pr_code_suggestions"]');
