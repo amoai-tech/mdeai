@@ -22,15 +22,15 @@ legend:
 | **Per-task routing** | [`todo.md`](./todo.md) § **Skill + MCP gate** — mandatory before Done |
 | **Enforcement** | [`.cursor/rules/mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc) |
 | **Load cap** | **≤5 skills** per task — pick one row below or todo matrix row |
-| **MDE stack** | Next.js 16 + React 19 + CopilotKit **1.55.2 v2 APIs** + Mastra + Supabase + Gemini + Google Maps |
+| **MDE stack** | Next.js 16 + React 19 + CopilotKit **1.55.2 using `/v2` React API entrypoints** + Mastra + Supabase + Gemini + Google Maps |
 | **Routing rule** | Use the canonical owner directly; `.agents/skills` is compatibility-only |
 | **100% before Done** | Skills read + MCP called + `task-verifier` Evidence Score ≥ **90** (P0) |
 
 ### Canonical skill layout (2026-09-20)
 
-**Canonical owners:** `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `events`, `real-estate`, `tasks`, `testing`, `tdd`, `code-review`, `task-verifier`, `systematic-debugging`, `research`, `writing-skills`, `wireframe`, `mermaid-diagrams`, and `using-mde-skills`.
+**Canonical owner folders use their exact `.claude/skills/` names.** Primary runtime/domain owners are `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `events`, and `real-estate`; task/ops owners include `tasks`, `testing`, `code-review`, `task-verifier`, `mde-vercel`, and `mde-worktree-pr-flow`. See Section A for the complete current inventory.
 
-`mde-real-estate` remains present as an explicit protected exception in this cleanup.
+`mde-real-estate` remains present as an explicit protected legacy exception in this cleanup; `real-estate` is still the canonical owner.
 
 **Compatibility layout:**
 
@@ -64,6 +64,8 @@ legend:
 **Compatibility path:** `.agents/skills/<name>/SKILL.md` → canonical `SKILL.md`.
 
 ## Historical audit snapshot (2026-06-08)
+
+> Historical record only. Do not use this section for current skill routing, ownership, package API selection, or symlink direction; use the current architecture above.
 
 **North star:** App at `/home/sk/mdeai/mdeapp/` from `CopilotKit/examples/integrations/mastra/`. **7 Mastra agents**, 3 workflows, Supabase, Stripe, Maps. CopilotKit **1.55.2** (not v2).
 
@@ -161,145 +163,31 @@ legend:
 
 ---
 
-## A — `.claude/skills` native (24)
+## A — Canonical `.claude/skills` inventory
 
-| Skill | Score | | Phase 1? | Notes |
-|-------|------:|:---:|----------|-------|
-| mastra | 98 | 🟢 | Yes | Agents, memory, tools — core |
-| supabase | 96 | 🟢 | Yes | RLS, migrations, edge patterns |
-| tasks | 95 | 🟢 | Yes | Replaces 9 task-* skills |
-| maps | 94 | 🟢 | W5–W6 | Places, ChatMap, grounding |
-| testing | 92 | 🟢 | Yes | 21→90 tests per PRD |
-| gemini | 90 | 🟢 | Yes | Use **`gemini-3.5-flash`** (CLAUDE.md registry) |
-| task-verifier | 88 | 🟢 | CTI/OCL | Forensic Done gates — [`agent-cti`](.claude/skills/task-verifier/references/agent-cti.md) |
-| mde-vercel | 90 | 🟢 | W1+ | Preview deploy, rolling release W10 |
-| mde-worktree-pr-flow | 88 | 🟢 | Yes | One PR / worktree |
-| mermaid-diagrams | 88 | 🟢 | Docs | PRD + task diagrams |
-| mde-stripe | 86 | 🟢 | W9 | Tickets; sponsor later |
-| mde-real-estate | 80 | 🟢 | W5–W7 | Rentals persona Camila |
-| mde-github | 72 | 🟡 | CI | `gh` + Actions templates |
-| mde-prompting | 68 | 🟡 | Meta | Skill/prompt authoring during cleanup |
-| mde-firecrawl | 58 | 🟡 | Research | Not product runtime |
-| mde-roadmap | 55 | 🟡 | Planning | Not implementation |
-| mde-infisical | 62 | 🟡 | Ops | Secrets sync |
-| mde-paperclip | 52 | 🟡 | Ops | Only if PAP-* task tracking |
-| mastra-routing | 48 | 🔴 | No | Legacy router; CopilotKit + direct agents replace for P1 |
-| mde-tool-use | 38 | 🔴 | No | Anthropic Messages API — not app path |
-| mde-tool-use/mde-social-media | 28 | 🔴 | No | Post-MVP marketing |
-| mde-whatsapp | 25 | 🔴 | Phase 2 | PRD defers WhatsApp |
-| mde-hostinger | 32 | 🔴 | Ops | VPS/OpenClaw — not mdeapp |
-| open-claw | 58 | 🟡 | OCL / CTI-C | VPS worker — **not** chat; see [`docs/tasks/openclaw/docs/sources.md`](docs/tasks/openclaw/docs/sources.md) |
-| outcomes | 42 | 🔴 | Meta | Not delivery |
-| gemini (folder) | 90 | 🟢 | — | Same as row above |
+`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **34 total** — **33 active/protected skills plus `_template`**. `archive/` is a container, not an active skill.
+
+| Group | Exact folders |
+|-------|---------------|
+| Runtime / domain owners | `cloudinary`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `nextjs`, `real-estate`, `stripe`, `supabase` |
+| Task / engineering workflow | `code-review`, `lean-dev-flow`, `mde-vercel`, `mde-worktree-pr-flow`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
+| Specialist review | `ci-review`, `copilotkit-review`, `maps-review`, `mastra-review`, `nextjs-review`, `stripe-review`, `supabase-review` |
+| Protected legacy exception | `mde-real-estate` — retained by explicit cleanup constraint; do not treat it as the canonical real-estate owner |
+| Template | `_template` |
 
 ---
 
-## B — Symlinked in `.claude/skills` (from `.agents/skills`)
+## B — `.agents/skills` compatibility links (27)
 
-| Skill | Score | | Phase 1? | Notes |
-|-------|------:|:---:|----------|-------|
-| copilotkitV1 | 97 | 🟢 | Yes | v1 hooks — **mdeapp default** |
-| copilotkit | 98 | 🟢 | Yes | Orchestrator |
-| copilotkit-integrations | 98 | 🟢 | Yes | `MastraAgent.getLocalAgents` |
-| copilotkit-setup | 96 | 🟢 | W1 | Bootstrap |
-| copilotkit-debug | 94 | 🟢 | Always | CORS, SSE, agent down |
-| copilotkit-agui | 92 | 🟢 | W4–W6 | HITL + state |
-| copilotkit-develop | 88 | 🟡 | W2–W10 | **v2-oriented** — use `copilotkitV1` + integrations for mdeapp |
-| mastra-smoke-test | 74 | 🟢 | W3+ | Studio smoke |
-| supabase-edge-functions | 82 | 🟢 | W4+ | Redirects to supabase deep refs |
-| code-review | 82 | 🟢 | PRs | CodeRabbit |
-| autofix | 78 | 🟢 | PRs | CodeRabbit threads |
-| plan-analysis | 76 | 🟢 | Pre-task | Plan critique |
-| playwright-cli | 78 | 🟡 | W8+ | E2E |
-| chrome-devtools | 76 | 🟡 | Debug | LCP/CWV |
-| react-best-practices | 74 | 🟡 | UI | Next 16 |
-| tailwind-best-practices | 72 | 🟡 | UI | shadcn week 2 |
-| test-driven-development | 70 | 🟡 | Optional | Methodology; `testing` owns toolchain |
-| working-with-claude-code | 72 | 🟡 | Meta | IDE hygiene |
-| using-superpowers | 70 | 🟡 | Meta | Skill discovery |
-| tech-stack-research | 60 | 🟡 | Rare | Stack picks done |
-| brainstorming | 65 | 🟡 | Design | Upstream of build |
-| wireframe-prototyping | 68 | 🟡 | Design | Roberto/Camila flows |
-| skill-creator | 55 | 🟡 | Meta | This index cleanup |
-| skill-development | 55 | 🟡 | Meta | Authoring |
-| hook-development | 58 | 🟡 | Meta | Hooks vs skills |
-| command-development | 52 | 🟡 | Meta | Slash commands |
-| agent-development | 55 | 🟡 | Meta | `.claude/agents` not product |
-| dispatching-parallel-agents | 60 | 🟡 | Meta | Parallel subagents |
-| mde-agents | 40 | 🔴 | No | Managed Agents API ≠ Mastra path |
-| google-maps-api | 45 | 🔴 | No | Use **maps** |
-| react-google-maps | 42 | 🔴 | No | Deprecated stub → maps |
-| supabase-audit-functions | 40 | 🔴 | Rare | Pentest-only |
-| pgvector | 72 | 🟡 | CTI-011 | Embeddings pipeline only — not Phase A |
-| postiz | 28 | 🔴 | Phase 2+ | Social scheduling |
-| xml-sitemap | 35 | 🔴 | SEO | Post-cutover |
-| create-payment-credential | 18 | 🔴 | No | Agent checkout experiments |
-| create-github-action-workflow-specification | 58 | 🟡 | CI | Workflow specs |
-| playwright-best-practices | 72 | 🟡 | W8 | E2E patterns |
-| playwright-generate-test | 65 | 🟡 | W8 | Test gen |
-| chrome-devtools-cli | 64 | 🟡 | CI | Headless smoke |
-| troubleshooting | 50 | 🟡 | MCP | Chrome MCP failures only |
-| chatbot-conversation-design | 45 | 🔴 | No | CopilotKit UX replaces |
-| ai-chatbot | 22 | 🔴 | No | **Vite** legacy — wrong stack |
-| copilotkit-upgrade | 32 | 🔴 | No | **Pinned 1.55.2** — v2 is Phase 2 exploration |
-| copilotkit-contribute | 20 | 🔴 | No | OSS contrib only |
-| copilotkit-self-update | 38 | 🔴 | No | Refresh skills manually when CK releases |
+`.agents/skills/` contains compatibility symlinks only. Every link must resolve to the matching canonical `.claude/skills/<name>/SKILL.md`; never put editable skill content in `.agents/skills/`.
+
+Current compatibility names: `_template`, `cloudinary`, `code-review`, `copilotkit`, `events`, `gemini`, `lean-dev-flow`, `maps`, `mastra`, `mde-real-estate`, `mde-vercel`, `mde-worktree-pr-flow`, `mermaid-diagrams`, `nextjs`, `playwright-cli`, `real-estate`, `research`, `stripe`, `supabase`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills`.
 
 ---
 
-## C — `.agents/skills` only (not symlinked to `.claude`)
+## C — `.agents/skills` only
 
-> **Note:** `google-agents-cli-*` (7) are symlinked in `.claude/skills/` — listed in **ADK / agents-cli dev pack** above, not here.
-
-| Skill | Score | | Phase 1? | Notes |
-|-------|------:|:---:|----------|-------|
-| ai-sdk | 28 | 🔴 | No | Vercel AI SDK — not primary (CopilotKit + Mastra) |
-| browser-automation | 30 | 🔴 | No | Chinese Playwright; use `playwright-cli` |
-| buildchatbot | 12 | 🔴 | No | IBM Watson SaaS |
-| chatbot-builder | 12 | 🔴 | No | chatbot.com CRM |
-| sales-chatbot | 18 | 🔴 | No | SendPulse-style; not product |
-| dogfood | 42 | 🔴 | No | Generic dogfood |
-| shopify | 0 | 🔴 | No | Out of scope |
-| hermes-agent | 22 | 🔴 | No | VPS agent; Phase 3 sponsors |
-| hostinger-tools | 35 | 🔴 | Ops | Duplicate of mde-hostinger |
-| infisical-agent | 50 | 🟡 | Ops | Overlaps mde-infisical |
-| infisical-api | 50 | 🟡 | Ops | |
-| infisical-secret-syncs | 52 | 🟡 | Ops | |
-| paperclip | 48 | 🟡 | Ops | Use **mde-paperclip** if needed |
-| paperclip-ai-orchestration | 45 | 🟡 | Ops | |
-| paperclip-converting-plans-to-tasks | 50 | 🟡 | Ops | Supports task planning/workflow |
-| paperclip-create-agent | 35 | 🔴 | Ops | |
-| paperclip-create-plugin | 35 | 🔴 | Ops | |
-| tasks | 95 | 🟢 | Yes | Canonical task lifecycle |
-| create-tasks | 18 | 🔴 | No | |
-| generate-tasks | 18 | 🔴 | No | |
-| executing-tasks | 18 | 🔴 | No | |
-| spec-tasks | 18 | 🔴 | No | |
-| tasks-generator | 20 | 🔴 | No | |
-| prd-taskmaster | 20 | 🔴 | No | |
-| task-prd-creator | 15 | 🔴 | No | |
-| stripe-best-practices | 15 | 🔴 | No | → **mde-stripe** |
-| stripe-integration | 15 | 🔴 | No | |
-| stripe-projects | 15 | 🔴 | No | |
-| roadmap-update | 42 | 🔴 | No | → **mde-roadmap** |
-| mermaid-diagram-specialist | 52 | 🟡 | Docs | Duplicate of mermaid-diagrams |
-| wireframe-to-spec | 65 | 🟡 | Design | Overlaps wireframe-prototyping |
-| debug-optimize-lcp | 62 | 🟡 | Perf | W7+ polish |
-| github-actions-docs | 58 | 🟡 | CI | Overlaps mde-github |
-| github-actions-templates | 58 | 🟡 | CI | |
-| gemini-api-dev | 55 | 🟡 | Partial | Overlaps native **gemini** |
-| gemini-interactions-api | 50 | 🟡 | Later | Interactions API not P1 chat path |
-| gemini-live-api-dev | 35 | 🔴 | No | Voice — not MVP |
-| prompt-engineer | 30 | 🔴 | No | → mde-prompting |
-| prompt-lookup | 28 | 🔴 | No | |
-| prompt-master | 28 | 🔴 | No | |
-| prompt-optimizer | 28 | 🔴 | No | |
-| agents | 38 | 🔴 | No | Generic |
-| agentic-coding | 40 | 🔴 | No | PACT — not P1 |
-| skill-factory | 35 | 🔴 | Meta | Auto-generate skills |
-| testing-strategy | 55 | 🟡 | QA | High-level; `testing` executes |
-
-**Duplicate tree:** `copilotkit/skills/copilotkit-*` mirrors top-level copilotkit skills — **do not register twice**.
+**None.** This bucket is intentionally empty after canonicalization. A regular file, standalone skill, broken link, or link outside `.claude/skills/` under `.agents/skills/` is an integrity failure.
 
 ---
 
@@ -318,12 +206,12 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 
 | PRD requirement | Skill status | Gap |
 |-----------------|-------------|-----|
-| CopilotKit 1.55.2 + Mastra | 🟢 Full pack | Route UI via **`copilotkitV1`** + **`copilotkit-integrations`** — not v2-only `copilotkit-develop` |
+| CopilotKit 1.55.2 + Mastra | 🟢 `copilotkit` + `mastra` | Current app code uses `@copilotkit/react-core/v2` entrypoints; verify the exact installed API surface before changing provider/hooks |
 | Supabase reuse | 🟢 supabase | Edge fn forensic W5 — use symlink + MCP |
 | Gemini **`3.5-flash`** | 🟢 gemini + MCP | CLAUDE.md registry; CTI-004/011 use `@ai-sdk/google` |
 | Maps W5–W6 | 🟢 maps | Remove `google-maps-api` / `react-google-maps` from default load |
 | ADK grounding service (Phase 2) | 🟡 google-agents-cli-* | Phase 1 = Mastra + Grounding Lite MCP ([MAP-002](docs/tasks/maps/MAP-002-grounding-attribution.md)); ADK HTTP sidecar after pins ship |
-| Stripe W9 | 🟢 mde-stripe | Drop deprecated stripe-* symlinks |
+| Stripe W9 | 🟢 `stripe` | Use the canonical `stripe` owner; keep payment changes behind S4 verification |
 | WhatsApp | 🔴 mde-whatsapp | Correctly deferred Phase 2 |
 | OpenClaw (OCL-013) | 🟡 open-claw | VPS crawl **after** CTI-001A–010; not chat runtime |
 | Custom ai-router | 🔴 mastra-routing | Replaced by CopilotKit agent selection |
@@ -331,31 +219,28 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 
 ---
 
-## F — Recommended actions (priority)
+## F — Current maintenance rules
 
-1. **Session load list:** Pin the 22-row Phase 1 pack; add **google-agents-cli-*** only when working on `services/adk-grounding/` ([../plan/ADK/notes.md](../plan/ADK/notes.md)).
-2. **Unlink red symlinks** from `.claude/skills/` (ai-chatbot, copilotkit-upgrade, google-maps-api, react-google-maps, stripe-*, task-*, supabase-audit-functions) — files stay in `.agents` for reference.
-3. **Set `disable-model-invocation: true`** on: `mastra-routing`, `ai-chatbot`, `mde-tool-use`, `mde-whatsapp`, deprecated stripe/* — **load `open-claw` only for OCL-* tasks**, not CTI Phase A chat.
-4. **Symlink or document** `copilotkit` paths in PRD — already correct via `.claude` → `.agents`.
-5. **Deduplicate:** delete or ignore `copilotkit/skills/*` duplicate copies; single source in `.agents/skills/copilotkit-*`.
-6. **Merge maps:** one entry point `maps` only.
-7. **Update** [../plan/prd/00-skills-reference.md](../plan/prd/00-skills-reference.md) §matrix: add `mde-vercel`, `testing`, `mde-stripe`; note `mastra-routing` deprecated for P1.
+1. Edit skill content only under `.claude/skills/<name>/`.
+2. Keep `.agents/skills/` compatibility-only: symlinks must point to matching `.claude/skills/<name>/SKILL.md`.
+3. Route work through the canonical owner names in the current architecture table; do not resurrect retired aliases such as `mde-maps`, `mde-supabase`, or `mde-task-lifecycle`.
+4. Treat `mde-real-estate` as the explicit protected legacy exception; `real-estate` remains the canonical owner.
+5. Verify skill changes with symlink integrity, routing-contract tests, session-start tests, and `git diff --check`.
+6. For CopilotKit, inspect the installed package and imports before changing APIs; this repo currently uses `@copilotkit/react-core/v2` entrypoints on package `1.55.2`.
 
 ---
 
-## G — Summary scorecard
+## G — Current integrity snapshot (2026-09-20)
 
-| Category | Avg score | Verdict |
-|----------|----------:|---------|
-| Phase 1 pack (22 skills) | **91** | 🟢 Ship with these |
-| Native mde-* (non-archive) | 68 | Mixed — 10 green, 8 yellow, 6 red |
-| CopilotKit cluster | 86 | 🟢 minus upgrade/contribute/self-update |
-| google-agents-cli dev pack (7) | 86 | 🟡 Phase 2 ADK service only |
-| Legacy chat / vendor | 15 | 🔴 Archive candidates |
-| Task/paperclip cluster | 22 | 🔴 Consolidated around tasks / mde-paperclip |
-| Ops (hostinger, openclaw, whatsapp) | 29 | 🔴 Defer |
-
-**Overall inventory health vs new plan: 62/100** — strong core, too many loaded skills. **After applying Phase 1 pack + unlink reds: ~94/100** for day-to-day dev.
+| Check | Expected state |
+|-------|----------------|
+| Canonical skill files | `.claude/skills/` only |
+| `.agents/skills` regular files | `0` |
+| `.agents/skills` compatibility symlinks | `27` |
+| Broken `.agents/skills` links | `0` |
+| Noncanonical `.agents` targets | `0` |
+| `.agents-only` skills | `0` |
+| Protected real-estate paths | unchanged by this cleanup |
 
 ---
 
@@ -365,4 +250,4 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 - 🟡 **Keep on disk** — load on topic  
 - 🔴 **Do not load** for new plan (archive / unlink / defer)
 
-*Last filesystem scan: 2026-06-08 — `.claude/skills/` (58) + `.agents/skills/` (~191). Phase 1 symlinks restored. Per-task gates: [`todo.md`](./todo.md). Enforced by [`mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc).*
+*Current architecture verified 2026-09-20. The 2026-06-08 inventory above is retained only as historical context.*
