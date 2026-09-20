@@ -162,8 +162,8 @@ export async function ensureChatInputVisible(page: Page) {
   await input.waitFor({ state: "visible", timeout: 15_000 });
 }
 
-/** Playwright helper — type into the concierge composer and submit (multi-strategy send cascade). */
-export async function sendConciergeMessage(page: Page, text: string) {
+/** One fill plus one submit attempt (multi-strategy send cascade). */
+async function submitConciergeMessageOnce(page: Page, text: string) {
   await ensureChatInputVisible(page);
   const input = page
     .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
@@ -228,6 +228,100 @@ export async function sendConciergeMessage(page: Page, text: string) {
   }
 
   await input.press("Enter");
+}
+
+/** How long an accepted submit has to make the app issue its own API request. */
+export const CONCIERGE_ACCEPT_GRACE_MS = 6_000;
+
+/**
+ * The two effects `sendConciergeMessage` needs, as a seam so the retry contract
+ * can be unit-tested deterministically — no browser, no timers, no network.
+ *
+ * `armReactionWatch` must be called *before* `submit`: an accepted submit makes
+ * the app issue its request immediately, so a watch armed afterwards misses it.
+ */
+export type ConciergeSubmitPort = {
+  armReactionWatch: (timeoutMs: number) => Promise<boolean>;
+  submit: () => Promise<void>;
+};
+
+/**
+ * Submit at most twice, and fail loudly if neither submit made the app react.
+ *
+ * On production the first submit after a page load can be silently discarded.
+ * Measured against the live site, an **accepted** submit makes the app call its
+ * own API within ~0ms — `/api/rentals/search`, `/api/events/search`,
+ * `/api/grounded/search`, or `/api/copilotkit` — while a **discarded** submit
+ * issues no request at all. That reaction is what decides whether to retry.
+ *
+ * This replaces an earlier "composer cleared" signal, which was measured to be
+ * *never* true: the composer retains its text for minutes after a send that
+ * demonstrably worked (cards rendered in 500ms). Gating on it made every query
+ * look dropped, so every query was submitted twice, and a subsequent "throw on
+ * the second attempt" turned a healthy product into a red smoke run.
+ *
+ * If the second submit also draws no reaction we must throw. Returning quietly
+ * here would restore the failure mode this helper exists to remove: the caller
+ * proceeds to assert on cards that were never requested, and the report blames
+ * the product for a send the harness silently dropped.
+ */
+export async function submitConciergeMessageWithRetry(
+  port: ConciergeSubmitPort,
+  text: string,
+  graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const reacted = port.armReactionWatch(graceMs);
+    await port.submit();
+    if (await reacted) return;
+  }
+  throw new Error(
+    `Concierge submit was not accepted after 2 attempts — the app issued no ` +
+      `request, so the message was discarded before CopilotKit took it. ` +
+      `Query: ${JSON.stringify(text)}`,
+  );
+}
+
+/**
+ * Resolve true once the page issues its own non-GET `/api/*` request, which is
+ * the observable consequence of an accepted submit. Resolves false on timeout.
+ */
+function watchForAppApiRequest(page: Page, timeoutMs: number): Promise<boolean> {
+  let origin: string;
+  try {
+    origin = new URL(page.url()).origin;
+  } catch {
+    return Promise.resolve(false);
+  }
+  return page
+    .waitForRequest(
+      (request) => {
+        try {
+          const url = new URL(request.url());
+          return (
+            url.origin === origin &&
+            url.pathname.startsWith("/api/") &&
+            request.method() !== "GET"
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: timeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
+}
+
+/** Type into the concierge composer and submit, retrying once (see above). */
+export async function sendConciergeMessage(page: Page, text: string) {
+  await submitConciergeMessageWithRetry(
+    {
+      armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
+      submit: () => submitConciergeMessageOnce(page, text),
+    },
+    text,
+  );
 }
 
 export async function waitForRentalCards(page: Page) {
@@ -364,13 +458,20 @@ export const RESTAURANT_FAST_PATH_QUERY = "suggest restaurants medellin";
 export async function waitForRestaurantCards(page: Page) {
   const panel = page.locator('[data-testid="restaurant-fast-path-panel"]');
   const card = page.locator('[data-testid="restaurant-card"]').first();
-  try {
+  const waitForCards = async () => {
     await panel.waitFor({ state: "visible", timeout: 90_000 });
     await card.waitFor({ state: "visible", timeout: 30_000 });
+  };
+  try {
+    await waitForCards();
   } catch {
-    throw new Error(
-      "Restaurant fast-path cards did not render — ensure UX-036 feat slice is on disk and dev server restarted.",
-    );
+    // Same recovery shape as waitForRentalCards/waitForEventCards. A fast-path
+    // turn issues no CopilotKit request, so a dropped submit surfaces here as
+    // missing cards rather than as an agent error. If this second attempt also
+    // times out, the caller sees Playwright's own timeout, which says what was
+    // missing — no local-dev advice that is meaningless against production.
+    await sendConciergeMessage(page, RESTAURANT_FAST_PATH_QUERY);
+    await waitForCards();
   }
 }
 

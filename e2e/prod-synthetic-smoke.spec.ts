@@ -2,9 +2,11 @@ import { test, expect } from "@playwright/test";
 import {
   gotoHome,
   sendConciergeMessage,
+  waitForCafeGroundedCards,
   waitForCopilotIdle,
-  waitForRentalCards,
   waitForEventCards,
+  waitForRentalCards,
+  waitForRestaurantCards,
 } from "./helpers/maps-layout";
 import fs from "node:fs";
 import path from "node:path";
@@ -61,6 +63,10 @@ test.describe("UX-034 prod synthetic smoke", () => {
 
     trackQuery("restaurants");
     await sendConciergeMessage(page, QUERIES.restaurants);
+    // The restaurant vertical renders from the fast-path panel, which may not emit a
+    // CopilotKit turn at all — so waiting for agent idle is not enough to know the
+    // cards exist. Wait for the cards themselves, like the rentals/events verticals.
+    await waitForRestaurantCards(page);
     await waitForCopilotIdle(page, 120_000);
     await page.screenshot({ path: path.join(outDir, "03-restaurants.png"), fullPage: true });
     const restaurantCards = await page.locator('[data-testid="restaurant-card"]').count();
@@ -71,6 +77,8 @@ test.describe("UX-034 prod synthetic smoke", () => {
 
     trackQuery("cafes");
     await sendConciergeMessage(page, QUERIES.cafes);
+    // Same reason as restaurants: assert the café cards exist before counting them.
+    await waitForCafeGroundedCards(page);
     await waitForCopilotIdle(page, 120_000);
     await page.screenshot({ path: path.join(outDir, "04-cafes.png"), fullPage: true });
     const cafeCards = await page.locator(
