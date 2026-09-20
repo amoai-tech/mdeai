@@ -41,12 +41,13 @@ const TARGET = {
 };
 
 /** React tracks its own value, so drive the native setter then fire `input`. */
+const nativeValueSetter = Object.getOwnPropertyDescriptor(
+  window.HTMLInputElement.prototype,
+  "value",
+)?.set;
+
 function setNativeValue(el: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value",
-  )?.set;
-  setter?.call(el, value);
+  nativeValueSetter?.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
@@ -66,7 +67,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  act(() => root.unmount());
+  act(() => {
+    root.unmount();
+  });
   container.remove();
   vi.clearAllMocks();
 });
@@ -77,7 +80,7 @@ async function renderModalAndFill() {
   await act(async () => {
     root.render(<ScheduleViewingModal />);
   });
-  await act(async () => {});
+  await act(() => Promise.resolve());
 
   await act(async () => {
     setNativeValue(
@@ -103,7 +106,7 @@ function submitForm() {
 
 describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
   it("submits once when the form is submitted twice before the request settles", async () => {
-    let resolveSubmit: (value: ScheduleViewingResult) => void = () => {};
+    let resolveSubmit!: (value: ScheduleViewingResult) => void;
     vi.mocked(submitScheduleViewing).mockReturnValue(
       new Promise<ScheduleViewingResult>((resolve) => {
         resolveSubmit = resolve;
