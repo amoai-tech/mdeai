@@ -19,46 +19,6 @@
     "anon": true,
     "authenticated": true
   },
-  "broadcast_event_attendees_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_event_dashboard_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_messages_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_proactive_suggestions_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_suggestions_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_trip_items_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_trips_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "broadcast_vote_tally_changes()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "broker_owns_apartment(p_apartment_id uuid)": {
     "public": true,
     "anon": true,
@@ -79,11 +39,6 @@
     "anon": true,
     "authenticated": true
   },
-  "compute_lead_score()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents integer)": {
     "public": true,
     "anon": true,
@@ -99,11 +54,6 @@
     "anon": true,
     "authenticated": true
   },
-  "enqueue_embedding_job()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "event_attendees_paginated(p_event_id uuid, p_search text, p_limit integer, p_offset integer)": {
     "public": false,
     "anon": false,
@@ -114,29 +64,9 @@
     "anon": false,
     "authenticated": true
   },
-  "events_sync_legacy_is_active()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "fn_apply_approval_decision()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "fn_join_wait_list(p_ticket_type_id uuid, p_user_id uuid, p_email text, p_phone text)": {
     "public": true,
     "anon": false,
-    "authenticated": true
-  },
-  "fn_outbox_set_updated_at()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "fn_outbox_suppression_check()": {
-    "public": true,
-    "anon": true,
     "authenticated": true
   },
   "fts_array_to_text(arr text[])": {
@@ -145,11 +75,6 @@
     "authenticated": true
   },
   "fts_spanish(content text)": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "generate_confirmation_code()": {
     "public": true,
     "anon": true,
     "authenticated": true
@@ -165,16 +90,6 @@
     "authenticated": true
   },
   "get_my_role()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "guard_booking_partner_decision()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "handle_new_user()": {
     "public": true,
     "anon": true,
     "authenticated": true
@@ -239,21 +154,6 @@
     "anon": true,
     "authenticated": true
   },
-  "realtime_broadcast_messages()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "realtime_broadcast_trip_items()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "realtime_broadcast_trips()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "record_check_in(p_event_id uuid, p_attendee_id uuid, p_qr_token text, p_scanned_by uuid, p_scanner_device text, p_ip_address inet, p_result text, p_details jsonb)": {
     "public": false,
     "anon": false,
@@ -284,11 +184,6 @@
     "anon": true,
     "authenticated": true
   },
-  "set_updated_at()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
     "anon": true,
@@ -301,51 +196,6 @@
   },
   "ticket_validate_consume(p_qr_token text)": {
     "public": false,
-    "anon": true,
-    "authenticated": true
-  },
-  "touch_embedding_updated_at()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "touch_updated_at()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "trigger_ai_embed()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "trigger_set_timestamps()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "update_collection_count()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "update_conversation_on_message()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "update_conversation_stats()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "update_updated_at()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "update_updated_at_column()": {
-    "public": true,
     "anon": true,
     "authenticated": true
   }

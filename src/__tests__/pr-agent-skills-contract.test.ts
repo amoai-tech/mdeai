@@ -106,6 +106,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).toContain("Standalone PR Review");
     expect(workflow).toContain("PR-Agent could not safely update the persistent review");
     expect(workflow).toContain('body.includes("## MDE PR Review")');
+    expect(workflow).toContain("Incremental Review Skipped");
+    expect(workflow).toContain("No files were changed since the");
+    expect(workflow).toContain("const maxAttempts = 10");
+    expect(workflow).toContain("await new Promise((resolve) => setTimeout(resolve, 10000))");
     expect(workflow).not.toContain("max_tokens=8000");
   });
 });
