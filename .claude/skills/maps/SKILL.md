@@ -1,7 +1,7 @@
 ---
 name: maps
 description: >-
-  Use when MDE work changes or diagnoses Google Maps, Places, map state, markers, routes, location search, Maps grounding, or map-related keys.
+  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
@@ -15,13 +15,6 @@ paths:
 ---
 
 # maps — Google Maps Platform
-
-## When NOT to use
-
-- Generic GIS / spatial math with no Google Maps Platform APIs
-- **Mapbox-only** or **Leaflet/OpenStreetMap-only** stacks (no GMP)
-- Unrelated mapping tutorials or homework off the mdeai repo
-- **Non-mdeAI** products—still read-only here; prefer not to expand scope in this skill
 
 ## Load order (keep context small)
 
@@ -105,7 +98,7 @@ Do not select a product from memory when current Google guidance is available.
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
 | **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
-| **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive MCP tools](#interactive-mcp-tools) below |
+| **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive Maps tools](#interactive-maps-tools) below |
 | **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
 
 ## mdeAI environment
@@ -113,7 +106,7 @@ Do not select a product from memory when current Google guidance is available.
 ```
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API, AdvancedMarkerElement
 GOOGLE_PLACES_API_KEY       — Server-side only — Places API (New), enrichment scripts
-GOOGLE_MAPS_API_KEY         — Edge functions — Directions, Routes
+GOOGLE_MAPS_API_KEY         — Server-side Maps APIs explicitly required by the feature
 GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
 ```
 
@@ -146,7 +139,7 @@ places.id,places.displayName,places.googleMapsLinks,places.location,places.gener
 | `places.googleMapsLinks.directionsUri` | Directions link | Optional card button |
 | `places.googleMapsLinks.photosUri` | Google Maps photos link | Optional "see photos" |
 | `places.location` | `{ latitude, longitude }` | Backfill lat/lng |
-| `places.generativeSummary` | `{ text, disclosureText }` | Store as `ai_summary`; show `disclosureText` |
+| `places.generativeSummary` | provider summary + disclosure | Use only with a model/schema that preserves provider provenance and disclosure; never collapse into generic MDE `ai_summary` |
 
 ### Volatile provider facts
 
@@ -194,14 +187,7 @@ MDE React/Next.js Maps code uses `@vis.gl/react-google-maps`. Prefer `<APIProvid
 
 ## Session tokens — autocomplete billing
 
-Use UUID v4 session tokens to group autocomplete keystrokes + final Place Details into one billing event:
-
-```typescript
-import { v4 as uuidv4 } from 'uuid';
-const sessionToken = uuidv4(); // new UUID per search session
-// Pass as sessionToken on each Autocomplete call
-// Generate fresh UUID after user selects a place
-```
+Use the current provider-recommended session-token mechanism for the API being called. In Maps JavaScript Place Autocomplete Data API, use `AutocompleteSessionToken`; for web-service flows, use a unique token per user autocomplete session. Start a fresh token after selection/termination and verify current billing semantics in official docs.
 
 ---
 
@@ -217,7 +203,7 @@ Demo Key: prototypes only. Production/shared environments use restricted project
 |-----|-------------|-------------|
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API only |
 | `GOOGLE_PLACES_API_KEY` | Server IP | Places API (New) only |
-| `GOOGLE_MAPS_API_KEY` | Server IP | Directions API, Maps Static |
+| `GOOGLE_MAPS_API_KEY` | Server IP | Only explicitly required server Maps APIs (for example Maps Static) |
 | `GOOGLE_ROUTES_API_KEY` | Server IP | Routes API |
 
 > Full 2-key security architecture → [`references/security-and-optimization.md`](references/security-and-optimization.md)
@@ -261,7 +247,7 @@ For significant Maps changes verify provider-sourced geo/place data, required at
 
 ## Google Places provider summaries
 
-Google Places provider summaries are distinct from MDE `ai_summary`. Render them through `GooglePlacesSummary`; missing provider disclosure suppresses the summary. Do not relabel MDE `ai_summary`.
+Google Places provider summaries are distinct from MDE `ai_summary`. Preserve provider provenance and disclosure end-to-end. Render provider summaries through `GooglePlacesSummary`; missing provider disclosure suppresses the summary. Do not relabel or store them as generic MDE `ai_summary`.
 
 
 ## Maps completion evidence gate

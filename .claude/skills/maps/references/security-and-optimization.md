@@ -153,7 +153,7 @@ When users want to download or share HTML pages:
 |---------|---------------------|-----------------|
 | Maps | Maps JS API (frontend key) | Embed iframe (free, no key) |
 | Street View | Direct Google Maps link (no key) | Direct Google Maps link (no key) |
-| Route lines | `DirectionsRenderer` (frontend key) | Static map image with path overlay |
+| Route lines | Current Routes/Route APIs (restricted key) | Static map image with path overlay |
 | Data (weather, places) | Pre-rendered from backend | Same pre-rendered HTML — no API calls |
 
 ```bash
