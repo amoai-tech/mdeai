@@ -186,12 +186,18 @@ describe("check-mastra-schema-contract — contract hygiene", () => {
 
   it("fails clearly when the contract file is missing", () => {
     // Both modes must fail: an unreadable contract is never a silent pass.
-    const plain = run(["--contract", "/nonexistent/contract.json"]);
+    const plain = run(["--contract", "scripts/nonexistent-contract.json"]);
     expect(plain.out).toContain("cannot read");
     expect(plain.status).toBe(1);
 
-    const strictRun = run(["--contract", "/nonexistent/contract.json", "--strict"]);
+    const strictRun = run(["--contract", "scripts/nonexistent-contract.json", "--strict"]);
     expect(strictRun.status).toBe(1);
+  });
+
+  it("rejects a contract path outside the project root", () => {
+    const { status, out } = run(["--contract", "../outside-contract.json"]);
+    expect(out).toContain("contract path must stay inside project root");
+    expect(status).toBe(1);
   });
 
   it("fails when stdin carries unparseable JSON", () => {

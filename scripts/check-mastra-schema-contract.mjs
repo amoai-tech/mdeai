@@ -46,7 +46,13 @@ const strict = process.argv.includes("--strict");
 const contractArg = argValue("--contract");
 /** `--contract -` reads the contract from stdin, so callers need no temp file. */
 const fromStdin = contractArg === "-";
-const contractPath = contractArg ?? path.join(ROOT, "scripts/mastra-schema-contract.json");
+const contractPath = fromStdin
+  ? null
+  : path.resolve(ROOT, contractArg ?? "scripts/mastra-schema-contract.json");
+if (contractPath && contractPath !== ROOT && !contractPath.startsWith(ROOT + path.sep)) {
+  console.error("mastra-schema-contract: contract path must stay inside project root");
+  process.exit(1);
+}
 const contractLabel = fromStdin ? "stdin" : path.relative(ROOT, contractPath);
 
 /** Every provisioned table lives in Mastra's own namespace. */
