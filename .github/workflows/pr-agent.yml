@@ -175,9 +175,12 @@ jobs:
                 body.includes("## Standalone PR Review") &&
                 body.includes("PR-Agent could not safely update the persistent review") &&
                 body.includes("## MDE PR Review");
+              const noDiffIncremental =
+                body.includes("Incremental Review Skipped") &&
+                body.includes("No files were changed since the");
               return (
                 comment.user?.login === "github-actions[bot]" &&
-                (canonical || standalone) &&
+                (canonical || standalone || noDiffIncremental) &&
                 new Date(comment.updated_at).getTime() >= startedAt
               );
             });
