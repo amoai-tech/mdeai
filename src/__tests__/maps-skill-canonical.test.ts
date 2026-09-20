@@ -14,6 +14,7 @@ describe("canonical Maps skill", () => {
       ".claude/skills/maps/references",
       ".claude/skills/maps/scripts",
       ".claude/skills/maps/tests",
+      ".claude/skills/maps/scripts/check-google-maps-upstream.mjs",
     ]) {
       expect(existsSync(path), `missing canonical Maps resource: ${path}`).toBe(true);
     }
@@ -28,6 +29,11 @@ describe("canonical Maps skill", () => {
       "## Legacy API hard failures",
       "## Critical failure checks",
       "## Compliance review",
+      "## Product-selection routing matrix",
+      "## Maps completion evidence gate",
+      "explicit `language` and `region`",
+      "google-map-react",
+      "@react-google-maps/api",
       "Pricing, free tiers, geographic availability, preview/GA status, field availability, and quotas are volatile.",
     ]) {
       expect(body).toContain(required);

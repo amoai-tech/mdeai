@@ -72,6 +72,24 @@ Changed map/place code and tests → this canonical skill → current Google Map
 
 ---
 
+## Product-selection routing matrix
+
+Choose the modern product before coding, then verify the matching current Google sub-skill.
+
+| Need | Default product direction |
+|---|---|
+| React map + markers | Maps JavaScript API via `@vis.gl/react-google-maps` + Advanced Markers |
+| Place search/details/autocomplete | Places API (New) / current Place APIs |
+| Routes, ETA, route matrix | Routes API / current Route APIs |
+| Address validation/standardization | Address Validation API |
+| Address ↔ coordinates | Geocoding API |
+| Static map / Street View image | Maps Static API / Street View Static API |
+| Air quality, pollen, solar, weather | Load the current matching environmental sub-skill |
+
+Do not select a product from memory when current Google guidance is available.
+
+---
+
 ## Quick routing
 
 | Task | Go to |
@@ -98,46 +116,9 @@ GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
 
 ---
 
-## Interactive MCP tools
+## Interactive Maps tools
 
-Use these when answering location questions **in a Claude session** (not for mdeAI production code). Tools call Google Maps APIs live.
-
-### Tools available
-
-```text
-search_places(query, location?, radius?, type?, open_now?, language?)
-search_nearby_places(location, radius, keyword?, type?, rank_by?, open_now?, language?)
-get_place_details(place_id, language?, reviews_sort?)
-get_directions(origin, destination, mode?, alternatives?, avoid?, language?)
-geocode_address(address, language?, region?)
-reverse_geocode(latlng, language?)
-show_on_map(map_type, markers?, directions?, center?, zoom?)
-```
-
-### Response pattern — Text → Map → Text
-
-**Always follow this sequence. Never call `show_on_map` in parallel with other calls.**
-
-1. **Text** — introduce what you'll show ("Here are top restaurants near Poblado:")
-2. **Map** — call `show_on_map` to render results
-3. **Text** — explain results in plain language (names, ratings, notes)
-
-**Multiple categories:** sequential maps — events then restaurants, not parallel.
-
-**Never echo raw map_data JSON** (coordinates, markers, zoom) in your text response. The map renders visually; describe places by name and quality only.
-
-### Intent → tool mapping
-
-| User says | Tool to use |
-|-----------|-------------|
-| "Where is X?" | `geocode_address` |
-| "Find restaurants near..." | `search_places` or `search_nearby_places` |
-| "What are the hours for...?" | `get_place_details` |
-| "How do I get from A to B?" | `get_directions` |
-| "What address is at these coords?" | `reverse_geocode` |
-| "Show me these places on a map" | `show_on_map` |
-
-**Preserve `place_id`** from search results for use in `get_place_details`.
+For live location questions, use the available Maps tools for search, details, directions, geocoding/reverse-geocoding, then render with `show_on_map` only after results exist. Preserve provider `place_id`; do not echo raw map JSON or invent place facts.
 
 ---
 
@@ -196,11 +177,11 @@ Verify current grounding products, availability, quotas, pricing, and structured
 
 ### React implementation rule
 
-MDE React/Next.js Maps code uses `@vis.gl/react-google-maps`. Prefer `<APIProvider>`, `<Map>`, `useMapsLibrary()`, and Advanced Marker APIs; do not introduce another React Maps wrapper. Use `@googlemaps/js-api-loader` only for non-React utilities or an existing raw-JS boundary. See [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md).
+MDE React/Next.js Maps code uses `@vis.gl/react-google-maps`. Prefer `<APIProvider>`, `<Map>`, `useMapsLibrary()`, and Advanced Marker APIs. Do not introduce `google-map-react`, `@react-google-maps/api`, or another wrapper. Use `@googlemaps/js-api-loader` only for non-React utilities or an existing raw-JS boundary. See [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md).
 
-- `mapId` is required where current Advanced Marker APIs require it.
-- Keep `data-testid="map-pin"` on pins used by MDE smoke tests.
-- Frontend keys stay restricted to approved referrers + required browser APIs only.
+- Map containers need explicit height; Advanced Markers need the current required marker library and a valid `mapId`.
+- International search/geocoding must consider explicit `language` and `region` rather than silently inheriting machine/IP locale.
+- Keep `data-testid="map-pin"` on pins used by MDE smoke tests; keep frontend keys restricted to approved referrers + required browser APIs only.
 
 ---
 
@@ -259,11 +240,17 @@ Do not introduce `google.maps.Marker`, legacy Places `Autocomplete`/`SearchBox`/
 
 ## Critical failure checks
 
-Before approval verify: no unsupported browser REST/CORS path; map container has explicit height; React uses `@vis.gl/react-google-maps`; Advanced Markers use a valid `mapId`; server keys stay out of client bundles; web-component object properties are not stringified as HTML attributes; headless tests do not assume WebGL/3D; coordinates stay `{ lat, lng }`; Places field masks are minimal; no legacy API was introduced.
+Before approval verify: no unsupported browser REST/CORS path; map container has explicit height; React uses `@vis.gl/react-google-maps` with the required marker library; Advanced Markers use a valid `mapId`; server keys stay out of client bundles; web-component objects are not stringified as HTML attributes; headless tests do not assume WebGL/3D; coordinates stay `{ lat, lng }`; international flows set intentional locale/region; Places field masks are minimal; no legacy API was introduced.
 
 ## Compliance review
 
 For significant Maps changes verify provider-sourced geo/place data, required attribution, permitted storage/caching, no LLM-fabricated provider facts, correct browser/server key restrictions, intentional billable fields/calls, and applicable regional/EEA requirements against current Google terms.
+
+## Maps completion evidence gate
+
+Do not call a Maps change complete until evidence covers: targeted Maps tests; no new legacy API; client/server key exposure; minimal field masks for changed Places calls; compliance/attribution review; and a browser smoke test when map UI changed. Record any current-doc or Code Assist source used for an API/version decision.
+
+For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite.
 
 ---
 
