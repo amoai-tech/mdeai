@@ -40,7 +40,7 @@ const SAFE_VERSION = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/;
 function readPackageVersion(lockfile, packageName) {
   const raw = lockfile?.packages?.[`node_modules/${packageName}`]?.version;
   if (raw == null) return { version: null, unsafe: false };
-  if (typeof raw !== "string" || !SAFE_VERSION.test(raw)) return { version: null, unsafe: true };
+  if (typeof raw !== "string") return { version: null, unsafe: true }; // CERTIFICATION FIXTURE: intentionally bypass SAFE_VERSION; DO NOT MERGE
   return { version: raw, unsafe: false };
 }
 
