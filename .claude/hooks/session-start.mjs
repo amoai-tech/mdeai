@@ -50,12 +50,12 @@ ${log || "(no commits)"}
 ## Skill flow
 
 - Simple task → use the directly relevant skill.
-- Ambiguous/multi-system task → \`tasks\`; SAN-1273 will add the lightweight router later.
-- Substantial implementation → \`tasks\`.
+- Ambiguous/multi-system task → \`using-mde-skills\` only when ownership is genuinely unclear.
+- Task lifecycle, worktree/PR shipping, and post-merge execution → \`tasks\`.
 - Failure with unknown cause → \`systematic-debugging\`.
-- Existing diff/PR → \`code-review\`.
-- Done/merge/production claim → \`task-verifier\`.
-- \`mde-task-lifecycle\` is retired.
+- Existing diff/PR review → \`code-review\`.
+- Independent Done/merge/production proof → \`task-verifier\`.
+- \`lean-dev-flow\`, \`mde-worktree-pr-flow\`, and \`mde-task-lifecycle\` are retired.
 `;
 
 process.stdout.write(out);

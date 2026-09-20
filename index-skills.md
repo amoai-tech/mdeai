@@ -28,7 +28,7 @@ legend:
 
 ### Canonical skill layout (2026-09-20)
 
-**Canonical owner folders use their exact `.claude/skills/` names.** Primary runtime/domain owners are `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `events`, and `real-estate`; task/ops owners include `tasks`, `testing`, `code-review`, `task-verifier`, `mde-vercel`, and `mde-worktree-pr-flow`. See Section A for the complete current inventory.
+**Canonical owner folders use their exact `.claude/skills/` names.** Primary runtime/domain owners are `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `events`, and `real-estate`; task/ops owners include `tasks`, `task-verifier`, `testing`, `code-review`, and `mde-vercel`. Lifecycle/worktree/PR execution is owned by `tasks`. See Section A for the complete current inventory.
 
 `mde-real-estate` remains present as an explicit protected legacy exception in this cleanup; `real-estate` is still the canonical owner.
 
@@ -165,23 +165,23 @@ legend:
 
 ## A — Canonical `.claude/skills` inventory
 
-`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **34 total** — **33 active/protected skills plus `_template`**. `archive/` is a container, not an active skill.
+`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **32 total** — **31 active/protected skills plus `_template`**. `archive/` is a container, not an active skill.
 
 | Group | Exact folders |
 |-------|---------------|
 | Runtime / domain owners | `cloudinary`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `nextjs`, `real-estate`, `stripe`, `supabase` |
-| Task / engineering workflow | `code-review`, `lean-dev-flow`, `mde-vercel`, `mde-worktree-pr-flow`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
+| Task / engineering workflow | `code-review`, `mde-vercel`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
 | Specialist review | `ci-review`, `copilotkit-review`, `maps-review`, `mastra-review`, `nextjs-review`, `stripe-review`, `supabase-review` |
 | Protected legacy exception | `mde-real-estate` — retained by explicit cleanup constraint; do not treat it as the canonical real-estate owner |
 | Template | `_template` |
 
 ---
 
-## B — `.agents/skills` compatibility links (27)
+## B — `.agents/skills` compatibility links (25)
 
 `.agents/skills/` contains compatibility symlinks only. Every link must resolve to the matching canonical `.claude/skills/<name>/SKILL.md`; never put editable skill content in `.agents/skills/`.
 
-Current compatibility names: `_template`, `cloudinary`, `code-review`, `copilotkit`, `events`, `gemini`, `lean-dev-flow`, `maps`, `mastra`, `mde-real-estate`, `mde-vercel`, `mde-worktree-pr-flow`, `mermaid-diagrams`, `nextjs`, `playwright-cli`, `real-estate`, `research`, `stripe`, `supabase`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills`.
+Current compatibility names: `_template`, `cloudinary`, `code-review`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `mde-real-estate`, `mde-vercel`, `mermaid-diagrams`, `nextjs`, `playwright-cli`, `real-estate`, `research`, `stripe`, `supabase`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills`.
 
 ---
 
@@ -223,7 +223,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 
 1. Edit skill content only under `.claude/skills/<name>/`.
 2. Keep `.agents/skills/` compatibility-only: symlinks must point to matching `.claude/skills/<name>/SKILL.md`.
-3. Route work through the canonical owner names in the current architecture table; do not resurrect retired aliases such as `mde-maps`, `mde-supabase`, or `mde-task-lifecycle`.
+3. Route work through the canonical owner names in the current architecture table; do not resurrect retired aliases such as `mde-maps`, `mde-supabase`, `mde-task-lifecycle`, `lean-dev-flow`, or `mde-worktree-pr-flow`.
 4. Treat `mde-real-estate` as the explicit protected legacy exception; `real-estate` remains the canonical owner.
 5. Verify skill changes with symlink integrity, routing-contract tests, session-start tests, and `git diff --check`.
 6. For CopilotKit, inspect the installed package and imports before changing APIs; this repo currently uses `@copilotkit/react-core/v2` entrypoints on package `1.55.2`.
@@ -236,7 +236,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 |-------|----------------|
 | Canonical skill files | `.claude/skills/` only |
 | `.agents/skills` regular files | `0` |
-| `.agents/skills` compatibility symlinks | `27` |
+| `.agents/skills` compatibility symlinks | `25` |
 | Broken `.agents/skills` links | `0` |
 | Noncanonical `.agents` targets | `0` |
 | `.agents-only` skills | `0` |

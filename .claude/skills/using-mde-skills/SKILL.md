@@ -12,6 +12,7 @@ Use this skill only when ownership is ambiguous and the request is non-trivial. 
 The router chooses one owner and stops.
 
 - ambiguous substantial implementation → `tasks`
+- task lifecycle, worktree/branch setup, implementation/test-loop selection, PR shipping, or post-merge cleanup → `tasks`
 - unknown failure → `systematic-debugging`
 - research/evidence → `research`
 - existing PR/diff → `code-review`

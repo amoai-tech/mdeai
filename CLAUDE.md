@@ -55,7 +55,7 @@ Workflow skills:
 - `wireframe`
 - `mermaid-diagrams`
 
-Retired: `mde-task-lifecycle`, `copilotkit-debug`, `copilotkit-integrations`, `copilotkit-setup`.
+Retired: `mde-task-lifecycle`, `lean-dev-flow`, `mde-worktree-pr-flow`, `copilotkit-debug`, `copilotkit-integrations`, `copilotkit-setup`. Task lifecycle/execution belongs to `tasks`; independent Done/merge/production proof belongs to `task-verifier`.
 
 ## Hard rules
 

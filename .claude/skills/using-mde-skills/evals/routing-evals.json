@@ -103,5 +103,40 @@
     "expected_owner": "systematic-debugging",
     "risk": "S2",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "worktree-lifecycle",
+    "input": "Start a worktree for SAN-1400 and open a PR when it is verified",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "lean-loop-lifecycle",
+    "input": "Use a fast dev loop and tell me which tests should I run before push",
+    "expected_owner": "tasks",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "post-merge-lifecycle",
+    "input": "Clean up merged worktrees and finish the post-merge actions",
+    "expected_owner": "tasks",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-lean-owner",
+    "input": "Route this to lean-dev-flow",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-worktree-owner",
+    "input": "Route this to mde-worktree-pr-flow",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

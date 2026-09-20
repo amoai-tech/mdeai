@@ -51,6 +51,10 @@ try {
   assert.ok(cleanOut.includes(`- Repo: ${clean}`));
   assert.match(cleanOut, /- Branch: main/);
   assert.match(cleanOut, /canonical skill scan: OK/);
+  assert.ok(cleanOut.includes("Task lifecycle, worktree/PR shipping, and post-merge execution → `tasks`"));
+  assert.ok(cleanOut.includes("Independent Done/merge/production proof → `task-verifier`"));
+  assert.ok(cleanOut.includes("`lean-dev-flow`, `mde-worktree-pr-flow`, and `mde-task-lifecycle` are retired"));
+  assert.doesNotMatch(cleanOut, /SAN-1273 will add the lightweight router later/);
   const commitLines = cleanOut.split("## Recent commits\n\n```\n")[1].split("\n```", 1)[0].trim().split("\n");
   assert.equal(commitLines.length, 3);
   assert.match(commitLines[0], /commit 4/);

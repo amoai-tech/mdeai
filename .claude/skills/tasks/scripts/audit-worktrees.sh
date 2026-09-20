@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # audit-worktrees.sh — Forensic read-only audit of all worktrees vs origin/main.
-# Usage: bash .claude/skills/mde-worktree-pr-flow/scripts/audit-worktrees.sh
+# Usage: bash .claude/skills/tasks/scripts/audit-worktrees.sh
 set -euo pipefail
 
 BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
@@ -81,4 +81,4 @@ done
 echo
 echo "${BOLD}Legend:${RESET} DIRTY = status --short lines; UNTR = untracked paths (ls-files); MAIN b/a = behind/ahead vs ${CYAN}origin/main${RESET}; STASH = repo-wide count."
 echo "${DIM}Next: classify domains, run backup-worktree.sh before any destructive command.${RESET}"
-echo "${DIM}Reference: .claude/skills/mde-worktree-pr-flow/references/forensic-cleanup.md${RESET}"
+echo "${DIM}Reference: .claude/skills/tasks/references/worktrees.md${RESET}"

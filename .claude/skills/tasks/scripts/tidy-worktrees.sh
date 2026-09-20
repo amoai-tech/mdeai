@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tidy-worktrees.sh — Weekly maintenance: prune stale worktrees and remote-tracking refs.
 # Safe read-mostly; does not delete unmerged local branches or dirty trees.
-# Usage: bash .agents/skills/mde-worktree-pr-flow/scripts/tidy-worktrees.sh [--dry-run]
+# Usage: bash .claude/skills/tasks/scripts/tidy-worktrees.sh [--dry-run]
 set -euo pipefail
 
 DRY=0

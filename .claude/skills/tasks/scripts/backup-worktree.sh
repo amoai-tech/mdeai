@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # backup-worktree.sh — Mandatory backup before cleanup / worktree removal / hard reset.
-# Usage: bash .claude/skills/mde-worktree-pr-flow/scripts/backup-worktree.sh [worktree-path]
+# Usage: bash .claude/skills/tasks/scripts/backup-worktree.sh [worktree-path]
 # Default: current directory's worktree.
 set -euo pipefail
 

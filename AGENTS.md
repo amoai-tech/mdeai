@@ -31,7 +31,7 @@ Use `systematic-debugging` only when the responsible domain/root cause is genuin
 - UI state/interaction design → `wireframe`.
 - Architecture/state/dependency visualization → `mermaid-diagrams`.
 
-`using-mde-skills` is the active lightweight ambiguity router. Do not restore the retired `mde-task-lifecycle` workflow or the old PR #45 routing machinery. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
+`using-mde-skills` is the active lightweight ambiguity router. Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, or `mde-worktree-pr-flow`) or the old PR #45 routing machinery. Lifecycle/execution routes to `tasks`; independent Done/merge/production proof routes to `task-verifier`. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
 
 ## Canonical skills
 
