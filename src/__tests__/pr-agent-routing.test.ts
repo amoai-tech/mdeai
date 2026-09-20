@@ -79,6 +79,12 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     }
   });
 
+  it("includes Next.js review invariants in PR-Agent context", () => {
+    const result = selectSkills(["src/app/page.tsx"]);
+    expect(result.paths).toContain("/github/workspace/.claude/skills/nextjs");
+    expect(result.paths).toContain("/github/workspace/.claude/skills/nextjs/references/review.md");
+  });
+
   it("caps the specialist context budget", () => {
     expect(selectSkills(["README.md"]).maxTokens).toBeLessThanOrEqual(2000);
     expect(selectSkills(["package.json"]).maxTokens).toBeLessThanOrEqual(6000);

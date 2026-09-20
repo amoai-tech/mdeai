@@ -44,9 +44,13 @@ export function selectSkills(files) {
   }
 
   const skills = [UNIVERSAL, ...SPECIALISTS.filter((skill) => selected.has(skill))];
+  const paths = skills.map((skill) => `/github/workspace/.claude/skills/${skill}`);
+  if (selected.has("nextjs")) {
+    paths.push("/github/workspace/.claude/skills/nextjs/references/review.md");
+  }
   return {
     skills,
-    paths: skills.map((skill) => `/github/workspace/.claude/skills/${skill}`),
+    paths,
     maxTokens: budget(skills.length),
   };
 }

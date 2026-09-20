@@ -137,11 +137,16 @@ describe("SAN-1332 evidence-backed review contract", () => {
 
 describe("SAN-1332 skill-budget checkpoint", () => {
   it("keeps every package.json review skill inside the configured budget", () => {
-    const selected = [
-      "code-review", "copilotkit-review", "mastra-review", "supabase-review",
-      "maps-review", "stripe-review", "nextjs",
-    ];
-    const rendered = selected.map((name) => read(`.claude/skills/${name}/SKILL.md`)).join("\n\n---\n\n");
+    const rendered = [
+      read(".claude/skills/code-review/SKILL.md"),
+      read(".claude/skills/copilotkit-review/SKILL.md"),
+      read(".claude/skills/mastra-review/SKILL.md"),
+      read(".claude/skills/supabase-review/SKILL.md"),
+      read(".claude/skills/maps-review/SKILL.md"),
+      read(".claude/skills/stripe-review/SKILL.md"),
+      read(".claude/skills/nextjs/SKILL.md"),
+      read(".claude/skills/nextjs/references/review.md"),
+    ].join("\n\n---\n\n");
     const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {
       const encoding = getEncoding(encodingName);
       return encoding.encode(rendered).length;

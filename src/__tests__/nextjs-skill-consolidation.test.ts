@@ -10,9 +10,11 @@ describe("Next.js skill consolidation", () => {
   });
 
   it("preserves specialist guidance through progressive-disclosure references", () => {
-    for (const file of ["review.md", "vercel.md", "performance.md", "app-router.md", "caching.md"]) {
-      expect(existsSync(`.claude/skills/nextjs/references/${file}`)).toBe(true);
-    }
+    expect(existsSync(".claude/skills/nextjs/references/review.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/vercel.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/performance.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/app-router.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/caching.md")).toBe(true);
     const skill = readFileSync(".claude/skills/nextjs/SKILL.md", "utf8");
     expect(skill).toContain("references/review.md");
     expect(skill).toContain("references/vercel.md");
