@@ -10,7 +10,7 @@ Primary sources:
 
 ## Custom autocomplete with the Place Autocomplete Data API
 
-For a custom React input, load the `places` library and call `AutocompleteSuggestion.fetchAutocompleteSuggestions()`. Keep one `AutocompleteSessionToken` for a user autocomplete session, then start a new token after selection.
+For a custom React input, load the `places` library and call `AutocompleteSuggestion.fetchAutocompleteSuggestions()`. Keep one `AutocompleteSessionToken` for a user autocomplete session, then start a new token after selection. For this browser pattern, the HTTP-referrer-restricted browser key must allow both **Maps JavaScript API and Places API (New)**; keep the key limited to only the browser APIs the deployed feature actually uses.
 
 ```tsx
 import { useEffect, useState } from 'react';

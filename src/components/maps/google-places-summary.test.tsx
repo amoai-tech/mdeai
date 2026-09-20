@@ -21,4 +21,12 @@ describe("GooglePlacesSummary", () => {
   it("does not render a provider summary without disclosure", () => {
     expect(GooglePlacesSummary({ summary: "A lively neighborhood cafe.", disclosure: "" })).toBeNull();
   });
+
+  it("does not render an empty provider summary even with disclosure", () => {
+    expect(GooglePlacesSummary({ summary: "", disclosure: "Summarized with Gemini" })).toBeNull();
+  });
+
+  it("does not render a whitespace-only provider summary even with disclosure", () => {
+    expect(GooglePlacesSummary({ summary: "   ", disclosure: "Summarized with Gemini" })).toBeNull();
+  });
 });

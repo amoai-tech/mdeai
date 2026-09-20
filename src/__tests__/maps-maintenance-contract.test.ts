@@ -21,6 +21,8 @@ describe("Maps maintenance contract", () => {
     const linkChecker = readFileSync(".claude/skills/maps/scripts/check-maps-reference-links.mjs", "utf8");
     expect(linkChecker).toContain("if (!location)");
     expect(linkChecker).toContain("redirect missing Location header");
+    expect(linkChecker).toContain("if (primary.length === 0)");
+    expect(linkChecker).toContain("no primary references selected");
 
     const skill = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
     expect(skill).toContain("## Demo key policy");

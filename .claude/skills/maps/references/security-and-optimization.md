@@ -51,7 +51,7 @@ Your Backend Server
 ```
 
 **Frontend key** (client-side, in the HTML):
-- Enables: **Maps JavaScript API only**
+- Enables: **Maps JavaScript API**; also enable **Places API (New)** on this browser key when the app uses browser Places New search/autocomplete
 - Restricted by: **HTTP referrer** → `https://app.yourdomain.com/*`
 - If copied by someone: only works from your domain, useless elsewhere
 
@@ -69,7 +69,7 @@ Your Backend Server
 1. **APIs & Services → Credentials → Create Credentials → API Key**
 2. Edit key → Application restrictions: **HTTP referrers**
 3. Add: `https://app.yourdomain.com/*`
-4. API restrictions: **Restrict key** → enable **Maps JavaScript API only**
+4. API restrictions: **Restrict key** → enable **Maps JavaScript API**; add **Places API (New)** only when the browser uses Places New search/autocomplete
 5. Save
 
 ### Backend key

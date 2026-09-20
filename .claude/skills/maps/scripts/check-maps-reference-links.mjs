@@ -13,6 +13,12 @@ const primary = rows.flatMap((line) => {
   return [{ url: match[1], authority, score }];
 });
 
+if (primary.length === 0) {
+  console.error("REFERENCE_LINK_FAILURES=1");
+  console.error("reference-index.md -> no primary references selected");
+  process.exit(2);
+}
+
 const timeoutMs = Number(process.env.MAPS_LINK_TIMEOUT_MS ?? 12000);
 const failures = [];
 for (const { url } of primary) {

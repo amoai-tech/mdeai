@@ -36,6 +36,10 @@ describe("Maps skill quality contract", () => {
     expectNoLegacyApis("places-autocomplete.md", placesAutocomplete);
     expect(placesAutocomplete).toContain("try {");
     expect(placesAutocomplete).toContain("catch (error)");
+    expect(placesAutocomplete).toContain("Maps JavaScript API and Places API (New)");
+
+    const skill = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
+    expect(skill).toContain("Maps JavaScript API; add Places API (New)");
   });
 
   it("adds a contents section to large non-vendored references", () => {

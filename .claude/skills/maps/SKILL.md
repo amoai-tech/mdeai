@@ -104,7 +104,7 @@ Do not select a product from memory when current Google guidance is available.
 ## mdeAI environment
 
 ```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API, AdvancedMarkerElement
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API; add Places API (New) for browser Places New search/autocomplete
 GOOGLE_PLACES_API_KEY       — Server-side only — Places API (New), enrichment scripts
 GOOGLE_MAPS_API_KEY         — Server-side Maps APIs explicitly required by the feature
 GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
@@ -201,7 +201,7 @@ Demo Key: prototypes only. Production/shared environments use restricted project
 
 | Key | Restrictions | APIs enabled |
 |-----|-------------|-------------|
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API only |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API; add Places API (New) when browser Places New search/autocomplete is used |
 | `GOOGLE_PLACES_API_KEY` | Server IP | Places API (New) only |
 | `GOOGLE_MAPS_API_KEY` | Server IP | Only explicitly required server Maps APIs (for example Maps Static) |
 | `GOOGLE_ROUTES_API_KEY` | Server IP | Routes API |
