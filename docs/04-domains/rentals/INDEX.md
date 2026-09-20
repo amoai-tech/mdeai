@@ -64,43 +64,122 @@ This is a summary only. Linear remains the live source for implementation task s
 
 Use the task numbers as the durable execution order. Whole numbers (`1.0`, `2.0`, `3.0`) are product areas; decimals (`1.1`, `1.2`, `1.3`) leave room for additional tasks without renumbering later.
 
-| Task | Status | % Complete | Product area | Planned doc | Next |
-|---:|---|---:|---|---|---|
-| **1.0** | 🟢 | 100% | Rental Experience | [`RENTALS.md`](./RENTALS.md) | Maintain Core/MVP scope |
-| 1.1 | 🟢 | 100% | Reference index | [`INDEX.md`](./INDEX.md) | Maintain |
-| 1.2 | 🟢 | 100% | Reuse decisions | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | Maintain |
-| 1.3 | 🟢 | 100% | External references | [`REFERENCES.md`](./REFERENCES.md) | Maintain |
-| **2.0** | 🔵 | 0% | Testing the Rental Journey | `TEST-PLAN.md` | **Create next** |
-| 2.1 | 🔵 | 0% | Core Rental Journey Tests | `TEST-PLAN.md` | Map J-RE-* journeys |
-| 2.2 | 🔵 | 0% | Database & Permission Tests | `TEST-PLAN.md` | Add deterministic backend proof |
-| 2.3 | 🔵 | 0% | Browser & Production Tests | `TEST-PLAN.md` | Add Playwright + production smoke |
-| **3.0** | 🔵 | 0% | Accounts & Permissions | `DATA-BOUNDARIES.md` | Create with ownership/RLS work |
-| 3.1 | 🔵 | 0% | Property Ownership | `DATA-BOUNDARIES.md` | Define authoritative ownership |
-| 3.2 | 🔵 | 0% | Who Can See What | `DATA-BOUNDARIES.md` | Define renter/broker/admin isolation |
-| 3.3 | 🔵 | 0% | AI Access to Rental Data | `DATA-BOUNDARIES.md` | Define tool/agent visibility |
-| **4.0** | 🔵 | 0% | Finding a Home | `SEARCH.md` | Create after testing + data boundaries |
-| 4.1 | 🔵 | 0% | Search by Requirements | `SEARCH.md` | Document SQL hard filters |
-| 4.2 | 🔵 | 0% | Best Match Ranking | `SEARCH.md` | Document semantic ranking after eligibility |
-| 4.3 | 🔵 | 0% | Move-in Dates & Availability | `SEARCH.md` | Document date/availability rules |
-| **5.0** | 🔵 | 0% | Book a Viewing | `VIEWINGS-LEADS.md` | Define committed conversion path |
-| 5.1 | 🔵 | 0% | Confirm a Viewing | `VIEWINGS-LEADS.md` | Define user approval + truthful UI |
-| 5.2 | 🔵 | 0% | Save the Viewing Request | `VIEWINGS-LEADS.md` | Define lead/showing transaction |
-| 5.3 | 🔵 | 0% | Send to Broker & Track Follow-Up | `VIEWINGS-LEADS.md` | Define states + broker handoff |
-| **6.0** | 🔵 | 0% | Broker Dashboard | `BROKER-WORKSPACE.md` | Define broker workflow |
-| 6.1 | 🔵 | 0% | Broker Sees Their Rentals & Leads | `BROKER-WORKSPACE.md` | Define authorized views |
-| 6.2 | 🔵 | 0% | Broker Follow-Up | `BROKER-WORKSPACE.md` | Define lead/showing actions |
-| **7.0** | 🔵 | 0% | Property Listings | `LISTINGS.md` | Define listing truth contract |
-| 7.1 | 🔵 | 0% | Listing Quality | `LISTINGS.md` | Define required listing fields/quality |
-| 7.2 | 🔵 | 0% | Property Details | `LISTINGS.md` | Define detail-view contract |
-| **8.0** | 🔵 | 0% | Map & Neighborhood | `MAPS.md` | Define map/card contract |
-| 8.1 | 🔵 | 0% | Listing Card ↔ Map Pin | `MAPS.md` | Document shared listing identity |
-| 8.2 | 🔵 | 0% | Map Area & Location | `MAPS.md` | Document bounds/PostGIS behavior |
-| **9.0** | 🔵 | 0% | Production Support | `OPERATIONS-RUNBOOK.md` | Create before launch/support |
-| 9.1 | 🔵 | 0% | Find Production Problems | `OPERATIONS-RUNBOOK.md` | Document common failure paths |
-| 9.2 | 🔵 | 0% | Recover Safely | `OPERATIONS-RUNBOOK.md` | Document safe recovery checks |
-| **10.0** | 🔵 | 0% | Data Migration | `MIGRATION-PLAN.md` | Create only if required |
-| **11.0** | 🔵 | 0% | Future Smart Features | Deferred | Start after Core/MVP proof |
-| **12.0** | 🟢 | 100% | AI Platform | Shared platform docs | Keep platform-owned; no rental duplicate |
+### 1.0 · Rental Experience
+
+**Main doc:** [`RENTALS.md`](./RENTALS.md)
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **1.0** | 🟢 | 100% | Rental Experience | Maintain Core/MVP scope |
+| 1.1 | 🟢 | 100% | Reference index | Maintain |
+| 1.2 | 🟢 | 100% | Reuse decisions | Maintain |
+| 1.3 | 🟢 | 100% | External references | Maintain |
+
+### 2.0 · Testing the Rental Journey
+
+**Planned doc:** `TEST-PLAN.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **2.0** | 🔵 | 0% | Testing the Rental Journey | **Create next** |
+| 2.1 | 🔵 | 0% | Core Rental Journey Tests | Map J-RE-* journeys |
+| 2.2 | 🔵 | 0% | Database & Permission Tests | Add deterministic backend proof |
+| 2.3 | 🔵 | 0% | Browser & Production Tests | Add Playwright + production smoke |
+
+### 3.0 · Accounts & Permissions
+
+**Planned doc:** `DATA-BOUNDARIES.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **3.0** | 🔵 | 0% | Accounts & Permissions | Create with ownership/RLS work |
+| 3.1 | 🔵 | 0% | Property Ownership | Define authoritative ownership |
+| 3.2 | 🔵 | 0% | Who Can See What | Define renter/broker/admin isolation |
+| 3.3 | 🔵 | 0% | AI Access to Rental Data | Define tool/agent visibility |
+
+### 4.0 · Finding a Home
+
+**Planned doc:** `SEARCH.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **4.0** | 🔵 | 0% | Finding a Home | Create after testing + data boundaries |
+| 4.1 | 🔵 | 0% | Search by Requirements | Document hard filters |
+| 4.2 | 🔵 | 0% | Best Match Ranking | Document ranking after eligibility |
+| 4.3 | 🔵 | 0% | Move-in Dates & Availability | Document date/availability rules |
+
+### 5.0 · Book a Viewing
+
+**Planned doc:** `VIEWINGS-LEADS.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **5.0** | 🔵 | 0% | Book a Viewing | Define committed conversion path |
+| 5.1 | 🔵 | 0% | Confirm a Viewing | Define user approval + truthful UI |
+| 5.2 | 🔵 | 0% | Save the Viewing Request | Define lead/showing transaction |
+| 5.3 | 🔵 | 0% | Send to Broker & Track Follow-Up | Define states + broker handoff |
+
+### 6.0 · Broker Dashboard
+
+**Planned doc:** `BROKER-WORKSPACE.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **6.0** | 🔵 | 0% | Broker Dashboard | Define broker workflow |
+| 6.1 | 🔵 | 0% | Broker Sees Their Rentals & Leads | Define authorized views |
+| 6.2 | 🔵 | 0% | Broker Follow-Up | Define lead/showing actions |
+
+### 7.0 · Property Listings
+
+**Planned doc:** `LISTINGS.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **7.0** | 🔵 | 0% | Property Listings | Define listing truth contract |
+| 7.1 | 🔵 | 0% | Listing Quality | Define required listing fields/quality |
+| 7.2 | 🔵 | 0% | Property Details | Define detail-view contract |
+
+### 8.0 · Map & Neighborhood
+
+**Planned doc:** `MAPS.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **8.0** | 🔵 | 0% | Map & Neighborhood | Define map/card contract |
+| 8.1 | 🔵 | 0% | Listing Card ↔ Map Pin | Document shared listing identity |
+| 8.2 | 🔵 | 0% | Map Area & Location | Document bounds/location behavior |
+
+### 9.0 · Production Support
+
+**Planned doc:** `OPERATIONS-RUNBOOK.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **9.0** | 🔵 | 0% | Production Support | Create before launch/support |
+| 9.1 | 🔵 | 0% | Find Production Problems | Document common failure paths |
+| 9.2 | 🔵 | 0% | Recover Safely | Document safe recovery checks |
+
+### 10.0 · Data Migration
+
+**Planned doc:** `MIGRATION-PLAN.md`
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **10.0** | 🔵 | 0% | Data Migration | Create only if required |
+
+### 11.0 · Future Smart Features
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **11.0** | 🔵 | 0% | Future Smart Features | Start after Core/MVP proof |
+
+### 12.0 · AI Platform
+
+**Documentation:** Shared platform docs
+
+| Task | Status | % Complete | Work | Next |
+|---:|---|---:|---|---|
+| **12.0** | 🟢 | 100% | AI Platform | Keep platform-owned; no rental duplicate |
 
 Add future work as the next decimal inside the relevant area—for example `5.4`—instead of renumbering later sections.
 
