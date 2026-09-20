@@ -1,39 +1,30 @@
-# MDE Rentals Domain Documentation — Design
+# MDE Rentals Documentation — Design
 
 ## Task 1 · Goal
 
-Create the canonical Real Estate / Rentals documentation package inside `docs/04-domains/rentals/` without introducing a second documentation taxonomy.
+Create a simple, canonical Real Estate / Rentals documentation package for MDE.
 
-The package must make it easy to answer five questions:
+The docs must answer these questions quickly:
 
 1. What does MDE Rentals do today?
-2. Which current MDE code/data/journeys are canonical and should be kept?
-3. Which external repositories/examples/templates are worth reusing, adapting, modeling, referencing, or skipping?
-4. Exactly what are we taking from each reference, and where does it fit in MDE?
-5. What gaps must be closed before the rental journey is production-ready?
+2. What should we keep from the current MDE implementation?
+3. Which external repos/examples are we using as references?
+4. Exactly what are we adapting from each repo?
+5. Where does that pattern go in MDE?
+6. What would a real MDE user experience look like?
+7. What must be fixed before Rentals is production-ready?
 
-Every planning document must explain references in plain language. A repo name alone is not enough.
+The rule for every reference is:
 
-For every important reference, state:
+> **Repo → what it proves → what MDE adapts → where it goes → real-world example → what we do not copy.**
 
-> **Reference repo → pattern we adapt → MDE feature/journey → what stays MDE-native → real-world example.**
+Do not write vague instructions such as “adapt PropertyShop” or “use CopilotKit canvas.”
 
-## Task 2 · Source-of-truth order
+---
 
-Use this order whenever sources disagree:
+## Task 2 · Canonical Files
 
-1. Current MDE implementation on merged `main`.
-2. Current Supabase schema/RLS/functions and live read-only evidence.
-3. Current Linear tasks and canonical MDE planning documents.
-4. Installed package source/types.
-5. Official CopilotKit/Mastra/Supabase/Google Maps documentation.
-6. Official GitHub examples/templates.
-7. Proven external real-estate OSS repositories.
-8. Custom design only when the sources above do not satisfy the requirement.
-
-Repository docs describe durable product/architecture truth. Linear owns live status, ownership, priority, and sequencing.
-
-## Task 3 · Canonical file set
+Use the existing MDE docs structure:
 
 ```text
 docs/04-domains/rentals/
@@ -45,384 +36,465 @@ docs/04-domains/rentals/
 
 ### `README.md`
 
-Small router only. It explains what each canonical file owns and links to the relevant Linear planning documents.
+A small index that explains what each file is for.
 
 ### `RENTALS.md`
 
-Canonical domain/product document.
+The main Real Estate product and architecture document.
 
-Required sections:
+It explains:
 
-1. Purpose and scope
-2. Current verified state
-3. Users/personas
-4. Routes/screens
-5. Core user journeys
-6. Current features
-7. Search architecture
-8. Maps/spatial behavior
-9. AI/agent responsibilities
-10. Tools/workflows
-11. Supabase/data model
-12. Ownership/RLS/auth boundaries
-13. Viewing/lead transaction model
-14. Existing MDE capabilities to KEEP
-15. Reference adaptation plan
-16. Domain reuse summary
-17. Gaps/blockers
-18. Target architecture
-19. Ordered implementation sequence
-20. Failure/degraded states
-21. Testing and production proof
-22. Success criteria
-23. References
+- renter and broker journeys;
+- screens/routes;
+- search and Maps behavior;
+- rental agent responsibilities;
+- Supabase, pgvector and PostGIS;
+- ownership/RLS;
+- viewing/lead transactions;
+- current gaps;
+- target architecture;
+- implementation order;
+- tests and production proof.
 
-The document must distinguish `CURRENT`, `PLANNED`, and `REFERENCE` behavior. It must not duplicate live Linear task status.
+### `REUSE-MATRIX.md`
 
-## Task 4 · Core journeys
+The decision table.
 
-The domain document must cover at least these journeys:
+It answers:
 
-### J-RE-01 · Rental discovery
+> Do we KEEP, COPY, ADAPT, MODEL, REFERENCE or SKIP this pattern?
+
+### `REFERENCES.md`
+
+The searchable index of repos, templates, examples and official docs used by MDE Rentals.
+
+---
+
+## Task 3 · Source of Truth
+
+When sources disagree, use this order:
+
+1. Merged MDE `main`.
+2. Current Supabase schema, RLS, RPCs and live read-only evidence.
+3. Current Linear tasks and canonical MDE planning docs.
+4. Installed package source/types.
+5. Official CopilotKit, Mastra, Supabase and Google Maps documentation.
+6. Official GitHub examples/templates.
+7. External real-estate repositories.
+8. Custom implementation only when the above do not solve the requirement.
+
+Important:
+
+- **GitHub `main`** tells us what is implemented.
+- **Supabase** tells us what data/security actually exists.
+- **Linear** tells us current task status and execution order.
+- **These docs** explain durable product and architecture decisions.
+
+Do not copy live Linear status into GitHub docs.
+
+---
+
+## Task 4 · Core MDE Rental Journeys
+
+### J-RE-01 · Find a rental
+
+Real-world example:
+
+> “I need a furnished 2-bedroom apartment under COP 5M in Laureles, available October 1.”
+
+Correct flow:
 
 ```text
-Describe need
-→ parse hard constraints
-→ SQL eligible candidate set
-→ geo/vector ranking
+User request
+→ extract hard filters
+→ Supabase SQL filters eligible listings
+→ PostGIS/location ranking
+→ pgvector/lifestyle ranking
 → cards + map
-→ refine
+→ AI explains the best matches
 ```
 
-### J-RE-02 · Listing detail
+The AI cannot put an apartment back into the result if it fails the budget, bedroom or availability rules.
+
+### J-RE-02 · Inspect a listing
 
 ```text
-Select card/pin
+Select card or map pin
 → load canonical listing
-→ inspect availability/amenities/location
+→ show location / price / availability / amenities
 → save or request viewing
 ```
 
-### J-RE-03 · Viewing request
+Real-world example:
+
+> User selects an apartment on the map and sees the exact same apartment selected in the list and chat context.
+
+### J-RE-03 · Request a viewing
 
 ```text
 Listing
 → choose future time
-→ explicit approval
-→ server authorization
+→ show exact action to user
+→ user approves
+→ server re-authorizes
 → atomic database write
-→ truthful confirmation
+→ confirmation only after commit
 ```
+
+Real-world example:
+
+> “Book a viewing Friday at 3 PM.” MDE shows the apartment and time, the user confirms, and only then creates the lead/showing.
 
 ### J-RE-04 · Broker follow-up
 
 ```text
-Authorized broker
-→ owned listing
-→ lead/showing
-→ contact/follow-up
-→ status update
+Broker signs in
+→ sees only owned listings
+→ opens lead/showing
+→ contacts renter
+→ updates status
 ```
 
-### J-RE-05 · Save/resume
+A broker must never see another broker's private lead simply because they know the record ID.
+
+### J-RE-05 · Save and resume
 
 ```text
-Save listing/preferences
-→ refresh/restart
+Save apartment/preferences
+→ refresh or return later
 → same authorized user
 → context resumes
 ```
 
-### J-RE-06 · Failure/recovery
+### J-RE-06 · Failure and recovery
 
-Must cover database/model/embedding/rate-limit failure, duplicate submit, stale ownership, inactive listing, and interrupted workflow.
+The docs must explain what happens when:
 
-## Task 5 · Search architecture invariant
+- Supabase is unavailable;
+- model call fails;
+- embedding search fails;
+- rate limiter fails;
+- user submits twice;
+- listing becomes inactive;
+- broker ownership changes;
+- workflow is interrupted.
 
-The canonical rule is:
+---
 
-> SQL decides what is eligible. AI decides what is relevant among eligible candidates.
+## Task 5 · Most Important Search Rule
 
-Hard constraints such as price, bedrooms, availability, ownership, authorization, counts, and aggregates must not be enforced only by vector similarity or LLM reasoning.
+> **SQL decides what is eligible. AI decides what is relevant among eligible listings.**
 
-Target flow:
+Use SQL/business logic for:
+
+- price;
+- bedrooms;
+- availability;
+- ownership;
+- authorization;
+- counts;
+- aggregates.
+
+Use AI/vector ranking for:
+
+- “quiet”;
+- “good for remote work”;
+- “walkable”;
+- “near cafés”;
+- “good lifestyle fit.”
+
+Target:
 
 ```mermaid
 flowchart LR
-    Q[User query] --> P[Parse hard constraints]
-    P --> SQL[Supabase SQL eligibility]
-    SQL --> GEO[PostGIS / distance]
-    GEO --> VEC[pgvector ranking]
+    Q[User request] --> F[Hard filters]
+    F --> SQL[Supabase SQL]
+    SQL --> GEO[PostGIS]
+    GEO --> VEC[pgvector]
     VEC --> SIG[Rental signals]
-    SIG --> UI[Cards + map + explanation]
+    SIG --> UI[Cards + Map + AI explanation]
 ```
 
-## Task 6 · Reuse matrix standard
+---
 
-`REUSE-MATRIX.md` follows the iPix documentation standard, adapted to MDE.
+## Task 6 · Reference Adaptation Map
+
+This table must appear near the top of the planning docs.
+
+| Repo / example | What it teaches us | What MDE adapts | Where it goes in MDE | Real-world MDE example | Do not copy |
+|---|---|---|---|---|---|
+| CopilotKit Mastra Canvas — https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra | AI and UI can share the same application state | Shared rental state | filters, selected listing, map pin, map bounds, shortlist | User says “only Laureles under $1,200”; cards, map and agent all use the same filters | Do not replace MDE auth, Supabase or runtime |
+| CopilotKit Generative UI — https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative-ui | AI can return typed UI, not only text | Fixed rental UI components | RentalCard, RentalComparison, ApprovalCard, ErrorRecoveryCard | AI shows 3 apartment cards with price and location instead of a paragraph | Do not let generated UI authorize privileged writes |
+| CopilotKit + Mastra Integration — https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra | Canonical CopilotKit ↔ Mastra wiring | Runtime parity patterns | existing MDE CopilotKit route + Mastra bridge | Rental tool results stream through the same runtime as chat | Do not rewrite working MDE runtime without a proven gap |
+| Dubai Real Estate — https://github.com/nazsats/dubai-real-estate | SQL should answer numeric/filter truth; RAG should answer semantic knowledge | SQL-first rental eligibility | rental search pipeline | “2BR under COP 5M” is filtered before AI ranking | Do not use RAG/vector similarity for hard constraints |
+| HomeRecoEngine — https://github.com/yuehong136/HomeRecoEngine | Structured + geo + semantic ranking can work together | Hybrid ranking | Supabase + PostGIS + pgvector + rental_signals | “Quiet near cafés but away from nightlife” | Do not create a second search database |
+| PropertyShop — https://github.com/awallathome/property_shop | Property research can be enriched progressively | Neighborhood/market enrichment after valid listings exist | advanced rental research | Compare Laureles vs Envigado for remote work after basic listing eligibility is known | Do not create an agent swarm for simple search |
+| PropGenie — https://github.com/neoxu999/real-estate-agent | Clear specialist responsibilities | Router/tool/workflow boundaries | concierge + rental/search/market capabilities | Search request goes to search; viewing request goes to deterministic workflow | Do not create one agent per feature |
+| AI Real Estate Assistant — https://github.com/AleksNeStu/ai-real-estate-assistant | Useful real-estate product surfaces | Favorites, saved searches, comparison, broker lead views | `/rentals`, `/saved`, broker workspace | User saves three apartments and compares them later | Do not copy its whole application architecture |
+| Real Estate AI Chatbot — https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot | AI can qualify leads and hand them to humans | Lead qualification + broker handoff | lead/showing flow | AI answers questions, captures renter intent, then hands off to the authorized broker | Do not bypass MDE RLS/HITL or copy vendor/channel assumptions |
+| Real Estate RAG — https://github.com/jusnaini/real-estate-rag | RAG is useful when evaluated and used for prose knowledge | Rental/building/neighborhood knowledge | FAQs and policy answers | “Is this building pet friendly?” returns a sourced answer | Do not use RAG for price, availability or ownership |
+| HomeMatch — https://github.com/GretaGalliani/HomeMatch | Lifestyle preferences can improve ranking | Preference extraction + semantic matching | user-scoped rental preferences | “Quiet, fast Wi-Fi, walkable, no steep hills” | Do not allow lifestyle score to override budget/date filters |
+| Mastra Company Knowledge — https://github.com/mastra-ai/template-company-knowledge | Grounded internal knowledge with source hierarchy | Broker/building/neighborhood knowledge | advanced knowledge layer | Broker asks building policy; MDE checks indexed internal knowledge first | Do not add another datastore if Supabase/pgvector already works |
+| Mastra Deep Search — https://github.com/mastra-ai/template-deep-search | Research can repeat until evidence is sufficient | Advanced neighborhood research | research workflow | “Best neighborhood for a one-month remote-work stay?” | Do not put deep research in the fast property-search path |
+| Mastra Browsing Agent — https://github.com/mastra-ai/template-browsing-agent | External websites can be checked through governed browser automation | Optional source verification | advanced broker/operator workflow | Verify whether an external property listing is still live | Do not allow unrestricted autonomous writes/browsing |
+| Mastra Agent Harness — https://github.com/mastra-ai/template-agent-harness | Approvals, tasks and schedules can be governed | Future broker coworker patterns | broker operations | Prepare tomorrow's follow-ups for broker review | Do not expose shell/filesystem capabilities to public rental chat |
+
+The point of this table is not to adopt everything. It tells us **what each repo is useful for** and where it fits.
+
+---
+
+## Task 7 · Reuse Matrix Rules
+
+`REUSE-MATRIX.md` must use:
+
+```text
+KEEP
+COPY
+ADAPT
+MODEL
+REFERENCE
+SKIP
+```
+
+### Meaning
+
+**KEEP**  
+MDE already has an equal or better implementation.
+
+**COPY**  
+Copy a small implementation only when source, license and version compatibility are verified.
+
+**ADAPT**  
+Reuse the pattern/code but change it for MDE's data, auth, runtime or UI.
+
+**MODEL**  
+Use the idea/architecture only. Do not copy code.
+
+**REFERENCE**  
+Useful documentation/evidence, not implementation authority.
+
+**SKIP**  
+Not suitable for MDE. Explain why.
 
 Required columns:
 
-| Field | Requirement |
+| Field | What to record |
 |---|---|
-| Capability | Concrete rental feature/journey step |
+| Capability | What user problem/feature this addresses |
 | Current MDE | Existing file/module/table/flow |
 | Reference | Repo/example/template |
-| Full URL | Exact source URL |
-| Version/commit | Exact ref used for verification |
-| License | Verified license or `UNKNOWN` |
-| Action | `KEEP / COPY / ADAPT / MODEL / REFERENCE / SKIP` |
-| Reuse | Exact pattern/code/idea to take |
-| MDE adaptation | Exact MDE component/tool/workflow/data contract this changes |
-| Real-world example | Short MDE user example showing why the reuse matters |
-| Do not copy | Explicit boundary/anti-pattern |
-| Verification | `VERIFIED / PARTIAL / UNVERIFIED / HISTORICAL` |
-| Journey | J-RE-* affected |
+| Full URL | Exact URL |
+| Commit/tag | Exact ref when implementation work begins |
+| License | Verified license or UNKNOWN |
+| Action | KEEP/COPY/ADAPT/MODEL/REFERENCE/SKIP |
+| What to take | Exact pattern/code/idea |
+| MDE destination | Exact MDE component/tool/workflow/data area |
+| Real example | One clear MDE user example |
+| Do not copy | Boundary/anti-pattern |
+| Verification | VERIFIED/PARTIAL/UNVERIFIED/HISTORICAL |
+| Journey | J-RE-* |
 
-Rules:
+Unknown or incompatible license means **MODEL/REFERENCE only**.
 
-- `KEEP` means current MDE is equal or stronger.
-- `COPY` requires source inspection, compatible license, and version compatibility.
-- `ADAPT` must name what changes for MDE auth/data/runtime.
-- `MODEL` means architectural/product inspiration only.
-- `REFERENCE` means useful evidence/docs, not implementation authority.
-- `SKIP` means not suitable for MDE and must state why.
-- Unknown/no license cannot be `COPY` or `ADAPT`; it is `MODEL` or `REFERENCE` only.
-- Prefer first-party/native CopilotKit/Mastra/Supabase primitives over duplicate infrastructure.
-- Never write only “adapt this repo.” Name the exact behavior/pattern and the exact MDE destination.
+---
 
-## Task 7 · GitHub reference index
+## Task 8 · REFERENCES.md Structure
 
-`REFERENCES.md` is the indexed search surface for repositories, templates, examples, docs, and source references used by MDE Rentals.
-
-Every entry records:
-
-- name;
-- category;
-- full URL;
-- owner;
-- language/framework;
-- exact commit/tag when adopted;
-- license;
-- what the repo actually demonstrates;
-- exact MDE feature/pattern to adapt;
-- exact MDE destination;
-- real-world MDE example;
-- action classification;
-- verification status;
-- related journey/capability.
+Organize references by usefulness.
 
 ### Tier A · MDE current implementation
+
+Always check these first:
 
 - https://github.com/amoai-tech/mdeai
 - https://github.com/amoai-tech/mdeai/tree/main/docs/04-domains/rentals
 - https://github.com/amoai-tech/mdeai/tree/main/src/mastra
 - https://github.com/amoai-tech/mdeai/tree/main/supabase
 
-These are always checked before external references.
+### Tier B · Official CopilotKit
 
-### Tier B · Official CopilotKit examples
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra-pm
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative-ui
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/a2a-travel
+- https://github.com/CopilotKit/CopilotKit/tree/main/examples
 
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra — canonical CopilotKit + Mastra integration; `ADAPT/REFERENCE`.
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra — shared-state cards/map/workspace pattern; `ADAPT/MODEL`.
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra-pm — complex workspace/state pattern; `MODEL`.
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative-ui — fixed-schema generative UI patterns; `ADAPT/MODEL`.
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/a2a-travel — multi-agent UX/orchestration reference only; `MODEL`, do not add a second runtime by default.
-- https://github.com/CopilotKit/CopilotKit/tree/main/examples — full current example catalog; `REFERENCE`.
+### Tier C · Official Mastra
 
-### Tier C · Official Mastra templates/repositories
+- https://github.com/mastra-ai/mastra
+- https://github.com/mastra-ai/template-company-knowledge
+- https://github.com/mastra-ai/template-deep-search
+- https://github.com/mastra-ai/template-browsing-agent
+- https://github.com/mastra-ai/template-agent-harness
+- https://github.com/mastra-ai/template-text-to-sql
 
-- https://github.com/mastra-ai/mastra — native capability/source reference; `REFERENCE`.
-- https://github.com/mastra-ai/template-company-knowledge — grounded internal knowledge/RAG pattern; `MODEL/ADAPT` only if needed.
-- https://github.com/mastra-ai/template-deep-search — research/evaluate/gap/repeat pattern; `MODEL` for advanced market/neighborhood research.
-- https://github.com/mastra-ai/template-browsing-agent — governed browser automation; `MODEL` for external availability/source verification.
-- https://github.com/mastra-ai/template-agent-harness — approvals/tasks/workspace/schedule governance; `MODEL` for advanced operations.
-- https://github.com/mastra-ai/template-text-to-sql — structured analytics/query pattern; `MODEL` for broker/admin analytics, never as a direct privileged-write path.
+### Tier D · Real Estate references
 
-### Tier D · Real-estate domain references
+- https://github.com/nazsats/dubai-real-estate
+- https://github.com/awallathome/property_shop
+- https://github.com/neoxu999/real-estate-agent
+- https://github.com/AleksNeStu/ai-real-estate-assistant
+- https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
+- https://github.com/yuehong136/HomeRecoEngine
+- https://github.com/jusnaini/real-estate-rag
+- https://github.com/Archit1706/Keya-Agentic-AI-assistant-for-Real-Estate
+- https://github.com/GretaGalliani/HomeMatch
+- https://github.com/open-estate-ai/real-estate-mcp-server
 
-These are domain references, not automatic implementation dependencies. License and current source must be verified before anything stronger than `MODEL/REFERENCE`.
+Each entry must say:
 
-- https://github.com/nazsats/dubai-real-estate — deterministic SQL vs RAG boundary, market analytics; high-value `MODEL`.
-- https://github.com/awallathome/property_shop — multi-agent property discovery and progressive results; `MODEL`.
-- https://github.com/neoxu999/real-estate-agent — specialist agent/router decomposition; `MODEL`.
-- https://github.com/AleksNeStu/ai-real-estate-assistant — product surface/features such as saved search, favorites, leads, valuation; `MODEL`.
-- https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot — lead qualification, human handoff, Supabase/pgvector concepts; `MODEL`.
-- https://github.com/yuehong136/HomeRecoEngine — hybrid semantic + structured + geospatial search pattern; `MODEL`.
-- https://github.com/jusnaini/real-estate-rag — evaluated real-estate RAG pattern; `MODEL`.
-- https://github.com/Archit1706/Keya-Agentic-AI-assistant-for-Real-Estate — conversational filters + contextual place data; `MODEL`.
-- https://github.com/GretaGalliani/HomeMatch — preference/lifestyle matching; `MODEL`.
-- https://github.com/open-estate-ai/real-estate-mcp-server — MCP concept only; `REFERENCE/MODEL` until implementation depth and license are verified.
+```text
+What this repo does
+What MDE wants from it
+Where that idea goes in MDE
+Real-world MDE example
+What MDE must not copy
+License
+Commit/tag when adopted
+Verification status
+```
 
-## Task 8 · Explicit reference adaptation map
+---
 
-The planning docs must include a concise table like this near the top. This is the human-readable answer to “what are we actually taking from these repos?”
+## Task 9 · RENTALS.md Required Structure
 
-| Reference repo | What we adapt | MDE destination | Real-world MDE example | What we do NOT copy |
-|---|---|---|---|---|
-| CopilotKit `examples/canvas/mastra` — https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra | Bidirectional shared state between AI and UI | Rental filters, selected listing, selected map pin, map bounds, shortlist | User says “only show Laureles under $1,200”; cards and map update together and the agent sees the same state | Do not replace MDE auth, Supabase, routing, or existing runtime |
-| CopilotKit `generative-ui` — https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative-ui | Typed/fixed-schema AI-rendered components | RentalCard, RentalComparison, ApprovalCard, ErrorRecoveryCard | Agent returns three apartments as structured cards instead of a paragraph | Do not allow arbitrary generated UI to authorize writes |
-| CopilotKit Mastra integration — https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra | Canonical CopilotKit ↔ Mastra runtime wiring | Existing MDE CopilotKit route and Mastra bridge | Rental agent streams tool-backed results through the same runtime used by MDE chat | Do not rebuild MDE runtime if parity audit shows current code is already equivalent |
-| Dubai Real Estate — https://github.com/nazsats/dubai-real-estate | Deterministic SQL for numeric/filter truth; RAG only for semantic knowledge | Rental search eligibility and market analytics | “2BR under $1,300 available next month” is filtered in SQL before AI ranking | Do not replace Supabase with its storage stack or use RAG for hard constraints |
-| HomeRecoEngine — https://github.com/yuehong136/HomeRecoEngine | Hybrid structured + semantic + geo ranking | Supabase filters + PostGIS + pgvector + `rental_signals` | “Quiet remote-work apartment near cafés but away from nightlife” combines hard filters, distance, and semantic fit | Do not create a second search database or independent truth store |
-| PropertyShop — https://github.com/awallathome/property_shop | Progressive specialist property research | Advanced neighborhood/market enrichment around the existing rental agent | User asks whether Envigado or Laureles is better for remote work; MDE enriches valid listings with neighborhood evidence | Do not create an agent swarm for basic search/filtering |
-| PropGenie — https://github.com/neoxu999/real-estate-agent | Clear specialist responsibilities and routing boundaries | Concierge/router → rental/search/market/task capabilities | “Find apartments” routes to search; “compare monthly cost” invokes deterministic calculation; “request viewing” uses workflow/tool | Do not create one MDE agent per feature when a tool/workflow is enough |
-| AI Real Estate Assistant — https://github.com/AleksNeStu/ai-real-estate-assistant | Product surface ideas: favorites, saved searches, comparison, valuation, lead views | MDE `/rentals`, `/saved`, broker workspace, future comparison surfaces | User saves three apartments and returns later to compare them | Do not copy its full application architecture |
-| Real Estate AI Chatbot — https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot | Lead qualification + human/broker handoff pattern | Rental lead/showing workflow and broker workspace | AI answers listing questions, captures intent, then hands a qualified lead to the authorized broker | Do not copy channel/vendor assumptions or bypass MDE RLS/HITL |
-| Real Estate RAG — https://github.com/jusnaini/real-estate-rag | Evaluated RAG for prose knowledge | Building rules, neighborhood guides, rental FAQs | User asks “Is this building pet friendly?” and receives a sourced answer from verified knowledge | Do not use RAG for price, availability, ownership, authorization, counts, or aggregates |
-| HomeMatch — https://github.com/GretaGalliani/HomeMatch | Lifestyle/preference extraction and semantic matching | User-scoped rental preferences + ranking | User says “quiet, fast Wi-Fi, walkable, no steep hills”; MDE ranks eligible listings by lifestyle fit | Do not let semantic preferences override hard budget/date constraints |
-| Mastra Company Knowledge — https://github.com/mastra-ai/template-company-knowledge | Grounded knowledge hierarchy and source citation | Advanced broker/building/neighborhood knowledge | Broker asks a policy question; MDE uses indexed internal knowledge first, then live sources when freshness is needed | Do not provision a duplicate datastore when Supabase/pgvector already satisfies the need |
-| Mastra Deep Search — https://github.com/mastra-ai/template-deep-search | Search → evaluate → identify gaps → repeat | Advanced property/neighborhood research workflow | User asks for the best neighborhoods for a month-long remote-work stay; research continues until key criteria are evidenced | Do not use deep research in the fast property search path |
-| Mastra Browsing Agent — https://github.com/mastra-ai/template-browsing-agent | Governed external browsing pattern | Optional verification of external listing/source information | Broker asks MDE to verify an external listing is still published before review | Do not allow autonomous write actions or unrestricted browsing without authorization/audit |
-| Mastra Agent Harness — https://github.com/mastra-ai/template-agent-harness | Approval, task, workspace, schedule governance ideas | Future broker coworker/operations workflows | Broker asks MDE to prepare follow-ups for tomorrow; actions remain reviewable and auditable | Do not expose shell/filesystem capabilities in public rental chat |
+Keep it easy to review:
 
-This table is not a license to implement everything. It is the planning map. `REUSE-MATRIX.md` provides the formal verification/classification before implementation.
+1. Purpose
+2. Current MDE state
+3. Users
+4. Screens/routes
+5. User journeys
+6. Current features
+7. Search architecture
+8. Maps/spatial behavior
+9. AI responsibilities
+10. Tools/workflows
+11. Supabase/data model
+12. RLS/ownership/security
+13. Viewing/lead transaction
+14. What we KEEP
+15. What we ADAPT from references
+16. Gaps/blockers
+17. Target architecture
+18. Implementation order
+19. Failure/degraded behavior
+20. Tests
+21. Success criteria
+22. References
 
-## Task 9 · Real-world adaptation examples required in planning docs
+Clearly label:
 
-Every major architecture recommendation must include a concrete MDE example.
+```text
+CURRENT
+PLANNED
+REFERENCE
+```
 
-### Example A · SQL-first rental search
+Do not present planned behavior as shipped behavior.
 
-Reference:
-https://github.com/nazsats/dubai-real-estate
+---
 
-Adapt:
-Deterministic filtering before semantic reasoning.
+## Task 10 · Real-World Examples Are Mandatory
 
-MDE example:
+Every major recommendation must include a real MDE example.
 
-> Camila asks: “I need a furnished 2-bedroom apartment under COP 5M, available October 1, around Laureles.”
+Bad:
 
-MDE must first enforce price, bedrooms, furnishing and availability in Supabase SQL. Only the eligible apartments continue to PostGIS/pgvector/rental-signal ranking. The LLM may explain why apartment A fits better than apartment B, but it cannot reintroduce an apartment over budget.
+> Adapt HomeRecoEngine.
 
-### Example B · Shared cards + map state
+Good:
 
-Reference:
-https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra
+> Adapt HomeRecoEngine's hybrid ranking pattern. MDE first applies SQL filters for price, bedrooms and availability, then PostGIS for distance, then pgvector/rental signals for lifestyle relevance. Example: a user asks for “a quiet apartment near cafés but away from nightlife.”
 
-Adapt:
-One shared state contract between CopilotKit, cards, map and rental agent.
+Bad:
 
-MDE example:
+> Use shared state.
 
-> Camila clicks apartment #3 on the map, then asks: “Compare this one with the quieter option.”
+Good:
 
-The agent must know which pin/card is selected without the user repeating the listing name. Selecting a card must highlight the same map pin.
+> Adapt CopilotKit's Mastra canvas shared-state pattern so the AI, rental cards and map use the same filters and selected listing. Example: when the user says “only show Laureles,” the map pins and cards update together and the agent sees that same neighborhood filter.
 
-### Example C · Qualified broker handoff
+---
 
-Reference:
-https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
+## Task 11 · Safety Rules
 
-Adapt:
-AI qualification followed by controlled human handoff.
+Stop implementation if a reference would:
 
-MDE example:
+- create cross-user state;
+- expose secrets/tokens to the browser or model;
+- bypass Supabase RLS;
+- bypass server authorization;
+- replace an atomic DB write with AI judgement;
+- create a second source of truth for listings/ownership;
+- introduce another agent runtime without a proven need;
+- require copying code with unknown/incompatible license;
+- remove working MDE behavior before replacement is proven.
 
-> A renter confirms budget, dates and viewing preference. MDE creates the authorized lead/showing transaction once, then the correct broker sees the lead in `/host/rentals`.
+---
 
-The reference provides the handoff concept. MDE keeps Supabase RLS, atomic RPCs, HITL and ownership as the authority.
+## Task 12 · Evidence Required Before ADAPT/COPY
 
-### Example D · Lifestyle ranking
-
-Reference:
-https://github.com/GretaGalliani/HomeMatch
-
-Adapt:
-Extract soft preferences and use them only after hard eligibility.
-
-MDE example:
-
-> User asks for “quiet, reliable Wi-Fi, cafés nearby, walkable, but not beside nightlife.”
-
-Budget/date/bedroom constraints are enforced first. MDE then uses semantic preferences, neighborhood profiles, distance and `rental_signals` to rank eligible apartments.
-
-## Task 10 · Reference selection rules
-
-Use external references for proven patterns, not wholesale architecture replacement.
-
-Examples:
-
-- Hard-filter correctness: model the SQL-vs-RAG boundary, but keep Supabase/Postgres as MDE source of truth.
-- Shared state: adapt the official CopilotKit Mastra canvas before writing custom synchronization.
-- HITL writes: keep MDE's existing `useHumanInTheLoop` pattern and deterministic backend/RPC authorization.
-- Memory: do not add observational memory until SAN-547/SAN-548 identity and durability proof exists.
-- MCP/browser/schedules: remain gated behind identity, authorization, auditing, and production-proof requirements.
-- Real-estate OSS repos: use mainly as product/domain models; never copy unlicensed or stale code.
-
-## Task 11 · Evidence and freshness
-
-Every adopted reference must have an evidence snapshot before implementation:
+Before implementation, record:
 
 ```text
 Verified date:
 MDE main SHA:
+Reference repo:
 Reference SHA/tag:
 Reference license:
-Installed MDE package versions:
+MDE package versions:
 Relevant MDE files:
 Relevant Supabase objects:
 Tests run:
 Verification status:
 ```
 
-Moving `main` URLs are acceptable for research, but `COPY`/`ADAPT` implementation work must pin exact source commits/tags.
+Moving `main` URLs are fine for research.
 
-## Task 12 · Failure and safety boundaries
+Implementation work must pin the exact source commit/tag.
 
-Stop implementation if a proposed reference would:
+---
 
-- create cross-user durable state;
-- expose privileged credentials to browser/model context;
-- bypass RLS/server authorization;
-- replace atomic database guarantees with model judgment;
-- introduce a second source of truth for listing eligibility/ownership;
-- add a second agent runtime without a proven requirement;
-- require copying code with unknown/incompatible licensing;
-- remove proven MDE behavior before replacement passes equivalent or stronger tests.
+## Task 13 · Implementation Order
 
-## Task 13 · Verification for the documentation package
+1. Update `README.md` as the rental docs index.
+2. Create `REFERENCES.md` first.
+3. Create `REUSE-MATRIX.md` from verified references + current MDE.
+4. Create `RENTALS.md` from current-state evidence and reuse decisions.
+5. Run docs validation.
+6. Update Linear only with durable links/summaries; keep live status in Linear.
 
-The implementation PR must prove:
+Verification:
 
 ```bash
 npm run docs:check
 git diff --check
 ```
 
-Additionally verify:
+Also prove:
 
-- all local Markdown links resolve;
-- every external implementation recommendation has a full URL;
-- every reused source has a classification;
-- every major reused source says exactly what MDE adapts;
-- every major reused source names the MDE destination/component/journey;
-- every major architectural pattern includes a real-world MDE example;
-- current vs planned behavior is explicit;
-- no live task-status table is duplicated from Linear;
-- no unverified repo is labeled `COPY` or `ADAPT`;
-- `README.md` routes readers to the three canonical rental documents.
+- all local links work;
+- all external references use full URLs;
+- every external repo has an action classification;
+- every important adaptation has a real MDE example;
+- no unverified repo is classified COPY/ADAPT;
+- current vs planned behavior is obvious;
+- rental README links to all canonical rental docs.
 
-## Task 14 · Implementation order
+---
 
-1. Update `docs/04-domains/rentals/README.md` as a router.
-2. Create `REFERENCES.md` first with the explicit repo → adaptation → MDE example mapping.
-3. Create `REUSE-MATRIX.md` from verified current MDE + indexed references.
-4. Create `RENTALS.md` from current-state evidence and the reuse decisions, using real-world examples for major architecture choices.
-5. Run docs validation and link checks.
-6. Mirror durable summaries/links into Linear only where useful; keep live execution status in Linear.
-
-## Task 15 · Non-goals
+## Task 14 · Non-Goals
 
 This documentation work does not:
 
-- modify production code;
-- modify the production database;
+- change production code;
+- change the production database;
 - implement rental features;
-- create new agents;
-- migrate historical threads;
-- change Linear task statuses;
-- copy external source code.
+- add new agents;
+- migrate threads;
+- change Linear task status;
+- copy third-party code.
 
-It creates the canonical documentation and reuse evidence needed to execute those changes safely later.
+It creates the clear evidence and planning structure needed to implement MDE Real Estate safely later.
