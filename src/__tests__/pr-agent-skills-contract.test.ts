@@ -142,7 +142,7 @@ describe("SAN-1332 skill-budget checkpoint", () => {
       read(".claude/skills/copilotkit-review/SKILL.md"),
       read(".claude/skills/mastra-review/SKILL.md"),
       read(".claude/skills/supabase-review/SKILL.md"),
-      read(".claude/skills/maps-review/SKILL.md"),
+      read(".claude/skills/maps/SKILL.md"),
       read(".claude/skills/stripe-review/SKILL.md"),
       read(".claude/skills/nextjs/SKILL.md"),
       read(".claude/skills/nextjs/references/review.md"),

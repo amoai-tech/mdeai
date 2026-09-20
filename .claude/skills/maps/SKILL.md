@@ -30,7 +30,7 @@ paths:
 3. **One** MDE `references/*.md` file for implementation; do not bulk-load unrelated references.
 4. **`scripts/gmaps.py` + `references/gmaps-cli-behavior.md`** only when running or editing batch CLI work.
 
-Historical Cursor/MCP files are not active local dependencies. Verify current Maps tooling before relying on an MCP integration.
+Verify current Maps tooling before relying on an MCP integration.
 
 ---
 
@@ -47,6 +47,22 @@ For Google Maps API/SDK implementation, read the pinned official skill first, th
 
 MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orchestration; Maps/Places own geo truth; Gemini must not invent coordinates, place IDs, hours, or routes.
 
+## PR review contract
+
+### Source of truth
+
+Changed map/place code and tests → this canonical skill → current Google Maps documentation / Code Assist → actual provider responses or stored grounded records.
+
+### Review invariants
+
+- Keep server-only Places/grounding credentials out of client bundles; restrict browser keys.
+- Use the smallest required Places API (New) field mask for the exact endpoint.
+- Do not invent or transform ungrounded place IDs, coordinates, URLs, hours, ratings, prices, availability, or business facts into provider truth.
+- Preserve `mapId` where AdvancedMarker requires it.
+- Reuse safe cached grounded results and stable provider/database IDs across map/list/chat state.
+- Verify API/version claims against current Google Maps documentation.
+- For a field-mask or billable-call defect, include the request path, smallest fix, and targeted proof of required fields without unnecessary requests.
+
 ---
 
 ## Quick routing
@@ -58,7 +74,6 @@ MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orche
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
 | **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive MCP tools](#interactive-mcp-tools) below |
-| **Batch Maps helper** — `gmaps.py` + operator rules | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
 
 ## mdeAI environment
