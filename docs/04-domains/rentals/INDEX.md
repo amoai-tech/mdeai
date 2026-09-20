@@ -66,41 +66,41 @@ Use the task numbers as the durable execution order. Whole numbers (`1.0`, `2.0`
 
 | Task | Status | % Complete | Product area | Planned doc | Next |
 |---:|---|---:|---|---|---|
-| **1.0** | 🟢 | 100% | Product foundation | [`RENTALS.md`](./RENTALS.md) | Maintain Core/MVP scope |
+| **1.0** | 🟢 | 100% | Rental Experience | [`RENTALS.md`](./RENTALS.md) | Maintain Core/MVP scope |
 | 1.1 | 🟢 | 100% | Reference index | [`INDEX.md`](./INDEX.md) | Maintain |
 | 1.2 | 🟢 | 100% | Reuse decisions | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | Maintain |
 | 1.3 | 🟢 | 100% | External references | [`REFERENCES.md`](./REFERENCES.md) | Maintain |
-| **2.0** | 🔵 | 0% | Testing + certification | `TEST-PLAN.md` | **Create next** |
-| 2.1 | 🔵 | 0% | Core journey tests | `TEST-PLAN.md` | Map J-RE-* journeys |
-| 2.2 | 🔵 | 0% | RLS/API/DB proof | `TEST-PLAN.md` | Add deterministic backend proof |
-| 2.3 | 🔵 | 0% | Browser/prod proof | `TEST-PLAN.md` | Add Playwright + production smoke |
-| **3.0** | 🔵 | 0% | Ownership + RLS | `DATA-BOUNDARIES.md` | Create with ownership/RLS work |
-| 3.1 | 🔵 | 0% | Ownership model | `DATA-BOUNDARIES.md` | Define authoritative ownership |
-| 3.2 | 🔵 | 0% | RLS boundaries | `DATA-BOUNDARIES.md` | Define renter/broker/admin isolation |
-| 3.3 | 🔵 | 0% | AI data access | `DATA-BOUNDARIES.md` | Define tool/agent visibility |
-| **4.0** | 🔵 | 0% | Search + discovery | `SEARCH.md` | Create after testing + data boundaries |
-| 4.1 | 🔵 | 0% | Search eligibility | `SEARCH.md` | Document SQL hard filters |
-| 4.2 | 🔵 | 0% | Ranking | `SEARCH.md` | Document semantic ranking after eligibility |
-| 4.3 | 🔵 | 0% | Availability | `SEARCH.md` | Document date/availability rules |
-| **5.0** | 🔵 | 0% | Viewing + lead conversion | `VIEWINGS-LEADS.md` | Define committed conversion path |
-| 5.1 | 🔵 | 0% | Viewing approval | `VIEWINGS-LEADS.md` | Define user approval + truthful UI |
-| 5.2 | 🔵 | 0% | Atomic write | `VIEWINGS-LEADS.md` | Define lead/showing transaction |
-| 5.3 | 🔵 | 0% | Lead lifecycle | `VIEWINGS-LEADS.md` | Define states + broker handoff |
-| **6.0** | 🔵 | 0% | Broker / host workspace | `BROKER-WORKSPACE.md` | Define broker workflow |
-| 6.1 | 🔵 | 0% | Broker visibility | `BROKER-WORKSPACE.md` | Define authorized views |
-| 6.2 | 🔵 | 0% | Follow-up workflow | `BROKER-WORKSPACE.md` | Define lead/showing actions |
-| **7.0** | 🔵 | 0% | Listings + detail | `LISTINGS.md` | Define listing truth contract |
-| 7.1 | 🔵 | 0% | Inventory quality | `LISTINGS.md` | Define required listing fields/quality |
-| 7.2 | 🔵 | 0% | Listing detail | `LISTINGS.md` | Define detail-view contract |
-| **8.0** | 🔵 | 0% | Maps + location | `MAPS.md` | Define map/card contract |
-| 8.1 | 🔵 | 0% | Card ↔ pin sync | `MAPS.md` | Document shared listing identity |
-| 8.2 | 🔵 | 0% | Location behavior | `MAPS.md` | Document bounds/PostGIS behavior |
-| **9.0** | 🔵 | 0% | Operations + recovery | `OPERATIONS-RUNBOOK.md` | Create before launch/support |
-| 9.1 | 🔵 | 0% | Failure diagnosis | `OPERATIONS-RUNBOOK.md` | Document common failure paths |
-| 9.2 | 🔵 | 0% | Recovery | `OPERATIONS-RUNBOOK.md` | Document safe recovery checks |
-| **10.0** | 🔵 | 0% | Migration / cutover | `MIGRATION-PLAN.md` | Create only if required |
-| **11.0** | 🔵 | 0% | Advanced intelligence | Deferred | Start after Core/MVP proof |
-| **12.0** | 🟢 | 100% | AI runtime / agent platform | Shared platform docs | Keep platform-owned; no rental duplicate |
+| **2.0** | 🔵 | 0% | Testing the Rental Journey | `TEST-PLAN.md` | **Create next** |
+| 2.1 | 🔵 | 0% | Core Rental Journey Tests | `TEST-PLAN.md` | Map J-RE-* journeys |
+| 2.2 | 🔵 | 0% | Database & Permission Tests | `TEST-PLAN.md` | Add deterministic backend proof |
+| 2.3 | 🔵 | 0% | Browser & Production Tests | `TEST-PLAN.md` | Add Playwright + production smoke |
+| **3.0** | 🔵 | 0% | Accounts & Permissions | `DATA-BOUNDARIES.md` | Create with ownership/RLS work |
+| 3.1 | 🔵 | 0% | Property Ownership | `DATA-BOUNDARIES.md` | Define authoritative ownership |
+| 3.2 | 🔵 | 0% | Who Can See What | `DATA-BOUNDARIES.md` | Define renter/broker/admin isolation |
+| 3.3 | 🔵 | 0% | AI Access to Rental Data | `DATA-BOUNDARIES.md` | Define tool/agent visibility |
+| **4.0** | 🔵 | 0% | Finding a Home | `SEARCH.md` | Create after testing + data boundaries |
+| 4.1 | 🔵 | 0% | Search by Requirements | `SEARCH.md` | Document SQL hard filters |
+| 4.2 | 🔵 | 0% | Best Match Ranking | `SEARCH.md` | Document semantic ranking after eligibility |
+| 4.3 | 🔵 | 0% | Move-in Dates & Availability | `SEARCH.md` | Document date/availability rules |
+| **5.0** | 🔵 | 0% | Book a Viewing | `VIEWINGS-LEADS.md` | Define committed conversion path |
+| 5.1 | 🔵 | 0% | Confirm a Viewing | `VIEWINGS-LEADS.md` | Define user approval + truthful UI |
+| 5.2 | 🔵 | 0% | Save the Viewing Request | `VIEWINGS-LEADS.md` | Define lead/showing transaction |
+| 5.3 | 🔵 | 0% | Send to Broker & Track Follow-Up | `VIEWINGS-LEADS.md` | Define states + broker handoff |
+| **6.0** | 🔵 | 0% | Broker Dashboard | `BROKER-WORKSPACE.md` | Define broker workflow |
+| 6.1 | 🔵 | 0% | Broker Sees Their Rentals & Leads | `BROKER-WORKSPACE.md` | Define authorized views |
+| 6.2 | 🔵 | 0% | Broker Follow-Up | `BROKER-WORKSPACE.md` | Define lead/showing actions |
+| **7.0** | 🔵 | 0% | Property Listings | `LISTINGS.md` | Define listing truth contract |
+| 7.1 | 🔵 | 0% | Listing Quality | `LISTINGS.md` | Define required listing fields/quality |
+| 7.2 | 🔵 | 0% | Property Details | `LISTINGS.md` | Define detail-view contract |
+| **8.0** | 🔵 | 0% | Map & Neighborhood | `MAPS.md` | Define map/card contract |
+| 8.1 | 🔵 | 0% | Listing Card ↔ Map Pin | `MAPS.md` | Document shared listing identity |
+| 8.2 | 🔵 | 0% | Map Area & Location | `MAPS.md` | Document bounds/PostGIS behavior |
+| **9.0** | 🔵 | 0% | Production Support | `OPERATIONS-RUNBOOK.md` | Create before launch/support |
+| 9.1 | 🔵 | 0% | Find Production Problems | `OPERATIONS-RUNBOOK.md` | Document common failure paths |
+| 9.2 | 🔵 | 0% | Recover Safely | `OPERATIONS-RUNBOOK.md` | Document safe recovery checks |
+| **10.0** | 🔵 | 0% | Data Migration | `MIGRATION-PLAN.md` | Create only if required |
+| **11.0** | 🔵 | 0% | Future Smart Features | Deferred | Start after Core/MVP proof |
+| **12.0** | 🟢 | 100% | AI Platform | Shared platform docs | Keep platform-owned; no rental duplicate |
 
 Add future work as the next decimal inside the relevant area—for example `5.4`—instead of renumbering later sections.
 
@@ -161,7 +161,7 @@ Use Linear for live status. These percentages are a simple planning snapshot for
 | 🟡 | 70% | Viewing UI truth | [SAN-1203](https://linear.app/amo100/issue/SAN-1203/san-1203-make-a-viewing-request-count-only-after-the-database-commits) | UI confirms only after the DB commits |
 | 🟡 | 70% | Atomic viewing write | [SAN-1286](https://linear.app/amo100/issue/SAN-1286/san-1286-make-rental-viewing-requests-one-atomic-database-write) | One atomic lead + showing write path |
 | 🟡 | 70% | Lead capture proof | [SAN-474](https://linear.app/amo100/issue/SAN-474/san-474-re-007-prove-rental-lead-capture-through-the-real-edge-atomic) | Real edge/API path reaches the atomic write |
-| 🟡 | 70% | Broker visibility | [SAN-476](https://linear.app/amo100/issue/SAN-476/real-009-prove-committed-showing-authorized-broker-visibility) | Correct broker sees committed showing |
+| 🟡 | 70% | Broker Sees Their Rentals & Leads | [SAN-476](https://linear.app/amo100/issue/SAN-476/real-009-prove-committed-showing-authorized-broker-visibility) | Correct broker sees committed showing |
 | 🟡 | 70% | Host workspace | [SAN-1204](https://linear.app/amo100/issue/SAN-1204/re-des-009-host-workspace-surfaces-real-consumer-leads-viewings) | Real leads/viewings appear in host UI |
 | 🟡 | 70% | End-to-end rental journey | [SAN-1205](https://linear.app/amo100/issue/SAN-1205/re-wire-004-prove-the-complete-rental-conversion-journey-end-to-end) | Full browser journey is proven |
 | 🔵 | 0% | Production smoke | [SAN-483](https://linear.app/amo100/issue/SAN-483/real-016-final-production-rental-conversion-smoke-floor) | Production rental conversion stays green |
@@ -170,8 +170,8 @@ Use Linear for live status. These percentages are a simple planning snapshot for
 | 🟡 | 70% | Production data boundary | [SAN-1349](https://linear.app/amo100/issue/SAN-1349/supa-re-015-close-rental-production-data-boundary-gaps) | Ownership/RLS/data gaps are closed |
 | 🟡 | 70% | Rental test harness | [SAN-482](https://linear.app/amo100/issue/SAN-482/san-482-shared-rental-test-harness-fixtures-auth-states-and-rls-proof) | Repeatable renter/broker/RLS fixtures exist |
 | 🟡 | 70% | Cards ↔ map sync | [SAN-472](https://linear.app/amo100/issue/SAN-472/san-472-re-005-map-pin-sync-with-rental-cards) | Cards and pins select the same listing |
-| 🟡 | 70% | Inventory quality | [SAN-468](https://linear.app/amo100/issue/SAN-468/real-002-apartment-inventory-quality) | Core listings are trustworthy enough for MVP |
-| 🟡 | 70% | Availability/date search | [SAN-486](https://linear.app/amo100/issue/SAN-486/real-019-rental-search-availability-date-filters) | Dates are deterministic search constraints |
+| 🟡 | 70% | Listing Quality | [SAN-468](https://linear.app/amo100/issue/SAN-468/real-002-apartment-inventory-quality) | Core listings are trustworthy enough for MVP |
+| 🟡 | 70% | Move-in Dates & Availability | [SAN-486](https://linear.app/amo100/issue/SAN-486/real-019-rental-search-availability-date-filters) | Dates are deterministic search constraints |
 | 🟡 | 70% | AI/data isolation | [SAN-547](https://linear.app/amo100/issue/SAN-547/san-547-keep-each-users-ai-tools-and-supabase-data-isolated) | User/thread/tool data stays isolated |
 | 🟡 | 70% | AI safety | [SAN-1054](https://linear.app/amo100/issue/SAN-1054/san-1054-prove-rental-ai-cannot-leak-prompts-data-or-perform) | Rental AI cannot leak or perform unauthorized actions |
 
@@ -231,15 +231,15 @@ Keep this small. Do not create a document just because a topic exists.
 
 | Status | % Complete | Proposed doc | Product area | Create when | Purpose | Priority |
 |---|---:|---|---|---|---|---|
-| 🔵 | 0% | `TEST-PLAN.md` | Testing + production certification | Before SAN-1205 / SAN-483 certification work | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | **1 · Next** |
-| 🔵 | 0% | `DATA-BOUNDARIES.md` | Ownership + RLS + data boundaries | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | **2** |
-| 🔵 | 0% | `SEARCH.md` | Search + discovery | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | **3** |
-| 🔵 | 0% | `VIEWINGS-LEADS.md` | Viewing + lead conversion | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | **4** |
-| 🔵 | 0% | `BROKER-WORKSPACE.md` | Broker / host workspace | With SAN-476 / SAN-1204 | Broker visibility, owned listings, leads, showings, follow-up | **5** |
-| 🔵 | 0% | `LISTINGS.md` | Listings + detail | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | **6** |
-| 🔵 | 0% | `MAPS.md` | Maps + location | When map/search interaction changes | Card ↔ pin sync, bounds, selection state, PostGIS/location behavior | **7** |
-| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Operations + recovery | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | **8 · Launch** |
-| 🔵 | 0% | `MIGRATION-PLAN.md` | Migration / cutover | Only if a real schema/data cutover is required | Exact source → target migration, stop/go, rollback, proof | Conditional |
+| 🔵 | 0% | `TEST-PLAN.md` | Testing the Rental Journey | Before SAN-1205 / SAN-483 certification work | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | **1 · Next** |
+| 🔵 | 0% | `DATA-BOUNDARIES.md` | Accounts & Permissions | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | **2** |
+| 🔵 | 0% | `SEARCH.md` | Finding a Home | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | **3** |
+| 🔵 | 0% | `VIEWINGS-LEADS.md` | Book a Viewing | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | **4** |
+| 🔵 | 0% | `BROKER-WORKSPACE.md` | Broker Dashboard | With SAN-476 / SAN-1204 | Broker listings, leads, viewings, and follow-up | **5** |
+| 🔵 | 0% | `LISTINGS.md` | Property Listings | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | **6** |
+| 🔵 | 0% | `MAPS.md` | Map & Neighborhood | When map/search interaction changes | Listing cards, map pins, bounds, selection, and location behavior | **7** |
+| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Production Support | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | **8 · Launch** |
+| 🔵 | 0% | `MIGRATION-PLAN.md` | Data Migration | Only if a real schema/data cutover is required | Exact source → target migration, stop/go, rollback, proof | Conditional |
 
 ### Docs we should NOT create now
 
