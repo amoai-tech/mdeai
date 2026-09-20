@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { Script } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { getEncoding } from "js-tiktoken";
 
@@ -9,6 +10,20 @@ const workflow = read(".github/workflows/pr-agent.yml");
 const config = read(".pr_agent.toml");
 const guidelines = read("docs/06-testing/pr-review-guidelines.md");
 const routing = read("scripts/select-pr-agent-skills.mjs");
+
+function workflowScript(stepName: string) {
+  const step = workflow.split(`      - name: ${stepName}\n`)[1];
+  if (!step) throw new Error(`workflow step not found: ${stepName}`);
+  const script = step.split("          script: |\n")[1];
+  if (!script) throw new Error(`workflow script not found: ${stepName}`);
+  const lines: string[] = [];
+  for (const line of script.split("\n")) {
+    if (line.startsWith("            ")) lines.push(line.slice(12));
+    else if (line.trim() === "") lines.push("");
+    else break;
+  }
+  return lines.join("\n");
+}
 
 const skills = [
   ".claude/skills/code-review/SKILL.md",
@@ -96,23 +111,33 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[7])).toContain("Async Request APIs");
   });
 
-  it("uses incremental push review without full synchronize review", () => {
+  it("keeps the embedded base-aware verifier script syntactically valid", () => {
+    const script = workflowScript("Require a fresh base-aware PR-Agent review result");
+    expect(() => new Script(
+      `(async function(github, context, core, process, require) {\n${script}\n})`,
+    )).not.toThrow();
+  });
+
+  it("uses base-aware full or incremental review and verifies the exact review mode", () => {
     expect(workflow).toContain('github_action_config.handle_push_trigger: "true"');
-    expect(workflow).toContain(`github_action_config.push_commands: '["/review -i"]'`);
+    expect(workflow).toContain("steps.review-mode.outputs.push_commands");
     expect(workflow).toContain(`github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'`);
-    expect(workflow).toContain("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3");
+    expect(workflow).toContain("Select full or incremental review from certified base context");
+    expect(workflow).toContain("scripts/pr-agent/review-policy.mjs");
+    expect(workflow).toContain("mde-pr-agent-cert base=");
+    expect(workflow).toContain("REVIEW_COMMAND: ${{ needs.review.outputs.review_command }}");
+    expect(workflow).toContain("Require a fresh base-aware PR-Agent review result");
     expect(workflow).toContain("scripts/select-pr-agent-skills.mjs");
     expect(workflow).toContain("trusted PR-Agent routing script missing from base branch");
     expect(routing).toContain("required trusted PR-Agent skill missing");
     expect(workflow).toContain("verify-review-result:");
     expect(workflow).toContain("getWorkflowRun");
     expect(workflow).toContain("pr-agent:review:incremental");
-    expect(workflow).toContain("PR-Agent did not publish a fresh review for this workflow run");
+    expect(workflow).toContain("pr-agent:review:full");
+    expect(workflow).toContain("PR-Agent did not publish a fresh review valid for the current base context");
     expect(workflow).toContain("Standalone PR Review");
     expect(workflow).toContain("PR-Agent could not safely update the persistent review");
     expect(workflow).toContain('body.includes("## MDE PR Review")');
-    expect(workflow).toContain("Incremental Review Skipped");
-    expect(workflow).toContain("No files were changed since the");
     expect(workflow).toContain("const maxAttempts = 10");
     expect(workflow).toContain("await new Promise((resolve) => setTimeout(resolve, 10000))");
     expect(workflow).not.toContain("max_tokens=8000");
