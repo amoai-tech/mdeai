@@ -43,6 +43,13 @@ on:
       - "package-lock.json"
       - ".nvmrc"
 
+# A push to a PR branch supersedes the previous run — cancelling the in-flight one avoids
+# queueing redundant stacks (each starts a full local Supabase stack) for a commit that is
+# already stale. `|| github.ref` covers the push-to-main trigger, where there is no PR number.
+concurrency:
+  group: supabase-acl-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -97,8 +104,23 @@ jobs:
       - name: Replay every migration from scratch
         run: supabase db reset
 
+      # `set -o pipefail` matters: without it a failing `supabase test db` would be masked by
+      # `tee` exiting 0, and the job would report green on a red suite. The log is `tee`d so it
+      # can be uploaded as an artifact on failure (below); Actions already shows stdout, but an
+      # artifact survives the run and can be attached to a bug report.
       - name: pgTAP — schema, ACL and runtime role-boundary assertions
-        run: supabase test db
+        run: |
+          set -o pipefail
+          supabase test db 2>&1 | tee pgtap.log
+
+      - name: Upload pgTAP log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgtap-log
+          path: pgtap.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The gate is designed to SKIP when it cannot reach a local DB, which keeps it usable for
       # developers without a stack running. That behaviour must never be allowed to masquerade as
