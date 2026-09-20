@@ -11,7 +11,7 @@ metadata:
 ## Source of truth
 
 1. Changed MDE map/place code and tests.
-2. Canonical MDE .claude/skills/mde-maps/SKILL.md.
+2. Canonical MDE .claude/skills/maps/SKILL.md.
 3. Current Google Maps Platform documentation / Code Assist.
 4. Actual provider responses or stored grounded records.
 

@@ -27,7 +27,7 @@ exclude_patterns = [
   "**/.gradle/**",
   "**/.mvn/**",
   "**/target/**",
-  ".claude/skills/mde-maps/references/**",
+  ".claude/skills/maps/references/**",
   "docs/**/evidence/**",
   "plan.md",
   "linear.md",

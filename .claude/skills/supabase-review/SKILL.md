@@ -12,7 +12,7 @@ metadata:
 
 1. Changed MDE SQL/functions/tests and current migrations/schema.
 2. Generated types and actual caller code.
-3. Canonical MDE .claude/skills/mde-supabase/SKILL.md and project rules.
+3. Canonical MDE .claude/skills/supabase/SKILL.md and project rules.
 4. Current official Supabase/Postgres documentation.
 
 ## Review invariants

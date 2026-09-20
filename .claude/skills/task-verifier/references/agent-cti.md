@@ -13,9 +13,9 @@ title: task-verifier — Coffee Tour Intelligence (CTI)
 | Skill | When |
 |-------|------|
 | **task-verifier** | Always |
-| **mde-supabase** | CTI-001A/B, 003, 014 |
+| **supabase** | CTI-001A/B, 003, 014 |
 | **mastra** + **copilotkit-integrations** | CTI-004, 006, 011–013 |
-| **mde-maps** | CTI-003 (place_id), 005, 008 |
+| **maps** | CTI-003 (place_id), 005, 008 |
 | **gemini** | Model `gemini-3.5-flash` in mdeapp per CLAUDE.md |
 | **pgvector** | CTI-011 only |
 | **open-claw** | **Not Phase A** — canonical crawler = `OCL-013-mvp`; CTI-019 cancelled |
