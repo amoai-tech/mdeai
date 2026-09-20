@@ -14,6 +14,8 @@ legend:
 
 # Skills index — PRD v6.0 alignment
 
+Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)
+
 ## Current architecture (2026-09-20)
 
 | Rule | Detail |
