@@ -13,8 +13,8 @@ export function certificationMarker({ baseSha, headSha }) {
 
 export function hasCertificationForBase(body, baseSha) {
   assertSha(baseSha, "baseSha");
-  const escaped = baseSha.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`<!-- mde-pr-agent-cert base=${escaped} head=[0-9a-f]{40} -->`, "i").test(body ?? "");
+  const markerPrefix = `<!-- mde-pr-agent-cert base=${baseSha.toLowerCase()} head=`;
+  return (body ?? "").toLowerCase().includes(markerPrefix);
 }
 
 export function appendCertification(body, { baseSha, headSha }) {
