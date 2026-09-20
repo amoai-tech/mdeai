@@ -230,53 +230,98 @@ async function submitConciergeMessageOnce(page: Page, text: string) {
   await input.press("Enter");
 }
 
+/** How long an accepted submit has to make the app issue its own API request. */
+export const CONCIERGE_ACCEPT_GRACE_MS = 6_000;
+
 /**
- * Type into the concierge composer and submit.
+ * The two effects `sendConciergeMessage` needs, as a seam so the retry contract
+ * can be unit-tested deterministically — no browser, no timers, no network.
  *
- * Retries once. On production the first submit after a page load can be silently
- * dropped: the composer keeps its text and no `/api/copilotkit` POST is made, so a
- * caller that only counts cards reports a false product failure. Rentals and events
- * tolerated that solely because their wait helpers resend the message; verticals
- * without one (restaurants, cafés) failed the prod smoke with zero cards while the
- * product itself was healthy.
- *
- * An emptied composer is the only observable proof that CopilotKit accepted the
- * message, so that is what decides whether the retry is needed.
+ * `armReactionWatch` must be called *before* `submit`: an accepted submit makes
+ * the app issue its request immediately, so a watch armed afterwards misses it.
  */
-export async function sendConciergeMessage(page: Page, text: string) {
-  await submitConciergeMessageOnce(page, text);
-  if (await composerCleared(page, 6_000)) return;
-  await submitConciergeMessageOnce(page, text);
-  await composerCleared(page, 6_000);
+export type ConciergeSubmitPort = {
+  armReactionWatch: (timeoutMs: number) => Promise<boolean>;
+  submit: () => Promise<void>;
+};
+
+/**
+ * Submit at most twice, and fail loudly if neither submit made the app react.
+ *
+ * On production the first submit after a page load can be silently discarded.
+ * Measured against the live site, an **accepted** submit makes the app call its
+ * own API within ~0ms — `/api/rentals/search`, `/api/events/search`,
+ * `/api/grounded/search`, or `/api/copilotkit` — while a **discarded** submit
+ * issues no request at all. That reaction is what decides whether to retry.
+ *
+ * This replaces an earlier "composer cleared" signal, which was measured to be
+ * *never* true: the composer retains its text for minutes after a send that
+ * demonstrably worked (cards rendered in 500ms). Gating on it made every query
+ * look dropped, so every query was submitted twice, and a subsequent "throw on
+ * the second attempt" turned a healthy product into a red smoke run.
+ *
+ * If the second submit also draws no reaction we must throw. Returning quietly
+ * here would restore the failure mode this helper exists to remove: the caller
+ * proceeds to assert on cards that were never requested, and the report blames
+ * the product for a send the harness silently dropped.
+ */
+export async function submitConciergeMessageWithRetry(
+  port: ConciergeSubmitPort,
+  text: string,
+  graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const reacted = port.armReactionWatch(graceMs);
+    await port.submit();
+    if (await reacted) return;
+  }
+  throw new Error(
+    `Concierge submit was not accepted after 2 attempts — the app issued no ` +
+      `request, so the message was discarded before CopilotKit took it. ` +
+      `Query: ${JSON.stringify(text)}`,
+  );
 }
 
 /**
- * CopilotKit clears the composer once it accepts a message, so an empty composer
- * is the acceptance signal.
- *
- * Native `expect` assertions retry for us and — critically — they *fail* rather
- * than pass when the element is unreadable (detached, or not a form control).
- * Reading the value as `inputValue().catch(() => "")` inverted that: an
- * unavailable composer looked empty, an empty composer looked accepted, and the
- * retry was skipped — so the dropped submit this helper exists to catch could
- * still pass unnoticed. Unreadable must mean "not accepted", never "sent".
+ * Resolve true once the page issues its own non-GET `/api/*` request, which is
+ * the observable consequence of an accepted submit. Resolves false on timeout.
  */
-async function composerCleared(page: Page, timeout: number): Promise<boolean> {
-  const input = page
-    .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
-    .first();
-  // The shared selector also matches `role="textbox"`, which can be a
-  // contenteditable element that `toHaveValue` rejects.
-  const isFormControl = await input
-    .evaluate((el) => ["TEXTAREA", "INPUT"].includes(el.tagName))
-    .catch(() => false);
+function watchForAppApiRequest(page: Page, timeoutMs: number): Promise<boolean> {
+  let origin: string;
   try {
-    if (isFormControl) await expect(input).toHaveValue("", { timeout });
-    else await expect(input).toHaveText("", { timeout });
-    return true;
+    origin = new URL(page.url()).origin;
   } catch {
-    return false;
+    return Promise.resolve(false);
   }
+  return page
+    .waitForRequest(
+      (request) => {
+        try {
+          const url = new URL(request.url());
+          return (
+            url.origin === origin &&
+            url.pathname.startsWith("/api/") &&
+            request.method() !== "GET"
+          );
+        } catch {
+          return false;
+        }
+      },
+      { timeout: timeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
+}
+
+/** Type into the concierge composer and submit, retrying once (see above). */
+export async function sendConciergeMessage(page: Page, text: string) {
+  await submitConciergeMessageWithRetry(
+    {
+      armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
+      submit: () => submitConciergeMessageOnce(page, text),
+    },
+    text,
+  );
 }
 
 export async function waitForRentalCards(page: Page) {

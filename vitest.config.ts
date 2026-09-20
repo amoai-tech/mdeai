@@ -10,6 +10,12 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["src/**/*.{test,spec}.ts", "src/**/*.{test,spec}.tsx"],
+    // `e2e/**/*.test.ts` only — Playwright keeps ownership of `*.spec.ts`, so
+    // e2e helper logic that needs deterministic fakes lives in a `.test.ts` beside it.
+    include: [
+      "src/**/*.{test,spec}.ts",
+      "src/**/*.{test,spec}.tsx",
+      "e2e/**/*.test.ts",
+    ],
   },
 });
