@@ -62,28 +62,47 @@ This is a summary only. Linear remains the live source for implementation task s
 
 ## 2 · Product areas and documentation plan
 
-This is the durable documentation map for the Real Estate product. One product area can have multiple Linear tasks, but should have one clear documentation home. The percentages below measure documentation completion, not implementation completion.
+Use the task numbers as the durable execution order. Whole numbers (`1.0`, `2.0`, `3.0`) are product areas; decimals (`1.1`, `1.2`, `1.3`) leave room for additional tasks without renumbering later.
 
-| Status | % Complete | Product area | Current documentation | Planned doc | What it will own |
-|---|---:|---|---|---|---|
-| 🟢 | 100% | Product overview + Core/MVP journey | [`RENTALS.md`](./RENTALS.md) | — | Scope, personas, journeys, architecture, blockers, success criteria |
-| 🔵 | 0% | Search + discovery | Covered inside `RENTALS.md` | `SEARCH.md` | Hard filters, SQL eligibility, ranking, availability/date rules, degraded search behavior |
-| 🔵 | 0% | Listings + detail | Covered inside `RENTALS.md` | `LISTINGS.md` | Listing contract, detail view, inventory quality, canonical listing truth |
-| 🔵 | 0% | Maps + location | Covered inside `RENTALS.md` | `MAPS.md` | Card ↔ pin sync, bounds, selection state, PostGIS/location behavior |
-| 🔵 | 0% | Viewing + lead conversion | Covered inside `RENTALS.md` | `VIEWINGS-LEADS.md` | Approval, atomic write, truthful confirmation, lead/showing lifecycle |
-| 🔵 | 0% | Broker / host workspace | Covered inside `RENTALS.md` | `BROKER-WORKSPACE.md` | Broker visibility, owned listings, leads, showings, follow-up workflow |
-| 🔵 | 0% | Ownership + RLS + data boundaries | Partial in `RENTALS.md` | `DATA-BOUNDARIES.md` | Renter/broker/admin/AI visibility, ownership model, RLS contracts |
-| 🔵 | 0% | Testing + production certification | Scattered tests + Linear tasks | `TEST-PLAN.md` | J-RE-* journey matrix, API/DB/RLS/Playwright/prod smoke proof |
-| 🔵 | 0% | Operations + recovery | Failure states in `RENTALS.md` | `OPERATIONS-RUNBOOK.md` | Production diagnosis, degraded modes, recovery, support checks |
-| 🔵 | 0% | Migration / cutover | Not required currently | `MIGRATION-PLAN.md` | Only created if a real schema/data cutover is required |
-| 🔵 | 0% | Advanced intelligence | Linear advanced backlog | No dedicated doc yet | Neighborhood research, market intelligence, recommendations after Core/MVP proof |
-| 🟢 | 100% | AI runtime / agent platform | Shared platform docs | No rental duplicate | CopilotKit/Mastra runtime, storage, memory, HITL, agent/tool standards stay platform-owned |
+| Task | Status | % Complete | Product area | Planned doc | Next |
+|---:|---|---:|---|---|---|
+| **1.0** | 🟢 | 100% | Product foundation | [`RENTALS.md`](./RENTALS.md) | Maintain Core/MVP scope |
+| 1.1 | 🟢 | 100% | Reference index | [`INDEX.md`](./INDEX.md) | Maintain |
+| 1.2 | 🟢 | 100% | Reuse decisions | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | Maintain |
+| 1.3 | 🟢 | 100% | External references | [`REFERENCES.md`](./REFERENCES.md) | Maintain |
+| **2.0** | 🔵 | 0% | Testing + certification | `TEST-PLAN.md` | **Create next** |
+| 2.1 | 🔵 | 0% | Core journey tests | `TEST-PLAN.md` | Map J-RE-* journeys |
+| 2.2 | 🔵 | 0% | RLS/API/DB proof | `TEST-PLAN.md` | Add deterministic backend proof |
+| 2.3 | 🔵 | 0% | Browser/prod proof | `TEST-PLAN.md` | Add Playwright + production smoke |
+| **3.0** | 🔵 | 0% | Ownership + RLS | `DATA-BOUNDARIES.md` | Create with ownership/RLS work |
+| 3.1 | 🔵 | 0% | Ownership model | `DATA-BOUNDARIES.md` | Define authoritative ownership |
+| 3.2 | 🔵 | 0% | RLS boundaries | `DATA-BOUNDARIES.md` | Define renter/broker/admin isolation |
+| 3.3 | 🔵 | 0% | AI data access | `DATA-BOUNDARIES.md` | Define tool/agent visibility |
+| **4.0** | 🔵 | 0% | Search + discovery | `SEARCH.md` | Create after testing + data boundaries |
+| 4.1 | 🔵 | 0% | Search eligibility | `SEARCH.md` | Document SQL hard filters |
+| 4.2 | 🔵 | 0% | Ranking | `SEARCH.md` | Document semantic ranking after eligibility |
+| 4.3 | 🔵 | 0% | Availability | `SEARCH.md` | Document date/availability rules |
+| **5.0** | 🔵 | 0% | Viewing + lead conversion | `VIEWINGS-LEADS.md` | Define committed conversion path |
+| 5.1 | 🔵 | 0% | Viewing approval | `VIEWINGS-LEADS.md` | Define user approval + truthful UI |
+| 5.2 | 🔵 | 0% | Atomic write | `VIEWINGS-LEADS.md` | Define lead/showing transaction |
+| 5.3 | 🔵 | 0% | Lead lifecycle | `VIEWINGS-LEADS.md` | Define states + broker handoff |
+| **6.0** | 🔵 | 0% | Broker / host workspace | `BROKER-WORKSPACE.md` | Define broker workflow |
+| 6.1 | 🔵 | 0% | Broker visibility | `BROKER-WORKSPACE.md` | Define authorized views |
+| 6.2 | 🔵 | 0% | Follow-up workflow | `BROKER-WORKSPACE.md` | Define lead/showing actions |
+| **7.0** | 🔵 | 0% | Listings + detail | `LISTINGS.md` | Define listing truth contract |
+| 7.1 | 🔵 | 0% | Inventory quality | `LISTINGS.md` | Define required listing fields/quality |
+| 7.2 | 🔵 | 0% | Listing detail | `LISTINGS.md` | Define detail-view contract |
+| **8.0** | 🔵 | 0% | Maps + location | `MAPS.md` | Define map/card contract |
+| 8.1 | 🔵 | 0% | Card ↔ pin sync | `MAPS.md` | Document shared listing identity |
+| 8.2 | 🔵 | 0% | Location behavior | `MAPS.md` | Document bounds/PostGIS behavior |
+| **9.0** | 🔵 | 0% | Operations + recovery | `OPERATIONS-RUNBOOK.md` | Create before launch/support |
+| 9.1 | 🔵 | 0% | Failure diagnosis | `OPERATIONS-RUNBOOK.md` | Document common failure paths |
+| 9.2 | 🔵 | 0% | Recovery | `OPERATIONS-RUNBOOK.md` | Document safe recovery checks |
+| **10.0** | 🔵 | 0% | Migration / cutover | `MIGRATION-PLAN.md` | Create only if required |
+| **11.0** | 🔵 | 0% | Advanced intelligence | Deferred | Start after Core/MVP proof |
+| **12.0** | 🟢 | 100% | AI runtime / agent platform | Shared platform docs | Keep platform-owned; no rental duplicate |
 
-### Recommended creation order
-
-`TEST-PLAN.md` → `DATA-BOUNDARIES.md` → `SEARCH.md` → `VIEWINGS-LEADS.md` → `BROKER-WORKSPACE.md` → `LISTINGS.md` → `MAPS.md` → `OPERATIONS-RUNBOOK.md`
-
-Do not create every document at once. Create each when its related implementation work starts or when `RENTALS.md` becomes too broad to remain the clear source of truth.
+Add future work as the next decimal inside the relevant area—for example `5.4`—instead of renumbering later sections.
 
 ## 3 · Canonical GitHub docs
 
