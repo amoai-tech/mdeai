@@ -138,5 +138,33 @@
     "expected_owner": "__INVALID__",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "lifecycle-beats-domain",
+    "input": "Create a worktree for a CopilotKit feature and open a PR",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "verification-beats-domain",
+    "input": "Verify this exact CopilotKit PR head is ready to merge",
+    "expected_owner": "task-verifier",
+    "risk": "S3",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "review-beats-domain",
+    "input": "Review this Supabase pull request diff for regressions",
+    "expected_owner": "code-review",
+    "risk": "S3",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "unknown-failure-beats-domain",
+    "input": "CopilotKit is failing and we do not know why",
+    "expected_owner": "systematic-debugging",
+    "risk": "S2",
+    "requires_independent_verifier": false
   }
 ]

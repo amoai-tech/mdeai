@@ -22,9 +22,6 @@ fi
 
 case "$TARGET" in
   /*|../*) echo "OK: target is outside the repository; no in-repo staging leak." ;;
-  .worktrees/*)
-    bash .claude/skills/tasks/scripts/guard-gitignore-worktrees.sh "$ROOT"
-    ;;
   *)
     if git check-ignore -q "$TARGET/.mde-ignore-probe" 2>/dev/null; then
       echo "OK: target path is ignored"

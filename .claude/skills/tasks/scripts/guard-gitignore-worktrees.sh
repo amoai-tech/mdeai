@@ -3,6 +3,7 @@
 set -euo pipefail
 ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$ROOT"
+# git check-ignore evaluates ignore rules even when the probe path does not exist.
 probe=".worktrees/.mde-ignore-probe"
 if git check-ignore -q "$probe" 2>/dev/null; then
   echo "OK: .worktrees/ is ignored"

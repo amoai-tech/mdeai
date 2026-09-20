@@ -29,16 +29,8 @@ def route(prompt: str) -> str:
     text = prompt.lower()
     if any(retired in text for retired in RETIRED):
         return "__INVALID__"
-    direct = {
-        "copilotkit": ("copilotkit",),
-        "mastra": ("mastra",),
-        "supabase": ("supabase", "rls", "tenant access"),
-        "gemini": ("gemini",),
-        "stripe": ("stripe", "payment"),
-    }
-    for owner, terms in direct.items():
-        if any(term in text for term in terms):
-            return owner
+    # Workflow intent outranks domain words when a prompt contains both.
+    # Example: "create a worktree for CopilotKit" is lifecycle execution → tasks.
     lifecycle_terms = (
         "start a worktree",
         "create a worktree",
@@ -58,6 +50,16 @@ def route(prompt: str) -> str:
         return "systematic-debugging"
     if any(term in text for term in ("research", "official guidance", "evidence")):
         return "research"
+    direct = {
+        "copilotkit": ("copilotkit",),
+        "mastra": ("mastra",),
+        "supabase": ("supabase", "rls", "tenant access"),
+        "gemini": ("gemini",),
+        "stripe": ("stripe", "payment"),
+    }
+    for owner, terms in direct.items():
+        if any(term in text for term in terms):
+            return owner
     if any(term in text for term in (
         "implement",
         "across the repo",

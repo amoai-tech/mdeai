@@ -3,7 +3,7 @@
 # Usage: bash .claude/skills/tasks/scripts/audit-worktrees.sh
 set -euo pipefail
 
-BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
+BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
 
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
