@@ -55,6 +55,12 @@
 -- functions that are provably trigger-only.
 --
 -- REVOKE is idempotent, so re-running this migration is a no-op.
+--
+-- PRODUCTION-DRIFT GUARD
+-- Fresh replay does not contain every historical production-only trigger function. After the
+-- reviewed named revokes below, a catalog catch-all applies the same end-user revoke to every
+-- app-owned public trigger function while mechanically excluding extension-owned functions.
+-- This preserves fresh replay and safely covers production-only helpers without recreating them.
 
 -- ── Timestamp / bookkeeping helpers (INVOKER, high trigger fan-out) ──────────────
 revoke execute on function public.update_updated_at() from public, anon, authenticated;
@@ -93,3 +99,32 @@ revoke execute on function public.broadcast_vote_tally_changes() from public, an
 revoke execute on function public.realtime_broadcast_messages() from public, anon, authenticated;
 revoke execute on function public.realtime_broadcast_trip_items() from public, anon, authenticated;
 revoke execute on function public.realtime_broadcast_trips() from public, anon, authenticated;
+
+-- ── Drift-safe catch-all for production-only app trigger functions ───────────────
+do $$
+declare
+  fn regprocedure;
+begin
+  for fn in
+    select p.oid::regprocedure
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prorettype = 'trigger'::regtype
+      and not exists (
+        select 1
+        from pg_depend d
+        join pg_extension e on e.oid = d.refobjid
+        where d.classid = 'pg_proc'::regclass
+          and d.objid = p.oid
+          and d.refclassid = 'pg_extension'::regclass
+          and d.deptype = 'e'
+      )
+  loop
+    execute format(
+      'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',
+      fn
+    );
+  end loop;
+end
+$$;

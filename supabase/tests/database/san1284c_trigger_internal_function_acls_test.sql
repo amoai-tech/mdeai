@@ -16,7 +16,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(17);
+select plan(18);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- CATCH-ALL: no trigger-returning public function is executable by an end-user role.
@@ -50,10 +50,15 @@ select is(
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   0, 'C: no trigger-returning function executable by authenticated');
 
--- NOTE ON service_role: these functions deliberately KEEP service_role EXECUTE. It is the
--- trusted server role, it never invokes a trigger function directly, and the function is not
--- reachable over the Data API. The contract this batch establishes is about END-USER roles
--- (PUBLIC / anon / authenticated) only — the same shape Batch 0B used for the money RPCs.
+-- service_role is tested separately: this batch narrows end-user access only and must preserve
+-- trusted server execution for every app-owned trigger function present in the environment.
+select is(
+  (select count(*)::int from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.prorettype = 'trigger'::regtype
+      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
+      and not has_function_privilege('service_role', p.oid, 'EXECUTE')),
+  0, 'C: every app-owned trigger function keeps service_role EXECUTE');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- BINDINGS INTACT — the revocation must not have detached any trigger
