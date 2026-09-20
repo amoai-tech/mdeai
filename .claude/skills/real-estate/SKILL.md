@@ -1,7 +1,7 @@
 ---
 name: real-estate
 description: >-
-  Use when MDE work changes real-estate or rental discovery, listings, leads, broker or host flows, neighborhood intelligence, viewing, or property-domain behavior.
+  Canonical MDE real-estate skill. Use for rental/property discovery, listings, leads, broker or host flows, viewings, neighborhood intelligence, property descriptions, lead qualification, and real-estate product or architecture decisions. Use V1 marketplace guidance by default; load MLS/IDX/RESO guidance only when explicitly requested.
 paths:
   - "src/**/*apartment*"
   - "src/**/*listing*"

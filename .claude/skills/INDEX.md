@@ -42,12 +42,11 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `maps-review` | 90 | KEEP + IMPROVE | Add API-key/cost/grounding review evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
 | `mastra-review` | 92 | KEEP + IMPROVE | Add tenant/HITL/persistence review evals |
-| `mde-real-estate` | 58 | PROTECTED LEGACY | Eventual consolidation into `real-estate`; do not modify under current constraint |
 | `mde-vercel` | 78 | IMPROVE / NARROW | Own Vercel deployment/platform only; remove Next.js-performance overlap |
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals || `nextjs` | 94 | KEEP | Keep framework ownership separate from Vercel deployment |
 | `nextjs-review` | 90 | KEEP + IMPROVE | Add server/client, cache, auth-boundary evals |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
-| `real-estate` | 87 | IMPROVE | Add domain references/evals before legacy consolidation |
+| `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
 | `research` | 95 | KEEP | Maintain primary-source/evidence discipline |
 | `stripe` | 94 | KEEP | Maintain payment/idempotency safety |
 | `stripe-review` | 91 | KEEP + IMPROVE | Add webhook/replay/authority review evals |
@@ -62,14 +61,13 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `wireframe` | 91 | KEEP + IMPROVE | Add responsive/AI-HITL design evals |
 | `writing-skills` | 94 | KEEP | Keep aligned with Anthropic eval/benchmark workflow |
 
-**Overall audit score: 90.7/100.**
+**Overall audit score: 91.9/100.**
 
 ## Remove / consolidate decisions
 
 | Candidate | Decision | Reason |
 |---|---|---|
 | `_template` | Remove from active discovery, keep template content | A template should not compete for triggering as a real skill |
-| `mde-real-estate` → `real-estate` | Consolidate later | Duplicate domain ownership; currently protected from modification |
 | `mde-vercel` + `nextjs` | Do not merge | Narrow `mde-vercel` to Vercel platform/deploy; keep `nextjs` framework-specific |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
 | specialist `*-review` skills | Do not merge | They keep PR review context small and domain-specific |
@@ -81,7 +79,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 4. **Narrow `mde-vercel`** — deployment, environment, domains, releases, and Vercel runtime only. Route React/Next.js performance rules to `nextjs`.
 5. **Clarify `testing` ↔ `playwright-cli`** — `testing` selects the proof ladder; `playwright-cli` performs browser automation and Playwright-specific mechanics.
 6. **Move `_template` out of active discovery** — retain it as authoring infrastructure, not a triggerable skill.
-7. **Real-estate consolidation later** — benchmark `real-estate` against protected `mde-real-estate`, then migrate only after explicit approval.
+7. **Benchmark `real-estate`** — the duplicate has already been consolidated on current `main`; add realistic marketplace, MLS-near-miss, lead, and neighborhood evals.
 
 ## Task 2 · Anthropic best-practice checkpoints
 
