@@ -69,8 +69,21 @@ function buildHandler(options: {
   }).handleRequest;
 }
 
+function isDeterministicE2ERuntimeInfoRequest(req: NextRequest) {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1" &&
+    req.method === "GET" &&
+    new URL(req.url).pathname.endsWith("/api/copilotkit/info")
+  );
+}
+
 /** Auth, distributed rate limits, then CopilotKit/Mastra runtime. */
 async function handleCopilotKit(req: NextRequest) {
+  if (isDeterministicE2ERuntimeInfoRequest(req)) {
+    return Response.json({ agents: {} });
+  }
+
   const unauthorized = assertCopilotKitAuthorized(req);
   if (unauthorized) return unauthorized;
 

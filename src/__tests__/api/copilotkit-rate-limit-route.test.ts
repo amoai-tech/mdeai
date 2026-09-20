@@ -36,7 +36,14 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { POST } from "@/app/api/copilotkit/[[...path]]/route";
+import { GET, POST } from "@/app/api/copilotkit/[[...path]]/route";
+
+function getInfoRequest(ip = "203.0.113.60"): Request {
+  return new Request("http://localhost/api/copilotkit/info", {
+    method: "GET",
+    headers: { "x-forwarded-for": ip },
+  });
+}
 
 function postRequest(ip: string, body = ""): Request {
   return new Request("http://localhost/api/copilotkit", {
@@ -51,6 +58,7 @@ function postRequest(ip: string, body = ""): Request {
 
 describe("POST /api/copilotkit — distributed rate limit gate", () => {
   beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT;
     handleRequestMock.mockReset();
     getUserMock.mockReset();
     ipHardCeilingMock.mockReset();
@@ -60,6 +68,20 @@ describe("POST /api/copilotkit — distributed rate limit gate", () => {
     distributedRateLimitMock.mockResolvedValue(null);
     getUserMock.mockResolvedValue({ data: { user: null } });
     handleRequestMock.mockResolvedValue(new Response("bad request", { status: 400 }));
+  });
+
+
+  it("returns local runtime info before auth/rate limits in deterministic E2E", async () => {
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT = "1";
+
+    const res = await GET(getInfoRequest() as never);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ agents: {} });
+    expect(ipHardCeilingMock).not.toHaveBeenCalled();
+    expect(distributedRateLimitMock).not.toHaveBeenCalled();
+    expect(getUserMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).not.toHaveBeenCalled();
   });
 
   it("does not call Mastra runtime when distributed rate limit blocks", async () => {
