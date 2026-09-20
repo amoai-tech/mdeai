@@ -93,13 +93,9 @@ Do not select a product from memory when current Google guidance is available.
 
 | Task | Go to |
 |------|-------|
-| **PRD / audit** — Places API (New) v2.1 feature matrix + score (PLACES-002–081) | Repo: `tasks/maps/maps-prd-v2.md`, `tasks/maps/places-api-new-audit.md` |
-| **Interactive** — live search/details/directions/map rendering | [§ Interactive Maps tools](#interactive-maps-tools) |
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
 | **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
-| **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive Maps tools](#interactive-maps-tools) below |
-| **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
 
 ## mdeAI environment
 
@@ -113,12 +109,6 @@ GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
 **Medellín anchor:** `{ latitude: 6.2442, longitude: -75.5812 }` — default `locationBias` center and Maps grounding `latLng`.
 
 **Never expose `GOOGLE_PLACES_API_KEY` through a `NEXT_PUBLIC_*` variable** — it is server-side only.
-
----
-
-## Interactive Maps tools
-
-For live location questions, use the available Maps tools for search, details, directions, geocoding/reverse-geocoding, then render with `show_on_map` only after results exist. Preserve provider `place_id`; do not echo raw map JSON or invent place facts.
 
 ---
 
@@ -147,23 +137,9 @@ Pricing, free tiers, geographic availability, preview/GA status, field availabil
 
 ---
 
-## Node.js client — enrichment script pattern
+## Server-side Places enrichment
 
-```typescript
-import { PlacesClient } from '@googlemaps/places';
-
-const client = new PlacesClient({ apiKey: process.env.GOOGLE_PLACES_API_KEY });
-
-const [response] = await client.searchText(
-  {
-    textQuery: `${venueName} ${neighborhood} Medellín Colombia`,
-    locationBias: {
-      circle: { center: { latitude: 6.2442, longitude: -75.5812 }, radius: 30000 },
-    },
-  },
-  { otherArgs: { headers: { 'X-Goog-FieldMask': 'places.id,places.displayName,places.googleMapsLinks,places.location,places.generativeSummary' } } },
-);
-```
+Keep Places API (New) calls server-side with `GOOGLE_PLACES_API_KEY`; request only fields the feature needs. Verify current client syntax and field names in Google docs before implementation.
 
 ---
 
@@ -212,24 +188,9 @@ Demo Key: prototypes only. Production/shared environments use restricted project
 
 ---
 
-## Event discovery — Maps / Places / ADK (plan 10 §11)
+## MDE domain handoff
 
-| Layer | mdeai use | Skill / task |
-|-------|-----------|----------------|
-| **Places API (New)** | Batch venue enrich → `place_id`, `maps_url`, lat/lng | **EVD-06** → EVP-024 (historical) |
-| **Maps JS** | Camila’s event pins (`mapId` + `AdvancedMarker`) | EVP-016 (historical) |
-| **ADK sidecar** | Freshness / `search_grounded_places` — not event inventory | EVP-023 (historical) |
-| **Web grounding** | C-004 citations — Google Search, not Places catalog | EVP-021 (historical) |
-
-Historical event-discovery task links were retired; resolve current work through Linear and the canonical `events` skill.
-
-**Golden rule:** Places enriches DB once; grounding answers live geo questions — never invent event listings from Maps.
-
----
-
-## Mastra handoff
-
-For Maps-related Mastra work, use the canonical `mastra` skill plus current source and the live Linear task. Retired `tasks/mastra/maps/**` paths are not active instructions.
+Maps/Places provides geo truth, not event/rental inventory. Keep inventory in Supabase, orchestration in Mastra, and route domain behavior through the owning `events` or `real-estate` skill. Never invent listings from Maps grounding.
 
 ---
 

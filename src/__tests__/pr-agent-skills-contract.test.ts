@@ -17,7 +17,7 @@ const skills = [
   ".claude/skills/copilotkit-review/SKILL.md",
   ".claude/skills/mastra-review/SKILL.md",
   ".claude/skills/supabase-review/SKILL.md",
-  ".claude/skills/maps-review/SKILL.md",
+  ".claude/skills/maps/SKILL.md",
   ".claude/skills/stripe-review/SKILL.md",
   ".claude/skills/nextjs/references/review.md",
 ];
@@ -68,7 +68,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(guidelines).toContain("falsify");
   });
 
-  it("ships all required review-only specialist skills", () => {
+  it("ships all required review skills", () => {
     for (const path of skills) {
       expect(existsSync(path)).toBe(true);
       const body = read(path);
