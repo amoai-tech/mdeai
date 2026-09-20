@@ -57,6 +57,15 @@ Mastra capability MDE already has natively.
 **Weighted MDE target architecture score:** **94/100** if MDE adopts native primitives first and copies
 references only where Mastra has no native answer.
 
+### The rental-domain pass, in one paragraph
+
+A second sweep proposed 10 real-estate AI repos. Verified: **7 of 10 carry no license** (so their code
+cannot legally be copied), **9 of 10 have ≤1 star**, **8 of 10 are Python**, and the 82/100-scored MCP
+server is **an empty repository**. But one item is genuinely excellent and verified in its source —
+**"SQL decides what is eligible; AI decides what is relevant among the eligible"** (§18). That single
+principle maps directly onto **five live MDE rental defects**, and MDE already holds ~80% of the data it
+needs. Adopt the principle; skip the code.
+
 ---
 
 ## §1 · Method and evidence
@@ -229,6 +238,10 @@ Not previously recorded in `roadmap.md`. These are **installed today**:
 | C11 | "Never collapse anonymous users into one `"anonymous"` resource" | `route.ts:54` — `options.userId ?? "anonymous"` | ⚠️ **Real live defect (D17)** — see §8.2 |
 | C12 | `roadmap.md` — "package declarations use moving beta/alpha ranges" | Every Mastra/AG-UI package is **exact-pinned**; `@mastra/pg` is `1.11.0` not `^1.1.0-alpha.2` | ❌ **Stale** — corrected in `roadmap.md`; risk is *distance*, not *drift* |
 | C13 | (implied) A2UI capability must be added | `@ag-ui/a2ui-middleware@0.0.4` already installed | 🟡 **Already present** — adopt, don't install |
+| C14 | 10 real-estate repos proposed as adapt-and-copy references | **7/10 have no license**, 9/10 have ≤1 star, 8/10 are Python | 🟥 **Cannot copy code.** Ideas only; see §17 |
+| C15 | `open-estate-ai/real-estate-mcp-server` scored 82/100 | **Empty repo — `README.md` + `.github/` only, 1 KB, zero code** | 🟥 **Skip entirely** |
+| C16 | "SQL before vector ranking" attributed to `dubai-real-estate` | ✅ **Verified verbatim** in its README ("Why only one tool is RAG") | 🟢 **Best item in either research pass** — adopt as MDE principle (§18) |
+| C17 | Proposed 6 new rental specialist agents | `roadmap.md` requires a durable ownership boundary; ladder prefers Mastra primitives | 🟡 **5 of 6 should be tools**, not agents (§19.1) |
 
 C11 is notable: the external research independently rediscovered the same defect the code audit found.
 
@@ -672,9 +685,246 @@ capability tables are empty and two identity/authorization defects sit underneat
 
 ---
 
-## §16 · Change log
+## §16 · Rental-domain reference sweep — verification
+
+A second research pass proposed 10 real-estate AI repositories as MDE references. Every one was
+resolved against the GitHub API on 2026-09-20. **The table below is the verification, not the pitch.**
+
+| # | Repo | Lang | Stars | License | Last push | Verdict |
+|---:|---|---|---:|---|---|---|
+| 1 | `awallathome/property_shop` | Python + TS | 1 | **NONE** | 2026-01-19 | 🟡 Pattern-only — mixed Next.js/`agno`/Apify; unlicensed |
+| 2 | `neoxu999/real-estate-agent` | Python | 1 | **NONE** | 2025-11-25 | 🟠 Toy-scale (75 KB, CrewAI); same-day push |
+| 3 | `nazsats/dubai-real-estate` | Python | 1 | **NONE** | 2026-08-02 | ⭐ **Highest-value reference** — see §18 |
+| 4 | `AleksNeStu/ai-real-estate-assistant` | Python | **311** | **MIT** | 2026-09-18 | 🟢 **Only licensed + maintained repo**; product-surface reference |
+| 5 | `JoaoVitorCarvalhoPR/real-estate-ai-chatbot` | JavaScript | 0 | NOASSERTION | 2026-08-15 | 🟠 n8n orchestration; same-day push |
+| 6 | `yuehong136/HomeRecoEngine` | Python | 0 | **NONE** | 2025-11-14 | 🟡 Hybrid-search *pattern* only |
+| 7 | `jusnaini/real-estate-rag` | Python | 1 | **NONE** | 2026-07-22 | 🟡 Eval-harness pattern only |
+| 8 | `Archit1706/Keya-…-Real-Estate` | **TypeScript** | 1 | **NONE** | 2025-12-03 | 🟡 Only TS repo; 3-panel UI pattern |
+| 9 | `GretaGalliani/HomeMatch` | Python | 1 | **NONE** | 2024-11-10 | 🟠 Course-project scale (2-day push) |
+| 10 | `open-estate-ai/real-estate-mcp-server` | **null** | 0 | **NONE** | 2025-09-07 | 🟥 **EMPTY — README + `.github` only, 1 KB, zero code** |
+
+### 16.1 The three facts the scores hid
+
+| Research score | Verified reality |
+|---|---|
+| #10 MCP server **82/100 B+** | **1 KB, no code.** Repository contains only `README.md` and `.github/`. There is nothing to adapt. |
+| #3 dubai-real-estate **99/100 A+** | ✅ Score is deserved — but **not for the reason implied**. It is a serious multi-tenant SaaS (76 MB, DLD transaction integration, asyncpg session pooler). |
+| #1 PropertyShop **98/100 A+** | `agno` + Apify + Claude Visual API. **Not Mastra.** No license. |
+
+**8 of 10 are Python. 7 of 10 carry no license. 9 of 10 have ≤1 star.**
+Only **#4 (MIT, 311 stars, pushed 2 days ago)** is both legally usable and demonstrably maintained.
+
+---
+
+## §17 · The hard constraint: license, not quality
+
+```mermaid
+flowchart TD
+  R["Candidate repo"] --> L{"Has a license?"}
+  L -- "no (7 of 10)" --> I["Read for IDEAS only<br/>copying code = infringement"]
+  L -- "MIT (1 of 10)" --> C["Code may be copied<br/>with attribution"]
+  L -- "NOASSERTION (1 of 10)" --> V["Ambiguous — treat as<br/>no license until reviewed"]
+  I --> P["Re-implement the pattern<br/>in MDE stack"]
+  C --> P
+  V --> P
+  P --> M["Mastra / CopilotKit / Supabase"]
+  style I fill:#fdd
+  style C fill:#dfd
+  style V fill:#fee
+```
+
+**Rule for MDE:** a repo without a license is *all rights reserved*. MDE may study it, learn the
+architecture, and re-implement the idea — but **must not copy code, prompts, or assets** from it.
+This applies to 7 of the 10 proposed references, including the two highest-scored ones.
+
+> Practical consequence: the value in this list is almost entirely **architectural principle**, which is
+> exactly what MDE needs for its rental defects — and principles carry no license obligation.
+
+---
+
+## §18 · The principle that matters most: SQL decides eligibility, AI decides relevance
+
+**This is the single most valuable item in either research pass, and it was verified in the source**
+(`nazsats/dubai-real-estate`, README §"Why only one tool is RAG", verified 2026-09-20).
+
+The repo splits four tools deliberately — three SQL, one RAG:
+
+| Tool | Backed by | Answers |
+|---|---|---|
+| `search_properties` | SQL over inventory, tenant-scoped | "3 bed in Dubai Marina under 5M with a pool" |
+| `market_check` | SQL aggregate | "What's a 2-bed in JVC actually going for?" |
+| `find_comparables` | SQL nearest by area/beds/size | "Justify this asking price" |
+| `knowledge_lookup` | **RAG** — pgvector + embeddings | "What are the transfer costs for a non-resident?" |
+
+Its stated reasoning, quoted verbatim:
+
+> **"Retrieval cannot aggregate."**
+>
+> "A vector search returns the ~20 chunks most similar to the question, the model averages those, and
+> reports the result as *the market rate* — fluently, with no signal that it saw 0.4% of the data.
+> Numeric predicates degrade the same way: 'under 2M' becomes a similarity score rather than a filter,
+> and counting is meaningless. **The failure is silent and confident, which is the worst kind.**"
+>
+> "Aggregates and filters must be exact, so they are SQL. Only prose is retrieved."
+
+Two further details worth stealing outright:
+
+1. **Use the median, not the mean** — "one Palm villa drags an average across a whole community."
+   MDE's Medellín inventory has the same outlier shape (luxury El Poblado listings against Laureles median).
+2. **Fail closed on knowledge**: when the KB is unavailable the tool "returns a message that explicitly
+   forbids answering from memory." This is the direct opposite of MDE's current fail-open behaviour.
+
+### 18.1 Why this is MDE's most urgent rental fix
+
+Every clause above maps onto a **verified** MDE defect from the rentals audit:
+
+| dubai-real-estate principle | MDE defect (verified) | Location |
+|---|---|---|
+| Numeric predicates must be filters, not similarity | `searchRentals` called with **no dates**; hard filters not applied | `src/app/rentals/page.tsx:29-34` |
+| Filters must be exact | Availability returns `true` when dates are absent | `src/mastra/tools/search-rentals.ts:145-154` |
+| Never answer from mock/memory | `MOCK_RENTALS` fallback silently substitutes data | `src/mastra/tools/search-rentals.ts:409-419` |
+| Do not fail open | Neighborhood filter fails **open** when empty | `src/mastra/lib/intelligence-rental-search.ts:312-318` |
+| State the tool contract honestly | Prompt says *"Mock data is the only truth"* | `src/mastra/agents/rental-agent.ts:117` |
+
+### 18.2 Target flow for MDE
+
+```mermaid
+flowchart TD
+  Q["User query<br/>'2BR in Laureles under 1,500 quiet'"] --> X["Extract hard constraints"]
+  X --> S["Supabase SQL filters<br/>price · beds · available_after · neighborhood"]
+  S --> E{"Eligible set empty?"}
+  E -- "yes" --> N["Return 'no matches'<br/>+ relax suggestions"]
+  E -- "no" --> C["Eligible candidates"]
+  C --> G["PostGIS distance<br/>walkability / noise radius"]
+  G --> V["pgvector semantic ranking<br/>within eligible set ONLY"]
+  V --> R["rental_signals scoring"]
+  R --> M["Median-based market context<br/>SQL aggregate"]
+  M --> UI["CopilotKit cards + map"]
+  N --> UI
+  style S fill:#dfd
+  style V fill:#ffd
+  style N fill:#fee
+```
+
+**The rule, in one line:**
+
+> **SQL decides what is *eligible*. AI decides what is *relevant* among the eligible.**
+
+Two forbidden moves follow from it:
+
+```text
+❌ vector similarity as the only gate for a numeric predicate
+❌ a prose answer when the eligible set is empty (must say "none", not improvise)
+```
+
+---
+
+## §19 · Per-repo adapt / copy / use verdicts
+
+| # | Repo | Adapt (idea) | Copy (code)? | Use for MDE |
+|---:|---|---|---|---|
+| 1 | `property_shop` | Multi-agent property enrichment; progressive results | ❌ unlicensed, `agno`/Python | Concept: specialist contributions to one result set |
+| 2 | `neoxu999/real-estate-agent` | Agent-role decomposition (route/search/calc/rag/task) | ❌ unlicensed, CrewAI, 75 KB | **Role checklist only** — map to tools, not new agents (§19.1) |
+| 3 | `nazsats/dubai-real-estate` | ⭐ **SQL-vs-RAG boundary; median not mean; fail-closed KB** | ❌ unlicensed | **Adopt as MDE principle §18** — highest value in the list |
+| 4 | `AleksNeStu/ai-real-estate-assistant` | Product surface: saved searches, favorites, comparisons, valuation, agent profiles | ✅ **MIT** (attribute) | Product/page reference; still Python/FastAPI/ChromaDB |
+| 5 | `JoaoVitorCarvalhoPR/real-estate-ai-chatbot` | Lead qualification → human handoff; ad attribution | ❌ unlicensed | Handoff state machine (§19.2) |
+| 6 | `HomeRecoEngine` | Hybrid semantic + geospatial + structured filters | ❌ unlicensed | Confirms MDE's PostGIS + pgvector combination |
+| 7 | `jusnaini/real-estate-rag` | Retrieval **evaluation** harness, not just a chatbot | ❌ unlicensed | Strengthens task #8/#9 (scorers + datasets) |
+| 8 | `Keya-…-Real-Estate` | Three-panel chat + filter + map UI; NL→filter extraction | ❌ unlicensed | UI layout for MDE's Left/Main/Right model |
+| 9 | `HomeMatch` | Lifestyle preference → embedding match | ❌ unlicensed | Maps to existing `rental_signals` + `neighborhood_profiles` |
+| 10 | `real-estate-mcp-server` | — | ❌ **empty repo** | **Skip.** MDE's own MCP layer (#11) supersedes it |
+
+### 19.1 Correction: the proposed agents should be tools
+
+The rental research proposes adding `RentalSearchAgent`, `NeighborhoodAgent`, `MapsAgent`, `MarketAgent`,
+`LifestyleAgent`, `ViewingAgent` under the concierge. **`roadmap.md` forbids this without a durable
+ownership boundary**, and the §6 ladder puts Mastra primitives above new agents.
+
+| Proposed agent | Correct MDE form | Why |
+|---|---|---|
+| RentalSearchAgent | 🟢 **exists** (`rentalAgent`) | No change |
+| ViewingAgent | **Tool + HITL action** | Single typed write; already partly built (SAN-1203) |
+| MarketAgent | **SQL aggregate tool** | Deterministic; never reasoning (§18) |
+| NeighborhoodAgent | **Knowledge tool / RAG** | Prose-only surface (§18) |
+| MapsAgent | **Tool** around existing Maps integration | MDE already has Maps + PostGIS |
+| LifestyleAgent | **Scorer + signal lookup** | Uses existing `rental_signals` |
+
+```mermaid
+flowchart LR
+  P["Proposed: 6 new agents"] --> R{"Durable ownership<br/>boundary?"}
+  R -- "no" --> T["Tool / workflow<br/>(5 of 6)"]
+  R -- "yes" --> A["New agent<br/>(1 already exists)"]
+  T --> K["Keeps registry small<br/>per roadmap.md"]
+  style T fill:#dfd
+  style A fill:#ffd
+```
+
+### 19.2 Lead qualification and broker handoff — verified against MDE assets
+
+The handoff pattern (#5) is the one genuinely new *workflow*, and MDE already has the tables for it
+(`leads` 17 rows, `showings` 6 rows, `rental_signals` 44).
+
+```mermaid
+stateDiagram-v2
+  [*] --> AIQualifying: renter starts chat
+  AIQualifying --> AIQualifying: answer questions, refine filters
+  AIQualifying --> Matched: eligible matches found
+  Matched --> HandoffPending: renter asks price/negotiation/legal
+  HandoffPending --> BrokerOwned: broker claims lead
+  BrokerOwned --> AIAssisted: broker returns it, AI summarises
+  AIAssisted --> [*]: lease signed / closed
+  Matched --> [*]: renter abandons
+  HandoffPending --> AIQualifying: renter declines handoff
+```
+
+> ⚠️ **Not in this plan's scope to build.** It requires the identity fix (#2) so a lead is attributable
+> to a real user, and broker authorization on `showings`/`leads`. Record it as a **rental-domain follow-up**,
+> owned by the rentals roadmap — not the platform adoption plan.
+
+---
+
+## §20 · What MDE already has (so most of this is wiring, not building)
+
+Verified live in Supabase on 2026-09-20 — the research's claim that these repos "match data MDE already has"
+is **correct**:
+
+| Asset | Rows | Serves |
+|---|---:|---|
+| `apartments` | 49 (44 active) | Inventory |
+| `listing_embeddings` | 44 | pgvector semantic ranking |
+| `rental_signals` | 44 | Lifestyle/preference scoring |
+| `neighborhood_profiles` | 8 | Neighborhood knowledge |
+| `neighborhoods` | 13 | Geography |
+| `leads` | 17 | Qualification + handoff |
+| `showings` | 6 | Viewing actions |
+| `query_embedding_cache` | 9 | Search perf |
+| PostGIS + pgvector | extensions live | Geo + semantic |
+| Google Maps / Places | configured | Map + POI |
+
+**Conclusion:** the top rental features — deterministic filters, lifestyle matching, hybrid geo+vector,
+median market context — are **already ~80% data-present**. The gap is the **SQL-first ordering** (§18),
+not the data.
+
+### 20.1 Additions to the §7 task list
+
+| # | Task | Status | % | Verified Existing | Missing / Broken | Dependency | Next Action |
+|---:|---|:---:|---:|---|---|---|---|
+| **20** | **MDE-RENTAL-SQL-FIRST-001 — SQL eligibility before vector ranking** | 🟡 | 30% | RPC + pgvector + PostGIS exist | Filters not applied first; empty set not fail-closed | — | Enforce hard filters in SQL, then rank only the eligible set (§18) |
+| **21** | **MDE-RENTAL-KB-EVAL-001 — Evaluated rental RAG (#7 pattern)** | 🔵 | 15% | `faithfulness` + `grounding-coverage` scorers live | No retrieval-quality dataset | #8 · #9 | Add retrieval eval to the existing scorer/dataset path |
+| **22** | **MDE-RENTAL-COMPARE-001 — Comparison workspace (#4/#9 pattern)** | 🔵 | 10% | Card rendering exists | No comparison surface | #5 · #6 | Build on the GenUI catalogue |
+| **23** | **MDE-RENTAL-HANDOFF-001 — Lead → broker handoff (#5 pattern)** | 🔵 | 5% | `leads`, `showings` tables live | No handoff state machine; no broker authz | **#2** | Ownership decision in the rentals roadmap first |
+
+> These four are **rental-domain** tasks: they belong to the rentals roadmap
+> ([`../../04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md`](../../04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md)).
+> They are listed here only to show where the *references* land.
+
+---
+
+## §21 · Change log
 
 | Rev | Date | Change |
 |---|---|---|
-| 1.0.0 | 2026-09-20 | Initial reference-adoption plan. Verified hooks/versions/live-DB/upstream paths. Corrected 3 research errors (A2A-travel language, non-existent agents C5, OpenBot maturity) and confirmed 5 claims. Re-scored all references for MDE fit. |
+| 1.0.0 | 2026-09-20 | Initial reference-adoption plan. Verified hooks/versions/live-DB/upstream paths. Corrected 3 research errors (A2A-travel language, non-existent agents, OpenBot maturity) and confirmed 5 claims. Re-scored all references for MDE fit. |
 | 1.1.0 | 2026-09-20 | Added C12 (stale "moving beta ranges" claim in `roadmap.md` — packages are exact-pinned) and C13 (`@ag-ui/a2ui-middleware` already installed). Raised task #5 to 50%. Corrected `roadmap.md` version table + added transitively-installed AG-UI surface. |
+| 1.2.0 | 2026-09-20 | Added §16–§20: rental-domain reference sweep of 10 proposed real-estate repos, all resolved against the GitHub API. Verified **7/10 unlicensed**, **9/10 ≤1 star**, **8/10 Python**, and that `open-estate-ai/real-estate-mcp-server` is **an empty repo (README only, zero code)** despite an 82/100 score. Verified the highest-value principle (**"SQL decides eligibility, AI decides relevance"**) is genuinely in the `dubai-real-estate` source and mapped it to five live MDE rental defects. Corrected the proposed 6-new-agents list down to tools per `roadmap.md`. Added tasks #20–#23. |
+
