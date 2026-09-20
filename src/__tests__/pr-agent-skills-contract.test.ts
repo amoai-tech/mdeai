@@ -10,6 +10,20 @@ const config = read(".pr_agent.toml");
 const guidelines = read("docs/06-testing/pr-review-guidelines.md");
 const routing = read("scripts/select-pr-agent-skills.mjs");
 
+function workflowScript(stepName: string) {
+  const step = workflow.split(`      - name: ${stepName}\n`)[1];
+  if (!step) throw new Error(`workflow step not found: ${stepName}`);
+  const script = step.split("          script: |\n")[1];
+  if (!script) throw new Error(`workflow script not found: ${stepName}`);
+  const lines: string[] = [];
+  for (const line of script.split("\n")) {
+    if (line.startsWith("            ")) lines.push(line.slice(12));
+    else if (line.trim() === "") lines.push("");
+    else break;
+  }
+  return lines.join("\n");
+}
+
 const skills = [
   ".claude/skills/code-review/SKILL.md",
   ".claude/skills/copilotkit-review/SKILL.md",
@@ -94,6 +108,13 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[7])).toContain("Next.js 16");
     expect(read(skills[7])).toContain("await cookies()");
     expect(read(skills[7])).toContain("Async Request APIs");
+  });
+
+  it("keeps the embedded base-aware verifier script syntactically valid", () => {
+    const script = workflowScript("Require a fresh base-aware PR-Agent review result");
+    expect(() => new Function(
+      `return async function(github, context, core, process, require) {\n${script}\n};`,
+    )).not.toThrow();
   });
 
   it("uses base-aware full or incremental review and verifies the exact review mode", () => {
