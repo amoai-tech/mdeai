@@ -82,8 +82,8 @@
     "commit:staged-guard:c012": "node scripts/commit-staged-guard.mjs c012",
     "commit:staged-guard:c013": "node scripts/commit-staged-guard.mjs c013",
     "test:e2e:new-chat": "playwright test e2e/concierge-new-chat.spec.ts --project=chromium --workers=1",
-    "test:e2e:prod-synthetic": "PROD_SMOKE_BASE_URL=${PROD_SMOKE_BASE_URL:-https://www.mdeai.co} PW_SKIP_WEBSERVER=1 playwright test e2e/prod-synthetic-smoke.spec.ts --project=chromium --workers=1",
-    "test:e2e:prod-journey-j05-j20": "PROD_SMOKE_BASE_URL=${PROD_SMOKE_BASE_URL:-https://www.mdeai.co} PW_SKIP_WEBSERVER=1 playwright test e2e/prod-journey-j05-j20.spec.ts --project=chromium --workers=1",
+    "test:e2e:prod-synthetic": "PROD_SMOKE_BASE_URL=${PROD_SMOKE_BASE_URL:-https://www.mdeai.co} PW_SKIP_WEBSERVER=1 playwright test e2e/prod-synthetic-smoke.spec.ts --project=prod-smoke --workers=1",
+    "test:e2e:prod-journey-j05-j20": "PROD_SMOKE_BASE_URL=${PROD_SMOKE_BASE_URL:-https://www.mdeai.co} PW_SKIP_WEBSERVER=1 playwright test e2e/prod-journey-j05-j20.spec.ts --project=prod-smoke --workers=1",
     "verify:commerce-mdeapp-env": "node --env-file=.env.local scripts/verify-commerce-mdeapp-env.mjs",
     "smoke:commerce-client": "npx tsx --env-file=.env.local scripts/smoke-commerce-client.ts",
     "check": "npm run typecheck && npm test -- --run",
@@ -92,7 +92,8 @@
     "test:lib": "vitest run src/lib/",
     "test:hooks": "vitest run src/hooks/",
     "test:api": "vitest run src/app/api/",
-    "check:docs": "node scripts/check-docs.mjs"
+    "check:docs": "node scripts/check-docs.mjs",
+    "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts --project=local-chromium --workers=1"
   },
   "dependencies": {
     "@ag-ui/client": "0.0.52",

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 import {
@@ -28,8 +29,8 @@ const ConciergeCoAgentContext = createContext<ConciergeCoAgentValue | null>(
   null,
 );
 
-/** Single useAgent mount for concierge — avoids duplicate CopilotKit sync POSTs. */
-export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) {
+/** Live CopilotKit agent mount for concierge. */
+function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
   const { agent } = useAgent({
     agentId: "conciergeAgent",
     updates: [
@@ -67,6 +68,56 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
     <ConciergeCoAgentContext.Provider value={value}>
       {children}
     </ConciergeCoAgentContext.Provider>
+  );
+}
+
+function DeterministicConciergeCoAgentProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [state, setStateValue] = useState<ConciergeWorkingMemory>({});
+  const setState = useCallback(
+    (
+      patch:
+        | Partial<ConciergeWorkingMemory>
+        | ((prev: ConciergeWorkingMemory) => ConciergeWorkingMemory),
+    ) => {
+      setStateValue((current) =>
+        typeof patch === "function" ? patch(current) : { ...current, ...patch },
+      );
+    },
+    [],
+  );
+  const value = useMemo(
+    () => ({ agent: undefined, state, setState }),
+    [state, setState],
+  );
+  return (
+    <ConciergeCoAgentContext.Provider value={value}>
+      {children}
+    </ConciergeCoAgentContext.Provider>
+  );
+}
+
+/** Deterministic E2E avoids useAgent/SSE while production keeps the live agent. */
+export function ConciergeCoAgentProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1"
+  ) {
+    return (
+      <DeterministicConciergeCoAgentProvider>
+        {children}
+      </DeterministicConciergeCoAgentProvider>
+    );
+  }
+  return (
+    <LiveConciergeCoAgentProvider>{children}</LiveConciergeCoAgentProvider>
   );
 }
 

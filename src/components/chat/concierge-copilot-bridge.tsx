@@ -68,7 +68,10 @@ function createVenueBookingHitlRender() {
     return (
       <>
         {status === "complete" ? (
-          <VenueBookingResultBannerSync result={result} venueTitle={venueTitle} />
+          <VenueBookingResultBannerSync
+            result={result}
+            venueTitle={venueTitle}
+          />
         ) : null}
         <VenueBookingHitlPanel
           args={hitlArgs}
@@ -84,11 +87,12 @@ type ConciergeCopilotBridgeProps = {
   children: ReactNode;
 };
 
-export function ConciergeCopilotBridge({
-  children,
-}: ConciergeCopilotBridgeProps) {
+function LiveConciergeCopilotBridge({ children }: ConciergeCopilotBridgeProps) {
   useSearchToolRenders();
-  const VenueBookingHitlRender = useMemo(() => createVenueBookingHitlRender(), []);
+  const VenueBookingHitlRender = useMemo(
+    () => createVenueBookingHitlRender(),
+    [],
+  );
 
   useHumanInTheLoop(
     {
@@ -113,4 +117,17 @@ export function ConciergeCopilotBridge({
   );
 
   return <>{children}</>;
+}
+
+/** Skip CopilotKit tool/HITL registration in deterministic local E2E. */
+export function ConciergeCopilotBridge({
+  children,
+}: ConciergeCopilotBridgeProps) {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1"
+  ) {
+    return <>{children}</>;
+  }
+  return <LiveConciergeCopilotBridge>{children}</LiveConciergeCopilotBridge>;
 }

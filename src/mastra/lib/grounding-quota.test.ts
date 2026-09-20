@@ -4,8 +4,14 @@ import { incrementAndCheckGroundingQuota } from "./grounding-quota";
 describe("incrementAndCheckGroundingQuota", () => {
   beforeEach(() => {
     vi.stubEnv("MAPS_GROUNDING_DAILY_LIMIT", "");
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    for (const name of [
+      "SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_SECRET_KEY",
+    ]) {
+      vi.stubEnv(name, "");
+    }
   });
 
   afterEach(() => {

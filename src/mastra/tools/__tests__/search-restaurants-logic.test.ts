@@ -61,15 +61,27 @@ describe('searchRestaurants — intelligent search fallback', () => {
 });
 
 describe('neighborhood sanitization', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('strips PostgREST special chars from neighborhood before filter', async () => {
-    // Supabase client unavailable in test → falls to fallback, but sanitization
-    // must not throw. We verify the returned source is fallback (not an error throw).
-    const result = await searchRestaurants({
+    for (const name of [
+      'SUPABASE_URL',
+      'NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    ]) {
+      vi.stubEnv(name, '');
+    }
+    vi.resetModules();
+    const { searchRestaurants: isolatedSearch } = await import('../search-restaurants.js');
+    const result = await isolatedSearch({
       neighborhood: "Laureles,),*weird'input",
       limit: 5,
     });
-    // Either supabase or fallback — must not throw
-    expect(['supabase', 'fallback']).toContain(result.source);
+    expect(result.source).toBe('fallback');
   });
 });
 

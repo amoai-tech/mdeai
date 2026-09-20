@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, PlayIcon } from "lucide-react";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 const chips = [
   "Rentals in Laureles",
@@ -20,6 +21,7 @@ interface HomeHeroProps {
 export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
+  const hydrated = useHydrated();
 
   const submit = (q: string) => {
     const trimmed = q.trim();
@@ -59,6 +61,8 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
 
             {/* Search bar */}
             <form
+              data-testid="home-concierge-search"
+              data-hydrated={hydrated ? "true" : "false"}
               className="flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-background px-4 py-2 shadow-lg transition-shadow duration-200 focus-within:shadow-xl"
               onSubmit={(e) => { e.preventDefault(); submit(query); }}
               role="search"

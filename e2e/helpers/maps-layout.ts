@@ -1,7 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-const RENTAL_QUERY =
-  "1BR apartment in Laureles under 80 dollars per night";
+const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
 const GROUNDING_QUERY = "Quiet cafés near Laureles";
 
@@ -19,28 +18,19 @@ export async function gotoMarketingHome(page: Page) {
   await page
     .getByRole("searchbox", { name: /ask the ai concierge/i })
     .waitFor({ state: "visible", timeout: 20_000 });
+  await expect(page.getByTestId("home-concierge-search")).toHaveAttribute(
+    "data-hydrated",
+    "true",
+    { timeout: 30_000 },
+  );
   await hideCopilotWebInspector(page);
 }
 
 /** Hero Ask CTA — client navigates to /chat?q=… */
 export async function submitHomeHeroQuery(page: Page, text: string) {
   const input = page.getByRole("searchbox", { name: /ask the ai concierge/i });
-  await input.click();
-  await input.evaluate((node, value) => {
-    const el = node as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    setter?.call(el, value);
-    el.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        data: value,
-        inputType: "insertText",
-      }),
-    );
-  }, text);
+  await input.fill(text);
+  await expect(input).toHaveValue(text);
   const submit = page.getByRole("button", { name: /^search$/i });
   await expect(submit).toBeEnabled({ timeout: 10_000 });
   await Promise.all([
@@ -152,7 +142,9 @@ export async function waitForCopilotRuntime(page: Page) {
 
 export async function ensureChatInputVisible(page: Page) {
   const input = page
-    .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
+    .locator(
+      '[data-testid="copilot-chat-textarea"], .copilotKitInput textarea, [role="textbox"][placeholder*="message" i]',
+    )
     .first();
   if (await input.isVisible().catch(() => false)) return;
   const open = page.getByRole("button", { name: /open chat/i });
@@ -166,25 +158,12 @@ export async function ensureChatInputVisible(page: Page) {
 async function submitConciergeMessageOnce(page: Page, text: string) {
   await ensureChatInputVisible(page);
   const input = page
-    .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
+    .locator(
+      '[data-testid="copilot-chat-textarea"], .copilotKitInput textarea, [role="textbox"][placeholder*="message" i]',
+    )
     .first();
-  await input.click();
-  await input.evaluate((node, value) => {
-    const textarea = node as HTMLTextAreaElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )?.set;
-    setter?.call(textarea, value);
-    textarea.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        data: value,
-        inputType: "insertText",
-      }),
-    );
-    textarea.dispatchEvent(new Event("change", { bubbles: true }));
-  }, text);
+  await input.fill(text);
+  await expect(input).toHaveValue(text);
 
   // CopilotKit v2 chat layouts differ (center panel, sidebar, welcome screen).
   // Try composer-scoped controls first, then broader fallbacks, then Enter.
@@ -195,7 +174,7 @@ async function submitConciergeMessageOnce(page: Page, text: string) {
   // Enter — last resort when no send button is clickable
   const sendNearComposer = page
     .locator(
-      '[data-testid="concierge-chat-view-mounted"] .copilotKitInputControlButton, [data-testid="concierge-chat-view-mounted"] .copilotKitInput button:not([disabled])',
+      '[data-testid="copilot-send-button"], [data-testid="concierge-chat-view-mounted"] .copilotKitInputControlButton, [data-testid="concierge-chat-view-mounted"] .copilotKitInput button:not([disabled])',
     )
     .first();
   if (await sendNearComposer.isVisible().catch(() => false)) {
@@ -286,7 +265,10 @@ export async function submitConciergeMessageWithRetry(
  * Resolve true once the page issues its own non-GET `/api/*` request, which is
  * the observable consequence of an accepted submit. Resolves false on timeout.
  */
-function watchForAppApiRequest(page: Page, timeoutMs: number): Promise<boolean> {
+function watchForAppApiRequest(
+  page: Page,
+  timeoutMs: number,
+): Promise<boolean> {
   let origin: string;
   try {
     origin = new URL(page.url()).origin;
@@ -414,9 +396,7 @@ export async function waitForGroundingAttribution(page: Page) {
   await waitForGroundedCards(page);
 }
 
-export function collectCriticalConsoleErrors(
-  errors: string[],
-): string[] {
+export function collectCriticalConsoleErrors(errors: string[]): string[] {
   const allowed = [/favicon/i, /Download the React DevTools/i];
   const blocked = [
     /RefererNotAllowedMapError/i,
@@ -426,8 +406,7 @@ export function collectCriticalConsoleErrors(
   return errors.filter(
     (e) =>
       !allowed.some((p) => p.test(e)) &&
-      (blocked.some((p) => p.test(e)) ||
-        /maps|google|copilot|error/i.test(e)),
+      (blocked.some((p) => p.test(e)) || /maps|google|copilot|error/i.test(e)),
   );
 }
 

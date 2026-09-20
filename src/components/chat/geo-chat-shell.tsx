@@ -32,7 +32,8 @@ import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { MapsShell } from "@/components/maps/MapProvider";
 
 function CafeBookingSheetMount() {
-  const { cafeBookingTarget, cafeBookingOpen, closeCafeBooking } = useRentalUi();
+  const { cafeBookingTarget, cafeBookingOpen, closeCafeBooking } =
+    useRentalUi();
   return (
     <CafeBookingSheet
       target={cafeBookingTarget}
@@ -113,6 +114,10 @@ function NightlifeBookingSheetMount() {
 }
 
 export function GeoChatShell() {
+  const deterministic =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+
   return (
     <ConciergeCopilotBridge>
       <ConciergeCoAgentProvider>
@@ -146,8 +151,10 @@ export function GeoChatShell() {
                                   <AuthStatus />
                                 </header>
                                 <MapsShell>
-                                  <FocusMapPinAction />
-                                  <EventWebCitationFetch />
+                                  {deterministic ? null : <FocusMapPinAction />}
+                                  {deterministic ? null : (
+                                    <EventWebCitationFetch />
+                                  )}
                                   <MapUiSync />
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />

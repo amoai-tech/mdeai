@@ -7,6 +7,8 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
+import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
+import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { CenterPanelMapResultsSlot } from "@/components/chat/center-panel-map-results-slot";
 import { EventResultsPanel } from "@/components/chat/event-results-panel";
@@ -36,6 +38,9 @@ function ConciergeCopilotChat() {
 
 export function ChatCenterPanel() {
   const { sessionKey } = useConciergeSession();
+  const deterministic =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
 
   return (
     <section
@@ -48,7 +53,7 @@ export function ChatCenterPanel() {
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       >
         <ChatQueryBar />
-        <ChatFilterCopilotInstructions />
+        {deterministic ? null : <ChatFilterCopilotInstructions />}
         <WorkflowProgressStrip />
         <div
           id="copilot-chat-region"
@@ -60,7 +65,12 @@ export function ChatCenterPanel() {
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>
-          <ConciergeCopilotChat />
+          {deterministic ? (
+            <DeterministicConciergeChat />
+          ) : (
+            <ConciergeCopilotChat />
+          )}
+          <ConciergeLocalChatMessages />
           <RentalFastPathPanel />
           <EventFastPathPanel />
           <GroundedFastPathPanel />

@@ -19,6 +19,7 @@ import {
   DEFAULT_MAP_ZOOM,
   getGoogleMapsMapId,
   MEDELLIN_CENTER,
+  isE2EMapsMockEnabled,
 } from "@/platform/maps/map-config";
 import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import { ClusteredCategoryMarkers } from "@/components/maps/ClusteredCategoryMarkers";
@@ -40,6 +41,34 @@ export function ChatMap({
     selectedPinId != null
       ? renderablePins.find((p) => p.id === selectedPinId) ?? null
       : null;
+
+  if (isE2EMapsMockEnabled()) {
+    return (
+      <div
+        id={mapDomId}
+        className="relative h-full min-h-[280px] w-full"
+        data-testid="chat-map"
+        data-mapid-present={hasConfiguredMapId() ? "true" : "false"}
+        data-map-clustering="false"
+        data-e2e-mock-map="true"
+      >
+        {renderablePins.map((pin) => (
+          <button
+            key={pin.id}
+            type="button"
+            data-testid="map-pin"
+            data-pin-id={pin.id}
+            data-pin-category={pin.category}
+            aria-label={`${pin.category}: ${pin.title}`}
+            onClick={() => panToPin(pin.id)}
+          >
+            {pin.title}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       id={mapDomId}
