@@ -14,53 +14,60 @@ legend:
 
 # Skills index — PRD v6.0 alignment
 
-## At a glance (2026-06-08)
+## Current architecture (2026-09-20)
 
 | Rule | Detail |
 |------|--------|
-| **Scan root** | `.claude/skills/` — **58** entries (native + symlinks → `.agents/skills/` or `../../../.agents/skills/`) |
+| **Canonical source** | `.claude/skills/` — real skill content lives here |
 | **Per-task routing** | [`todo.md`](./todo.md) § **Skill + MCP gate** — mandatory before Done |
 | **Enforcement** | [`.cursor/rules/mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc) |
 | **Load cap** | **≤5 skills** per task — pick one row below or todo matrix row |
-| **mdeapp stack** | CopilotKit **1.55.2 (v1)** + Mastra + Gemini **`gemini-3.5-flash`** + Supabase + vis.gl maps |
-| **v2 trap** | `copilotkit-develop` = **v2** — for **mdeapp** use **`copilotkitV1`** (+ read `.agents/skills/copilotkit-integrations/` if symlink missing) |
+| **MDE stack** | Next.js 16 + React 19 + CopilotKit **1.55.2 v2 APIs** + Mastra + Supabase + Gemini + Google Maps |
+| **Routing rule** | Use the canonical owner directly; `.agents/skills` is compatibility-only |
 | **100% before Done** | Skills read + MCP called + `task-verifier` Evidence Score ≥ **90** (P0) |
 
-### Scan root audit (2026-06-08)
+### Canonical skill layout (2026-09-20)
 
-**Present in `.claude/skills/` (58):** Phase 1 pack restored 2026-06-08 — `copilotkit`, `copilotkit-integrations`, `copilotkit-agui`, `copilotkit-debug`, `copilotkit-setup`, `testing`, `mde-vercel`, `mde-stripe`, `mde-real-estate`, `mastra-smoke-test`, `coderabbit`, `code-review` (alias → `coderabbit`), plus `copilotkitV1`, `gemini`, `mastra`, `mde-maps`, `mde-supabase`, `mde-task-lifecycle`, `mde-worktree-pr-flow`, `task-verifier`, Mercur/mcloud/stripe/ui pack.
+**Canonical owners:** `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `events`, `real-estate`, `tasks`, `testing`, `tdd`, `code-review`, `task-verifier`, `systematic-debugging`, `research`, `writing-skills`, `wireframe`, `mermaid-diagrams`, and `using-mde-skills`.
 
-**Symlink paths:**
+`mde-real-estate` remains present as an explicit protected exception in this cleanup.
 
-| Target | Relative from `.claude/skills/` |
-|--------|----------------------------------------|
-| Mercur / mcloud / shadcn | `../../.agents/skills/<name>` → `.agents/skills/` |
-| Phase 1 pack (copilotkit, testing, mde-*, etc.) | `../../../.agents/skills/<name>` → repo `.agents/skills/` |
-| `code-review` | `coderabbit` (compat alias per `_archive/2026-06-05-coderabbit-merge`) |
+**Compatibility layout:**
+
+| Path | Rule |
+|------|------|
+| `.claude/skills/<name>/` | Canonical editable skill content |
+| `.agents/skills/<name>/SKILL.md` | Compatibility symlink → `../../../.claude/skills/<name>/SKILL.md` |
+| Direction | `.agents` → `.claude` only; never `.claude` → `.agents` |
 
 ### Load by work type (authoritative routing)
 
-| Work type | Load first | Then | MCP |
-|-----------|------------|------|-----|
-| **Any task / Done gate** | `mde-task-lifecycle` | `task-verifier`, `testing` | — |
-| **CopilotKit runtime / chat UI** | `copilotkit` | `copilotkit-integrations` | copilotkit |
-| **CK hooks / generative UI** | `copilotkitV1` | `copilotkit-integrations` (mastra.md), `copilotkit-agui` — **not** `copilotkit-develop` v2 | copilotkit |
-| **Mastra agents / tools / workflows** | `mastra` | `gemini`, `mastra-smoke-test` | mastra |
-| **Maps / Places / pins** | `mde-maps` | `testing` | google-maps-code-assist |
-| **Supabase / RLS / edge fn** | `mde-supabase` | `task-verifier` | user-supabase |
-| **Gemini models / tools** | `gemini` | — | gemini-api-docs-mcp |
-| **Stripe / tickets** | `mde-stripe` | `mde-supabase` | — |
-| **Ship / PR / commit** | `mde-worktree-pr-flow` | `code-review` | — |
-| **UI polish (shadcn/Tailwind)** | `shadcn` | `tailwind-best-practices` | — |
-| **Screens (`SCREEN-*`)** | `copilotkitV1` | `copilotkit-integrations`, `mde-maps` if pins, `testing` | — |
+| Work type | Canonical owner | Supporting skill when needed |
+|-----------|-----------------|------------------------------|
+| Substantial Linear task | `tasks` | `testing`, `task-verifier` |
+| CopilotKit / AG-UI | `copilotkit` | `mastra` |
+| Mastra agents/tools/workflows | `mastra` | `copilotkit`, `supabase` |
+| Supabase / RLS / SQL / Edge Functions | `supabase` | `task-verifier` for S4 |
+| Google Maps / Places | `maps` | `testing` |
+| Gemini models/provider | `gemini` | owning domain skill |
+| Stripe/payments | `stripe` | `task-verifier` for S4 |
+| Next.js runtime/framework | `nextjs` | `testing` |
+| Cloudinary/media | `cloudinary` | owning domain skill |
+| Events | `events` | relevant stack skill |
+| Real estate | `real-estate` | relevant stack skill |
+| Existing diff / PR review | `code-review` | specialist review skill |
+| Unknown root cause | `systematic-debugging` | owning domain after diagnosis |
+| UI state / interaction design | `wireframe` | `nextjs` |
+| Architecture/dependency diagram | `mermaid-diagrams` | owning domain skill |
 
-**Paths:** `.claude/skills/copilotkitV1` · `copilotkit` · `copilotkit-develop` (v2 reference only) · `copilotkit-integrations` · `gemini` · `mastra` · `mde-maps` · `mde-supabase` · `mde-task-lifecycle` · `tailwind-best-practices`
+**Canonical path:** `.claude/skills/<name>/`.
+**Compatibility path:** `.agents/skills/<name>/SKILL.md` → canonical `SKILL.md`.
 
----
+## Historical audit snapshot (2026-06-08)
 
 **North star:** App at `/home/sk/mdeai/mdeapp/` from `CopilotKit/examples/integrations/mastra/`. **7 Mastra agents**, 3 workflows, Supabase, Stripe, Maps. CopilotKit **1.55.2** (not v2).
 
-**Layout:** `.claude/skills/` = scan root (**58** entries as of 2026-06-08; Phase 1 pack fully symlinked).
+**Layout:** `.claude/skills/` is the canonical skill library. `.agents/skills/` contains compatibility symlinks only.
 
 **Counts (active, non-`_archive`):**
 
@@ -88,12 +95,12 @@ legend:
 | copilotkit-agui | 92 | symlink — HITL + shared state |
 | copilotkit-debug | 94 | symlink — incident response |
 | mastra | 98 | `.claude/skills/mastra` native |
-| mde-supabase | 96 | native |
+| supabase | 96 | native |
 | supabase-edge-functions | 82 | symlink — edge fn port W4–W9 |
 | gemini | 90 | native — **`gemini-3.5-flash`** in mdeapp per CLAUDE.md |
 | task-verifier | 88 | native — **CTI/OCL Done gates**; load before flipping tasks |
-| mde-maps | 94 | native — W5–W6 rentals/chat |
-| mde-task-lifecycle | 95 | native — plan→ship |
+| maps | 94 | native — W5–W6 rentals/chat |
+| tasks | 95 | native — plan→ship |
 | mermaid-diagrams | 88 | native — PRD/task diagrams |
 | testing | 92 | native — Vitest + Playwright |
 | mde-vercel | 90 | native — deploy + Next perf |
@@ -111,9 +118,9 @@ legend:
 
 | When | Skills | MCP |
 |------|--------|-----|
-| Schema / seed | mde-supabase, task-verifier | user-supabase |
+| Schema / seed | supabase, task-verifier | user-supabase |
 | Tools / rank | mastra, copilotkit-integrations, gemini, testing | user-mastra, gemini-api-docs-mcp |
-| Maps / place_id | mde-maps | google-maps-code-assist |
+| Maps / place_id | maps | google-maps-code-assist |
 | UI / smoke | copilotkitV1, shadcn, webapp-testing | copilotkit |
 | Embeddings (Phase B) | pgvector, gemini | user-supabase |
 | OpenClaw crawl | open-claw, mde-hostinger | **OCL-013-mvp** — not CTI-019 |
@@ -159,9 +166,9 @@ legend:
 | Skill | Score | | Phase 1? | Notes |
 |-------|------:|:---:|----------|-------|
 | mastra | 98 | 🟢 | Yes | Agents, memory, tools — core |
-| mde-supabase | 96 | 🟢 | Yes | RLS, migrations, edge patterns |
-| mde-task-lifecycle | 95 | 🟢 | Yes | Replaces 9 task-* skills |
-| mde-maps | 94 | 🟢 | W5–W6 | Places, ChatMap, grounding |
+| supabase | 96 | 🟢 | Yes | RLS, migrations, edge patterns |
+| tasks | 95 | 🟢 | Yes | Replaces 9 task-* skills |
+| maps | 94 | 🟢 | W5–W6 | Places, ChatMap, grounding |
 | testing | 92 | 🟢 | Yes | 21→90 tests per PRD |
 | gemini | 90 | 🟢 | Yes | Use **`gemini-3.5-flash`** (CLAUDE.md registry) |
 | task-verifier | 88 | 🟢 | CTI/OCL | Forensic Done gates — [`agent-cti`](.claude/skills/task-verifier/references/agent-cti.md) |
@@ -199,7 +206,7 @@ legend:
 | copilotkit-agui | 92 | 🟢 | W4–W6 | HITL + state |
 | copilotkit-develop | 88 | 🟡 | W2–W10 | **v2-oriented** — use `copilotkitV1` + integrations for mdeapp |
 | mastra-smoke-test | 74 | 🟢 | W3+ | Studio smoke |
-| supabase-edge-functions | 82 | 🟢 | W4+ | Redirects to mde-supabase deep refs |
+| supabase-edge-functions | 82 | 🟢 | W4+ | Redirects to supabase deep refs |
 | code-review | 82 | 🟢 | PRs | CodeRabbit |
 | autofix | 78 | 🟢 | PRs | CodeRabbit threads |
 | plan-analysis | 76 | 🟢 | Pre-task | Plan critique |
@@ -220,8 +227,8 @@ legend:
 | agent-development | 55 | 🟡 | Meta | `.claude/agents` not product |
 | dispatching-parallel-agents | 60 | 🟡 | Meta | Parallel subagents |
 | mde-agents | 40 | 🔴 | No | Managed Agents API ≠ Mastra path |
-| google-maps-api | 45 | 🔴 | No | Use **mde-maps** |
-| react-google-maps | 42 | 🔴 | No | Deprecated stub → mde-maps |
+| google-maps-api | 45 | 🔴 | No | Use **maps** |
+| react-google-maps | 42 | 🔴 | No | Deprecated stub → maps |
 | supabase-audit-functions | 40 | 🔴 | Rare | Pentest-only |
 | pgvector | 72 | 🟡 | CTI-011 | Embeddings pipeline only — not Phase A |
 | postiz | 28 | 🔴 | Phase 2+ | Social scheduling |
@@ -260,10 +267,10 @@ legend:
 | infisical-secret-syncs | 52 | 🟡 | Ops | |
 | paperclip | 48 | 🟡 | Ops | Use **mde-paperclip** if needed |
 | paperclip-ai-orchestration | 45 | 🟡 | Ops | |
-| paperclip-converting-plans-to-tasks | 50 | 🟡 | Ops | Overlaps mde-task-lifecycle |
+| paperclip-converting-plans-to-tasks | 50 | 🟡 | Ops | Supports task planning/workflow |
 | paperclip-create-agent | 35 | 🔴 | Ops | |
 | paperclip-create-plugin | 35 | 🔴 | Ops | |
-| tasks | 18 | 🔴 | No | Superseded by mde-task-lifecycle |
+| tasks | 95 | 🟢 | Yes | Canonical task lifecycle |
 | create-tasks | 18 | 🔴 | No | |
 | generate-tasks | 18 | 🔴 | No | |
 | executing-tasks | 18 | 🔴 | No | |
@@ -312,9 +319,9 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 | PRD requirement | Skill status | Gap |
 |-----------------|-------------|-----|
 | CopilotKit 1.55.2 + Mastra | 🟢 Full pack | Route UI via **`copilotkitV1`** + **`copilotkit-integrations`** — not v2-only `copilotkit-develop` |
-| Supabase reuse | 🟢 mde-supabase | Edge fn forensic W5 — use symlink + MCP |
+| Supabase reuse | 🟢 supabase | Edge fn forensic W5 — use symlink + MCP |
 | Gemini **`3.5-flash`** | 🟢 gemini + MCP | CLAUDE.md registry; CTI-004/011 use `@ai-sdk/google` |
-| Maps W5–W6 | 🟢 mde-maps | Remove `google-maps-api` / `react-google-maps` from default load |
+| Maps W5–W6 | 🟢 maps | Remove `google-maps-api` / `react-google-maps` from default load |
 | ADK grounding service (Phase 2) | 🟡 google-agents-cli-* | Phase 1 = Mastra + Grounding Lite MCP ([MAP-002](docs/tasks/maps/MAP-002-grounding-attribution.md)); ADK HTTP sidecar after pins ship |
 | Stripe W9 | 🟢 mde-stripe | Drop deprecated stripe-* symlinks |
 | WhatsApp | 🔴 mde-whatsapp | Correctly deferred Phase 2 |
@@ -331,7 +338,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 3. **Set `disable-model-invocation: true`** on: `mastra-routing`, `ai-chatbot`, `mde-tool-use`, `mde-whatsapp`, deprecated stripe/* — **load `open-claw` only for OCL-* tasks**, not CTI Phase A chat.
 4. **Symlink or document** `copilotkit` paths in PRD — already correct via `.claude` → `.agents`.
 5. **Deduplicate:** delete or ignore `copilotkit/skills/*` duplicate copies; single source in `.agents/skills/copilotkit-*`.
-6. **Merge maps:** one entry point `mde-maps` only.
+6. **Merge maps:** one entry point `maps` only.
 7. **Update** [../plan/prd/00-skills-reference.md](../plan/prd/00-skills-reference.md) §matrix: add `mde-vercel`, `testing`, `mde-stripe`; note `mastra-routing` deprecated for P1.
 
 ---
@@ -345,7 +352,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 | CopilotKit cluster | 86 | 🟢 minus upgrade/contribute/self-update |
 | google-agents-cli dev pack (7) | 86 | 🟡 Phase 2 ADK service only |
 | Legacy chat / vendor | 15 | 🔴 Archive candidates |
-| Task/paperclip cluster | 22 | 🔴 Superseded by mde-task-lifecycle / mde-paperclip |
+| Task/paperclip cluster | 22 | 🔴 Consolidated around tasks / mde-paperclip |
 | Ops (hostinger, openclaw, whatsapp) | 29 | 🔴 Defer |
 
 **Overall inventory health vs new plan: 62/100** — strong core, too many loaded skills. **After applying Phase 1 pack + unlink reds: ~94/100** for day-to-day dev.
