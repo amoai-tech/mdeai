@@ -9,7 +9,7 @@ const SPECIALISTS = [
   "supabase-review",
   "maps-review",
   "stripe-review",
-  "nextjs-review",
+  "nextjs",
 ];
 
 // `src/proxy.ts` is MDE's Next.js auth proxy and delegates to `@/lib/supabase/middleware`.
@@ -19,7 +19,7 @@ const matches = {
   "copilotkit-review": (p) => /copilotkit|ag-ui/i.test(p),
   "maps-review": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
   "stripe-review": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
-  "nextjs-review": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
+  "nextjs": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
 };
 
 function budget(skillCount) {

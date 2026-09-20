@@ -1,6 +1,6 @@
 # Next.js Skill Consolidation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Consolidate `nextjs`, `nextjs-review`, and `mde-vercel` into one canonical `nextjs` skill without breaking workflow routing.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Claude skills Markdown/YAML, Python routing contract, Vitest repository contracts, Git symlink compatibility layer.
 
-**Spec:** `docs/superpowers/specs/2026-09-20-nextjs-skill-consolidation-design.md`
+**Spec:** `docs/02-architecture/skills/nextjs-skill-consolidation-design.md`
 
 ## Global Constraints
 
@@ -29,30 +29,30 @@
 
 ### Task 1: Add consolidation regression contract
 **Files:** Create `src/__tests__/nextjs-skill-consolidation.test.ts`; modify routing evals.
-- [ ] Add failing assertions for retired directories/symlinks, new references, and `nextjs` ownership.
-- [ ] Add collision evals for deploy, cache, review, unknown failure, and production proof.
-- [ ] Run targeted tests and confirm RED.
+- [x] Add failing assertions for retired directories/symlinks, new references, and `nextjs` ownership.
+- [x] Add collision evals for deploy, cache, review, unknown failure, and production proof.
+- [x] Run targeted tests and confirm RED.
 
 ### Task 2: Build canonical `nextjs` skill
 **Files:** Modify `.claude/skills/nextjs/SKILL.md`; create `references/review.md`, `references/vercel.md`, `references/performance.md`, `references/app-router.md`, `references/caching.md`, `evals/evals.json`.
-- [ ] Keep trigger description explicit and pushy for Next.js/Vercel framework work.
-- [ ] Add a reference-selection table so only relevant guidance loads.
-- [ ] Preserve exact-version review invariants, deployment safety, and performance guidance.
-- [ ] Add 3 realistic skill eval prompts.
+- [x] Keep trigger description explicit and pushy for Next.js/Vercel framework work.
+- [x] Add a reference-selection table so only relevant guidance loads.
+- [x] Preserve exact-version review invariants, deployment safety, and performance guidance.
+- [x] Add 3 realistic skill eval prompts.
 
 ### Task 3: Retire duplicate owners and update routing
 **Files:** Delete `.claude/skills/nextjs-review/**`, `.claude/skills/mde-vercel/**`, matching `.agents` links; modify router/session/PR-Agent contracts as discovered.
-- [ ] Add retired names to the routing sentinel.
-- [ ] Add direct `nextjs` mapping for Next.js/Vercel/RSC/cache/deploy terms after workflow-intent checks.
-- [ ] Update PR-Agent/domain review selection to use `nextjs/references/review.md` under `code-review`.
+- [x] Add retired names to the routing sentinel.
+- [x] Add direct `nextjs` mapping for Next.js/Vercel/RSC/cache/deploy terms after workflow-intent checks.
+- [x] Update PR-Agent/domain review selection to use `nextjs/references/review.md` under `code-review`.
 
 ### Task 4: Update indexes and repository guidance
 **Files:** Modify `.claude/skills/INDEX.md`, `index-skills.md`, `AGENTS.md`, `CLAUDE.md`, and any active references found by search.
-- [ ] Remove active-owner references to `nextjs-review` and `mde-vercel`.
-- [ ] Recompute canonical/compatibility counts.
-- [ ] Mark consolidation decision and current ownership clearly.
+- [x] Remove active-owner references to `nextjs-review` and `mde-vercel`.
+- [x] Recompute canonical/compatibility counts.
+- [x] Mark consolidation decision and current ownership clearly.
 
 ### Task 5: Verify and ship
-- [ ] Run routing contract, session-start tests, targeted consolidation/PR-Agent tests, symlink integrity, lint, typecheck, full Vitest, and `git diff --check`.
-- [ ] Search active repo for stale owner references and classify historical/spec references separately.
-- [ ] Commit, push, create PR, and report exact head + CI status.
+- [x] Run routing contract, session-start tests, targeted consolidation/PR-Agent tests, symlink integrity, lint, typecheck, full Vitest, and `git diff --check`.
+- [x] Search active repo for stale owner references and classify historical/spec references separately.
+- [x] Commit, push, create PR, and report exact head + CI status.

@@ -17,6 +17,8 @@ RETIRED = {
     "copilotkit-setup",
     "tdd",
     "ci-review",
+    "nextjs-review",
+    "mde-vercel",
 }
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED
 WORKFLOW = {"tasks", "systematic-debugging", "testing", "research", "code-review", "task-verifier"}
@@ -45,7 +47,7 @@ def route(prompt: str) -> str:
         return "tasks"
     if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "which tests should i run", "run the tests", "interpret the test failure")):
         return "testing"
-    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
+    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "production ready", "production-ready", "done proof")):
         return "task-verifier"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
         return "code-review"
@@ -59,6 +61,7 @@ def route(prompt: str) -> str:
         "supabase": ("supabase", "rls", "tenant access"),
         "gemini": ("gemini",),
         "stripe": ("stripe", "payment"),
+        "nextjs": ("next.js", "nextjs", "vercel", "app router", "server component", "rsc", "revalidation", "core web vitals"),
     }
     for owner, terms in direct.items():
         if any(term in text for term in terms):

@@ -17,7 +17,7 @@ The umbrella skill for V1 work. Routes you to the right domain skill depending o
 | You're working on… | Primary skill | Why |
 |---|---|---|
 | **Landlord signup / onboarding wizard** (D2-D3) | `real-estate-mdeai` (this) + `better-auth-best-practices` | account_type metadata, qa-landlord QA seed, GoTrue gotchas |
-| **Listing creation wizard** (D4-D5) | `real-estate-mdeai` (this) + `shadcn` + `mde-vercel` | 4-step form, Step1Address Google Places, Step3Photos upload, Step4Description |
+| **Listing creation wizard** (D4-D5) | `real-estate` (this) + `nextjs` | 4-step form, Step1Address Google Places, Step3Photos upload, Step4Description |
 | **Listing description copywriting** | `property-description-generator` | NextAutomation MLS-ready / social / luxury copywriting framework. Use when generating apartment descriptions from specs |
 | **Neighborhood content** (`/neighborhoods/:slug`, `/hosts/:id` blurbs) | `neighborhood-guide-creator` | Lifestyle storytelling + practical data, fits the 12 seeded Medellín neighborhoods |
 | **Lead scoring / qualification** (post-D8 inbox triage) | `lead-qualifier-agent` | BANT-R framework — pairs with the `landlord_inbox.structured_profile` jsonb |
