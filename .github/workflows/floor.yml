@@ -78,13 +78,18 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Disposable database: the job provisions it from empty every run.
-      - name: Provision the Mastra schema on a fresh database
+      # Disposable database: exercise the real package entry point from empty.
+      - name: Provision the Mastra schema through mastra:init
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
-        run: npm run check:mastra:schema:init
+        run: npm run mastra:init
 
-      - name: Prove the initializer is idempotent
+      - name: Prove mastra:init is idempotent
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: npm run mastra:init
+
+      - name: Verify the provisioned schema matches the contract
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: npm run check:mastra:schema:init

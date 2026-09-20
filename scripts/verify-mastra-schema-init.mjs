@@ -33,7 +33,12 @@ function argValue(flag) {
   return i !== -1 ? process.argv[i + 1] : undefined;
 }
 
-const contractPath = argValue("--contract") ?? path.join(ROOT, "scripts/mastra-schema-contract.json");
+const contractArg = argValue("--contract");
+const contractPath = path.resolve(ROOT, contractArg ?? "scripts/mastra-schema-contract.json");
+if (contractPath !== ROOT && !contractPath.startsWith(ROOT + path.sep)) {
+  console.error("mastra-schema-init-check: contract path must stay inside project root");
+  process.exit(1);
+}
 const connectionString = process.env.DATABASE_URL?.trim().replace(/^"|"$/g, "").trim();
 
 if (!connectionString) {

@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
  * through Vite's glob, so these tests touch no filesystem and build no path.
  */
 const SCRIPT = "scripts/check-mastra-schema-contract.mjs";
+const VERIFY_INIT_SCRIPT = "scripts/verify-mastra-schema-init.mjs";
 
 /**
  * Immutable baseline: the production `public.mastra_*` schema observed live on
@@ -115,7 +116,7 @@ describe("check-mastra-schema-contract — drift detection", () => {
     ]);
     expect(out).toContain("DRIFT detected");
     expect(out).toContain("@mastra/pg installed=1.1.0-alpha.2 contract=1.11.0");
-    expect(out).toContain("WARN (SAN-1321 open");
+    expect(out).toContain("WARN (report-only mode)");
     expect(status).toBe(0);
   });
 
@@ -210,6 +211,16 @@ describe("check-mastra-schema-contract — contract hygiene", () => {
     expect(result.status).toBe(1);
   });
 
+  it("rejects a falsy JSON contract instead of silently passing strict mode", () => {
+    const result = spawnSync(process.execPath, [SCRIPT, "--contract", "-", "--strict"], {
+      encoding: "utf8",
+      input: "null",
+      env: { NODE_ENV: "test", PATH: process.env.PATH ?? "" } as NodeJS.ProcessEnv,
+    });
+    expect(`${result.stdout}${result.stderr}`).toContain("contract must be a JSON object");
+    expect(result.status).toBe(1);
+  });
+
   it("does not read a manifest outside node_modules for a crafted adapter name", () => {
     // `installedVersion` resolves the name from the contract; a traversal attempt
     // must be treated as "not installed" rather than reading an arbitrary file.
@@ -219,6 +230,21 @@ describe("check-mastra-schema-contract — contract hygiene", () => {
     );
     expect(out).toContain("../../../package is not installed");
     expect(status).toBe(1);
+  });
+});
+
+describe("verify-mastra-schema-init — contract path safety", () => {
+  it("rejects a contract path outside the project root before reading it", () => {
+    const result = spawnSync(process.execPath, [VERIFY_INIT_SCRIPT, "--contract", "/etc/passwd"], {
+      encoding: "utf8",
+      env: {
+        NODE_ENV: "test",
+        PATH: process.env.PATH ?? "",
+        DATABASE_URL: "postgresql://unused:unused@127.0.0.1:1/unused",
+      } as NodeJS.ProcessEnv,
+    });
+    expect(`${result.stdout}${result.stderr}`).toContain("contract path must stay inside project root");
+    expect(result.status).toBe(1);
   });
 });
 

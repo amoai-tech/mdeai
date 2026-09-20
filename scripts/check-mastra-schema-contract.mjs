@@ -20,17 +20,16 @@
  *
  * Usage
  * -----
- *   node scripts/check-mastra-schema-contract.mjs            # report (exit 0)
+ *   node scripts/check-mastra-schema-contract.mjs            # report-only mode
  *   node scripts/check-mastra-schema-contract.mjs --strict   # fail on drift
+ *
+ * `npm run check:mastra` invokes this script with `--strict`, and `floor` runs
+ * `npm run check:mastra`, so schema/version drift is merge-blocking in CI.
  *
  * Test hooks (used by the unit tests; never needed in CI):
  *   --contract <path|->       alternate contract file, or `-` to read stdin
  *   --installed-pg <ver>     override the detected @mastra/pg version
  *   --installed-core <ver>   override the detected @mastra/core version
- *
- * This is a WARNING gate while SAN-1321 is open, so it cannot red-line `floor`
- * for a pre-existing condition. Flip it to `--strict` as the completion criterion
- * of SAN-1321 (see `check:mastra:schema:strict`).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -80,7 +79,12 @@ try {
   process.exit(1);
 }
 
-if (contract) {
+if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
+  console.error("mastra-schema-contract: contract must be a JSON object");
+  process.exit(1);
+}
+
+{
   const installedPg = argValue("--installed-pg") ?? installedVersion(contract.adapter);
   const installedCore = argValue("--installed-core") ?? installedVersion(contract.core);
 
@@ -135,7 +139,7 @@ if (contract) {
       process.exitCode = 1;
     } else {
       console.log("");
-      console.log("mastra-schema-contract: WARN (SAN-1321 open — not blocking). Run with --strict to fail.");
+      console.log("mastra-schema-contract: WARN (report-only mode). Run with --strict to fail.");
     }
   } else {
     console.log("");
