@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const retiredMapsAliases = [
@@ -16,6 +16,31 @@ describe("canonical Maps skill", () => {
       ".claude/skills/maps/tests",
     ]) {
       expect(existsSync(path), `missing canonical Maps resource: ${path}`).toBe(true);
+    }
+  });
+
+  it("keeps current-doc, React, legacy, failure, and compliance guardrails without volatile claims", () => {
+    const body = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
+
+    for (const required of [
+      "## Current Google guidance workflow",
+      "@vis.gl/react-google-maps",
+      "## Legacy API hard failures",
+      "## Critical failure checks",
+      "## Compliance review",
+      "Pricing, free tiers, geographic availability, preview/GA status, field availability, and quotas are volatile.",
+    ]) {
+      expect(body).toContain(required);
+    }
+
+    for (const staleClaim of [
+      "English only; US and India only currently",
+      "free as of 2026-05",
+      "500/day",
+      "$25/1K",
+      "Maps Grounding Lite (MCP) — **GA**",
+    ]) {
+      expect(body).not.toContain(staleClaim);
     }
   });
 

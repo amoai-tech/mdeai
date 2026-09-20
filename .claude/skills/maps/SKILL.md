@@ -43,9 +43,16 @@ Verify current Maps tooling before relying on an MCP integration.
 - Pinned reviewed copy: [`references/vendor/google-maps-platform/SKILL.md`](references/vendor/google-maps-platform/SKILL.md)
 - Reviewed upstream commit: `84f0e9a2527403a408a61b8705bea0c3900b76a8`
 
-For Google Maps API/SDK implementation, read the pinned official skill first, then apply the MDE rules here. For changing facts such as API availability, deprecations, pricing, and regional coverage, verify current official Google documentation or Code Assist rather than historical MDE notes.
+## Current Google guidance workflow
 
-MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orchestration; Maps/Places own geo truth; Gemini must not invent coordinates, place IDs, hours, or routes.
+For non-trivial implementation, migration, bug fix, review, or API/version claim:
+1. Read this MDE skill for repo architecture.
+2. Retrieve Google’s current Maps Platform skills index and load only the matching product sub-skill.
+3. Use Maps Platform Code Assist/current official docs only when the sub-skill does not fully cover the task.
+4. Apply MDE Supabase, Mastra, security, UI, and testing constraints.
+5. Run the PR/compliance checks below before completion.
+
+Do not implement changing APIs, pricing, coverage, deprecations, quotas, or billing behavior from model memory. MDE ownership remains: Supabase = inventory truth; Mastra = orchestration; Maps/Places = geo truth.
 
 ## PR review contract
 
@@ -97,37 +104,14 @@ Use these when answering location questions **in a Claude session** (not for mde
 
 ### Tools available
 
-```
+```text
 search_places(query, location?, radius?, type?, open_now?, language?)
-  query     — text query ("restaurants in Laureles")
-  location  — "lat,lng" center (optional)
-  radius    — meters, max 50000 (optional)
-  type      — place type filter ("restaurant", "tourist_attraction", "hotel")
-  open_now  — boolean, default false
-  language  — language code, default "en"
-
 search_nearby_places(location, radius, keyword?, type?, rank_by?, open_now?, language?)
-  location  — "lat,lng" (required)
-  radius    — meters (required, max 50000)
-  rank_by   — "prominence" (default) or "distance"
-
 get_place_details(place_id, language?, reviews_sort?)
-  place_id  — from search results
-  reviews_sort — "most_relevant" (default) or "newest"
-
 get_directions(origin, destination, mode?, alternatives?, avoid?, language?)
-  mode      — "driving" (default), "walking", "bicycling", "transit"
-  avoid     — "tolls", "highways", or "ferries"
-
 geocode_address(address, language?, region?)
-  region    — country code for regional bias
-
 reverse_geocode(latlng, language?)
-  latlng    — "lat,lng"
-
 show_on_map(map_type, markers?, directions?, center?, zoom?)
-  map_type  — "markers", "directions", or "area"
-  markers   — array of {lat, lng} objects
 ```
 
 ### Response pattern — Text → Map → Text
@@ -176,15 +160,9 @@ places.id,places.displayName,places.googleMapsLinks,places.location,places.gener
 | `places.location` | `{ latitude, longitude }` | Backfill lat/lng |
 | `places.generativeSummary` | `{ text, disclosureText }` | Store as `ai_summary`; show `disclosureText` |
 
-### generativeSummary constraints
+### Volatile provider facts
 
-- **Coverage:** English only; US and India only currently
-- **Attribution required:** Display `disclosureText` ("Summarized with Gemini") wherever `ai_summary` appears — ToS requirement
-- **Cache in DB:** Fetch once at seeding time. Never call per chat turn.
-
-### googleMapsLinks — currently free
-
-`googleMapsLinks` is in preview and **free** as of 2026-05. Use `placeUri` (not lat/lng-constructed URLs) — it's stable and canonical.
+Pricing, free tiers, geographic availability, preview/GA status, field availability, and quotas are volatile. Always verify them against current Google Maps Platform documentation before architecture, billing, or product decisions. Preserve required attribution/disclosure and cache only when current terms permit it.
 
 ---
 
@@ -210,28 +188,19 @@ const [response] = await client.searchText(
 
 ## Gemini Maps grounding — summary
 
-Use current official Google Maps grounding documentation; do not rely on retired offline mirrors.
-
-| Mode | Free tier | Cost | Enable |
-|------|-----------|------|--------|
-| Grounding with Google Maps (Gemini API) | 500/day | $25/1K | `tools: [{ googleMaps: {} }]` |
-| Maps Grounding Lite (MCP) — **GA** | pay-as-you-go | per SKU | `mapstools.googleapis.com/mcp` |
-
-**Kill switch:** `MAPS_GROUNDING_DAILY_LIMIT=0` → fall back to Supabase immediately.
-
-**Sequential calls for structured output:** grounded call (no `responseMimeType`) → structured output call (no grounding). Maps + custom function declarations CAN be combined in one call (March 2026 update).
+Verify current grounding products, availability, quotas, pricing, and structured-output compatibility in official Google guidance before implementation. Keep `MAPS_GROUNDING_DAILY_LIMIT=0` as the MDE kill switch to fall back to Supabase.
 
 ---
 
 ## Maps JavaScript API — ChatMap.tsx summary
 
-Use [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) plus current app source for Maps JavaScript implementation.
+### React implementation rule
 
-- Loader: `@googlemaps/js-api-loader` with `libraries: ['marker']`
-- `mapId` required for `AdvancedMarkerElement`
-- `data-testid="map-pin"` on every pin content element (MASTRA-045 smoke spec)
-- Per-category pin merge: `setPins(prev => [...prev.filter(p => p.category !== cat), ...newPins])`
-- Frontend key restricted to HTTP referrers + Maps JS API only
+MDE React/Next.js Maps code uses `@vis.gl/react-google-maps`. Prefer `<APIProvider>`, `<Map>`, `useMapsLibrary()`, and Advanced Marker APIs; do not introduce another React Maps wrapper. Use `@googlemaps/js-api-loader` only for non-React utilities or an existing raw-JS boundary. See [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md).
+
+- `mapId` is required where current Advanced Marker APIs require it.
+- Keep `data-testid="map-pin"` on pins used by MDE smoke tests.
+- Frontend keys stay restricted to approved referrers + required browser APIs only.
 
 ---
 
@@ -281,6 +250,20 @@ Historical event-discovery task links were retired; resolve current work through
 ## Mastra handoff
 
 For Maps-related Mastra work, use the canonical `mastra` skill plus current source and the live Linear task. Retired `tasks/mastra/maps/**` paths are not active instructions.
+
+---
+
+## Legacy API hard failures
+
+Do not introduce `google.maps.Marker`, legacy Places `Autocomplete`/`SearchBox`/`PlacesService`, legacy `DirectionsService`/`DirectionsRenderer`, `DistanceMatrixService`, `visualization.HeatmapLayer`, or `google.maps.drawing`. Retrieve current Google guidance and use the recommended modern replacement before editing these surfaces.
+
+## Critical failure checks
+
+Before approval verify: no unsupported browser REST/CORS path; map container has explicit height; React uses `@vis.gl/react-google-maps`; Advanced Markers use a valid `mapId`; server keys stay out of client bundles; web-component object properties are not stringified as HTML attributes; headless tests do not assume WebGL/3D; coordinates stay `{ lat, lng }`; Places field masks are minimal; no legacy API was introduced.
+
+## Compliance review
+
+For significant Maps changes verify provider-sourced geo/place data, required attribution, permitted storage/caching, no LLM-fabricated provider facts, correct browser/server key restrictions, intentional billable fields/calls, and applicable regional/EEA requirements against current Google terms.
 
 ---
 
