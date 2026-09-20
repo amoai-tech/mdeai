@@ -1,8 +1,9 @@
-name: Playwright deterministic
+name: Playwright critical cross-browser
 
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1"
 
 permissions:
   contents: read
@@ -11,10 +12,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  deterministic-chromium:
-    name: deterministic chromium
+  critical-cross-browser:
+    name: critical cross-browser
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +28,10 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Run deterministic critical journeys
+      - name: Run deterministic critical journeys across browsers
         env:
           NODE_ENV: development
           NEXT_TELEMETRY_DISABLED: 1
@@ -42,13 +43,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npm run test:e2e:deterministic
+        run: |
+          npx playwright test e2e/deterministic-critical.spec.ts \
+            --project=critical-cross-browser-chromium \
+            --project=critical-cross-browser-firefox \
+            --project=critical-cross-browser-webkit \
+            --workers=1
 
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: deterministic-playwright-${{ github.run_id }}
+          name: critical-cross-browser-${{ github.run_id }}
           path: |
             test-results/**
             tmp/playwright-report/**

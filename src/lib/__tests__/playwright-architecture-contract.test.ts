@@ -11,6 +11,9 @@ describe("SAN-1341 Playwright architecture", () => {
         "cross-browser-chromium",
         "cross-browser-firefox",
         "cross-browser-webkit",
+        "critical-cross-browser-chromium",
+        "critical-cross-browser-firefox",
+        "critical-cross-browser-webkit",
         "prod-smoke",
       ]),
     );
@@ -75,6 +78,33 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
     expect(provider).toContain("DeterministicConciergeCoAgentProvider");
   });
+  it("keeps auth and deterministic cross-browser contracts isolated", () => {
+    for (const name of [
+      "cross-browser-chromium",
+      "cross-browser-firefox",
+      "cross-browser-webkit",
+    ]) {
+      const project = (config.projects ?? []).find((item) => item.name === name);
+      expect(JSON.stringify(project?.testMatch ?? "")).toContain("auth-guard.spec.ts");
+      expect(JSON.stringify(project?.testMatch ?? "")).not.toContain(
+        "deterministic-critical.spec.ts",
+      );
+    }
+
+    for (const name of [
+      "critical-cross-browser-chromium",
+      "critical-cross-browser-firefox",
+      "critical-cross-browser-webkit",
+    ]) {
+      const project = (config.projects ?? []).find((item) => item.name === name);
+      expect(JSON.stringify(project?.testMatch ?? "")).toContain(
+        "deterministic-critical.spec.ts",
+      );
+      expect(project?.retries).toBe(0);
+      expect(project?.workers).toBe(1);
+    }
+  });
+
   it("keeps a serialized chromium compatibility project during migration", () => {
     const legacy = (config.projects ?? []).find(
       (project) => project.name === "chromium",
@@ -91,8 +121,25 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("npm run test:e2e:deterministic");
     expect(workflow).toContain('NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"');
+    expect(workflow).toContain('NODE_ENV: development');
     expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
     expect(workflow).toContain("SMOKE_BASE_URL: http://localhost:3002");
+  });
+
+  it("adds scheduled/manual critical cross-browser certification without slowing PRs", () => {
+    const workflow = fs.readFileSync(
+      ".github/workflows/playwright-cross-browser.yml",
+      "utf8",
+    );
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("schedule:");
+    expect(workflow).not.toContain("pull_request:");
+    expect(workflow).toContain("chromium firefox webkit");
+    expect(workflow).toContain("critical-cross-browser-chromium");
+    expect(workflow).toContain("critical-cross-browser-firefox");
+    expect(workflow).toContain("critical-cross-browser-webkit");
+    expect(workflow).toContain("NODE_ENV: development");
+    expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
   });
 
   it("never reuses an existing web server in CI", () => {
