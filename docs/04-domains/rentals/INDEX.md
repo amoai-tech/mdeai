@@ -60,13 +60,13 @@ This is a summary only. Linear remains the live source for implementation task s
 
 ## 2 · Canonical GitHub docs
 
-| Document | Purpose | Status |
-|---|---|---|
-| [`INDEX.md`](./INDEX.md) | Navigation across docs, Linear, tasks, and references | Canonical index |
-| [`README.md`](./README.md) | Small folder router and source-of-truth rules | Canonical |
-| [`RENTALS.md`](./RENTALS.md) | Product, journeys, architecture, blockers, success criteria | Canonical |
-| [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | KEEP / COPY / ADAPT / MODEL / REFERENCE / SKIP decisions | Canonical |
-| [`REFERENCES.md`](./REFERENCES.md) | GitHub repos, official templates, local clones, and MDE adaptations | Canonical |
+| Status | % Complete | Document | Purpose | Next |
+|---|---:|---|---|---|
+| 🟢 | 100% | [`INDEX.md`](./INDEX.md) | Navigation across docs, Linear, tasks, and references | Maintain |
+| 🟢 | 100% | [`README.md`](./README.md) | Small folder router and source-of-truth rules | Maintain |
+| 🟢 | 100% | [`RENTALS.md`](./RENTALS.md) | Product, journeys, architecture, blockers, success criteria | Maintain as architecture changes |
+| 🟢 | 100% | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | KEEP / COPY / ADAPT / MODEL / REFERENCE / SKIP decisions | Pin exact commit/license before direct reuse |
+| 🟢 | 100% | [`REFERENCES.md`](./REFERENCES.md) | GitHub repos, official templates, local clones, and MDE adaptations | Keep sources and local paths current |
 
 GitHub docs root:
 https://github.com/amoai-tech/mdeai/tree/main/docs
@@ -106,28 +106,28 @@ https://github.com/amoai-tech/mdeai/tree/main/docs/04-domains/rentals
 
 ## 4 · Core/MVP task map
 
-Use Linear for live status. This table explains ownership, not progress percentages.
+Use Linear for live status. These percentages are a simple planning snapshot for this index; update them when the underlying Linear task meaningfully changes.
 
-| Area | Primary Linear task | What becomes true |
-|---|---|---|
-| Rental launch coordinator | [SAN-1315](https://linear.app/amo100/issue/SAN-1315/san-1315-finish-the-rental-journey-from-apartment-discovery-to) | Discovery → detail → committed viewing works as one journey |
-| Rental readiness tracker | [SAN-1270](https://linear.app/amo100/issue/SAN-1270/san-1270-keep-the-rental-production-readiness-tracker-current) | One current rental readiness view |
-| Viewing UI truth | [SAN-1203](https://linear.app/amo100/issue/SAN-1203/san-1203-make-a-viewing-request-count-only-after-the-database-commits) | UI confirms only after the DB commits |
-| Atomic viewing write | [SAN-1286](https://linear.app/amo100/issue/SAN-1286/san-1286-make-rental-viewing-requests-one-atomic-database-write) | One atomic lead + showing write path |
-| Lead capture proof | [SAN-474](https://linear.app/amo100/issue/SAN-474/san-474-re-007-prove-rental-lead-capture-through-the-real-edge-atomic) | Real edge/API path reaches the atomic write |
-| Broker visibility | [SAN-476](https://linear.app/amo100/issue/SAN-476/real-009-prove-committed-showing-authorized-broker-visibility) | Correct broker sees committed showing |
-| Host workspace | [SAN-1204](https://linear.app/amo100/issue/SAN-1204/re-des-009-host-workspace-surfaces-real-consumer-leads-viewings) | Real leads/viewings appear in host UI |
-| End-to-end rental journey | [SAN-1205](https://linear.app/amo100/issue/SAN-1205/re-wire-004-prove-the-complete-rental-conversion-journey-end-to-end) | Full browser journey is proven |
-| Production smoke | [SAN-483](https://linear.app/amo100/issue/SAN-483/real-016-final-production-rental-conversion-smoke-floor) | Production rental conversion stays green |
-| Rental ownership model | [SAN-1104](https://linear.app/amo100/issue/SAN-1104/d-01-ptr-rentals-001-landlord-id-ownership-model) | Every rental has authoritative owner identity |
-| Broker isolation | [SAN-1105](https://linear.app/amo100/issue/SAN-1105/d-02-ptr-rentals-002-broker-rls-two-user-test) | Broker A cannot read Broker B data |
-| Production data boundary | [SAN-1349](https://linear.app/amo100/issue/SAN-1349/supa-re-015-close-rental-production-data-boundary-gaps) | Ownership/RLS/data gaps are closed |
-| Rental test harness | [SAN-482](https://linear.app/amo100/issue/SAN-482/san-482-shared-rental-test-harness-fixtures-auth-states-and-rls-proof) | Repeatable renter/broker/RLS fixtures exist |
-| Cards ↔ map sync | [SAN-472](https://linear.app/amo100/issue/SAN-472/san-472-re-005-map-pin-sync-with-rental-cards) | Cards and pins select the same listing |
-| Inventory quality | [SAN-468](https://linear.app/amo100/issue/SAN-468/real-002-apartment-inventory-quality) | Core listings are trustworthy enough for MVP |
-| Availability/date search | [SAN-486](https://linear.app/amo100/issue/SAN-486/real-019-rental-search-availability-date-filters) | Dates are deterministic search constraints |
-| AI/data isolation | [SAN-547](https://linear.app/amo100/issue/SAN-547/san-547-keep-each-users-ai-tools-and-supabase-data-isolated) | User/thread/tool data stays isolated |
-| AI safety | [SAN-1054](https://linear.app/amo100/issue/SAN-1054/san-1054-prove-rental-ai-cannot-leak-prompts-data-or-perform) | Rental AI cannot leak or perform unauthorized actions |
+| Status | % Complete | Area | Primary Linear task | What becomes true |
+|---|---:|---|---|---|
+| 🟡 | 70% | Rental launch coordinator | [SAN-1315](https://linear.app/amo100/issue/SAN-1315/san-1315-finish-the-rental-journey-from-apartment-discovery-to) | Discovery → detail → committed viewing works as one journey |
+| 🟡 | 70% | Rental readiness tracker | [SAN-1270](https://linear.app/amo100/issue/SAN-1270/san-1270-keep-the-rental-production-readiness-tracker-current) | One current rental readiness view |
+| 🟡 | 70% | Viewing UI truth | [SAN-1203](https://linear.app/amo100/issue/SAN-1203/san-1203-make-a-viewing-request-count-only-after-the-database-commits) | UI confirms only after the DB commits |
+| 🟡 | 70% | Atomic viewing write | [SAN-1286](https://linear.app/amo100/issue/SAN-1286/san-1286-make-rental-viewing-requests-one-atomic-database-write) | One atomic lead + showing write path |
+| 🟡 | 70% | Lead capture proof | [SAN-474](https://linear.app/amo100/issue/SAN-474/san-474-re-007-prove-rental-lead-capture-through-the-real-edge-atomic) | Real edge/API path reaches the atomic write |
+| 🟡 | 70% | Broker visibility | [SAN-476](https://linear.app/amo100/issue/SAN-476/real-009-prove-committed-showing-authorized-broker-visibility) | Correct broker sees committed showing |
+| 🟡 | 70% | Host workspace | [SAN-1204](https://linear.app/amo100/issue/SAN-1204/re-des-009-host-workspace-surfaces-real-consumer-leads-viewings) | Real leads/viewings appear in host UI |
+| 🟡 | 70% | End-to-end rental journey | [SAN-1205](https://linear.app/amo100/issue/SAN-1205/re-wire-004-prove-the-complete-rental-conversion-journey-end-to-end) | Full browser journey is proven |
+| 🔵 | 0% | Production smoke | [SAN-483](https://linear.app/amo100/issue/SAN-483/real-016-final-production-rental-conversion-smoke-floor) | Production rental conversion stays green |
+| 🟡 | 70% | Rental ownership model | [SAN-1104](https://linear.app/amo100/issue/SAN-1104/d-01-ptr-rentals-001-landlord-id-ownership-model) | Every rental has authoritative owner identity |
+| 🟡 | 70% | Broker isolation | [SAN-1105](https://linear.app/amo100/issue/SAN-1105/d-02-ptr-rentals-002-broker-rls-two-user-test) | Broker A cannot read Broker B data |
+| 🟡 | 70% | Production data boundary | [SAN-1349](https://linear.app/amo100/issue/SAN-1349/supa-re-015-close-rental-production-data-boundary-gaps) | Ownership/RLS/data gaps are closed |
+| 🟡 | 70% | Rental test harness | [SAN-482](https://linear.app/amo100/issue/SAN-482/san-482-shared-rental-test-harness-fixtures-auth-states-and-rls-proof) | Repeatable renter/broker/RLS fixtures exist |
+| 🟡 | 70% | Cards ↔ map sync | [SAN-472](https://linear.app/amo100/issue/SAN-472/san-472-re-005-map-pin-sync-with-rental-cards) | Cards and pins select the same listing |
+| 🟡 | 70% | Inventory quality | [SAN-468](https://linear.app/amo100/issue/SAN-468/real-002-apartment-inventory-quality) | Core listings are trustworthy enough for MVP |
+| 🟡 | 70% | Availability/date search | [SAN-486](https://linear.app/amo100/issue/SAN-486/real-019-rental-search-availability-date-filters) | Dates are deterministic search constraints |
+| 🟡 | 70% | AI/data isolation | [SAN-547](https://linear.app/amo100/issue/SAN-547/san-547-keep-each-users-ai-tools-and-supabase-data-isolated) | User/thread/tool data stays isolated |
+| 🟡 | 70% | AI safety | [SAN-1054](https://linear.app/amo100/issue/SAN-1054/san-1054-prove-rental-ai-cannot-leak-prompts-data-or-perform) | Rental AI cannot leak or perform unauthorized actions |
 
 ## 5 · Shared platform docs
 
@@ -168,12 +168,12 @@ Use local clones for source inspection instead of repeatedly browsing moving `ma
 
 Real Estate Core/MVP clones:
 
-| Repo | Local path | Main MDE use |
-|---|---|---|
-| Dubai Real Estate | `/home/sk/github-repos/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
-| HomeRecoEngine | `/home/sk/github-repos/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
-| Real Estate AI Chatbot | `/home/sk/github-repos/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
-| HomeMatch | `/home/sk/github-repos/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
+| Status | % Complete | Repo | Local path | Main MDE use |
+|---|---:|---|---|---|
+| 🟢 | 100% | Dubai Real Estate | `/home/sk/github-repos/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
+| 🟢 | 100% | HomeRecoEngine | `/home/sk/github-repos/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
+| 🟢 | 100% | Real Estate AI Chatbot | `/home/sk/github-repos/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
+| 🟢 | 100% | HomeMatch | `/home/sk/github-repos/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
 
 Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) and [`REUSE-MATRIX.md`](./REUSE-MATRIX.md).
 
@@ -183,12 +183,12 @@ When adapting code, record the exact local clone commit/tag and license. A local
 
 Keep this small. Do not create a document just because a topic exists.
 
-| Proposed doc | Create when | Purpose | Priority |
-|---|---|---|---|
-| `TEST-PLAN.md` | Before SAN-1205 / SAN-483 certification work | One durable J-RE-* test matrix covering browser, API, DB, RLS, failures, and production smoke | **Next** |
-| `DATA-BOUNDARIES.md` | While SAN-1104 / SAN-1105 / SAN-1349 are being completed | Canonical ownership/RLS/data visibility contract for renter, broker, admin and AI tools | **Next after ownership work starts** |
-| `MIGRATION-PLAN.md` | Only if an actual schema/data cutover is required | Exact source → target data migration, stop/go, rollback and proof | Conditional |
-| `OPERATIONS-RUNBOOK.md` | Before production support becomes recurring | What to check when rental search/viewing/broker flow fails in production | Post-MVP / launch |
+| Status | % Complete | Proposed doc | Create when | Purpose | Priority |
+|---|---:|---|---|---|---|
+| 🔵 | 0% | `TEST-PLAN.md` | Before SAN-1205 / SAN-483 certification work | One durable J-RE-* test matrix covering browser, API, DB, RLS, failures, and production smoke | **Next** |
+| 🔵 | 0% | `DATA-BOUNDARIES.md` | While SAN-1104 / SAN-1105 / SAN-1349 are being completed | Canonical ownership/RLS/data visibility contract for renter, broker, admin and AI tools | **Next after ownership work starts** |
+| 🔵 | 0% | `MIGRATION-PLAN.md` | Only if an actual schema/data cutover is required | Exact source → target data migration, stop/go, rollback and proof | Conditional |
+| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Before production support becomes recurring | What to check when rental search/viewing/broker flow fails in production | Post-MVP / launch |
 
 ### Docs we should NOT create now
 
