@@ -18,7 +18,7 @@ legend:
 
 | Rule | Detail |
 |------|--------|
-| **Scan root** | `.claude/skills/` — **58** entries (native + symlinks → `.agents/skills/` or `../../../.agents/skills/`) |
+| **Scan root** | `.claude/skills/` — canonical skill scan root (native + forwarding links) |
 | **Per-task routing** | [`todo.md`](./todo.md) § **Skill + MCP gate** — mandatory before Done |
 | **Enforcement** | [`.cursor/rules/mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc) |
 | **Load cap** | **≤5 skills** per task — pick one row below or todo matrix row |
@@ -28,7 +28,7 @@ legend:
 
 ### Scan root audit (2026-06-08)
 
-**Present in `.claude/skills/` (58):** Phase 1 pack restored 2026-06-08 — `copilotkit`, `copilotkit-integrations`, `copilotkit-agui`, `copilotkit-debug`, `copilotkit-setup`, `testing`, `mde-vercel`, `mde-stripe`, `mde-real-estate`, `mastra-smoke-test`, `coderabbit`, `code-review` (alias → `coderabbit`), plus `copilotkitV1`, `gemini`, `mastra`, `mde-maps`, `mde-supabase`, `mde-task-lifecycle`, `mde-worktree-pr-flow`, `task-verifier`, Mercur/mcloud/stripe/ui pack.
+**Present in `.claude/skills/` (canonical scan root):** Phase 1 pack restored 2026-06-08 — `copilotkit`, `copilotkit-integrations`, `copilotkit-agui`, `copilotkit-debug`, `copilotkit-setup`, `testing`, `mde-vercel`, `mde-stripe`, `real-estate`, `mastra-smoke-test`, `coderabbit`, `code-review` (alias → `coderabbit`), plus `copilotkitV1`, `gemini`, `mastra`, `mde-maps`, `mde-supabase`, `mde-task-lifecycle`, `mde-worktree-pr-flow`, `task-verifier`, Mercur/mcloud/stripe/ui pack.
 
 **Symlink paths:**
 
@@ -60,7 +60,7 @@ legend:
 
 **North star:** App at `/home/sk/mdeai/mdeapp/` from `CopilotKit/examples/integrations/mastra/`. **7 Mastra agents**, 3 workflows, Supabase, Stripe, Maps. CopilotKit **1.55.2** (not v2).
 
-**Layout:** `.claude/skills/` = scan root (**58** entries as of 2026-06-08; Phase 1 pack fully symlinked).
+**Layout:** `.claude/skills/` is the canonical scan root; derive inventory counts from the filesystem instead of hard-coding them here.
 
 **Counts (active, non-`_archive`):**
 
@@ -99,7 +99,7 @@ legend:
 | mde-vercel | 90 | native — deploy + Next perf |
 | mde-stripe | 86 | native — W9 tickets |
 | mde-worktree-pr-flow | 88 | native — PR discipline |
-| mde-real-estate | 80 | native — Camila / rentals vertical |
+| real-estate | 80 | native — Camila / rentals vertical |
 | code-review | 82 | symlink |
 | autofix | 78 | symlink |
 | plan-analysis | 76 | symlink — critique plans before tasks |
@@ -169,7 +169,7 @@ legend:
 | mde-worktree-pr-flow | 88 | 🟢 | Yes | One PR / worktree |
 | mermaid-diagrams | 88 | 🟢 | Docs | PRD + task diagrams |
 | mde-stripe | 86 | 🟢 | W9 | Tickets; sponsor later |
-| mde-real-estate | 80 | 🟢 | W5–W7 | Rentals persona Camila |
+| real-estate | 80 | 🟢 | W5–W7 | Rentals persona Camila |
 | mde-github | 72 | 🟡 | CI | `gh` + Actions templates |
 | mde-prompting | 68 | 🟡 | Meta | Skill/prompt authoring during cleanup |
 | mde-firecrawl | 58 | 🟡 | Research | Not product runtime |
@@ -358,4 +358,4 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 - 🟡 **Keep on disk** — load on topic  
 - 🔴 **Do not load** for new plan (archive / unlink / defer)
 
-*Last filesystem scan: 2026-06-08 — `.claude/skills/` (58) + `.agents/skills/` (~191). Phase 1 symlinks restored. Per-task gates: [`todo.md`](./todo.md). Enforced by [`mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc).*
+*Canonical alias cleanup verified 2026-09-20. Derive exact skill counts from the filesystem; do not treat historical counts in this document as runtime truth. Per-task gates: [`todo.md`](./todo.md). Enforced by [`mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc).*
