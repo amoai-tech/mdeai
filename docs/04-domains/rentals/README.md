@@ -10,6 +10,14 @@ This folder is the canonical home for current MDE Rentals product, architecture,
 | [`RENTALS.md`](./RENTALS.md) | What the rental product does, Core/MVP journeys, architecture, blockers, failure behavior, and success criteria |
 | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | What MDE keeps vs what it adapts/models from external repositories |
 | [`REFERENCES.md`](./REFERENCES.md) | Indexed GitHub repos, official examples, templates, and docs used as references |
+| [`TEST-PLAN.md`](./TEST-PLAN.md) | How the renter journey is proven across API, DB, RLS, browser, failures, and production smoke |
+| [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md) | Who can see what: ownership, RLS, renter/broker/admin/AI data access |
+| [`SEARCH.md`](./SEARCH.md) | Finding a home: hard filters, ranking, dates, and degraded search behavior |
+| [`VIEWINGS.md`](./VIEWINGS.md) | Book a viewing: confirmation, atomic commit, state changes, and broker handoff |
+| [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md) | Broker workflow: assigned rentals, leads, viewings, and follow-up |
+| [`LISTINGS.md`](./LISTINGS.md) | Canonical property listing identity and relationships |
+| [`MAPS.md`](./MAPS.md) | Cards, map pins, selected listing, bounds, and location behavior |
+| [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Production diagnosis, safe fallback, recovery, and smoke verification |
 
 ## Task 2 · Source of truth
 

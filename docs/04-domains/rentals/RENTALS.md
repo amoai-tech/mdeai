@@ -26,6 +26,25 @@ need
 
 Do not make the MVP depend on an autonomous real-estate agent platform.
 
+### Renter journey diagram
+
+```mermaid
+journey
+  title Find a home and book a viewing
+  section Find a home
+    Describe rental needs: 5: Renter
+    Compare eligible homes: 5: Renter
+    Explore map and neighborhood: 4: Renter
+  section Choose a home
+    Open property details: 5: Renter
+    Choose viewing time: 5: Renter
+  section Get connected
+    Confirm viewing request: 5: Renter
+    Receive truthful confirmation: 5: Renter
+    Broker follows up: 4: Renter, Broker
+```
+
+
 ---
 
 ## Task 2 · Core user journeys

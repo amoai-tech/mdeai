@@ -11,7 +11,7 @@ One page to find the current Real Estate docs, Linear plans/tasks, reference rep
 5. [Core/MVP task map](#5--coremvp-task-map)
 6. [Shared platform docs](#6--shared-platform-docs)
 7. [Reference repos and local clones](#7--reference-repos-and-local-clones)
-8. [Docs to create next](#8--docs-to-create-next)
+8. [Product docs](#8--product-docs)
 9. [Strategy and advanced work](#9--strategy-and-advanced-work)
 10. [Source-of-truth rules](#10--source-of-truth-rules)
 11. [How to keep this index current](#11--how-to-keep-this-index-current)
@@ -48,16 +48,31 @@ Do not make this journey depend on MCP, A2A, browser agents, deep research, obse
 | 🟢 | 100% | Reference index | Complete | Maintain |
 | 🟢 | 100% | Reuse matrix | Complete | Maintain |
 | 🟢 | 100% | Reference repos | Core/MVP set cloned | Inspect exact commits/licenses before reuse |
-| 🔵 | 0% | Test plan | Not started | Create TEST-PLAN.md |
-| 🔵 | 0% | Data boundaries | Not started | Create with ownership/RLS work |
+| 🟢 | 100% | Test plan | Created | Maintain + add evidence |
+| 🟢 | 100% | Data boundaries | Created | Maintain with RLS evidence |
 | 🔵 | 0% | Migration plan | Not required yet | Create only if a real schema/data cutover appears |
-| 🔵 | 0% | Operations runbook | Not started | Create before recurring production support |
+| 🟢 | 100% | Operations runbook | Created | Maintain before launch/support |
 | 🟡 | 70% | Core/MVP implementation | In progress | Finish rental journey blockers in Linear |
 | 🔵 | 0% | Advanced real-estate features | Deferred | Start only after Core/MVP production proof |
 
 **Legend:** 🟢 Complete · 🟡 In progress · 🔴 Blocked/failed · 🔵 Not started
 
 This is a summary only. Linear remains the live source for implementation task status.
+
+## Visual execution path
+
+```mermaid
+flowchart LR
+  A["Rental Experience"] --> B["Testing the Rental Journey"]
+  B --> C["Accounts & Permissions"]
+  C --> D["Finding a Home"]
+  D --> E["Book a Viewing"]
+  E --> F["Broker Dashboard"]
+  D --> G["Property Listings"]
+  G --> H["Map & Neighborhood"]
+  F --> I["Production Support"]
+```
+
 
 
 ## 2 · Product areas and documentation plan
@@ -77,85 +92,85 @@ Use the task numbers as the durable execution order. Whole numbers (`1.0`, `2.0`
 
 ### 2.0 · Testing the Rental Journey
 
-**Planned doc:** `TEST-PLAN.md`
+**Main doc:** [`TEST-PLAN.md`](./TEST-PLAN.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **2.0** | 🔵 | 0% | Testing the Rental Journey | **Create next** |
+| **2.0** | 🟢 | 100% | Testing the Rental Journey | Maintain + expand with test evidence |
 | 2.1 | 🔵 | 0% | Core Rental Journey Tests | Map J-RE-* journeys |
 | 2.2 | 🔵 | 0% | Database & Permission Tests | Add deterministic backend proof |
 | 2.3 | 🔵 | 0% | Browser & Production Tests | Add Playwright + production smoke |
 
 ### 3.0 · Accounts & Permissions
 
-**Planned doc:** `DATA-BOUNDARIES.md`
+**Main doc:** [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **3.0** | 🔵 | 0% | Accounts & Permissions | Create with ownership/RLS work |
+| **3.0** | 🟢 | 100% | Accounts & Permissions | Maintain with ownership/RLS evidence |
 | 3.1 | 🔵 | 0% | Property Ownership | Define authoritative ownership |
 | 3.2 | 🔵 | 0% | Who Can See What | Define renter/broker/admin isolation |
 | 3.3 | 🔵 | 0% | AI Access to Rental Data | Define tool/agent visibility |
 
 ### 4.0 · Finding a Home
 
-**Planned doc:** `SEARCH.md`
+**Main doc:** [`SEARCH.md`](./SEARCH.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **4.0** | 🔵 | 0% | Finding a Home | Create after testing + data boundaries |
+| **4.0** | 🟢 | 100% | Finding a Home | Maintain search contract |
 | 4.1 | 🔵 | 0% | Search by Requirements | Document hard filters |
 | 4.2 | 🔵 | 0% | Best Match Ranking | Document ranking after eligibility |
 | 4.3 | 🔵 | 0% | Move-in Dates & Availability | Document date/availability rules |
 
 ### 5.0 · Book a Viewing
 
-**Planned doc:** `VIEWINGS-LEADS.md`
+**Main doc:** [`VIEWINGS.md`](./VIEWINGS.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **5.0** | 🔵 | 0% | Book a Viewing | Define committed conversion path |
+| **5.0** | 🟢 | 100% | Book a Viewing | Maintain committed conversion path |
 | 5.1 | 🔵 | 0% | Confirm a Viewing | Define user approval + truthful UI |
 | 5.2 | 🔵 | 0% | Save the Viewing Request | Define lead/showing transaction |
 | 5.3 | 🔵 | 0% | Send to Broker & Track Follow-Up | Define states + broker handoff |
 
 ### 6.0 · Broker Dashboard
 
-**Planned doc:** `BROKER-WORKSPACE.md`
+**Main doc:** [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **6.0** | 🔵 | 0% | Broker Dashboard | Define broker workflow |
+| **6.0** | 🟢 | 100% | Broker Dashboard | Maintain broker workflow |
 | 6.1 | 🔵 | 0% | Broker Sees Their Rentals & Leads | Define authorized views |
 | 6.2 | 🔵 | 0% | Broker Follow-Up | Define lead/showing actions |
 
 ### 7.0 · Property Listings
 
-**Planned doc:** `LISTINGS.md`
+**Main doc:** [`LISTINGS.md`](./LISTINGS.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **7.0** | 🔵 | 0% | Property Listings | Define listing truth contract |
+| **7.0** | 🟢 | 100% | Property Listings | Maintain listing truth contract |
 | 7.1 | 🔵 | 0% | Listing Quality | Define required listing fields/quality |
 | 7.2 | 🔵 | 0% | Property Details | Define detail-view contract |
 
 ### 8.0 · Map & Neighborhood
 
-**Planned doc:** `MAPS.md`
+**Main doc:** [`MAPS.md`](./MAPS.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **8.0** | 🔵 | 0% | Map & Neighborhood | Define map/card contract |
+| **8.0** | 🟢 | 100% | Map & Neighborhood | Maintain map/card contract |
 | 8.1 | 🔵 | 0% | Listing Card ↔ Map Pin | Document shared listing identity |
 | 8.2 | 🔵 | 0% | Map Area & Location | Document bounds/location behavior |
 
 ### 9.0 · Production Support
 
-**Planned doc:** `OPERATIONS-RUNBOOK.md`
+**Main doc:** [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md)
 
 | Task | Status | % Complete | Work | Next |
 |---:|---|---:|---|---|
-| **9.0** | 🔵 | 0% | Production Support | Create before launch/support |
+| **9.0** | 🟢 | 100% | Production Support | Maintain runbook before launch/support |
 | 9.1 | 🔵 | 0% | Find Production Problems | Document common failure paths |
 | 9.2 | 🔵 | 0% | Recover Safely | Document safe recovery checks |
 
@@ -304,20 +319,20 @@ Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) 
 
 When adapting code, record the exact local clone commit/tag and license. A local path is convenient evidence; it is not an implementation authority by itself.
 
-## 8 · Docs to create next
+## 8 · Product docs
 
-Keep this small. Do not create a document just because a topic exists.
+Keep this list aligned with the product-area docs above. Status here measures documentation completion, not feature implementation.
 
 | Status | % Complete | Proposed doc | Product area | Create when | Purpose | Priority |
 |---|---:|---|---|---|---|---|
-| 🔵 | 0% | `TEST-PLAN.md` | Testing the Rental Journey | Before SAN-1205 / SAN-483 certification work | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | **1 · Next** |
-| 🔵 | 0% | `DATA-BOUNDARIES.md` | Accounts & Permissions | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | **2** |
-| 🔵 | 0% | `SEARCH.md` | Finding a Home | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | **3** |
-| 🔵 | 0% | `VIEWINGS-LEADS.md` | Book a Viewing | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | **4** |
-| 🔵 | 0% | `BROKER-WORKSPACE.md` | Broker Dashboard | With SAN-476 / SAN-1204 | Broker listings, leads, viewings, and follow-up | **5** |
-| 🔵 | 0% | `LISTINGS.md` | Property Listings | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | **6** |
-| 🔵 | 0% | `MAPS.md` | Map & Neighborhood | When map/search interaction changes | Listing cards, map pins, bounds, selection, and location behavior | **7** |
-| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Production Support | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | **8 · Launch** |
+| 🟢 | 100% | [`TEST-PLAN.md`](./TEST-PLAN.md) | Testing the Rental Journey | Created | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | Maintain |
+| 🟢 | 100% | [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md) | Accounts & Permissions | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | Maintain |
+| 🟢 | 100% | [`SEARCH.md`](./SEARCH.md) | Finding a Home | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | Maintain |
+| 🟢 | 100% | [`VIEWINGS.md`](./VIEWINGS.md) | Book a Viewing | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | Maintain |
+| 🟢 | 100% | [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md) | Broker Dashboard | With SAN-476 / SAN-1204 | Broker listings, leads, viewings, and follow-up | Maintain |
+| 🟢 | 100% | [`LISTINGS.md`](./LISTINGS.md) | Property Listings | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | Maintain |
+| 🟢 | 100% | [`MAPS.md`](./MAPS.md) | Map & Neighborhood | When map/search interaction changes | Listing cards, map pins, bounds, selection, and location behavior | Maintain |
+| 🟢 | 100% | [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Production Support | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | Maintain for launch |
 | 🔵 | 0% | `MIGRATION-PLAN.md` | Data Migration | Only if a real schema/data cutover is required | Exact source → target migration, stop/go, rollback, proof | Conditional |
 
 ### Docs we should NOT create now
