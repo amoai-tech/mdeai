@@ -167,22 +167,22 @@ Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/
 
 ## A — Canonical `.claude/skills` inventory
 
-`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **31 total** — **30 active skills plus `_template`**. `archive/` is a container, not an active skill.
+`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **29 total** — **28 active skills plus `_template`**. `archive/` is a container, not an active skill.
 
 | Group | Exact folders |
 |-------|---------------|
 | Runtime / domain owners | `cloudinary`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `nextjs`, `real-estate`, `stripe`, `supabase` |
-| Task / engineering workflow | `code-review`, `mde-vercel`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
-| Specialist review | `ci-review`, `copilotkit-review`, `maps-review`, `mastra-review`, `nextjs-review`, `stripe-review`, `supabase-review` |
+| Task / engineering workflow | `code-review`, `mde-vercel`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
+| Specialist review | `copilotkit-review`, `maps-review`, `mastra-review`, `nextjs-review`, `stripe-review`, `supabase-review` |
 | Template | `_template` |
 
 ---
 
-## B — `.agents/skills` compatibility links (24)
+## B — `.agents/skills` compatibility links (23)
 
 `.agents/skills/` contains compatibility symlinks only. Every link must resolve to the matching canonical `.claude/skills/<name>/SKILL.md`; never put editable skill content in `.agents/skills/`.
 
-Current compatibility names: `_template`, `cloudinary`, `code-review`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `mde-vercel`, `mermaid-diagrams`, `nextjs`, `playwright-cli`, `real-estate`, `research`, `stripe`, `supabase`, `systematic-debugging`, `task-verifier`, `tasks`, `tdd`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills`.
+Current compatibility names: `_template`, `cloudinary`, `code-review`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `mde-vercel`, `mermaid-diagrams`, `nextjs`, `playwright-cli`, `real-estate`, `research`, `stripe`, `supabase`, `systematic-debugging`, `task-verifier`, `tasks`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills`.
 
 ---
 
@@ -237,7 +237,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 |-------|----------------|
 | Canonical skill files | `.claude/skills/` only |
 | `.agents/skills` regular files | `0` |
-| `.agents/skills` compatibility symlinks | `24` |
+| `.agents/skills` compatibility symlinks | `23` |
 | Broken `.agents/skills` links | `0` |
 | Noncanonical `.agents` targets | `0` |
 | `.agents-only` skills | `0` |

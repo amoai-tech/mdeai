@@ -1,10 +1,4 @@
----
-name: tdd
-description: >-
-  Use when implementing a feature or bugfix whose behavior can be expressed as an automated test, especially regressions, domain rules, API contracts, RLS, workflows, and user journeys.
----
-
-# Test-Driven Development
+# Test-Driven Development (TDD)
 
 ## Purpose
 

@@ -1,7 +1,7 @@
 ---
 name: testing
 description: >-
-  Use when selecting, running, troubleshooting, or interpreting MDE Vitest, Playwright, smoke, CI, eval, or production tests.
+  Use when designing test-first changes, selecting test seams, running or interpreting MDE Vitest/Playwright/smoke/eval/production tests, or proving regressions with RED → GREEN → REFACTOR.
 title: Testing — mdeai.co toolchain + Claude-assisted layers
 impact: HIGH
 impactDescription: Vitest/Playwright/MCP recipes + generic layers + evals
@@ -18,10 +18,14 @@ paths:
 
 # testing — mdeai.co + cross-stack test layers
 
+## Ownership
+
+`testing` is the single owner for test strategy, test-first implementation, regression proof, running tests, and interpreting test results. Use `systematic-debugging` first when the failure source is unknown; return to `testing` once the behavior/seam is localized.
+
+For test-first work, read [references/tdd.md](references/tdd.md). For broader strategy, read [references/testing-strategy.md](references/testing-strategy.md).
+
 ## When NOT to use
 
-- **Pure TDD discipline** as the only goal → **`tdd`** skill
-- **Chrome DevTools MCP won’t connect** → **`troubleshooting`** skill
 - **Load / soak testing** as the primary ask (no mdeai harness yet)—keep scope to shipped gates in CLAUDE.md
 
 Pick the topic that matches the work, then load it.
@@ -30,36 +34,28 @@ Pick the topic that matches the work, then load it.
 |--------|------|
 | Component tests, unit tests, jsdom, Vitest config, mocks | [vitest.md](vitest.md) |
 | Playwright e2e, real browser, login flow, multi-step | [playwright.md](playwright.md) |
-| Chrome DevTools MCP — traces, network panel, real-browser inspection | **`chrome-devtools`** skill + MCP (`chrome-devtools-mcp` @latest via `claude mcp` / plugin) |
-| LCP / Core Web Vitals tuning under DevTools | **`debug-optimize-lcp`** skill when installed |
-| MCP-driven preview-server browser testing (Claude Preview) | [preview-mcp.md](preview-mcp.md) |
+| Chrome DevTools MCP — traces, network panel, real-browser inspection | Use the configured Chrome DevTools tooling directly; keep test ownership in `testing` |
+| LCP / Core Web Vitals verification | Use current performance tooling; performance implementation ownership stays with the affected framework/deploy domain |
 | Manual exploratory testing, dogfood session, bug discovery | [exploratory.md](exploratory.md) |
 | Choosing what to test (pyramid, ROI, coverage strategy) | [references/testing-strategy.md](references/testing-strategy.md) |
 | Common bug patterns / triage taxonomy | [references/issue-taxonomy.md](references/issue-taxonomy.md) |
 | Map of layers (unit → E2E → visual → mobile → agentic → evals) | [references/testing-layers.md](references/testing-layers.md) |
 | Curated external links (subagents, marketplace, Anthropic eval docs) | [references/resource-hub.md](references/resource-hub.md) |
-| MCP server itself failing to connect | **`troubleshooting`** skill |
+| Browser/MCP tool itself failing to connect | `systematic-debugging` |
 
 ---
 
 ## Browser surfaces — pick one
 
-Three distinct browser-control systems are available in this repo. They are NOT interchangeable; pick by the question being asked.
+Choose the lightest surface that proves the behavior:
 
-| Surface | Tool namespace | When to pick |
-|---------|----------------|--------------|
-| **chrome-devtools-mcp** (Google's Chrome team, 29 tools) | requires install: `claude mcp add chrome-devtools --scope user npx chrome-devtools-mcp@latest` (or `/plugin install chrome-devtools-mcp`) | Numbers/perf required: performance traces, Lighthouse audits, network panel inspection, console error capture during a navigation, memory snapshots, repeatable headless flows that don't need login. |
-| **Claude in Chrome** (`--chrome` flag + browser extension) | `mcp__Claude_in_Chrome__*` | Real signed-in browser state required: Supabase auth, Google OAuth, Stripe Link wallet, Gmail/Notion drafting, anything behind a login or CAPTCHA. |
-| **Claude Preview MCP** | `mcp__Claude_Preview__*` | Stateless preview-server smoke tests during a Vite feature loop — the four-state pattern, the 3-panel layout, mobile collapse, AI proposal cards. |
+| Surface | When to pick |
+|---------|--------------|
+| **Playwright** | Repeatable E2E/user journeys, auth flows, regression coverage, CI-safe browser proof |
+| **Chrome DevTools tooling** | Network/console/performance traces, Lighthouse/Core Web Vitals, runtime inspection |
+| **Interactive authenticated browser tooling** | A real signed-in session is required and the configured environment explicitly provides it |
 
-**Picking rule:** state required → Claude in Chrome · numbers/perf required → chrome-devtools-mcp · stateless verify → Claude Preview.
-
-**Claude in Chrome docs:** [Use Claude Code with Chrome (beta)](https://code.claude.com/docs/en/chrome) — prerequisites (`claude --chrome`, extension), VS Code, troubleshooting.
-
-Specialists for each surface (install separately — paths vary by Claude plugins / global skills):
-
-- **`chrome-devtools`** / **`chrome-devtools-cli`** — same MCP server; CLI variant for bash/CI
-- **`troubleshooting`** — when an MCP server fails to start
+Resolve available browser tooling from the current environment; do not assume a historical MCP/plugin is installed. Never hardcode test-user passwords or tokens in a skill.
 
 ---
 
@@ -67,24 +63,24 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 
 | Job | Surface | Owner skill |
 |-----|---------|-------------|
-| LCP regression on `/coffee` | chrome-devtools-mcp (`performance_start_trace` → `performance_analyze_insight LCPBreakdown`) | `debug-optimize-lcp` |
+| LCP regression on `/coffee` | current browser performance tooling | `testing` for proof; affected framework/deploy skill for implementation |
 | Lighthouse audit on a Vercel preview URL | chrome-devtools-mcp (`lighthouse_audit --mode navigation --device mobile`) | `mde-vercel` |
-| Bundle / Core Web Vitals trace | chrome-devtools-mcp | `mde-vercel`, `debug-optimize-lcp` |
-| Supabase email/OAuth sign-in regression | Claude in Chrome | `testing` → [playwright.md](playwright.md) |
-| Stripe Link checkout end-to-end | Claude in Chrome | `stripe`, `create-payment-credential` |
-| Shopify cart → checkout smoke | Claude in Chrome | `stripe` (plus `mdeai-commerce.md`) |
-| AI-proposal card four-state visual verify | Claude Preview MCP | `testing` → [preview-mcp.md](preview-mcp.md) |
+| Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `mde-vercel`/`nextjs` for implementation ownership |
+| Supabase email/OAuth sign-in regression | Playwright or configured authenticated browser | `testing` → [playwright.md](playwright.md) |
+| Stripe checkout end-to-end | authenticated browser/Playwright path | `testing` + `stripe` |
+
+| UI four-state visual verify | Playwright | `testing` → [playwright.md](playwright.md) |
 | RLS / 403 debugging during a UI flow | chrome-devtools-mcp (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
-| Console-error sweep before commit | chrome-devtools-cli inside `/ship` step 3 | `testing` (this skill) |
+| Console-error sweep before commit | Playwright or current DevTools tooling | `testing` |
 
 ---
 
 ## Repo-specific pointers (mdeai.co)
 
 - Vitest entry: `npm run test` (run once) / `npm run test:watch`
-- Playwright is configured but no e2e tests exist yet (see CLAUDE.md "Known Issues")
+- Playwright E2E coverage exists under `e2e/`; use focused specs first instead of the full suite for narrow changes.
 - Required-states pattern in the MDE UI state contract: every data-fetching component handles loading/error/empty/success — tests must cover all four
-- Preview server runs on port 8080 (`npm run dev`)
+- Resolve the active dev/preview command and port from current repo configuration instead of hardcoding a historical port.
 
 ---
 
@@ -93,7 +89,7 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 | User need | Open |
 |-----------|------|
 | Task lifecycle Phase 4 routing | `tasks` + this testing skill |
-| TDD discipline (red/green/refactor) | **tdd** skill |
+| Test-first implementation / regression proof | [references/tdd.md](references/tdd.md) |
 | Ship checklist + deploy gates | `tasks` + `task-verifier` + current deploy/runtime checks |
 
 ---
@@ -104,7 +100,7 @@ Specialists for each surface (install separately — paths vary by Claude plugin
 Goal
  ├─ Only choosing framework / layer / CI shape for a greenfield app → testing-layers.md
  ├─ External guides + subagent checklist → resource-hub.md
- ├─ This repo (Vitest, Playwright, Preview MCP, npm scripts) → vitest.md / playwright.md / preview-mcp.md
+ ├─ This repo (Vitest, Playwright, npm scripts) → vitest.md / playwright.md
  └─ Ship checklist + deploy gates → tasks + task-verifier + current deploy/runtime checks
 ```
 

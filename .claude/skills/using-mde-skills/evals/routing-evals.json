@@ -166,5 +166,33 @@
     "expected_owner": "systematic-debugging",
     "risk": "S2",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "test-first-implementation",
+    "input": "Write a failing regression test first, then implement the fix with red green refactor",
+    "expected_owner": "testing",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "ci-review-under-code-review",
+    "input": "Review this GitHub Actions workflow diff for secret leakage and false-green behavior",
+    "expected_owner": "code-review",
+    "risk": "S3",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-tdd-owner",
+    "input": "Route this to tdd",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-ci-review-owner",
+    "input": "Route this to ci-review",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

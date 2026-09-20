@@ -14,6 +14,7 @@ The router chooses one owner and stops.
 - ambiguous substantial implementation → `tasks`
 - task lifecycle, worktree/branch setup, implementation/test-loop selection, PR shipping, or post-merge cleanup → `tasks`
 - unknown failure → `systematic-debugging`
+- test strategy/TDD, regression proof, test execution, or test interpretation → `testing`
 - research/evidence → `research`
 - existing PR/diff → `code-review`
 - Done/merge/production proof → `task-verifier`

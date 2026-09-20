@@ -50,11 +50,8 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["src/lib/stripe/webhook.ts"])).toContain("stripe-review");
   });
 
-  it("routes CI workflow changes to CI review", () => {
-    expect(names([".github/workflows/floor.yml"])).toEqual([
-      "code-review",
-      "ci-review",
-    ]);
+  it("keeps CI workflow review under universal code-review", () => {
+    expect(names([".github/workflows/floor.yml"])).toEqual(["code-review"]);
   });
 
   it("does not route generic names to unrelated specialists", () => {

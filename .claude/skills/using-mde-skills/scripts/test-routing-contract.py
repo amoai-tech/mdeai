@@ -15,9 +15,11 @@ RETIRED = {
     "copilotkit-debug",
     "copilotkit-integrations",
     "copilotkit-setup",
+    "tdd",
+    "ci-review",
 }
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED
-WORKFLOW = {"tasks", "systematic-debugging", "research", "code-review", "task-verifier"}
+WORKFLOW = {"tasks", "systematic-debugging", "testing", "research", "code-review", "task-verifier"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -42,6 +44,8 @@ def route(prompt: str) -> str:
     )
     if any(term in text for term in lifecycle_terms):
         return "tasks"
+    if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "run the tests", "interpret the test failure")):
+        return "testing"
     if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
         return "task-verifier"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
@@ -85,6 +89,7 @@ require("Do not recreate its implementation process" in verifier_text, "task-ver
 required_rules = {
     "tasks": "ambiguous substantial",
     "systematic-debugging": "unknown failure",
+    "testing": "test strategy/TDD",
     "research": "research/evidence",
     "code-review": "existing PR/diff",
     "task-verifier": "Done/merge/production proof",

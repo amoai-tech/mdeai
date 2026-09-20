@@ -12,7 +12,7 @@ Find the root cause before changing behavior. Treat symptoms, reviewer guesses, 
 
 ## MDE ownership
 
-Use this skill to diagnose. Use `tdd` to lock the failure into a regression test, the affected domain skill for implementation-specific rules, `code-review` to review the patch, and `task-verifier` to prove the task or PR is complete.
+Use this skill to diagnose. Once the failure is localized, use `testing` to lock it into a regression test and apply RED → GREEN → REFACTOR, the affected domain skill for implementation-specific rules, `code-review` to review the patch, and `task-verifier` to prove the task or PR is complete.
 
 ## Workflow
 

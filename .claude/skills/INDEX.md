@@ -31,9 +31,8 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | Skill | Score /100 | Decision | Main improvement |
 |---|---:|---|---|
 | `_template` | 62 | MOVE / EXCLUDE | Keep as authoring template but remove from active skill discovery |
-| `ci-review` | 88 | KEEP + IMPROVE | Add realistic review-routing/eval cases |
 | `cloudinary` | 89 | KEEP CONDITIONAL | Verify Cloudinary is actually active before triggering |
-| `code-review` | 95 | KEEP | Maintain exact-head and evidence-first review behavior |
+| `code-review` | 98 | KEEP | Universal PR/diff review; CI-specific invariants live in `references/ci-review.md` |
 | `copilotkit` | 97 | KEEP | Maintain version/source verification and v2 entrypoint accuracy |
 | `copilotkit-review` | 91 | KEEP + IMPROVE | Add adversarial review evals |
 | `events` | 91 | KEEP | Add domain references only as event rules grow |
@@ -43,7 +42,8 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
 | `mastra-review` | 92 | KEEP + IMPROVE | Add tenant/HITL/persistence review evals |
 | `mde-vercel` | 78 | IMPROVE / NARROW | Own Vercel deployment/platform only; remove Next.js-performance overlap |
-| `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals || `nextjs` | 94 | KEEP | Keep framework ownership separate from Vercel deployment |
+| `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
+| `nextjs` | 94 | KEEP | Keep framework ownership separate from Vercel deployment |
 | `nextjs-review` | 90 | KEEP + IMPROVE | Add server/client, cache, auth-boundary evals |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
@@ -55,13 +55,12 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `systematic-debugging` | 96 | KEEP | Maintain root-cause-before-fix behavior |
 | `task-verifier` | 98 | KEEP + BENCHMARK | Add explicit Quick/Standard/Adversarial eval suite |
 | `tasks` | 98 | KEEP + BENCHMARK | Add lifecycle/worktree/PR/post-merge eval suite |
-| `tdd` | 95 | KEEP | Maintain RED → GREEN → REFACTOR evidence |
-| `testing` | 94 | KEEP + CLARIFY | Own strategy; delegate browser mechanics to `playwright-cli` |
+| `testing` | 97 | KEEP | Single owner for TDD, test strategy, execution, interpretation, and regression proof |
 | `using-mde-skills` | 96 | KEEP + EXPAND EVALS | Add near-miss trigger tests and ownership conflicts |
 | `wireframe` | 91 | KEEP + IMPROVE | Add responsive/AI-HITL design evals |
 | `writing-skills` | 94 | KEEP | Keep aligned with Anthropic eval/benchmark workflow |
 
-**Overall audit score: 91.9/100.**
+**Overall audit score: 92.2/100.**
 
 ## Remove / consolidate decisions
 
@@ -69,6 +68,8 @@ Scores are audit scores, not benchmark pass rates. They combine:
 |---|---|---|
 | `_template` | Remove from active discovery, keep template content | A template should not compete for triggering as a real skill |
 | `mde-vercel` + `nextjs` | Do not merge | Narrow `mde-vercel` to Vercel platform/deploy; keep `nextjs` framework-specific |
+| `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
+| `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
 | specialist `*-review` skills | Do not merge | They keep PR review context small and domain-specific |
 ## Task 1 · Highest-priority actions

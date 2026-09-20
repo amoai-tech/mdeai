@@ -1,9 +1,4 @@
----
-name: ci-review
-description: Review GitHub Actions and CI changes for security, trigger, failure-propagation, and exact-head correctness.
----
-
-# CI Review
+# CI Review Reference
 
 ## Source of truth
 
