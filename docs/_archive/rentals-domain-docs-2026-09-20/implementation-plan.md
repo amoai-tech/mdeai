@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown, MDE docs checker, GitHub, Linear, Next.js/CopilotKit/Mastra/Supabase concepts only as documentation inputs.
 
-**Spec:** `docs/superpowers/specs/2026-09-20-rentals-domain-docs-design.md`
+**Spec:** `docs/_archive/rentals-domain-docs-2026-09-20/design.md`
 
 ## Global Constraints
 
@@ -242,7 +242,7 @@ git commit -m "docs: route rental documentation"
 - [ ] **Step 1: Run documentation validation**
 
 ```bash
-npm run docs:check
+npm run check:docs
 ```
 
 Expected: documentation check passes with zero broken local links.

@@ -469,7 +469,7 @@ Implementation work must pin the exact source commit/tag.
 Verification:
 
 ```bash
-npm run docs:check
+npm run check:docs
 git diff --check
 ```
 
