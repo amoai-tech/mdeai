@@ -67,7 +67,7 @@ async function typeAndSubmit(page: Page, text: string) {
   const input = page.getByPlaceholder(/type a message/i);
   await expect(input).toBeVisible({ timeout: 20_000 });
   await input.click();
-  await input.pressSequentially(text);
+  await input.fill(text);
   await expect(input).toHaveValue(text);
   const send = page.getByTestId("copilot-send-button");
   await expect(send).toBeEnabled({ timeout: 20_000 });

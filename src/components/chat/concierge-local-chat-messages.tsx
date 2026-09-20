@@ -24,7 +24,6 @@ export function ConciergeLocalChatMessages() {
               data-testid="concierge-user-message"
               className="ml-auto max-w-[85%] rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground"
             >
-              {" "}
               <p>{message.content}</p>
             </div>
           );

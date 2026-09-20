@@ -30,7 +30,6 @@ export function DeterministicConciergeChat() {
       data-hydrated={hydrated ? "true" : "false"}
       className="flex min-h-0 flex-1 flex-col justify-end"
     >
-      {" "}
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
         <div
           data-testid="copilot-chat-input"
@@ -58,7 +57,6 @@ export function DeterministicConciergeChat() {
             onClick={() => void submit()}
             className="rounded-full bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
-            {" "}
             {sending ? "Sending…" : "Send"}
           </button>
         </div>
