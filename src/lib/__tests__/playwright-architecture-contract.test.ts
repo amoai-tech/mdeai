@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
-import path from "node:path";
 import config from "../../../playwright.config";
 
 describe("SAN-1341 Playwright architecture", () => {
@@ -32,18 +31,12 @@ describe("SAN-1341 Playwright architecture", () => {
   });
 
   it("keeps critical helpers on Playwright user interactions without native value setters", () => {
-    const helper = fs.readFileSync(
-      path.join(process.cwd(), "e2e/helpers/maps-layout.ts"),
-      "utf8",
-    );
+    const helper = fs.readFileSync("e2e/helpers/maps-layout.ts", "utf8");
     expect(helper).not.toContain("Object.getOwnPropertyDescriptor(");
   });
 
   it("removes the restaurant fast-path fixed sleep", () => {
-    const spec = fs.readFileSync(
-      path.join(process.cwd(), "e2e/restaurant-card-fast-path.spec.ts"),
-      "utf8",
-    );
+    const spec = fs.readFileSync("e2e/restaurant-card-fast-path.spec.ts", "utf8");
     expect(spec).not.toContain("waitForTimeout(");
   });
 
@@ -57,7 +50,7 @@ describe("SAN-1341 Playwright architecture", () => {
   });
   it("mounts a deterministic chat adapter without CopilotKit transport for local PR tests", () => {
     const panel = fs.readFileSync(
-      path.join(process.cwd(), "src/components/chat/chat-center-panel.tsx"),
+      "src/components/chat/chat-center-panel.tsx",
       "utf8",
     );
     expect(panel).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
@@ -66,10 +59,7 @@ describe("SAN-1341 Playwright architecture", () => {
 
   it("restores visible local fast-path messages and restaurant clarify chips", () => {
     const localMessages = fs.readFileSync(
-      path.join(
-        process.cwd(),
-        "src/components/chat/concierge-local-chat-messages.tsx",
-      ),
+      "src/components/chat/concierge-local-chat-messages.tsx",
       "utf8",
     );
     expect(localMessages).toContain("RestaurantFilterChips");
@@ -79,10 +69,7 @@ describe("SAN-1341 Playwright architecture", () => {
 
   it("bypasses useAgent transport in deterministic E2E mode", () => {
     const provider = fs.readFileSync(
-      path.join(
-        process.cwd(),
-        "src/components/chat/concierge-coagent-context.tsx",
-      ),
+      "src/components/chat/concierge-coagent-context.tsx",
       "utf8",
     );
     expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
@@ -98,10 +85,7 @@ describe("SAN-1341 Playwright architecture", () => {
 
   it("adds a focused deterministic Playwright pull-request workflow", () => {
     const workflow = fs.readFileSync(
-      path.join(
-        process.cwd(),
-        ".github/workflows/playwright-deterministic.yml",
-      ),
+      ".github/workflows/playwright-deterministic.yml",
       "utf8",
     );
     expect(workflow).toContain("pull_request:");
@@ -112,10 +96,7 @@ describe("SAN-1341 Playwright architecture", () => {
   });
 
   it("never reuses an existing web server in CI", () => {
-    const configText = fs.readFileSync(
-      path.join(process.cwd(), "playwright.config.ts"),
-      "utf8",
-    );
+    const configText = fs.readFileSync("playwright.config.ts", "utf8");
     expect(configText).toContain("reuseExistingServer: !process.env.CI");
   });
 });
