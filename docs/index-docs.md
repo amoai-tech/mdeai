@@ -157,7 +157,7 @@ Active docs must not present these as current truth:
 
 - old repository references such as `amo-tech-ai/mdeapp`;
 - assumptions that `/home/sk/mdeai/mdeapp` is the repository root;
-- retired skill names such as `mde-real-estate` and `mde-maps`;
+- retired or superseded skill aliases that duplicate canonical domain skills;
 - hard-coded live task status/order that duplicates Linear;
 - stale commit SHAs/readiness percentages presented as evergreen facts;
 - route claims that conflict with current `src/app`.

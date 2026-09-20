@@ -1,1 +1,0 @@
-../../../.claude/skills/mde-real-estate/SKILL.md
