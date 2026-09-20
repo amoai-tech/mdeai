@@ -19,7 +19,6 @@ const skills = [
   ".claude/skills/supabase-review/SKILL.md",
   ".claude/skills/maps-review/SKILL.md",
   ".claude/skills/stripe-review/SKILL.md",
-  ".claude/skills/ci-review/SKILL.md",
   ".claude/skills/nextjs-review/SKILL.md",
 ];
 
@@ -87,11 +86,12 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[4])).toContain("Do not invent or transform ungrounded");
     expect(read(skills[4])).toContain("field mask");
     expect(read(skills[5])).toContain("duplicate delivery must not duplicate tickets");
-    expect(read(skills[6])).toContain("silent skip");
-    expect(read(skills[7])).toContain("package.json");
-    expect(read(skills[7])).toContain("Next.js 16");
-    expect(read(skills[7])).toContain("await cookies()");
-    expect(read(skills[7])).toContain("Async Request APIs");
+    const ciReview = read(".claude/skills/code-review/references/ci-review.md");
+    expect(ciReview).toContain("silent skip");
+    expect(read(skills[6])).toContain("package.json");
+    expect(read(skills[6])).toContain("Next.js 16");
+    expect(read(skills[6])).toContain("await cookies()");
+    expect(read(skills[6])).toContain("Async Request APIs");
   });
 
   it("keeps the repo-local base-aware review-policy contract", () => {
@@ -128,7 +128,7 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(config).toContain("NEEDS VERIFICATION");
     expect(config).toContain("cannot independently block merge");
     expect(config).toContain("Exact version evidence alone does not prove a specific API claim");
-    expect(read(skills[7])).toContain("`src/proxy.ts`");
+    expect(read(".claude/skills/nextjs-review/SKILL.md")).toContain("`src/proxy.ts`");
   });
 });
 

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sourceHook = resolve(here, "../session-start.mjs");
-const required = ["tasks", "task-verifier", "systematic-debugging", "testing", "tdd", "research", "code-review", "writing-skills", "wireframe", "mermaid-diagrams", "copilotkit", "mastra", "supabase", "gemini", "maps", "stripe", "nextjs", "cloudinary"];
+const required = ["tasks", "task-verifier", "systematic-debugging", "testing", "research", "code-review", "writing-skills", "wireframe", "mermaid-diagrams", "copilotkit", "mastra", "supabase", "gemini", "maps", "stripe", "nextjs", "cloudinary"];
 
 function run(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, encoding: "utf8" });
@@ -51,6 +51,10 @@ try {
   assert.ok(cleanOut.includes(`- Repo: ${clean}`));
   assert.match(cleanOut, /- Branch: main/);
   assert.match(cleanOut, /canonical skill scan: OK/);
+  assert.match(cleanOut, /Task lifecycle.*`tasks`/);
+  assert.match(cleanOut, /Independent Done\/merge\/production proof.*`task-verifier`/);
+  assert.match(cleanOut, /lean-dev-flow.*mde-worktree-pr-flow.*mde-task-lifecycle.*retired/);
+  assert.doesNotMatch(cleanOut, /SAN-1273 will add the lightweight router later/);
   const commitLines = cleanOut.split("## Recent commits\n\n```\n")[1].split("\n```", 1)[0].trim().split("\n");
   assert.equal(commitLines.length, 3);
   assert.match(commitLines[0], /commit 4/);

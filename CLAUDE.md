@@ -21,7 +21,7 @@ For substantial or ambiguous work:
 2. `tasks` owns substantial implementation orchestration.
 3. Load only the affected stack/domain skills.
 4. `systematic-debugging` owns diagnosis when a failure is not understood.
-5. `testing` owns verification strategy; `tdd` owns test-first implementation.
+5. `testing` owns verification strategy, test-first implementation, and RED → GREEN → REFACTOR regression proof.
 6. `code-review` reviews an existing diff or PR.
 7. `task-verifier` independently challenges Done/merge/production claims.
 8. Persist S2-S4 handoff state in Linear.
@@ -46,7 +46,6 @@ Domain skills:
 Workflow skills:
 - `tasks`
 - `systematic-debugging`
-- `tdd`
 - `testing`
 - `code-review`
 - `task-verifier`
@@ -55,7 +54,7 @@ Workflow skills:
 - `wireframe`
 - `mermaid-diagrams`
 
-Retired: `mde-task-lifecycle`, `copilotkit-debug`, `copilotkit-integrations`, `copilotkit-setup`.
+Retired: `mde-task-lifecycle`, `lean-dev-flow`, `mde-worktree-pr-flow`, `copilotkit-debug`, `copilotkit-integrations`, `copilotkit-setup`. Task lifecycle/execution belongs to `tasks`; independent Done/merge/production proof belongs to `task-verifier`.
 
 ## Hard rules
 

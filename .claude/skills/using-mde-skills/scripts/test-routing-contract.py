@@ -6,9 +6,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 SKILL = ROOT / ".claude/skills/using-mde-skills/SKILL.md"
 EVALS = ROOT / ".claude/skills/using-mde-skills/evals/routing-evals.json"
-RETIRED = {"mde-task-lifecycle", "copilotkit-debug", "copilotkit-integrations", "copilotkit-setup"}
+TASKS = ROOT / ".claude/skills/tasks/SKILL.md"
+VERIFIER = ROOT / ".claude/skills/task-verifier/SKILL.md"
+RETIRED = {
+    "mde-task-lifecycle",
+    "lean-dev-flow",
+    "mde-worktree-pr-flow",
+    "copilotkit-debug",
+    "copilotkit-integrations",
+    "copilotkit-setup",
+    "tdd",
+    "ci-review",
+}
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED
-WORKFLOW = {"tasks", "systematic-debugging", "research", "code-review", "task-verifier"}
+WORKFLOW = {"tasks", "systematic-debugging", "testing", "research", "code-review", "task-verifier"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -20,6 +31,28 @@ def route(prompt: str) -> str:
     text = prompt.lower()
     if any(retired in text for retired in RETIRED):
         return "__INVALID__"
+    # Workflow intent outranks domain words when a prompt contains both.
+    # Example: "create a worktree for CopilotKit" is lifecycle execution → tasks.
+    lifecycle_terms = (
+        "start a worktree",
+        "create a worktree",
+        "open a pr",
+        "ship this change",
+        "fast dev loop",
+        "clean up merged worktrees",
+    )
+    if any(term in text for term in lifecycle_terms):
+        return "tasks"
+    if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "which tests should i run", "run the tests", "interpret the test failure")):
+        return "testing"
+    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
+        return "task-verifier"
+    if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
+        return "code-review"
+    if any(term in text for term in ("do not know why", "do not know which subsystem", "unknown failure", "suddenly fails", "root cause")):
+        return "systematic-debugging"
+    if any(term in text for term in ("research", "official guidance", "evidence")):
+        return "research"
     direct = {
         "copilotkit": ("copilotkit",),
         "mastra": ("mastra",),
@@ -30,27 +63,32 @@ def route(prompt: str) -> str:
     for owner, terms in direct.items():
         if any(term in text for term in terms):
             return owner
-    if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
-        return "code-review"
-    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
-        return "task-verifier"
-    if any(term in text for term in ("do not know why", "do not know which subsystem", "unknown failure", "suddenly fails", "root cause")):
-        return "systematic-debugging"
-    if any(term in text for term in ("research", "official guidance", "evidence")):
-        return "research"
-    if any(term in text for term in ("implement", "across the repo", "remaining san-1273")):
+    if any(term in text for term in (
+        "implement",
+        "across the repo",
+        "remaining san work",
+        "outstanding linear task",
+    )):
         return "tasks"
     return "direct"
 
 
 require(SKILL.exists(), "router SKILL.md is missing")
+for retired in RETIRED:
+    require(not (ROOT / ".claude/skills" / retired).exists(), f"retired skill still exists: {retired}")
 text = SKILL.read_text()
+tasks_text = TASKS.read_text()
+verifier_text = VERIFIER.read_text()
 cases = json.loads(EVALS.read_text())
-require(len(cases) >= 10, f"expected at least 10 cases, found {len(cases)}")
+require(len(cases) >= 20, f"expected at least 20 cases, found {len(cases)}")
+require("only canonical task lifecycle/execution owner" in tasks_text, "tasks does not claim consolidated lifecycle ownership")
+require("independently challenge claims and prove merge safety / Done" in verifier_text, "task-verifier independence contract missing")
+require("Do not recreate its implementation process" in verifier_text, "task-verifier may duplicate execution lifecycle")
 
 required_rules = {
     "tasks": "ambiguous substantial",
     "systematic-debugging": "unknown failure",
+    "testing": "test strategy/TDD",
     "research": "research/evidence",
     "code-review": "existing PR/diff",
     "task-verifier": "Done/merge/production proof",

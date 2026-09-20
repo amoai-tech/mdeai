@@ -1,1 +1,0 @@
-../../../.claude/skills/mde-worktree-pr-flow/SKILL.md

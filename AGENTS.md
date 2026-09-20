@@ -24,14 +24,14 @@ Use `systematic-debugging` only when the responsible domain/root cause is genuin
 - Simple domain/stack work → relevant specialist skill.
 - Substantial or ambiguous implementation → `tasks`.
 - Unknown failure/root cause → `systematic-debugging`.
-- Test strategy → `testing`; test-first implementation → `tdd`.
+- Test strategy, test-first implementation, and regression proof → `testing`.
 - Existing diff/PR review → `code-review`.
 - Research/evidence gathering → `research`.
 - Done/merge/production claim → `task-verifier`.
 - UI state/interaction design → `wireframe`.
 - Architecture/state/dependency visualization → `mermaid-diagrams`.
 
-`using-mde-skills` is the active lightweight ambiguity router. Do not restore the retired `mde-task-lifecycle` workflow or the old PR #45 routing machinery. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
+`using-mde-skills` is the active lightweight ambiguity router. Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, or `mde-worktree-pr-flow`) or the old PR #45 routing machinery. Lifecycle/execution routes to `tasks`; independent Done/merge/production proof routes to `task-verifier`. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
 
 ## Canonical skills
 
@@ -39,7 +39,7 @@ Stack: `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`,
 
 Domain: `events`, `real-estate`.
 
-Workflow: `using-mde-skills`, `tasks`, `systematic-debugging`, `testing`, `tdd`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
+Workflow: `using-mde-skills`, `tasks`, `systematic-debugging`, `testing`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
 
 ## Graphify repo intelligence
 
@@ -62,7 +62,7 @@ Do not duplicate detailed operating rules here when a canonical skill owns them.
 - Git/worktree safety and execution sequencing → `tasks`.
 - Verification and anti-fake-Done requirements → `task-verifier`.
 - Root-cause methodology → `systematic-debugging`.
-- Test selection and regression proof → `testing` / `tdd`.
+- Test selection, TDD, and regression proof → `testing`.
 - Supabase auth/RLS/service-role rules → `supabase`.
 - CopilotKit/AG-UI integration rules → `copilotkit`.
 - Mastra agent/tool/workflow rules → `mastra`.

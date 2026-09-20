@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # guard-worktree-context.sh — Detect linked worktree vs main checkout; block nested worktree creation.
-# Usage: bash .agents/skills/mde-worktree-pr-flow/scripts/guard-worktree-context.sh [--allow-linked]
+# Usage: bash .claude/skills/tasks/scripts/guard-worktree-context.sh [--allow-linked]
 #   --allow-linked  exit 0 when already in a linked worktree (skip creation, use current path)
 #   default         exit 1 when in linked worktree AND caller wants to create another
 set -euo pipefail

@@ -10,7 +10,6 @@ const SPECIALISTS = [
   "maps-review",
   "stripe-review",
   "nextjs-review",
-  "ci-review",
 ];
 
 // `src/proxy.ts` is MDE's Next.js auth proxy and delegates to `@/lib/supabase/middleware`.
@@ -21,7 +20,6 @@ const matches = {
   "maps-review": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
   "stripe-review": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
   "nextjs-review": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
-  "ci-review": (p) => /^\.github\/workflows\//.test(p) || /^scripts\/(check|verify|smoke)-/i.test(p),
 };
 
 function budget(skillCount) {
@@ -37,7 +35,7 @@ export function selectSkills(files) {
 
   for (const file of files) {
     if (file === "package.json") {
-      for (const skill of SPECIALISTS.filter((name) => name !== "ci-review")) selected.add(skill);
+      for (const skill of SPECIALISTS) selected.add(skill);
       continue;
     }
     for (const [skill, matcher] of Object.entries(matches)) {

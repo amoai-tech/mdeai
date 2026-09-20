@@ -15,6 +15,13 @@ Review the actual diff against both the repository contract and the task/spec. F
 
 `code-review` reviews implementation quality and spec fit. `task-verifier` independently decides whether the task/PR is actually complete and production-safe. Do not duplicate the verifier's full release gate here.
 
+## Specialist references
+
+Load specialist guidance only when the changed surface requires it:
+- GitHub Actions, CI scripts, required gates, permissions, secret exposure, event/path filters, or false-green pipelines → [`references/ci-review.md`](references/ci-review.md).
+
+`code-review` remains the owner; the reference adds CI-specific invariants rather than creating a second review skill.
+
 ## Source of truth
 
 Changed code/tests, the exact task/spec, trusted repository policy, and relevant surrounding contracts are the evidence hierarchy. PR prose is not authoritative when it conflicts with current code.

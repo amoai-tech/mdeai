@@ -69,4 +69,4 @@ The **[test-automator](https://github.com/VoltAgent/awesome-claude-code-subagent
 
 ## Repo-specific note (mdeai.co)
 
-For **this** codebase’s commands, Vitest/Playwright layout, and browser MCP surfaces → **`testing`** skill (`vitest.md`, `playwright.md`, `preview-mcp.md`).
+For **this** codebase’s commands, Vitest/Playwright layout, and browser proof surfaces → **`testing`** skill (`vitest.md`, `playwright.md`).
