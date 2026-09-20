@@ -39,31 +39,24 @@ search
 
 Do not make this journey depend on MCP, A2A, browser agents, deep research, observational memory, autonomous broker agents, or agent swarms.
 
-### Progress tracker
+### Summary
 
-Status legend:
+| Status | % Complete | Area | Current state | Next |
+|---|---:|---|---|---|
+| 🟢 | 100% | Core rental docs | Complete | Maintain |
+| 🟢 | 100% | Reference index | Complete | Maintain |
+| 🟢 | 100% | Reuse matrix | Complete | Maintain |
+| 🟢 | 100% | Reference repos | Core/MVP set cloned | Inspect exact commits/licenses before reuse |
+| 🔵 | 0% | Test plan | Not started | Create TEST-PLAN.md |
+| 🔵 | 0% | Data boundaries | Not started | Create with ownership/RLS work |
+| 🔵 | 0% | Migration plan | Not required yet | Create only if a real schema/data cutover appears |
+| 🔵 | 0% | Operations runbook | Not started | Create before recurring production support |
+| 🟡 | 70% | Core/MVP implementation | In progress | Finish rental journey blockers in Linear |
+| 🔵 | 0% | Advanced real-estate features | Deferred | Start only after Core/MVP production proof |
 
-| Dot | Meaning |
-|---|---|
-| 🟢 | Completed |
-| 🟡 | In progress |
-| 🔴 | Failed / blocked |
-| 🔵 | Not started / needs completion |
+**Legend:** 🟢 Complete · 🟡 In progress · 🔴 Blocked/failed · 🔵 Not started
 
-| Item | Status | Next action |
-|---|---|---|
-| `INDEX.md` | 🟢 | Keep current as docs/tasks change |
-| `README.md` | 🟢 | Keep as the small folder router |
-| `RENTALS.md` | 🟢 | Update only when durable product/architecture changes |
-| `REUSE-MATRIX.md` | 🟢 | Pin exact repo commit/license before direct code reuse |
-| `REFERENCES.md` | 🟢 | Keep repo URLs + local clone paths current |
-| Real Estate local reference clones | 🟢 | Inspect exact source before adapting patterns |
-| `TEST-PLAN.md` | 🔵 | Create next; map J-RE-* journeys to unit/API/DB/RLS/Playwright/prod proof |
-| `DATA-BOUNDARIES.md` | 🔵 | Create with SAN-1104 / SAN-1105 / SAN-1349 ownership work |
-| `MIGRATION-PLAN.md` | 🔵 | Create only if a real schema/data cutover is required |
-| `OPERATIONS-RUNBOOK.md` | 🔵 | Create before recurring production support / launch |
-
-This tracker covers durable documentation/reference work only. Linear remains the live source for implementation task status.
+This is a summary only. Linear remains the live source for implementation task status.
 
 ## 2 · Canonical GitHub docs
 
