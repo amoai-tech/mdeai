@@ -135,17 +135,26 @@ Use local clones for source inspection instead of repeatedly browsing moving `ma
 
 | Source | Local path | Main MDE use |
 |---|---|---|
-| CopilotKit | `/home/sk/ipixai/github/CopilotKit` | Mastra integration, shared state, GenUI patterns |
-| Mastra monorepo | `/home/sk/ipixai/github/mastra/clones/mastra` | Native agents/tools/workflows/storage APIs |
-| Mastra Agent Harness | `/home/sk/ipixai/github/mastra/clones/template-agent-harness` | Advanced governance reference; not Core/MVP requirement |
-| Mastra Browsing Agent | `/home/sk/ipixai/github/mastra/clones/template-browsing-agent` | Future external verification reference |
-| Mastra Company Knowledge | `/home/sk/ipixai/github/mastra/clones/template-company-knowledge` | Future grounded knowledge reference |
-| Mastra Deep Search | `/home/sk/ipixai/github/mastra/clones/template-deep-search` | Future neighborhood/market research reference |
-| Mastra Text-to-SQL | `/home/sk/ipixai/github/mastra/clones/template-text-to-sql` | Broker/admin analytics model only |
-| OpenBot | `/home/sk/ipixai/github/mastra/clones/OpenBot` | Advanced broker coworker reference; not Core/MVP |
-| Mastra Supabase starter | `/home/sk/ipixai/github/mastra/clones/mastra-supabase-starter` | Supabase integration comparison |
-| Mastra auth examples | `/home/sk/ipixai/github/mastra/clones/mastra-auth-examples` | Auth pattern comparison |
-| Observational memory workshop | `/home/sk/ipixai/github/mastra/clones/mastra-observational-memory-workshop` | Advanced-only memory research |
+| CopilotKit | `/home/sk/github-repos/copilotkit/CopilotKit` | Mastra integration, shared state, GenUI patterns |
+| Mastra monorepo | `/home/sk/github-repos/mastra/mastra` | Native agents/tools/workflows/storage APIs |
+| Mastra Agent Harness | `/home/sk/github-repos/mastra/template-agent-harness` | Advanced governance reference; not Core/MVP requirement |
+| Mastra Browsing Agent | `/home/sk/github-repos/mastra/template-browsing-agent` | Future external verification reference |
+| Mastra Company Knowledge | `/home/sk/github-repos/mastra/template-company-knowledge` | Future grounded knowledge reference |
+| Mastra Deep Search | `/home/sk/github-repos/mastra/template-deep-search` | Future neighborhood/market research reference |
+| Mastra Text-to-SQL | `/home/sk/github-repos/mastra/template-text-to-sql` | Broker/admin analytics model only |
+| OpenBot | `/home/sk/github-repos/copilotkit/OpenBot` | Advanced broker coworker reference; not Core/MVP |
+| Mastra Supabase starter | `/home/sk/github-repos/community/mastra-supabase-starter` | Supabase integration comparison |
+| Mastra auth examples | `/home/sk/github-repos/mastra/mastra-auth-examples` | Auth pattern comparison |
+| Observational memory workshop | `/home/sk/github-repos/mastra/mastra-observational-memory-workshop` | Advanced-only memory research |
+
+Real Estate Core/MVP clones:
+
+| Repo | Local path | Main MDE use |
+|---|---|---|
+| Dubai Real Estate | `/home/sk/github-repos/community/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
+| HomeRecoEngine | `/home/sk/github-repos/community/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
+| Real Estate AI Chatbot | `/home/sk/github-repos/community/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
+| HomeMatch | `/home/sk/github-repos/community/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
 
 Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) and [`REUSE-MATRIX.md`](./REUSE-MATRIX.md).
 
