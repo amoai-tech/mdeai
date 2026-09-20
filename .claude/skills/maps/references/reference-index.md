@@ -1,5 +1,8 @@
 # Google Maps reference index
 
+Last reviewed: 2026-09-20
+Freshness: volatile — AI/grounding availability, pricing, quotas, regional support, product status, and API behavior must be revalidated from current primary sources.
+
 Use this index to choose the smallest authoritative source for a Maps task. Score = MDE reference priority (10 = primary/current implementation authority; lower scores = discovery/community only). Volatile facts such as pricing, quotas, preview/GA status, regional coverage, and limits must be rechecked at use time.
 
 ## 1. Core Google Maps Platform
@@ -88,11 +91,11 @@ Use this index to choose the smallest authoritative source for a Maps task. Scor
 5. **Third-party source:** inspiration or explicitly selected vendor only; never overrides Google policy/security/API semantics.
 6. **Search results:** discovery only; replace with the underlying primary source before coding or review.
 
-## 7. Skill improvements suggested by this audit
+## 7. Implemented maintenance safeguards
 
-- Add **source-tier routing** to the canonical skill so agents know which authority wins when sources disagree.
-- Add a **freshness trigger**: pricing, quotas, field availability, regional support, preview/GA state, deprecations, and AI product availability always require a current official lookup.
-- Add **Places summaries attribution tests** because current docs require attribution/disclosure when AI-generated summaries are displayed.
-- Add **Code Assist hosted-MCP guidance** and avoid deprecated local npm setup; the official `platform-ai` repo now points to the hosted remote MCP as primary.
-- Add **product-status labels** (`GA`, preview, experimental, private preview) only when dynamically retrieved, never frozen in `SKILL.md`.
-- Add **reference-index routing** to PR review evidence so reviewers cite the exact primary source used for a Maps API/version decision.
+- Weekly + Maps-change CI checks upstream skill drift without auto-updating vendored content.
+- Primary reference links are checked for dead or meaningful redirect drift; same-path locale redirects are reported but tolerated.
+- Google Places provider summaries have a UI attribution contract that suppresses text when disclosure is missing.
+- Demo keys are prototype-only; production/shared environments require restricted project credentials.
+- `@vis.gl/react-google-maps` compatibility is checked against current Google/canonical examples when Maps skill or dependency files change.
+- Volatile AI/grounding references carry review-date/freshness metadata rather than frozen pricing, quota, coverage, or product-status claims.

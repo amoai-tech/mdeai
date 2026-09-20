@@ -205,6 +205,12 @@ const sessionToken = uuidv4(); // new UUID per search session
 
 ---
 
+## Demo key policy
+
+Demo Key: prototypes only. Production/shared environments use restricted project credentials for required APIs/origins. Never commit keys.
+
+---
+
 ## GCP key setup — quick reference
 
 | Key | Restrictions | APIs enabled |
@@ -253,24 +259,13 @@ Before approval verify: no unsupported browser REST/CORS path; map container has
 
 For significant Maps changes verify provider-sourced geo/place data, required attribution, permitted storage/caching, no LLM-fabricated provider facts, correct browser/server key restrictions, intentional billable fields/calls, and applicable regional/EEA requirements against current Google terms.
 
+## Google Places provider summaries
+
+Google Places provider summaries are distinct from MDE `ai_summary`. Render them through `GooglePlacesSummary`; missing provider disclosure suppresses the summary. Do not relabel MDE `ai_summary`.
+
+
 ## Maps completion evidence gate
 
 Do not call a Maps change complete until evidence covers: targeted Maps tests; no new legacy API; client/server key exposure; minimal field masks for changed Places calls; compliance/attribution review; and a browser smoke test when map UI changed. Record any current-doc or Code Assist source used for an API/version decision.
 
 For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite.
-
----
-
-## Common gotchas
-
-| Gotcha | Fix |
-|--------|-----|
-| `generativeSummary` null | Handle gracefully — not all places have summaries |
-| No `disclosureText` shown | Required by ToS — show "Summarized with Gemini" |
-| Legacy Places API | Switch to Places API (New) — different billing, different endpoints |
-| `googleMapsLinks` missing | Must be in field mask explicitly |
-| Constructing Maps URLs from lat/lng | Use `placeUri` from `googleMapsLinks` — it's canonical and stable |
-| `AdvancedMarkerElement` not found | Add `'marker'` to `libraries` in js-api-loader |
-| Missing `mapId` | Required for AdvancedMarkerElement — set in Map constructor |
-| Frontend key 403 | Verify HTTP referrer restriction includes current origin |
-| Places server key in `NEXT_PUBLIC_*` | Server-side keys must never be browser-exposed |
