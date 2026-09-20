@@ -19,11 +19,11 @@ API key in `.env`, used locally. Key never leaves the machine.
 ```
 .env (GOOGLE_MAPS_API_KEY=...)
 gmaps.py → calls Google APIs directly
-HTML pages → zero-key embed iframes (no key in HTML)
+HTML pages → supported Maps Embed API with a restricted browser key, or Maps URLs for keyless outbound links
 ```
 
 **Risk:** Low — it's the user's own key on their own machine.
-**Best practice:** Even personally, prefer zero-key `output=embed` iframes for HTML. Only use Maps JS API when advanced features (custom markers, polylines, clustering) are needed.
+**Best practice:** Use the supported Maps Embed API for simple iframe maps and Maps JavaScript API for richer interactive behavior. Use Maps URLs when the requirement is a keyless outbound link rather than an embedded map.
 
 ### Mode 2: Users bring their own key (BYOK)
 
@@ -31,8 +31,8 @@ Users configure their own Google API key. They control their own billing.
 
 - Store key in user profile (encrypted at rest)
 - Use server-side for data queries
-- For shareable/exported HTML: generate static exports with **zero keys in HTML**
-- Never embed a user's key in a downloadable file
+- For portable/shareable HTML, prefer Google Maps URLs instead of embedding a user-specific key
+- Never put a server key or unrestricted browser key in a downloadable file
 
 ### Mode 3: Platform key — you pay, users must never see it
 
@@ -90,49 +90,41 @@ GOOGLE_MAPS_FRONTEND_KEY=AIzaSy...yyy  # Domain-restricted, in HTML
 
 ---
 
-## HTML pages — zero-key embed iframes (default)
+## HTML pages — supported embed path
 
-**Always default to zero-key embed iframes for HTML maps.** No API key in HTML, free, unlimited.
+Use the documented **Maps Embed API** when an iframe is required. It uses the `https://www.google.com/maps/embed/v1/` endpoint and requires an API key. Restrict the browser key to approved HTTP referrers and only the APIs the page needs.
 
 ```html
-<!-- Location/place map -->
-<iframe src="https://maps.google.com/maps?q=El+Poblado+Medellín&z=13&output=embed"
-  width="100%" height="400" style="border:0" allowfullscreen></iframe>
-
-<!-- Directions map -->
-<iframe src="https://maps.google.com/maps?saddr=Parque+Lleras&daddr=El+Centro+Medellín&output=embed"
-  width="100%" height="400" style="border:0" allowfullscreen></iframe>
+<iframe
+  width="600"
+  height="450"
+  style="border:0"
+  loading="lazy"
+  allowfullscreen
+  referrerpolicy="strict-origin-when-cross-origin"
+  src="https://www.google.com/maps/embed/v1/place?key=YOUR_RESTRICTED_BROWSER_KEY&q=El+Poblado+Medellin">
+</iframe>
 ```
 
-**Parameters:**
-- `q` — place name or address (URL-encoded, `+` for spaces)
-- `saddr` / `daddr` — origin/destination for directions
-- `z` — zoom level 1–20
-- `output=embed` — required
-- `ll` — optional center coordinates
+For directions, search, view, or Street View embeds, use the documented Embed API mode and current parameters:
+https://developers.google.com/maps/documentation/embed/embedding-map
 
-**WARNING:** Never use `loading="lazy"` on Google Maps embed iframes — it causes maps below the fold to appear permanently blank.
+For a **keyless link** that opens Google Maps instead of embedding it, use Maps URLs:
+https://developers.google.com/maps/documentation/urls/get-started
 
-Only use `<script src="maps.googleapis.com/maps/api/js?key=...">` when you need **advanced interactive features** (custom markers, polylines, clustering) that embeds can't support.
+Use Maps JavaScript API when the product needs richer interactive behavior such as application-managed markers, clustering, route rendering, or synchronized React state.
 
 ---
 
-## Street View — zero-key approach (hard rule)
+## Street View — link or supported embed
 
-**Never embed Street View using the JavaScript API or Embed API in HTML pages.** Both expose the key in client-side code.
-
-Instead, use a **direct Google Maps link** — zero cost, zero key exposure, full interactive experience:
+For a keyless outbound experience, use an official Google Maps URL:
 
 ```
 https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lng}&heading={heading}&pitch=0&fov=90
 ```
 
-**Parameters:**
-- `viewpoint` — `lat,lng` coordinates
-- `heading` — compass degrees (0=North, 90=East, 180=South, 270=West)
-- `pitch` — angle (-90=down, 0=level, 90=up)
-- `fov` — field of view 10–100 degrees
-- `map_action=pano` — **required** — explicitly triggers panorama mode
+If Street View must be embedded on the page, use the documented Maps Embed API `streetview` mode with a properly restricted browser key. Do not treat a browser key as a secret; protect it with application and API restrictions.
 
 ```html
 <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=6.2088,-75.5736&heading=90&pitch=0&fov=90"
@@ -141,7 +133,7 @@ https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lng}&headin
 </a>
 ```
 
-**WARNING:** The old shorthand `@{lat},{lng},3a,75y,{heading}h,90t` is unreliable. Always use `map_action=pano`.
+Prefer the documented `api=1` Maps URL syntax over undocumented URL shorthand.
 
 ---
 
@@ -151,13 +143,13 @@ When users want to download or share HTML pages:
 
 | Element | In-app (interactive) | Shareable export |
 |---------|---------------------|-----------------|
-| Maps | Maps JS API (frontend key) | Embed iframe (free, no key) |
-| Street View | Direct Google Maps link (no key) | Direct Google Maps link (no key) |
+| Maps | Maps JS API or Maps Embed API with restricted browser key | Google Maps URL link when the export must remain keyless |
+| Street View | Maps URL link or supported Embed API | Google Maps URL link when the export must remain keyless |
 | Route lines | Current Routes/Route APIs (restricted key) | Static map image with path overlay |
 | Data (weather, places) | Pre-rendered from backend | Same pre-rendered HTML — no API calls |
 
 ```bash
-# Generate free embed URLs for shareable exports
+# Generate a supported Maps Embed API URL (requires a configured restricted key)
 python3 ~/.claude/skills/maps/scripts/gmaps.py embed-url --mode place --query "El Poblado Medellín"
 python3 ~/.claude/skills/maps/scripts/gmaps.py embed-url --mode directions --origin "Aeropuerto Medellín" --destination "El Poblado"
 ```
@@ -192,34 +184,27 @@ From https://developers.google.com/maps/optimization-guide:
 - Avoid overlay redraws during map pan/zoom
 
 ### Billing optimization
-- Request only the **field mask** fields you display (Places API)
-- Use **Place Details** (cheaper) instead of Text Search when you already have `place_id`
-- Use **session tokens** for autocomplete + place details (groups into one billing event)
-- `googleMapsLinks` is currently **free** — include in every Places mask
-- Geocoding fallback (location field only) uses Basic Data SKU — cheapest option
+- Request only the **field mask** fields the feature actually needs.
+- When you already have a place ID, choose the smallest current Place Details field set rather than issuing an unnecessary search.
+- Use the current provider-recommended autocomplete session-token flow; billing semantics are version/SKU sensitive.
+- Before claiming one API/field is cheaper or free, verify the current Google Maps pricing/SKU documentation.
 
 ### Set budget alerts
 ```
 GCP Console → Billing → Budgets & Alerts
 ```
-Set alerts at 50%, 75%, 90% of monthly budget. Set a hard cap to stop serving at limit.
+Choose alert thresholds appropriate to the project. Budget alerts are notifications, not an automatic hard cap; enforce application quotas or a kill switch separately when a hard stop is required.
 
 ---
 
 ## Coverage
 
-Coverage varies by API and region: https://developers.google.com/maps/coverage
+Coverage, supported languages, regional availability, preview/GA status, and AI-generated Place fields change over time. Do not freeze regional claims in this skill. Verify the exact product/field at use time:
 
-| Coverage type | Notes |
-|--------------|-------|
-| Maps imagery | Global — satellite and street-level vary by region |
-| Street View | Major cities comprehensive; rural areas sparse |
-| Places data | Best coverage in US, EU, India, Australia; Latin America good in major cities |
-| `generativeSummary` | **English only; US and India only** as of 2026-05 |
-| Real-time traffic | Limited to regions with Google traffic data |
-| Transit data | Depends on local transit agency agreements |
+- Coverage: https://developers.google.com/maps/coverage
+- Places summaries: https://developers.google.com/maps/documentation/places/web-service/place-summaries
 
-**For mdeAI (Medellín):** Maps imagery and Places data are good in Medellín metro. `generativeSummary` is NOT available for Medellín — store null gracefully when enriching.
+For MDE international flows, treat unavailable provider fields as optional and degrade gracefully without inventing replacement provider data.
 
 ---
 
@@ -252,15 +237,11 @@ https://console.cloud.google.com/apis/library/{api-endpoint}
 
 ---
 
-## Pricing summary (as of 2026-05)
+## Pricing and quotas
 
-- **Maps Embed API**: Always free
-- **Maps JavaScript API**: $7 per 1,000 loads
-- **Street View (JS API)**: $7 per 1,000 panoramas — **use direct links instead**
-- **Places API (New)**: $17–40 per 1,000 requests (depends on field SKU)
-- **Geocoding**: $5 per 1,000 requests
-- **Routes API**: $5–15 per 1,000 requests
-- **Directions API**: $10 per 1,000 requests
-- **$200/month free credit** on Google Maps Platform
+Do not hard-code Maps pricing, credits, quota limits, or SKU assumptions in this skill. Verify current official pricing and product-specific usage/billing documentation at decision time:
 
-Check https://developers.google.com/maps/billing-and-pricing/pricing for current rates — prices change.
+- https://developers.google.com/maps/billing-and-pricing/pricing
+- https://developers.google.com/maps/documentation/embed/usage-and-billing
+
+Record the source/date in implementation or PR evidence when cost materially affects architecture.

@@ -54,4 +54,24 @@ describe("Maps skill quality contract", () => {
     expect(skill).not.toContain("Store as `ai_summary`; show `disclosureText`");
     expect(skill.toLowerCase()).toContain("preserve provider provenance and disclosure");
   });
+
+  it("keeps security guidance on supported embed URLs and volatile facts dynamic", () => {
+    const security = readFileSync(".claude/skills/maps/references/security-and-optimization.md", "utf8");
+    const cli = readFileSync(".claude/skills/maps/scripts/gmaps.py", "utf8");
+
+    expect(security).toContain("https://www.google.com/maps/embed/v1/");
+    expect(security).toContain("https://www.google.com/maps/@?api=1");
+    for (const stale of [
+      "zero-key embed iframes",
+      "Never use `loading=\"lazy\"`",
+      "groups into one billing event",
+      "English only; US and India only",
+      "## Pricing summary (as of",
+      "$7 per 1,000",
+      "$200/month free credit",
+    ]) {
+      expect(security, stale).not.toContain(stale);
+    }
+    expect(cli).not.toContain("free, unlimited");
+  });
 });
