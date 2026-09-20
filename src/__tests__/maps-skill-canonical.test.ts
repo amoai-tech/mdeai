@@ -15,6 +15,7 @@ describe("canonical Maps skill", () => {
       ".claude/skills/maps/scripts",
       ".claude/skills/maps/tests",
       ".claude/skills/maps/scripts/check-google-maps-upstream.mjs",
+      ".claude/skills/maps/references/reference-index.md",
     ]) {
       expect(existsSync(path), `missing canonical Maps resource: ${path}`).toBe(true);
     }
@@ -31,6 +32,9 @@ describe("canonical Maps skill", () => {
       "## Compliance review",
       "## Product-selection routing matrix",
       "## Maps completion evidence gate",
+      "## Source precedence and freshness",
+      "references/reference-index.md",
+      "mapscodeassist.googleapis.com/mcp",
       "explicit `language` and `region`",
       "google-map-react",
       "@react-google-maps/api",

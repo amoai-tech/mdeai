@@ -27,8 +27,8 @@ paths:
 
 1. This **`SKILL.md`** — Quick routing table + Consolidated sibling note.
 2. **GMP doc questions** — read the pinned official Google Maps skill first, then one MDE reference relevant to the task.
-3. **One** MDE `references/*.md` file for implementation; do not bulk-load unrelated references.
-4. **`scripts/gmaps.py` + `references/gmaps-cli-behavior.md`** only when running or editing batch CLI work.
+3. Use [`references/reference-index.md`](references/reference-index.md) to choose one authoritative source; then load only the MDE reference needed.
+4. **`scripts/gmaps.py` + `references/gmaps-cli-behavior.md`** only for batch CLI work.
 
 Verify current Maps tooling before relying on an MCP integration.
 
@@ -41,7 +41,7 @@ Verify current Maps tooling before relying on an MCP integration.
 - Official docs: https://developers.google.com/maps/ai/agent-skills
 - Official source: https://github.com/googlemaps/agent-skills
 - Pinned reviewed copy: [`references/vendor/google-maps-platform/SKILL.md`](references/vendor/google-maps-platform/SKILL.md)
-- Reviewed upstream commit: `84f0e9a2527403a408a61b8705bea0c3900b76a8`
+- Reviewed upstream commit: `6606930272e554171b42d69312674cbe40aa819c`
 
 ## Current Google guidance workflow
 
@@ -53,6 +53,12 @@ For non-trivial implementation, migration, bug fix, review, or API/version claim
 5. Run the PR/compliance checks below before completion.
 
 Do not implement changing APIs, pricing, coverage, deprecations, quotas, or billing behavior from model memory. MDE ownership remains: Supabase = inventory truth; Mastra = orchestration; Maps/Places = geo truth.
+
+## Source precedence and freshness
+
+Use [`references/reference-index.md`](references/reference-index.md). Priority is: current Google implementation docs/canonical library docs → current Google architecture/AI docs → Google product pages/blogs → community/third-party sources. Search results and third-party skills are discovery only. For pricing, quotas, regional coverage, product status, deprecations, AI availability, or field availability, fetch a current official source before deciding.
+
+For Code Assist, prefer the Google-hosted remote MCP endpoint `https://mapscodeassist.googleapis.com/mcp`; do not add the deprecated local npm Code Assist package.
 
 ## PR review contract
 
@@ -95,9 +101,10 @@ Do not select a product from memory when current Google guidance is available.
 | Task | Go to |
 |------|-------|
 | **PRD / audit** — Places API (New) v2.1 feature matrix + score (PLACES-002–081) | Repo: `tasks/maps/maps-prd-v2.md`, `tasks/maps/places-api-new-audit.md` |
-| **Interactive** — search_places, get_directions, show_on_map in Claude session | [§ Interactive MCP tools below](#interactive-mcp-tools) |
+| **Interactive** — live search/details/directions/map rendering | [§ Interactive Maps tools](#interactive-maps-tools) |
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
+| **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
 | **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive MCP tools](#interactive-mcp-tools) below |
 | **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
 

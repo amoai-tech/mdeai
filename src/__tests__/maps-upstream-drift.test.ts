@@ -5,7 +5,7 @@ const script = ".claude/skills/maps/scripts/check-google-maps-upstream.mjs";
 
 describe("Maps upstream drift checker", () => {
   it("passes when the current upstream commit matches the pinned commit", () => {
-    const out = execFileSync("node", [script, "--current", "84f0e9a2527403a408a61b8705bea0c3900b76a8"], { encoding: "utf8" });
+    const out = execFileSync("node", [script, "--current", "6606930272e554171b42d69312674cbe40aa819c"], { encoding: "utf8" });
     expect(out).toContain("UP_TO_DATE");
   });
 
