@@ -13,7 +13,7 @@ Primary sources:
 For a custom React input, load the `places` library and call `AutocompleteSuggestion.fetchAutocompleteSuggestions()`. Keep one `AutocompleteSessionToken` for a user autocomplete session, then start a new token after selection.
 
 ```tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 export function PlaceAutocomplete({
@@ -38,12 +38,17 @@ export function PlaceAutocomplete({
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
-      const { suggestions: next } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input,
-        sessionToken,
-        includedRegionCodes: ['co'],
-      });
-      if (!cancelled) setSuggestions(next);
+      try {
+        const { suggestions: next } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input,
+          sessionToken,
+          includedRegionCodes: ['co'],
+        });
+        if (!cancelled) setSuggestions(next);
+      } catch (error) {
+        if (!cancelled) setSuggestions([]);
+        console.error('Place autocomplete failed', error);
+      }
     }, 250);
 
     return () => {
@@ -65,14 +70,19 @@ export function PlaceAutocomplete({
             key={prediction.placeId}
             type="button"
             onClick={async () => {
-              const place = prediction.toPlace();
-              await place.fetchFields({
-                fields: ['displayName', 'formattedAddress', 'location'],
-              });
-              onSelect(place);
-              setInput(place.formattedAddress ?? place.displayName ?? '');
-              setSuggestions([]);
-              setSessionToken(new places.AutocompleteSessionToken());
+              try {
+                const place = prediction.toPlace();
+                await place.fetchFields({
+                  fields: ['displayName', 'formattedAddress', 'location'],
+                });
+                onSelect(place);
+                setInput(place.formattedAddress ?? place.displayName ?? '');
+                setSuggestions([]);
+                setSessionToken(new places.AutocompleteSessionToken());
+              } catch (error) {
+                console.error('Place details failed', error);
+                onSelect(null);
+              }
             }}
           >
             {prediction.text.toString()}
@@ -92,10 +102,14 @@ When a custom UI is unnecessary, prefer Google’s current `PlaceAutocompleteEle
 
 ```ts
 placeAutocomplete.addEventListener('gmp-select', async ({ placePrediction }) => {
-  const place = placePrediction.toPlace();
-  await place.fetchFields({
-    fields: ['displayName', 'formattedAddress', 'location', 'viewport'],
-  });
+  try {
+    const place = placePrediction.toPlace();
+    await place.fetchFields({
+      fields: ['displayName', 'formattedAddress', 'location', 'viewport'],
+    });
+  } catch (error) {
+    console.error('Place selection failed', error);
+  }
 });
 ```
 
@@ -108,11 +122,16 @@ const places = useMapsLibrary('places');
 
 async function fetchPlace(placeId: string) {
   if (!places) return null;
-  const place = new places.Place({ id: placeId });
-  await place.fetchFields({
-    fields: ['displayName', 'formattedAddress', 'location'],
-  });
-  return place;
+  try {
+    const place = new places.Place({ id: placeId });
+    await place.fetchFields({
+      fields: ['displayName', 'formattedAddress', 'location'],
+    });
+    return place;
+  } catch (error) {
+    console.error('Place details failed', error);
+    return null;
+  }
 }
 ```
 
@@ -122,15 +141,19 @@ Use the current `Place.searchNearby()` API and declare the minimum result fields
 
 ```tsx
 const { Place } = places;
-const { places: results } = await Place.searchNearby({
-  fields: ['id', 'displayName', 'location'],
-  locationRestriction: {
-    center: { lat: 6.2442, lng: -75.5812 },
-    radius: 1500,
-  },
-  includedPrimaryTypes: ['restaurant'],
-  maxResultCount: 10,
-});
+try {
+  const { places: results } = await Place.searchNearby({
+    fields: ['id', 'displayName', 'location'],
+    locationRestriction: {
+      center: { lat: 6.2442, lng: -75.5812 },
+      radius: 1500,
+    },
+    includedPrimaryTypes: ['restaurant'],
+    maxResultCount: 10,
+  });
+} catch (error) {
+  console.error('Nearby search failed', error);
+}
 ```
 
 ## Text search
@@ -139,11 +162,15 @@ Use `Place.searchByText()` when the user supplies a query rather than a nearby c
 
 ```tsx
 const { Place } = places;
-const { places: results } = await Place.searchByText({
-  textQuery: 'coffee in Laureles Medellín',
-  fields: ['id', 'displayName', 'formattedAddress', 'location'],
-  maxResultCount: 10,
-});
+try {
+  const { places: results } = await Place.searchByText({
+    textQuery: 'coffee in Laureles Medellín',
+    fields: ['id', 'displayName', 'formattedAddress', 'location'],
+    maxResultCount: 10,
+  });
+} catch (error) {
+  console.error('Text search failed', error);
+}
 ```
 
 ## Geocoding
@@ -154,8 +181,12 @@ Geocoding is separate from Places search. Use the current Geocoding API/library 
 const geocoding = useMapsLibrary('geocoding');
 if (!geocoding) return;
 const geocoder = new geocoding.Geocoder();
-const response = await geocoder.geocode({ address: 'Parque Lleras, Medellín' });
-const location = response.results[0]?.geometry.location;
+try {
+  const response = await geocoder.geocode({ address: 'Parque Lleras, Medellín' });
+  const location = response.results[0]?.geometry.location;
+} catch (error) {
+  console.error('Geocoding failed', error);
+}
 ```
 
 ## Review checklist

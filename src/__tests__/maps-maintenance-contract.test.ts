@@ -18,6 +18,9 @@ describe("Maps maintenance contract", () => {
   it("ships maintenance scripts without weakening the canonical skill", () => {
     expect(existsSync(".claude/skills/maps/scripts/check-maps-reference-links.mjs")).toBe(true);
     expect(existsSync(".claude/skills/maps/scripts/check-visgl-compatibility.mjs")).toBe(true);
+    const linkChecker = readFileSync(".claude/skills/maps/scripts/check-maps-reference-links.mjs", "utf8");
+    expect(linkChecker).toContain("if (!location)");
+    expect(linkChecker).toContain("redirect missing Location header");
 
     const skill = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
     expect(skill).toContain("## Demo key policy");

@@ -26,7 +26,11 @@ for (const { url } of primary) {
       await response.body?.cancel();
     }
     if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location") ?? "";
+      const location = response.headers.get("location");
+      if (!location) {
+        failures.push(`${url} -> redirect missing Location header (${response.status})`);
+        continue;
+      }
       const from = new URL(target);
       const to = new URL(location, from);
       const localeOnly =

@@ -32,7 +32,10 @@ describe("Maps skill quality contract", () => {
     expectNoLegacyApis("geometry-components.md", readFileSync(".claude/skills/maps/references/react-vis-gl/geometry-components.md", "utf8"));
     expectNoLegacyApis("hooks-api.md", readFileSync(".claude/skills/maps/references/react-vis-gl/hooks-api.md", "utf8"));
     expectNoLegacyApis("patterns.md", readFileSync(".claude/skills/maps/references/react-vis-gl/patterns.md", "utf8"));
-    expectNoLegacyApis("places-autocomplete.md", readFileSync(".claude/skills/maps/references/react-vis-gl/places-autocomplete.md", "utf8"));
+    const placesAutocomplete = readFileSync(".claude/skills/maps/references/react-vis-gl/places-autocomplete.md", "utf8");
+    expectNoLegacyApis("places-autocomplete.md", placesAutocomplete);
+    expect(placesAutocomplete).toContain("try {");
+    expect(placesAutocomplete).toContain("catch (error)");
   });
 
   it("adds a contents section to large non-vendored references", () => {
