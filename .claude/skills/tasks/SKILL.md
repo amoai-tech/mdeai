@@ -1,9 +1,9 @@
 ---
 name: tasks
 description: >-
-  Use when creating, planning, executing, resuming, or completing a substantial MDE Linear SAN task.
+  Use when creating, planning, executing, resuming, shipping, or completing substantial MDE Linear SAN work, including worktree/branch setup, fast implementation/test-loop selection, PR creation, review-comment handling, post-merge cleanup, and evidence tracking.
 metadata:
-  version: "2.0.0-mde.1"
+  version: "2.1.0-mde.1"
 ---
 
 # tasks — MDE Linear task specification standard
@@ -113,13 +113,15 @@ Every substantial executable `SAN-*` task is a dependency-ordered runbook. Keep 
 For agent-prompt structure, read [agent-instructions.md](references/agent-instructions.md).
 For detailed layout, read [task-format.md](references/task-format.md).
 For progress rules, read [progress-tracker.md](references/progress-tracker.md).
+For the implementation inner loop and cheapest-proof test tiers, read [execution-loop.md](references/execution-loop.md).
+For worktree creation, branch isolation, preservation-first cleanup, and focused PR boundaries, read [worktrees.md](references/worktrees.md).
 For legacy/reference migrations, use [migration-legacy.md](references/migration-legacy.md) only when a task explicitly ports behavior from a historical or external reference repository.
 Before commit, read [pre-commit.md](references/pre-commit.md), then choose the risk-matched verification set from [pre-merge-tests.md](references/pre-merge-tests.md).
 For PR creation/troubleshooting, read [github-pr.md](references/github-pr.md), [review-comments.md](references/review-comments.md), [domain-routing.md](references/domain-routing.md), [research-evidence.md](references/research-evidence.md), and [github-actions.md](references/github-actions.md).
 For user-facing or AI-native workflows, read [user-journey-testing.md](references/user-journey-testing.md).
 For UI-heavy work, read [ui-review.md](references/ui-review.md).
 Load `../mermaid-diagrams/SKILL.md` only when architecture, ownership, state, sequence, dependencies, trust boundaries, or failure/recovery paths are non-trivial enough that a diagram can expose errors.
-After merge, read [post-merge.md](references/post-merge.md). `mde-task-lifecycle` is retired; `tasks` is the canonical task lifecycle.
+After merge, read [post-merge.md](references/post-merge.md). `mde-task-lifecycle`, `lean-dev-flow`, and `mde-worktree-pr-flow` are retired; `tasks` is the only canonical task lifecycle/execution owner.
 
 ## Explicit action vocabulary
 

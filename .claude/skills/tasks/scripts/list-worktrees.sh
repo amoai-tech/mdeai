@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # list-worktrees.sh — Every worktree: branch, HEAD, dirty/untracked counts, vs origin/main.
-# Usage: bash .claude/skills/mde-worktree-pr-flow/scripts/list-worktrees.sh
+# Usage: bash .claude/skills/tasks/scripts/list-worktrees.sh
 set -euo pipefail
 
 BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
@@ -90,4 +90,4 @@ done
 
 echo
 echo "${DIM}DIRTY = status --short lines | UNTR = untracked path count | MAIN = behind/ahead vs origin/main${RESET}"
-echo "${DIM}Forensic audit: bash .claude/skills/mde-worktree-pr-flow/scripts/audit-worktrees.sh${RESET}"
+echo "${DIM}Forensic audit: bash .claude/skills/tasks/scripts/audit-worktrees.sh${RESET}"

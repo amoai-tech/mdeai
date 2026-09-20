@@ -4,7 +4,7 @@
 #   (a) any in-repo worktree dir that is NOT gitignored  (the actual leak condition)
 #   (b) any worktree whose STAGEABLE footprint (untracked, not-ignored) is large
 #
-# Usage: bash .claude/skills/mde-worktree-pr-flow/scripts/guard-worktree-size.sh
+# Usage: bash .claude/skills/tasks/scripts/guard-worktree-size.sh
 # Env:   STAGEABLE_WARN=200  STAGEABLE_FAIL=500  (untracked-file counts)
 set -euo pipefail
 

@@ -17,7 +17,7 @@
 ├── skills/                    ← 42 scan-root entries (symlinks → ../../.agents/skills/*)
 ├── auto-review -> ../.agents/auto-review
 ├── docs/                      ← Workspace-scoped docs (not user-facing)
-├── worktrees/                 ← mde-worktree-pr-flow scratch dirs
+├── worktrees/                 ← task/worktree scratch dirs (owned by tasks)
 └── README.md                  ← this file
 ```
 

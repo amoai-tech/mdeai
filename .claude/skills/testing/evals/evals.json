@@ -1,0 +1,29 @@
+{
+  "skill_name": "testing",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Fix a duplicate Stripe webhook processing bug.",
+      "expected_output": "Use RED → GREEN → REFACTOR: first prove replay/idempotency failure, then make the smallest fix and rerun targeted/adjacent proof.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Add a new pure price-normalization rule.",
+      "expected_output": "Choose the cheapest durable seam, confirm RED, implement minimal GREEN, refactor, and keep the test on observable behavior.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Which tests should I run for a small Next.js component change before push?",
+      "expected_output": "Select the cheapest reliable targeted test first, then escalate only as risk requires.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The Playwright auth flow is flaky. Help me interpret the failure and choose the next proof.",
+      "expected_output": "Treat the flake as a defect, inspect the browser/E2E seam, and avoid rerun-until-green behavior.",
+      "files": []
+    }
+  ]
+}
