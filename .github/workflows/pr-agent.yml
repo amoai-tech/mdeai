@@ -29,6 +29,8 @@ jobs:
     # cancelled at 10m13s and PR #81 failed at 4m28s on the same class of run.
     # Repeated re-runs "fix" it only by luck. Give the job room to finish instead.
     timeout-minutes: 25
+    outputs:
+      review_command: ${{ steps.review-mode.outputs.review_command }}
 
     steps:
       - name: Checkout trusted repository files for PR-Agent skills
@@ -95,6 +97,52 @@ jobs:
           grep -Fq "Base SHA: \`$BASE_SHA\`" .pr-agent/evidence.md
           grep -Fq "Head SHA: \`$HEAD_SHA\`" .pr-agent/evidence.md
 
+      - name: Select full or incremental review from certified base context
+        id: review-mode
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CHANGED_FILES_JSON: ${{ steps.changed-files.outputs.files }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const { pathToFileURL } = require("url");
+            const policyPath = `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`;
+            let selectReviewCommand;
+            if (fs.existsSync(policyPath)) {
+              ({ selectReviewCommand } = await import(pathToFileURL(policyPath).href));
+            } else {
+              const changedFiles = JSON.parse(process.env.CHANGED_FILES_JSON ?? "[]");
+              if (!changedFiles.includes("scripts/pr-agent/review-policy.mjs")) {
+                core.setFailed("trusted PR-Agent review policy missing from base branch");
+                return;
+              }
+              // Rollout bootstrap: after this PR merges the trusted-base module is used.
+              selectReviewCommand = ({ action, certificationBodies, baseSha }) => {
+                if (action !== "synchronize") return "/review";
+                const marker = `<!-- mde-pr-agent-cert base=${baseSha.toLowerCase()} head=`;
+                return certificationBodies.some((body) => (body ?? "").includes(marker))
+                  ? "/review -i"
+                  : "/review";
+              };
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const reviewCommand = selectReviewCommand({
+              action: context.payload.action,
+              certificationBodies: comments
+                .filter((comment) => comment.user?.login === "github-actions[bot]")
+                .map((comment) => comment.body ?? ""),
+              baseSha: context.payload.pull_request.base.sha,
+            });
+            core.info(`PR-Agent review command: ${reviewCommand}`);
+            core.setOutput("review_command", reviewCommand);
+            core.setOutput("push_commands", JSON.stringify([reviewCommand]));
+
       - name: Select trusted MDE review skills
         id: reviewer-skills
         shell: bash
@@ -146,7 +194,7 @@ jobs:
           github_action_config.auto_improve: "false"
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
           github_action_config.handle_push_trigger: "true"
-          github_action_config.push_commands: '["/review -i"]'
+          github_action_config.push_commands: ${{ steps.review-mode.outputs.push_commands }}
   verify-review-result:
     name: verify-review-result
     needs: review
@@ -154,52 +202,108 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require a fresh PR-Agent review result
+      - name: Checkout trusted PR-Agent verification policy
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Require a fresh base-aware PR-Agent review result
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REVIEW_COMMAND: ${{ needs.review.outputs.review_command }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require("fs");
+            const { pathToFileURL } = require("url");
+            const policyPath = `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`;
+            let verifyReviewResult;
+            let appendCertification;
+            const certHistoryMarker = "<!-- mde-pr-agent-cert-history -->";
+            if (fs.existsSync(policyPath)) {
+              ({ verifyReviewResult, appendCertification } = await import(pathToFileURL(policyPath).href));
+            } else {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner, repo: context.repo.repo, pull_number: context.issue.number, per_page: 100,
+              });
+              if (!files.some((file) => file.filename === "scripts/pr-agent/review-policy.mjs")) {
+                core.setFailed("trusted PR-Agent review policy missing from base branch");
+                return;
+              }
+              const sameBase = (body, baseSha) =>
+                (body ?? "").includes(`<!-- mde-pr-agent-cert base=${baseSha.toLowerCase()} head=`);
+              verifyReviewResult = ({ comments, startedAt, reviewCommand, baseSha }) => {
+                const marker = reviewCommand === "/review -i"
+                  ? "<!-- pr-agent:review:incremental -->"
+                  : "<!-- pr-agent:review:full -->";
+                const priorSameBase = comments.some((comment) =>
+                  comment.user?.login === "github-actions[bot]" &&
+                  new Date(comment.updated_at).getTime() < startedAt &&
+                  sameBase(comment.body, baseSha));
+                const ok = comments.some((comment) => {
+                  if (comment.user?.login !== "github-actions[bot]" ||
+                      new Date(comment.updated_at).getTime() < startedAt) return false;
+                  const body = comment.body ?? "";
+                  const canonical = body.includes(marker);
+                  const standalone = body.includes("## Standalone PR Review") &&
+                    body.includes("PR-Agent could not safely update the persistent review") &&
+                    body.includes("## MDE PR Review");
+                  const skipped = reviewCommand === "/review -i" && priorSameBase &&
+                    body.includes("Incremental Review Skipped") &&
+                    body.includes("No files were changed since the previous PR Review");
+                  return canonical || standalone || skipped;
+                });
+                return { ok };
+              };
+              appendCertification = (body, { baseSha, headSha }) => {
+                const marker = `<!-- mde-pr-agent-cert base=${baseSha.toLowerCase()} head=${headSha.toLowerCase()} -->`;
+                if ((body ?? "").includes(marker)) return body;
+                const prefix = (body ?? "").includes(certHistoryMarker)
+                  ? body.trimEnd()
+                  : `${certHistoryMarker}\nPR-Agent certified review contexts:`;
+                return `${prefix}\n${marker}\n`;
+              };
+            }
             const { data: run } = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
+              owner: context.repo.owner, repo: context.repo.repo, run_id: context.runId,
             });
-            const marker = context.payload.action === "synchronize"
-              ? "<!-- pr-agent:review:incremental -->"
-              : "<!-- pr-agent:review:full -->";
             const startedAt = new Date(run.run_started_at).getTime();
             const maxAttempts = 10;
-            let fresh = false;
-
-            for (let attempt = 1; attempt <= maxAttempts && !fresh; attempt += 1) {
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
+            let comments = [];
+            let result = { ok: false };
+            for (let attempt = 1; attempt <= maxAttempts && !result.ok; attempt += 1) {
+              comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, per_page: 100,
               });
-              fresh = comments.some((comment) => {
-                const body = comment.body ?? "";
-                const canonical = body.includes(marker);
-                const standalone =
-                  body.includes("## Standalone PR Review") &&
-                  body.includes("PR-Agent could not safely update the persistent review") &&
-                  body.includes("## MDE PR Review");
-                const noDiffIncremental =
-                  body.includes("Incremental Review Skipped") &&
-                  body.includes("No files were changed since the");
-                return (
-                  comment.user?.login === "github-actions[bot]" &&
-                  (canonical || standalone || noDiffIncremental) &&
-                  new Date(comment.updated_at).getTime() >= startedAt
-                );
+              result = verifyReviewResult({
+                comments,
+                startedAt,
+                reviewCommand: process.env.REVIEW_COMMAND || "/review",
+                baseSha: context.payload.pull_request.base.sha,
               });
-              if (!fresh && attempt < maxAttempts) {
+              if (!result.ok && attempt < maxAttempts) {
                 core.info(`PR-Agent review not visible yet; retrying (${attempt}/${maxAttempts})`);
                 await new Promise((resolve) => setTimeout(resolve, 10000));
               }
             }
-
-            if (!fresh) {
-              core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
+            if (!result.ok) {
+              core.setFailed("PR-Agent did not publish a fresh review valid for the current base context");
+              return;
+            }
+            const existing = comments.find((comment) =>
+              comment.user?.login === "github-actions[bot]" && (comment.body ?? "").includes(certHistoryMarker));
+            const body = appendCertification(existing?.body ?? "", {
+              baseSha: context.payload.pull_request.base.sha,
+              headSha: context.payload.pull_request.head.sha,
+            });
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body,
+              });
+            }
             }
