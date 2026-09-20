@@ -161,29 +161,39 @@ jobs:
             const marker = context.payload.action === "synchronize"
               ? "<!-- pr-agent:review:incremental -->"
               : "<!-- pr-agent:review:full -->";
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
             const startedAt = new Date(run.run_started_at).getTime();
-            const fresh = comments.some((comment) => {
-              const body = comment.body ?? "";
-              const canonical = body.includes(marker);
-              const standalone =
-                body.includes("## Standalone PR Review") &&
-                body.includes("PR-Agent could not safely update the persistent review") &&
-                body.includes("## MDE PR Review");
-              const noDiffIncremental =
-                body.includes("Incremental Review Skipped") &&
-                body.includes("No files were changed since the");
-              return (
-                comment.user?.login === "github-actions[bot]" &&
-                (canonical || standalone || noDiffIncremental) &&
-                new Date(comment.updated_at).getTime() >= startedAt
-              );
-            });
+            const maxAttempts = 10;
+            let fresh = false;
+
+            for (let attempt = 1; attempt <= maxAttempts && !fresh; attempt += 1) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+              fresh = comments.some((comment) => {
+                const body = comment.body ?? "";
+                const canonical = body.includes(marker);
+                const standalone =
+                  body.includes("## Standalone PR Review") &&
+                  body.includes("PR-Agent could not safely update the persistent review") &&
+                  body.includes("## MDE PR Review");
+                const noDiffIncremental =
+                  body.includes("Incremental Review Skipped") &&
+                  body.includes("No files were changed since the");
+                return (
+                  comment.user?.login === "github-actions[bot]" &&
+                  (canonical || standalone || noDiffIncremental) &&
+                  new Date(comment.updated_at).getTime() >= startedAt
+                );
+              });
+              if (!fresh && attempt < maxAttempts) {
+                core.info(`PR-Agent review not visible yet; retrying (${attempt}/${maxAttempts})`);
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+              }
+            }
+
             if (!fresh) {
               core.setFailed("PR-Agent did not publish a fresh review for this workflow run");
             }
