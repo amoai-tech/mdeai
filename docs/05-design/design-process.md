@@ -8,7 +8,7 @@ related:
   - ./concierge-os-direction.md      # IA / product framing (light-luxury) + §7 component map
   - ../README.md                     # per-page improvement pack (cafes/restaurants/nightlife)
   - ../wireframe/home-wireframe.html  # the home wireframe — proof the "wireframe carries the component map" model works
-sources: user process paste 2026-06-04 · mdeapp/src/app/globals.css :root · DESIGN.MD · LESSONS.md
+sources: user process paste 2026-06-04 · src/app/globals.css :root · DESIGN.MD · LESSONS.md
 ---
 
 # MDE Design Process — Best-Practice Plan

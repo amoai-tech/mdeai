@@ -137,7 +137,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (123 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog.
+This table lists **every active documentation file currently under `docs/`** on `main` (123 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
 
 | Area | Document | Type | Status |
 |---|---|---|---|

@@ -9,7 +9,7 @@ related:
   - ../README.md                     # design improvement pack (cafes/restaurants/nightlife)
   - ../wireframe/home-wireframe.html  # annotated home wireframe (visual companion)
   - ../wireframe/01-marketing.md      # ASCII home wireframe
-sources: user vision paste 2026-06-04 · mdeapp/src/app/globals.css :root · CLAUDE.md hard rules
+sources: user vision paste 2026-06-04 · src/app/globals.css :root · CLAUDE.md hard rules
 ---
 
 # MDE Design Direction — The Medellín AI Concierge OS

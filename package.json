@@ -92,7 +92,7 @@
     "test:lib": "vitest run src/lib/",
     "test:hooks": "vitest run src/hooks/",
     "test:api": "vitest run src/app/api/",
-    "check:docs": "node scripts/check-docs.mjs"
+    "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@ag-ui/client": "0.0.52",
