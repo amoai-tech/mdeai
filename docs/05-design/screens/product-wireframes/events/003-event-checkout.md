@@ -1,153 +1,105 @@
+---
+title: Event Checkout
+description: Current MDE event ticket checkout architecture, user journey, recovery behavior, and implementation references.
+status: current
+updated: 2026-09-20
+source_of_truth: current code and tests
+---
+
 # Event Checkout
-> Route: `/events/[slug]/checkout`  
-> User: Consumer  
+
+> Route: `/events/[slug]`
+> User: Consumer
 > Phase: Core · P0
 
----
+The current checkout is **not** a standalone `/events/[slug]/checkout` page and MDE does **not** collect card numbers itself. Ticket selection opens an in-app checkout modal, the server creates a checkout session through Supabase, and the browser is redirected to Stripe-hosted payment.
 
-## Page Goal
-Streamlined 2-step checkout: ticket selection → payment. AI pre-fills whatever it knows (quantity from prior chat, payment method from profile). HITL approval card shows full summary before charge.
+## Contents
 
----
+- [Page goal](#page-goal)
+- [Current user journey](#current-user-journey)
+- [Architecture](#architecture)
+- [UI contract](#ui-contract)
+- [Retry and failure behavior](#retry-and-failure-behavior)
+- [Security and payment boundary](#security-and-payment-boundary)
+- [Source of truth](#source-of-truth)
+- [Verification](#verification)
 
-## Desktop Wireframe
+## Page goal
 
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│  ▣ mdeai  ← Jazz Night at Casa Bali                              🔔           │
-├─────────────────┬──────────────────────────────────────┬───────────────────────┤
-│  LEFT 280px     │  CENTER                              │  RIGHT 360px          │
-│  STEP PROGRESS  │                                      │                       │
-│                 │  STEP 2 OF 2 — Payment               │  ┌─────────────────┐  │
-│  [●]─────[●]   │  ─────────────────────────────────   │  │  Order Summary  │  │
-│  Tickets Payment│                                      │  │  ─────────────  │  │
-│                 │  ┌──────────────────────────────┐   │  │  Jazz Night     │  │
-│  ─────────────  │  │  ✅ 2× GA — confirmed         │   │  │  Fri Jan 10    │  │
-│  Order Summary  │  └──────────────────────────────┘   │  │                 │  │
-│  Jazz Night     │                                      │  │  2× GA  $25    │  │
-│  Fri Jan 10     │  ┌──────────────────────────────┐   │  │  Subtotal  $50  │  │
-│  2× GA  $50     │  │  Card Number                  │   │  │  Fees      $3   │  │
-│  Fees    $3     │  │  [●●●● ●●●● ●●●● ____]        │   │  │  Total    $53   │  │
-│  ─────────────  │  │                               │   │  │  ─────────────  │  │
-│  Secure         │  │  Expiry        CVC            │   │  │  🔒 Stripe      │  │
-│  🔒 Stripe      │  │  [MM/YY]       [●●●]          │   │  │  secure payment │  │
-│                 │  │                               │   │  └─────────────────┘  │
-│                 │  │  Name on card                 │   │                       │
-│                 │  │  [Camila González_____________]│   │  ┌─────────────────┐  │
-│                 │  │                               │   │  │  ⚡ AI           │  │
-│                 │  │  Email                        │   │  │  "Ticket will   │  │
-│                 │  │  [camila@email.com____________]│   │  │  be in your     │  │
-│                 │  │                               │   │  │  wallet after   │  │
-│                 │  │  [Pay $53 — Book Tickets]     │   │  │  payment"       │  │
-│                 │  └──────────────────────────────┘   │  └─────────────────┘  │
-│                 │                                      │                       │
-│                 │  ┌──────────────────────────────┐   │                       │
-│                 │  │  💬 Questions before booking? │   │                       │
-│                 │  └──────────────────────────────┘   │                       │
-└─────────────────┴──────────────────────────────────────┴───────────────────────┘
-```
+Let a consumer choose an available event ticket tier and quantity, confirm buyer identity, then continue to Stripe for payment without MDE handling raw payment-card data.
 
----
+## Current user journey
 
-## HITL Approval State (fires before Stripe charge)
+1. User opens `/events/[slug]`.
+2. User chooses a ticket tier and quantity in `EventTicketTiers`.
+3. **Buy tickets** opens `BookingCheckoutModal` on the same event page.
+4. User enters full name and email and sees the tier, quantity, and total.
+5. Submit calls `/api/tickets/checkout` with a stable idempotency key.
+6. The API delegates checkout creation to the Supabase `ticket-checkout` Edge Function.
+7. Browser redirects to the Stripe-hosted checkout URL returned by the API.
+8. After payment, the event page reads the checkout result and the ticket/wallet flow can continue.
 
-```
-┌──────────────────────────────────────────┐
-│  🤖 Confirm your booking                 │
-│                                          │
-│  Event:   Jazz Night at Casa Bali        │
-│  Date:    Friday Jan 10, 9pm–1am         │
-│  Tickets: 2× General Admission           │
-│  Total:   $53 (incl. fees)               │
-│                                          │
-│  Payment: Visa ending 4242               │
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐  │
-│  │  ✅ Confirm    │  │  ✕ Cancel      │  │
-│  └────────────────┘  └────────────────┘  │
-└──────────────────────────────────────────┘
-```
-
----
-
-## Confirmation State
-
-```
-┌──────────────────────────────────────────┐
-│                                          │
-│         ✅ You're going!                 │
-│                                          │
-│   Jazz Night at Casa Bali               │
-│   Friday Jan 10 · 9pm–1am               │
-│                                          │
-│   [QR CODE]                             │
-│   Booking #JN-2025-0089                 │
-│                                          │
-│   Added to calendar ✓                   │
-│   Tickets in wallet ✓                   │
-│                                          │
-│   [View My Tickets]  [Share Event]      │
-│                                          │
-│   🤖 "Oci.Mde is 200m away — book       │
-│   a dinner table before the show?"      │
-│                                          │
-└──────────────────────────────────────────┘
-```
-
----
-
-## Components
-- `StepProgress` — 2-step indicator (Tickets → Payment)
-- `TicketSummary` — read-only confirmation of selection
-- `StripeCardElement` — embedded Stripe card input
-- `OrderSummary` — line items + fees + total (right panel)
-- `HITLBookingCard` — `renderAndWaitForResponse` approval before charge
-- `ConfirmationCard` — QR code + booking ID + next actions
-- `PostBookingAI` — agent cross-sell after confirmation
-
----
-
-## Data Sources
-| Data | Source |
-|---|---|
-| Ticket tiers + prices | Supabase `ticket_tiers` |
-| Stripe payment intent | Stripe `checkout.session.create` |
-| Booking record | Supabase `bookings` + `tickets` |
-| Idempotency key | UUID generated client-side |
-
----
-
-## Stripe Flow
+## Architecture
 
 ```mermaid
-sequenceDiagram
-    actor User
-    participant UI as Checkout UI
-    participant HITL as HITL Card
-    participant API as /api/bookings
-    participant STR as Stripe
-    participant SB as Supabase
-
-    User->>UI: Fills card details → clicks Pay
-    UI->>HITL: renderAndWaitForResponse(BookingConfirmCard)
-    HITL-->>User: Summary card shown
-    User->>HITL: Confirm
-    HITL-->>API: POST create_booking_intent
-    API->>STR: paymentIntent.create(amount=5300, idempotency_key)
-    STR-->>API: client_secret
-    API->>UI: Return client_secret
-    UI->>STR: stripe.confirmCardPayment(client_secret)
-    STR-->>UI: payment succeeded
-    UI->>API: POST confirm_booking(payment_intent_id)
-    API->>SB: INSERT bookings + tickets
-    SB-->>API: booking_id created
-    API-->>UI: Confirmation card data
-    UI-->>User: ✅ Confirmation card + QR
+flowchart LR
+    A[Event detail /events/slug] --> B[Ticket tier + quantity]
+    B --> C[BookingCheckoutModal]
+    C --> D[/api/tickets/checkout]
+    D --> E[Supabase ticket-checkout Edge Function]
+    E --> F[Stripe checkout session]
+    F --> G[Stripe-hosted payment]
+    G --> H[Return to MDE + checkout result]
 ```
 
----
+## UI contract
 
-## Error States
-- Card declined: "Payment failed — please check your card details"
-- Sold out after HITL: "Sorry, these tickets just sold out. Join waitlist?"
-- Session expired: "Your session expired — restart checkout"
+The modal shows only information MDE owns:
+
+- event name;
+- selected ticket tier;
+- quantity;
+- calculated total;
+- buyer full name;
+- buyer email;
+- retry/error state;
+- **Pay with Stripe** action.
+
+Do **not** add card-number, expiry, or CVC inputs to MDE unless the payment architecture is deliberately changed and re-reviewed. Current UI explicitly states that payment is not processed in the browser.
+
+## Retry and failure behavior
+
+`BookingCheckoutModal` creates one `crypto.randomUUID()` idempotency key per checkout target and reuses it across retries. Recoverable network/API failures may show **Try again**; the retry must not create an unintended duplicate payment attempt.
+
+The UI classifies checkout errors and hides the retry action for non-retryable failures.
+
+## Security and payment boundary
+
+- Raw payment-card entry belongs to Stripe-hosted checkout.
+- MDE sends buyer/ticket/order intent, not card credentials.
+- `/api/tickets/checkout` is the server boundary before the Supabase Edge Function.
+- Stripe webhook processing remains server-side in `ticket-payment-webhook`.
+- Checkout and webhook behavior must preserve idempotency and signature/authentication checks.
+
+## Source of truth
+
+Current implementation:
+
+- `src/app/events/[slug]/page.tsx`
+- `src/components/events/event-ticket-tiers.tsx`
+- `src/components/modals/booking-checkout-modal.tsx`
+- `src/lib/tickets/submit-ticket-checkout.ts`
+- `src/app/api/tickets/checkout/route.ts`
+- `supabase/functions/ticket-checkout/`
+- `supabase/functions/ticket-payment-webhook/`
+
+Current tests include:
+
+- `e2e/screens/SCREEN-009-checkout.spec.ts`
+- `e2e/san-715-checkout-states.spec.ts`
+- `e2e/prod-journey-j05-j20.spec.ts`
+
+## Verification
+
+Before changing this document, verify the current code path above. If checkout architecture changes, update this document in the same PR and run the relevant checkout/E2E tests plus the repository documentation check.

@@ -1,10 +1,31 @@
+---
+title: Localhost QA runbook — MDE AI
+description: Local verification steps for Maps, grounding, UI, and E2E checks from the current repository root.
+status: current
+updated: 2026-09-20
+source_of_truth: current repository code and tests
+---
+
 # Localhost QA runbook — mdeai
 
 Quick verification after Maps env or grounding changes. **Persona:** Sofía (QA) + Camila (rentals/chat).
 
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [0. Always start here (common mistake)](#0-always-start-here-common-mistake)
+- [1. Start services (max 2 processes)](#1-start-services-max-2-processes)
+- [2. Automated gate (copy-paste)](#2-automated-gate-copy-paste)
+- [3. Browser manual checks](#3-browser-manual-checks)
+- [4. Sidecar-only grounding probe](#4-sidecar-only-grounding-probe)
+- [5. MAP-002 “Done” checklist (do not skip)](#5-map-002-done-checklist-do-not-skip)
+- [6. Troubleshooting](#6-troubleshooting)
+- [7. Report template](#7-report-template)
+
 ## Prerequisites
 
-- Repo: `/home/sk/mdeai/mdeapp`
+- Repo: `/home/sk/mdeai`
 - `.env.local` has **two** Google keys:
   - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — browser (HTTP referrer: `http://localhost:3001/*`)
   - `GOOGLE_MAPS_SERVER_API_KEY` — sidecar only (IP or unrestricted, **not** referrer)
@@ -13,15 +34,15 @@ Quick verification after Maps env or grounding changes. **Persona:** Sofía (QA)
 
 ## 0. Always start here (common mistake)
 
-**App lives at `/home/sk/mdeai/mdeapp`** — not `~/mdeapp` and not `~`.
+**Canonical checkout root:** resolve the current Git repository root dynamically. On this machine it is `/home/sk/mdeai`; do not assume an obsolete `mdeapp/` subdirectory.
 
 ```bash
-cd /home/sk/mdeai/mdeapp
-pwd   # must print /home/sk/mdeai/mdeapp
+cd /home/sk/mdeai
+pwd   # must print /home/sk/mdeai
 npm run   # must list smoke:map-pins, floor, test:e2e:screens
 ```
 
-From `~`, `cd mdeapp` fails and `npm run smoke:*` / Playwright will error.
+Run repository scripts from the Git checkout root; invoking them from an unrelated directory can resolve the wrong package or fail.
 
 ## 1. Start services (max 2 processes)
 
@@ -33,7 +54,7 @@ curl -s -o /dev/null -w "UI: %{http_code}\n" http://localhost:3001/
 
 | If | Then |
 |----|------|
-| UI ≠ 200 | `cd /home/sk/mdeai/mdeapp && npm run dev` |
+| UI ≠ 200 | `cd /home/sk/mdeai && npm run dev` |
 | UI = 200 | Skip — dev already running |
 
 ```bash
@@ -49,7 +70,7 @@ Mastra Studio (optional): http://localhost:4111 — should return 200 when agent
 ## 2. Automated gate (copy-paste)
 
 ```bash
-cd /home/sk/mdeai/mdeapp
+cd /home/sk/mdeai
 
 npm test
 npm run lint

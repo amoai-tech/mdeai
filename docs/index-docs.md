@@ -9,6 +9,18 @@ source_of_truth: Linear for live work; merged main for shipped code; src/app for
 
 This is the canonical navigation index for active MDE AI documentation on `main`.
 
+## Contents
+
+- [Source-of-truth rules](#source-of-truth-rules)
+- [Start here](#start-here)
+- [Canonical documentation architecture](#canonical-documentation-architecture)
+- [Current canonical areas](#current-canonical-areas)
+- [Complete active documentation catalog](#complete-active-documentation-catalog)
+- [Legacy migration status](#legacy-migration-status)
+- [Stale-content rules](#stale-content-rules)
+- [Documentation decision rules](#documentation-decision-rules)
+- [Cleanup progress](#cleanup-progress)
+
 ## Source-of-truth rules
 
 1. Linear MDE AI owns live task status, priority, and execution order.
@@ -125,7 +137,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (125 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog.
+This table lists **every active documentation file currently under `docs/`** on `main` (123 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog.
 
 | Area | Document | Type | Status |
 |---|---|---|---|
@@ -250,8 +262,6 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Strategy | [`08-strategy/subscription-plans.md`](08-strategy/subscription-plans.md) | Markdown | Current |
 | Root | [`README.md`](README.md) | Markdown | Current |
 | Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |
-| Active plans/specs | [`superpowers/plans/2026-09-19-san-1332-pr-agent-evidence.md`](superpowers/plans/2026-09-19-san-1332-pr-agent-evidence.md) | Markdown | Active task-specific plan/spec |
-| Active plans/specs | [`superpowers/specs/2026-09-19-san-1332-pr-agent-evidence-design.md`](superpowers/specs/2026-09-19-san-1332-pr-agent-evidence-design.md) | Markdown | Active task-specific plan/spec |
 | Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current convention/index |
 | Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current convention/index |
 
