@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16.3.5, Node 24.21.0, Playwright 1.60.x, Vitest 4, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-20-san-1341-playwright-architecture-design.md`
+**Spec:** `docs/06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md`
 
 ## Global Constraints
 - No dependency downgrade.

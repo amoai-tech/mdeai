@@ -37,7 +37,6 @@ Stack skills:
 - `stripe`
 - `nextjs`
 - `cloudinary`
-- `mde-vercel`
 
 Domain skills:
 - `events`

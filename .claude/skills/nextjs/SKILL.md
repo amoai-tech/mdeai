@@ -1,34 +1,33 @@
 ---
 name: nextjs
 description: >-
-  Use when MDE work changes Next.js App Router pages, layouts, route handlers, server/client boundaries, caching, metadata, middleware, or Next.js build/runtime behavior.
+  Own MDE Next.js and Vercel application-platform work. Use this skill whenever a task changes or diagnoses Next.js App Router pages, layouts, route handlers, Server/Client Component boundaries, Async Request APIs, caching/revalidation, metadata, proxy/middleware behavior, RSC/streaming, bundle or Core Web Vitals performance, or Vercel preview/production deployment, environment, domain, rollback, or runtime configuration. For PR/diff review, root-cause debugging, test strategy, or final production-readiness proof, keep the workflow owner (`code-review`, `systematic-debugging`, `testing`, or `task-verifier`) and load the relevant Next.js reference from this skill.
 ---
 
 # Next.js
 
-Own Next.js framework behavior for the MDE application. Resolve the exact installed version from `package.json`; do not hardcode it here.
+Own the MDE application framework and its Vercel deployment surface. Resolve the exact installed Next.js version from `package.json`; do not rely on remembered versions.
 
-## Source order
+## Load only what the task needs
 
-1. Inspect the installed version, existing app pattern, and relevant source file.
-2. Use current official Next.js documentation for version-sensitive APIs.
-3. Prefer established MDE patterns over introducing a second framework convention.
+| Intent | Read |
+|---|---|
+| App Router, request APIs, server/client boundaries | `references/app-router.md` |
+| Caching, revalidation, user-scoped data | `references/caching.md` |
+| React/Next.js performance, bundles, RSC, streaming | `references/performance.md` |
+| Vercel preview/production, env, domains, rollback | `references/vercel.md` |
+| Reviewing a Next.js/Vercel diff | `references/review.md` with `code-review` |
 
-## MDE invariants
+## Core workflow
 
-- Keep server-only secrets and privileged clients out of client components.
-- Make `use client` boundaries intentional and as narrow as practical.
-- Route handlers must authenticate/authorize before privileged writes.
-- Treat caching/revalidation as observable behavior, not an implementation detail.
-- Do not add middleware, rewrites, or dynamic rendering merely to work around an unrelated bug.
+1. Inspect `package.json`, the changed files, and the nearest working MDE pattern.
+2. Classify the work and load only the matching reference above.
+3. Verify version-sensitive behavior against current official Next.js/Vercel documentation when needed.
+4. Make the smallest coherent change and use `testing` for the cheapest reliable proof.
 
-## Workflow
+## Boundaries
 
-1. Classify the change: page/layout, route handler, rendering boundary, cache, build, or deployment behavior.
-2. Inspect the nearest working pattern in `src/app`.
-3. Verify version-sensitive framework behavior.
-4. Make the smallest change and run targeted type/lint/test/build proof as appropriate.
-
-## Handoff
-
-Use domain skills for product behavior, `supabase` for data authorization, `mde-vercel` only for Vercel-specific deployment behavior, and `systematic-debugging` when root cause is unknown.
+- Use `supabase` for authorization and database policy.
+- Use `systematic-debugging` when the failing subsystem is unknown.
+- Use `code-review` for an existing PR/diff; this skill supplies domain invariants, not the review workflow.
+- Use `task-verifier` for exact-head merge safety or production Done proof.

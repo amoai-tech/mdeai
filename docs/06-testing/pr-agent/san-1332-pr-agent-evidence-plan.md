@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node 24, GitHub Actions, PR-Agent v0.45.0, Vitest, TOML/YAML configuration.
 
-**Spec:** `docs/superpowers/specs/2026-09-19-san-1332-pr-agent-evidence-design.md`
+**Spec:** `docs/06-testing/pr-agent/san-1332-pr-agent-evidence-design.md`
 
 ## Global Constraints
 - Trusted base controls reviewer code/policy/skills.

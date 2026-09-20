@@ -41,10 +41,8 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `maps-review` | 90 | KEEP + IMPROVE | Add API-key/cost/grounding review evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
 | `mastra-review` | 92 | KEEP + IMPROVE | Add tenant/HITL/persistence review evals |
-| `mde-vercel` | 78 | IMPROVE / NARROW | Own Vercel deployment/platform only; remove Next.js-performance overlap |
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
-| `nextjs` | 94 | KEEP | Keep framework ownership separate from Vercel deployment |
-| `nextjs-review` | 90 | KEEP + IMPROVE | Add server/client, cache, auth-boundary evals |
+| `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/Vercel domain owner; review/deploy/performance detail uses progressive-disclosure references |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
 | `research` | 95 | KEEP | Maintain primary-source/evidence discipline |
@@ -60,24 +58,24 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `wireframe` | 91 | KEEP + IMPROVE | Add responsive/AI-HITL design evals |
 | `writing-skills` | 94 | KEEP | Keep aligned with Anthropic eval/benchmark workflow |
 
-**Overall audit score: 92.2/100.**
+**Overall audit score: 92.9/100.**
 
 ## Remove / consolidate decisions
 
 | Candidate | Decision | Reason |
 |---|---|---|
 | `_template` | Remove from active discovery, keep template content | A template should not compete for triggering as a real skill |
-| `mde-vercel` + `nextjs` | Do not merge | Narrow `mde-vercel` to Vercel platform/deploy; keep `nextjs` framework-specific |
+| former `mde-vercel` + former `nextjs-review` + `nextjs` | Consolidated | `nextjs` is the single domain owner; Vercel, performance, and review invariants load from `nextjs/references/` |
 | `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
 | `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
-| specialist `*-review` skills | Do not merge | They keep PR review context small and domain-specific |
+| remaining specialist `*-review` skills | Review individually | Keep only where domain-specific invariants justify a top-level owner; Next.js review is now a `nextjs` reference |
 ## Task 1 · Highest-priority actions
 
 1. **Merge PR #107 first** — it removes the redundant lifecycle skills and makes this index accurate for the intended canonical tree.
 2. **Add skill-integrity CI** — fail when `.agents/skills` contains real files, symlinks break, a canonical skill lacks `SKILL.md`, frontmatter names mismatch, retired owners reappear, or stale repo paths return.
 3. **Add eval coverage to critical routers/owners** — `tasks`, `task-verifier`, `using-mde-skills`, `maps`, and specialist review skills should have realistic positive + near-miss cases.
-4. **Narrow `mde-vercel`** — deployment, environment, domains, releases, and Vercel runtime only. Route React/Next.js performance rules to `nextjs`.
+4. **Benchmark consolidated `nextjs`** — exercise framework, Vercel, performance, and review-reference trigger/collision cases.
 5. **Clarify `testing` ↔ `playwright-cli`** — `testing` selects the proof ladder; `playwright-cli` performs browser automation and Playwright-specific mechanics.
 6. **Move `_template` out of active discovery** — retain it as authoring infrastructure, not a triggerable skill.
 7. **Benchmark `real-estate`** — the duplicate has already been consolidated on current `main`; add realistic marketplace, MLS-near-miss, lead, and neighborhood evals.
