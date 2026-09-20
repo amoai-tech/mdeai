@@ -22,15 +22,16 @@ const DOMAIN_MATCHERS = {
   mastra: (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   copilotkit: (p) => /copilotkit|ag-ui/i.test(p),
   maps: (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
-  stripe: (p) => /stripe/i.test(p) || /checkout/i.test(p),
+  stripe: (p) => /stripe/i.test(p),
   ci: (p) => /^\.github\/workflows\//.test(p) || /^scripts\/(check|verify|smoke)-/i.test(p),
 };
 
 export function validateLockfile(lockfile, label = "lockfile") {
-  // MDE's committed package manager contract is npm package-lock v3. Unsupported
-  // formats intentionally fall back to advisory evidence in the workflow.
-  if (lockfile?.lockfileVersion !== 3 || !lockfile.packages || typeof lockfile.packages !== "object") {
-    throw new Error(`${label} must be npm package-lock v3 with a packages map`);
+  // npm lockfiles with a packages map (v2+) expose the exact package records this
+  // builder needs. Legacy/structurally different formats fall back to advisory evidence.
+  const version = lockfile?.lockfileVersion;
+  if (!Number.isInteger(version) || version < 2 || !lockfile.packages || typeof lockfile.packages !== "object") {
+    throw new Error(`${label} must be npm package-lock with a packages map`);
   }
 }
 

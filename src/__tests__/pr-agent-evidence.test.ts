@@ -83,19 +83,36 @@ describe("SAN-1332 PR-Agent evidence builder", () => {
     expect(result.markdown).toContain("`@supabase/supabase-js`: 2.106.1 → 2.106.1");
   });
 
-  it("rejects unsupported lockfile formats explicitly", async () => {
+  it("accepts npm lockfiles with a packages map across modern lockfile versions", async () => {
+    const { buildEvidence } = await loadBuilder();
+    for (const lockfileVersion of [2, 3, 4]) {
+      const modern = { ...lock({ "next": "16.3.5", "@supabase/supabase-js": "2.106.1" }), lockfileVersion };
+      expect(() => buildEvidence({
+        baseSha: "base123", headSha: "head456", changedFiles: ["src/proxy.ts"],
+        baseLock: modern, headLock: modern,
+      })).not.toThrow();
+    }
+  });
+
+  it("rejects legacy or structurally unsupported lockfiles", async () => {
     const { buildEvidence } = await loadBuilder();
     expect(() => buildEvidence({
       baseSha: "base123", headSha: "head456", changedFiles: ["src/proxy.ts"],
-      baseLock: { lockfileVersion: 2, packages: {} },
+      baseLock: { lockfileVersion: 1, dependencies: {} },
       headLock: lock({ "next": "16.3.5" }),
-    })).toThrow("npm package-lock v3");
+    })).toThrow("npm package-lock with a packages map");
   });
 
   it("handles empty and unusual filenames without inventing domains", async () => {
     const { detectDomains } = await loadBuilder();
     expect(detectDomains([])).toEqual([]);
     expect(detectDomains(["docs/[odd] file → notes.md"])).toEqual([]);
+  });
+
+  it("does not route generic checkout files to Stripe review", async () => {
+    const { detectDomains } = await loadBuilder();
+    expect(detectDomains(["src/app/checkout/page.tsx"])).toEqual(["nextjs"]);
+    expect(detectDomains(["src/lib/stripe-webhook.ts"])).toEqual(["stripe"]);
   });
 
   it("does not claim verified version evidence for package-less Stripe review", async () => {
