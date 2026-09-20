@@ -5,15 +5,16 @@ One page to find the current Real Estate docs, Linear plans/tasks, reference rep
 ## Table of contents
 
 1. [Start here](#1--start-here)
-2. [Canonical GitHub docs](#2--canonical-github-docs)
-3. [Linear planning and task views](#3--linear-planning-and-task-views)
-4. [Core/MVP task map](#4--coremvp-task-map)
-5. [Shared platform docs](#5--shared-platform-docs)
-6. [Reference repos and local clones](#6--reference-repos-and-local-clones)
-7. [Docs to create next](#7--docs-to-create-next)
-8. [Strategy and advanced work](#8--strategy-and-advanced-work)
-9. [Source-of-truth rules](#9--source-of-truth-rules)
-10. [How to keep this index current](#10--how-to-keep-this-index-current)
+2. [Product areas and documentation plan](#2--product-areas-and-documentation-plan)
+3. [Canonical GitHub docs](#3--canonical-github-docs)
+4. [Linear planning and task views](#4--linear-planning-and-task-views)
+5. [Core/MVP task map](#5--coremvp-task-map)
+6. [Shared platform docs](#6--shared-platform-docs)
+7. [Reference repos and local clones](#7--reference-repos-and-local-clones)
+8. [Docs to create next](#8--docs-to-create-next)
+9. [Strategy and advanced work](#9--strategy-and-advanced-work)
+10. [Source-of-truth rules](#10--source-of-truth-rules)
+11. [How to keep this index current](#11--how-to-keep-this-index-current)
 
 ## 1 · Start here
 
@@ -58,7 +59,33 @@ Do not make this journey depend on MCP, A2A, browser agents, deep research, obse
 
 This is a summary only. Linear remains the live source for implementation task status.
 
-## 2 · Canonical GitHub docs
+
+## 2 · Product areas and documentation plan
+
+This is the durable documentation map for the Real Estate product. One product area can have multiple Linear tasks, but should have one clear documentation home. The percentages below measure documentation completion, not implementation completion.
+
+| Status | % Complete | Product area | Current documentation | Planned doc | What it will own |
+|---|---:|---|---|---|---|
+| 🟢 | 100% | Product overview + Core/MVP journey | [`RENTALS.md`](./RENTALS.md) | — | Scope, personas, journeys, architecture, blockers, success criteria |
+| 🔵 | 0% | Search + discovery | Covered inside `RENTALS.md` | `SEARCH.md` | Hard filters, SQL eligibility, ranking, availability/date rules, degraded search behavior |
+| 🔵 | 0% | Listings + detail | Covered inside `RENTALS.md` | `LISTINGS.md` | Listing contract, detail view, inventory quality, canonical listing truth |
+| 🔵 | 0% | Maps + location | Covered inside `RENTALS.md` | `MAPS.md` | Card ↔ pin sync, bounds, selection state, PostGIS/location behavior |
+| 🔵 | 0% | Viewing + lead conversion | Covered inside `RENTALS.md` | `VIEWINGS-LEADS.md` | Approval, atomic write, truthful confirmation, lead/showing lifecycle |
+| 🔵 | 0% | Broker / host workspace | Covered inside `RENTALS.md` | `BROKER-WORKSPACE.md` | Broker visibility, owned listings, leads, showings, follow-up workflow |
+| 🔵 | 0% | Ownership + RLS + data boundaries | Partial in `RENTALS.md` | `DATA-BOUNDARIES.md` | Renter/broker/admin/AI visibility, ownership model, RLS contracts |
+| 🔵 | 0% | Testing + production certification | Scattered tests + Linear tasks | `TEST-PLAN.md` | J-RE-* journey matrix, API/DB/RLS/Playwright/prod smoke proof |
+| 🔵 | 0% | Operations + recovery | Failure states in `RENTALS.md` | `OPERATIONS-RUNBOOK.md` | Production diagnosis, degraded modes, recovery, support checks |
+| 🔵 | 0% | Migration / cutover | Not required currently | `MIGRATION-PLAN.md` | Only created if a real schema/data cutover is required |
+| 🔵 | 0% | Advanced intelligence | Linear advanced backlog | No dedicated doc yet | Neighborhood research, market intelligence, recommendations after Core/MVP proof |
+| 🟢 | 100% | AI runtime / agent platform | Shared platform docs | No rental duplicate | CopilotKit/Mastra runtime, storage, memory, HITL, agent/tool standards stay platform-owned |
+
+### Recommended creation order
+
+`TEST-PLAN.md` → `DATA-BOUNDARIES.md` → `SEARCH.md` → `VIEWINGS-LEADS.md` → `BROKER-WORKSPACE.md` → `LISTINGS.md` → `MAPS.md` → `OPERATIONS-RUNBOOK.md`
+
+Do not create every document at once. Create each when its related implementation work starts or when `RENTALS.md` becomes too broad to remain the clear source of truth.
+
+## 3 · Canonical GitHub docs
 
 | Status | % Complete | Document | Purpose | Next |
 |---|---:|---|---|---|
@@ -74,7 +101,7 @@ https://github.com/amoai-tech/mdeai/tree/main/docs
 Rentals folder on `main` after merge:
 https://github.com/amoai-tech/mdeai/tree/main/docs/04-domains/rentals
 
-## 3 · Linear planning and task views
+## 4 · Linear planning and task views
 
 ### Main navigation
 
@@ -104,7 +131,7 @@ https://github.com/amoai-tech/mdeai/tree/main/docs/04-domains/rentals
 - SAN-1278 domain docs: https://linear.app/amo100/issue/SAN-1278/task-47-mde-docs-domains-001-rewrite-current-domain-documentation
 - SAN-1280 docs drift prevention: https://linear.app/amo100/issue/SAN-1280/task-49-mde-docs-drift-001-add-documentation-validation-and-drift
 
-## 4 · Core/MVP task map
+## 5 · Core/MVP task map
 
 Use Linear for live status. These percentages are a simple planning snapshot for this index; update them when the underlying Linear task meaningfully changes.
 
@@ -129,7 +156,7 @@ Use Linear for live status. These percentages are a simple planning snapshot for
 | 🟡 | 70% | AI/data isolation | [SAN-547](https://linear.app/amo100/issue/SAN-547/san-547-keep-each-users-ai-tools-and-supabase-data-isolated) | User/thread/tool data stays isolated |
 | 🟡 | 70% | AI safety | [SAN-1054](https://linear.app/amo100/issue/SAN-1054/san-1054-prove-rental-ai-cannot-leak-prompts-data-or-perform) | Rental AI cannot leak or perform unauthorized actions |
 
-## 5 · Shared platform docs
+## 6 · Shared platform docs
 
 Do not duplicate these inside rentals. Link to them.
 
@@ -146,7 +173,7 @@ Platform tasks that can affect Rentals:
 - Mastra storage certification: https://linear.app/amo100/issue/SAN-1311/task-5410-mde-mastra-storage-cert-001-certify-mastra-storage-for
 - Chat memory durability: https://linear.app/amo100/issue/SAN-548/san-548-prove-chat-memory-survives-a-vercel-restart
 
-## 6 · Reference repos and local clones
+## 7 · Reference repos and local clones
 
 ### Local clone cache
 
@@ -179,16 +206,21 @@ Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) 
 
 When adapting code, record the exact local clone commit/tag and license. A local path is convenient evidence; it is not an implementation authority by itself.
 
-## 7 · Docs to create next
+## 8 · Docs to create next
 
 Keep this small. Do not create a document just because a topic exists.
 
-| Status | % Complete | Proposed doc | Create when | Purpose | Priority |
-|---|---:|---|---|---|---|
-| 🔵 | 0% | `TEST-PLAN.md` | Before SAN-1205 / SAN-483 certification work | One durable J-RE-* test matrix covering browser, API, DB, RLS, failures, and production smoke | **Next** |
-| 🔵 | 0% | `DATA-BOUNDARIES.md` | While SAN-1104 / SAN-1105 / SAN-1349 are being completed | Canonical ownership/RLS/data visibility contract for renter, broker, admin and AI tools | **Next after ownership work starts** |
-| 🔵 | 0% | `MIGRATION-PLAN.md` | Only if an actual schema/data cutover is required | Exact source → target data migration, stop/go, rollback and proof | Conditional |
-| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Before production support becomes recurring | What to check when rental search/viewing/broker flow fails in production | Post-MVP / launch |
+| Status | % Complete | Proposed doc | Product area | Create when | Purpose | Priority |
+|---|---:|---|---|---|---|---|
+| 🔵 | 0% | `TEST-PLAN.md` | Testing + production certification | Before SAN-1205 / SAN-483 certification work | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | **1 · Next** |
+| 🔵 | 0% | `DATA-BOUNDARIES.md` | Ownership + RLS + data boundaries | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | **2** |
+| 🔵 | 0% | `SEARCH.md` | Search + discovery | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | **3** |
+| 🔵 | 0% | `VIEWINGS-LEADS.md` | Viewing + lead conversion | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | **4** |
+| 🔵 | 0% | `BROKER-WORKSPACE.md` | Broker / host workspace | With SAN-476 / SAN-1204 | Broker visibility, owned listings, leads, showings, follow-up | **5** |
+| 🔵 | 0% | `LISTINGS.md` | Listings + detail | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | **6** |
+| 🔵 | 0% | `MAPS.md` | Maps + location | When map/search interaction changes | Card ↔ pin sync, bounds, selection state, PostGIS/location behavior | **7** |
+| 🔵 | 0% | `OPERATIONS-RUNBOOK.md` | Operations + recovery | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | **8 · Launch** |
+| 🔵 | 0% | `MIGRATION-PLAN.md` | Migration / cutover | Only if a real schema/data cutover is required | Exact source → target migration, stop/go, rollback, proof | Conditional |
 
 ### Docs we should NOT create now
 
@@ -197,7 +229,7 @@ Keep this small. Do not create a document just because a topic exists.
 - `AGENTS.md` for rentals — agent/platform behavior belongs in shared platform docs unless the rental agent gets a stable domain-specific contract worth documenting.
 - separate docs for every external repo — use `REFERENCES.md` + `REUSE-MATRIX.md` instead.
 
-## 8 · Strategy and advanced work
+## 9 · Strategy and advanced work
 
 ### Current strategy source
 
@@ -223,7 +255,7 @@ Examples:
 
 These can become later phases only after the Core/MVP journey is production-proven.
 
-## 9 · Source-of-truth rules
+## 10 · Source-of-truth rules
 
 When information conflicts, use this order:
 
@@ -239,7 +271,7 @@ Real-world example:
 
 > If an old planning doc says viewing creation uses two writes, but current `main` and Supabase show a certified atomic RPC path, the current implementation/database wins. Update the docs; do not rebuild the old design.
 
-## 10 · How to keep this index current
+## 11 · How to keep this index current
 
 Update this file when one of these changes:
 
