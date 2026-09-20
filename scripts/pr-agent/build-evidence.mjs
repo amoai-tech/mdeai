@@ -63,14 +63,10 @@ export function detectDomains(files) {
   }
   return DOMAIN_ORDER.filter((domain) => selected.has(domain));
 }
-export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLock }) {
-  validateLockfile(baseLock, "base lockfile");
-  validateLockfile(headLock, "head lockfile");
-  const domains = detectDomains(changedFiles);
+function collectVersionEvidence(domains, baseLock, headLock) {
   const missing = [];
   const unsafe = [];
   const versionLines = [];
-  const versionSensitiveDomains = domains.filter((domain) => DOMAIN_PACKAGES[domain].length > 0);
 
   for (const domain of domains) {
     const packages = DOMAIN_PACKAGES[domain];
@@ -84,14 +80,20 @@ export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLo
       }
       if (!base.version && !head.version) continue;
       resolved += 1;
-      const before = base.version ?? "not present";
-      const after = head.version ?? "not present";
-      versionLines.push(`- \`${packageName}\`: ${before} → ${after}`);
+      versionLines.push(`- \`${packageName}\`: ${base.version ?? "not present"} → ${head.version ?? "not present"}`);
     }
     if (packages.length && resolved === 0) missing.push(domain);
   }
 
-  const noVersionContract = domains.length > 0 && versionSensitiveDomains.length === 0;
+  return { missing, unsafe, versionLines };
+}
+
+export function buildEvidence({ baseSha, headSha, changedFiles, baseLock, headLock }) {
+  validateLockfile(baseLock, "base lockfile");
+  validateLockfile(headLock, "head lockfile");
+  const domains = detectDomains(changedFiles);
+  const { missing, unsafe, versionLines } = collectVersionEvidence(domains, baseLock, headLock);
+  const noVersionContract = domains.length > 0 && domains.every((domain) => DOMAIN_PACKAGES[domain].length === 0);
   const status = missing.length || unsafe.length || noVersionContract ? "NEEDS VERIFICATION" : "VERIFIED";
   const lines = [
     "# MDE PR-Agent Evidence",
