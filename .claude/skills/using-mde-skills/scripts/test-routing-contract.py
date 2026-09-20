@@ -63,15 +63,16 @@ def route(prompt: str) -> str:
     if any(term in text for term in (
         "implement",
         "across the repo",
-        "remaining san-1273",
+        "remaining san work",
+        "outstanding linear task",
     )):
         return "tasks"
     return "direct"
 
 
 require(SKILL.exists(), "router SKILL.md is missing")
-for retired in ("lean-dev-flow", "mde-worktree-pr-flow", "mde-task-lifecycle"):
-    require(not (ROOT / ".claude/skills" / retired).exists(), f"retired lifecycle skill still exists: {retired}")
+for retired in RETIRED:
+    require(not (ROOT / ".claude/skills" / retired).exists(), f"retired skill still exists: {retired}")
 text = SKILL.read_text()
 tasks_text = TASKS.read_text()
 verifier_text = VERIFIER.read_text()

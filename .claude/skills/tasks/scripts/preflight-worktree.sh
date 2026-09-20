@@ -23,7 +23,8 @@ fi
 case "$TARGET" in
   /*|../*) echo "OK: target is outside the repository; no in-repo staging leak." ;;
   *)
-    if git check-ignore -q "$TARGET/.mde-ignore-probe" 2>/dev/null; then
+    # Synthetic path only: git check-ignore evaluates patterns even when the target does not exist yet.
+    if git check-ignore -q "$TARGET/__ignore_check__" 2>/dev/null; then
       echo "OK: target path is ignored"
     else
       echo "BLOCKED: in-repo target '$TARGET' is not ignored." >&2
