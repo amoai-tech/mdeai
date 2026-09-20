@@ -45,6 +45,50 @@ jobs:
             });
             core.setOutput("files", JSON.stringify(files.map((file) => file.filename)));
 
+      - name: Checkout PR head lockfile as untrusted data
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .pr-agent-head
+          sparse-checkout: package-lock.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Build trusted PR-Agent evidence
+        shell: bash
+        env:
+          CHANGED_FILES_JSON: ${{ steps.changed-files.outputs.files }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p .pr-agent
+          if [[ -f scripts/pr-agent/build-evidence.mjs ]]; then
+            if [[ ! -s .pr-agent-head/package-lock.json ]]; then
+              echo "PR head package-lock.json missing or empty; using advisory evidence" >&2
+              printf '# MDE PR-Agent Evidence\n\nVersion evidence: **NEEDS VERIFICATION**\nAPI claim default: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nPR head package-lock.json missing or empty; framework/API claims are advisory only.\n' \
+                "$BASE_SHA" "$HEAD_SHA" > .pr-agent/evidence.md
+            elif ! node scripts/pr-agent/build-evidence.mjs \
+              --base-lock package-lock.json \
+              --head-lock .pr-agent-head/package-lock.json \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$HEAD_SHA" \
+              --changed-files "$CHANGED_FILES_JSON" \
+              --output .pr-agent/evidence.md; then
+              printf '# MDE PR-Agent Evidence\n\nVersion evidence: **NEEDS VERIFICATION**\nAPI claim default: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nEvidence generation failed; framework/API claims are advisory only.\n' \
+                "$BASE_SHA" "$HEAD_SHA" > .pr-agent/evidence.md
+            fi
+          else
+            if [[ "$CHANGED_FILES_JSON" != *"scripts/pr-agent/build-evidence.mjs"* ]]; then
+              echo "trusted PR-Agent evidence builder missing from base branch" >&2
+              exit 1
+            fi
+            printf '# MDE PR-Agent Evidence\n\nVersion evidence: **NEEDS VERIFICATION**\nAPI claim default: **NEEDS VERIFICATION**\nBase SHA: `%s`\nHead SHA: `%s`\n\nRollout bootstrap: trusted-base evidence builder is not available yet. Framework/API claims are advisory only.\n' \
+              "$BASE_SHA" "$HEAD_SHA" > .pr-agent/evidence.md
+          fi
+          test -s .pr-agent/evidence.md
+          grep -Fq "Base SHA: \`$BASE_SHA\`" .pr-agent/evidence.md
+          grep -Fq "Head SHA: \`$HEAD_SHA\`" .pr-agent/evidence.md
+
       - name: Select trusted MDE review skills
         id: reviewer-skills
         shell: bash
@@ -80,6 +124,8 @@ jobs:
         uses: docker://pragent/pr-agent@sha256:548b760b81ab4b3f729182428695ccc1194bbf87528c2b1e2b2b07e5223af7b6 # v0.45.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_PATH: ".pr-agent/evidence.md"
+          ARTIFACT_INSTRUCTIONS: "Use this trusted artifact as exact-version evidence, not standalone API proof. A framework/API claim is VERIFIED only when trusted diff/repository/skill/type evidence also proves the behavior; otherwise keep it NEEDS VERIFICATION, advisory, and non-blocking."
           NVIDIA_NIM_API_BASE: "https://integrate.api.nvidia.com/v1"
           NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           config.model: "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b"

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { getEncoding } from "js-tiktoken";
 
 const read = (path: string) =>
   readFileSync(path, "utf8");
@@ -106,5 +107,46 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(workflow).toContain("PR-Agent could not safely update the persistent review");
     expect(workflow).toContain('body.includes("## MDE PR Review")');
     expect(workflow).not.toContain("max_tokens=8000");
+  });
+});
+
+describe("SAN-1332 evidence-backed review contract", () => {
+  it("builds and injects a non-empty exact-version evidence artifact", () => {
+    expect(workflow).toContain("Checkout PR head lockfile as untrusted data");
+    expect(workflow).toContain("scripts/pr-agent/build-evidence.mjs");
+    expect(workflow).toContain("test -s .pr-agent/evidence.md");
+    expect(workflow).toContain("if ! node scripts/pr-agent/build-evidence.mjs");
+    expect(workflow).toContain("Evidence generation failed; framework/API claims are advisory only.");
+    expect(workflow).toContain("PR head package-lock.json missing or empty");
+    expect(workflow).toContain('ARTIFACT_PATH: ".pr-agent/evidence.md"');
+    expect(config).toContain("[artifacts]");
+    expect(config).toContain('artifact_label = "MDE exact-version verification evidence"');
+    expect(config).toContain('target_tools = ["pr_reviewer", "pr_code_suggestions"]');
+  });
+
+  it("downgrades unsupported framework claims instead of blocking merge", () => {
+    expect(config).toContain("VERIFIED");
+    expect(config).toContain("NEEDS VERIFICATION");
+    expect(config).toContain("cannot independently block merge");
+    expect(config).toContain("Exact version evidence alone does not prove a specific API claim");
+    expect(read(skills[7])).toContain("`src/proxy.ts`");
+  });
+});
+
+describe("SAN-1332 skill-budget checkpoint", () => {
+  it("keeps every package.json review skill inside the configured budget", () => {
+    const selected = [
+      "code-review", "copilotkit-review", "mastra-review", "supabase-review",
+      "maps-review", "stripe-review", "nextjs-review",
+    ];
+    const rendered = selected.map((name) => read(`.claude/skills/${name}/SKILL.md`)).join("\n\n---\n\n");
+    const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {
+      const encoding = getEncoding(encodingName);
+      return encoding.encode(rendered).length;
+    });
+    expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(6000);
+    const packageJson = JSON.parse(read("package.json")) as { devDependencies?: Record<string, string> };
+    expect(packageJson.devDependencies?.["js-tiktoken"]).toBe("1.0.21");
+    expect(routing).toContain("return 6000");
   });
 });
