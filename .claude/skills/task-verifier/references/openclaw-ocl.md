@@ -15,7 +15,7 @@ impact: HIGH
 |-------|--------|
 | VPS / gateway | `open-claw`, `mde-hostinger` |
 | ClawHub policy | `open-claw` → `references/clawhub.md`, `code-review` |
-| Mastra seam | `mastra`, `copilotkit-integrations`, `mde-supabase` |
+| Mastra seam | `mastra`, `copilotkit-integrations`, `supabase` |
 | Done gate | **this skill** (`task-verifier`) |
 
 ## Probes (VPS tasks)

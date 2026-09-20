@@ -1,10 +1,10 @@
 ---
 name: lean-dev-flow
-description: Lean implementation loop for mdeapp (SAN-NNN) tasks. Use this skill whenever starting implementation of any Linear issue, choosing which tests to run, setting up or cleaning up a worktree, or when mde-task-lifecycle phases 3–4 feel heavy for the change at hand. Provides: the 7-step loop (read→implement→T1 test→typecheck→commit→push→PR), test-tier selection by change shape (T1 targeted ~2s / T2 domain ~5s / T3 floor ~3min), worktree bootstrap/audit/clean commands, local-vs-CI verification matrix, and structured evidence capture. ALWAYS invoke this before running `npm run floor` locally, spinning up the dev server for a backend-only change, or doing a full-suite test run after a single-file edit. Replaces the "lint-per-chunk + build-per-chunk + floor-before-commit" pattern that burns 2–3min per task cycle with no safety benefit.
+description: Lean implementation loop for mdeapp (SAN-NNN) tasks. Use this skill whenever starting implementation of any Linear issue, choosing which tests to run, setting up or cleaning up a worktree, or when tasks phases 3–4 feel heavy for the change at hand. Provides: the 7-step loop (read→implement→T1 test→typecheck→commit→push→PR), test-tier selection by change shape (T1 targeted ~2s / T2 domain ~5s / T3 floor ~3min), worktree bootstrap/audit/clean commands, local-vs-CI verification matrix, and structured evidence capture. ALWAYS invoke this before running `npm run floor` locally, spinning up the dev server for a backend-only change, or doing a full-suite test run after a single-file edit. Replaces the "lint-per-chunk + build-per-chunk + floor-before-commit" pattern that burns 2–3min per task cycle with no safety benefit.
 title: lean-dev-flow — mdeapp lean implementation loop
 impact: HIGH
 impactDescription: Cuts per-task cycle overhead by eliminating floor-on-every-change, wrong test tier, stale worktrees, and silent verify-script failures
-tags: lean, mde-task-lifecycle, testing, worktree, vitest, verification, implementation, efficiency
+tags: lean, tasks, testing, worktree, vitest, verification, implementation, efficiency
 paths:
   - "mdeapp/src/**"
   - "mdeapp/e2e/**"
@@ -193,11 +193,11 @@ Add these to `mdeapp/package.json` `scripts`:
 
 ---
 
-## Integration with mde-task-lifecycle
+## Integration with tasks
 
 This skill operates inside phases 3 and 4. The lifecycle owns everything else.
 
-| Phase | mde-task-lifecycle owns | lean-dev-flow adds |
+| Phase | tasks owns | lean-dev-flow adds |
 |-------|------------------------|-------------------|
 | Phase 3 — Implement | Entry criteria, wiring plan, read-before-edit rule | 7-step loop replaces lint-per-chunk + build-per-chunk |
 | Phase 4 — Test | Which test types apply, failure triage, smoke steps | Tier selection (T1/T2/T3), local-vs-CI matrix |
@@ -209,10 +209,10 @@ This skill operates inside phases 3 and 4. The lifecycle owns everything else.
 
 | Need | Route to |
 |------|----------|
-| Full task lifecycle (plan → research → ship) | `mde-task-lifecycle` |
+| Full task lifecycle (plan → research → ship) | `tasks` |
 | Worktree/PR discipline and forensic cleanup | `mde-worktree-pr-flow` |
 | Vitest patterns (mocks, fixtures, RTL) | `vitest` skill |
 | Playwright setup, selectors, network mocking | `playwright-cli` skill |
 | Pre-ship gate full checklist | `/deploy-check` |
 | Debugging a failing test or build error | `systematic-debugging` |
-| Supabase migration safety | `mde-supabase` |
+| Supabase migration safety | `supabase` |

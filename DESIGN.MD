@@ -562,7 +562,7 @@ Load these when working on UI tasks (max 5 per task):
 | CopilotKit screens | `copilotkit-integrations` | Any CopilotKit render/action |
 | UI/UX design work | `ui-ux-pro-max` | Design decisions, wireframe review |
 | Web design guidelines | `web-design-guidelines` | Accessibility, polish |
-| Maps integration | `mde-maps` | Any map, pin, or Places work |
+| Maps integration | `maps` | Any map, pin, or Places work |
 | Testing standards | `testing` + `webapp-testing` | Before marking any screen Done |
 
 **Load order for a typical screen task:**

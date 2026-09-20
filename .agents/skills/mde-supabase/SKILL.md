@@ -1,1 +1,0 @@
-../../../.claude/skills/mde-supabase/SKILL.md
