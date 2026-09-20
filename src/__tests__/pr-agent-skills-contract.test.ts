@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { Script } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { getEncoding } from "js-tiktoken";
 
@@ -112,8 +113,8 @@ describe("SAN-1312 PR-Agent review contract", () => {
 
   it("keeps the embedded base-aware verifier script syntactically valid", () => {
     const script = workflowScript("Require a fresh base-aware PR-Agent review result");
-    expect(() => new Function(
-      `return async function(github, context, core, process, require) {\n${script}\n};`,
+    expect(() => new Script(
+      `(async function(github, context, core, process, require) {\n${script}\n})`,
     )).not.toThrow();
   });
 
