@@ -34,24 +34,43 @@ describe("LeadConfirmationBanner (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain('data-testid="lead-confirmation-card"');
   });
 
-  it("shows 'Viewing scheduled' heading", () => {
+  it("uses truthful copy that does not claim a booked viewing (SAN-1203)", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       leadConfirmation: {
         leadId: "abc12345-dead-beef-0000-000000000001",
-        message: "We will reach out within 24h.",
+        showingId: "def67890-dead-beef-0000-000000000001",
+        message: "Viewing request received — awaiting host confirmation.",
         listingTitle: "Poblado Studio",
       },
       clearLeadConfirmation: vi.fn(),
     } as unknown as ReturnType<typeof useRentalUi>);
 
     const html = renderToStaticMarkup(React.createElement(LeadConfirmationBanner));
-    expect(html).toContain("Viewing scheduled");
+    expect(html).toContain("Viewing request received");
+    expect(html).toContain("awaiting host confirmation");
+    expect(html).not.toContain("Viewing scheduled");
+  });
+
+  it("carries the committed showing id (SAN-1203)", () => {
+    vi.mocked(useRentalUi).mockReturnValue({
+      leadConfirmation: {
+        leadId: "abc12345-dead-beef-0000-000000000001",
+        showingId: "showing-1",
+        message: "Viewing request received — awaiting host confirmation.",
+        listingTitle: "Poblado Studio",
+      },
+      clearLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    const html = renderToStaticMarkup(React.createElement(LeadConfirmationBanner));
+    expect(html).toContain('data-showing-id="showing-1"');
   });
 
   it("displays the listing title and truncated lead ref", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       leadConfirmation: {
         leadId: "ref99999-dead-beef-0000-000000000099",
+        showingId: "showing-2",
         message: "We will reach out within 24h.",
         listingTitle: "Envigado Studio",
       },

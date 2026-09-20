@@ -6,27 +6,42 @@ import {
 } from "@/lib/tickets/ticket-checkout-schema";
 
 describe("scheduleViewingInputSchema", () => {
+  const base = {
+    listingId: "apt-123",
+    listingTitle: "2BR Laureles",
+    neighborhood: "Laureles",
+    name: "Camila Test",
+    email: "camila@example.com",
+    preferredAt: "2099-06-01T10:00",
+  };
+
   it("accepts valid rental lead payload", () => {
-    const parsed = scheduleViewingInputSchema.parse({
-      listingId: "apt-123",
-      listingTitle: "2BR Laureles",
-      neighborhood: "Laureles",
-      name: "Camila Test",
-      email: "camila@example.com",
-      preferredAt: "2026-06-01T10:00",
-    });
+    const parsed = scheduleViewingInputSchema.parse(base);
     expect(parsed.listingId).toBe("apt-123");
   });
 
   it("rejects missing email", () => {
     expect(() =>
-      scheduleViewingInputSchema.parse({
-        listingId: "x",
-        listingTitle: "t",
-        neighborhood: "Laureles",
-        name: "Camila",
-        email: "not-an-email",
-      }),
+      scheduleViewingInputSchema.parse({ ...base, email: "not-an-email" }),
+    ).toThrow();
+  });
+
+  // SAN-1203 — a viewing request is only meaningful with a future time.
+  it("rejects a missing preferredAt", () => {
+    expect(() =>
+      scheduleViewingInputSchema.parse({ ...base, preferredAt: undefined }),
+    ).toThrow();
+  });
+
+  it("rejects a past preferredAt", () => {
+    expect(() =>
+      scheduleViewingInputSchema.parse({ ...base, preferredAt: "2020-01-01T10:00" }),
+    ).toThrow();
+  });
+
+  it("rejects a malformed preferredAt", () => {
+    expect(() =>
+      scheduleViewingInputSchema.parse({ ...base, preferredAt: "next tuesday" }),
     ).toThrow();
   });
 });
