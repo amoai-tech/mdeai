@@ -119,7 +119,7 @@ test.describe("SAN-1341 deterministic critical journeys", () => {
 
     await gotoMarketingHome(page);
     await submitHomeHeroQuery(page, query);
-    await expect(page).toHaveURL(/\/chat$/);
+    await expect(page).toHaveURL((url) => url.pathname === "/chat");
     await expect(page.getByText(query, { exact: true })).toHaveCount(1);
     await expect(page.getByTestId("restaurant-clarify")).toBeVisible();
     await chooseRestaurantFilter(page);
