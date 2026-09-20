@@ -1,32 +1,45 @@
 {
   "version": 1,
+  "skill_name": "nextjs",
   "evals": [
     {
-      "prompt": "Handle a focused nextjs change in MDE and identify the correct implementation boundary.",
+      "id": 1,
+      "prompt": "Handle a focused Next.js change in MDE and identify the correct implementation boundary.",
       "expected_output": "Uses nextjs as the primary specialist and keeps unrelated domains out.",
-      "expectations": [
-        "inspects current repo state",
-        "uses current official docs for version-sensitive behavior",
-        "makes the smallest safe change"
-      ]
+      "files": [],
+      "expectations": ["inspects current repo state", "uses current official docs for version-sensitive behavior", "makes the smallest safe change"]
     },
     {
-      "prompt": "A bug appears near nextjs, but the root cause is not known. What owns diagnosis?",
-      "expected_output": "Routes diagnosis to systematic-debugging while retaining the specialist for domain evidence.",
-      "expectations": [
-        "does not guess root cause",
-        "uses systematic-debugging for diagnosis",
-        "keeps specialist scope bounded"
-      ]
+      "id": 2,
+      "prompt": "A bug appears near Next.js, but the root cause is not known. What owns diagnosis?",
+      "expected_output": "Routes diagnosis to systematic-debugging while retaining nextjs for domain evidence.",
+      "files": [],
+      "expectations": ["does not guess root cause", "uses systematic-debugging for diagnosis", "keeps specialist scope bounded"]
     },
     {
-      "prompt": "A production-critical nextjs change is ready to ship. What proof is required?",
+      "id": 3,
+      "prompt": "A production-critical Next.js change is ready to ship. What proof is required?",
       "expected_output": "Requires targeted tests and independent task verification before Done.",
-      "expectations": [
-        "requires current evidence",
-        "does not self-certify",
-        "uses task-verifier for completion proof"
-      ]
+      "files": [],
+      "expectations": ["requires current evidence", "does not self-certify", "uses task-verifier for completion proof"]
+    },
+    {
+      "id": 4,
+      "prompt": "Our Next.js App Router page is reading cookies synchronously after the framework upgrade. Fix it using the installed package version and keep server-only data on the server.",
+      "expected_output": "Checks package.json, applies the installed async request API contract, and preserves server/client boundaries.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Create a Vercel preview for this branch and verify the deployment binding and environment scope without accidentally pushing production.",
+      "expected_output": "Loads the Vercel reference, inspects binding/auth state, defaults to preview, and reports deployment evidence.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "This Next.js bundle jumped after a component change. Find the narrowest fix and prove the bundle improvement without changing unrelated runtime behavior.",
+      "expected_output": "Loads the performance reference, measures before/after, and prefers a narrow bundle/import boundary fix.",
+      "files": []
     }
   ]
 }

@@ -64,8 +64,8 @@ Resolve available browser tooling from the current environment; do not assume a 
 | Job | Surface | Owner skill |
 |-----|---------|-------------|
 | LCP regression on `/coffee` | current browser performance tooling | `testing` for proof; affected framework/deploy skill for implementation |
-| Lighthouse audit on a Vercel preview URL | Chrome DevTools tooling (`lighthouse_audit --mode navigation --device mobile`) | `mde-vercel` |
-| Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `mde-vercel`/`nextjs` for implementation ownership |
+| Lighthouse audit on a Vercel preview URL | Chrome DevTools tooling (`lighthouse_audit --mode navigation --device mobile`) | `nextjs` |
+| Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `nextjs` for implementation ownership |
 | Supabase email/OAuth sign-in regression | Playwright or configured authenticated browser | `testing` → [playwright.md](playwright.md) |
 | Stripe checkout end-to-end | authenticated browser/Playwright path | `testing` + `stripe` |
 
