@@ -151,10 +151,10 @@ Real Estate Core/MVP clones:
 
 | Repo | Local path | Main MDE use |
 |---|---|---|
-| Dubai Real Estate | `/home/sk/github-repos/community/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
-| HomeRecoEngine | `/home/sk/github-repos/community/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
-| Real Estate AI Chatbot | `/home/sk/github-repos/community/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
-| HomeMatch | `/home/sk/github-repos/community/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
+| Dubai Real Estate | `/home/sk/github-repos/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
+| HomeRecoEngine | `/home/sk/github-repos/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
+| Real Estate AI Chatbot | `/home/sk/github-repos/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
+| HomeMatch | `/home/sk/github-repos/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
 
 Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) and [`REUSE-MATRIX.md`](./REUSE-MATRIX.md).
 

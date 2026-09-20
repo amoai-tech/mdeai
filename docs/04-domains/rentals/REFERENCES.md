@@ -69,7 +69,7 @@ External references should improve or clarify these existing MDE foundations.
 
 ### Central local reference library
 
-Use `/home/sk/github-repos/README.md` as the local repository catalog. For MDE Rentals, inspect first-party framework clones under `/home/sk/github-repos/copilotkit/` and `/home/sk/github-repos/mastra/`, and Real Estate domain references under `/home/sk/github-repos/community/real-estate/`.
+Use `/home/sk/github-repos/README.md` as the local repository catalog. For MDE Rentals, inspect first-party framework clones under `/home/sk/github-repos/copilotkit/` and `/home/sk/github-repos/mastra/`, and Real Estate domain references under `/home/sk/github-repos/real-estate/`.
 
 A local clone is convenient inspection evidence, not permission to copy code. Record exact commit/tag and license before any direct adaptation.
 
@@ -151,7 +151,7 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra
 **Repo:**
 https://github.com/nazsats/dubai-real-estate
 
-**Local clone:** `/home/sk/github-repos/community/real-estate/dubai-real-estate`
+**Local clone:** `/home/sk/github-repos/real-estate/dubai-real-estate`
 
 **Classification:** `MODEL`
 
@@ -178,7 +178,7 @@ MDE first enforces price, bedrooms, furnishing, and availability in SQL. Only el
 **Repo:**
 https://github.com/yuehong136/HomeRecoEngine
 
-**Local clone:** `/home/sk/github-repos/community/real-estate/HomeRecoEngine`
+**Local clone:** `/home/sk/github-repos/real-estate/HomeRecoEngine`
 
 **Classification:** `MODEL`
 
@@ -205,7 +205,7 @@ Hard constraints remove invalid listings. Location logic measures spatial fit. S
 **Repo:**
 https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
 
-**Local clone:** `/home/sk/github-repos/community/real-estate/real-estate-ai-chatbot`
+**Local clone:** `/home/sk/github-repos/real-estate/real-estate-ai-chatbot`
 
 **Classification:** `MODEL`
 
@@ -230,7 +230,7 @@ https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
 **Repo:**
 https://github.com/GretaGalliani/HomeMatch
 
-**Local clone:** `/home/sk/github-repos/community/real-estate/HomeMatch`
+**Local clone:** `/home/sk/github-repos/real-estate/HomeMatch`
 
 **Classification:** `MODEL`
 
