@@ -59,144 +59,155 @@ Do not make this journey depend on MCP, A2A, browser agents, deep research, obse
 
 This is a summary only. Linear remains the live source for implementation task status.
 
-## Visual execution path
+## Visual rental journey
 
 ```mermaid
 flowchart LR
-  A["Rental Experience"] --> B["Testing the Rental Journey"]
-  B --> C["Accounts & Permissions"]
-  C --> D["Finding a Home"]
-  D --> E["Book a Viewing"]
-  E --> F["Broker Dashboard"]
-  D --> G["Property Listings"]
-  G --> H["Map & Neighborhood"]
-  F --> I["Production Support"]
+  A["Find a Rental"] --> B["Compare Rentals"]
+  B --> C["Explore the Map"]
+  C --> D["View Property Details"]
+  D --> E["Ask a Question"]
+  D --> F["Request a Viewing"]
+  F --> G["Broker Follow-Up"]
+  G --> H["Manage Rentals"]
 ```
-
-
 
 ## 2 · Product areas and documentation plan
 
-Use the task numbers as the durable execution order. Whole numbers (`1.0`, `2.0`, `3.0`) are product areas; decimals (`1.1`, `1.2`, `1.3`) leave room for additional tasks without renumbering later.
+The primary path follows how a real renter uses MDE. Technical docs come after the user journey. Whole numbers are major product areas; decimals leave room for future tasks without renumbering later.
 
 ### 1.0 · Rental Experience
 
 **Main doc:** [`RENTALS.md`](./RENTALS.md)
 
-| Task | Status | % Complete | Work | Next |
+| Task | Status | % Complete | What the user does | Doc |
 |---:|---|---:|---|---|
-| **1.0** | 🟢 | 100% | Rental Experience | Maintain Core/MVP scope |
-| 1.1 | 🟢 | 100% | Reference index | Maintain |
-| 1.2 | 🟢 | 100% | Reuse decisions | Maintain |
-| 1.3 | 🟢 | 100% | External references | Maintain |
+| **1.0** | 🟢 | 100% | Understand the complete rental journey | [`RENTALS.md`](./RENTALS.md) |
+| 1.1 | 🟢 | 100% | See the current product path | [`INDEX.md`](./INDEX.md) |
+| 1.2 | 🟢 | 100% | Understand what MDE already has vs reuses | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) |
+| 1.3 | 🟢 | 100% | Find source repos and official references | [`REFERENCES.md`](./REFERENCES.md) |
 
-### 2.0 · Testing the Rental Journey
+### 2.0 · Find a Rental
 
-**Main doc:** [`TEST-PLAN.md`](./TEST-PLAN.md)
+**Current doc:** [`SEARCH.md`](./SEARCH.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **2.0** | 🟢 | 100% | Testing the Rental Journey | Maintain + expand with test evidence |
-| 2.1 | 🔵 | 0% | Core Rental Journey Tests | Map J-RE-* journeys |
-| 2.2 | 🔵 | 0% | Database & Permission Tests | Add deterministic backend proof |
-| 2.3 | 🔵 | 0% | Browser & Production Tests | Add Playwright + production smoke |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **2.0** | 🟢 | 100% | Find rentals that match their needs |
+| 2.1 | 🔵 | 0% | Search by neighborhood |
+| 2.2 | 🔵 | 0% | Search by bedrooms |
+| 2.3 | 🔵 | 0% | Search by budget |
+| 2.4 | 🔵 | 0% | Search by move-in dates and availability |
+| 2.5 | 🔵 | 0% | Refine results with AI without breaking hard requirements |
 
-### 3.0 · Accounts & Permissions
+### 3.0 · Compare Rentals
 
-**Main doc:** [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md)
+**Current coverage:** [`RENTALS.md`](./RENTALS.md) + rental browse UI
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **3.0** | 🟢 | 100% | Accounts & Permissions | Maintain with ownership/RLS evidence |
-| 3.1 | 🔵 | 0% | Property Ownership | Define authoritative ownership |
-| 3.2 | 🔵 | 0% | Who Can See What | Define renter/broker/admin isolation |
-| 3.3 | 🔵 | 0% | AI Access to Rental Data | Define tool/agent visibility |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **3.0** | 🟡 | 70% | Compare available rentals |
+| 3.1 | 🟡 | 70% | Compare rental cards |
+| 3.2 | 🟡 | 70% | Compare price, bedrooms and amenities |
+| 3.3 | 🟡 | 70% | Select a rental to inspect |
+| 3.4 | 🔵 | 0% | Save a shortlist for later |
 
-### 4.0 · Finding a Home
+### 4.0 · Explore the Map
 
-**Main doc:** [`SEARCH.md`](./SEARCH.md)
+**Current doc:** [`MAPS.md`](./MAPS.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **4.0** | 🟢 | 100% | Finding a Home | Maintain search contract |
-| 4.1 | 🔵 | 0% | Search by Requirements | Document hard filters |
-| 4.2 | 🔵 | 0% | Best Match Ranking | Document ranking after eligibility |
-| 4.3 | 🔵 | 0% | Move-in Dates & Availability | Document date/availability rules |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **4.0** | 🟢 | 100% | See where rentals are located |
+| 4.1 | 🟡 | 70% | Select a rental card and see the matching map pin |
+| 4.2 | 🟡 | 70% | Select a map pin and see the matching rental |
+| 4.3 | 🔵 | 0% | Understand the neighborhood and nearby area |
 
-### 5.0 · Book a Viewing
+### 5.0 · View Property Details
 
-**Main doc:** [`VIEWINGS.md`](./VIEWINGS.md)
+**Current doc:** [`LISTINGS.md`](./LISTINGS.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **5.0** | 🟢 | 100% | Book a Viewing | Maintain committed conversion path |
-| 5.1 | 🔵 | 0% | Confirm a Viewing | Define user approval + truthful UI |
-| 5.2 | 🔵 | 0% | Save the Viewing Request | Define lead/showing transaction |
-| 5.3 | 🔵 | 0% | Send to Broker & Track Follow-Up | Define states + broker handoff |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **5.0** | 🟢 | 100% | Open a rental and decide whether it fits |
+| 5.1 | 🟢 | 100% | View photos |
+| 5.2 | 🟢 | 100% | Review price, bedrooms, bathrooms and guest capacity |
+| 5.3 | 🟢 | 100% | Review amenities and description |
+| 5.4 | 🟢 | 100% | Review availability and minimum stay |
+| 5.5 | 🟢 | 100% | Review house rules and location |
+| 5.6 | 🟢 | 100% | See the host and rental terms |
 
-### 6.0 · Broker Dashboard
+### 6.0 · Ask About a Rental
 
-**Main doc:** [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md)
+**Current coverage:** property detail + rental concierge
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **6.0** | 🟢 | 100% | Broker Dashboard | Maintain broker workflow |
-| 6.1 | 🔵 | 0% | Broker Sees Their Rentals & Leads | Define authorized views |
-| 6.2 | 🔵 | 0% | Broker Follow-Up | Define lead/showing actions |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **6.0** | 🟡 | 70% | Ask questions before committing |
+| 6.1 | 🟡 | 70% | Ask about the selected rental |
+| 6.2 | 🟡 | 70% | Keep the selected property in conversation context |
+| 6.3 | 🔵 | 0% | Get clear answers when property data is missing or pending |
 
-### 7.0 · Property Listings
+### 7.0 · Request a Viewing
 
-**Main doc:** [`LISTINGS.md`](./LISTINGS.md)
+**Current doc:** [`VIEWINGS.md`](./VIEWINGS.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **7.0** | 🟢 | 100% | Property Listings | Maintain listing truth contract |
-| 7.1 | 🔵 | 0% | Listing Quality | Define required listing fields/quality |
-| 7.2 | 🔵 | 0% | Property Details | Define detail-view contract |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **7.0** | 🟢 | 100% | Request to see a property |
+| 7.1 | 🟡 | 70% | Choose the property and preferred time |
+| 7.2 | 🟡 | 70% | Explicitly confirm the request |
+| 7.3 | 🟡 | 70% | Save the request exactly once |
+| 7.4 | 🟡 | 70% | Receive confirmation only after the database commits |
 
-### 8.0 · Map & Neighborhood
+### 8.0 · Broker Follow-Up
 
-**Main doc:** [`MAPS.md`](./MAPS.md)
+**Current coverage:** [`VIEWINGS.md`](./VIEWINGS.md) + [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **8.0** | 🟢 | 100% | Map & Neighborhood | Maintain map/card contract |
-| 8.1 | 🔵 | 0% | Listing Card ↔ Map Pin | Document shared listing identity |
-| 8.2 | 🔵 | 0% | Map Area & Location | Document bounds/location behavior |
+| Task | Status | % Complete | What happens next |
+|---:|---|---:|---|
+| **8.0** | 🟡 | 70% | The correct broker receives the committed request |
+| 8.1 | 🟡 | 70% | Broker sees the renter's lead/viewing |
+| 8.2 | 🟡 | 70% | Broker follows up with the renter |
+| 8.3 | 🔵 | 0% | Viewing status stays current through completion/cancellation |
 
-### 9.0 · Production Support
+### 9.0 · Manage Rentals
 
-**Main doc:** [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md)
+**Current doc:** [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md)
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **9.0** | 🟢 | 100% | Production Support | Maintain runbook before launch/support |
-| 9.1 | 🔵 | 0% | Find Production Problems | Document common failure paths |
-| 9.2 | 🔵 | 0% | Recover Safely | Document safe recovery checks |
+| Task | Status | % Complete | What the broker/host does |
+|---:|---|---:|---|
+| **9.0** | 🟡 | 70% | Manage rental activity |
+| 9.1 | 🟡 | 70% | View owned/authorized listings |
+| 9.2 | 🟡 | 70% | Review leads and viewing requests |
+| 9.3 | 🟡 | 70% | Follow up and update status |
 
-### 10.0 · Data Migration
+### 10.0 · Save Rentals
 
-**Planned doc:** `MIGRATION-PLAN.md`
+**Status:** future / incomplete
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **10.0** | 🔵 | 0% | Data Migration | Create only if required |
+| Task | Status | % Complete | What the user does |
+|---:|---|---:|---|
+| **10.0** | 🔵 | 0% | Save rentals to revisit later |
+| 10.1 | 🔵 | 0% | Save a favorite |
+| 10.2 | 🔵 | 0% | Return to saved rentals |
+| 10.3 | 🔵 | 0% | Resume with the correct signed-in user |
 
-### 11.0 · Future Smart Features
+### Engineering & Operations
 
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **11.0** | 🔵 | 0% | Future Smart Features | Start after Core/MVP proof |
+These docs support the rental journey but are not primary user-facing product areas.
 
-### 12.0 · AI Platform
+| Area | Status | Doc | Purpose |
+|---|---|---|---|
+| Accounts & permissions | 🟢 | [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md) | Ownership, RLS, renter/broker/admin/AI access |
+| Testing the rental journey | 🟢 | [`TEST-PLAN.md`](./TEST-PLAN.md) | Unit, API, DB, RLS, browser and production proof |
+| Production support | 🟢 | [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Diagnose failures and recover safely |
+| Reuse decisions | 🟢 | [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | What MDE keeps, adapts, models, references or skips |
+| Reference sources | 🟢 | [`REFERENCES.md`](./REFERENCES.md) | Official docs, repos, templates and local clones |
+| Shared AI platform | 🟢 | [CopilotKit + Mastra docs](../../03-platform/copilotkit-mastra/README.md) | Runtime, agents, tools, memory, HITL and shared platform behavior |
+| Data migration | 🔵 | `MIGRATION-PLAN.md` | Create only if a real schema/data cutover is needed |
 
-**Documentation:** Shared platform docs
-
-| Task | Status | % Complete | Work | Next |
-|---:|---|---:|---|---|
-| **12.0** | 🟢 | 100% | AI Platform | Keep platform-owned; no rental duplicate |
-
-Add future work as the next decimal inside the relevant area—for example `5.4`—instead of renumbering later sections.
+Add future work as the next decimal inside the relevant user journey area—for example `7.5`—instead of renumbering later sections.
 
 ## 3 · Canonical GitHub docs
 
@@ -321,19 +332,33 @@ When adapting code, record the exact local clone commit/tag and license. A local
 
 ## 8 · Product docs
 
-Keep this list aligned with the product-area docs above. Status here measures documentation completion, not feature implementation.
+The index now follows the real user journey. Existing filenames stay stable in this change; the next documentation pass can rename them to match the user-facing language below.
 
-| Status | % Complete | Proposed doc | Product area | Create when | Purpose | Priority |
-|---|---:|---|---|---|---|---|
-| 🟢 | 100% | [`TEST-PLAN.md`](./TEST-PLAN.md) | Testing the Rental Journey | Created | J-RE-* matrix across unit, API, DB, RLS, Playwright, failure, and production smoke | Maintain |
-| 🟢 | 100% | [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md) | Accounts & Permissions | With SAN-1104 / SAN-1105 / SAN-1349 | Canonical renter/broker/admin/AI visibility and ownership contract | Maintain |
-| 🟢 | 100% | [`SEARCH.md`](./SEARCH.md) | Finding a Home | When SAN-486/search hardening is active | SQL eligibility, filters, ranking, availability/date rules, degraded search behavior | Maintain |
-| 🟢 | 100% | [`VIEWINGS.md`](./VIEWINGS.md) | Book a Viewing | With SAN-1203 / SAN-1286 / SAN-474 | Approval, atomic lead/showing write, truthful confirmation, lifecycle | Maintain |
-| 🟢 | 100% | [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md) | Broker Dashboard | With SAN-476 / SAN-1204 | Broker listings, leads, viewings, and follow-up | Maintain |
-| 🟢 | 100% | [`LISTINGS.md`](./LISTINGS.md) | Property Listings | When inventory/detail work needs a stable contract | Listing schema/contract, detail view, inventory quality, canonical truth | Maintain |
-| 🟢 | 100% | [`MAPS.md`](./MAPS.md) | Map & Neighborhood | When map/search interaction changes | Listing cards, map pins, bounds, selection, and location behavior | Maintain |
-| 🟢 | 100% | [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Production Support | Before recurring production support | Diagnosis, degraded modes, recovery, support checks | Maintain for launch |
-| 🔵 | 0% | `MIGRATION-PLAN.md` | Data Migration | Only if a real schema/data cutover is required | Exact source → target migration, stop/go, rollback, proof | Conditional |
+### Primary user-journey docs
+
+| Order | Current doc | Real-world purpose | Better filename for next pass |
+|---:|---|---|---|
+| 1.0 | [`RENTALS.md`](./RENTALS.md) | Complete rental experience | Keep `RENTALS.md` |
+| 2.0 | [`SEARCH.md`](./SEARCH.md) | Find a rental | `FIND-A-RENTAL.md` |
+| 3.0 | Covered in `RENTALS.md` + browse UI | Compare rentals | `COMPARE-RENTALS.md` |
+| 4.0 | [`MAPS.md`](./MAPS.md) | Explore rentals on the map | `EXPLORE-THE-MAP.md` |
+| 5.0 | [`LISTINGS.md`](./LISTINGS.md) | View property details | `PROPERTY-DETAILS.md` |
+| 6.0 | Covered by property detail + concierge | Ask about a rental | `ASK-ABOUT-A-RENTAL.md` |
+| 7.0 | [`VIEWINGS.md`](./VIEWINGS.md) | Request a viewing | `REQUEST-A-VIEWING.md` |
+| 8.0 | Split across viewing + broker docs | Broker follow-up | `BROKER-FOLLOW-UP.md` |
+| 9.0 | [`BROKER-DASHBOARD.md`](./BROKER-DASHBOARD.md) | Manage rentals, leads and viewings | `MANAGE-RENTALS.md` |
+| 10.0 | Not implemented as a complete flow | Save rentals for later | `SAVE-RENTALS.md` when implemented |
+
+### Engineering & operations docs
+
+| Doc | Purpose |
+|---|---|
+| [`DATA-BOUNDARIES.md`](./DATA-BOUNDARIES.md) | Accounts, ownership, permissions and RLS |
+| [`TEST-PLAN.md`](./TEST-PLAN.md) | Rental journey verification |
+| [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Production diagnosis and recovery |
+| [`REUSE-MATRIX.md`](./REUSE-MATRIX.md) | Reuse decisions |
+| [`REFERENCES.md`](./REFERENCES.md) | Source repos and official references |
+| `MIGRATION-PLAN.md` | Create only when a real data/schema migration exists |
 
 ### Docs we should NOT create now
 
