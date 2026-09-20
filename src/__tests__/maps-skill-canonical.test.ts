@@ -9,16 +9,12 @@ const retiredMapsAliases = [
 
 describe("canonical Maps skill", () => {
   it("keeps the canonical Maps skill resources", () => {
-    for (const path of [
-      ".claude/skills/maps/SKILL.md",
-      ".claude/skills/maps/references",
-      ".claude/skills/maps/scripts",
-      ".claude/skills/maps/tests",
-      ".claude/skills/maps/scripts/check-google-maps-upstream.mjs",
-      ".claude/skills/maps/references/reference-index.md",
-    ]) {
-      expect(existsSync(path), `missing canonical Maps resource: ${path}`).toBe(true);
-    }
+    expect(existsSync(".claude/skills/maps/SKILL.md")).toBe(true);
+    expect(existsSync(".claude/skills/maps/references")).toBe(true);
+    expect(existsSync(".claude/skills/maps/scripts")).toBe(true);
+    expect(existsSync(".claude/skills/maps/tests")).toBe(true);
+    expect(existsSync(".claude/skills/maps/scripts/check-google-maps-upstream.mjs")).toBe(true);
+    expect(existsSync(".claude/skills/maps/references/reference-index.md")).toBe(true);
   });
 
   it("keeps current-doc, React, legacy, failure, and compliance guardrails without volatile claims", () => {
