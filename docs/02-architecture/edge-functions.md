@@ -27,7 +27,7 @@ This is the single largest provenance gap in the epic. Nothing may be deleted un
 
 ## Current repository vs historical deployment paths
 
-The active repository is `https://github.com/amoai-tech/mdeai`, with app and Supabase source at the repository root. On the audited machine the checkout is `/home/sk/mdeai`.
+The active repository is `https://github.com/amoai-tech/mdeai`, with app and Supabase source at the repository root. Treat `<repo-root>` as the current checkout root (for example, resolve it with `git rev-parse --show-toplevel`) rather than relying on a machine-specific absolute path.
 
 Paths such as `/home/sk/mdeai/mdeapp/...`, `/home/sk/mde/...`, worktree paths, and `/tmp/user_fn_*` below are **historical live deployment provenance captured on 2026-09-17**. Preserve them exactly as evidence; do not reinterpret them as current source locations.
 

@@ -74,7 +74,7 @@ Repository-wide invariants that remain explicit:
 - Production AI uses Gemini. Verify current model/provider contracts before changing model names.
 - CopilotKit stays on the v2 API surface; do not mix bare v1 imports with `/v2` imports.
 - New Supabase tables require RLS and an explicit authorization policy.
-- Google Places requests must use intentional field masks; Maps markers require the correct map configuration.
+- Google Places requests must use intentional field masks; Maps markers require the correct map configuration, unless the owning Maps skill or current task documents a specific supported exception.
 - Never expose secrets or service-role credentials to client code.
 - Do not reset, clean, or discard unrelated working-tree changes.
 - Do not mark work Done without current evidence from the relevant tests/runtime.
@@ -93,7 +93,7 @@ node .claude/hooks/__tests__/session-start.test.mjs
 
 Then validate changed-file links, skill metadata/frontmatter, eval JSON, and stale router dependencies. Run the full application Floor on the final landing stack or whenever runtime/source/config changes require it.
 
-Structural eval definitions are specifications only until they are actually executed. Never report an eval as passing merely because its JSON validates.
+Structural eval definitions are specifications only until they are actually executed. Schema-validation tests may report the JSON/schema validation itself as passing, but do not report the behavioral eval as passing merely because its definition validates.
 
 ## Application context
 

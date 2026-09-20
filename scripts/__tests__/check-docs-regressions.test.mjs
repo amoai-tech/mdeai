@@ -3,16 +3,23 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import test from "node:test";
+import { afterEach, test } from "node:test";
 
 const checker = path.resolve("scripts/check-docs.mjs");
 const roots = [
   "01-product", "02-architecture", "03-platform", "04-domains",
   "05-design", "06-testing", "07-operations", "08-strategy", "tasks",
 ];
+const fixtureRoots = new Set();
+
+afterEach(() => {
+  for (const root of fixtureRoots) fs.rmSync(root, { recursive: true, force: true });
+  fixtureRoots.clear();
+});
 
 function fixture(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mde-check-docs-"));
+  fixtureRoots.add(root);
   for (const dir of roots) fs.mkdirSync(path.join(root, "docs", dir), { recursive: true });
   fs.mkdirSync(path.join(root, "docs", "_archive"), { recursive: true });
   const base = {

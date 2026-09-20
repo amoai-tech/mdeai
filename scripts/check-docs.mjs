@@ -88,10 +88,13 @@ for (const relative of normalizedMarkdown) {
     errors.push(`${path.relative(root, file)} -> missing required frontmatter`);
     continue;
   }
+  const frontmatterLines = frontmatter[1].split("\n");
   for (const key of requiredFrontmatterKeys) {
-    if (!new RegExp(`^${key}:\\s*\\S+`, "m").test(frontmatter[1])) {
-      errors.push(`${path.relative(root, file)} -> frontmatter missing ${key}`);
-    }
+    const prefix = `${key}:`;
+    const hasValue = frontmatterLines.some((line) =>
+      line.startsWith(prefix) && line.slice(prefix.length).trim().length > 0,
+    );
+    if (!hasValue) errors.push(`${path.relative(root, file)} -> frontmatter missing ${key}`);
   }
 }
 
@@ -107,8 +110,12 @@ for (const rootDir of activeRoots) {
   );
 }
 
-const indexFile = path.join(docs, "index-docs.md");
-if (fs.existsSync(indexFile)) {
+const docsRoot = path.resolve(docs);
+const indexFile = path.resolve(docsRoot, "index-docs.md");
+const docsPrefix = `${docsRoot}${path.sep}`;
+if (!indexFile.startsWith(docsPrefix)) {
+  errors.push("docs/index-docs.md -> resolved outside docs root");
+} else if (fs.existsSync(indexFile)) {
   const indexText = fs.readFileSync(indexFile, "utf8");
   const catalogMatch = indexText.match(
     /## Complete active documentation catalog\n[\s\S]*?(?=\n### Historical archive\n)/,
