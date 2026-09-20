@@ -24,6 +24,13 @@ on:
       - "scripts/function-acl-baseline.json"
       - "scripts/lib/local-db-url.mjs"
       - ".github/workflows/supabase-acl.yml"
+      # The gate is only ever invoked through `npm run check:function-acl`, so the manifest
+      # that defines that script — plus the lockfile and Node version that resolve and run
+      # it — must retrigger this workflow. Without these, a package change would silently
+      # skip the gate and the workflow would report green having tested nothing.
+      - "package.json"
+      - "package-lock.json"
+      - ".nvmrc"
   push:
     branches: [main]
     paths:
@@ -32,6 +39,9 @@ on:
       - "scripts/function-acl-baseline.json"
       - "scripts/lib/local-db-url.mjs"
       - ".github/workflows/supabase-acl.yml"
+      - "package.json"
+      - "package-lock.json"
+      - ".nvmrc"
 
 permissions:
   contents: read
