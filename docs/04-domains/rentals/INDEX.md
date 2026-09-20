@@ -39,6 +39,32 @@ search
 
 Do not make this journey depend on MCP, A2A, browser agents, deep research, observational memory, autonomous broker agents, or agent swarms.
 
+### Progress tracker
+
+Status legend:
+
+| Dot | Meaning |
+|---|---|
+| 🟢 | Completed |
+| 🟡 | In progress |
+| 🔴 | Failed / blocked |
+| 🔵 | Not started / needs completion |
+
+| Item | Status | Next action |
+|---|---|---|
+| `INDEX.md` | 🟢 | Keep current as docs/tasks change |
+| `README.md` | 🟢 | Keep as the small folder router |
+| `RENTALS.md` | 🟢 | Update only when durable product/architecture changes |
+| `REUSE-MATRIX.md` | 🟢 | Pin exact repo commit/license before direct code reuse |
+| `REFERENCES.md` | 🟢 | Keep repo URLs + local clone paths current |
+| Real Estate local reference clones | 🟢 | Inspect exact source before adapting patterns |
+| `TEST-PLAN.md` | 🔵 | Create next; map J-RE-* journeys to unit/API/DB/RLS/Playwright/prod proof |
+| `DATA-BOUNDARIES.md` | 🔵 | Create with SAN-1104 / SAN-1105 / SAN-1349 ownership work |
+| `MIGRATION-PLAN.md` | 🔵 | Create only if a real schema/data cutover is required |
+| `OPERATIONS-RUNBOOK.md` | 🔵 | Create before recurring production support / launch |
+
+This tracker covers durable documentation/reference work only. Linear remains the live source for implementation task status.
+
 ## 2 · Canonical GitHub docs
 
 | Document | Purpose | Status |
