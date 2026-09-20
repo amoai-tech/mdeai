@@ -194,5 +194,12 @@
     "expected_owner": "__INVALID__",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "test-selection-routes-to-testing",
+    "input": "Which tests should I run?",
+    "expected_owner": "testing",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

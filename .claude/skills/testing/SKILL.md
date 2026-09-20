@@ -64,13 +64,13 @@ Resolve available browser tooling from the current environment; do not assume a 
 | Job | Surface | Owner skill |
 |-----|---------|-------------|
 | LCP regression on `/coffee` | current browser performance tooling | `testing` for proof; affected framework/deploy skill for implementation |
-| Lighthouse audit on a Vercel preview URL | chrome-devtools-mcp (`lighthouse_audit --mode navigation --device mobile`) | `mde-vercel` |
+| Lighthouse audit on a Vercel preview URL | Chrome DevTools tooling (`lighthouse_audit --mode navigation --device mobile`) | `mde-vercel` |
 | Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `mde-vercel`/`nextjs` for implementation ownership |
 | Supabase email/OAuth sign-in regression | Playwright or configured authenticated browser | `testing` → [playwright.md](playwright.md) |
 | Stripe checkout end-to-end | authenticated browser/Playwright path | `testing` + `stripe` |
 
 | UI four-state visual verify | Playwright | `testing` → [playwright.md](playwright.md) |
-| RLS / 403 debugging during a UI flow | chrome-devtools-mcp (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
+| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
 | Console-error sweep before commit | Playwright or current DevTools tooling | `testing` |
 
 ---

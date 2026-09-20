@@ -39,12 +39,11 @@ def route(prompt: str) -> str:
         "open a pr",
         "ship this change",
         "fast dev loop",
-        "which tests should i run",
         "clean up merged worktrees",
     )
     if any(term in text for term in lifecycle_terms):
         return "tasks"
-    if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "run the tests", "interpret the test failure")):
+    if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "which tests should i run", "run the tests", "interpret the test failure")):
         return "testing"
     if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "done proof")):
         return "task-verifier"
