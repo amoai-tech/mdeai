@@ -33,6 +33,10 @@ function timeZoneOffsetMinutes(timeZone: string, instant: Date): number {
   const value = (type: string): number =>
     Number(parts.find((part) => part.type === type)?.value ?? "0");
 
+  // `hour12: false` can render midnight as "24" on some ICU builds; V8 returns
+  // "00". Normalising with `% 24` maps "24" to 0 *on the same day*, which is the
+  // correct wall clock. Removing it would let Date.UTC roll 24h forward and
+  // compute the offset for the wrong day — so this modulo is deliberate.
   const asUtc = Date.UTC(
     value("year"),
     value("month") - 1,
@@ -55,22 +59,29 @@ export function resolvePreferredAtInstant(raw: string): string | null {
   if (!match) return null;
 
   const [, year, month, day, hour, minute, second] = match;
-  const wallAsUtc = Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second ?? 0),
-  );
+  const y = Number(year);
+  const mo = Number(month);
+  const d = Number(day);
+  const h = Number(hour);
+  const mi = Number(minute);
+  const s = Number(second ?? 0);
 
-  // `Date.UTC` silently rolls impossible values over (2026-02-30 → 2026-03-02),
-  // so compare the round trip and reject anything that moved.
+  // Range-check EVERY component before Date.UTC. Date.UTC silently normalises
+  // out-of-range values (10:99 → 11:39), and a date round trip only catches the
+  // subset of overflows that happen to cross a day boundary — so `10:99`,
+  // `10:60` and `10:00:99` would otherwise be accepted and quietly rewritten.
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  if (h > 23 || mi > 59 || s > 59) return null;
+
+  const wallAsUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+
+  // Reject impossible calendar dates (2026-02-30 → 2026-03-02) that Date.UTC
+  // rolls forward while still looking like the requested day-of-month.
   const probe = new Date(wallAsUtc);
   if (
-    probe.getUTCFullYear() !== Number(year) ||
-    probe.getUTCMonth() !== Number(month) - 1 ||
-    probe.getUTCDate() !== Number(day)
+    probe.getUTCFullYear() !== y ||
+    probe.getUTCMonth() !== mo - 1 ||
+    probe.getUTCDate() !== d
   ) {
     return null;
   }

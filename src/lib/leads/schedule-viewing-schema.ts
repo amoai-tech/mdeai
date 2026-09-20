@@ -20,16 +20,23 @@ export const scheduleViewingInputSchema = z.object({
     .string({ required_error: "preferredAt is required" })
     .min(1)
     .max(40)
-    .refine((value) => resolvePreferredAtInstant(value) !== null, {
-      message: "preferredAt must be a valid Medellín-local date and time",
-    })
-    .refine(
-      (value) => {
-        const instant = resolvePreferredAtInstant(value);
-        return instant !== null && isFutureInstant(instant);
-      },
-      { message: "preferredAt must be in the future" },
-    ),
+    // One pass: resolve once, then report validity and future-ness separately.
+    .superRefine((value, ctx) => {
+      const instant = resolvePreferredAtInstant(value);
+      if (instant === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "preferredAt must be a valid Medellín-local date and time",
+        });
+        return;
+      }
+      if (!isFutureInstant(instant)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "preferredAt must be in the future",
+        });
+      }
+    }),
   tripId: z.string().uuid().optional(),
 });
 

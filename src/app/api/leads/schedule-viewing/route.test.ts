@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({ auth: { getSession } })),
+  createClient: vi.fn(() => Promise.resolve({ auth: { getSession } })),
 }));
 
 vi.mock("@/lib/supabase/edge-functions", () => ({
@@ -43,7 +43,7 @@ function edgeResponse(status: number, payload: unknown) {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => payload,
+    json: () => Promise.resolve(payload),
   } as Response;
 }
 

@@ -51,6 +51,52 @@ describe("schedule-viewing-time (SAN-1203 timezone contract)", () => {
     }
   });
 
+  /**
+   * PR #112 review regression. `Date.UTC` silently normalises out-of-range
+   * components (`10:99` → `11:39`), and a date round trip only catches the
+   * subset of overflows that cross a day boundary — so `10:99`, `10:60` and
+   * `10:00:99` were previously ACCEPTED and quietly rewritten. Every component
+   * must be range-checked before `Date.UTC` is called.
+   */
+  it("rejects out-of-range clock components instead of normalising them", () => {
+    for (const bad of [
+      "2099-11-03T10:99",
+      "2099-11-03T10:60",
+      "2099-11-03T10:00:99",
+      "2099-11-03T10:00:60",
+      "2099-11-03T23:60",
+      "2099-11-03T24:00",
+      "2099-11-03T25:00",
+      "2099-11-03T99:00",
+      "2099-11-03T10:99:99",
+    ]) {
+      expect(resolvePreferredAtInstant(bad), bad).toBeNull();
+    }
+  });
+
+  it("still accepts the exact boundary values of a valid clock", () => {
+    expect(resolvePreferredAtInstant("2099-11-03T23:59:59")).toBe(
+      "2099-11-04T04:59:59.000Z",
+    );
+    expect(resolvePreferredAtInstant("2099-11-03T00:00:00")).toBe(
+      "2099-11-03T05:00:00.000Z",
+    );
+  });
+
+  /**
+   * Pins the deliberate `% 24` in `timeZoneOffsetMinutes`. V8 renders midnight
+   * as "00" with `hour12: false`; some ICU builds render "24". The modulo keeps
+   * the offset on the correct listing-local day in both cases — removing it
+   * (as one review suggested) would roll 24h forward and compute the wrong day.
+   */
+  it("resolves listing-local midnight to the same calendar day", () => {
+    for (const day of ["2026-01-15", "2026-06-15", "2026-11-03"]) {
+      expect(resolvePreferredAtInstant(`${day}T00:00`), day).toBe(
+        `${day}T05:00:00.000Z`,
+      );
+    }
+  });
+
   it("rejects impossible calendar dates instead of rolling them over", () => {
     expect(resolvePreferredAtInstant("2026-02-30T10:00")).toBeNull();
     expect(resolvePreferredAtInstant("2026-13-01T10:00")).toBeNull();
