@@ -71,6 +71,30 @@ describe("PR-Agent review policy", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("accepts the Markdown-linked incremental skip message for a certified base", () => {
+    const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
+    const skip = "Incremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)";
+    const result = verifyReviewResult({
+      comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review -i",
+      baseSha: BASE_A,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects the Markdown-linked incremental skip message after the base changes", () => {
+    const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
+    const skip = "Incremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)";
+    const result = verifyReviewResult({
+      comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review -i",
+      baseSha: BASE_B,
+    });
+    expect(result.ok).toBe(false);
+  });
+
   it("rejects stale, spoofed, or absent review output", () => {
     const stale = comment("<!-- pr-agent:review:incremental -->", "2026-09-20T00:59:59Z");
     const spoofed = comment("<!-- pr-agent:review:incremental -->", "2026-09-20T01:00:05Z", "someone-else");

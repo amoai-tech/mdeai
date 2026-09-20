@@ -36,6 +36,13 @@ function isBotComment(comment) {
   return comment?.user?.login === "github-actions[bot]";
 }
 
+function isIncrementalSkipNotice(body) {
+  return body.includes("Incremental Review Skipped") && (
+    body.includes("No files were changed since the previous PR Review") ||
+    body.includes("No files were changed since the [previous PR Review](")
+  );
+}
+
 export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha }) {
   const expectedMarker = reviewCommand === "/review -i"
     ? "<!-- pr-agent:review:incremental -->"
@@ -57,8 +64,7 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
     const incrementalSkipped =
       reviewCommand === "/review -i" &&
       priorSameBaseCertification &&
-      body.includes("Incremental Review Skipped") &&
-      body.includes("No files were changed since the previous PR Review");
+      isIncrementalSkipNotice(body);
     return canonical || standalone || incrementalSkipped;
   });
 

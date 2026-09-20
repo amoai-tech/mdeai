@@ -250,8 +250,10 @@ jobs:
                     body.includes("PR-Agent could not safely update the persistent review") &&
                     body.includes("## MDE PR Review");
                   const skipped = reviewCommand === "/review -i" && priorSameBase &&
-                    body.includes("Incremental Review Skipped") &&
-                    body.includes("No files were changed since the previous PR Review");
+                    body.includes("Incremental Review Skipped") && (
+                      body.includes("No files were changed since the previous PR Review") ||
+                      body.includes("No files were changed since the [previous PR Review](")
+                    );
                   return canonical || standalone || skipped;
                 });
                 return { ok };
