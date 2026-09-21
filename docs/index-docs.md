@@ -118,6 +118,9 @@ Use for reusable test guidance, QA, release verification, and production smoke p
 
 Use for local development, deployment, security operations, observability, runbooks, and troubleshooting.
 
+Current workflow plan:
+- [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, todo, changelog, GitBook, and Claude/Codex/ChatGPT collaboration.
+
 ### Strategy
 [08-strategy/README.md](08-strategy/README.md)
 
