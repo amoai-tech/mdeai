@@ -42,18 +42,18 @@ Do not make this journey depend on MCP, A2A, browser agents, deep research, obse
 
 ### Summary
 
-| Status | % Complete | Area | Current state | Next |
-|---|---:|---|---|---|
-| 🟢 | 100% | Core rental docs | Complete | Maintain |
-| 🟢 | 100% | Reference index | Complete | Maintain |
-| 🟢 | 100% | Reuse matrix | Complete | Maintain |
-| 🟢 | 100% | Reference repos | Core/MVP set cloned | Inspect exact commits/licenses before reuse |
-| 🟢 | 100% | Test plan | Created | Maintain + add evidence |
-| 🟢 | 100% | Data boundaries | Created | Maintain with RLS evidence |
-| 🔵 | 0% | Migration plan | Not required yet | Create only if a real schema/data cutover appears |
-| 🟢 | 100% | Operations runbook | Created | Maintain before launch/support |
-| 🟡 | 70% | Core/MVP implementation | In progress | Finish rental journey blockers in Linear |
-| 🔵 | 0% | Advanced real-estate features | Deferred | Start only after Core/MVP production proof |
+| Scope | Status | % Complete | Area | Current state | Next |
+|---|---|---:|---|---|---|
+| Documentation | 🟢 | 100% | Core rental docs | Complete | Maintain |
+| Documentation | 🟢 | 100% | Reference index | Complete | Maintain |
+| Documentation | 🟢 | 100% | Reuse matrix | Complete | Maintain |
+| Documentation | 🟢 | 100% | Reference repos | Core/MVP set cataloged | Inspect exact commits/licenses before reuse |
+| Documentation | 🟢 | 100% | Test plan | Created | Maintain + add evidence |
+| Documentation | 🟢 | 100% | Data boundaries | Created | Maintain with RLS evidence |
+| Documentation | 🔵 | 0% | Migration plan | Not required yet | Create only if a real schema/data cutover appears |
+| Documentation | 🟢 | 100% | Operations runbook | Created | Maintain before launch/support |
+| Implementation | 🟡 | 70% | Core/MVP implementation | In progress | Finish rental journey blockers in Linear |
+| Implementation | 🔵 | 0% | Advanced real-estate features | Deferred | Start only after Core/MVP production proof |
 
 **Legend:** 🟢 Complete · 🟡 In progress · 🔴 Blocked/failed · 🔵 Not started
 
@@ -71,6 +71,8 @@ flowchart LR
   F --> G["Broker Follow-Up"]
   G --> H["Manage Rentals"]
 ```
+
+`Ask a Question` is covered by the property-detail experience plus the rental concierge; it does not have a standalone document yet.
 
 ## 2 · Product areas and documentation plan
 
