@@ -7,16 +7,16 @@
 | Area | Current state | Decision |
 |---|---|---|
 | Shared agent rules | `AGENTS.md` is the canonical cross-agent repository guide | **KEEP** |
-| Claude adapter | `CLAUDE.md` delegates to `AGENTS.md` | **KEEP** |
+| Claude adapter | `CLAUDE.md` still duplicates routing rules and does not yet behave as a thin adapter to `AGENTS.md` | **RECONCILE** |
 | Codex | `.agents/skills/` mirrors canonical project skills for Codex | **KEEP** |
 | ChatGPT | No explicit repo startup/handoff contract | **ADD lightweight workflow** |
 | Linear | Current `docs/README.md` and `docs/tasks/INDEX.md` correctly make Linear live work truth | **KEEP** |
 | Legacy Linear docs | Root `linear.md` still says disk task docs are authoritative and contains stale project data | **ARCHIVE / REWRITE** |
-| Task handoff | Root `todo.md` is missing | **CREATE short handoff file** |
+| Task handoff | Root `todo.md` is missing; the shared startup sequence below is **future-state until this file is created** | **CREATE short handoff file** |
 | Changelog | Root `CHANGELOG.md` is missing | **CREATE** |
 | Canonical docs | Numbered `docs/01`–`08` structure is established | **KEEP** |
 | Docs validation | `npm run check:docs` exists | **KEEP** |
-| GitBook | No GitBook config/workflow is present in the repository | **ADD after canonical docs are stable** |
+| GitBook | Root `gitbook-docs.yaml` is committed and prepares site-level Git Sync; publishing/sync is not yet the canonical production workflow | **FINISH + VERIFY** |
 | Claude workspace docs | `.claude/README.md` contains stale details that conflict with current `AGENTS.md`/settings | **UPDATE** |
 
 ## Task 2 · Source-of-truth model
@@ -154,8 +154,8 @@ GitHub `docs/**` remains canonical. GitBook is a publication/retrieval layer.
 
 Recommended first implementation:
 
-1. Create `docs/07-operations/gitbook.md` with the publishing and ownership rules.
-2. Connect one GitBook space/site to the canonical `docs/` tree or a deliberately curated subset.
+1. Create `docs/07-operations/gitbook.md` with the publishing and ownership rules, and verify it matches the already-committed root `gitbook-docs.yaml`.
+2. Connect the MDE GitBook site to this repository and `main` with **site-level Git Sync**; keep `gitbook-docs.yaml` as the single mapping from GitBook spaces to existing documentation directories.
 3. Publish only current canonical docs; keep `docs/_archive/` out of primary navigation/retrieval.
 4. Add minimal frontmatter only where it improves GitBook/search quality:
 
@@ -166,7 +166,7 @@ description: "One sentence explaining exactly what this page answers."
 ---
 ```
 
-5. Let GitBook expose its generated Markdown/LLM/MCP surfaces rather than manually duplicating them in the repo.
+5. Let GitBook expose its generated Markdown/LLM/Model Context Protocol (MCP) surfaces rather than manually duplicating them in the repo.
 6. Test retrieval with real questions from Claude, Codex, and ChatGPT.
 7. Do not edit canonical content directly in GitBook unless the approved workflow synchronizes it back to GitHub.
 
@@ -188,6 +188,8 @@ All agents should start from the same repository reality.
 
 ### Shared startup sequence
 
+**Future-state until `todo.md` exists.** Until then, agents must read `AGENTS.md`, the referenced Linear issue, current branch/PR state, and affected canonical docs directly.
+
 ```text
 1. Read AGENTS.md.
 2. Read todo.md for current handoff.
@@ -203,7 +205,7 @@ All agents should start from the same repository reality.
 
 ### Claude
 
-- Keep `CLAUDE.md` as a thin adapter to `AGENTS.md`.
+- Target state: keep `CLAUDE.md` as a thin adapter to `AGENTS.md`; first reconcile its duplicated routing rules with the current `using-mde-skills` → canonical-owner routing in `AGENTS.md`.
 - Update `.claude/README.md` so it describes the current skill/hook layout and current CopilotKit rules.
 - Session hooks may surface branch, `todo.md`, and verification reminders, but must not invent task truth.
 
@@ -325,8 +327,8 @@ flowchart LR
 
 ## Task 13 · First three implementation tasks
 
-1. **MDE-WORKFLOW-001 · Add a short shared `todo.md` handoff and make every agent read it after `AGENTS.md`.**
-2. **MDE-WORKFLOW-002 · Add `CHANGELOG.md` and define when verified work is notable enough to record.**
-3. **MDE-WORKFLOW-003 · Retire stale `linear.md` task-truth rules and document the current Linear → PR → verification → docs lifecycle.**
+1. **Shared handoff · Add a short `todo.md` handoff and make every agent read it after `AGENTS.md`.** Create a real `SAN-####` Linear issue before implementation.
+2. **Changelog · Add `CHANGELOG.md` and define when verified work is notable enough to record.** Create a real `SAN-####` Linear issue before implementation.
+3. **Linear cleanup · Retire stale `linear.md` task-truth rules and document the current Linear → PR → verification → docs lifecycle.** Create a real `SAN-####` Linear issue before implementation.
 
-Only after those three are stable should MDE add the GitBook publication workflow.
+After those three are stable, finish and verify the already-committed `gitbook-docs.yaml` site-level Git Sync workflow rather than creating a second GitBook configuration path.

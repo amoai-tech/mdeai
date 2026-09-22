@@ -1,6 +1,6 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-18
+updated: 2026-09-21
 status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
