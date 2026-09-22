@@ -86,6 +86,14 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra
 
 **Classification:** `ADAPT / MODEL`
 
+**Pinned revision:** `CopilotKit/CopilotKit@5eec9b0d025cc8c84558145be6ebbeaa7e2321fa`
+
+**License:** MIT, verified from the repository `LICENSE` at the pinned revision.
+
+**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit 1.55.2 before implementation.
+
+**Permalink:** https://github.com/CopilotKit/CopilotKit/tree/5eec9b0d025cc8c84558145be6ebbeaa7e2321fa/examples/canvas/mastra
+
 **What it demonstrates:** shared state between AI and application UI.
 
 **What MDE adapts:** one shared contract for rental filters, selected listing, selected map pin, map bounds, and shortlist state.
@@ -109,6 +117,14 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative
 
 **Classification:** `ADAPT / MODEL`
 
+**Pinned revision:** `CopilotKit/CopilotKit@5eec9b0d025cc8c84558145be6ebbeaa7e2321fa`
+
+**License:** MIT, verified from the repository `LICENSE` at the pinned revision.
+
+**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit 1.55.2 before implementation.
+
+**Permalink:** https://github.com/CopilotKit/CopilotKit/tree/5eec9b0d025cc8c84558145be6ebbeaa7e2321fa/examples/showcases/generative-ui
+
 **What it demonstrates:** typed AI results rendered as application components instead of plain prose.
 
 **What MDE adapts:** structured `RentalCard`, rental comparison, approval, and recovery UI patterns.
@@ -131,6 +147,14 @@ Instead of replying with a paragraph, MDE shows three consistent cards with pric
 https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra
 
 **Classification:** `REFERENCE / ADAPT only if a verified gap exists`
+
+**Pinned revision:** `CopilotKit/CopilotKit@5eec9b0d025cc8c84558145be6ebbeaa7e2321fa`
+
+**License:** MIT, verified from the repository `LICENSE` at the pinned revision.
+
+**Verification:** integration path exists at the pinned revision. Keep as `REFERENCE` until a concrete MDE parity gap and package-version compatibility are proven.
+
+**Permalink:** https://github.com/CopilotKit/CopilotKit/tree/5eec9b0d025cc8c84558145be6ebbeaa7e2321fa/examples/integrations/mastra
 
 **What it demonstrates:** first-party CopilotKit ↔ Mastra integration.
 
