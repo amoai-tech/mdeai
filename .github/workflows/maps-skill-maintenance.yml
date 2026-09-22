@@ -17,6 +17,8 @@ on:
       - "src/**/*Map*.tsx"
       - "src/**/*places*.ts"
       - "src/**/*places*.tsx"
+      - "src/**/*place*.ts"
+      - "src/**/*place*.tsx"
       - "src/__tests__/maps-*.test.ts"
       - "package.json"
       - "package-lock.json"

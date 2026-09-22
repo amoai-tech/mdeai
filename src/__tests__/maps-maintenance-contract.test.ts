@@ -6,6 +6,7 @@ describe("Maps maintenance contract", () => {
     expect(existsSync(".github/workflows/maps-skill-maintenance.yml")).toBe(true);
     const body = readFileSync(".github/workflows/maps-skill-maintenance.yml", "utf8");
     expect(body).toContain("schedule:");
+    expect(body).toContain('cron: "23 13 * * 1"');
     expect(body).toContain("workflow_dispatch:");
     expect(body).toContain("pull_request:");
     expect(body).toContain("maps-contracts:");
@@ -25,7 +26,15 @@ describe("Maps maintenance contract", () => {
       "src/**/places/**",
       "src/**/*map*.ts",
       "src/**/*map*.tsx",
+      "src/**/*Map*.ts",
       "src/**/*Map*.tsx",
+      "src/**/*places*.ts",
+      "src/**/*places*.tsx",
+      "src/**/*place*.ts",
+      "src/**/*place*.tsx",
+      "src/__tests__/maps-*.test.ts",
+      "package.json",
+      "package-lock.json",
     ]) expect(body, path).toContain(path);
   });
 
