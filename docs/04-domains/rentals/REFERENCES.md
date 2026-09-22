@@ -67,11 +67,11 @@ Do not rebuild search, rental agents, map conversion, or transaction infrastruct
 External references should improve or clarify these existing MDE foundations.
 
 
-### Central local reference library
+### Reference repository inspection
 
-Use `/home/sk/github-repos/README.md` as the local repository catalog. For MDE Rentals, inspect first-party framework clones under `/home/sk/github-repos/copilotkit/` and `/home/sk/github-repos/mastra/`, and Real Estate domain references under `/home/sk/github-repos/real-estate/`.
+Use the canonical repository URLs in this document as the portable source references. Local clones may be used for faster inspection, but their machine-specific paths are intentionally not part of the canonical documentation.
 
-A local clone is convenient inspection evidence, not permission to copy code. Record exact commit/tag and license before any direct adaptation.
+A local clone is convenient inspection evidence, not permission to copy code. Record the exact commit/tag and license before any direct adaptation.
 
 ---
 
@@ -151,8 +151,6 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/integrations/mastra
 **Repo:**
 https://github.com/nazsats/dubai-real-estate
 
-**Local clone:** `/home/sk/github-repos/real-estate/dubai-real-estate`
-
 **Classification:** `MODEL`
 
 **Verification:** external domain reference; inspect exact commit/license before any code reuse.
@@ -177,8 +175,6 @@ MDE first enforces price, bedrooms, furnishing, and availability in SQL. Only el
 
 **Repo:**
 https://github.com/yuehong136/HomeRecoEngine
-
-**Local clone:** `/home/sk/github-repos/real-estate/HomeRecoEngine`
 
 **Classification:** `MODEL`
 
@@ -205,8 +201,6 @@ Hard constraints remove invalid listings. Location logic measures spatial fit. S
 **Repo:**
 https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
 
-**Local clone:** `/home/sk/github-repos/real-estate/real-estate-ai-chatbot`
-
 **Classification:** `MODEL`
 
 **Verification:** external domain reference; inspect exact commit/license before any code reuse.
@@ -229,8 +223,6 @@ https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot
 
 **Repo:**
 https://github.com/GretaGalliani/HomeMatch
-
-**Local clone:** `/home/sk/github-repos/real-estate/HomeMatch`
 
 **Classification:** `MODEL`
 

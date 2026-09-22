@@ -297,38 +297,32 @@ Platform tasks that can affect Rentals:
 - Mastra storage certification: https://linear.app/amo100/issue/SAN-1311/task-5410-mde-mastra-storage-cert-001-certify-mastra-storage-for
 - Chat memory durability: https://linear.app/amo100/issue/SAN-548/san-548-prove-chat-memory-survives-a-vercel-restart
 
-## 7 · Reference repos and local clones
+## 7 · Reference repositories
 
-### Local clone cache
+Use canonical repository URLs here so the docs work on every machine. Local clones are optional inspection aids and are intentionally not recorded as machine-specific filesystem paths.
 
-Use local clones for source inspection instead of repeatedly browsing moving `main` branches.
-
-| Source | Local path | Main MDE use |
+| Source | Canonical repository | Main MDE use |
 |---|---|---|
-| CopilotKit | `/home/sk/github-repos/copilotkit/CopilotKit` | Mastra integration, shared state, GenUI patterns |
-| Mastra monorepo | `/home/sk/github-repos/mastra/mastra` | Native agents/tools/workflows/storage APIs |
-| Mastra Agent Harness | `/home/sk/github-repos/mastra/template-agent-harness` | Advanced governance reference; not Core/MVP requirement |
-| Mastra Browsing Agent | `/home/sk/github-repos/mastra/template-browsing-agent` | Future external verification reference |
-| Mastra Company Knowledge | `/home/sk/github-repos/mastra/template-company-knowledge` | Future grounded knowledge reference |
-| Mastra Deep Search | `/home/sk/github-repos/mastra/template-deep-search` | Future neighborhood/market research reference |
-| Mastra Text-to-SQL | `/home/sk/github-repos/mastra/template-text-to-sql` | Broker/admin analytics model only |
-| OpenBot | `/home/sk/github-repos/copilotkit/OpenBot` | Advanced broker coworker reference; not Core/MVP |
-| Mastra Supabase starter | `/home/sk/github-repos/community/mastra-supabase-starter` | Supabase integration comparison |
-| Mastra auth examples | `/home/sk/github-repos/mastra/mastra-auth-examples` | Auth pattern comparison |
-| Observational memory workshop | `/home/sk/github-repos/mastra/mastra-observational-memory-workshop` | Advanced-only memory research |
+| CopilotKit | https://github.com/CopilotKit/CopilotKit | Mastra integration, shared state, GenUI patterns |
+| Mastra monorepo | https://github.com/mastra-ai/mastra | Native agents/tools/workflows/storage APIs |
+| Mastra Agent Harness | https://github.com/mastra-ai/template-agent-harness | Advanced governance reference; not Core/MVP requirement |
+| Mastra Browsing Agent | https://github.com/mastra-ai/template-browsing-agent | Future external verification reference |
+| Mastra Company Knowledge | https://github.com/mastra-ai/template-company-knowledge | Future grounded knowledge reference |
+| Mastra Deep Search | https://github.com/mastra-ai/template-deep-search | Future neighborhood/market research reference |
+| Mastra Text-to-SQL | https://github.com/mastra-ai/template-text-to-sql | Broker/admin analytics model only |
 
-Real Estate Core/MVP clones:
+Real Estate Core/MVP references:
 
-| Status | % Complete | Repo | Local path | Main MDE use |
+| Status | % Complete | Repo | Canonical repository | Main MDE use |
 |---|---:|---|---|---|
-| 🟢 | 100% | Dubai Real Estate | `/home/sk/github-repos/real-estate/dubai-real-estate` | SQL-first hard truth before AI ranking |
-| 🟢 | 100% | HomeRecoEngine | `/home/sk/github-repos/real-estate/HomeRecoEngine` | Structured + semantic + geospatial ranking pattern |
-| 🟢 | 100% | Real Estate AI Chatbot | `/home/sk/github-repos/real-estate/real-estate-ai-chatbot` | Lead qualification and authorized broker handoff |
-| 🟢 | 100% | HomeMatch | `/home/sk/github-repos/real-estate/HomeMatch` | Soft lifestyle ranking after hard filters |
+| 🟢 | 100% | Dubai Real Estate | https://github.com/nazsats/dubai-real-estate | SQL-first hard truth before AI ranking |
+| 🟢 | 100% | HomeRecoEngine | https://github.com/yuehong136/HomeRecoEngine | Structured + semantic + geospatial ranking pattern |
+| 🟢 | 100% | Real Estate AI Chatbot | https://github.com/JoaoVitorCarvalhoPR/real-estate-ai-chatbot | Lead qualification and authorized broker handoff |
+| 🟢 | 100% | HomeMatch | https://github.com/GretaGalliani/HomeMatch | Soft lifestyle ranking after hard filters |
 
 Full external repo classification belongs in [`REFERENCES.md`](./REFERENCES.md) and [`REUSE-MATRIX.md`](./REUSE-MATRIX.md).
 
-When adapting code, record the exact local clone commit/tag and license. A local path is convenient evidence; it is not an implementation authority by itself.
+When adapting code, record the exact commit/tag and license. A local clone can speed inspection, but the canonical URL and pinned revision remain the portable evidence.
 
 ## 8 · Product docs
 

@@ -64,4 +64,4 @@ A repo name by itself is not an implementation plan.
 - MDE Reference Reuse Matrix: https://linear.app/amo100/document/mde-reference-reuse-matrix-883571644ed8
 - MDE Agent Platform Migration Plan: https://linear.app/amo100/document/mde-agent-platform-migration-plan-5c76cd7d8032
 
-Legacy rental/real-estate docs remain historical evidence until explicitly reviewed, merged, or archived. They do not override this canonical package.
+Superseded rental design and implementation plans from this documentation pass are archived under `docs/_archive/rentals-domain-docs-2026-09-20/`. Other older rental/real-estate material remains historical evidence until explicitly audited; it does not belong in this canonical folder and does not override this package.
