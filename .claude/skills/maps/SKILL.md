@@ -198,6 +198,10 @@ Maps/Places provides geo truth, not event/rental inventory. Keep inventory in Su
 
 Do not introduce `google.maps.Marker`, legacy Places `Autocomplete`/`SearchBox`/`PlacesService`, legacy `DirectionsService`/`DirectionsRenderer`, `DistanceMatrixService`, `visualization.HeatmapLayer`, or `google.maps.drawing`. Retrieve current Google guidance and use the recommended modern replacement before editing these surfaces.
 
+**Directions status override (verified 2026-09-22):** current Google Maps JavaScript reference documentation says `DirectionsService` and `DirectionsRenderer` are **deprecated as of February 25, 2026** and **not scheduled to be discontinued**. They may remain in existing integrations, but MDE must not introduce them in new code; use the current Routes library/API (`Route` / `RouteMatrix`) instead. If the pinned vendor skill says these services were disabled in March 2025, current implementation documentation wins:
+- https://developers.google.com/maps/documentation/javascript/reference/directions
+- https://developers.google.com/maps/documentation/javascript/routes/overview
+
 ## Critical failure checks
 
 Before approval verify: no unsupported browser REST/CORS path; map container has explicit height; React uses `@vis.gl/react-google-maps` with the required marker library; Advanced Markers use a valid `mapId`; server keys stay out of client bundles; web-component objects are not stringified as HTML attributes; headless tests do not assume WebGL/3D; coordinates stay `{ lat, lng }`; international flows set intentional locale/region; Places field masks are minimal; no legacy API was introduced.

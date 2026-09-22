@@ -6,6 +6,7 @@ const bannedLegacyTokens = [
   "DrawingManager", "HeatmapLayer", "useMarkerRef", "'drawing'", "'visualization'",
 ];
 
+/** Assert that active reference text does not teach legacy Maps APIs. */
 function expectNoLegacyApis(name: string, body: string) {
   for (const token of bannedLegacyTokens) expect(body, `${name}: ${token}`).not.toContain(token);
 }
@@ -53,6 +54,13 @@ describe("Maps skill quality contract", () => {
     const skill = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
     expect(skill).not.toContain("Store as `ai_summary`; show `disclosureText`");
     expect(skill.toLowerCase()).toContain("preserve provider provenance and disclosure");
+  });
+
+  it("overrides stale upstream Directions availability claims with current Google docs", () => {
+    const skill = readFileSync(".claude/skills/maps/SKILL.md", "utf8");
+    expect(skill).toContain("deprecated as of February 25, 2026");
+    expect(skill).toContain("not scheduled to be discontinued");
+    expect(skill).toContain("https://developers.google.com/maps/documentation/javascript/reference/directions");
   });
 
   it("keeps security guidance on supported embed URLs and volatile facts dynamic", () => {
