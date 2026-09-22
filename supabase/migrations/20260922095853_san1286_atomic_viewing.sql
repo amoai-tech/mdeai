@@ -88,13 +88,67 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  IF p_scheduled_at IS NULL OR p_scheduled_at <= now() THEN
-    RAISE EXCEPTION 'p1_schedule_tour_atomic: future scheduled_at required'
+  IF p_user_id IS NULL AND v_email IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: guest email required for idempotency'
       USING ERRCODE = 'P0001';
   END IF;
 
-  IF p_user_id IS NULL AND v_email IS NULL THEN
-    RAISE EXCEPTION 'p1_schedule_tour_atomic: guest email required for idempotency'
+  -- Idempotency is stronger than volatile new-request validation. If this exact
+  -- logical request already committed, return the existing pair even when the
+  -- requested time has since passed or the listing is no longer requestable.
+  IF p_user_id IS NOT NULL THEN
+    SELECT l.* INTO v_lead
+    FROM public.leads AS l
+    WHERE l.user_id = p_user_id
+      AND l.idempotency_key = v_idempotency_key;
+  ELSE
+    SELECT l.* INTO v_lead
+    FROM public.leads AS l
+    WHERE l.user_id IS NULL
+      AND l.idempotency_key = v_idempotency_key;
+  END IF;
+
+  IF v_lead.id IS NOT NULL THEN
+    IF v_listing_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
+      SELECT a.* INTO v_apartment
+      FROM public.apartments AS a
+      WHERE a.id = v_listing_id::uuid;
+    ELSE
+      SELECT a.* INTO v_apartment
+      FROM public.apartments AS a
+      WHERE a.slug = v_listing_id;
+    END IF;
+
+    IF v_apartment.id IS NULL
+      OR v_lead.apartment_id IS DISTINCT FROM v_apartment.id
+      OR v_lead.preferred_showing_at IS DISTINCT FROM p_scheduled_at
+      OR v_lead.trip_id IS DISTINCT FROM p_trip_id
+      OR v_lead.intent IS DISTINCT FROM 'rental'
+      OR v_lead.email IS DISTINCT FROM v_email
+      OR lower(v_lead.name) IS DISTINCT FROM lower(v_name)
+      OR v_lead.phone IS DISTINCT FROM v_phone
+    THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT s.* INTO v_showing
+    FROM public.showings AS s
+    WHERE s.lead_id = v_lead.id
+      AND s.apartment_id = v_lead.apartment_id
+      AND s.scheduled_at = p_scheduled_at;
+
+    IF v_showing.id IS NOT NULL THEN
+      RETURN jsonb_build_object(
+        'lead', to_jsonb(v_lead),
+        'showing', to_jsonb(v_showing),
+        'idempotent_replay', true
+      );
+    END IF;
+  END IF;
+
+  IF p_scheduled_at IS NULL OR p_scheduled_at <= now() THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: future scheduled_at required'
       USING ERRCODE = 'P0001';
   END IF;
 

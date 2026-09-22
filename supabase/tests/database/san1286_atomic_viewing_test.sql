@@ -3,7 +3,7 @@
 -- full rental contract, and is idempotent for authenticated and guest callers.
 
 begin;
-select plan(44);
+select plan(47);
 
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
@@ -135,6 +135,32 @@ select lives_ok($q$
 $q$, 'authenticated replay succeeds');
 select is((select count(*)::int from public.leads where idempotency_key='san1286-auth-key-001'), 1, 'authenticated replay keeps one lead');
 select is((select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-auth-key-001'), 1, 'authenticated replay keeps one showing');
+
+-- A completed request must remain idempotent even after its requested time passes.
+-- This models a lost response retried later: the existing committed pair wins over
+-- new-request future-time validation.
+insert into public.leads (
+  user_id, source, email, name, apartment_id, preferred_showing_at, intent, status,
+  pipeline_stage, metadata, idempotency_key
+) values (
+  null, 'form', 'past-replay@example.com', 'Past Replay',
+  'a2860000-0000-4000-8000-000000000010'::uuid,
+  '2026-01-15 14:00:00+00'::timestamptz, 'rental', 'new', 'showing_scheduled',
+  '{"listing_id":"san1286-active"}'::jsonb, 'san1286-past-replay-key'
+);
+insert into public.showings (lead_id, apartment_id, scheduled_at, status, metadata)
+select id, apartment_id, preferred_showing_at, 'scheduled', '{}'::jsonb
+from public.leads where idempotency_key='san1286-past-replay-key';
+
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san1286-active', null::uuid, 'san1286-past-replay-key', 'form',
+    'past-replay@example.com', 'Past Replay', null, null::uuid,
+    '2026-01-15 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'past committed request replays after its scheduled time');
+select is((select count(*)::int from public.leads where idempotency_key='san1286-past-replay-key'), 1, 'past replay keeps one lead');
+select is((select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-past-replay-key'), 1, 'past replay keeps one showing');
 
 -- Reusing the same idempotency key for a different request must fail closed.
 select throws_ok($q$
