@@ -183,6 +183,27 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(first.idempotency_key).not.toBe(third.idempotency_key);
   });
 
+  it("preserves a typed validation error from the edge", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "p1_schedule_tour_atomic: listing is not requestable",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(json.error.message).toBe(
+      "p1_schedule_tour_atomic: listing is not requestable",
+    );
+  });
+
   it("maps a rate-limited edge response to a typed error", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(429, {
