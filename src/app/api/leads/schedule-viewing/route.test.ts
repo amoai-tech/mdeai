@@ -204,6 +204,24 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     );
   });
 
+  it("does not downgrade a 5xx edge validation response to a client 400", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(500, {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "validation path failed upstream",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("maps a rate-limited edge response to a typed error", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(429, {

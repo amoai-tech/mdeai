@@ -3,7 +3,7 @@
 -- full rental contract, and is idempotent for authenticated and guest callers.
 
 begin;
-select plan(47);
+select plan(52);
 
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
@@ -93,7 +93,7 @@ select is((select count(*)::int from public.showings s join public.leads l on l.
 -- Authenticated request: one committed pair with the full rental contract.
 select lives_ok($q$
   select public.p1_schedule_tour_atomic(
-    'san1286-active',
+    '  san1286-active  ',
     'a2860000-0000-4000-8000-000000000001'::uuid,
     'san1286-auth-key-001',
     'form',
@@ -116,6 +116,7 @@ select is((select trip_id from public.leads where idempotency_key='san1286-auth-
 select is((select pipeline_stage from public.leads where idempotency_key='san1286-auth-key-001'), 'showing_scheduled', 'lead enters showing_scheduled pipeline stage');
 select is((select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-auth-key-001'), 1, 'authenticated request creates one showing');
 select is((select s.trip_id from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-auth-key-001'), 'a2860000-0000-4000-8000-000000000002'::uuid, 'showing stores trip id');
+select is((select metadata->>'listing_id' from public.leads where idempotency_key='san1286-auth-key-001'), 'san1286-active', 'lead stores normalized original listing identifier');
 
 -- Replay must return the existing logical pair.
 select lives_ok($q$
@@ -135,6 +136,26 @@ select lives_ok($q$
 $q$, 'authenticated replay succeeds');
 select is((select count(*)::int from public.leads where idempotency_key='san1286-auth-key-001'), 1, 'authenticated replay keeps one lead');
 select is((select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-auth-key-001'), 1, 'authenticated replay keeps one showing');
+
+-- A committed replay must use the preserved request identity, not the apartment's
+-- current slug. Renaming a slug after commit must not invalidate the original retry.
+update public.apartments set slug='san1286-active-renamed' where id='a2860000-0000-4000-8000-000000000010'::uuid;
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san1286-active',
+    'a2860000-0000-4000-8000-000000000001'::uuid,
+    'san1286-auth-key-001', 'form', 'camila@example.com', 'Camila', '+573001234567',
+    'a2860000-0000-4000-8000-000000000002'::uuid,
+    '2099-10-15 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'committed replay survives apartment slug rename');
+update public.apartments set slug='san1286-active' where id='a2860000-0000-4000-8000-000000000010'::uuid;
+
+select throws_ok($q$
+  update public.leads
+  set metadata = jsonb_set(metadata, '{listing_id}', '"tampered-listing"'::jsonb)
+  where idempotency_key='san1286-auth-key-001'
+$q$, 'P1286', 'SAN-1286 viewing listing identity is immutable', 'committed listing identity cannot be changed');
 
 -- A completed request must remain idempotent even after its requested time passes.
 -- This models a lost response retried later: the existing committed pair wins over
@@ -273,6 +294,31 @@ select throws_ok($q$
 $q$, 'P0001', 'forced showing failure', 'showing failure propagates');
 select is((select count(*)::int from public.leads where idempotency_key='san1286-rollback-key'), 0, 'showing failure rolls back lead');
 select is((select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-rollback-key'), 0, 'showing failure leaves no showing');
+
+-- The RPC may suppress only the intentional same-day arbiter conflict. An
+-- unrelated future unique constraint must propagate instead of being swallowed.
+create unique index san1286_test_showings_external_unique
+  on public.showings ((metadata->>'external_unique'))
+  where metadata ? 'external_unique';
+update public.showings
+set metadata = metadata || '{"external_unique":"collision"}'::jsonb
+where id = (
+  select s.id
+  from public.showings s
+  join public.leads l on l.id=s.lead_id
+  where l.idempotency_key='san1286-service-key-001'
+  limit 1
+);
+
+select throws_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san1286-active', null::uuid, 'san1286-unrelated-unique-key', 'form',
+    'unique@example.com', 'Unique Conflict', null, null::uuid,
+    '2099-10-19 14:00:00+00'::timestamptz, '{}'::jsonb,
+    '{"external_unique":"collision"}'::jsonb
+  )
+$q$, '23505', null, 'unrelated showing unique violation propagates');
+select is((select count(*)::int from public.leads where idempotency_key='san1286-unrelated-unique-key'), 0, 'unrelated showing unique violation rolls back lead');
 
 select * from finish();
 rollback;

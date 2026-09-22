@@ -132,7 +132,7 @@ export async function POST(req: Request) {
     return failure(
       "VALIDATION_ERROR",
       edgeJson.error.message ?? "Viewing request validation failed",
-      edgeRes.status >= 400 && edgeRes.status < 500 ? edgeRes.status : 400,
+      edgeRes.status >= 400 && edgeRes.status < 500 ? edgeRes.status : 502,
     );
   }
 

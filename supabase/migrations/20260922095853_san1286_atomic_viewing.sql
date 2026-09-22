@@ -42,6 +42,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_showings_lead_apt_day
     ((scheduled_at AT TIME ZONE 'America/Bogota')::date)
   );
 
+-- Viewing idempotency depends on the originally submitted listing identifier.
+-- Preserve that key inside lead metadata and prevent later lead edits from changing it.
+CREATE OR REPLACE FUNCTION public.san1286_preserve_viewing_listing_identity()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF OLD.idempotency_key IS NOT NULL
+    AND OLD.intent = 'rental'
+    AND OLD.metadata ? 'listing_id'
+    AND (NEW.metadata ->> 'listing_id') IS DISTINCT FROM (OLD.metadata ->> 'listing_id')
+  THEN
+    RAISE EXCEPTION 'SAN-1286 viewing listing identity is immutable'
+      USING ERRCODE = 'P1286';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS san1286_preserve_viewing_listing_identity ON public.leads;
+CREATE TRIGGER san1286_preserve_viewing_listing_identity
+BEFORE UPDATE OF metadata ON public.leads
+FOR EACH ROW
+WHEN (OLD.idempotency_key IS NOT NULL AND OLD.intent = 'rental')
+EXECUTE FUNCTION public.san1286_preserve_viewing_listing_identity();
+
+REVOKE ALL ON FUNCTION public.san1286_preserve_viewing_listing_identity()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.san1286_preserve_viewing_listing_identity()
+  TO service_role;
+
 -- PostgREST does not support overloaded RPCs reliably. Retire the historical
 -- signature before installing the single current contract.
 DROP FUNCTION IF EXISTS public.p1_schedule_tour_atomic(
@@ -109,18 +142,10 @@ BEGIN
   END IF;
 
   IF v_lead.id IS NOT NULL THEN
-    IF v_listing_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
-      SELECT a.* INTO v_apartment
-      FROM public.apartments AS a
-      WHERE a.id = v_listing_id::uuid;
-    ELSE
-      SELECT a.* INTO v_apartment
-      FROM public.apartments AS a
-      WHERE a.slug = v_listing_id;
-    END IF;
-
-    IF v_apartment.id IS NULL
-      OR v_lead.apartment_id IS DISTINCT FROM v_apartment.id
+    -- Replay identity is the normalized identifier captured at commit time, not
+    -- the apartment's current slug. The trigger above makes this metadata key
+    -- immutable for idempotent rental-viewing leads.
+    IF (v_lead.metadata ->> 'listing_id') IS DISTINCT FROM v_listing_id
       OR v_lead.preferred_showing_at IS DISTINCT FROM p_scheduled_at
       OR v_lead.trip_id IS DISTINCT FROM p_trip_id
       OR v_lead.intent IS DISTINCT FROM 'rental'
@@ -220,7 +245,7 @@ BEGIN
       'showing_scheduled',
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
-          'listing_id', p_listing_id,
+          'listing_id', v_listing_id,
           'preferred_at', p_scheduled_at
         ),
       v_idempotency_key
@@ -267,7 +292,7 @@ BEGIN
       'showing_scheduled',
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
-          'listing_id', p_listing_id,
+          'listing_id', v_listing_id,
           'preferred_at', p_scheduled_at
         ),
       v_idempotency_key
@@ -329,9 +354,13 @@ BEGIN
       'scheduled',
       p_trip_id,
       coalesce(p_showing_metadata, '{}'::jsonb)
-        || jsonb_build_object('listing_id', p_listing_id)
+        || jsonb_build_object('listing_id', v_listing_id)
     )
-    ON CONFLICT DO NOTHING
+    ON CONFLICT (
+      lead_id,
+      apartment_id,
+      ((scheduled_at AT TIME ZONE 'America/Bogota')::date)
+    ) DO NOTHING
     RETURNING * INTO v_showing;
 
     IF v_showing.id IS NULL THEN
