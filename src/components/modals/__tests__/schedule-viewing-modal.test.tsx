@@ -96,6 +96,31 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain("Phone (optional)");
   });
 
+  // SAN-1203 — a viewing request cannot be submitted without a time.
+  it("preferred time field is required", () => {
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: MOCK_TARGET,
+      closeScheduleViewing: vi.fn(),
+      setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    const html = renderToStaticMarkup(React.createElement(ScheduleViewingModal));
+    const tag = html.match(/<input[^>]*name="preferredAt"[^>]*>/)?.[0] ?? "";
+    expect(tag).not.toBe("");
+    expect(tag).toContain("required");
+  });
+
+  it("labels the field as a listing-local time so the timezone contract is visible", () => {
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: MOCK_TARGET,
+      closeScheduleViewing: vi.fn(),
+      setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    const html = renderToStaticMarkup(React.createElement(ScheduleViewingModal));
+    expect(html).toContain("Medellín time");
+  });
+
   it("renders Submit and Cancel buttons", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       scheduleTarget: MOCK_TARGET,
