@@ -127,6 +127,28 @@ Deno.test("createScheduleViewingBridge — maps RPC validation errors", async ()
   });
 });
 
+Deno.test("createScheduleViewingBridge — keeps internal P0001 failures as DB errors", async () => {
+  const client = {
+    rpc: () => Promise.resolve({
+      data: null,
+      error: { code: "P0001", message: "SAN1286 forced showing failure" },
+    }),
+  } as unknown as Parameters<typeof createScheduleViewingBridge>[0];
+
+  const result = await createScheduleViewingBridge(client, {
+    listingId: "apt-laureles-001",
+    preferredAt: "2026-10-15T14:00:00.000Z",
+    idempotencyKey: "sv-test-db-error-123",
+    email: "camila@example.com",
+  });
+
+  assertEquals(result, {
+    ok: false,
+    code: "DB_ERROR",
+    message: "Failed to save viewing request",
+  });
+});
+
 Deno.test("createScheduleViewingBridge — rejects missing idempotency key before RPC", async () => {
   let called = false;
   const client = {
