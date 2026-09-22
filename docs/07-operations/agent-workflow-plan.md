@@ -325,10 +325,12 @@ flowchart LR
     DOCS --> GB
 ```
 
-## Task 13 · First three implementation tasks
+## Task 13 · First three implementation proposals
 
-1. **Shared handoff · Add a short `todo.md` handoff and make every agent read it after `AGENTS.md`.** Create a real `SAN-####` Linear issue before implementation.
-2. **Changelog · Add `CHANGELOG.md` and define when verified work is notable enough to record.** Create a real `SAN-####` Linear issue before implementation.
-3. **Linear cleanup · Retire stale `linear.md` task-truth rules and document the current Linear → PR → verification → docs lifecycle.** Create a real `SAN-####` Linear issue before implementation.
+These are proposal names, not actionable Linear issues yet. Before implementation, create each item in the MDE Linear project and replace the proposal name with its real `SAN-` issue ID.
+
+1. **Shared handoff · Add a short `todo.md` handoff and make every agent read it after `AGENTS.md`.**
+2. **Changelog · Add `CHANGELOG.md` and define when verified work is notable enough to record.**
+3. **Linear cleanup · Retire stale `linear.md` task-truth rules and document the current Linear → PR → verification → docs lifecycle.**
 
 After those three are stable, finish and verify the already-committed `gitbook-docs.yaml` site-level Git Sync workflow rather than creating a second GitBook configuration path.
