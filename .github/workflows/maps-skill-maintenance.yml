@@ -7,8 +7,16 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".github/workflows/maps-skill-maintenance.yml"
       - ".claude/skills/maps/**"
-      - "src/components/maps/**"
+      - "src/**/maps/**"
+      - "src/**/places/**"
+      - "src/**/*map*.ts"
+      - "src/**/*map*.tsx"
+      - "src/**/*Map*.ts"
+      - "src/**/*Map*.tsx"
+      - "src/**/*places*.ts"
+      - "src/**/*places*.tsx"
       - "src/__tests__/maps-*.test.ts"
       - "package.json"
       - "package-lock.json"
@@ -20,8 +28,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  maps-maintenance:
-    name: upstream · links · @vis.gl/react-google-maps
+  maps-contracts:
+    name: deterministic Maps contracts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,11 +40,24 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Google Maps agent-skill upstream drift
-        run: node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
-      - name: Primary Maps reference link health
-        run: node .claude/skills/maps/scripts/check-maps-reference-links.mjs
-      - name: React Maps compatibility with current Google examples
+      - name: Verify installed React Maps API contract
         run: node .claude/skills/maps/scripts/check-visgl-compatibility.mjs
       - name: Maps maintenance contracts
-        run: npx vitest run src/__tests__/maps-maintenance-contract.test.ts src/__tests__/maps-reference-index.test.ts src/components/maps/google-places-summary.test.tsx
+        run: npx vitest run src/__tests__/maps-*.test.ts src/components/maps/google-places-summary.test.tsx
+
+  maps-live-maintenance:
+    if: github.event_name != 'pull_request'
+    name: advisory upstream and link drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Google Maps agent-skill upstream drift
+        continue-on-error: true
+        run: node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
+      - name: Primary Maps reference link health
+        continue-on-error: true
+        run: node .claude/skills/maps/scripts/check-maps-reference-links.mjs

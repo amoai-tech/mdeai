@@ -44,4 +44,15 @@ describe("Maps reference index", () => {
       expect(body).toContain(heading);
     }
   });
+  it("keeps product, marketing, and blog sources below implementation-authority scores", () => {
+    const body = readFileSync(indexPath, "utf8");
+    const rows = body.split("\n").filter((line) => line.startsWith("| ["));
+    for (const row of rows) {
+      const authority = row.split("|")[2]?.trim() ?? "";
+      if (!/(product page|blog|community|third-party)/i.test(authority)) continue;
+      const score = Number(row.match(/\|\s*(\d+)\/10\s*\|\s*$/)?.[1]);
+      expect(score, row).toBeLessThanOrEqual(7);
+    }
+  });
+
 });
