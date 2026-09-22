@@ -28,14 +28,14 @@ function buildScheduleIdempotencyKey(input: {
   tripId?: string;
   preferredAtInstant: string;
 }): string {
-  const raw = [
-    input.listingId,
-    input.email.toLowerCase(),
+  const raw = JSON.stringify([
+    input.listingId.trim(),
+    input.email.trim().toLowerCase(),
     input.name.trim().toLowerCase(),
     input.phone?.trim() ?? "",
     input.tripId ?? "",
     input.preferredAtInstant,
-  ].join("|");
+  ]);
   const digest = createHash("sha256").update(raw).digest("hex").slice(0, 32);
   return `sv-${digest}`;
 }
