@@ -167,13 +167,13 @@ Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/
 
 ## A — Canonical `.claude/skills` inventory
 
-`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **27 total** — **26 active skills plus `_template`**. `archive/` is a container, not an active skill.
+`.claude/skills/` is the editable source of truth. Current real skill directories with `SKILL.md`: **26 total** — **25 active skills plus `_template`**. `archive/` is a container, not an active skill.
 
 | Group | Exact folders |
 |-------|---------------|
 | Runtime / domain owners | `cloudinary`, `copilotkit`, `events`, `gemini`, `maps`, `mastra`, `nextjs`, `real-estate`, `stripe`, `supabase` |
 | Task / engineering workflow | `code-review`, `mermaid-diagrams`, `playwright-cli`, `research`, `systematic-debugging`, `task-verifier`, `tasks`, `testing`, `using-mde-skills`, `wireframe`, `writing-skills` |
-| Specialist review | `copilotkit-review`, `maps-review`, `mastra-review`, `stripe-review`, `supabase-review` |
+| Specialist review | `copilotkit-review`, `mastra-review`, `stripe-review`, `supabase-review`; Maps review routes to canonical `maps` |
 | Template | `_template` |
 
 ---
@@ -224,7 +224,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 
 1. Edit skill content only under `.claude/skills/<name>/`.
 2. Keep `.agents/skills/` compatibility-only: symlinks must point to matching `.claude/skills/<name>/SKILL.md`.
-3. Route work through the canonical owner names in the current architecture table; do not resurrect retired aliases such as `mde-maps`, `mde-supabase`, `mde-task-lifecycle`, `lean-dev-flow`, or `mde-worktree-pr-flow`.
+3. Route work through the canonical owner names in the current architecture table; do not resurrect retired or superseded aliases.
 4. Keep `real-estate` as the single canonical real-estate owner; do not recreate retired aliases.
 5. Verify skill changes with symlink integrity, routing-contract tests, session-start tests, and `git diff --check`.
 6. For CopilotKit, inspect the installed package and imports before changing APIs; this repo currently uses `@copilotkit/react-core/v2` entrypoints on package `1.55.2`.

@@ -666,11 +666,11 @@ def cmd_places_aggregate(args):
 
 
 # ---------------------------------------------------------------------------
-# 18. MAP EMBED URL (free, no API call - just generates URL)
+# 18. MAP EMBED URL (documented Embed API URL generator)
 # ---------------------------------------------------------------------------
 
 def cmd_embed_url(args):
-    """Generate a Google Maps Embed URL (free, unlimited)."""
+    """Generate a Google Maps Embed API URL using the configured API key."""
     key = load_api_key()
     mode = args.mode or "place"
     params = {"key": key}
@@ -957,7 +957,7 @@ def build_parser():
     s.set_defaults(func=cmd_places_aggregate)
 
     # --- embed-url ---
-    s = sub.add_parser("embed-url", help="Generate Maps Embed URL (free)")
+    s = sub.add_parser("embed-url", help="Generate Maps Embed API URL")
     s.add_argument("--mode", default="place",
                    choices=["place", "directions", "search", "view", "streetview"])
     s.add_argument("--query", help="Place or search query")

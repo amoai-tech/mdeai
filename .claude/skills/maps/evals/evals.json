@@ -1,0 +1,35 @@
+{
+  "skill_name": "maps",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Update our Next.js rentals map to add draggable property pins and keep the selected list card synchronized while dragging.",
+      "expected_output": "Uses @vis.gl/react-google-maps and AdvancedMarker, preserves stable IDs, explicit map height/mapId, and adds targeted UI tests.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Add a custom place autocomplete box to the React app and fetch only name, address, and coordinates after selection.",
+      "expected_output": "Uses current Place Autocomplete Data API/AutocompleteSuggestion flow, session tokens, Place.fetchFields with minimal fields, and avoids legacy Places services.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Review a PR that adds restaurant AI summaries from Google Places to cards. Check cost, attribution, caching, and data provenance.",
+      "expected_output": "Requires current official docs, minimal field masks, provider disclosure, source provenance, and does not conflate Google summaries with MDE ai_summary.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Replace an old route implementation on the map and show ETA between two venues without adding deprecated Maps APIs.",
+      "expected_output": "Selects current Routes/Route APIs, rejects legacy directions classes, checks key restrictions and region/locale implications, and includes verification evidence.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Make a generic PostGIS query that finds points inside a polygon; this project does not use Google Maps for the operation.",
+      "expected_output": "Maps skill should not be selected because the task is generic GIS with no Google Maps Platform dependency.",
+      "files": []
+    }
+  ]
+}

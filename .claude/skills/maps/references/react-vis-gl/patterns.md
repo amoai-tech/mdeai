@@ -1,5 +1,19 @@
 # Advanced Patterns
 
+## Contents
+
+- Controlled vs uncontrolled maps
+- Real-time drag synchronization
+- User-drawn geometry
+- Synchronized maps
+- Marker clustering
+- Heatmaps
+- Fit bounds
+- Custom overlays
+- 3D maps
+- Error boundaries
+- Next.js considerations
+
 ## Controlled vs Uncontrolled Maps
 
 ### Uncontrolled (Default)
@@ -174,85 +188,11 @@ function OptimizedDrag() {
 
 ---
 
-## Drawing Manager
+## User-drawn geometry
 
-Allow users to draw shapes on the map:
+The former Maps JavaScript drawing library is unavailable in current releases. For editable user-drawn shapes, verify Google’s current deprecation guidance and use a supported integration such as Terra Draw rather than restoring retired Maps JS drawing code.
 
-```tsx
-import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-
-function useDrawingManager() {
-  const map = useMap();
-  const drawingLib = useMapsLibrary('drawing');
-  const [drawingManager, setDrawingManager] = useState<google.maps.drawing.DrawingManager | null>(null);
-
-  useEffect(() => {
-    if (!map || !drawingLib) return;
-
-    const manager = new drawingLib.DrawingManager({
-      map,
-      drawingMode: null, // Start with no drawing mode
-      drawingControl: true,
-      drawingControlOptions: {
-        position: google.maps.ControlPosition.TOP_CENTER,
-        drawingModes: [
-          google.maps.drawing.OverlayType.MARKER,
-          google.maps.drawing.OverlayType.CIRCLE,
-          google.maps.drawing.OverlayType.POLYGON,
-          google.maps.drawing.OverlayType.POLYLINE,
-          google.maps.drawing.OverlayType.RECTANGLE,
-        ],
-      },
-      circleOptions: {
-        fillColor: '#FF0000',
-        fillOpacity: 0.3,
-        strokeWeight: 2,
-        editable: true,
-        draggable: true,
-      },
-      polygonOptions: {
-        fillColor: '#00FF00',
-        fillOpacity: 0.3,
-        strokeWeight: 2,
-        editable: true,
-        draggable: true,
-      },
-    });
-
-    setDrawingManager(manager);
-
-    return () => manager.setMap(null);
-  }, [map, drawingLib]);
-
-  return drawingManager;
-}
-
-// Handle drawn shapes
-function DrawableMap() {
-  const drawingManager = useDrawingManager();
-  const [shapes, setShapes] = useState<google.maps.MVCObject[]>([]);
-
-  useEffect(() => {
-    if (!drawingManager) return;
-
-    const listeners = [
-      google.maps.event.addListener(drawingManager, 'circlecomplete', (circle: google.maps.Circle) => {
-        setShapes((prev) => [...prev, circle]);
-        console.log('Circle:', circle.getCenter()?.toJSON(), circle.getRadius());
-      }),
-      google.maps.event.addListener(drawingManager, 'polygoncomplete', (polygon: google.maps.Polygon) => {
-        setShapes((prev) => [...prev, polygon]);
-        const path = polygon.getPath().getArray().map(p => p.toJSON());
-        console.log('Polygon:', path);
-      }),
-    ];
-
-    return () => listeners.forEach((l) => l.remove());
-  }, [drawingManager]);
-
-  return <Map {...mapProps} />;
-}
-```
+Primary source: https://developers.google.com/maps/deprecations
 
 ---
 
@@ -357,29 +297,11 @@ function ClusteredMarkers({ points }: { points: google.maps.LatLngLiteral[] }) {
 
 ---
 
-## Heatmap Layer
+## Heatmaps
 
-```tsx
-function HeatmapLayer({ data }: { data: google.maps.LatLngLiteral[] }) {
-  const map = useMap();
-  const visualizationLib = useMapsLibrary('visualization');
+The former Maps JavaScript heatmap implementation is unavailable in current releases. Use a supported third-party integration such as deck.gl when a heatmap is required, and verify the current Google deprecation guidance before implementation.
 
-  useEffect(() => {
-    if (!map || !visualizationLib || !data.length) return;
-
-    const heatmap = new visualizationLib.HeatmapLayer({
-      data: data.map((d) => new google.maps.LatLng(d.lat, d.lng)),
-      map,
-      radius: 20,
-      opacity: 0.7,
-    });
-
-    return () => heatmap.setMap(null);
-  }, [map, visualizationLib, data]);
-
-  return null;
-}
-```
+Primary source: https://developers.google.com/maps/deprecations
 
 ---
 

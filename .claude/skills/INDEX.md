@@ -69,7 +69,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
 | `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
-| remaining specialist `*-review` skills | Review individually | Keep only where domain-specific invariants justify a top-level owner; Next.js review is now a `nextjs` reference |
+| remaining specialist `*-review` skills | Review individually | Maps review is consolidated into canonical `maps`; keep other top-level review skills only where domain-specific invariants justify them |
 ## Task 1 · Highest-priority actions
 
 1. **Merge PR #107 first** — it removes the redundant lifecycle skills and makes this index accurate for the intended canonical tree.

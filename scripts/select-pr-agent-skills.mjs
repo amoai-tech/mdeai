@@ -7,7 +7,7 @@ const SPECIALISTS = [
   "copilotkit-review",
   "mastra-review",
   "supabase-review",
-  "maps-review",
+  "maps",
   "stripe-review",
   "nextjs",
 ];
@@ -17,7 +17,7 @@ const matches = {
   "supabase-review": (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
   "mastra-review": (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   "copilotkit-review": (p) => /copilotkit|ag-ui/i.test(p),
-  "maps-review": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
+  "maps": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
   "stripe-review": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
   "nextjs": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
 };

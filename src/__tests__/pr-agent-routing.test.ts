@@ -46,7 +46,7 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
   });
 
   it("routes Maps and Stripe changes independently", () => {
-    expect(names(["src/components/map/MapView.tsx"])).toContain("maps-review");
+    expect(names(["src/components/map/MapView.tsx"])).toContain("maps");
     expect(names(["src/lib/stripe/webhook.ts"])).toContain("stripe-review");
   });
 
@@ -71,7 +71,7 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
       "copilotkit-review",
       "mastra-review",
       "supabase-review",
-      "maps-review",
+      "maps",
       "stripe-review",
       "nextjs",
     ]) {
