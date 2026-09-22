@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       showing_id?: string;
       actions?: Array<{ payload?: { message?: string } }>;
     };
-    error?: { message?: string };
+    error?: { code?: string; message?: string };
   };
 
   if (edgeRes.status === 429) {
@@ -125,6 +125,14 @@ export async function POST(req: Request) {
       "RATE_LIMITED",
       edgeJson.error?.message ?? "Too many submissions — try again later",
       429,
+    );
+  }
+
+  if (!edgeRes.ok && edgeJson.error?.code === "VALIDATION_ERROR") {
+    return failure(
+      "VALIDATION_ERROR",
+      edgeJson.error.message ?? "Viewing request validation failed",
+      edgeRes.status >= 400 && edgeRes.status < 500 ? edgeRes.status : 400,
     );
   }
 
