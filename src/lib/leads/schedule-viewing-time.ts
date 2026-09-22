@@ -70,6 +70,8 @@ export function resolvePreferredAtInstant(raw: string): string | null {
   // out-of-range values (10:99 → 11:39), and a date round trip only catches the
   // subset of overflows that happen to cross a day boundary — so `10:99`,
   // `10:60` and `10:00:99` would otherwise be accepted and quietly rewritten.
+  // `d <= 31` is intentionally only a cheap component bound; the round-trip
+  // check below is the authoritative calendar validation for month/day pairs.
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   if (h > 23 || mi > 59 || s > 59) return null;
 
@@ -87,7 +89,9 @@ export function resolvePreferredAtInstant(raw: string): string | null {
   }
 
   // First pass lands within a day of the true instant; the second pass resolves
-  // the exact offset in force at that instant.
+  // the exact offset in force at that instant. For today's fixed-offset Bogotá
+  // zone both passes are identical; pass two is insurance against a future
+  // timezone-rule change without hard-coding UTC-05:00.
   const estimate = wallAsUtc - timeZoneOffsetMinutes(LISTING_TIME_ZONE, new Date(wallAsUtc)) * 60_000;
   const instant = wallAsUtc - timeZoneOffsetMinutes(LISTING_TIME_ZONE, new Date(estimate)) * 60_000;
 
