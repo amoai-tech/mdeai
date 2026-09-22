@@ -24,12 +24,16 @@ function buildScheduleIdempotencyKey(input: {
   listingId: string;
   email: string;
   name: string;
+  phone?: string;
+  tripId?: string;
   preferredAtInstant: string;
 }): string {
   const raw = [
     input.listingId,
     input.email.toLowerCase(),
     input.name.trim().toLowerCase(),
+    input.phone?.trim() ?? "",
+    input.tripId ?? "",
     input.preferredAtInstant,
   ].join("|");
   const digest = createHash("sha256").update(raw).digest("hex").slice(0, 32);
@@ -98,6 +102,8 @@ export async function POST(req: Request) {
           listingId: data.listingId,
           email: data.email,
           name: data.name,
+          phone: data.phone,
+          tripId: data.tripId,
           preferredAtInstant,
         }),
       }),
