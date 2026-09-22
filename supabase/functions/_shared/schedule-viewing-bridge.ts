@@ -87,10 +87,13 @@ export async function createScheduleViewingBridge(
 
   if (error) {
     console.error("[schedule-viewing-bridge] atomic RPC:", error);
+    const isValidationError =
+      error.code === "P0001" &&
+      error.message.startsWith("p1_schedule_tour_atomic:");
     return {
       ok: false,
-      code: error.code === "P0001" ? "VALIDATION_ERROR" : "DB_ERROR",
-      message: error.code === "P0001"
+      code: isValidationError ? "VALIDATION_ERROR" : "DB_ERROR",
+      message: isValidationError
         ? error.message
         : "Failed to save viewing request",
     };
