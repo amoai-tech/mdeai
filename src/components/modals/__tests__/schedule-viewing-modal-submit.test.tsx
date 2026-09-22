@@ -82,7 +82,7 @@ async function renderModalAndFill() {
   });
   await act(() => Promise.resolve());
 
-  await act(async () => {
+  await act(() => {
     setNativeValue(
       container.querySelector('input[name="name"]') as HTMLInputElement,
       "Camila Test",
@@ -106,7 +106,7 @@ function submitForm() {
 
 describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
   it("submits once when the form is submitted twice before the request settles", async () => {
-    let resolveSubmit!: (value: ScheduleViewingResult) => void;
+    let resolveSubmit!: (_value: ScheduleViewingResult) => void;
     vi.mocked(submitScheduleViewing).mockReturnValue(
       new Promise<ScheduleViewingResult>((resolve) => {
         resolveSubmit = resolve;
