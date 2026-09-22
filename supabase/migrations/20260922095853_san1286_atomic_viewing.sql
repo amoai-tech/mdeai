@@ -235,17 +235,18 @@ BEGIN
 
   IF v_lead.id IS NULL THEN
     RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency conflict could not be resolved'
-      USING ERRCODE = 'P0001';
+      USING ERRCODE = 'P1286';
   END IF;
 
   -- Reusing an idempotency key for a different logical viewing is an error,
-  -- never an instruction to mutate the original request.
+  -- never an instruction to mutate the original request. Name casing is not
+  -- request identity because the API canonicalizes it before hashing.
   IF v_lead.apartment_id IS DISTINCT FROM v_apartment.id
     OR v_lead.preferred_showing_at IS DISTINCT FROM p_scheduled_at
     OR v_lead.trip_id IS DISTINCT FROM p_trip_id
     OR v_lead.intent IS DISTINCT FROM 'rental'
     OR v_lead.email IS DISTINCT FROM v_email
-    OR v_lead.name IS DISTINCT FROM v_name
+    OR lower(v_lead.name) IS DISTINCT FROM lower(v_name)
     OR v_lead.phone IS DISTINCT FROM v_phone
   THEN
     RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
@@ -302,7 +303,7 @@ BEGIN
     END IF;
 
     RAISE EXCEPTION 'p1_schedule_tour_atomic: showing not created or resolved'
-      USING ERRCODE = 'P0001';
+      USING ERRCODE = 'P1286';
   END IF;
 
   RETURN jsonb_build_object(
