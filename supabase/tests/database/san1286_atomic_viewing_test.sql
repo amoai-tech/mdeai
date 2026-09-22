@@ -3,7 +3,7 @@
 -- full rental contract, and is idempotent for authenticated and guest callers.
 
 begin;
-select plan(52);
+select plan(54);
 
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
@@ -155,7 +155,17 @@ select throws_ok($q$
   update public.leads
   set metadata = jsonb_set(metadata, '{listing_id}', '"tampered-listing"'::jsonb)
   where idempotency_key='san1286-auth-key-001'
-$q$, 'P1286', 'SAN-1286 viewing listing identity is immutable', 'committed listing identity cannot be changed');
+$q$, 'P1286', 'SAN-1286 viewing request identity is immutable', 'committed listing identity cannot be changed');
+select throws_ok($q$
+  update public.leads
+  set intent = 'buyer'
+  where idempotency_key='san1286-auth-key-001'
+$q$, 'P1286', 'SAN-1286 viewing request identity is immutable', 'viewing intent cannot be changed to bypass identity protection');
+select throws_ok($q$
+  update public.leads
+  set idempotency_key = 'san1286-auth-key-bypassed'
+  where idempotency_key='san1286-auth-key-001'
+$q$, 'P1286', 'SAN-1286 viewing request identity is immutable', 'viewing idempotency key cannot be changed to bypass identity protection');
 
 -- A completed request must remain idempotent even after its requested time passes.
 -- This models a lost response retried later: the existing committed pair wins over

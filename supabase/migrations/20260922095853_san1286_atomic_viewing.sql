@@ -53,9 +53,13 @@ BEGIN
   IF OLD.idempotency_key IS NOT NULL
     AND OLD.intent = 'rental'
     AND OLD.metadata ? 'listing_id'
-    AND (NEW.metadata ->> 'listing_id') IS DISTINCT FROM (OLD.metadata ->> 'listing_id')
+    AND (
+      NEW.idempotency_key IS DISTINCT FROM OLD.idempotency_key
+      OR NEW.intent IS DISTINCT FROM OLD.intent
+      OR (NEW.metadata ->> 'listing_id') IS DISTINCT FROM (OLD.metadata ->> 'listing_id')
+    )
   THEN
-    RAISE EXCEPTION 'SAN-1286 viewing listing identity is immutable'
+    RAISE EXCEPTION 'SAN-1286 viewing request identity is immutable'
       USING ERRCODE = 'P1286';
   END IF;
 
@@ -65,7 +69,7 @@ $$;
 
 DROP TRIGGER IF EXISTS san1286_preserve_viewing_listing_identity ON public.leads;
 CREATE TRIGGER san1286_preserve_viewing_listing_identity
-BEFORE UPDATE OF metadata ON public.leads
+BEFORE UPDATE OF metadata, intent, idempotency_key ON public.leads
 FOR EACH ROW
 WHEN (OLD.idempotency_key IS NOT NULL AND OLD.intent = 'rental')
 EXECUTE FUNCTION public.san1286_preserve_viewing_listing_identity();
