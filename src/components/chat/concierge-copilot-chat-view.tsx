@@ -1,16 +1,33 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, type ComponentProps } from "react";
 import {
   CopilotChatView,
   type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
+import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
+
+function ConciergeScrollView(
+  props: ComponentProps<typeof CopilotChatView.ScrollView>,
+) {
+  const { children, ...rest } = props;
+  return (
+    <CopilotChatView.ScrollView {...rest}>
+      {children}
+      <div className="cpk:max-w-3xl cpk:mx-auto">
+        <ConciergeLocalChatMessages />
+      </div>
+    </CopilotChatView.ScrollView>
+  );
+}
 
 /** Wrap CopilotChatView — route composer submit through classify + fast-path before agent fallback (CK-V2-015). */
 function ConciergeChatViewInner(props: CopilotChatViewProps) {
   const handlers = useConciergeSendHandlers();
+  const { messages: localMessages } = useEventLocalChat();
   const onSubmitMessage = useCallback(
     (text: string) => {
       void sendConciergeUserMessage(text, handlers);
@@ -21,6 +38,8 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
     <div data-testid="concierge-chat-view-mounted" className="contents">
       <CopilotChatView
         {...props}
+        scrollView={ConciergeScrollView}
+        welcomeScreen={localMessages.length > 0 ? false : props.welcomeScreen}
         input={
           typeof props.input === "object" &&
           props.input !== null &&

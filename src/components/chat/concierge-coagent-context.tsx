@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   useAgent,
+  useCopilotKit,
   UseAgentUpdate,
   type AbstractAgent,
 } from "@copilotkit/react-core/v2";
@@ -32,6 +33,7 @@ const ConciergeCoAgentContext = createContext<ConciergeCoAgentValue | null>(
 
 /** Single useAgent mount for concierge — avoids duplicate CopilotKit sync POSTs. */
 export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) {
+  const { copilotkit } = useCopilotKit();
   const { agent } = useAgent({
     agentId: "conciergeAgent",
     updates: [
@@ -41,13 +43,13 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
     ],
   });
 
-  // Detect provisional agent: ProxiedCopilotRuntimeAgent with runtimeMode === "pending"
+  // Installed CopilotKit 1.55.2 does not expose useAgent().isReady yet.
+  // Mirror its public provider-status gate instead of reading private agent fields.
   const isReady = useMemo(() => {
     if (!agent) return false;
-    // ProxiedCopilotRuntimeAgent has a runtimeMode getter; "pending" means not yet synced
-    const runtimeMode = (agent as { runtimeMode?: string }).runtimeMode;
-    return runtimeMode !== "pending";
-  }, [agent]);
+    if (copilotkit.runtimeUrl === undefined) return true;
+    return copilotkit.runtimeConnectionStatus === "connected";
+  }, [agent, copilotkit.runtimeConnectionStatus, copilotkit.runtimeUrl]);
 
   const state = useMemo(
     () => (agent?.state ?? {}) as ConciergeWorkingMemory,

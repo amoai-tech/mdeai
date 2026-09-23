@@ -7,7 +7,6 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
-import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { CenterPanelMapResultsSlot } from "@/components/chat/center-panel-map-results-slot";
 import { EventResultsPanel } from "@/components/chat/event-results-panel";
@@ -61,7 +60,6 @@ export function ChatCenterPanel() {
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>
-          <ConciergeLocalChatMessages />
           <ConciergeCopilotChat />
           <RentalFastPathPanel />
           <EventFastPathPanel />

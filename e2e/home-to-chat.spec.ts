@@ -139,13 +139,15 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     test.setTimeout(180_000);
 
     await gotoMarketingHome(page);
-    const rentalRequestPromise = page.waitForRequest(
-      (request) =>
-        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    const rentalResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/api/rentals/search"),
     );
     await submitHomeHeroQuery(page, SAN1356_QUERY);
-    const rentalRequest = await rentalRequestPromise;
-    expect(rentalRequest.postDataJSON()).toMatchObject({
+    const rentalResponse = await rentalResponsePromise;
+    expect(rentalResponse.ok()).toBe(true);
+    expect(rentalResponse.request().postDataJSON()).toMatchObject({
       neighborhood: "Laureles",
       limit: 5,
     });
@@ -182,13 +184,15 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     test.setTimeout(180_000);
 
     await gotoMarketingHome(page);
-    const firstRequestPromise = page.waitForRequest(
-      (request) =>
-        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    const firstResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/api/rentals/search"),
     );
     await submitHomeHeroQuery(page, SAN1356_QUERY);
-    const firstRequest = await firstRequestPromise;
-    const firstBody = firstRequest.postDataJSON();
+    const firstResponse = await firstResponsePromise;
+    expect(firstResponse.ok()).toBe(true);
+    const firstBody = firstResponse.request().postDataJSON();
 
     await waitForHomeToChatHandoff(page, SAN1356_QUERY);
     await assertConciergeShellVisible(page);
@@ -205,13 +209,15 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
       .first();
     await input.click();
     await input.fill(SAN1356_QUERY);
-    const secondRequestPromise = page.waitForRequest(
-      (request) =>
-        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    const secondResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/api/rentals/search"),
     );
     await page.getByRole("button", { name: /^send$/i }).click();
-    const secondRequest = await secondRequestPromise;
-    const secondBody = secondRequest.postDataJSON();
+    const secondResponse = await secondResponsePromise;
+    expect(secondResponse.ok()).toBe(true);
+    const secondBody = secondResponse.request().postDataJSON();
 
     // Network semantics are the decisive proof: the same text must produce
     // the same normalized neighborhood and explicit result limit both times.
@@ -222,5 +228,8 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     const secondCardCount = await rentalCards.count();
     expect(secondCardCount).toBe(firstCardCount);
     expect(secondCardCount).toBeLessThanOrEqual(5);
+    for (let index = 0; index < secondCardCount; index += 1) {
+      await expect(rentalCards.nth(index)).toContainText("Laureles");
+    }
   });
 });
