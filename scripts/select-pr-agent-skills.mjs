@@ -4,21 +4,21 @@ import { pathToFileURL } from "node:url";
 
 const UNIVERSAL = "code-review";
 const SPECIALISTS = [
-  "copilotkit-review",
-  "mastra-review",
-  "supabase-review",
+  "copilotkit",
+  "mastra",
+  "supabase",
   "maps",
-  "stripe-review",
+  "stripe",
   "nextjs",
 ];
 
 // `src/proxy.ts` is MDE's Next.js auth proxy and delegates to `@/lib/supabase/middleware`.
 const matches = {
-  "supabase-review": (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
-  "mastra-review": (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
-  "copilotkit-review": (p) => /copilotkit|ag-ui/i.test(p),
+  "supabase": (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
+  "mastra": (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
+  "copilotkit": (p) => /copilotkit|ag-ui/i.test(p),
   "maps": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
-  "stripe-review": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
+  "stripe": (p) => /stripe/i.test(p) || /^src\/app\/api\/tickets\/checkout\//i.test(p) || /(^|\/)(ticket-checkout|submit-ticket-checkout|checkout-wallet)([-_.\/]|$)/i.test(p),
   "nextjs": (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
 };
 
@@ -44,9 +44,13 @@ export function selectSkills(files) {
   }
 
   const skills = [UNIVERSAL, ...SPECIALISTS.filter((skill) => selected.has(skill))];
-  const paths = skills.map((skill) => `/github/workspace/.claude/skills/${skill}`);
-  if (selected.has("nextjs")) {
-    paths.push("/github/workspace/.claude/skills/nextjs/references/review.md");
+  const paths = ["/github/workspace/.claude/skills/code-review/SKILL.md"];
+  for (const skill of skills.slice(1)) {
+    if (skill === "maps") {
+      paths.push("/github/workspace/.claude/skills/maps/SKILL.md");
+    } else {
+      paths.push(`/github/workspace/.claude/skills/${skill}/references/review.md`);
+    }
   }
   return {
     skills,

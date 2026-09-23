@@ -14,11 +14,11 @@ const evidenceBuilder = read("scripts/pr-agent/build-evidence.mjs");
 
 const skills = [
   ".claude/skills/code-review/SKILL.md",
-  ".claude/skills/copilotkit-review/SKILL.md",
-  ".claude/skills/mastra-review/SKILL.md",
-  ".claude/skills/supabase-review/SKILL.md",
+  ".claude/skills/copilotkit/references/review.md",
+  ".claude/skills/mastra/references/review.md",
+  ".claude/skills/supabase/references/review.md",
   ".claude/skills/maps/SKILL.md",
-  ".claude/skills/stripe-review/SKILL.md",
+  ".claude/skills/stripe/references/review.md",
   ".claude/skills/nextjs/references/review.md",
 ];
 
@@ -74,9 +74,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
       const body = read(path);
       expect(body).toContain("Source of truth");
       expect(body.toLowerCase()).toContain("review invariants");
-      const owner = path.includes("nextjs/references/review.md")
-        ? "nextjs"
-        : path.replace(".claude/skills/", "").replace("/SKILL.md", "");
+      const owner = path.replace(".claude/skills/", "").split("/")[0];
       expect(routing).toContain(owner);
     }
   });
@@ -139,12 +137,11 @@ describe("SAN-1332 skill-budget checkpoint", () => {
   it("keeps every package.json review skill inside the configured budget", () => {
     const rendered = [
       read(".claude/skills/code-review/SKILL.md"),
-      read(".claude/skills/copilotkit-review/SKILL.md"),
-      read(".claude/skills/mastra-review/SKILL.md"),
-      read(".claude/skills/supabase-review/SKILL.md"),
+      read(".claude/skills/copilotkit/references/review.md"),
+      read(".claude/skills/mastra/references/review.md"),
+      read(".claude/skills/supabase/references/review.md"),
       read(".claude/skills/maps/SKILL.md"),
-      read(".claude/skills/stripe-review/SKILL.md"),
-      read(".claude/skills/nextjs/SKILL.md"),
+      read(".claude/skills/stripe/references/review.md"),
       read(".claude/skills/nextjs/references/review.md"),
     ].join("\n\n---\n\n");
     const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {

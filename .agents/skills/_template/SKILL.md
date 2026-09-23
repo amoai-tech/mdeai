@@ -1,1 +1,0 @@
-../../../.claude/skills/_template/SKILL.md
