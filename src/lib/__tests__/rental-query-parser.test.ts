@@ -113,6 +113,16 @@ describe("rental-query-parser — SAN-1356 explicit result count (top N)", () =>
     expect(s.explicitLimit).toBe(3);
   });
 
+  it("parses natural filler in 'show me 5 rentals'", () => {
+    const s = scoreRentalQuery("show me 5 rentals in laureles");
+    expect(s.explicitLimit).toBe(5);
+  });
+
+  it("does not treat a photo count as a rental result limit", () => {
+    const s = scoreRentalQuery("show 3 photos of the apartment in laureles");
+    expect(s.explicitLimit).toBeUndefined();
+  });
+
   it("parses 'find 10' as explicitLimit = 10", () => {
     const s = scoreRentalQuery("find 10 rentals in poblado");
     expect(s.explicitLimit).toBe(10);
