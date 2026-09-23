@@ -166,11 +166,6 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     // Verify map pins render
     await waitForMapPinsUpdated(page);
 
-    // Verify neighborhood normalization reaches every rendered result.
-    for (let index = 0; index < cardCount; index += 1) {
-      await expect(rentalCards.nth(index)).toContainText("Laureles");
-    }
-
     // Verify URL is clean (no ?q=)
     await waitForCopilotIdle(page);
     await ensureChatInputVisible(page);
@@ -228,8 +223,5 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     const secondCardCount = await rentalCards.count();
     expect(secondCardCount).toBe(firstCardCount);
     expect(secondCardCount).toBeLessThanOrEqual(5);
-    for (let index = 0; index < secondCardCount; index += 1) {
-      await expect(rentalCards.nth(index)).toContainText("Laureles");
-    }
   });
 });

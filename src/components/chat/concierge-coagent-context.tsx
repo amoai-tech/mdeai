@@ -47,7 +47,7 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
   // Mirror its public provider-status gate instead of reading private agent fields.
   const isReady = useMemo(() => {
     if (!agent) return false;
-    if (copilotkit.runtimeUrl === undefined) return true;
+    if (copilotkit.runtimeUrl === undefined) return false;
     return copilotkit.runtimeConnectionStatus === "connected";
   }, [agent, copilotkit.runtimeConnectionStatus, copilotkit.runtimeUrl]);
 

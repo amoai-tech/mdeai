@@ -69,7 +69,7 @@ const NEIGHBORHOOD_PATTERNS: Array<{ neighborhood: string; re: RegExp }> = [
   { neighborhood: "Estadio", re: /\bestadio\b/i },
 ];
 
-const TOP_N_RE = /\b(?:top|show|find|get)\s+(?:me\s+)?(\d+)\s+(?:rentals?|apartments?|listings?|units?|homes?|places?)\b/i;
+const TOP_N_RE = /\b(?:top|show|find|get)\s+(?:me\s+)?(\d{1,3})\s+(?:rentals?|apartments?|listings?|units?|homes?|places?)\b/i;
 
 function parseExplicitLimit(text: string): number | undefined {
   const m = text.match(TOP_N_RE);

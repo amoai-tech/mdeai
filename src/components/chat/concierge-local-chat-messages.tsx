@@ -1,10 +1,10 @@
 "use client";
 
-import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
+import { useConciergeLocalChat } from "@/components/chat/use-concierge-local-chat";
 
 /** Renders local fast-path messages (user + clarify/assistant) before CopilotKit history. */
 export function ConciergeLocalChatMessages() {
-  const { messages } = useEventLocalChat();
+  const { messages } = useConciergeLocalChat();
 
   if (!messages.length) return null;
 

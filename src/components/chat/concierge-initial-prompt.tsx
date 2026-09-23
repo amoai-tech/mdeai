@@ -33,21 +33,26 @@ export function ConciergeInitialPrompt() {
     // Claim the send before starting to prevent concurrent sends
     sentRef.current = true;
 
-    void sendConciergeUserMessage(trimmedQ, handlers).then((handled) => {
-      if (!handled) {
-        // Release claim if not handled so a retry can occur
-        sentRef.current = false;
-        return;
-      }
+    void sendConciergeUserMessage(trimmedQ, handlers)
+      .then((handled) => {
+        if (!handled) {
+          // Release claim if not handled so a retry can occur
+          sentRef.current = false;
+          return;
+        }
 
-      if (typeof window === "undefined") return;
-      const onChatWithQ =
-        window.location.pathname === "/chat" &&
-        new URLSearchParams(window.location.search).has("q");
-      if (onChatWithQ) {
-        router.replace("/chat", { scroll: false });
-      }
-    });
+        if (typeof window === "undefined") return;
+        const onChatWithQ =
+          window.location.pathname === "/chat" &&
+          new URLSearchParams(window.location.search).has("q");
+        if (onChatWithQ) {
+          router.replace("/chat", { scroll: false });
+        }
+      })
+      .catch(() => {
+        // Release claim on rejection so a retry can occur
+        sentRef.current = false;
+      });
   }, [searchParams, isReady, isLoading, router, handlers]);
 
   return null;
