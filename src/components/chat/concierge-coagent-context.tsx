@@ -16,6 +16,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type ConciergeCoAgentValue = {
   agent: AbstractAgent | undefined;
+  /** True when the real runtime-synced agent is available (not provisional). */
+  isReady: boolean;
   state: ConciergeWorkingMemory;
   setState: (
     patch:
@@ -39,6 +41,14 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
     ],
   });
 
+  // Detect provisional agent: ProxiedCopilotRuntimeAgent with runtimeMode === "pending"
+  const isReady = useMemo(() => {
+    if (!agent) return false;
+    // ProxiedCopilotRuntimeAgent has a runtimeMode getter; "pending" means not yet synced
+    const runtimeMode = (agent as { runtimeMode?: string }).runtimeMode;
+    return runtimeMode !== "pending";
+  }, [agent]);
+
   const state = useMemo(
     () => (agent.state ?? {}) as ConciergeWorkingMemory,
     [agent.state],
@@ -59,8 +69,8 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
   );
 
   const value = useMemo(
-    () => ({ agent, state, setState }),
-    [agent, state, setState],
+    () => ({ agent, isReady, state, setState }),
+    [agent, isReady, state, setState],
   );
 
   return (

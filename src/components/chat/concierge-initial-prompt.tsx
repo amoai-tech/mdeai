@@ -2,18 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
+import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 
 /**
  * Reads /chat?q= from home CTAs, auto-sends once, then strips the query param.
  * No UI — must mount inside GeoChatShell fast-path providers.
+ * Waits for the real runtime-synced concierge agent (isReady) before sending.
  */
 export function ConciergeInitialPrompt() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isLoading } = useConciergeChat();
+  const { isReady } = useConciergeCoAgent();
   const handlers = useConciergeSendHandlers();
   const sentRef = useRef(false);
 
@@ -25,7 +26,7 @@ export function ConciergeInitialPrompt() {
       router.replace("/chat", { scroll: false });
       return;
     }
-    if (!trimmedQ || sentRef.current || isLoading) return;
+    if (!trimmedQ || sentRef.current || !isReady) return;
 
     void sendConciergeUserMessage(trimmedQ, handlers).then((handled) => {
       if (!handled) return;
@@ -39,7 +40,7 @@ export function ConciergeInitialPrompt() {
         router.replace("/chat", { scroll: false });
       }
     });
-  }, [searchParams, isLoading, router, handlers]);
+  }, [searchParams, isReady, router, handlers]);
 
   return null;
 }

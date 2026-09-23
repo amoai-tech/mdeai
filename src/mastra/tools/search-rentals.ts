@@ -24,6 +24,8 @@ export const rentalSchema = z.object({
   tags: z.array(z.string()),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  /** Monthly price when available (authoritative for monthly display). */
+  price_monthly: z.number().optional(),
 });
 
 export type Rental = z.infer<typeof rentalSchema>;
@@ -68,6 +70,7 @@ export interface ApartmentRow {
   neighborhood: string;
   bedrooms: number | null;
   price_daily: number;
+  price_monthly: number | null;
   wifi_speed: number | null;
   amenities: string[] | null;
   images: string[] | null;
@@ -108,6 +111,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     }),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
+    price_monthly: r.price_monthly != null ? Number(r.price_monthly) : undefined,
   });
 }
 
@@ -193,13 +197,21 @@ async function searchRentalsFromSupabase(
   if (typeof query.maxPricePerNight === 'number') {
     q = q.lte('price_daily', query.maxPricePerNight);
   }
-  if (query.checkIn) {
-    // available_to IS NULL (open-ended) OR available_to >= checkIn
-    q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-  }
-  if (query.checkOut) {
-    // available_from IS NULL (available now) OR available_from <= checkOut
-    q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+
+  // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
+  // available_to IS NULL means open-ended availability
+  const today = new Date().toISOString().slice(0, 10);
+  if (!query.checkIn && !query.checkOut) {
+    q = q.or(`available_to.is.null,available_to.gte.${today}`);
+  } else {
+    if (query.checkIn) {
+      // available_to IS NULL (open-ended) OR available_to >= checkIn
+      q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
+    }
+    if (query.checkOut) {
+      // available_from IS NULL (available now) OR available_from <= checkOut
+      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    }
   }
 
   const { data, error, count } = await q;

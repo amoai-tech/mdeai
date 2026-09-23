@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreRentalQuery } from "@/lib/rental-query-parser";
+import { scoreRentalQuery, buildRentalSearchParams } from "@/lib/rental-query-parser";
 
 describe("rental-query-parser — budget wording", () => {
   it("parses '$80/night' as nightly with neighborhood + bedrooms", () => {
@@ -85,5 +85,64 @@ describe("rental-query-parser — INT-002 multi-vertical hero queries", () => {
     expect(s.neighborhood).toBe("Laureles");
     expect(s.hasCafeOrGym).toBe(true);
     expect(s.confidence).toBeGreaterThanOrEqual(0.62);
+  });
+});
+
+describe("rental-query-parser — SAN-1356 neighborhood typo normalization", () => {
+  it("normalizes 'laureless' to 'Laureles'", () => {
+    const s = scoreRentalQuery("search top 5 rentals laureless");
+    expect(s.neighborhood).toBe("Laureles");
+  });
+
+  it("normalizes 'laureless' with other filters", () => {
+    const s = scoreRentalQuery("1BR in laureless under $80/night");
+    expect(s.neighborhood).toBe("Laureles");
+    expect(s.minBedrooms).toBe(1);
+    expect(s.maxPricePerNight).toBe(80);
+  });
+});
+
+describe("rental-query-parser — SAN-1356 explicit result count (top N)", () => {
+  it("parses 'top 5' as explicitLimit = 5", () => {
+    const s = scoreRentalQuery("search top 5 rentals laureles");
+    expect(s.explicitLimit).toBe(5);
+  });
+
+  it("parses 'show 3' as explicitLimit = 3", () => {
+    const s = scoreRentalQuery("show 3 apartments in laureles");
+    expect(s.explicitLimit).toBe(3);
+  });
+
+  it("parses 'find 10' as explicitLimit = 10", () => {
+    const s = scoreRentalQuery("find 10 rentals in poblado");
+    expect(s.explicitLimit).toBe(10);
+  });
+
+  it("clamps explicit limit to max 20", () => {
+    const s = scoreRentalQuery("top 50 rentals in laureles");
+    expect(s.explicitLimit).toBe(20);
+  });
+
+  it("ignores 'top 0' as invalid (returns undefined)", () => {
+    const s = scoreRentalQuery("top 0 rentals in laureles");
+    expect(s.explicitLimit).toBeUndefined();
+  });
+
+  it("uses explicit limit in buildRentalSearchParams", () => {
+    const params = buildRentalSearchParams("search top 5 rentals laureles", {});
+    expect(params?.limit).toBe(5);
+  });
+
+  it("falls back to FAST_PATH_LIMIT when no explicit limit", () => {
+    const params = buildRentalSearchParams("1BR in laureles under $80/night", {});
+    expect(params?.limit).toBe(8);
+  });
+
+  it("first and second identical query produce identical semantics", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", limit: 5, genericAskPending: false } };
+    const params1 = buildRentalSearchParams("search top 5 rentals laureles", memory);
+    const params2 = buildRentalSearchParams("search top 5 rentals laureles", memory);
+    expect(params1?.limit).toBe(params2?.limit);
+    expect(params1?.neighborhood).toBe(params2?.neighborhood);
   });
 });

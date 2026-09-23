@@ -41,6 +41,9 @@ const VERTICAL_CASES = [
   },
 ] as const;
 
+/** SAN-1356 exact regression: homepage query with typo + explicit count. */
+const SAN1356_QUERY = "search top 5 rentals laureless";
+
 test.describe("Home → Chat launch (SAN-733)", () => {
   test.use({ viewport: HOME_VIEWPORT });
 
@@ -125,4 +128,72 @@ test.describe("Home → Chat vertical handoffs", () => {
       expect(page.url()).toMatch(/\/chat$/);
     });
   }
+});
+
+test.describe("SAN-1356: Homepage rental search exact regression", () => {
+  test.use({ viewport: HOME_VIEWPORT });
+
+  test("hero search: 'search top 5 rentals laureless' → Laureles + limit 5 + cards + map", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    await gotoMarketingHome(page);
+    await submitHomeHeroQuery(page, SAN1356_QUERY);
+
+    // Verify handoff to /chat with query stripped
+    await waitForHomeToChatHandoff(page, SAN1356_QUERY);
+    await assertConciergeShellVisible(page);
+
+    // Verify rental cards render (max 5 due to explicit "top 5")
+    await waitForRentalCards(page);
+    const rentalCards = page.locator('[data-testid="rental-card"]');
+    const cardCount = await rentalCards.count();
+    expect(cardCount).toBeGreaterThan(0);
+    expect(cardCount).toBeLessThanOrEqual(5);
+
+    // Verify map pins render
+    await waitForMapPinsUpdated(page);
+
+    // Verify neighborhood normalization: laureless → Laureles in results
+    const firstCard = rentalCards.first();
+    await expect(firstCard).toContainText("Laureles");
+
+    // Verify URL is clean (no ?q=)
+    await waitForCopilotIdle(page);
+    await ensureChatInputVisible(page);
+    expect(page.url()).toMatch(/\/chat$/);
+    expect(page.url()).not.toContain("?q=");
+  });
+
+  test("repeat submission has identical semantics (no genericAskPending drift)", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    await gotoMarketingHome(page);
+    await submitHomeHeroQuery(page, SAN1356_QUERY);
+
+    await waitForHomeToChatHandoff(page, SAN1356_QUERY);
+    await assertConciergeShellVisible(page);
+    await waitForRentalCards(page);
+
+    const firstCardCount = await page.locator('[data-testid="rental-card"]').count();
+
+    // Submit the same query again via chat input
+    await ensureChatInputVisible(page);
+    const input = page
+      .locator('.copilotKitInput textarea, [role="textbox"][placeholder*="message" i]')
+      .first();
+    await input.click();
+    await input.fill(SAN1356_QUERY);
+    await page.getByRole("button", { name: /^send$/i }).click();
+
+    await waitForRentalCards(page);
+    const secondCardCount = await page.locator('[data-testid="rental-card"]').count();
+
+    // Semantics should be identical: same neighborhood, same limit
+    expect(secondCardCount).toBe(firstCardCount);
+    expect(secondCardCount).toBeLessThanOrEqual(5);
+  });
 });

@@ -199,8 +199,14 @@ export async function searchRentalsIntelligent(
     if (typeof query.maxPricePerNight === "number") {
       q = q.lte("price_daily", query.maxPricePerNight);
     }
-    if (query.checkIn) q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-    if (query.checkOut) q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
+    const today = new Date().toISOString().slice(0, 10);
+    if (!query.checkIn && !query.checkOut) {
+      q = q.or(`available_to.is.null,available_to.gte.${today}`);
+    } else {
+      if (query.checkIn) q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
+      if (query.checkOut) q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    }
     const { data } = await q;
     const apartments = data ?? [];
     hybridRows = apartments.map((r: Record<string, unknown>) => ({
@@ -232,8 +238,14 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
       )
       .in("id", ids);
-    if (query.checkIn) aptQ = aptQ.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-    if (query.checkOut) aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
+    const today = new Date().toISOString().slice(0, 10);
+    if (!query.checkIn && !query.checkOut) {
+      aptQ = aptQ.or(`available_to.is.null,available_to.gte.${today}`);
+    } else {
+      if (query.checkIn) aptQ = aptQ.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
+      if (query.checkOut) aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    }
     const { data: aptRows } = await aptQ;
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);

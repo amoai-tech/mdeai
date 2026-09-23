@@ -227,6 +227,7 @@ export function RentalResults({
     title: string;
     neighborhood: string;
     nightly_price?: number;
+    price_monthly?: number;
     bedrooms?: number;
     photo_url?: string;
     image_url?: string;
@@ -304,6 +305,7 @@ export function RentalResults({
               title={r.title}
               neighborhood={r.neighborhood}
               nightly_price={r.nightly_price}
+              price_monthly={r.price_monthly}
               bedrooms={r.bedrooms}
               photoUrl={r.photo_url ?? r.image_url}
               wifi={r.wifi}
