@@ -188,7 +188,7 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
       )
       .eq("status", "active")
       .not("price_daily", "is", null)
@@ -199,13 +199,12 @@ export async function searchRentalsIntelligent(
     if (typeof query.maxPricePerNight === "number") {
       q = q.lte("price_daily", query.maxPricePerNight);
     }
-    // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
     const today = new Date().toISOString().slice(0, 10);
-    if (!query.checkIn && !query.checkOut) {
-      q = q.or(`available_to.is.null,available_to.gte.${today}`);
-    } else {
-      if (query.checkIn) q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-      if (query.checkOut) q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    const checkInDate = query.checkIn ?? today;
+    q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
+    if (query.checkOut) {
+      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
     }
     const { data } = await q;
     const apartments = data ?? [];
@@ -215,7 +214,7 @@ export async function searchRentalsIntelligent(
       description: null,
       neighborhood: r.neighborhood as string | null,
       city: null,
-      price_monthly: null,
+      price_monthly: (r.price_monthly as number | string | null) ?? null,
       bedrooms: r.bedrooms as number | null,
       bathrooms: null,
       rating: null,
@@ -235,26 +234,24 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
       )
       .in("id", ids);
-    // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
     const today = new Date().toISOString().slice(0, 10);
-    if (!query.checkIn && !query.checkOut) {
-      aptQ = aptQ.or(`available_to.is.null,available_to.gte.${today}`);
-    } else {
-      if (query.checkIn) aptQ = aptQ.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-      if (query.checkOut) aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    const checkInDate = query.checkIn ?? today;
+    aptQ = aptQ.or(`available_to.is.null,available_to.gte.${checkInDate}`);
+    if (query.checkOut) {
+      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
     }
     const { data: aptRows } = await aptQ;
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
     }
-    // Remove hybridRows that didn't survive the availability filter
-    if (query.checkIn || query.checkOut) {
-      const availableIds = new Set(aptMap.keys());
-      hybridRows = hybridRows.filter((r) => availableIds.has(r.id));
-    }
+    // Every apartments lookup applies an availability filter (explicit stay window
+    // or the default current-date guard), so only keep hybrid rows that survived it.
+    const availableIds = new Set(aptMap.keys());
+    hybridRows = hybridRows.filter((r) => availableIds.has(r.id));
   }
 
   const signalMap = new Map<string, RentalSignalRow>();

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 
@@ -15,6 +16,7 @@ export function ConciergeInitialPrompt() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isReady } = useConciergeCoAgent();
+  const { isLoading } = useConciergeChat();
   const handlers = useConciergeSendHandlers();
   const sentRef = useRef(false);
 
@@ -26,12 +28,18 @@ export function ConciergeInitialPrompt() {
       router.replace("/chat", { scroll: false });
       return;
     }
-    if (!trimmedQ || sentRef.current || !isReady) return;
+    if (!trimmedQ || sentRef.current || !isReady || isLoading) return;
+
+    // Claim the send before starting to prevent concurrent sends
+    sentRef.current = true;
 
     void sendConciergeUserMessage(trimmedQ, handlers).then((handled) => {
-      if (!handled) return;
+      if (!handled) {
+        // Release claim if not handled so a retry can occur
+        sentRef.current = false;
+        return;
+      }
 
-      sentRef.current = true;
       if (typeof window === "undefined") return;
       const onChatWithQ =
         window.location.pathname === "/chat" &&
@@ -40,7 +48,7 @@ export function ConciergeInitialPrompt() {
         router.replace("/chat", { scroll: false });
       }
     });
-  }, [searchParams, isReady, router, handlers]);
+  }, [searchParams, isReady, isLoading, router, handlers]);
 
   return null;
 }

@@ -180,7 +180,7 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude',
       { count: 'exact' },
     )
     .eq('status', 'active')
@@ -198,20 +198,13 @@ async function searchRentalsFromSupabase(
     q = q.lte('price_daily', query.maxPricePerNight);
   }
 
-  // Default: exclude expired rentals (available_to < today) unless checkIn/checkOut provided
-  // available_to IS NULL means open-ended availability
+  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
   const today = new Date().toISOString().slice(0, 10);
-  if (!query.checkIn && !query.checkOut) {
-    q = q.or(`available_to.is.null,available_to.gte.${today}`);
-  } else {
-    if (query.checkIn) {
-      // available_to IS NULL (open-ended) OR available_to >= checkIn
-      q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-    }
-    if (query.checkOut) {
-      // available_from IS NULL (available now) OR available_from <= checkOut
-      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-    }
+  const checkInDate = query.checkIn ?? today;
+  q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
+  if (query.checkOut) {
+    // available_from IS NULL (available now) OR available_from <= checkOut
+    q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
   }
 
   const { data, error, count } = await q;
@@ -480,6 +473,7 @@ export const searchRentalsTool = createTool({
         neighborhood: r.neighborhood,
         bedrooms: r.bedrooms,
         nightly_price: r.nightly_price,
+        price_monthly: r.price_monthly,
         currency: r.currency,
         host_name: r.host_name,
         wifi: r.wifi,

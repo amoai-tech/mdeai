@@ -50,8 +50,8 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
   }, [agent]);
 
   const state = useMemo(
-    () => (agent.state ?? {}) as ConciergeWorkingMemory,
-    [agent.state],
+    () => (agent?.state ?? {}) as ConciergeWorkingMemory,
+    [agent?.state],
   );
 
   const setState = useCallback(
@@ -60,6 +60,7 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
         | Partial<ConciergeWorkingMemory>
         | ((prev: ConciergeWorkingMemory) => ConciergeWorkingMemory),
     ) => {
+      if (!agent) return;
       const current = (agent.state ?? {}) as ConciergeWorkingMemory;
       const next =
         typeof patch === "function" ? patch(current) : { ...current, ...patch };

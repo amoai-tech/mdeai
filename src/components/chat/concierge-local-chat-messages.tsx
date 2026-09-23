@@ -20,8 +20,6 @@ export function ConciergeLocalChatMessages() {
             className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${
               msg.role === "user"
                 ? "bg-primary text-primary-foreground rounded-br-none"
-                : msg.isClarify
-                ? "bg-muted text-muted-foreground rounded-bl-none"
                 : "bg-muted text-muted-foreground rounded-bl-none"
             }`}
           >

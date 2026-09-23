@@ -139,15 +139,24 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     test.setTimeout(180_000);
 
     await gotoMarketingHome(page);
+    const rentalRequestPromise = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    );
     await submitHomeHeroQuery(page, SAN1356_QUERY);
+    const rentalRequest = await rentalRequestPromise;
+    expect(rentalRequest.postDataJSON()).toMatchObject({
+      neighborhood: "Laureles",
+      limit: 5,
+    });
 
     // Verify handoff to /chat with query stripped
     await waitForHomeToChatHandoff(page, SAN1356_QUERY);
     await assertConciergeShellVisible(page);
 
-    // Verify rental cards render (max 5 due to explicit "top 5")
-    await waitForRentalCards(page);
+    // Verify rental cards render (max 5 due to explicit "top 5") — no fallback resend
     const rentalCards = page.locator('[data-testid="rental-card"]');
+    await expect(rentalCards.first()).toBeVisible({ timeout: 120_000 });
     const cardCount = await rentalCards.count();
     expect(cardCount).toBeGreaterThan(0);
     expect(cardCount).toBeLessThanOrEqual(5);
@@ -155,9 +164,10 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     // Verify map pins render
     await waitForMapPinsUpdated(page);
 
-    // Verify neighborhood normalization: laureless → Laureles in results
-    const firstCard = rentalCards.first();
-    await expect(firstCard).toContainText("Laureles");
+    // Verify neighborhood normalization reaches every rendered result.
+    for (let index = 0; index < cardCount; index += 1) {
+      await expect(rentalCards.nth(index)).toContainText("Laureles");
+    }
 
     // Verify URL is clean (no ?q=)
     await waitForCopilotIdle(page);
@@ -172,13 +182,21 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     test.setTimeout(180_000);
 
     await gotoMarketingHome(page);
+    const firstRequestPromise = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    );
     await submitHomeHeroQuery(page, SAN1356_QUERY);
+    const firstRequest = await firstRequestPromise;
+    const firstBody = firstRequest.postDataJSON();
 
     await waitForHomeToChatHandoff(page, SAN1356_QUERY);
     await assertConciergeShellVisible(page);
-    await waitForRentalCards(page);
 
-    const firstCardCount = await page.locator('[data-testid="rental-card"]').count();
+    // Wait for first-turn cards
+    const rentalCards = page.locator('[data-testid="rental-card"]');
+    await expect(rentalCards.first()).toBeVisible({ timeout: 120_000 });
+    const firstCardCount = await rentalCards.count();
 
     // Submit the same query again via chat input
     await ensureChatInputVisible(page);
@@ -187,12 +205,21 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
       .first();
     await input.click();
     await input.fill(SAN1356_QUERY);
+    const secondRequestPromise = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && request.url().includes("/api/rentals/search"),
+    );
     await page.getByRole("button", { name: /^send$/i }).click();
+    const secondRequest = await secondRequestPromise;
+    const secondBody = secondRequest.postDataJSON();
 
-    await waitForRentalCards(page);
-    const secondCardCount = await page.locator('[data-testid="rental-card"]').count();
+    // Network semantics are the decisive proof: the same text must produce
+    // the same normalized neighborhood and explicit result limit both times.
+    expect(firstBody).toMatchObject({ neighborhood: "Laureles", limit: 5 });
+    expect(secondBody).toMatchObject({ neighborhood: "Laureles", limit: 5 });
+    expect(secondBody).toMatchObject(firstBody);
 
-    // Semantics should be identical: same neighborhood, same limit
+    const secondCardCount = await rentalCards.count();
     expect(secondCardCount).toBe(firstCardCount);
     expect(secondCardCount).toBeLessThanOrEqual(5);
   });
