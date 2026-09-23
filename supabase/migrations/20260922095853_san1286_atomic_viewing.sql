@@ -27,6 +27,20 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'SAN-1286 preflight: duplicate same-day showings exist';
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.leads
+    WHERE intent = 'rental'
+      AND idempotency_key IS NOT NULL
+      AND (
+        apartment_id IS NULL
+        OR preferred_showing_at IS NULL
+        OR nullif(metadata ->> 'listing_id', '') IS NULL
+      )
+  ) THEN
+    RAISE EXCEPTION 'SAN-1286 preflight: existing idempotent rental lead is missing immutable viewing identity source fields';
+  END IF;
 END;
 $$;
 
@@ -42,9 +56,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_showings_lead_apt_day
     ((scheduled_at AT TIME ZONE 'America/Bogota')::date)
   );
 
--- Viewing idempotency depends on the originally submitted listing identifier.
--- Preserve that key inside lead metadata and prevent later lead edits from changing it.
-CREATE OR REPLACE FUNCTION public.san1286_preserve_viewing_listing_identity()
+-- Persist the original request contract separately from mutable CRM lead fields.
+-- Existing idempotent rental leads are backfilled before the immutability trigger
+-- is installed so retries remain safe after this migration lands.
+UPDATE public.leads AS l
+SET metadata = coalesce(l.metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'schedule_viewing_identity',
+    jsonb_build_object(
+      'user_id', l.user_id,
+      'listing_id', l.metadata ->> 'listing_id',
+      'apartment_id', l.apartment_id,
+      'scheduled_at', l.preferred_showing_at,
+      'trip_id', l.trip_id,
+      'email', nullif(lower(btrim(l.email)), ''),
+      'name', nullif(lower(btrim(l.name)), ''),
+      'phone', nullif(btrim(l.phone), '')
+    )
+  )
+WHERE l.intent = 'rental'
+  AND l.idempotency_key IS NOT NULL
+  AND NOT (coalesce(l.metadata, '{}'::jsonb) ? 'schedule_viewing_identity');
+
+CREATE OR REPLACE FUNCTION public.san1286_preserve_viewing_request_identity()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = ''
@@ -52,11 +86,12 @@ AS $$
 BEGIN
   IF OLD.idempotency_key IS NOT NULL
     AND OLD.intent = 'rental'
-    AND OLD.metadata ? 'listing_id'
     AND (
       NEW.idempotency_key IS DISTINCT FROM OLD.idempotency_key
       OR NEW.intent IS DISTINCT FROM OLD.intent
       OR (NEW.metadata ->> 'listing_id') IS DISTINCT FROM (OLD.metadata ->> 'listing_id')
+      OR (NEW.metadata -> 'schedule_viewing_identity')
+        IS DISTINCT FROM (OLD.metadata -> 'schedule_viewing_identity')
     )
   THEN
     RAISE EXCEPTION 'SAN-1286 viewing request identity is immutable'
@@ -67,16 +102,16 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS san1286_preserve_viewing_listing_identity ON public.leads;
-CREATE TRIGGER san1286_preserve_viewing_listing_identity
+DROP TRIGGER IF EXISTS san1286_preserve_viewing_request_identity ON public.leads;
+CREATE TRIGGER san1286_preserve_viewing_request_identity
 BEFORE UPDATE OF metadata, intent, idempotency_key ON public.leads
 FOR EACH ROW
 WHEN (OLD.idempotency_key IS NOT NULL AND OLD.intent = 'rental')
-EXECUTE FUNCTION public.san1286_preserve_viewing_listing_identity();
+EXECUTE FUNCTION public.san1286_preserve_viewing_request_identity();
 
-REVOKE ALL ON FUNCTION public.san1286_preserve_viewing_listing_identity()
+REVOKE ALL ON FUNCTION public.san1286_preserve_viewing_request_identity()
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.san1286_preserve_viewing_listing_identity()
+GRANT EXECUTE ON FUNCTION public.san1286_preserve_viewing_request_identity()
   TO service_role;
 
 -- PostgREST does not support overloaded RPCs reliably. Retire the historical
@@ -85,7 +120,7 @@ DROP FUNCTION IF EXISTS public.p1_schedule_tour_atomic(
   uuid, text, uuid, text, text, text, text, jsonb, uuid, timestamptz, text, jsonb
 );
 
-CREATE FUNCTION public.p1_schedule_tour_atomic(
+CREATE OR REPLACE FUNCTION public.p1_schedule_tour_atomic(
   p_listing_id text,
   p_user_id uuid,
   p_idempotency_key text,
@@ -113,6 +148,8 @@ DECLARE
   v_name text := nullif(btrim(p_name), '');
   v_phone text := nullif(btrim(p_phone), '');
   v_source text := coalesce(nullif(btrim(p_source), ''), 'form');
+  v_viewing_identity jsonb;
+  v_identity_apartment_id uuid;
   v_replay boolean := false;
 BEGIN
   IF v_listing_id IS NULL THEN
@@ -146,16 +183,24 @@ BEGIN
   END IF;
 
   IF v_lead.id IS NOT NULL THEN
-    -- Replay identity is the normalized identifier captured at commit time, not
-    -- the apartment's current slug. The trigger above makes this metadata key
-    -- immutable for idempotent rental-viewing leads.
-    IF (v_lead.metadata ->> 'listing_id') IS DISTINCT FROM v_listing_id
-      OR v_lead.preferred_showing_at IS DISTINCT FROM p_scheduled_at
-      OR v_lead.trip_id IS DISTINCT FROM p_trip_id
-      OR v_lead.intent IS DISTINCT FROM 'rental'
-      OR v_lead.email IS DISTINCT FROM v_email
-      OR lower(v_lead.name) IS DISTINCT FROM lower(v_name)
-      OR v_lead.phone IS DISTINCT FROM v_phone
+    -- Replay against the immutable request snapshot, never mutable CRM columns.
+    -- This keeps one idempotency key bound to one logical viewing even when the
+    -- renter later edits their lead profile or preferred time.
+    v_viewing_identity := v_lead.metadata -> 'schedule_viewing_identity';
+    v_identity_apartment_id := nullif(v_viewing_identity ->> 'apartment_id', '')::uuid;
+
+    IF v_viewing_identity IS NULL OR v_identity_apartment_id IS NULL THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: committed viewing identity snapshot missing'
+        USING ERRCODE = 'P1286';
+    END IF;
+
+    IF nullif(v_viewing_identity ->> 'user_id', '')::uuid IS DISTINCT FROM p_user_id
+      OR (v_viewing_identity ->> 'listing_id') IS DISTINCT FROM v_listing_id
+      OR nullif(v_viewing_identity ->> 'scheduled_at', '')::timestamptz IS DISTINCT FROM p_scheduled_at
+      OR nullif(v_viewing_identity ->> 'trip_id', '')::uuid IS DISTINCT FROM p_trip_id
+      OR nullif(v_viewing_identity ->> 'email', '') IS DISTINCT FROM v_email
+      OR nullif(v_viewing_identity ->> 'name', '') IS DISTINCT FROM lower(v_name)
+      OR nullif(v_viewing_identity ->> 'phone', '') IS DISTINCT FROM v_phone
     THEN
       RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
         USING ERRCODE = 'P0001';
@@ -164,7 +209,7 @@ BEGIN
     SELECT s.* INTO v_showing
     FROM public.showings AS s
     WHERE s.lead_id = v_lead.id
-      AND s.apartment_id = v_lead.apartment_id
+      AND s.apartment_id = v_identity_apartment_id
       AND s.scheduled_at = p_scheduled_at;
 
     IF v_showing.id IS NOT NULL THEN
@@ -250,7 +295,17 @@ BEGIN
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
           'listing_id', v_listing_id,
-          'preferred_at', p_scheduled_at
+          'preferred_at', p_scheduled_at,
+          'schedule_viewing_identity', jsonb_build_object(
+            'user_id', p_user_id,
+            'listing_id', v_listing_id,
+            'apartment_id', v_apartment.id,
+            'scheduled_at', p_scheduled_at,
+            'trip_id', p_trip_id,
+            'email', v_email,
+            'name', lower(v_name),
+            'phone', v_phone
+          )
         ),
       v_idempotency_key
     )
@@ -297,7 +352,17 @@ BEGIN
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
           'listing_id', v_listing_id,
-          'preferred_at', p_scheduled_at
+          'preferred_at', p_scheduled_at,
+          'schedule_viewing_identity', jsonb_build_object(
+            'user_id', p_user_id,
+            'listing_id', v_listing_id,
+            'apartment_id', v_apartment.id,
+            'scheduled_at', p_scheduled_at,
+            'trip_id', p_trip_id,
+            'email', v_email,
+            'name', lower(v_name),
+            'phone', v_phone
+          )
         ),
       v_idempotency_key
     )
@@ -321,16 +386,25 @@ BEGIN
       USING ERRCODE = 'P1286';
   END IF;
 
-  -- Reusing an idempotency key for a different logical viewing is an error,
-  -- never an instruction to mutate the original request. Name casing is not
-  -- request identity because the API canonicalizes it before hashing.
-  IF v_lead.apartment_id IS DISTINCT FROM v_apartment.id
-    OR v_lead.preferred_showing_at IS DISTINCT FROM p_scheduled_at
-    OR v_lead.trip_id IS DISTINCT FROM p_trip_id
+  -- Reusing an idempotency key for a different logical viewing is an error.
+  -- Compare the immutable commit snapshot, not mutable CRM lead fields.
+  v_viewing_identity := v_lead.metadata -> 'schedule_viewing_identity';
+  v_identity_apartment_id := nullif(v_viewing_identity ->> 'apartment_id', '')::uuid;
+
+  IF v_viewing_identity IS NULL OR v_identity_apartment_id IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: committed viewing identity snapshot missing'
+      USING ERRCODE = 'P1286';
+  END IF;
+
+  IF nullif(v_viewing_identity ->> 'user_id', '')::uuid IS DISTINCT FROM p_user_id
+    OR (v_viewing_identity ->> 'listing_id') IS DISTINCT FROM v_listing_id
+    OR v_identity_apartment_id IS DISTINCT FROM v_apartment.id
+    OR nullif(v_viewing_identity ->> 'scheduled_at', '')::timestamptz IS DISTINCT FROM p_scheduled_at
+    OR nullif(v_viewing_identity ->> 'trip_id', '')::uuid IS DISTINCT FROM p_trip_id
+    OR nullif(v_viewing_identity ->> 'email', '') IS DISTINCT FROM v_email
+    OR nullif(v_viewing_identity ->> 'name', '') IS DISTINCT FROM lower(v_name)
+    OR nullif(v_viewing_identity ->> 'phone', '') IS DISTINCT FROM v_phone
     OR v_lead.intent IS DISTINCT FROM 'rental'
-    OR v_lead.email IS DISTINCT FROM v_email
-    OR lower(v_lead.name) IS DISTINCT FROM lower(v_name)
-    OR v_lead.phone IS DISTINCT FROM v_phone
   THEN
     RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
       USING ERRCODE = 'P0001';

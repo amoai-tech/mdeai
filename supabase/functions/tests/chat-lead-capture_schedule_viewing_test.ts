@@ -23,6 +23,11 @@ Deno.test("parsePreferredShowingAt — invalid", () => {
   assertEquals(parsePreferredShowingAt("not-a-date"), null);
 });
 
+Deno.test("parsePreferredShowingAt — rejects oversized input", () => {
+  const oversized = `2026-10-15T14:00:00.000Z${"0".repeat(5_000_000)}`;
+  assertEquals(parsePreferredShowingAt(oversized), null);
+});
+
 Deno.test("isScheduleViewingRequest — rental + listing + preferred_at", () => {
   assertEquals(
     isScheduleViewingRequest(

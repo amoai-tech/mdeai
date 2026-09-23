@@ -3,7 +3,7 @@
 -- full rental contract, and is idempotent for authenticated and guest callers.
 
 begin;
-select plan(54);
+select plan(60);
 
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
@@ -17,6 +17,13 @@ values
     'a2860000-0000-4000-8000-000000000002',
     'a2860000-0000-4000-8000-000000000001',
     'SAN-1286 trip',
+    '2099-10-01',
+    '2099-10-31'
+  ),
+  (
+    'a2860000-0000-4000-8000-000000000005',
+    'a2860000-0000-4000-8000-000000000001',
+    'SAN-1286 second renter trip',
     '2099-10-01',
     '2099-10-31'
   ),
@@ -167,6 +174,55 @@ select throws_ok($q$
   where idempotency_key='san1286-auth-key-001'
 $q$, 'P1286', 'SAN-1286 viewing request identity is immutable', 'viewing idempotency key cannot be changed to bypass identity protection');
 
+select ok(
+  (select metadata ? 'schedule_viewing_identity' from public.leads where idempotency_key='san1286-auth-key-001'),
+  'committed lead stores an immutable full viewing request identity snapshot'
+);
+select throws_ok($q$
+  update public.leads
+  set metadata = jsonb_set(metadata, '{schedule_viewing_identity,scheduled_at}', '"2099-10-22T14:00:00+00:00"'::jsonb)
+  where idempotency_key='san1286-auth-key-001'
+$q$, 'P1286', 'SAN-1286 viewing request identity is immutable', 'viewing request identity snapshot cannot be changed directly');
+
+-- Authenticated owners may edit normal lead fields later, but those mutable CRM
+-- values must never redefine the original idempotent viewing request.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a2860000-0000-4000-8000-000000000001', true);
+select lives_ok($q$
+  update public.leads
+  set preferred_showing_at = '2099-10-22 14:00:00+00'::timestamptz,
+      trip_id = 'a2860000-0000-4000-8000-000000000005'::uuid,
+      email = 'changed@example.com',
+      name = 'Changed Camila',
+      phone = '+573009999999'
+  where idempotency_key='san1286-auth-key-001'
+$q$, 'authenticated owner can still update mutable CRM lead fields');
+reset role;
+
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san1286-active',
+    'a2860000-0000-4000-8000-000000000001'::uuid,
+    'san1286-auth-key-001', 'form', 'camila@example.com', 'Camila', '+573001234567',
+    'a2860000-0000-4000-8000-000000000002'::uuid,
+    '2099-10-15 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'original committed request still replays after mutable lead edits');
+select throws_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san1286-active',
+    'a2860000-0000-4000-8000-000000000001'::uuid,
+    'san1286-auth-key-001', 'form', 'changed@example.com', 'Changed Camila', '+573009999999',
+    'a2860000-0000-4000-8000-000000000005'::uuid,
+    '2099-10-22 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'P0001', 'p1_schedule_tour_atomic: idempotency key reused for different viewing request', 'mutable lead edits cannot redefine the idempotency identity');
+select is(
+  (select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id where l.idempotency_key='san1286-auth-key-001'),
+  1,
+  'mutable lead edits plus replay still keep exactly one showing'
+);
+
 -- A completed request must remain idempotent even after its requested time passes.
 -- This models a lost response retried later: the existing committed pair wins over
 -- new-request future-time validation.
@@ -177,7 +233,20 @@ insert into public.leads (
   null, 'form', 'past-replay@example.com', 'Past Replay',
   'a2860000-0000-4000-8000-000000000010'::uuid,
   '2026-01-15 14:00:00+00'::timestamptz, 'rental', 'new', 'showing_scheduled',
-  '{"listing_id":"san1286-active"}'::jsonb, 'san1286-past-replay-key'
+  '{
+    "listing_id":"san1286-active",
+    "schedule_viewing_identity":{
+      "user_id":null,
+      "listing_id":"san1286-active",
+      "apartment_id":"a2860000-0000-4000-8000-000000000010",
+      "scheduled_at":"2026-01-15T14:00:00+00:00",
+      "trip_id":null,
+      "email":"past-replay@example.com",
+      "name":"past replay",
+      "phone":null
+    }
+  }'::jsonb,
+  'san1286-past-replay-key'
 );
 insert into public.showings (lead_id, apartment_id, scheduled_at, status, metadata)
 select id, apartment_id, preferred_showing_at, 'scheduled', '{}'::jsonb

@@ -25,22 +25,73 @@ type AtomicScheduleRpcResult = {
   idempotent_replay?: unknown;
 };
 
+const MAX_PREFERRED_AT_LENGTH = 29;
+
+function isAsciiDigits(value: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 48 || code > 57) return false;
+  }
+  return true;
+}
+
+function hasValidDateTimeShape(value: string): boolean {
+  if (
+    value.length < 16 ||
+    value[4] !== "-" ||
+    value[7] !== "-" ||
+    value[10] !== "T" ||
+    value[13] !== ":" ||
+    !isAsciiDigits(value, 0, 4) ||
+    !isAsciiDigits(value, 5, 7) ||
+    !isAsciiDigits(value, 8, 10) ||
+    !isAsciiDigits(value, 11, 13) ||
+    !isAsciiDigits(value, 14, 16)
+  ) {
+    return false;
+  }
+
+  if (value.length === 16) return true;
+  if (value.length < 19 || value[16] !== ":" || !isAsciiDigits(value, 17, 19)) {
+    return false;
+  }
+  if (value.length === 19) return true;
+  return (
+    value.length >= 21 &&
+    value.length <= 23 &&
+    value[19] === "." &&
+    isAsciiDigits(value, 20, value.length)
+  );
+}
+
 export function parsePreferredShowingAt(raw: string): string | null {
   const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (
-    !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(?:\.\d{1,3})?)?([zZ]|[+-]\d{2}:\d{2})?)?$/.test(
-      trimmed,
-    )
+  if (!trimmed || trimmed.length > MAX_PREFERRED_AT_LENGTH) return null;
+
+  let dateTime = trimmed;
+  let hasTimezone = false;
+  if (trimmed.endsWith("Z") || trimmed.endsWith("z")) {
+    dateTime = trimmed.slice(0, -1);
+    hasTimezone = true;
+  } else if (
+    trimmed.length >= 22 &&
+    (trimmed[trimmed.length - 6] === "+" || trimmed[trimmed.length - 6] === "-") &&
+    trimmed[trimmed.length - 3] === ":" &&
+    isAsciiDigits(trimmed, trimmed.length - 5, trimmed.length - 3) &&
+    isAsciiDigits(trimmed, trimmed.length - 2, trimmed.length)
   ) {
-    return null;
+    dateTime = trimmed.slice(0, -6);
+    hasTimezone = true;
   }
-  const withTz = /[zZ]|[+-]\d{2}:\d{2}$/.test(trimmed)
+
+  if (!hasValidDateTimeShape(dateTime)) return null;
+
+  const withTimezone = hasTimezone
     ? trimmed
-    : `${trimmed.length === 16 ? `${trimmed}:00` : trimmed}-05:00`;
-  const d = new Date(withTz);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+    : `${dateTime.length === 16 ? `${dateTime}:00` : dateTime}-05:00`;
+  const parsed = new Date(withTimezone);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 export async function createScheduleViewingBridge(
