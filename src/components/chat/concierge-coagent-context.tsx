@@ -4,9 +4,8 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -46,21 +45,27 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
   });
 
   // Installed @copilotkit/react-core 1.55.2 does not expose useAgent().isReady.
-  // CopilotKitCore mutates runtimeConnectionStatus in place, so mirror the
-  // public runtime-status subscription into React state. This makes the first
-  // cold disconnected/connecting -> connected transition reactive.
-  const [runtimeConnectionStatus, setRuntimeConnectionStatus] = useState(
-    () => copilotkit.runtimeConnectionStatus,
+  // CopilotKitCore is an external mutable store. useSyncExternalStore reads a
+  // current snapshot after subscribing, so a cold connecting -> connected
+  // transition cannot be lost between render and the subscription effect.
+  const subscribeToRuntimeStatus = useCallback(
+    (onStoreChange: () => void) => {
+      const subscription = copilotkit.subscribe({
+        onRuntimeConnectionStatusChanged: () => onStoreChange(),
+      });
+      return () => subscription.unsubscribe();
+    },
+    [copilotkit],
   );
-
-  useEffect(() => {
-    const subscription = copilotkit.subscribe({
-      onRuntimeConnectionStatusChanged: ({ status }) => {
-        setRuntimeConnectionStatus(status);
-      },
-    });
-    return () => subscription.unsubscribe();
-  }, [copilotkit]);
+  const getRuntimeConnectionStatus = useCallback(
+    () => copilotkit.runtimeConnectionStatus,
+    [copilotkit],
+  );
+  const runtimeConnectionStatus = useSyncExternalStore(
+    subscribeToRuntimeStatus,
+    getRuntimeConnectionStatus,
+    getRuntimeConnectionStatus,
+  );
 
   const isReady = Boolean(
     agent &&
