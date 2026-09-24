@@ -80,6 +80,9 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
+const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
   const slots: RentalIntelligenceSlots = {};
@@ -193,7 +196,7 @@ export async function searchRentalsIntelligent(
       .eq("status", "active")
       .not("price_daily", "is", null)
       .order("price_daily", { ascending: true })
-      .limit(48);
+      .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
     if (typeof query.maxPricePerNight === "number") {

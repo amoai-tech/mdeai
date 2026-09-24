@@ -138,6 +138,16 @@ describe("rental-query-parser — SAN-1356 explicit result count (top N)", () =>
     expect(s.explicitLimit).toBe(20);
   });
 
+  it("clamps four-digit explicit limits to max 20", () => {
+    const s = scoreRentalQuery("top 1000 rentals in laureles");
+    expect(s.explicitLimit).toBe(20);
+  });
+
+  it("clamps six-digit explicit limits to max 20", () => {
+    const s = scoreRentalQuery("top 999999 rentals in laureles");
+    expect(s.explicitLimit).toBe(20);
+  });
+
   it("ignores 'top 0' as invalid (returns undefined)", () => {
     const s = scoreRentalQuery("top 0 rentals in laureles");
     expect(s.explicitLimit).toBeUndefined();

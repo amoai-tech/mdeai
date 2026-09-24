@@ -43,7 +43,6 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate", () => {
 
   it("guards against concurrent sends with sentRef", () => {
     expect(source).toContain("sentRef.current");
-    // sentRef is checked in the early return condition
     expect(source).toContain("sentRef.current || !isReady || isLoading");
   });
 
@@ -55,5 +54,13 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate", () => {
   it("handles empty query by normalizing URL without sending", () => {
     expect(source).toContain('trimmedQ === ""');
     expect(source).toContain("router.replace");
+  });
+
+  it("uses .catch() to handle promise rejection", () => {
+    expect(source).toContain(".catch(");
+  });
+
+  it("resets sentRef.current to false in catch handler", () => {
+    expect(source).toContain("sentRef.current = false");
   });
 });
