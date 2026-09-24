@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 import {
@@ -44,11 +46,26 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
   });
 
   // Installed @copilotkit/react-core 1.55.2 does not expose useAgent().isReady.
-  // Mirror the public runtime-connection gate instead of reading private agent fields.
+  // CopilotKitCore mutates runtimeConnectionStatus in place, so mirror the
+  // public runtime-status subscription into React state. This makes the first
+  // cold disconnected/connecting -> connected transition reactive.
+  const [runtimeConnectionStatus, setRuntimeConnectionStatus] = useState(
+    () => copilotkit.runtimeConnectionStatus,
+  );
+
+  useEffect(() => {
+    const subscription = copilotkit.subscribe({
+      onRuntimeConnectionStatusChanged: ({ status }) => {
+        setRuntimeConnectionStatus(status);
+      },
+    });
+    return () => subscription.unsubscribe();
+  }, [copilotkit]);
+
   const isReady = Boolean(
     agent &&
-      copilotkit?.runtimeUrl !== undefined &&
-      copilotkit.runtimeConnectionStatus === "connected",
+      copilotkit.runtimeUrl !== undefined &&
+      runtimeConnectionStatus === "connected",
   );
 
   const state = useMemo(
