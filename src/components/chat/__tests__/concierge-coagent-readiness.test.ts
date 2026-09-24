@@ -32,4 +32,24 @@ describe("Concierge CopilotKit readiness compatibility guard", () => {
     expect(source).toContain("copilotkit.runtimeConnectionStatus");
     expect(source).toContain("copilotkit.runtimeUrl");
   });
+
+  it("uses useAgent hook for concierge agent", () => {
+    expect(source).toContain("useAgent");
+    expect(source).toContain('agentId: "conciergeAgent"');
+  });
+
+  it("subscribes to state, run status, and messages changes", () => {
+    expect(source).toContain("UseAgentUpdate.OnStateChanged");
+    expect(source).toContain("UseAgentUpdate.OnRunStatusChanged");
+    expect(source).toContain("UseAgentUpdate.OnMessagesChanged");
+  });
+
+  it("provides state and setState from agent", () => {
+    expect(source).toContain("agent?.state");
+    expect(source).toContain("agent.setState");
+  });
+
+  it("does not use private runtimeMode field", () => {
+    expect(source).not.toContain("runtimeMode");
+  });
 });

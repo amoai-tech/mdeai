@@ -37,4 +37,23 @@ describe("Concierge local fast-path transcript placement", () => {
   it("hides welcome screen when local messages exist", () => {
     expect(view).toContain("welcomeScreen={localMessages.length > 0 ? false : props.welcomeScreen}");
   });
+
+  it("uses ConciergeScrollView to inject local messages into scroll view", () => {
+    expect(view).toContain("ConciergeScrollView");
+    expect(view).toContain("scrollView={ConciergeScrollView}");
+  });
+
+  it("wraps local messages in max-width container", () => {
+    expect(view).toContain("cpk:max-w-3xl");
+    expect(view).toContain("cpk:mx-auto");
+  });
+
+  it("uses useConciergeLocalChat for welcome screen logic", () => {
+    expect(view).toContain("const { messages: localMessages } = useConciergeLocalChat()");
+  });
+
+  it("does not import useEventLocalChat", () => {
+    expect(view).not.toContain("useEventLocalChat");
+    expect(view).not.toContain("event-local-chat-context");
+  });
 });
