@@ -1,0 +1,49 @@
+name: Codacy Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codacy-coverage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Generate LCOV coverage
+        run: npm run test:coverage -- --coverage.reporter=lcov
+        env:
+          GOOGLE_GENERATIVE_AI_API_KEY: ""
+          GEMINI_API_KEY: ""
+          GOOGLE_API_KEY: ""
+          OPENAI_API_KEY: ""
+      - name: Upload JavaScript coverage
+        if: env.CODACY_PROJECT_TOKEN != ''
+        run: bash <(curl -Ls https://coverage.codacy.com/get.sh) report --partial -l Javascript -r coverage/lcov.info
+      - name: Upload TypeScript coverage
+        if: env.CODACY_PROJECT_TOKEN != ''
+        run: bash <(curl -Ls https://coverage.codacy.com/get.sh) report --partial -l TypeScript -r coverage/lcov.info
+      - name: Finalize Codacy coverage
+        if: env.CODACY_PROJECT_TOKEN != ''
+        run: bash <(curl -Ls https://coverage.codacy.com/get.sh) final
+      - name: Warn when Codacy token is unavailable
+        if: env.CODACY_PROJECT_TOKEN == ''
+        run: echo "::warning::CODACY_PROJECT_TOKEN is unavailable; coverage was generated but not uploaded."
