@@ -24,14 +24,18 @@ function buildScheduleIdempotencyKey(input: {
   listingId: string;
   email: string;
   name: string;
+  phone?: string;
+  tripId?: string;
   preferredAtInstant: string;
 }): string {
-  const raw = [
-    input.listingId,
-    input.email.toLowerCase(),
+  const raw = JSON.stringify([
+    input.listingId.trim(),
+    input.email.trim().toLowerCase(),
     input.name.trim().toLowerCase(),
+    input.phone?.trim() ?? "",
+    input.tripId ?? "",
     input.preferredAtInstant,
-  ].join("|");
+  ]);
   const digest = createHash("sha256").update(raw).digest("hex").slice(0, 32);
   return `sv-${digest}`;
 }
@@ -98,6 +102,8 @@ export async function POST(req: Request) {
           listingId: data.listingId,
           email: data.email,
           name: data.name,
+          phone: data.phone,
+          tripId: data.tripId,
           preferredAtInstant,
         }),
       }),
@@ -111,7 +117,7 @@ export async function POST(req: Request) {
       showing_id?: string;
       actions?: Array<{ payload?: { message?: string } }>;
     };
-    error?: { message?: string };
+    error?: { code?: string; message?: string };
   };
 
   if (edgeRes.status === 429) {
@@ -119,6 +125,14 @@ export async function POST(req: Request) {
       "RATE_LIMITED",
       edgeJson.error?.message ?? "Too many submissions — try again later",
       429,
+    );
+  }
+
+  if (!edgeRes.ok && edgeJson.error?.code === "VALIDATION_ERROR") {
+    return failure(
+      "VALIDATION_ERROR",
+      edgeJson.error.message ?? "Viewing request validation failed",
+      edgeRes.status >= 400 && edgeRes.status < 500 ? edgeRes.status : 502,
     );
   }
 
