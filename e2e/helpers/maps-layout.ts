@@ -12,6 +12,14 @@ const EVENT_QUERY = "salsa events this weekend in Medellín";
 
 /** Marketing homepage — hero search, FAB, no GeoChatShell yet. */
 export async function gotoMarketingHome(page: Page) {
+  // The hero input is present in SSR markup before React is hydrated. Observe
+  // the homepage CopilotKit handshake so tests do not type into pre-hydration
+  // markup and lose the input event before React attaches its handlers.
+  const runtimeHandshake = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/copilotkit") && response.status() === 200,
+    { timeout: 30_000 },
+  );
   const res = await page.goto("/", { waitUntil: "domcontentloaded" });
   if (!res?.ok()) {
     throw new Error(`GET / failed: ${res?.status()}`);
@@ -19,6 +27,7 @@ export async function gotoMarketingHome(page: Page) {
   await page
     .getByRole("searchbox", { name: /ask the ai concierge/i })
     .waitFor({ state: "visible", timeout: 20_000 });
+  await runtimeHandshake;
   await hideCopilotWebInspector(page);
 }
 
@@ -26,21 +35,8 @@ export async function gotoMarketingHome(page: Page) {
 export async function submitHomeHeroQuery(page: Page, text: string) {
   const input = page.getByRole("searchbox", { name: /ask the ai concierge/i });
   await input.click();
-  await input.evaluate((node, value) => {
-    const el = node as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    setter?.call(el, value);
-    el.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        data: value,
-        inputType: "insertText",
-      }),
-    );
-  }, text);
+  await input.fill(text);
+  await expect(input).toHaveValue(text);
   const submit = page.getByRole("button", { name: /^search$/i });
   await expect(submit).toBeEnabled({ timeout: 10_000 });
   await Promise.all([

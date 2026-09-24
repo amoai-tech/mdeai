@@ -80,6 +80,9 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
+const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
   const slots: RentalIntelligenceSlots = {};
@@ -150,21 +153,25 @@ export async function searchRentalsIntelligent(
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
       });
-      if (!error && data?.length) {
+      if (error) {
+        // Supabase JS retries transient PostgREST failures. If the RPC still
+        // fails, preserve search availability by degrading to the keyword path.
+        console.warn(
+          "[intelligence-rental-search] hybrid RPC unavailable — keyword fallback",
+          error,
+        );
+        rankExplanation.push({
+          factor: "hybrid_rpc_error",
+          score: 0,
+          note: "hybrid_search_listings unavailable",
+        });
+      } else if (data?.length) {
         hybridRows = data as HybridListingRow[];
         hybridUsed = true;
         rankExplanation.push({
           factor: "hybrid_semantic",
           score: hybridRows[0]?.similarity ?? 0,
           note: "hybrid_search_listings RPC",
-        });
-      } else if (error) {
-        // Embed succeeded — failure is Supabase RPC, not embed API.
-        console.warn("[intelligence-rental-search] hybrid RPC:", error.message);
-        rankExplanation.push({
-          factor: "hybrid_rpc_error",
-          score: 0,
-          note: "hybrid_search_listings unavailable",
         });
       }
     } else {
@@ -188,20 +195,28 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
       )
       .eq("status", "active")
       .not("price_daily", "is", null)
       .order("price_daily", { ascending: true })
-      .limit(48);
+      .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
     if (typeof query.maxPricePerNight === "number") {
       q = q.lte("price_daily", query.maxPricePerNight);
     }
-    if (query.checkIn) q = q.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-    if (query.checkOut) q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-    const { data } = await q;
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
+    const today = new Date().toISOString().slice(0, 10);
+    const checkInDate = query.checkIn ?? today;
+    q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
+    if (query.checkOut) {
+      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    }
+    const { data, error } = await q;
+    if (error) {
+      throw new Error(`keyword fallback query failed: ${error.message}`);
+    }
     const apartments = data ?? [];
     hybridRows = apartments.map((r: Record<string, unknown>) => ({
       id: String(r.id),
@@ -209,7 +224,7 @@ export async function searchRentalsIntelligent(
       description: null,
       neighborhood: r.neighborhood as string | null,
       city: null,
-      price_monthly: null,
+      price_monthly: (r.price_monthly as number | string | null) ?? null,
       bedrooms: r.bedrooms as number | null,
       bathrooms: null,
       rating: null,
@@ -229,52 +244,76 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
       )
       .in("id", ids);
-    if (query.checkIn) aptQ = aptQ.or(`available_to.is.null,available_to.gte.${query.checkIn}`);
-    if (query.checkOut) aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-    const { data: aptRows } = await aptQ;
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
+    const today = new Date().toISOString().slice(0, 10);
+    const checkInDate = query.checkIn ?? today;
+    aptQ = aptQ.or(`available_to.is.null,available_to.gte.${checkInDate}`);
+    if (query.checkOut) {
+      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    }
+    const { data: aptRows, error: aptError } = await aptQ;
+    if (aptError) {
+      throw new Error(`apartment detail query failed: ${aptError.message}`);
+    }
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
     }
-    // Remove hybridRows that didn't survive the availability filter
-    if (query.checkIn || query.checkOut) {
-      const availableIds = new Set(aptMap.keys());
-      hybridRows = hybridRows.filter((r) => availableIds.has(r.id));
-    }
+    // Every apartments lookup applies an availability filter (explicit stay window
+    // or the default current-date guard), so only keep hybrid rows that survived it.
+    const availableIds = new Set(aptMap.keys());
+    hybridRows = hybridRows.filter((r) => availableIds.has(r.id));
   }
 
   const signalMap = new Map<string, RentalSignalRow>();
   if (ids.length) {
-    const { data: signals } = await client
+    const { data: signals, error: signalsError } = await client
       .from("rental_signals")
       .select(
         "apartment_id, digital_nomad_score, walkability, nightlife_access, quiet_score, workspace_score, value_score, confidence, source, evidence",
       )
       .in("apartment_id", ids);
-    for (const s of (signals ?? []) as RentalSignalRow[]) {
-      signalMap.set(s.apartment_id, s);
+    if (signalsError) {
+      console.warn(
+        "[intelligence-rental-search] rental signal enrichment unavailable",
+        signalsError,
+      );
+    } else {
+      for (const s of (signals ?? []) as RentalSignalRow[]) {
+        signalMap.set(s.apartment_id, s);
+      }
     }
   }
 
   let profileBoost = 0;
   if (neighborhood) {
-    const { data: hoodRow } = await client
+    const { data: hoodRow, error: hoodError } = await client
       .from("neighborhoods")
       .select("id, name")
       .ilike("name", `%${neighborhood.split(" ")[0]}%`)
       .limit(1)
       .maybeSingle();
-    if (hoodRow?.id) {
-      const { data: profile } = await client
+    if (hoodError) {
+      console.warn(
+        "[intelligence-rental-search] neighborhood enrichment unavailable",
+        hoodError,
+      );
+    } else if (hoodRow?.id) {
+      const { data: profile, error: profileError } = await client
         .from("neighborhood_profiles")
         .select(
           "neighborhood_id, digital_nomad_friendliness, gym_coworking_proximity, noise_level, summary",
         )
         .eq("neighborhood_id", hoodRow.id)
         .maybeSingle();
-      if (profile) {
+      if (profileError) {
+        console.warn(
+          "[intelligence-rental-search] neighborhood profile enrichment unavailable",
+          profileError,
+        );
+      } else if (profile) {
         const p = profile as NeighborhoodProfileRow;
         if (slots.wantsNomad) profileBoost += num(p.digital_nomad_friendliness) ?? 0;
         if (slots.wantsGym || slots.wantsCafe) {
