@@ -31,6 +31,16 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.handleEventMessage).not.toHaveBeenCalled();
   });
 
+  it("handled rental fast-path does not also run the agent", async () => {
+    const handlers = makeHandlers();
+    handlers.handleRentalMessage.mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage("search top 5 rentals laureles", handlers);
+
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
   it("venue booking still uses event_venue_booking handler", async () => {
     const handlers = makeHandlers();
     handlers.handleEventVenueBookingMessage.mockResolvedValueOnce(true);

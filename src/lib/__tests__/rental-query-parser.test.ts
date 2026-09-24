@@ -153,6 +153,11 @@ describe("rental-query-parser — SAN-1356 explicit result count (top N)", () =>
     expect(s.explicitLimit).toBeUndefined();
   });
 
+  it("does not turn a restaurant-style 'show 5 places' request into rental params", () => {
+    const params = buildRentalSearchParams("show 5 places to eat in Laureles", {});
+    expect(params).toBeNull();
+  });
+
   it("uses explicit limit in buildRentalSearchParams", () => {
     const params = buildRentalSearchParams("search top 5 rentals laureles", {});
     expect(params?.limit).toBe(5);

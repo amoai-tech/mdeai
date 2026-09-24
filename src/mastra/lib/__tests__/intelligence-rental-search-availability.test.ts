@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
     errorTable: null as string | null,
     neighborhoodRow: null as { id: string; name: string } | null,
     profileRow: null as Record<string, unknown> | null,
+    rpcError: null as { message: string; code: string } | null,
   };
 
   const activeApartment = {
@@ -78,6 +79,8 @@ const mocks = vi.hoisted(() => {
       in: pass,
       or: pass,
       eq: pass,
+      not: pass,
+      order: pass,
       ilike: pass,
       limit: pass,
       maybeSingle: vi.fn(async () => {
@@ -99,7 +102,11 @@ const mocks = vi.hoisted(() => {
   };
 
   const client = {
-    rpc: vi.fn(async () => ({ data: hybridRows, error: null })),
+    rpc: vi.fn(async () =>
+      mocks.state.rpcError
+        ? { data: null, error: mocks.state.rpcError }
+        : { data: hybridRows, error: null },
+    ),
     from: vi.fn((table: string) => {
       if (table === "apartments") {
         return makeThenable(table, () => {
@@ -132,6 +139,7 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.errorTable = null;
     mocks.state.neighborhoodRow = null;
     mocks.state.profileRow = null;
+    mocks.state.rpcError = null;
   });
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
@@ -144,6 +152,29 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     expect(mocks.state.apartmentProjection).toContain("price_monthly");
     expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
     expect(result.results[0]?.price_monthly).toBe(650);
+  });
+
+
+  it("falls back to keyword search when the hybrid RPC is unavailable", async () => {
+    mocks.state.rpcError = { message: "temporary RPC outage", code: "503" };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({
+      queryText: "digital nomad rental in Laureles",
+      neighborhood: "Laureles",
+      limit: 5,
+    });
+
+    expect(result.hybridUsed).toBe(false);
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(result.rankExplanation).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ factor: "hybrid_rpc_error" }),
+      ]),
+    );
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("keeps core results when rental signal enrichment fails", async () => {

@@ -154,9 +154,18 @@ export async function searchRentalsIntelligent(
         match_count: Math.max(limit * 4, 20),
       });
       if (error) {
-        throw new Error(`hybrid_search_listings RPC failed: ${error.message}`);
-      }
-      if (data?.length) {
+        // Supabase JS retries transient PostgREST failures. If the RPC still
+        // fails, preserve search availability by degrading to the keyword path.
+        console.warn(
+          "[intelligence-rental-search] hybrid RPC unavailable — keyword fallback",
+          error,
+        );
+        rankExplanation.push({
+          factor: "hybrid_rpc_error",
+          score: 0,
+          note: "hybrid_search_listings unavailable",
+        });
+      } else if (data?.length) {
         hybridRows = data as HybridListingRow[];
         hybridUsed = true;
         rankExplanation.push({

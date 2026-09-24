@@ -140,6 +140,52 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
     expect(mockSendConciergeUserMessage).toHaveBeenCalledWith("test query", expect.any(Object));
   });
 
+  it("does not duplicate a pending send across readiness reconnect transitions", async () => {
+    let resolveHandled!: (value: boolean) => void;
+    mockSendConciergeUserMessage.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveHandled = resolve;
+      }),
+    );
+    mockUseConciergeChat.mockReturnValue({
+      isLoading: false,
+      reset: vi.fn(),
+      appendMessage: vi.fn(async () => true),
+    });
+    mockUseConciergeCoAgent.mockReturnValue({
+      isReady: true,
+      state: {},
+      setState: vi.fn(),
+      agent: undefined,
+    });
+
+    const rendered = renderWithAct(React.createElement(ConciergeInitialPrompt));
+    expect(mockSendConciergeUserMessage).toHaveBeenCalledTimes(1);
+
+    mockUseConciergeCoAgent.mockReturnValue({
+      isReady: false,
+      state: {},
+      setState: vi.fn(),
+      agent: undefined,
+    });
+    rendered.rerender(React.createElement(ConciergeInitialPrompt));
+    mockUseConciergeCoAgent.mockReturnValue({
+      isReady: true,
+      state: {},
+      setState: vi.fn(),
+      agent: undefined,
+    });
+    rendered.rerender(React.createElement(ConciergeInitialPrompt));
+
+    expect(mockSendConciergeUserMessage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveHandled(true);
+      await Promise.resolve();
+    });
+    rendered.unmount();
+  });
+
   it("releases the send gate on handled === false", async () => {
     mockUseConciergeCoAgent.mockReturnValue({
       isReady: true,
