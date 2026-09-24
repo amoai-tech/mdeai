@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -47,6 +49,30 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
+  const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
+  const agentRef = useRef(agent);
+
+  useEffect(() => {
+    agentRef.current = agent;
+  }, [agent]);
+
+  useEffect(() => {
+    if (!agent || pendingAgentMessagesRef.current.length === 0) return;
+    const pending = pendingAgentMessagesRef.current;
+    agent.addMessages(pending);
+    pendingAgentMessagesRef.current = [];
+  }, [agent]);
+
+  const publishOrQueue = useCallback(
+    (nextMessages: EventLocalChatMessage[]) => {
+      if (agentRef.current) {
+        agentRef.current.addMessages(nextMessages);
+        return;
+      }
+      pendingAgentMessagesRef.current.push(...nextMessages);
+    },
+    [],
+  );
 
   const showClarify = useCallback(
     (userText: string, assistantText: string, kind: LocalClarifyKind) => {
@@ -62,9 +88,9 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyPending(true);
       setClarifyKind(kind);
       setMessages(nextMessages);
-      agent?.addMessages(nextMessages);
+      publishOrQueue(nextMessages);
     },
-    [agent],
+    [publishOrQueue],
   );
 
   const showExchange = useCallback(
@@ -82,12 +108,13 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyPending(false);
       setClarifyKind(null);
       setMessages((prev) => [...prev, ...nextMessages]);
-      agent?.addMessages(nextMessages);
+      publishOrQueue(nextMessages);
     },
-    [agent],
+    [publishOrQueue],
   );
 
   const clearLocalMessages = useCallback(() => {
+    pendingAgentMessagesRef.current = [];
     setMessages([]);
     setClarifyPending(false);
     setClarifyKind(null);
