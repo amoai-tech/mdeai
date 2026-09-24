@@ -58,9 +58,16 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!agent || pendingAgentMessagesRef.current.length === 0) return;
-    const pending = pendingAgentMessagesRef.current;
-    agent.addMessages(pending);
-    pendingAgentMessagesRef.current = [];
+    const pending = [...pendingAgentMessagesRef.current];
+    try {
+      agent.addMessages(pending);
+      pendingAgentMessagesRef.current = [];
+    } catch (error) {
+      console.error(
+        "[EventLocalChat] Failed to flush queued agent messages",
+        error,
+      );
+    }
   }, [agent]);
 
   const publishOrQueue = useCallback(

@@ -146,6 +146,56 @@ describe("Concierge transcript ownership", () => {
     unmount();
   });
 
+  it("retains queued messages when agent hydration flush throws and retries later", () => {
+    mocks.agent = undefined;
+    const { rerender, unmount } = renderWithAct(
+      React.createElement(
+        EventLocalChatProvider,
+        null,
+        React.createElement(TriggerExchange),
+      ),
+    );
+
+    const flushError = new Error("agent unavailable");
+    const failingAddMessages = vi.fn(() => {
+      throw flushError;
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    mocks.agent = { addMessages: failingAddMessages };
+    rerender(
+      React.createElement(
+        EventLocalChatProvider,
+        null,
+        React.createElement(TriggerExchange),
+      ),
+    );
+
+    expect(failingAddMessages).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[EventLocalChat] Failed to flush queued agent messages",
+      flushError,
+    );
+
+    mocks.agent = { addMessages: mocks.addMessages };
+    rerender(
+      React.createElement(
+        EventLocalChatProvider,
+        null,
+        React.createElement(TriggerExchange),
+      ),
+    );
+
+    expect(mocks.addMessages).toHaveBeenCalledTimes(1);
+    expect(mocks.addMessages.mock.calls[0]?.[0]).toMatchObject([
+      { role: "user", content: "search rentals" },
+      { role: "assistant", content: "Found 4 rentals" },
+    ]);
+
+    consoleError.mockRestore();
+    unmount();
+  });
+
   it("queues a clarification until the agent becomes available", () => {
     mocks.agent = undefined;
     const { rerender, unmount } = renderWithAct(
