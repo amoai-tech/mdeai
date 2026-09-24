@@ -225,6 +225,8 @@ test.describe("SAN-1356: Homepage rental search exact regression", () => {
     expect(secondBody).toMatchObject({ neighborhood: "Laureles", limit: 5 });
     expect(secondBody).toMatchObject(firstBody);
 
+    // Wait for second-turn cards to render (new search results)
+    await expect(rentalCards.first()).toBeVisible({ timeout: 120_000 });
     const secondCardCount = await rentalCards.count();
     expect(secondCardCount).toBe(firstCardCount);
     expect(secondCardCount).toBeLessThanOrEqual(5);

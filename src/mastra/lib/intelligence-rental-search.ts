@@ -153,21 +153,16 @@ export async function searchRentalsIntelligent(
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
       });
-      if (!error && data?.length) {
+      if (error) {
+        throw new Error(`hybrid_search_listings RPC failed: ${error.message}`);
+      }
+      if (data?.length) {
         hybridRows = data as HybridListingRow[];
         hybridUsed = true;
         rankExplanation.push({
           factor: "hybrid_semantic",
           score: hybridRows[0]?.similarity ?? 0,
           note: "hybrid_search_listings RPC",
-        });
-      } else if (error) {
-        // Embed succeeded — failure is Supabase RPC, not embed API.
-        console.warn("[intelligence-rental-search] hybrid RPC:", error.message);
-        rankExplanation.push({
-          factor: "hybrid_rpc_error",
-          score: 0,
-          note: "hybrid_search_listings unavailable",
         });
       }
     } else {
@@ -209,7 +204,10 @@ export async function searchRentalsIntelligent(
     if (query.checkOut) {
       q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
     }
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      throw new Error(`keyword fallback query failed: ${error.message}`);
+    }
     const apartments = data ?? [];
     hybridRows = apartments.map((r: Record<string, unknown>) => ({
       id: String(r.id),
@@ -247,7 +245,10 @@ export async function searchRentalsIntelligent(
     if (query.checkOut) {
       aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
     }
-    const { data: aptRows } = await aptQ;
+    const { data: aptRows, error: aptError } = await aptQ;
+    if (aptError) {
+      throw new Error(`apartment detail query failed: ${aptError.message}`);
+    }
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
     }
@@ -259,12 +260,15 @@ export async function searchRentalsIntelligent(
 
   const signalMap = new Map<string, RentalSignalRow>();
   if (ids.length) {
-    const { data: signals } = await client
+    const { data: signals, error: signalsError } = await client
       .from("rental_signals")
       .select(
         "apartment_id, digital_nomad_score, walkability, nightlife_access, quiet_score, workspace_score, value_score, confidence, source, evidence",
       )
       .in("apartment_id", ids);
+    if (signalsError) {
+      throw new Error(`rental_signals query failed: ${signalsError.message}`);
+    }
     for (const s of (signals ?? []) as RentalSignalRow[]) {
       signalMap.set(s.apartment_id, s);
     }
@@ -272,20 +276,26 @@ export async function searchRentalsIntelligent(
 
   let profileBoost = 0;
   if (neighborhood) {
-    const { data: hoodRow } = await client
+    const { data: hoodRow, error: hoodError } = await client
       .from("neighborhoods")
       .select("id, name")
       .ilike("name", `%${neighborhood.split(" ")[0]}%`)
       .limit(1)
       .maybeSingle();
+    if (hoodError) {
+      throw new Error(`neighborhoods query failed: ${hoodError.message}`);
+    }
     if (hoodRow?.id) {
-      const { data: profile } = await client
+      const { data: profile, error: profileError } = await client
         .from("neighborhood_profiles")
         .select(
           "neighborhood_id, digital_nomad_friendliness, gym_coworking_proximity, noise_level, summary",
         )
         .eq("neighborhood_id", hoodRow.id)
         .maybeSingle();
+      if (profileError) {
+        throw new Error(`neighborhood_profiles query failed: ${profileError.message}`);
+      }
       if (profile) {
         const p = profile as NeighborhoodProfileRow;
         if (slots.wantsNomad) profileBoost += num(p.digital_nomad_friendliness) ?? 0;
