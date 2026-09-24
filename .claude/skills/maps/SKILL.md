@@ -1,7 +1,7 @@
 ---
 name: maps
 description: >-
-  Use when MDE work changes or diagnoses Google Maps, Places, map state, markers, routes, location search, Maps grounding, or map-related keys.
+  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
@@ -16,21 +16,14 @@ paths:
 
 # maps — Google Maps Platform
 
-## When NOT to use
-
-- Generic GIS / spatial math with no Google Maps Platform APIs
-- **Mapbox-only** or **Leaflet/OpenStreetMap-only** stacks (no GMP)
-- Unrelated mapping tutorials or homework off the mdeai repo
-- **Non-mdeAI** products—still read-only here; prefer not to expand scope in this skill
-
 ## Load order (keep context small)
 
 1. This **`SKILL.md`** — Quick routing table + Consolidated sibling note.
 2. **GMP doc questions** — read the pinned official Google Maps skill first, then one MDE reference relevant to the task.
-3. **One** MDE `references/*.md` file for implementation; do not bulk-load unrelated references.
-4. **`scripts/gmaps.py` + `references/gmaps-cli-behavior.md`** only when running or editing batch CLI work.
+3. Use [`references/reference-index.md`](references/reference-index.md) to choose one authoritative source; then load only the MDE reference needed.
+4. **`scripts/gmaps.py` + `references/gmaps-cli-behavior.md`** only for batch CLI work.
 
-Historical Cursor/MCP files are not active local dependencies. Verify current Maps tooling before relying on an MCP integration.
+Verify current Maps tooling before relying on an MCP integration.
 
 ---
 
@@ -41,11 +34,58 @@ Historical Cursor/MCP files are not active local dependencies. Verify current Ma
 - Official docs: https://developers.google.com/maps/ai/agent-skills
 - Official source: https://github.com/googlemaps/agent-skills
 - Pinned reviewed copy: [`references/vendor/google-maps-platform/SKILL.md`](references/vendor/google-maps-platform/SKILL.md)
-- Reviewed upstream commit: `84f0e9a2527403a408a61b8705bea0c3900b76a8`
+- Reviewed upstream commit: `6606930272e554171b42d69312674cbe40aa819c`
 
-For Google Maps API/SDK implementation, read the pinned official skill first, then apply the MDE rules here. For changing facts such as API availability, deprecations, pricing, and regional coverage, verify current official Google documentation or Code Assist rather than historical MDE notes.
+## Current Google guidance workflow
 
-MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orchestration; Maps/Places own geo truth; Gemini must not invent coordinates, place IDs, hours, or routes.
+For non-trivial implementation, migration, bug fix, review, or API/version claim:
+1. Read this MDE skill for repo architecture.
+2. Retrieve Google’s current Maps Platform skills index and load only the matching product sub-skill.
+3. Use Maps Platform Code Assist/current official docs only when the sub-skill does not fully cover the task.
+4. Apply MDE Supabase, Mastra, security, UI, and testing constraints.
+5. Run the PR/compliance checks below before completion.
+
+Do not implement changing APIs, pricing, coverage, deprecations, quotas, or billing behavior from model memory. MDE ownership remains: Supabase = inventory truth; Mastra = orchestration; Maps/Places = geo truth.
+
+## Source precedence and freshness
+
+Use [`references/reference-index.md`](references/reference-index.md). Priority is: current Google implementation docs/canonical library docs → current Google architecture/AI docs → Google product pages/blogs → community/third-party sources. Search results and third-party skills are discovery only. For pricing, quotas, regional coverage, product status, deprecations, AI availability, or field availability, fetch a current official source before deciding.
+
+For Code Assist, prefer the Google-hosted remote MCP endpoint `https://mapscodeassist.googleapis.com/mcp`; do not add the deprecated local npm Code Assist package.
+
+## PR review contract
+
+### Source of truth
+
+Changed map/place code and tests → this canonical skill → current Google Maps documentation / Code Assist → actual provider responses or stored grounded records.
+
+### Review invariants
+
+- Keep server-only Places/grounding credentials out of client bundles; restrict browser keys.
+- Use the smallest required Places API (New) field mask for the exact endpoint.
+- Do not invent or transform ungrounded place IDs, coordinates, URLs, hours, ratings, prices, availability, or business facts into provider truth.
+- Preserve `mapId` where AdvancedMarker requires it.
+- Reuse safe cached grounded results and stable provider/database IDs across map/list/chat state.
+- Verify API/version claims against current Google Maps documentation.
+- For a field-mask or billable-call defect, include the request path, smallest fix, and targeted proof of required fields without unnecessary requests.
+
+---
+
+## Product-selection routing matrix
+
+Choose the modern product before coding, then verify the matching current Google sub-skill.
+
+| Need | Default product direction |
+|---|---|
+| React map + markers | Maps JavaScript API via `@vis.gl/react-google-maps` + Advanced Markers |
+| Place search/details/autocomplete | Places API (New) / current Place APIs |
+| Routes, ETA, route matrix | Routes API / current Route APIs |
+| Address validation/standardization | Address Validation API |
+| Address ↔ coordinates | Geocoding API |
+| Static map / Street View image | Maps Static API / Street View Static API |
+| Air quality, pollen, solar, weather | Load the current matching environmental sub-skill |
+
+Do not select a product from memory when current Google guidance is available.
 
 ---
 
@@ -53,92 +93,22 @@ MDE-specific ownership remains: Supabase owns inventory truth; Mastra owns orche
 
 | Task | Go to |
 |------|-------|
-| **PRD / audit** — Places API (New) v2.1 feature matrix + score (PLACES-002–081) | Repo: `tasks/maps/maps-prd-v2.md`, `tasks/maps/places-api-new-audit.md` |
-| **Interactive** — search_places, get_directions, show_on_map in Claude session | [§ Interactive MCP tools below](#interactive-mcp-tools) |
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
-| **Former `google-maps` skill** — removed 2026-05-14 (last stub copy in `_archive/2026-05-14/google-maps-stub/`) | § [Interactive MCP tools](#interactive-mcp-tools) below |
-| **Batch Maps helper** — `gmaps.py` + operator rules | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
-| **Former `react-google-maps` skill** — `@vis.gl/react-google-maps` | [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) |
+| **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
 
 ## mdeAI environment
 
 ```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API, AdvancedMarkerElement
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — Frontend (browser) — Maps JS API; add Places API (New) for browser Places New search/autocomplete
 GOOGLE_PLACES_API_KEY       — Server-side only — Places API (New), enrichment scripts
-GOOGLE_MAPS_API_KEY         — Edge functions — Directions, Routes
+GOOGLE_MAPS_API_KEY         — Server-side Maps APIs explicitly required by the feature
 GOOGLE_ROUTES_API_KEY       — Edge functions — Routes API
 ```
 
 **Medellín anchor:** `{ latitude: 6.2442, longitude: -75.5812 }` — default `locationBias` center and Maps grounding `latLng`.
 
 **Never expose `GOOGLE_PLACES_API_KEY` through a `NEXT_PUBLIC_*` variable** — it is server-side only.
-
----
-
-## Interactive MCP tools
-
-Use these when answering location questions **in a Claude session** (not for mdeAI production code). Tools call Google Maps APIs live.
-
-### Tools available
-
-```
-search_places(query, location?, radius?, type?, open_now?, language?)
-  query     — text query ("restaurants in Laureles")
-  location  — "lat,lng" center (optional)
-  radius    — meters, max 50000 (optional)
-  type      — place type filter ("restaurant", "tourist_attraction", "hotel")
-  open_now  — boolean, default false
-  language  — language code, default "en"
-
-search_nearby_places(location, radius, keyword?, type?, rank_by?, open_now?, language?)
-  location  — "lat,lng" (required)
-  radius    — meters (required, max 50000)
-  rank_by   — "prominence" (default) or "distance"
-
-get_place_details(place_id, language?, reviews_sort?)
-  place_id  — from search results
-  reviews_sort — "most_relevant" (default) or "newest"
-
-get_directions(origin, destination, mode?, alternatives?, avoid?, language?)
-  mode      — "driving" (default), "walking", "bicycling", "transit"
-  avoid     — "tolls", "highways", or "ferries"
-
-geocode_address(address, language?, region?)
-  region    — country code for regional bias
-
-reverse_geocode(latlng, language?)
-  latlng    — "lat,lng"
-
-show_on_map(map_type, markers?, directions?, center?, zoom?)
-  map_type  — "markers", "directions", or "area"
-  markers   — array of {lat, lng} objects
-```
-
-### Response pattern — Text → Map → Text
-
-**Always follow this sequence. Never call `show_on_map` in parallel with other calls.**
-
-1. **Text** — introduce what you'll show ("Here are top restaurants near Poblado:")
-2. **Map** — call `show_on_map` to render results
-3. **Text** — explain results in plain language (names, ratings, notes)
-
-**Multiple categories:** sequential maps — events then restaurants, not parallel.
-
-**Never echo raw map_data JSON** (coordinates, markers, zoom) in your text response. The map renders visually; describe places by name and quality only.
-
-### Intent → tool mapping
-
-| User says | Tool to use |
-|-----------|-------------|
-| "Where is X?" | `geocode_address` |
-| "Find restaurants near..." | `search_places` or `search_nearby_places` |
-| "What are the hours for...?" | `get_place_details` |
-| "How do I get from A to B?" | `get_directions` |
-| "What address is at these coords?" | `reverse_geocode` |
-| "Show me these places on a map" | `show_on_map` |
-
-**Preserve `place_id`** from search results for use in `get_place_details`.
 
 ---
 
@@ -159,77 +129,47 @@ places.id,places.displayName,places.googleMapsLinks,places.location,places.gener
 | `places.googleMapsLinks.directionsUri` | Directions link | Optional card button |
 | `places.googleMapsLinks.photosUri` | Google Maps photos link | Optional "see photos" |
 | `places.location` | `{ latitude, longitude }` | Backfill lat/lng |
-| `places.generativeSummary` | `{ text, disclosureText }` | Store as `ai_summary`; show `disclosureText` |
+| `places.generativeSummary` | provider summary + disclosure | Use only with a model/schema that preserves provider provenance and disclosure; never collapse into generic MDE `ai_summary` |
 
-### generativeSummary constraints
+### Volatile provider facts
 
-- **Coverage:** English only; US and India only currently
-- **Attribution required:** Display `disclosureText` ("Summarized with Gemini") wherever `ai_summary` appears — ToS requirement
-- **Cache in DB:** Fetch once at seeding time. Never call per chat turn.
-
-### googleMapsLinks — currently free
-
-`googleMapsLinks` is in preview and **free** as of 2026-05. Use `placeUri` (not lat/lng-constructed URLs) — it's stable and canonical.
+Pricing, free tiers, geographic availability, preview/GA status, field availability, and quotas are volatile. Always verify them against current Google Maps Platform documentation before architecture, billing, or product decisions. Preserve required attribution/disclosure and cache only when current terms permit it.
 
 ---
 
-## Node.js client — enrichment script pattern
+## Server-side Places enrichment
 
-```typescript
-import { PlacesClient } from '@googlemaps/places';
-
-const client = new PlacesClient({ apiKey: process.env.GOOGLE_PLACES_API_KEY });
-
-const [response] = await client.searchText(
-  {
-    textQuery: `${venueName} ${neighborhood} Medellín Colombia`,
-    locationBias: {
-      circle: { center: { latitude: 6.2442, longitude: -75.5812 }, radius: 30000 },
-    },
-  },
-  { otherArgs: { headers: { 'X-Goog-FieldMask': 'places.id,places.displayName,places.googleMapsLinks,places.location,places.generativeSummary' } } },
-);
-```
+Keep Places API (New) calls server-side with `GOOGLE_PLACES_API_KEY`; request only fields the feature needs. Verify current client syntax and field names in Google docs before implementation.
 
 ---
 
 ## Gemini Maps grounding — summary
 
-Use current official Google Maps grounding documentation; do not rely on retired offline mirrors.
-
-| Mode | Free tier | Cost | Enable |
-|------|-----------|------|--------|
-| Grounding with Google Maps (Gemini API) | 500/day | $25/1K | `tools: [{ googleMaps: {} }]` |
-| Maps Grounding Lite (MCP) — **GA** | pay-as-you-go | per SKU | `mapstools.googleapis.com/mcp` |
-
-**Kill switch:** `MAPS_GROUNDING_DAILY_LIMIT=0` → fall back to Supabase immediately.
-
-**Sequential calls for structured output:** grounded call (no `responseMimeType`) → structured output call (no grounding). Maps + custom function declarations CAN be combined in one call (March 2026 update).
+Verify current grounding products, availability, quotas, pricing, and structured-output compatibility in official Google guidance before implementation. Keep `MAPS_GROUNDING_DAILY_LIMIT=0` as the MDE kill switch to fall back to Supabase.
 
 ---
 
 ## Maps JavaScript API — ChatMap.tsx summary
 
-Use [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md) plus current app source for Maps JavaScript implementation.
+### React implementation rule
 
-- Loader: `@googlemaps/js-api-loader` with `libraries: ['marker']`
-- `mapId` required for `AdvancedMarkerElement`
-- `data-testid="map-pin"` on every pin content element (MASTRA-045 smoke spec)
-- Per-category pin merge: `setPins(prev => [...prev.filter(p => p.category !== cat), ...newPins])`
-- Frontend key restricted to HTTP referrers + Maps JS API only
+MDE React/Next.js Maps code uses `@vis.gl/react-google-maps`. Prefer `<APIProvider>`, `<Map>`, `useMapsLibrary()`, and Advanced Marker APIs. Do not introduce `google-map-react`, `@react-google-maps/api`, or another wrapper. Use `@googlemaps/js-api-loader` only for non-React utilities or an existing raw-JS boundary. See [`references/react-vis-gl/README.md`](references/react-vis-gl/README.md).
+
+- Map containers need explicit height; Advanced Markers need the current required marker library and a valid `mapId`.
+- International search/geocoding must consider explicit `language` and `region` rather than silently inheriting machine/IP locale.
+- Keep `data-testid="map-pin"` on pins used by MDE smoke tests; keep frontend keys restricted to approved referrers + required browser APIs only.
 
 ---
 
 ## Session tokens — autocomplete billing
 
-Use UUID v4 session tokens to group autocomplete keystrokes + final Place Details into one billing event:
+Use the current provider-recommended session-token mechanism for the API being called. In Maps JavaScript Place Autocomplete Data API, use `AutocompleteSessionToken`; for web-service flows, use a unique token per user autocomplete session. Start a fresh token after selection/termination and verify current billing semantics in official docs.
 
-```typescript
-import { v4 as uuidv4 } from 'uuid';
-const sessionToken = uuidv4(); // new UUID per search session
-// Pass as sessionToken on each Autocomplete call
-// Generate fresh UUID after user selects a place
-```
+---
+
+## Demo key policy
+
+Demo Key: prototypes only. Production/shared environments use restricted project credentials for required APIs/origins. Never commit keys.
 
 ---
 
@@ -237,9 +177,9 @@ const sessionToken = uuidv4(); // new UUID per search session
 
 | Key | Restrictions | APIs enabled |
 |-----|-------------|-------------|
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API only |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | HTTP referrers for approved MDE origins | Maps JavaScript API; add Places API (New) when browser Places New search/autocomplete is used |
 | `GOOGLE_PLACES_API_KEY` | Server IP | Places API (New) only |
-| `GOOGLE_MAPS_API_KEY` | Server IP | Directions API, Maps Static |
+| `GOOGLE_MAPS_API_KEY` | Server IP | Only explicitly required server Maps APIs (for example Maps Static) |
 | `GOOGLE_ROUTES_API_KEY` | Server IP | Routes API |
 
 > Full 2-key security architecture → [`references/security-and-optimization.md`](references/security-and-optimization.md)
@@ -248,37 +188,35 @@ const sessionToken = uuidv4(); // new UUID per search session
 
 ---
 
-## Event discovery — Maps / Places / ADK (plan 10 §11)
+## MDE domain handoff
 
-| Layer | mdeai use | Skill / task |
-|-------|-----------|----------------|
-| **Places API (New)** | Batch venue enrich → `place_id`, `maps_url`, lat/lng | **EVD-06** → EVP-024 (historical) |
-| **Maps JS** | Camila’s event pins (`mapId` + `AdvancedMarker`) | EVP-016 (historical) |
-| **ADK sidecar** | Freshness / `search_grounded_places` — not event inventory | EVP-023 (historical) |
-| **Web grounding** | C-004 citations — Google Search, not Places catalog | EVP-021 (historical) |
-
-Historical event-discovery task links were retired; resolve current work through Linear and the canonical `events` skill.
-
-**Golden rule:** Places enriches DB once; grounding answers live geo questions — never invent event listings from Maps.
+Maps/Places provides geo truth, not event/rental inventory. Keep inventory in Supabase, orchestration in Mastra, and route domain behavior through the owning `events` or `real-estate` skill. Never invent listings from Maps grounding.
 
 ---
 
-## Mastra handoff
+## Legacy API hard failures
 
-For Maps-related Mastra work, use the canonical `mastra` skill plus current source and the live Linear task. Retired `tasks/mastra/maps/**` paths are not active instructions.
+Do not introduce `google.maps.Marker`, legacy Places `Autocomplete`/`SearchBox`/`PlacesService`, legacy `DirectionsService`/`DirectionsRenderer`, `DistanceMatrixService`, `visualization.HeatmapLayer`, or `google.maps.drawing`. Retrieve current Google guidance and use the recommended modern replacement before editing these surfaces.
 
----
+**Directions status override (verified 2026-09-22):** current Google Maps JavaScript reference documentation says `DirectionsService` and `DirectionsRenderer` are **deprecated as of February 25, 2026** and **not scheduled to be discontinued**. They may remain in existing integrations, but MDE must not introduce them in new code; use the current Routes library/API (`Route` / `RouteMatrix`) instead. If the pinned vendor skill says these services were disabled in March 2025, current implementation documentation wins:
+- https://developers.google.com/maps/documentation/javascript/reference/directions
+- https://developers.google.com/maps/documentation/javascript/routes/overview
 
-## Common gotchas
+## Critical failure checks
 
-| Gotcha | Fix |
-|--------|-----|
-| `generativeSummary` null | Handle gracefully — not all places have summaries |
-| No `disclosureText` shown | Required by ToS — show "Summarized with Gemini" |
-| Legacy Places API | Switch to Places API (New) — different billing, different endpoints |
-| `googleMapsLinks` missing | Must be in field mask explicitly |
-| Constructing Maps URLs from lat/lng | Use `placeUri` from `googleMapsLinks` — it's canonical and stable |
-| `AdvancedMarkerElement` not found | Add `'marker'` to `libraries` in js-api-loader |
-| Missing `mapId` | Required for AdvancedMarkerElement — set in Map constructor |
-| Frontend key 403 | Verify HTTP referrer restriction includes current origin |
-| Places server key in `NEXT_PUBLIC_*` | Server-side keys must never be browser-exposed |
+Before approval verify: no unsupported browser REST/CORS path; map container has explicit height; React uses `@vis.gl/react-google-maps` with the required marker library; Advanced Markers use a valid `mapId`; server keys stay out of client bundles; web-component objects are not stringified as HTML attributes; headless tests do not assume WebGL/3D; coordinates stay `{ lat, lng }`; international flows set intentional locale/region; Places field masks are minimal; no legacy API was introduced.
+
+## Compliance review
+
+For significant Maps changes verify provider-sourced geo/place data, required attribution, permitted storage/caching, no LLM-fabricated provider facts, correct browser/server key restrictions, intentional billable fields/calls, and applicable regional/EEA requirements against current Google terms.
+
+## Google Places provider summaries
+
+Google Places provider summaries are distinct from MDE `ai_summary`. Preserve provider provenance and disclosure end-to-end. Render provider summaries through `GooglePlacesSummary`; missing provider disclosure suppresses the summary. Do not relabel or store them as generic MDE `ai_summary`.
+
+
+## Maps completion evidence gate
+
+Do not call a Maps change complete until evidence covers: targeted Maps tests; no new legacy API; client/server key exposure; minimal field masks for changed Places calls; compliance/attribution review; and a browser smoke test when map UI changed. Record any current-doc or Code Assist source used for an API/version decision.
+
+For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite.

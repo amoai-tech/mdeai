@@ -51,6 +51,8 @@ export type RentalQuerySignals = {
   dateRangeLabel?: string;
   checkIn?: string;
   checkOut?: string;
+  /** Explicit result count from query (e.g., "top 5", "show 3") */
+  explicitLimit?: number;
 };
 
 const RENTAL_INTENT_RE =
@@ -60,12 +62,23 @@ const EVENT_INTENT_RE =
   /\b(events?|concert|concerts|salsa|nightlife|festival|ticket|tickets|what'?s on)\b/i;
 
 const NEIGHBORHOOD_PATTERNS: Array<{ neighborhood: string; re: RegExp }> = [
-  { neighborhood: "Laureles", re: /\blaureles\b/i },
+  { neighborhood: "Laureles", re: /\b(laureles|laureless)\b/i },
   { neighborhood: "El Poblado", re: /\b(el poblad[oa]|poblado|provenza)\b/i },
   { neighborhood: "Envigado", re: /\benvigado\b/i },
   { neighborhood: "Belén", re: /\bbel[eé]n\b/i },
   { neighborhood: "Estadio", re: /\bestadio\b/i },
 ];
+
+const TOP_N_RE = /\b(?:top|show|find|get)\s+(?:me\s+)?(\d+)\s+(?:rentals?|apartments?|listings?|units?|homes?|places?)\b/i;
+
+function parseExplicitLimit(text: string): number | undefined {
+  const m = text.match(TOP_N_RE);
+  if (m) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) return Math.min(Math.max(n, 1), 20);
+  }
+  return undefined;
+}
 
 const BEDROOM_RE =
   /\b(\d+)\s?(?:br|bed(?:room)?s?)\b|\b(studio|one bedroom|1 bedroom|2 bedroom|3 bedroom)\b/i;
@@ -201,6 +214,7 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
   const normalized = text.trim();
   const { maxPricePerNight, budgetType } = parseBudget(normalized);
   const minBedrooms = parseBedrooms(normalized);
+  const explicitLimit = parseExplicitLimit(normalized);
 
   let neighborhood: string | undefined;
   for (const { neighborhood: n, re } of NEIGHBORHOOD_PATTERNS) {
@@ -257,6 +271,7 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
     dateRangeLabel,
     checkIn,
     checkOut,
+    explicitLimit,
   };
 }
 
@@ -282,6 +297,10 @@ export function shouldInstantRentalClarify(
 
 const FAST_PATH_LIMIT = 8;
 
+function effectiveLimit(s: RentalQuerySignals, q?: ConciergeWorkingMemory["lastRentalQuery"]): number {
+  return s.explicitLimit ?? q?.limit ?? FAST_PATH_LIMIT;
+}
+
 export function buildRentalSearchParams(
   text: string,
   memory: ConciergeWorkingMemory,
@@ -290,6 +309,7 @@ export function buildRentalSearchParams(
 
   const s = scoreRentalQuery(text);
   const q = memory.lastRentalQuery;
+  const limit = effectiveLimit(s, q);
 
   if (q?.genericAskPending) {
     const merged: RentalSearchApiParams = {
@@ -299,7 +319,7 @@ export function buildRentalSearchParams(
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
       stayType: s.budgetType ?? q.budgetType,
-      limit: FAST_PATH_LIMIT,
+      limit,
     };
     if (
       merged.neighborhood ||
@@ -309,7 +329,7 @@ export function buildRentalSearchParams(
       return attachQueryText(merged, text, s);
     }
     if (hasRentalSignals(text)) {
-      return attachQueryText({ limit: FAST_PATH_LIMIT }, text, s);
+      return attachQueryText({ limit }, text, s);
     }
   }
 
@@ -322,7 +342,7 @@ export function buildRentalSearchParams(
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
         stayType: q?.budgetType,
-        limit: FAST_PATH_LIMIT,
+        limit,
       },
       text,
       s,
@@ -337,7 +357,7 @@ export function buildRentalSearchParams(
         neighborhood: s.neighborhood,
         minBedrooms: s.minBedrooms,
         maxPricePerNight: s.maxPricePerNight,
-        limit: FAST_PATH_LIMIT,
+        limit,
       },
       text,
       s,
@@ -350,7 +370,7 @@ export function buildRentalSearchParams(
         neighborhood: s.neighborhood,
         minBedrooms: s.minBedrooms,
         maxPricePerNight: s.maxPricePerNight,
-        limit: FAST_PATH_LIMIT,
+        limit,
       },
       text,
       s,
@@ -370,7 +390,7 @@ export function buildRentalSearchParams(
         checkIn: q.checkIn,
         checkOut: q.checkOut,
         stayType: q.budgetType,
-        limit: FAST_PATH_LIMIT,
+        limit,
       },
       text,
       s,

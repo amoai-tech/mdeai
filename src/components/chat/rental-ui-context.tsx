@@ -19,6 +19,8 @@ export type ScheduleViewingTarget = {
 
 export type LeadConfirmation = {
   leadId: string;
+  /** SAN-1203 — the committed showing. A confirmation cannot exist without it. */
+  showingId: string;
   message: string;
   listingTitle: string;
 };

@@ -1,0 +1,42 @@
+name: Maps Skill Maintenance
+
+on:
+  schedule:
+    - cron: "23 13 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".claude/skills/maps/**"
+      - "src/components/maps/**"
+      - "src/__tests__/maps-*.test.ts"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  maps-maintenance:
+    name: upstream · links · @vis.gl/react-google-maps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Google Maps agent-skill upstream drift
+        run: node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
+      - name: Primary Maps reference link health
+        run: node .claude/skills/maps/scripts/check-maps-reference-links.mjs
+      - name: React Maps compatibility with current Google examples
+        run: node .claude/skills/maps/scripts/check-visgl-compatibility.mjs
+      - name: Maps maintenance contracts
+        run: npx vitest run src/__tests__/maps-maintenance-contract.test.ts src/__tests__/maps-reference-index.test.ts src/components/maps/google-places-summary.test.tsx

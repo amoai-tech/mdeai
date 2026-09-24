@@ -39,7 +39,10 @@ describe("SAN-1341 Playwright architecture", () => {
   });
 
   it("removes the restaurant fast-path fixed sleep", () => {
-    const spec = fs.readFileSync("e2e/restaurant-card-fast-path.spec.ts", "utf8");
+    const spec = fs.readFileSync(
+      "e2e/restaurant-card-fast-path.spec.ts",
+      "utf8",
+    );
     expect(spec).not.toContain("waitForTimeout(");
   });
 
@@ -84,8 +87,12 @@ describe("SAN-1341 Playwright architecture", () => {
       "cross-browser-firefox",
       "cross-browser-webkit",
     ]) {
-      const project = (config.projects ?? []).find((item) => item.name === name);
-      expect(JSON.stringify(project?.testMatch ?? "")).toContain("auth-guard.spec.ts");
+      const project = (config.projects ?? []).find(
+        (item) => item.name === name,
+      );
+      expect(JSON.stringify(project?.testMatch ?? "")).toContain(
+        "auth-guard.spec.ts",
+      );
       expect(JSON.stringify(project?.testMatch ?? "")).not.toContain(
         "deterministic-critical.spec.ts",
       );
@@ -96,7 +103,9 @@ describe("SAN-1341 Playwright architecture", () => {
       "critical-cross-browser-firefox",
       "critical-cross-browser-webkit",
     ]) {
-      const project = (config.projects ?? []).find((item) => item.name === name);
+      const project = (config.projects ?? []).find(
+        (item) => item.name === name,
+      );
       expect(JSON.stringify(project?.testMatch ?? "")).toContain(
         "deterministic-critical.spec.ts",
       );
@@ -121,7 +130,7 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("npm run test:e2e:deterministic");
     expect(workflow).toContain('NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"');
-    expect(workflow).toContain('NODE_ENV: development');
+    expect(workflow).toContain("NODE_ENV: development");
     expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
     expect(workflow).toContain("SMOKE_BASE_URL: http://localhost:3002");
   });
@@ -140,6 +149,21 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("critical-cross-browser-webkit");
     expect(workflow).toContain("NODE_ENV: development");
     expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
+  });
+
+  it("retains traces on deterministic failures when retries are disabled", () => {
+    for (const name of [
+      "local-chromium",
+      "critical-cross-browser-chromium",
+      "critical-cross-browser-firefox",
+      "critical-cross-browser-webkit",
+    ]) {
+      const project = (config.projects ?? []).find(
+        (item) => item.name === name,
+      );
+      expect(project?.retries).toBe(0);
+      expect(project?.use?.trace).toBe("retain-on-failure");
+    }
   });
 
   it("never reuses an existing web server in CI", () => {

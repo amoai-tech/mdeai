@@ -5,6 +5,7 @@ export type RentalResultRow = {
   title: string;
   neighborhood: string;
   nightly_price?: number;
+  price_monthly?: number;
   bedrooms?: number;
   wifi?: boolean;
   amenities?: string[];
@@ -25,7 +26,7 @@ const BENEFIT_MAP: Array<{ re: RegExp; label: string }> = [
   { re: /\bsafe|security\b/i, label: "Secure building" },
 ];
 
-export function formatRentalPrices(nightly?: number): {
+export function formatRentalPrices(nightly?: number, monthly?: number): {
   nightlyLabel: string | null;
   monthlyLabel: string | null;
 } {
@@ -33,7 +34,10 @@ export function formatRentalPrices(nightly?: number): {
     return { nightlyLabel: null, monthlyLabel: null };
   }
   const nightlyLabel = `$${nightly.toLocaleString("en-US")}/night`;
-  const monthlyLabel = `~$${Math.round(nightly * 30).toLocaleString("en-US")}/mo`;
+  // Use stored monthly price when present; otherwise estimate from nightly
+  const monthlyLabel = monthly != null && Number.isFinite(monthly)
+    ? `$${monthly.toLocaleString("en-US")}/mo`
+    : `~$${Math.round(nightly * 30).toLocaleString("en-US")}/mo`;
   return { nightlyLabel, monthlyLabel };
 }
 

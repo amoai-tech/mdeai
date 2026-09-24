@@ -6,10 +6,12 @@ import {
   useContext,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
   useAgent,
+  useCopilotKit,
   UseAgentUpdate,
   type AbstractAgent,
 } from "@copilotkit/react-core/v2";
@@ -17,6 +19,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type ConciergeCoAgentValue = {
   agent: AbstractAgent | undefined;
+  /** True when the active provider can accept concierge state/messages. */
+  isReady: boolean;
   state: ConciergeWorkingMemory;
   setState: (
     patch:
@@ -31,6 +35,7 @@ const ConciergeCoAgentContext = createContext<ConciergeCoAgentValue | null>(
 
 /** Live CopilotKit agent mount for concierge. */
 function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
+  const { copilotkit } = useCopilotKit();
   const { agent } = useAgent({
     agentId: "conciergeAgent",
     updates: [
@@ -40,9 +45,38 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
     ],
   });
 
+  // Installed @copilotkit/react-core 1.55.2 does not expose useAgent().isReady.
+  // CopilotKitCore is an external mutable store. useSyncExternalStore reads a
+  // current snapshot after subscribing, so a cold connecting -> connected
+  // transition cannot be lost between render and the subscription effect.
+  const subscribeToRuntimeStatus = useCallback(
+    (onStoreChange: () => void) => {
+      const subscription = copilotkit.subscribe({
+        onRuntimeConnectionStatusChanged: () => onStoreChange(),
+      });
+      return () => subscription.unsubscribe();
+    },
+    [copilotkit],
+  );
+  const getRuntimeConnectionStatus = useCallback(
+    () => copilotkit.runtimeConnectionStatus,
+    [copilotkit],
+  );
+  const runtimeConnectionStatus = useSyncExternalStore(
+    subscribeToRuntimeStatus,
+    getRuntimeConnectionStatus,
+    getRuntimeConnectionStatus,
+  );
+
+  const isReady = Boolean(
+    agent &&
+    copilotkit.runtimeUrl !== undefined &&
+    runtimeConnectionStatus === "connected",
+  );
+
   const state = useMemo(
-    () => (agent.state ?? {}) as ConciergeWorkingMemory,
-    [agent.state],
+    () => (agent?.state ?? {}) as ConciergeWorkingMemory,
+    [agent?.state],
   );
 
   const setState = useCallback(
@@ -51,6 +85,7 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
         | Partial<ConciergeWorkingMemory>
         | ((prev: ConciergeWorkingMemory) => ConciergeWorkingMemory),
     ) => {
+      if (!agent) return;
       const current = (agent.state ?? {}) as ConciergeWorkingMemory;
       const next =
         typeof patch === "function" ? patch(current) : { ...current, ...patch };
@@ -60,8 +95,8 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ agent, state, setState }),
-    [agent, state, setState],
+    () => ({ agent, isReady, state, setState }),
+    [agent, isReady, state, setState],
   );
 
   return (
@@ -71,6 +106,7 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Local state provider for deterministic E2E; never mounts live CopilotKit transport. */
 function DeterministicConciergeCoAgentProvider({
   children,
 }: {
@@ -90,9 +126,10 @@ function DeterministicConciergeCoAgentProvider({
     [],
   );
   const value = useMemo(
-    () => ({ agent: undefined, state, setState }),
+    () => ({ agent: undefined, isReady: true, state, setState }),
     [state, setState],
   );
+
   return (
     <ConciergeCoAgentContext.Provider value={value}>
       {children}
@@ -116,6 +153,7 @@ export function ConciergeCoAgentProvider({
       </DeterministicConciergeCoAgentProvider>
     );
   }
+
   return (
     <LiveConciergeCoAgentProvider>{children}</LiveConciergeCoAgentProvider>
   );

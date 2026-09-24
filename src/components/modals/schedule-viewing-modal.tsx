@@ -37,6 +37,9 @@ export const ScheduleViewingModal = () => {
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } = useRentalUi();
   const panelRef = useRef<HTMLDivElement>(null);
   useModalA11y(Boolean(scheduleTarget), closeScheduleViewing, panelRef);
+  // SAN-1203 — `setSubmitting` is async, so a fast double-click could fire two
+  // requests before the button disables. This ref is the synchronous lock.
+  const submitLockRef = useRef(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -80,6 +83,8 @@ export const ScheduleViewingModal = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
     setError(null);
     setSubmitting(true);
     try {
@@ -90,10 +95,12 @@ export const ScheduleViewingModal = () => {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
-        preferredAt: preferredAt || undefined,
+        preferredAt,
       });
+      // SAN-1203 — reaching here proves leadId + showingId are both committed.
       setLeadConfirmation({
         leadId: result.leadId,
+        showingId: result.showingId,
         message: result.message,
         listingTitle: scheduleTarget.title,
       });
@@ -103,8 +110,11 @@ export const ScheduleViewingModal = () => {
       setPhone("");
       setPreferredAt("");
     } catch (err) {
+      // The modal stays open with the typed values intact so the renter can fix
+      // the time or retry rather than losing the request.
       setError(err instanceof Error ? err.message : "Submit failed");
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
@@ -170,11 +180,12 @@ export const ScheduleViewingModal = () => {
             />
           </label>
           <label className="block text-sm">
-            <span className="font-medium">Preferred time</span>
+            <span className="font-medium">Preferred time (Medellín time)</span>
             <input
               type="datetime-local"
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               name="preferredAt"
+              required
               value={preferredAt}
               onChange={(e) => setPreferredAt(e.target.value)}
               disabled={submitting}

@@ -17,7 +17,7 @@ Loads the Google Maps JavaScript API. Must wrap all map components.
 
 **Props:**
 - `apiKey` (required): Google Maps API key
-- `libraries`: Array of libraries to preload (`'places'`, `'geocoding'`, `'drawing'`, `'geometry'`, `'visualization'`)
+- `libraries`: Preload only current libraries required by the feature (for example `'places'`, `'geocoding'`, `'geometry'`, `'marker'`)
 - `version`: API version (`'weekly'`, `'quarterly'`, `'beta'`)
 - `region`: Region code for localized behavior
 - `language`: Language code
@@ -253,20 +253,3 @@ BOTTOM_LEFT   BOTTOM_CENTER   BOTTOM_RIGHT
 ```
 
 ---
-
-## Marker (Deprecated)
-
-Legacy marker. Use AdvancedMarker for new projects.
-
-```tsx
-import { useMarkerRef } from '@vis.gl/react-google-maps';
-
-const [markerRef, marker] = useMarkerRef();
-
-<Marker
-  ref={markerRef}
-  position={position}
-  icon="/custom-icon.png"
-  label="A"
-/>
-```

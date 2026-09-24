@@ -47,7 +47,11 @@ export default defineConfig({
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+        trace: "retain-on-failure",
+      },
     },
     {
       name: "cross-browser-chromium",
@@ -76,7 +80,11 @@ export default defineConfig({
       testIgnore: VITEST_TESTS,
       retries: 0,
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+        trace: "retain-on-failure",
+      },
     },
     {
       name: "critical-cross-browser-firefox",
@@ -84,7 +92,11 @@ export default defineConfig({
       testIgnore: VITEST_TESTS,
       retries: 0,
       workers: 1,
-      use: { ...devices["Desktop Firefox"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Firefox"],
+        baseURL: localBaseURL,
+        trace: "retain-on-failure",
+      },
     },
     {
       name: "critical-cross-browser-webkit",
@@ -92,7 +104,11 @@ export default defineConfig({
       testIgnore: VITEST_TESTS,
       retries: 0,
       workers: 1,
-      use: { ...devices["Desktop Safari"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Safari"],
+        baseURL: localBaseURL,
+        trace: "retain-on-failure",
+      },
     },
     {
       name: "prod-smoke",

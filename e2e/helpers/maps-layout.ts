@@ -11,6 +11,14 @@ const EVENT_QUERY = "salsa events this weekend in Medellín";
 
 /** Marketing homepage — hero search, FAB, no GeoChatShell yet. */
 export async function gotoMarketingHome(page: Page) {
+  // The hero input is present in SSR markup before React is hydrated. Observe
+  // the homepage CopilotKit handshake so tests do not type into pre-hydration
+  // markup and lose the input event before React attaches its handlers.
+  const runtimeHandshake = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/copilotkit") && response.status() === 200,
+    { timeout: 30_000 },
+  );
   const res = await page.goto("/", { waitUntil: "domcontentloaded" });
   if (!res?.ok()) {
     throw new Error(`GET / failed: ${res?.status()}`);
@@ -23,6 +31,7 @@ export async function gotoMarketingHome(page: Page) {
     "true",
     { timeout: 30_000 },
   );
+  await runtimeHandshake;
   await hideCopilotWebInspector(page);
 }
 

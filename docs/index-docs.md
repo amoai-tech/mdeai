@@ -1,6 +1,6 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-18
+updated: 2026-09-21
 status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
@@ -117,6 +117,9 @@ Use for reusable test guidance, QA, release verification, and production smoke p
 [07-operations/README.md](07-operations/README.md)
 
 Use for local development, deployment, security operations, observability, runbooks, and troubleshooting.
+
+Current workflow plan:
+- [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, todo, changelog, GitBook, and Claude/Codex/ChatGPT collaboration.
 
 ### Strategy
 [08-strategy/README.md](08-strategy/README.md)
