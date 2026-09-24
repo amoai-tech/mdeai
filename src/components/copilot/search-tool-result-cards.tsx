@@ -22,6 +22,21 @@ import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
+const CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS = new Set([
+  "hybrid_semantic",
+  "neighborhood_profile",
+  "neighborhood",
+  "digital_nomad_score",
+]);
+
+export function filterCustomerVisibleRentalRankExplanation<
+  T extends { factor: string },
+>(entries: T[]): T[] {
+  return entries.filter((entry) =>
+    CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS.has(entry.factor),
+  );
+}
+
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
 }
@@ -237,7 +252,9 @@ export function RentalResults({
     availability?: string;
     host_name?: string;
   }>;
-  const rankExplanation = envelope.rankExplanation ?? [];
+  const rankExplanation = filterCustomerVisibleRentalRankExplanation(
+    envelope.rankExplanation ?? [],
+  );
   const searchParams = searchMeta?.params;
 
   useEffect(() => {

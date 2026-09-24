@@ -133,6 +133,13 @@ test.describe("Home → Chat vertical handoffs", () => {
 test.describe("SAN-1356: Homepage rental search exact regression", () => {
   test.use({ viewport: HOME_VIEWPORT });
 
+  test.beforeEach(async ({ page }) => {
+    // This regression covers homepage -> chat -> rental behavior, not Maps auth.
+    await page.route(/https:\/\/maps\.googleapis\.com\/.*/, (route) =>
+      route.fulfill({ status: 200, contentType: "application/javascript", body: "" }),
+    );
+  });
+
   test("hero search: 'search top 5 rentals laureless' → Laureles + limit 5 + cards", async ({
     page,
   }) => {
