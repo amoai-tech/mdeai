@@ -11,14 +11,18 @@ const EVENT_QUERY = "salsa events this weekend in Medellín";
 
 /** Marketing homepage — hero search, FAB, no GeoChatShell yet. */
 export async function gotoMarketingHome(page: Page) {
-  // The hero input is present in SSR markup before React is hydrated. Observe
-  // the homepage CopilotKit handshake so tests do not type into pre-hydration
-  // markup and lose the input event before React attaches its handlers.
-  const runtimeHandshake = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/copilotkit") && response.status() === 200,
-    { timeout: 30_000 },
-  );
+  // The hero input is present in SSR markup before React is hydrated. The
+  // explicit data-hydrated signal is authoritative in deterministic E2E mode,
+  // where live CopilotKit transport is intentionally disabled.
+  const deterministicE2E =
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+  const runtimeHandshake = deterministicE2E
+    ? null
+    : page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/copilotkit") && response.status() === 200,
+        { timeout: 30_000 },
+      );
   const res = await page.goto("/", { waitUntil: "domcontentloaded" });
   if (!res?.ok()) {
     throw new Error(`GET / failed: ${res?.status()}`);
@@ -31,7 +35,9 @@ export async function gotoMarketingHome(page: Page) {
     "true",
     { timeout: 30_000 },
   );
-  await runtimeHandshake;
+  if (runtimeHandshake) {
+    await runtimeHandshake;
+  }
   await hideCopilotWebInspector(page);
 }
 
@@ -42,10 +48,8 @@ export async function submitHomeHeroQuery(page: Page, text: string) {
   await expect(input).toHaveValue(text);
   const submit = page.getByRole("button", { name: /^search$/i });
   await expect(submit).toBeEnabled({ timeout: 10_000 });
-  await Promise.all([
-    page.waitForURL(/\/chat/, { timeout: 30_000 }),
-    submit.click(),
-  ]);
+  await submit.click();
+  await expect(page).toHaveURL(/\/chat/, { timeout: 30_000 });
 }
 
 /** After home handoff: lands on /chat, ?q stripped, user message sent once. */

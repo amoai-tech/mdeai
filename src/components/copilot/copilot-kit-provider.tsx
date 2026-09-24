@@ -13,6 +13,14 @@ import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
 function CopilotKitWithThread({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { activeThreadId } = useThreadNav();
+  const deterministicE2E =
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+
+  // Deterministic browser tests exercise the real app/router with mocked
+  // domain boundaries, but must not start live CopilotKit transport.
+  if (deterministicE2E) {
+    return <>{children}</>;
+  }
 
   // These routes bring their own v2 provider in a layout, so the root
   // conciergeAgent provider must NOT also wrap them:

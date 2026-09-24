@@ -38,6 +38,17 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(helper).not.toContain("Object.getOwnPropertyDescriptor(");
   });
 
+  it("uses a web assertion instead of a load-lifecycle wait for the Home to Chat handoff", () => {
+    const helper = fs.readFileSync("e2e/helpers/maps-layout.ts", "utf8");
+    const submitHelper = helper.match(
+      /export async function submitHomeHeroQuery[\s\S]*?\n}/,
+    )?.[0];
+    expect(submitHelper).toBeDefined();
+    expect(submitHelper).toContain("await submit.click()");
+    expect(submitHelper).toContain("await expect(page).toHaveURL");
+    expect(submitHelper).not.toContain("page.waitForURL(");
+  });
+
   it("removes the restaurant fast-path fixed sleep", () => {
     const spec = fs.readFileSync(
       "e2e/restaurant-card-fast-path.spec.ts",
@@ -80,6 +91,15 @@ describe("SAN-1341 Playwright architecture", () => {
     );
     expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
     expect(provider).toContain("DeterministicConciergeCoAgentProvider");
+  });
+
+  it("bypasses the root CopilotKit transport in deterministic E2E mode", () => {
+    const provider = fs.readFileSync(
+      "src/components/copilot/copilot-kit-provider.tsx",
+      "utf8",
+    );
+    expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
+    expect(provider).toContain("deterministicE2E");
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [
