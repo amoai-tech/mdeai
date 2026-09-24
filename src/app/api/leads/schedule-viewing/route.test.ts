@@ -161,6 +161,67 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(first.idempotency_key).toBe(second.idempotency_key);
   });
 
+  it("changes the idempotency key when phone or trip identity changes", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(200, {
+        success: true,
+        data: { lead_id: "lead-1", showing_id: "showing-1" },
+      }),
+    );
+
+    await post(validBody({ phone: "+573001111111" }));
+    await post(validBody({ phone: "+573002222222" }));
+    await post(validBody({
+      phone: "+573001111111",
+      tripId: "a2860000-0000-4000-8000-000000000002",
+    }));
+
+    const first = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const second = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const third = JSON.parse(fetchMock.mock.calls[2][1].body as string);
+    expect(first.idempotency_key).not.toBe(second.idempotency_key);
+    expect(first.idempotency_key).not.toBe(third.idempotency_key);
+  });
+
+  it("preserves a typed validation error from the edge", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "p1_schedule_tour_atomic: listing is not requestable",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(json.error.message).toBe(
+      "p1_schedule_tour_atomic: listing is not requestable",
+    );
+  });
+
+  it("does not downgrade a 5xx edge validation response to a client 400", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(500, {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "validation path failed upstream",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("maps a rate-limited edge response to a typed error", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(429, {
