@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { apartmentProjection: "" };
+  const state = {
+    apartmentProjection: "",
+    errorTable: null as string | null,
+    neighborhoodRow: null as { id: string; name: string } | null,
+    profileRow: null as Record<string, unknown> | null,
+  };
 
   const activeApartment = {
     id: "active-1",
@@ -75,9 +80,20 @@ const mocks = vi.hoisted(() => {
       eq: pass,
       ilike: pass,
       limit: pass,
-      maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+      maybeSingle: vi.fn(async () => {
+        if (state.errorTable === table) {
+          return { data: null, error: { message: `${table} unavailable`, code: "503" } };
+        }
+        if (table === "neighborhoods") return { data: state.neighborhoodRow, error: null };
+        if (table === "neighborhood_profiles") return { data: state.profileRow, error: null };
+        return { data: null, error: null };
+      }),
       then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
-        Promise.resolve({ data: dataFactory(), error: null }).then(resolve, reject),
+        Promise.resolve(
+          state.errorTable === table
+            ? { data: null, error: { message: `${table} unavailable`, code: "503" } }
+            : { data: dataFactory(), error: null },
+        ).then(resolve, reject),
     });
     return chain;
   };
@@ -111,6 +127,12 @@ vi.mock("../query-embedding", () => ({
 }));
 
 describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", () => {
+  beforeEach(() => {
+    mocks.state.apartmentProjection = "";
+    mocks.state.errorTable = null;
+    mocks.state.neighborhoodRow = null;
+    mocks.state.profileRow = null;
+  });
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
 
@@ -122,5 +144,53 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     expect(mocks.state.apartmentProjection).toContain("price_monthly");
     expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
     expect(result.results[0]?.price_monthly).toBe(650);
+  });
+
+  it("keeps core results when rental signal enrichment fails", async () => {
+    mocks.state.errorTable = "rental_signals";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({
+      queryText: "digital nomad rental",
+      limit: 5,
+    });
+
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps core results when neighborhood enrichment fails", async () => {
+    mocks.state.errorTable = "neighborhoods";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({
+      queryText: "quiet rental in Laureles",
+      neighborhood: "Laureles",
+      limit: 5,
+    });
+
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps core results when neighborhood profile enrichment fails", async () => {
+    mocks.state.neighborhoodRow = { id: "hood-1", name: "Laureles" };
+    mocks.state.errorTable = "neighborhood_profiles";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({
+      queryText: "quiet digital nomad rental in Laureles",
+      neighborhood: "Laureles",
+      limit: 5,
+    });
+
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

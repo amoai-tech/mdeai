@@ -267,10 +267,14 @@ export async function searchRentalsIntelligent(
       )
       .in("apartment_id", ids);
     if (signalsError) {
-      throw new Error(`rental_signals query failed: ${signalsError.message}`);
-    }
-    for (const s of (signals ?? []) as RentalSignalRow[]) {
-      signalMap.set(s.apartment_id, s);
+      console.warn(
+        "[intelligence-rental-search] rental signal enrichment unavailable",
+        signalsError,
+      );
+    } else {
+      for (const s of (signals ?? []) as RentalSignalRow[]) {
+        signalMap.set(s.apartment_id, s);
+      }
     }
   }
 
@@ -283,9 +287,11 @@ export async function searchRentalsIntelligent(
       .limit(1)
       .maybeSingle();
     if (hoodError) {
-      throw new Error(`neighborhoods query failed: ${hoodError.message}`);
-    }
-    if (hoodRow?.id) {
+      console.warn(
+        "[intelligence-rental-search] neighborhood enrichment unavailable",
+        hoodError,
+      );
+    } else if (hoodRow?.id) {
       const { data: profile, error: profileError } = await client
         .from("neighborhood_profiles")
         .select(
@@ -294,9 +300,11 @@ export async function searchRentalsIntelligent(
         .eq("neighborhood_id", hoodRow.id)
         .maybeSingle();
       if (profileError) {
-        throw new Error(`neighborhood_profiles query failed: ${profileError.message}`);
-      }
-      if (profile) {
+        console.warn(
+          "[intelligence-rental-search] neighborhood profile enrichment unavailable",
+          profileError,
+        );
+      } else if (profile) {
         const p = profile as NeighborhoodProfileRow;
         if (slots.wantsNomad) profileBoost += num(p.digital_nomad_friendliness) ?? 0;
         if (slots.wantsGym || slots.wantsCafe) {

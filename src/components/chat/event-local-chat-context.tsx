@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 
 export type EventLocalChatMessage = {
   id: string;
@@ -42,15 +43,14 @@ function nextId() {
 }
 
 export function EventLocalChatProvider({ children }: { children: ReactNode }) {
+  const { agent } = useConciergeCoAgent();
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
 
   const showClarify = useCallback(
     (userText: string, assistantText: string, kind: LocalClarifyKind) => {
-      setClarifyPending(true);
-      setClarifyKind(kind);
-      setMessages([
+      const nextMessages: EventLocalChatMessage[] = [
         { id: nextId(), role: "user", content: userText },
         {
           id: nextId(),
@@ -58,27 +58,33 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
           content: assistantText,
           isClarify: true,
         },
-      ]);
+      ];
+      setClarifyPending(true);
+      setClarifyKind(kind);
+      setMessages(nextMessages);
+      agent?.addMessages(nextMessages);
     },
-    [],
+    [agent],
   );
 
   const showExchange = useCallback(
     (userText: string, assistantText: string) => {
+      const nextMessages: EventLocalChatMessage[] = [
+        { id: nextId(), role: "user", content: userText },
+      ];
+      if (assistantText.trim()) {
+        nextMessages.push({
+          id: nextId(),
+          role: "assistant",
+          content: assistantText,
+        });
+      }
       setClarifyPending(false);
       setClarifyKind(null);
-      setMessages((prev) => {
-        const next: EventLocalChatMessage[] = [
-          ...prev,
-          { id: nextId(), role: "user", content: userText },
-        ];
-        if (assistantText.trim()) {
-          next.push({ id: nextId(), role: "assistant", content: assistantText });
-        }
-        return next;
-      });
+      setMessages((prev) => [...prev, ...nextMessages]);
+      agent?.addMessages(nextMessages);
     },
-    [],
+    [agent],
   );
 
   const clearLocalMessages = useCallback(() => {

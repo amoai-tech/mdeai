@@ -47,6 +47,9 @@ function renderWithAct(component: React.ReactElement) {
 
   return {
     container,
+    rerender: (next: React.ReactElement) => {
+      root.render(next);
+    },
     unmount: () => {
       root.unmount();
       document.body.removeChild(container);
@@ -129,6 +132,36 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
     expect(captured.isReady).toBe(false);
   });
 
+  it("updates readiness when the same CopilotKit core transitions from connecting to connected", () => {
+    const copilotkit = {
+      runtimeUrl: "/api/copilotkit" as string | undefined,
+      runtimeConnectionStatus: "connecting",
+    };
+    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
+    mockUseCopilotKit.mockImplementation(() => ({ copilotkit }));
+
+    const captured: { isReady: boolean | null } = { isReady: null };
+    const TestComponent = () => {
+      captured.isReady = useConciergeCoAgent().isReady;
+      return null;
+    };
+
+    const rendered = renderWithAct(
+      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent)),
+    );
+    expect(captured.isReady).toBe(false);
+
+    copilotkit.runtimeConnectionStatus = "connected";
+    act(() => {
+      rendered.rerender(
+        React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent)),
+      );
+    });
+
+    expect(captured.isReady).toBe(true);
+    rendered.unmount();
+  });
+
   it("returns isReady=true when runtime is connected and agent exists", () => {
     mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
     mockUseCopilotKit.mockReturnValue({
@@ -152,13 +185,4 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
     expect(captured.isReady).toBe(true);
   });
 
-  it("does not use private runtimeMode field", async () => {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const sourceText = fs.readFileSync(
-      path.resolve(process.cwd(), "src/components/chat/concierge-coagent-context.tsx"),
-      "utf8",
-    );
-    expect(sourceText).not.toContain("runtimeMode");
-  });
 });

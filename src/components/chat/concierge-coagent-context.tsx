@@ -43,15 +43,13 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
     ],
   });
 
-  // Installed CopilotKit 1.55.2 does not expose useAgent().isReady yet.
-  // Mirror its public provider-status gate instead of reading private agent fields.
-  const isReady = useMemo(() => {
-    if (!agent) return false;
-    // Fail closed: if CopilotKit context is not available or runtimeUrl is missing,
-    // the agent is not ready. This prevents sending to a disconnected agent.
-    if (!copilotkit || copilotkit.runtimeUrl === undefined) return false;
-    return copilotkit.runtimeConnectionStatus === "connected";
-  }, [agent, copilotkit]);
+  // Installed @copilotkit/react-core 1.55.2 does not expose useAgent().isReady.
+  // Mirror the public runtime-connection gate instead of reading private agent fields.
+  const isReady = Boolean(
+    agent &&
+      copilotkit?.runtimeUrl !== undefined &&
+      copilotkit.runtimeConnectionStatus === "connected",
+  );
 
   const state = useMemo(
     () => (agent?.state ?? {}) as ConciergeWorkingMemory,
