@@ -21,7 +21,6 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate", () => {
 
   it("claims the send gate before starting the send", () => {
     expect(source).toContain("sentRef.current = true");
-    // The claim happens before the send call (not the import)
     const claimIndex = source.indexOf("sentRef.current = true");
     const sendCallIndex = source.indexOf("void sendConciergeUserMessage");
     expect(claimIndex).toBeLessThan(sendCallIndex);
@@ -40,5 +39,21 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate", () => {
   it("only replaces URL after successful handling", () => {
     expect(source).toContain("if (onChatWithQ)");
     expect(source).toContain('router.replace("/chat", { scroll: false })');
+  });
+
+  it("guards against concurrent sends with sentRef", () => {
+    expect(source).toContain("sentRef.current");
+    // sentRef is checked in the early return condition
+    expect(source).toContain("sentRef.current || !isReady || isLoading");
+  });
+
+  it("uses useConciergeCoAgent for readiness (not useConciergeChat.isLoading alone)", () => {
+    expect(source).toContain("useConciergeCoAgent");
+    expect(source).toContain("isReady");
+  });
+
+  it("handles empty query by normalizing URL without sending", () => {
+    expect(source).toContain('trimmedQ === ""');
+    expect(source).toContain("router.replace");
   });
 });
