@@ -1,18 +1,25 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import React from "react";
-import { act } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
-// Use vi.hoisted to define mocks before vi.mock runs
 const mocks = vi.hoisted(() => ({
   mockUseAgent: vi.fn<() => { agent: unknown }>(() => ({ agent: undefined })),
   mockUseCopilotKit: vi.fn<
-    () => { copilotkit: { runtimeUrl: string | undefined; runtimeConnectionStatus: string } }
+    () => {
+      copilotkit: {
+        runtimeUrl: string | undefined;
+        runtimeConnectionStatus: string;
+        subscribe: (subscriber: {
+          onRuntimeConnectionStatusChanged?: (event: { status: string }) => void;
+        }) => { unsubscribe: () => void };
+      };
+    }
   >(() => ({
     copilotkit: {
       runtimeUrl: "/api/copilotkit",
       runtimeConnectionStatus: "connected",
+      subscribe: () => ({ unsubscribe: () => undefined }),
     },
   })),
 }));
@@ -31,7 +38,10 @@ vi.mock("@/lib/types", () => ({
   ConciergeWorkingMemory: {} as Record<string, unknown>,
 }));
 
-import { ConciergeCoAgentProvider, useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import {
+  ConciergeCoAgentProvider,
+  useConciergeCoAgent,
+} from "@/components/chat/concierge-coagent-context";
 
 const mockUseAgent = mocks.mockUseAgent;
 const mockUseCopilotKit = mocks.mockUseCopilotKit;
@@ -46,15 +56,20 @@ function renderWithAct(component: React.ReactElement) {
   });
 
   return {
-    container,
-    rerender: (next: React.ReactElement) => {
-      root.render(next);
-    },
     unmount: () => {
-      root.unmount();
+      act(() => root.unmount());
       document.body.removeChild(container);
     },
   };
+}
+
+function captureReadiness() {
+  const captured: { isReady: boolean | null } = { isReady: null };
+  const TestComponent = () => {
+    captured.isReady = useConciergeCoAgent().isReady;
+    return null;
+  };
+  return { captured, TestComponent };
 }
 
 describe("ConciergeCoAgentProvider — readiness behavior", () => {
@@ -65,124 +80,114 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
       copilotkit: {
         runtimeUrl: "/api/copilotkit",
         runtimeConnectionStatus: "connected",
+        subscribe: () => ({ unsubscribe: () => undefined }),
       },
     });
   });
 
   it("returns isReady=false when no agent is available", () => {
-    mockUseAgent.mockReturnValue({ agent: undefined });
-
-    const captured: { isReady: boolean | null } = { isReady: null };
-    const TestComponent = () => {
-      captured.isReady = useConciergeCoAgent().isReady;
-      return null;
-    };
-
+    const { captured, TestComponent } = captureReadiness();
     const { unmount } = renderWithAct(
-      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent))
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
     );
-    unmount();
 
     expect(captured.isReady).toBe(false);
+    unmount();
   });
 
-  it("returns isReady=false when copilotkit runtimeUrl is undefined", () => {
+  it("returns isReady=false when runtimeUrl is missing", () => {
     mockUseAgent.mockReturnValue({ agent: {} });
     mockUseCopilotKit.mockReturnValue({
       copilotkit: {
         runtimeUrl: undefined,
         runtimeConnectionStatus: "connected",
+        subscribe: () => ({ unsubscribe: () => undefined }),
       },
     });
-
-    const captured: { isReady: boolean | null } = { isReady: null };
-    const TestComponent = () => {
-      captured.isReady = useConciergeCoAgent().isReady;
-      return null;
-    };
-
+    const { captured, TestComponent } = captureReadiness();
     const { unmount } = renderWithAct(
-      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent))
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
     );
-    unmount();
 
     expect(captured.isReady).toBe(false);
+    unmount();
   });
 
-  it("returns isReady=false when runtimeConnectionStatus is not connected", () => {
+  it("returns isReady=false while runtime is connecting", () => {
     mockUseAgent.mockReturnValue({ agent: {} });
     mockUseCopilotKit.mockReturnValue({
       copilotkit: {
         runtimeUrl: "/api/copilotkit",
         runtimeConnectionStatus: "connecting",
+        subscribe: () => ({ unsubscribe: () => undefined }),
       },
     });
-
-    const captured: { isReady: boolean | null } = { isReady: null };
-    const TestComponent = () => {
-      captured.isReady = useConciergeCoAgent().isReady;
-      return null;
-    };
-
+    const { captured, TestComponent } = captureReadiness();
     const { unmount } = renderWithAct(
-      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent))
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
     );
-    unmount();
 
     expect(captured.isReady).toBe(false);
+    unmount();
   });
 
-  it("updates readiness when the same CopilotKit core transitions from connecting to connected", () => {
+  it("reacts to the cold runtime connecting -> connected subscription event", () => {
+    let onRuntimeConnectionStatusChanged:
+      | ((event: { status: string }) => void)
+      | undefined;
+    const unsubscribe = vi.fn();
     const copilotkit = {
       runtimeUrl: "/api/copilotkit" as string | undefined,
       runtimeConnectionStatus: "connecting",
+      subscribe: vi.fn(
+        (subscriber: {
+          onRuntimeConnectionStatusChanged?: (event: { status: string }) => void;
+        }) => {
+          onRuntimeConnectionStatusChanged =
+            subscriber.onRuntimeConnectionStatusChanged;
+          return { unsubscribe };
+        },
+      ),
     };
     mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
     mockUseCopilotKit.mockImplementation(() => ({ copilotkit }));
 
-    const captured: { isReady: boolean | null } = { isReady: null };
-    const TestComponent = () => {
-      captured.isReady = useConciergeCoAgent().isReady;
-      return null;
-    };
-
-    const rendered = renderWithAct(
-      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent)),
-    );
-    expect(captured.isReady).toBe(false);
-
-    copilotkit.runtimeConnectionStatus = "connected";
-    act(() => {
-      rendered.rerender(
-        React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent)),
-      );
-    });
-
-    expect(captured.isReady).toBe(true);
-    rendered.unmount();
-  });
-
-  it("returns isReady=true when runtime is connected and agent exists", () => {
-    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
-    mockUseCopilotKit.mockReturnValue({
-      copilotkit: {
-        runtimeUrl: "/api/copilotkit",
-        runtimeConnectionStatus: "connected",
-      },
-    });
-
-    const captured: { isReady: boolean | null } = { isReady: null };
-    const TestComponent = () => {
-      captured.isReady = useConciergeCoAgent().isReady;
-      return null;
-    };
-
+    const { captured, TestComponent } = captureReadiness();
     const { unmount } = renderWithAct(
-      React.createElement(ConciergeCoAgentProvider, null, React.createElement(TestComponent))
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
     );
-    unmount();
+
+    expect(captured.isReady).toBe(false);
+    expect(copilotkit.subscribe).toHaveBeenCalledOnce();
+
+    act(() => {
+      copilotkit.runtimeConnectionStatus = "connected";
+      onRuntimeConnectionStatusChanged?.({ status: "connected" });
+    });
 
     expect(captured.isReady).toBe(true);
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
+  it("returns isReady=true when runtime is already connected", () => {
+    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
+    const { captured, TestComponent } = captureReadiness();
+    const { unmount } = renderWithAct(
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
+    );
+
+    expect(captured.isReady).toBe(true);
+    unmount();
+  });
 });
