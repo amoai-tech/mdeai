@@ -1,0 +1,140 @@
+/// <reference types="vite/client" />
+import { describe, it, expect } from "vitest";
+import { parse } from "yaml";
+
+/**
+ * SAN-1330 — pin the production certification wiring.
+ *
+ * The whole point of this workflow is *when* it runs and whether it publishes a
+ * status Vercel can gate on. Both are easy to "simplify" back into something that
+ * looks fine and certifies nothing:
+ *
+ *  - `vercel.deployment.success` fires AFTER the deployment has been promoted to
+ *    production, so a workflow on that event can never gate the release.
+ *  - without `actions/status@v1` + `statuses: write`, no commit status exists for
+ *    Vercel Deployment Checks to require.
+ *
+ * These assertions exist so that regression fails loudly instead of silently
+ * returning to "READY means live".
+ */
+/**
+ * Raw workflow text, loaded through Vite's glob so the test performs no
+ * filesystem access and constructs no dynamic path.
+ */
+const WORKFLOW_SOURCES = import.meta.glob(
+  "/.github/workflows/prod-synthetic-smoke.yml",
+  { query: "?raw", import: "default", eager: true },
+) as Record<string, string>;
+const text = Object.values(WORKFLOW_SOURCES)[0];
+if (typeof text !== "string") throw new Error("workflow source not found");
+
+type Step = { name?: string; uses?: string; if?: string; env?: Record<string, string>; with?: Record<string, string> };
+type Workflow = {
+  on?: Record<string, unknown>;
+  permissions?: Record<string, string>;
+  jobs?: Record<string, { "if"?: string; steps?: Step[] }>;
+};
+
+const doc = parse(text) as Workflow & Record<string, unknown>;
+// `yaml` implements YAML 1.2, so `on` stays the string key it looks like.
+const on = (doc.on ?? (doc as Record<string, unknown>)[String(true)]) as Record<string, unknown>;
+const triggers = on as {
+  repository_dispatch?: { types?: string[] };
+  schedule?: unknown;
+  workflow_dispatch?: unknown;
+};
+// A workflow may declare several jobs; collect every step so the assertions
+// below hold regardless of job layout, without index access or a length guard.
+const steps = Object.values(doc.jobs ?? {}).flatMap((job) => job.steps ?? []);
+
+const stepUsing = (uses: string) => steps.find((s) => s.uses?.startsWith(uses));
+
+describe("prod certification workflow — trigger contract", () => {
+  it("triggers on vercel.deployment.ready, which is not yet promoted", () => {
+    const types = triggers.repository_dispatch?.types ?? [];
+    expect(types).toContain("vercel.deployment.ready");
+  });
+
+  it("does not rely on vercel.deployment.success (already promoted)", () => {
+    const types = triggers.repository_dispatch?.types ?? [];
+    expect(types).not.toContain("vercel.deployment.success");
+  });
+
+  it("keeps the scheduled and manual paths for live-domain certification", () => {
+    // `workflow_dispatch:` with no value is null in YAML, so assert the key.
+    expect(triggers).toHaveProperty("schedule");
+    expect(triggers).toHaveProperty("workflow_dispatch");
+  });
+});
+
+describe("prod certification workflow — status publication", () => {
+  it("grants statuses: write so a commit status can be published", () => {
+    expect(doc.permissions?.statuses).toBe("write");
+  });
+
+  it("publishes the production-certification status via actions/status@v1", () => {
+    const status = stepUsing("vercel/repository-dispatch/actions/status@");
+    expect(status).toBeDefined();
+    expect(status?.with?.name).toBe("production-certification");
+  });
+
+  it("guards status publication to repository_dispatch (one status per deployment)", () => {
+    const status = stepUsing("vercel/repository-dispatch/actions/status@");
+    expect(status?.if).toContain("repository_dispatch");
+  });
+
+  it("checks out the dispatched commit for repository_dispatch runs", () => {
+    expect(stepUsing("vercel/repository-dispatch/actions/checkout@")).toBeDefined();
+  });
+});
+
+describe("prod certification workflow — staged deployment handling", () => {
+  it("resolves the staged deployment URL from the dispatch payload", () => {
+    expect(text).toContain("github.event.client_payload.url");
+  });
+
+  it("certifies the dispatched SHA, not the branch head", () => {
+    expect(text).toContain("github.event.client_payload.git.sha");
+  });
+
+  it("requires the automation bypass instead of silently passing", () => {
+    // Deployment URLs are SSO-protected, so without the bypass the gate cannot
+    // certify the staged deployment. It must fail, not skip.
+    expect(text).toContain("VERCEL_AUTOMATION_BYPASS_SECRET");
+    expect(text).toContain("x-vercel-protection-bypass");
+    expect(text).toContain("exit 1");
+  });
+
+  it("still certifies the production domain for non-dispatch runs", () => {
+    expect(text).toContain("vars.PROD_SMOKE_BASE_URL");
+  });
+});
+
+describe("prod certification workflow — never silently skips certification", () => {
+  // Collected without index access or optional chaining, so this stays valid for
+  // any job layout.
+  const jobGuards = Object.values(doc.jobs ?? {})
+    .map((j) => j.if ?? "")
+    .join("\n");
+
+  it("starts the job for a production dispatch regardless of PROD_SMOKE_ENABLED", () => {
+    // Gating the whole job on the variable meant a missing or misspelled value
+    // skipped certification and left a required Deployment Check unresolved.
+    expect(jobGuards).toContain("github.event_name == 'repository_dispatch'");
+    expect(jobGuards).toContain("client_payload.environment == 'production'");
+    expect(jobGuards).not.toMatch(/^\$\{\{\s*vars\.PROD_SMOKE_ENABLED/);
+  });
+
+  it("fails a dispatch loudly when PROD_SMOKE_ENABLED is not exactly 'true'", () => {
+    expect(steps.some((s) => s.name === "Validate production smoke configuration")).toBe(true);
+    expect(text).toContain("PROD_SMOKE_ENABLED must be exactly 'true'");
+  });
+
+  it("verifies the Vercel public-variable contract before certifying", () => {
+    // A NEXT_PUBLIC_* stored as Secret/Sensitive compiles to `undefined` in the
+    // client bundle while Vercel still reports READY, so the metadata contract
+    // must be checked on the certification path rather than by hand.
+    expect(steps.some((s) => s.name === "Verify Vercel public-variable contract")).toBe(true);
+    expect(text).toContain("check-vercel-env-contract.mjs");
+  });
+});

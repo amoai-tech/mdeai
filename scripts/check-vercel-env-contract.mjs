@@ -1,0 +1,284 @@
+#!/usr/bin/env node
+/**
+ * SAN-1330 — preflight the Vercel environment *contract* for public variables.
+ *
+ * Why this exists
+ * ---------------
+ * `NEXT_PUBLIC_*` values are compiled into the browser bundle, so Vercel must
+ * store them as **Config** (`encrypted` / `plain`). Vercel's own guidance is that
+ * Config is for "non-sensitive configuration such as public prefixes", and a
+ * Secret is write-only and not usable for that purpose.
+ *
+ * On 2026-09-18 production had `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and
+ * `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` configured as **Secrets**. `vercel env ls`
+ * looked healthy, the deployment was `READY`, and `/chat` rendered
+ * `data-testid="map-env-error"` because neither value reached the build.
+ *
+ * `scripts/check-env-contract.mjs` catches that at build time, by which point the
+ * production deployment has already been attempted. This catches it *before*,
+ * from the project's environment metadata.
+ *
+ * Usage
+ * -----
+ *   node scripts/check-vercel-env-contract.mjs --project mdeai --scope amo1000
+ *   node scripts/check-vercel-env-contract.mjs --input env.json      # offline
+ *   node scripts/check-vercel-env-contract.mjs ... --warn-only       # advisory
+ *
+ * Credentials: `VERCEL_TOKEN`, or the Vercel CLI's stored auth
+ * (`~/.local/share/com.vercel.cli/auth.json`). Variable VALUES are never read
+ * from the API and never printed — only names, types and targets.
+ */
+import fs from "node:fs";
+import https from "node:https";
+import os from "node:os";
+import path from "node:path";
+
+const argv = process.argv.slice(2);
+const flag = (name) => {
+  const i = argv.indexOf(name);
+  return i !== -1 ? argv[i + 1] : undefined;
+};
+const has = (name) => argv.includes(name);
+
+const projectName = flag("--project") ?? "mdeai";
+const scopeSlug = flag("--scope") ?? "amo1000";
+const inputFile = flag("--input");
+const warnOnly = has("--warn-only");
+
+/** Public variables the production client contract requires, with fallbacks. */
+const REQUIRED_PUBLIC = [
+  { key: "NEXT_PUBLIC_SUPABASE_URL" },
+  { key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", oneOf: ["NEXT_PUBLIC_SUPABASE_ANON_KEY"] },
+  { key: "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" },
+  { key: "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID" },
+];
+
+/** Vercel types that cannot satisfy a public, build-time-inlined variable. */
+const SECRET_TYPES = new Set(["secret", "sensitive"]);
+
+/**
+ * Every name the required contract mentions — primary or fallback. The required
+ * loop already governs these, so the generic sweep below ignores them and only
+ * reports `NEXT_PUBLIC_*` names outside the contract.
+ */
+const REQUIRED_PUBLIC_KEYS = new Set(
+  REQUIRED_PUBLIC.flatMap((spec) => [spec.key, ...(spec.oneOf ?? [])]),
+);
+
+function readToken() {
+  if (process.env.VERCEL_TOKEN) return process.env.VERCEL_TOKEN;
+  const candidates = [
+    path.join(os.homedir(), ".local/share/com.vercel.cli/auth.json"),
+    path.join(os.homedir(), ".vercel/auth.json"),
+  ];
+  for (const file of candidates) {
+    try {
+      const auth = JSON.parse(fs.readFileSync(file, "utf8"));
+      const token = auth.token ?? auth.accessToken;
+      if (token) return token;
+    } catch {
+      /* keep looking */
+    }
+  }
+  return undefined;
+}
+
+function apiGet(token, reqPath) {
+  return new Promise((resolve, reject) => {
+    https
+      .get({ hostname: "api.vercel.com", path: reqPath, headers: { Authorization: `Bearer ${token}` } }, (res) => {
+        let body = "";
+        res.on("data", (d) => (body += d));
+        res.on("end", () => {
+          try {
+            resolve({ status: res.statusCode, json: JSON.parse(body) });
+          } catch {
+            resolve({ status: res.statusCode, json: {} });
+          }
+        });
+      })
+      .on("error", reject);
+  });
+}
+
+/**
+ * Advisory sweep for `NEXT_PUBLIC_*` names *outside* the declared contract.
+ *
+ * A `NEXT_PUBLIC_*` value is inlined into the browser bundle at build time, and
+ * for this project a Sensitive value did not reach the build: the SAN-1322
+ * outage shipped because `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` was Sensitive, so the
+ * client bundle compiled it to `undefined` while Vercel still reported READY.
+ *
+ * That evidence is specific to names the **client** reads. Vercel documents
+ * Sensitive values as readable by application code at runtime, so a Sensitive
+ * `NEXT_PUBLIC_*` that is only read on the server — `NEXT_PUBLIC_SITE_URL` is
+ * read by `src/lib/auth/site-url.ts` from server modules only — or not read at
+ * all (`NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY`) is harmless.
+ *
+ * Env metadata cannot distinguish those cases, and never exposes values, so this
+ * is an advisory rather than a failure. Only the declared contract in
+ * `REQUIRED_PUBLIC` — the names the client genuinely needs — fails the gate.
+ */
+function publicSecretAdvisories(envs) {
+  return envs
+    .filter((e) => (e.target ?? []).includes("production"))
+    .filter((e) => String(e.key).startsWith("NEXT_PUBLIC_"))
+    .filter((e) => SECRET_TYPES.has(e.type))
+    .filter((e) => !REQUIRED_PUBLIC_KEYS.has(e.key))
+    .map((e) => ({
+      key: e.key,
+      type: e.type,
+      kind: "public-secret",
+      detail: `type=${e.type} — not in the declared client contract; verify the value reaches the client build if any browser code reads it`,
+    }));
+}
+
+/**
+ * The gate itself: only the declared client-build contract can fail a release.
+ *
+ * envs: [{ key, type, target: [] }] — no values.
+ */
+function evaluate(envs) {
+  const targetsProduction = (e) => (e.target ?? []).includes("production");
+  const find = (key) => envs.find((e) => e.key === key && targetsProduction(e));
+
+  const findings = [];
+  for (const spec of REQUIRED_PUBLIC) {
+    // A fallback name satisfies the contract when its type is usable. Prefer the
+    // first Config candidate, otherwise a Secret primary would mask a working
+    // Config fallback — the runtime resolves by name and would still work.
+    const candidates = [spec.key, ...(spec.oneOf ?? [])].map(find).filter(Boolean);
+    const match = candidates.find((e) => !SECRET_TYPES.has(e.type)) ?? candidates[0];
+    if (!match) {
+      findings.push({ key: spec.key, kind: "missing", detail: "not set for Production" });
+      continue;
+    }
+    if (SECRET_TYPES.has(match.type)) {
+      findings.push({
+        key: match.key,
+        type: match.type,
+        kind: "secret",
+        detail: `type=${match.type} — a public variable must be Config (encrypted/plain) or it will not reach the client build`,
+      });
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Follow Vercel's `pagination.next` cursor.
+ *
+ * `/v9/projects` paginates (default 20, `limit` capped at 100), so a team with
+ * more projects than one page would otherwise look like it does not contain the
+ * target project. Non-200 responses are surfaced rather than swallowed: a
+ * transient failure previously reported as "team not found", which pointed
+ * debugging in the wrong direction.
+ */
+async function apiGetAll(token, buildPath, collectionKey) {
+  const items = [];
+  let until;
+  for (let page = 0; page < 50; page++) {
+    const path = buildPath(until);
+    const { status, json } = await apiGet(token, path);
+    if (status !== 200) throw new Error(`Vercel API ${path} returned HTTP ${status}`);
+    items.push(...(json[collectionKey] ?? []));
+    const next = json.pagination?.next;
+    if (!next) return items;
+    until = next;
+  }
+  throw new Error(`Vercel API ${collectionKey} pagination did not terminate after 50 pages`);
+}
+
+async function loadEnvs() {
+  if (inputFile) {
+    // `--input -` reads metadata from stdin, so callers and tests can pipe JSON
+    // instead of writing a temporary file.
+    const fromStdin = inputFile === "-";
+    const parsed = JSON.parse(
+      fromStdin
+        ? fs.readFileSync(0, "utf8")
+        : fs.readFileSync(path.resolve(inputFile), "utf8"),
+    );
+    const list = Array.isArray(parsed) ? parsed : (parsed.envs ?? []);
+    return { source: fromStdin ? "stdin" : `file:${inputFile}`, envs: list };
+  }
+
+  const token = readToken();
+  if (!token) {
+    throw new Error(
+      "no Vercel credentials: set VERCEL_TOKEN, or authenticate the Vercel CLI, or pass --input <file>",
+    );
+  }
+
+  const teamsRes = await apiGet(token, "/v2/teams");
+  if (teamsRes.status !== 200) {
+    throw new Error(`Vercel API /v2/teams returned HTTP ${teamsRes.status}`);
+  }
+  const team = (teamsRes.json.teams ?? []).find((t) => t.slug === scopeSlug);
+  if (!team) throw new Error(`team '${scopeSlug}' not found for these credentials`);
+
+  const projects = await apiGetAll(
+    token,
+    (until) => `/v9/projects?limit=100&teamId=${team.id}${until ? `&until=${until}` : ""}`,
+    "projects",
+  );
+  const project = projects.find((p) => p.name === projectName);
+  if (!project) throw new Error(`project '${projectName}' not found in team '${scopeSlug}'`);
+
+  // No decrypt: we only need key/type/target metadata, never values. The env
+  // endpoint returns the full list today, but follow the cursor if it appears.
+  const envs = await apiGetAll(
+    token,
+    (until) => `/v9/projects/${project.id}/env?teamId=${team.id}${until ? `&until=${until}` : ""}`,
+    "envs",
+  );
+  return { source: `${scopeSlug}/${projectName}`, envs };
+}
+
+const { source, envs } = await loadEnvs();
+const findings = evaluate(envs);
+
+console.log(`vercel-env-contract: ${source}`);
+for (const spec of REQUIRED_PUBLIC) {
+  // Same preference as `evaluate`, so the report and the findings always agree.
+  const candidates = [spec.key, ...(spec.oneOf ?? [])]
+    .map((key) => envs.find((e) => e.key === key && (e.target ?? []).includes("production")))
+    .filter(Boolean);
+  const match = candidates.find((e) => !SECRET_TYPES.has(e.type)) ?? candidates[0];
+  if (!match) console.log(`  MISSING ${spec.key}`);
+  else if (SECRET_TYPES.has(match.type)) console.log(`  SECRET  ${match.key} (type=${match.type})`);
+  else console.log(`  ok      ${match.key} (type=${match.type})`);
+}
+
+// Names outside the declared contract. Sensitive here is worth a look, not a
+// failure: the value may be read only on the server, or not read at all, and
+// metadata cannot tell us which. This never changes the exit code.
+const advisories = publicSecretAdvisories(envs);
+if (advisories.length) {
+  console.log("");
+  console.log("  advisory — NEXT_PUBLIC_* outside the declared client contract, stored as Secret:");
+  for (const advisory of advisories) {
+    console.log(`  REVIEW  ${advisory.key} (type=${advisory.type})`);
+  }
+  console.log("          Only a problem if browser code reads it; the client build then sees undefined.");
+}
+
+if (findings.length === 0) {
+  console.log("");
+  console.log("vercel-env-contract: OK");
+} else {
+  console.log("");
+  for (const f of findings) console.error(`  ${f.kind.toUpperCase()}: ${f.key} — ${f.detail}`);
+  console.error("");
+  console.error(
+    "Public variables compiled into the client bundle must be Config, not Secret." +
+      " Delete the Secret and re-create it as Config, then redeploy — NEXT_PUBLIC_* is compiled in.",
+  );
+  if (warnOnly) {
+    console.log("vercel-env-contract: WARN (advisory mode)");
+  } else {
+    console.error(`vercel-env-contract: FAIL — ${findings.length} problem(s)`);
+    process.exitCode = 1;
+  }
+}
