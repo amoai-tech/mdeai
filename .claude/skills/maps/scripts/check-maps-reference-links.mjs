@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
+import { fetchWithRetry } from "./network-retry.mjs";
 
 const indexPath = new URL("../references/reference-index.md", import.meta.url);
 const body = await readFile(indexPath, "utf8");
@@ -20,40 +21,31 @@ if (primary.length === 0) {
 }
 
 const timeoutMs = Number(process.env.MAPS_LINK_TIMEOUT_MS ?? 12000);
+const attempts = Number(process.env.MAPS_NETWORK_RETRIES ?? 3);
 const failures = [];
+
 for (const { url } of primary) {
   const target = url.split("#")[0];
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const retry = {
+    attempts,
+    delayMs: 350,
+    timeoutMs,
+    onRetry: (error, attempt) => console.error(`LINK_RETRY attempt=${attempt} ${url} ${error.message}`),
+  };
   try {
-    let response = await fetch(target, { method: "HEAD", redirect: "manual", signal: controller.signal });
+    let response = await fetchWithRetry(target, { method: "HEAD", redirect: "follow" }, retry);
     if ([403, 405].includes(response.status)) {
-      response = await fetch(target, { method: "GET", redirect: "manual", signal: controller.signal });
+      response = await fetchWithRetry(target, { method: "GET", redirect: "follow" }, retry);
       await response.body?.cancel();
     }
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) {
-        failures.push(`${url} -> redirect missing Location header (${response.status})`);
-        continue;
-      }
-      const from = new URL(target);
-      const to = new URL(location, from);
-      const localeOnly =
-        from.origin === to.origin &&
-        from.pathname === to.pathname &&
-        [...to.searchParams.keys()].every((key) => key === "hl");
-      if (localeOnly) console.log(`REDIRECT_LOCALE ${response.status} ${url} -> ${location}`);
-      else failures.push(`${url} -> redirect ${response.status} ${location}`.trim());
-    } else if (!response.ok) {
+    if (!response.ok) {
       failures.push(`${url} -> HTTP ${response.status}`);
-    } else {
-      console.log(`OK ${response.status} ${url}`);
+      continue;
     }
+    if (response.url && response.url !== target) console.log(`REDIRECT_OK ${url} -> ${response.url}`);
+    else console.log(`OK ${response.status} ${url}`);
   } catch (error) {
     failures.push(`${url} -> ${error instanceof Error ? error.message : String(error)}`);
-  } finally {
-    clearTimeout(timer);
   }
 }
 

@@ -1,6 +1,6 @@
 # Google Maps reference index
 
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-22
 Freshness: volatile — AI/grounding availability, pricing, quotas, regional support, product status, and API behavior must be revalidated from current primary sources.
 
 Use this index to choose the smallest authoritative source for a Maps task. Score = MDE reference priority (10 = primary/current implementation authority; lower scores = discovery/community only). Volatile facts such as pricing, quotas, preview/GA status, regional coverage, and limits must be rechecked at use time.
@@ -15,11 +15,11 @@ Use this index to choose the smallest authoritative source for a Maps task. Scor
 | [APIs by platform](https://developers.google.com/maps/apis-by-platform) | Google official docs | Web/Android/iOS capability selection | Verify a feature exists on Web before designing it | 10/10 |
 | [Architecture Center](https://developers.google.com/maps/architecture) | Google official architecture | Production architecture patterns | Design server/client boundaries for Places + Maps JS | 10/10 |
 | [Capabilities Explorer](https://developers.google.com/maps/documentation/capabilities-explorer) | Google official docs | Compare capabilities/products | Decide whether Places, Routes, or Address Validation fits a workflow | 10/10 |
-| [Maps APIs product page](https://mapsplatform.google.com/lp/maps-apis/) | Google product page | Product/pricing orientation | Understand modern products and legacy-service notices | 8/10 |
-| [Maps Platform](https://mapsplatform.google.com/) | Google product page | Product discovery | Explore Maps, Routes, Places, Environment and AI offerings | 8/10 |
-| [Dynamic Maps](https://mapsplatform.google.com/maps-products/dynamic-maps/) | Google product page | Interactive map capabilities | Build an interactive rentals map with styled markers | 8/10 |
-| [Maps products / Static Maps](https://mapsplatform.google.com/maps-products/#static-maps) | Google product page | Static-map discovery | Generate non-interactive listing/location images | 8/10 |
-| [Maps Demo Key](https://mapsplatform.google.com/maps-demo-key/) | Google official product page | Zero-friction prototype setup | Prototype a map before creating production credentials | 9/10 |
+| [Maps APIs product page](https://mapsplatform.google.com/lp/maps-apis/) | Google product page | Product/pricing orientation | Understand modern products and legacy-service notices | 7/10 |
+| [Maps Platform](https://mapsplatform.google.com/) | Google product page | Product discovery | Explore Maps, Routes, Places, Environment and AI offerings | 7/10 |
+| [Dynamic Maps](https://mapsplatform.google.com/maps-products/dynamic-maps/) | Google product page | Interactive map capabilities | Build an interactive rentals map with styled markers | 7/10 |
+| [Maps products / Static Maps](https://mapsplatform.google.com/maps-products/#static-maps) | Google product page | Static-map discovery | Generate non-interactive listing/location images | 7/10 |
+| [Maps Demo Key](https://mapsplatform.google.com/maps-demo-key/) | Google official product page | Zero-friction prototype setup | Prototype a map before creating production credentials | 7/10 |
 | [Premium included APIs](https://cloud.google.com/maps-platform/terms/other/premium-included-apis?hl=es) | Google Cloud terms/reference | Legacy Premium Plan compatibility only | Audit an old Premium Plan integration | 6/10 |
 
 ## 2. Places, AI, grounding, and agent development
@@ -37,12 +37,12 @@ Use this index to choose the smallest authoritative source for a Maps task. Scor
 | [Gemini API Maps grounding](https://ai.google.dev/gemini-api/docs/maps-grounding) | Google AI official docs | Ground Gemini responses with Maps | Answer “best cafés near this hotel” from current Maps data | 10/10 |
 | [Trusted agent architecture](https://docs.cloud.google.com/architecture/agentic-ai-system-with-grounding-using-maps) | Google Cloud architecture | Agentic Maps system design | Build an agent that reasons with Maps-grounded tool results | 10/10 |
 | [Gemini Enterprise Maps grounding](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-maps) | Google Cloud docs | Enterprise agent grounding | Add Maps grounding to an enterprise location assistant | 9/10 |
-| [Maps Grounding](https://mapsplatform.google.com/maps-products/grounding/) | Google product page | Grounding product family | Compare Grounding, Grounding Lite, Agentic UI, Imagery | 9/10 |
-| [Grounding Lite](https://mapsplatform.google.com/maps-products/grounding/#maps-grounding-lite) | Google product page | MCP-based fresh Maps context | Give a non-Gemini LLM current place/location context | 9/10 |
-| [Maps Agentic UI Toolkit](https://mapsplatform.google.com/maps-products/grounding/#maps-agentic-ui-toolkit) | Google product page | Agent-native interactive Maps UI | Render a map/tool surface inside an agent experience | 9/10 |
-| [Maps Imagery Grounding](https://mapsplatform.google.com/maps-products/grounding/#maps-imagery-grounding) | Google product page | Imagery-grounded generative workflows | Ground generated media in real-world imagery | 8/10 |
-| [Maps AI / summaries](https://mapsplatform.google.com/ai/#ai-summaries) | Google product page | Discover AI summaries/features | Evaluate place/area/review summaries for MDE cards | 8/10 |
-| [Maps AI / product agents](https://mapsplatform.google.com/ai/#product-ai-agents) | Google product page | Discover agentic Maps products | Evaluate Google-provided agent tools before custom-building | 8/10 |
+| [Maps Grounding](https://mapsplatform.google.com/maps-products/grounding/) | Google product page | Grounding product family | Compare Grounding, Grounding Lite, Agentic UI, Imagery | 7/10 |
+| [Grounding Lite](https://mapsplatform.google.com/maps-products/grounding/#maps-grounding-lite) | Google product page | MCP-based fresh Maps context | Give a non-Gemini LLM current place/location context | 7/10 |
+| [Maps Agentic UI Toolkit](https://mapsplatform.google.com/maps-products/grounding/#maps-agentic-ui-toolkit) | Google product page | Agent-native interactive Maps UI | Render a map/tool surface inside an agent experience | 7/10 |
+| [Maps Imagery Grounding](https://mapsplatform.google.com/maps-products/grounding/#maps-imagery-grounding) | Google product page | Imagery-grounded generative workflows | Ground generated media in real-world imagery | 7/10 |
+| [Maps AI / summaries](https://mapsplatform.google.com/ai/#ai-summaries) | Google product page | Discover AI summaries/features | Evaluate place/area/review summaries for MDE cards | 7/10 |
+| [Maps AI / product agents](https://mapsplatform.google.com/ai/#product-ai-agents) | Google product page | Discover agentic Maps products | Evaluate Google-provided agent tools before custom-building | 7/10 |
 | [AI Studio Maps styling](https://aistudio.google.com/apps/bundled/maps_styling?showAssistant=true&showPreview=true) | Google AI Studio | Interactive map-style generation | Prototype a branded MDE map style | 8/10 |
 | [Grounding with Maps — Gemini API announcement](https://blog.google/innovation-and-ai/technology/developers-tools/grounding-google-maps-gemini-api/) | Google official blog | Product announcement/context | Understand intended Gemini Maps-grounding scenarios | 7/10 |
 | [Grounding with Maps — Vertex AI](https://mapsplatform.google.com/resources/blog/grounding-with-google-maps-now-available-in-vertex-ai-power-your-ai-responses-with-google-maps-information/) | Google official blog | Vertex grounding examples | Build a cloud agent answering current place questions | 7/10 |
@@ -57,7 +57,7 @@ Use this index to choose the smallest authoritative source for a Maps task. Scor
 | [`vis.gl` documentation](https://visgl.github.io/react-google-maps/) | Canonical library docs | React component/hook reference | Configure `APIProvider`, `Map`, `AdvancedMarker`, hooks | 10/10 |
 | [Google React codelab](https://developers.google.com/codelabs/maps-platform/maps-platform-101-react-js) | Google official tutorial | End-to-end React learning | Build a first React map with current Google guidance | 9/10 |
 | [Google RGM basic map example](https://developers.google.com/maps/documentation/javascript/examples/rgm-basic-map) | Google official sample | Minimal React Google Maps example | Verify the basic MDE React setup | 10/10 |
-| [Google: introducing React components](https://mapsplatform.google.com/resources/blog/introducing-react-components-for-the-maps-javascript-api/) | Google official blog | Why/how React integration is supported | Validate `@vis.gl/react-google-maps` as the MDE wrapper | 9/10 |
+| [Google: introducing React components](https://mapsplatform.google.com/resources/blog/introducing-react-components-for-the-maps-javascript-api/) | Google official blog | Why/how React integration is supported | Validate `@vis.gl/react-google-maps` as the MDE wrapper | 7/10 |
 | [vis.gl Discussion #324](https://github.com/visgl/react-google-maps/discussions/324) | Community discussion | Troubleshooting/examples | Diagnose setup questions after checking official docs | 6/10 |
 | [Afi: add/style a map](https://blog.afi.io/blog/google-maps-with-react-add-a-google-map-and-style-it/) | Third-party tutorial | Supplementary React example | Compare styling approaches, then verify APIs officially | 5/10 |
 | [Afi: build with React](https://blog.afi.io/blog/react-google-maps-build-with-google-maps-using-react/) | Third-party tutorial | Supplementary implementation | Learn a practical React flow, not architecture authority | 5/10 |
