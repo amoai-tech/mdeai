@@ -12,7 +12,19 @@ describe("Maps maintenance contract", () => {
     expect(body).toContain("maps-contracts:");
     expect(body).toContain("maps-live-maintenance:");
     expect(body).toContain("github.event_name != 'pull_request'");
-    expect(body).toContain("continue-on-error: true");
+    expect(body).toContain("MAPS_CHECK_MODE: strict");
+    // Operator-supplied workflow_dispatch inputs are a supply-chain surface
+    // (Checkov CKV_GHA_7); the mode is fixed to strict in CI.
+    expect(body).not.toContain("inputs:");
+    // A blanket step-level `continue-on-error` previously let a confirmed broken
+    // reference produce a green scheduled run. The scripts now own the exit code.
+    expect(body).not.toContain("continue-on-error: true");
+    // A failing first live check must not hide the second check's classification.
+    // `!cancelled()` is verified to bypass the implicit success() gate: in a live
+    // probe run a step guarded by `if: !cancelled()` executed after an earlier step
+    // failed, while steps with no `if` or `if: success()` were skipped. It is
+    // preferred over `always()` because `always()` also runs on job cancellation.
+    expect(body).toContain("if: ${{ !cancelled() }}");
     expect(body).toContain("check-visgl-compatibility.mjs");
     expect(body).toContain("check-google-maps-upstream.mjs");
     expect(body).toContain("check-maps-reference-links.mjs");
@@ -46,6 +58,15 @@ describe("Maps maintenance contract", () => {
     expect(linkChecker).toContain('redirect: "follow"');
     expect(linkChecker).toContain("if (primary.length === 0)");
     expect(linkChecker).toContain("no primary references selected");
+
+    // Both live checks must classify outcomes rather than exit blindly.
+    const upstreamChecker = readFileSync(".claude/skills/maps/scripts/check-google-maps-upstream.mjs", "utf8");
+    for (const script of [linkChecker, upstreamChecker]) {
+      expect(script).toContain("check-classification.mjs");
+      expect(script).toContain("reportCheckSummary");
+      expect(script).toContain("resolveCheckMode");
+    }
+    expect(existsSync(".claude/skills/maps/scripts/check-classification.mjs")).toBe(true);
 
     const visgl = readFileSync(".claude/skills/maps/scripts/check-visgl-compatibility.mjs", "utf8");
     expect(visgl).toContain("APIProvider");

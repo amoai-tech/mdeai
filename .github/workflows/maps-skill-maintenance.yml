@@ -3,6 +3,10 @@ name: Maps Skill Maintenance
 on:
   schedule:
     - cron: "23 13 * * 1"
+  # Scheduled/manual maintenance only. The live checks are intentionally NOT
+  # driven by a workflow_dispatch input: operator-supplied inputs are a
+  # supply-chain surface (Checkov CKV_GHA_7), and the mode only ever needs to be
+  # strict here. `advisory` remains available to operators locally via the env var.
   workflow_dispatch:
   pull_request:
     branches: [main]
@@ -30,6 +34,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # PR-critical. Deterministic and local — must never depend on external availability.
   maps-contracts:
     name: deterministic Maps contracts
     runs-on: ubuntu-latest
@@ -47,19 +52,28 @@ jobs:
       - name: Maps maintenance contracts
         run: npx vitest run src/__tests__/maps-*.test.ts src/components/maps/google-places-summary.test.tsx
 
+  # Live external checks. They do not run on pull requests at all, so they can never
+  # block a PR (SAN-1351 Step 3). On schedule/manual runs the scripts classify each
+  # result and decide the exit code themselves, so confirmed drift genuinely fails —
+  # there is deliberately no blanket `continue-on-error` here, which previously made
+  # the weekly drift alarm unable to fail even on a confirmed broken reference.
   maps-live-maintenance:
     if: github.event_name != 'pull_request'
-    name: advisory upstream and link drift
+    name: live upstream and link drift
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      MAPS_CHECK_MODE: strict
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
       - name: Google Maps agent-skill upstream drift
-        continue-on-error: true
         run: node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
+      # `!cancelled()` so a failing upstream check cannot hide the reference-link
+      # classification: strict mode must report BOTH live checks, and the job still
+      # fails if either step fails.
       - name: Primary Maps reference link health
-        continue-on-error: true
+        if: ${{ !cancelled() }}
         run: node .claude/skills/maps/scripts/check-maps-reference-links.mjs

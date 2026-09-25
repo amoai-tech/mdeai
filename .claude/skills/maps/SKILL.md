@@ -219,4 +219,4 @@ Google Places provider summaries are distinct from MDE `ai_summary`. Preserve pr
 
 Do not call a Maps change complete until evidence covers: targeted Maps tests; no new legacy API; client/server key exposure; minimal field masks for changed Places calls; compliance/attribution review; and a browser smoke test when map UI changed. Record any current-doc or Code Assist source used for an API/version decision.
 
-For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite.
+For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite. Live-check classification: `references/maintenance-classification.md`.
