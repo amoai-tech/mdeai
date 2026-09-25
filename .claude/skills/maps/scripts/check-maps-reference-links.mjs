@@ -19,7 +19,19 @@ function finish(classifications) {
 }
 
 const indexPath = new URL("../references/reference-index.md", import.meta.url);
-const body = await readFile(indexPath, "utf8");
+let body;
+try {
+  body = await readFile(indexPath, "utf8");
+} catch (error) {
+  // A missing or unreadable index is the same broken local contract as an index with
+  // no usable rows below — and it must still emit MAPS_CHECK_SUMMARY so the run states
+  // its classification instead of dying with a bare stack trace and exit code 1.
+  console.error("REFERENCE_LINK_FAILURES=1");
+  console.error(
+    `reference-index.md -> ${error instanceof Error ? error.message : String(error)}`,
+  );
+  finish([MAPS_CHECK_CLASSES.BROKEN_REFERENCE]);
+}
 const rows = body.split("\n").filter((line) => line.startsWith("| ["));
 const primary = rows.flatMap((line) => {
   const match = line.match(/\]\((https:\/\/[^)]+)\).*\|\s*(\d+)\/10\s*\|\s*$/);
@@ -39,7 +51,6 @@ if (primary.length === 0) {
 
 const timeoutMs = Number(process.env.MAPS_LINK_TIMEOUT_MS ?? 12000);
 const attempts = Number(process.env.MAPS_NETWORK_RETRIES ?? 3);
-const failures = [];
 const classifications = [];
 
 for (const { url } of primary) {
@@ -59,7 +70,6 @@ for (const { url } of primary) {
     if (!response.ok) {
       const classification = classifyHttpStatus(response.status);
       classifications.push(classification);
-      failures.push(`${classification} ${url} -> HTTP ${response.status}`);
       console.error(`${classification} ${url} -> HTTP ${response.status}`);
       continue;
     }
@@ -71,13 +81,14 @@ for (const { url } of primary) {
   } catch (error) {
     const classification = classifyFetchError(error);
     classifications.push(classification);
-    failures.push(`${classification} ${url} -> ${error instanceof Error ? error.message : String(error)}`);
     console.error(`${classification} ${url} -> ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-if (failures.length) {
-  console.error(`REFERENCE_LINK_FAILURES=${failures.length}`);
+// Derived from the classifications themselves so there is one source of truth.
+const failureCount = classifications.filter((c) => c !== MAPS_CHECK_CLASSES.OK).length;
+if (failureCount > 0) {
+  console.error(`REFERENCE_LINK_FAILURES=${failureCount}`);
   finish(classifications);
 }
 console.log(`REFERENCE_LINKS_OK=${primary.length}`);

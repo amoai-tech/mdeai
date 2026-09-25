@@ -20,6 +20,10 @@ describe("Maps maintenance contract", () => {
     // reference produce a green scheduled run. The scripts now own the exit code.
     expect(body).not.toContain("continue-on-error: true");
     // A failing first live check must not hide the second check's classification.
+    // `!cancelled()` is verified to bypass the implicit success() gate: in a live
+    // probe run a step guarded by `if: !cancelled()` executed after an earlier step
+    // failed, while steps with no `if` or `if: success()` were skipped. It is
+    // preferred over `always()` because `always()` also runs on job cancellation.
     expect(body).toContain("if: ${{ !cancelled() }}");
     expect(body).toContain("check-visgl-compatibility.mjs");
     expect(body).toContain("check-google-maps-upstream.mjs");

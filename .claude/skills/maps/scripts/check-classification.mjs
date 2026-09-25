@@ -37,8 +37,24 @@ export const MAPS_CHECK_MODES = Object.freeze({
   ADVISORY: "advisory",
 });
 
-/** Retryable transport statuses. Mirrors network-retry.mjs's transient set. */
+/**
+ * Statuses worth **retrying**. Mirrors network-retry.mjs's transient set: retrying a
+ * 501/505/507 would be pointless, so this deliberately stays narrower than the set of
+ * statuses that count as external unavailability when classifying (see classifyHttpStatus).
+ */
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+/** Transport errno codes: we could not obtain evidence about the reference. */
+const TRANSPORT_ERROR_CODES =
+  /^(EAI_AGAIN|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE|ENETUNREACH|EHOSTUNREACH)$/;
+
+/**
+ * Transport messages git forwards from libcurl when it cannot reach the remote.
+ * Git exits 128 for *every* fatal error — including "repository not found", which is a
+ * genuine broken reference — so the exit code alone cannot decide the class.
+ */
+const TRANSPORT_STDERR =
+  /(Could not resolve host|Failed to connect to|Connection refused|Connection (?:timed out|reset by peer)|Operation timed out|Empty reply from server|Recv failure|Send failure|SSL connect error|SSL_ERROR|gnutls_handshake|The requested URL returned error: 5\d\d|unexpected disconnect|early EOF|RPC failed)/i;
 
 /**
  * Resolve the execution mode from an environment value.
@@ -56,16 +72,40 @@ export function resolveCheckMode(raw) {
 
 /**
  * Classify a non-2xx HTTP response.
- * 404/410 and other definitive client errors are broken references; transport
- * and rate-limit statuses are external unavailability.
+ *
+ * Transport and rate-limit statuses are external unavailability; everything else
+ * is treated as a broken reference. That deliberately includes 401/403: every URL
+ * this check follows is a *public* canonical Google/canonical-library document, so
+ * an authorization failure means the reference is no longer publicly reachable —
+ * which is exactly the drift this alarm exists to surface. The link checker already
+ * retries 403/405 once as a GET before classifying, so a HEAD-only rejection is not
+ * mistaken for drift. If an authenticated reference is ever added to the index,
+ * extend this function rather than silently reclassifying all client errors.
  *
  * @param {number} status
  * @returns {string}
  */
 export function classifyHttpStatus(status) {
   if (status >= 200 && status < 300) return MAPS_CHECK_CLASSES.OK;
-  if (TRANSIENT_HTTP_STATUSES.has(status)) return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+  // A 5xx means the server failed to answer, so the reference's existence is unproven —
+  // it is not evidence that the reference moved. Every 5xx counts as external
+  // unavailability here, even though only the retryable subset is worth retrying.
+  const isServerError = status >= 500 && status < 600;
+  if (isServerError || TRANSIENT_HTTP_STATUSES.has(status)) {
+    return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+  }
   return MAPS_CHECK_CLASSES.BROKEN_REFERENCE;
+}
+
+/** True when this error object itself is a transport failure, not a local defect. */
+function isTransportFailure(error) {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String(error.name) : "";
+  if (name === "AbortError" || name === "TimeoutError") return true;
+  const code = "code" in error ? String(error.code) : "";
+  // Undici emits prefixed codes (UND_ERR_SOCKET, UND_ERR_HEADERS_TIMEOUT, …),
+  // so match the family rather than the bare "UND_ERR" literal.
+  return TRANSPORT_ERROR_CODES.test(code) || code.startsWith("UND_ERR");
 }
 
 /**
@@ -83,19 +123,37 @@ export function classifyHttpStatus(status) {
  */
 export function classifyFetchError(error) {
   if (error && typeof error === "object") {
-    const name = "name" in error ? String(error.name) : "";
-    if (name === "AbortError" || name === "TimeoutError") return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+    if (isTransportFailure(error)) return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+    // `fetch` rejects with `TypeError: fetch failed` and hangs the real transport
+    // error off `cause`, so a DNS/socket failure is only visible there. `cause` is
+    // consulted only when the outer error carries no code of its own: an error that
+    // does carry one is authoritative, which keeps a local contract break such as
+    // ENOENT out of the outage bucket.
     const code = "code" in error ? String(error.code) : "";
-    // Undici emits prefixed codes (UND_ERR_SOCKET, UND_ERR_HEADERS_TIMEOUT, …),
-    // so match the family rather than the bare "UND_ERR" literal.
-    if (
-      /^(EAI_AGAIN|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE)$/.test(code) ||
-      code.startsWith("UND_ERR")
-    ) {
-      return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
-    }
+    if (!code && isTransportFailure(error.cause)) return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
   }
   return MAPS_CHECK_CLASSES.BROKEN_REFERENCE;
+}
+
+/**
+ * Classify a failed child-process call (git over HTTPS).
+ *
+ * Git exits 128 for every fatal error, so a "repository not found" — a genuine broken
+ * reference — is indistinguishable from an outage by exit code alone. Only the libcurl
+ * transport messages in stderr are treated as external unavailability; everything else
+ * stays on the fail-closed path.
+ *
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function classifyExecError(error) {
+  if (error && typeof error === "object") {
+    // Our own `execFile` timeout kills the child, which produced no evidence at all.
+    if ("signal" in error && error.signal) return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+    const stderr = "stderr" in error ? String(error.stderr ?? "") : "";
+    if (stderr && TRANSPORT_STDERR.test(stderr)) return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+  }
+  return classifyFetchError(error);
 }
 
 /**

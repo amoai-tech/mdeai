@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { retryOperation } from "./network-retry.mjs";
 import {
   MAPS_CHECK_CLASSES,
-  classifyFetchError,
+  classifyExecError,
   reportCheckSummary,
   resolveCheckMode,
 } from "./check-classification.mjs";
@@ -100,7 +100,7 @@ try {
 } catch (error) {
   const classification =
     (error && typeof error === "object" && "classification" in error && error.classification) ||
-    classifyFetchError(error);
+    classifyExecError(error);
   console.error(`ERROR ${error instanceof Error ? error.message : String(error)}`);
   finish([classification]);
 }

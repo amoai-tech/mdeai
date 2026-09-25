@@ -33,6 +33,25 @@ Unrecognised errors fail **closed** as `BROKEN_REFERENCE`. An unknown throw is f
 defect in the script (`TypeError`, `ReferenceError`, a missing local file) than a provider outage, and
 treating it as `EXTERNAL_UNAVAILABLE` would let a genuine bug exit `0` in advisory mode.
 
+## What each failure maps to
+
+| Signal | Class | Why |
+|---|---|---|
+| `2xx` | `OK` | The reference resolved. |
+| `404`, `410`, other `4xx` (incl. `401`/`403`) | `BROKEN_REFERENCE` | Public canonical docs only: an auth failure means it is no longer publicly reachable. The link checker retries `403`/`405` once as `GET` first. |
+| `408`, `425`, `429` | `EXTERNAL_UNAVAILABLE` | Throttling, not a moved reference. |
+| **any** `5xx` | `EXTERNAL_UNAVAILABLE` | The server failed to answer, so the reference's existence is unproven. Only the retryable subset is worth retrying. |
+| `AbortError` / `TimeoutError` | `EXTERNAL_UNAVAILABLE` | Timed out. |
+| `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`, `EPIPE`, `ENETUNREACH`, `EHOSTUNREACH`, `UND_ERR*` | `EXTERNAL_UNAVAILABLE` | Transport failure. |
+| `TypeError: fetch failed` whose `cause` carries one of the codes above | `EXTERNAL_UNAVAILABLE` | `fetch` hides the real DNS/socket error on `cause`. |
+| Git exit `128` whose stderr matches a libcurl transport message | `EXTERNAL_UNAVAILABLE` | Git uses `128` for every fatal error. |
+| Git killed by our own `execFile` timeout (signal set) | `EXTERNAL_UNAVAILABLE` | No evidence was obtained. |
+| Git exit `128` — "repository not found", "Authentication failed" | `BROKEN_REFERENCE` | A deleted or renamed upstream **is** the drift this alarm exists to raise. |
+| Missing/unreadable `reference-index.md`, or no usable rows | `BROKEN_REFERENCE` | Broken local contract — still emits the summary line. |
+
+An error that carries its own `code` is authoritative: the cause is only consulted when the outer
+error has none, so a local contract break such as `ENOENT` is never reclassified as an outage.
+
 ## Running locally
 
 ```bash
