@@ -56,6 +56,19 @@ export async function updateSession(request: NextRequest) {
     return authRelay;
   }
 
+  const e2eAuthBypass =
+    process.env.NODE_ENV !== "production" &&
+    process.env.E2E_BYPASS_AUTH === "1";
+
+  if (e2eAuthBypass) {
+    const response = NextResponse.next({ request });
+    response.headers.set(
+      "x-pathname",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
+    return response;
+  }
+
   let supabaseResponse = NextResponse.next({ request });
   const { url, anonKey } = getSupabaseEnv();
 
@@ -79,11 +92,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
 
-  if (
-    !claims &&
-    isProtectedPath(request.nextUrl.pathname) &&
-    process.env.E2E_BYPASS_AUTH !== "1"
-  ) {
+  if (!claims && isProtectedPath(request.nextUrl.pathname) && !e2eAuthBypass) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set(

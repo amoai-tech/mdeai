@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -15,10 +16,11 @@ import {
   type AbstractAgent,
 } from "@copilotkit/react-core/v2";
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 type ConciergeCoAgentValue = {
   agent: AbstractAgent | undefined;
-  /** True when the real runtime-synced agent is available (not provisional). */
+  /** True when the active provider can accept concierge state/messages. */
   isReady: boolean;
   state: ConciergeWorkingMemory;
   setState: (
@@ -32,8 +34,8 @@ const ConciergeCoAgentContext = createContext<ConciergeCoAgentValue | null>(
   null,
 );
 
-/** Single useAgent mount for concierge — avoids duplicate CopilotKit sync POSTs. */
-export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) {
+/** Live CopilotKit agent mount for concierge. */
+function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
   const { copilotkit } = useCopilotKit();
   const { agent } = useAgent({
     agentId: "conciergeAgent",
@@ -69,8 +71,8 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
 
   const isReady = Boolean(
     agent &&
-      copilotkit.runtimeUrl !== undefined &&
-      runtimeConnectionStatus === "connected",
+    copilotkit.runtimeUrl !== undefined &&
+    runtimeConnectionStatus === "connected",
   );
 
   const state = useMemo(
@@ -102,6 +104,56 @@ export function ConciergeCoAgentProvider({ children }: { children: ReactNode }) 
     <ConciergeCoAgentContext.Provider value={value}>
       {children}
     </ConciergeCoAgentContext.Provider>
+  );
+}
+
+/** Local state provider for deterministic E2E; never mounts live CopilotKit transport. */
+function DeterministicConciergeCoAgentProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [state, setStateValue] = useState<ConciergeWorkingMemory>({});
+  const setState = useCallback(
+    (
+      patch:
+        | Partial<ConciergeWorkingMemory>
+        | ((prev: ConciergeWorkingMemory) => ConciergeWorkingMemory),
+    ) => {
+      setStateValue((current) =>
+        typeof patch === "function" ? patch(current) : { ...current, ...patch },
+      );
+    },
+    [],
+  );
+  const value = useMemo(
+    () => ({ agent: undefined, isReady: true, state, setState }),
+    [state, setState],
+  );
+
+  return (
+    <ConciergeCoAgentContext.Provider value={value}>
+      {children}
+    </ConciergeCoAgentContext.Provider>
+  );
+}
+
+/** Deterministic E2E avoids useAgent/SSE while production keeps the live agent. */
+export function ConciergeCoAgentProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) {
+    return (
+      <DeterministicConciergeCoAgentProvider>
+        {children}
+      </DeterministicConciergeCoAgentProvider>
+    );
+  }
+
+  return (
+    <LiveConciergeCoAgentProvider>{children}</LiveConciergeCoAgentProvider>
   );
 }
 

@@ -1,0 +1,62 @@
+name: Playwright critical cross-browser
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  critical-cross-browser:
+    name: critical cross-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run deterministic critical journeys across browsers
+        env:
+          NODE_ENV: development
+          NEXT_TELEMETRY_DISABLED: 1
+          E2E_BYPASS_AUTH: "1"
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: |
+          npx playwright test e2e/deterministic-critical.spec.ts \
+            --project=critical-cross-browser-chromium \
+            --project=critical-cross-browser-firefox \
+            --project=critical-cross-browser-webkit \
+            --workers=1
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critical-cross-browser-${{ github.run_id }}
+          path: |
+            test-results/**
+            tmp/playwright-report/**
+          if-no-files-found: ignore
+          retention-days: 7

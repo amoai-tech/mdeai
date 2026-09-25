@@ -62,7 +62,9 @@ describe("Supabase proxy session gate", () => {
     for (const path of ["/trips", "/trips/t_123", "/host/event/new"]) {
       const response = await updateSession(request(path));
       expect(response.status).toBe(307);
-      expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+      expect(new URL(response.headers.get("location")!).pathname).toBe(
+        "/login",
+      );
     }
   });
 
@@ -79,7 +81,9 @@ describe("Supabase proxy session gate", () => {
     const response = await updateSession(request("/login?error=access_denied"));
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("x-pathname")).toBe("/login?error=access_denied");
+    expect(response.headers.get("x-pathname")).toBe(
+      "/login?error=access_denied",
+    );
   });
 
   it("allows authenticated claims through protected routes", async () => {
@@ -89,6 +93,42 @@ describe("Supabase proxy session gate", () => {
     });
     const response = await updateSession(request("/saved"));
     expect(response.status).toBe(200);
+  });
+
+  it("allows explicit E2E auth bypass without Supabase credentials", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    vi.stubEnv("E2E_BYPASS_AUTH", "1");
+
+    const response = await updateSession(request("/chat"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-pathname")).toBe("/chat");
+    expect(authMocks.getClaims).not.toHaveBeenCalled();
+  });
+
+  it("still redirects protected routes when E2E bypass is set in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("E2E_BYPASS_AUTH", "1");
+
+    const response = await updateSession(request("/host/events"));
+
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    expect(authMocks.getClaims).toHaveBeenCalledOnce();
+  });
+
+  it("ignores E2E auth bypass in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    vi.stubEnv("E2E_BYPASS_AUTH", "1");
+
+    await expect(updateSession(request("/host"))).rejects.toThrow(
+      "Missing NEXT_PUBLIC_SUPABASE_URL",
+    );
   });
 
   it("fails deterministically when the required Supabase environment is missing", async () => {

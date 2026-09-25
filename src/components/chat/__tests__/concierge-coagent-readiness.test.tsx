@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
         runtimeUrl: string | undefined;
         runtimeConnectionStatus: string;
         subscribe: (subscriber: {
-          onRuntimeConnectionStatusChanged?: (event: { status: string }) => void;
+          onRuntimeConnectionStatusChanged?: (event: {
+            status: string;
+          }) => void;
         }) => { unsubscribe: () => void };
       };
     }
@@ -73,6 +75,10 @@ function captureReadiness() {
 }
 
 describe("ConciergeCoAgentProvider — readiness behavior", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAgent.mockReturnValue({ agent: undefined });
@@ -147,7 +153,9 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
       runtimeConnectionStatus: "connecting",
       subscribe: vi.fn(
         (subscriber: {
-          onRuntimeConnectionStatusChanged?: (event: { status: string }) => void;
+          onRuntimeConnectionStatusChanged?: (event: {
+            status: string;
+          }) => void;
         }) => {
           onRuntimeConnectionStatusChanged =
             subscriber.onRuntimeConnectionStatusChanged;
@@ -176,6 +184,22 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
     expect(captured.isReady).toBe(true);
     unmount();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("uses a ready local provider without live CopilotKit transport in deterministic E2E mode", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    const { captured, TestComponent } = captureReadiness();
+    const { unmount } = renderWithAct(
+      <ConciergeCoAgentProvider>
+        <TestComponent />
+      </ConciergeCoAgentProvider>,
+    );
+
+    expect(captured.isReady).toBe(true);
+    expect(mockUseAgent).not.toHaveBeenCalled();
+    expect(mockUseCopilotKit).not.toHaveBeenCalled();
+    unmount();
   });
 
   it("returns isReady=true when runtime is already connected", () => {

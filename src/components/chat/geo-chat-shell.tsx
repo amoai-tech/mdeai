@@ -30,9 +30,11 @@ import { RestaurantBookingSheet } from "@/components/sheets/restaurant-booking-s
 import { VenueDetailSheet } from "@/components/sheets/venue-detail-sheet";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 function CafeBookingSheetMount() {
-  const { cafeBookingTarget, cafeBookingOpen, closeCafeBooking } = useRentalUi();
+  const { cafeBookingTarget, cafeBookingOpen, closeCafeBooking } =
+    useRentalUi();
   return (
     <CafeBookingSheet
       target={cafeBookingTarget}
@@ -113,6 +115,8 @@ function NightlifeBookingSheetMount() {
 }
 
 export function GeoChatShell() {
+  const deterministic = isDeterministicE2E();
+
   return (
     <ConciergeCopilotBridge>
       <ConciergeCoAgentProvider>
@@ -146,8 +150,10 @@ export function GeoChatShell() {
                                   <AuthStatus />
                                 </header>
                                 <MapsShell>
-                                  <FocusMapPinAction />
-                                  <EventWebCitationFetch />
+                                  {deterministic ? null : <FocusMapPinAction />}
+                                  {deterministic ? null : (
+                                    <EventWebCitationFetch />
+                                  )}
                                   <MapUiSync />
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />
