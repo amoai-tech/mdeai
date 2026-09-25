@@ -46,18 +46,16 @@ test.describe(`${SCREEN_ID} event card polish`, () => {
       await gotoHome(page);
       await sendEventQuery(page, EVENT_QUERY);
       await waitForEventCards(page);
-      await page.waitForTimeout(3000);
 
       const cards = page.locator('[data-testid="event-card"]');
-      expect(await cards.count()).toBeGreaterThanOrEqual(1);
+      await expect(cards.first()).toBeVisible();
 
       const buyCta = page.locator('[data-testid="event-buy-cta"]').first();
       await expect(buyCta).toBeVisible();
       const href = await buyCta.getAttribute("href");
       expect(href).toMatch(/^\/events\/.+/);
 
-      const pins = await page.locator('[data-testid="map-pin"]').count();
-      expect(pins).toBeGreaterThan(0);
+      await expect(page.getByTestId("map-pin").first()).toBeVisible();
 
       await captureScreenEvidence(page, SCREEN_ID, "desktop-event-cards.png");
 

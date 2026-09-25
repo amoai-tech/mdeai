@@ -36,8 +36,6 @@ test.describe("MAP-007B desktop layout", () => {
     await gotoHome(page);
     await sendConciergeMessage(page, RENTAL_QUERY);
     await waitForRentalCards(page);
-    await page.waitForTimeout(2000);
-
     const card = page.locator('[data-testid="rental-card"]').first();
     await card.click();
 

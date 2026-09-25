@@ -16,8 +16,6 @@ test.describe("Restaurant filter chips", () => {
     test.setTimeout(180_000);
 
     await gotoHome(page);
-    await page.waitForTimeout(4_000);
-
     await sendConciergeMessage(page, "suggest restaurants");
     await expect(page.locator('[data-testid="restaurant-clarify"]')).toBeVisible({
       timeout: 30_000,
@@ -37,8 +35,6 @@ test.describe("Restaurant filter chips", () => {
     test.setTimeout(180_000);
 
     await gotoHome(page);
-    await page.waitForTimeout(4_000);
-
     await sendConciergeMessage(page, "fine dining modern poblado");
     await waitForRestaurantCards(page);
 

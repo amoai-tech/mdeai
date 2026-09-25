@@ -52,7 +52,6 @@ test.describe("SAN-574 chat cards (desktop)", () => {
   test("restaurant card in chat", async ({ page }) => {
     test.setTimeout(180_000);
     await gotoHome(page);
-    await page.waitForTimeout(8_000);
     await sendConciergeMessage(page, RESTAURANT_FAST_PATH_QUERY);
     await waitForRestaurantCards(page);
     await page.screenshot({

@@ -18,6 +18,10 @@ function isCopilotKitPost(url: string, method: string): boolean {
   return url.includes("/api/copilotkit") && method === "POST";
 }
 
+function observeBudgetWindow(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 test.describe("CK-P0-07 CopilotKit request budget", () => {
   test("idle + event fast-path stay within POST budget", async ({ page }) => {
     test.setTimeout(180_000);
@@ -59,14 +63,14 @@ test.describe("CK-P0-07 CopilotKit request budget", () => {
 
     await gotoHome(page);
     postCount = 0;
-    await page.waitForTimeout(8_000);
+    await observeBudgetWindow(8_000);
 
     const idlePosts = postCount;
     expect(idlePosts, "idle CopilotKit POST budget").toBeLessThanOrEqual(IDLE_POST_MAX);
 
     postCount = 0;
     await sendConciergeMessage(page, EVENT_FAST_PATH_QUERY);
-    await page.waitForTimeout(10_000);
+    await observeBudgetWindow(10_000);
     const eventBurstPosts = postCount;
     expect(
       eventBurstPosts,
