@@ -1,0 +1,52 @@
+# SAN-1330 — prove the CI Vercel credential reaches the right team and project.
+#
+# "Secret added" is not "secret works". A token can be present, valid, and still
+# belong to a different team — and this repository contains a lookalike project
+# *also named* `mdeai` in another account, so resolving by name succeeds and
+# returns something plausible but wrong (framework `vite`, different domains).
+#
+# Run this whenever credentials change, and before trusting anything derived from
+# Vercel. It asserts team id, project id, framework, custom domain, the current
+# Production deployment's state, and optionally its git SHA.
+name: Vercel access check
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Require the Production deployment to be serving this git SHA (optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  access-check:
+    name: vercel-access-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # The token is only ever passed through the environment and is never
+      # echoed: the script prints identifiers and deployment metadata only.
+      - name: Verify Vercel team and project access
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${EXPECTED_SHA}" ]; then
+            node scripts/check-vercel-access.mjs --expect-sha "${EXPECTED_SHA}"
+          else
+            node scripts/check-vercel-access.mjs
+          fi
