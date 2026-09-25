@@ -220,3 +220,23 @@ Google Places provider summaries are distinct from MDE `ai_summary`. Preserve pr
 Do not call a Maps change complete until evidence covers: targeted Maps tests; no new legacy API; client/server key exposure; minimal field masks for changed Places calls; compliance/attribution review; and a browser smoke test when map UI changed. Record any current-doc or Code Assist source used for an API/version decision.
 
 For upstream maintenance, run `node .claude/skills/maps/scripts/check-google-maps-upstream.mjs`; drift is a review signal, never an automatic overwrite.
+
+## Live maintenance classification
+
+The live external checks (`check-google-maps-upstream.mjs`, `check-maps-reference-links.mjs`) classify every result and decide their own exit code from `MAPS_CHECK_MODE`. Do **not** wrap them in a blanket `continue-on-error` — that previously let a confirmed broken reference produce a green scheduled run.
+
+| Classification | Meaning | `strict` | `advisory` |
+|---|---|:---:|:---:|
+| `OK` | Check passed | pass | pass |
+| `DRIFT` | Source reachable, content moved (upstream SHA advanced) | **fail** | **fail** |
+| `BROKEN_REFERENCE` | Source reachable and definitively wrong (404/410, or a broken local contract) | **fail** | **fail** |
+| `EXTERNAL_UNAVAILABLE` | Could not obtain evidence (timeout, DNS, reset, 429, 5xx) | **fail** | pass |
+
+`advisory` exists so an operator can gather information without failing a run. It never downgrades confirmed drift.
+
+```bash
+MAPS_CHECK_MODE=strict   node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
+MAPS_CHECK_MODE=advisory node .claude/skills/maps/scripts/check-maps-reference-links.mjs
+```
+
+Scheduled maintenance runs `strict`; `workflow_dispatch` defaults to `strict` and accepts `advisory`. Each run prints a machine-readable `MAPS_CHECK_SUMMARY check=… mode=… OK=… DRIFT=… BROKEN_REFERENCE=… EXTERNAL_UNAVAILABLE=… result=PASS|FAIL`. These checks do not run on pull requests at all, so they can never block a PR.

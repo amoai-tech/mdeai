@@ -12,7 +12,12 @@ describe("Maps maintenance contract", () => {
     expect(body).toContain("maps-contracts:");
     expect(body).toContain("maps-live-maintenance:");
     expect(body).toContain("github.event_name != 'pull_request'");
-    expect(body).toContain("continue-on-error: true");
+    expect(body).toContain("MAPS_CHECK_MODE");
+    expect(body).toContain("inputs.mode || 'strict'");
+    expect(body).toContain("default: strict");
+    // A blanket step-level `continue-on-error` previously let a confirmed broken
+    // reference produce a green scheduled run. The scripts now own the exit code.
+    expect(body).not.toContain("continue-on-error: true");
     expect(body).toContain("check-visgl-compatibility.mjs");
     expect(body).toContain("check-google-maps-upstream.mjs");
     expect(body).toContain("check-maps-reference-links.mjs");
@@ -46,6 +51,15 @@ describe("Maps maintenance contract", () => {
     expect(linkChecker).toContain('redirect: "follow"');
     expect(linkChecker).toContain("if (primary.length === 0)");
     expect(linkChecker).toContain("no primary references selected");
+
+    // Both live checks must classify outcomes rather than exit blindly.
+    const upstreamChecker = readFileSync(".claude/skills/maps/scripts/check-google-maps-upstream.mjs", "utf8");
+    for (const script of [linkChecker, upstreamChecker]) {
+      expect(script).toContain("check-classification.mjs");
+      expect(script).toContain("reportCheckSummary");
+      expect(script).toContain("resolveCheckMode");
+    }
+    expect(existsSync(".claude/skills/maps/scripts/check-classification.mjs")).toBe(true);
 
     const visgl = readFileSync(".claude/skills/maps/scripts/check-visgl-compatibility.mjs", "utf8");
     expect(visgl).toContain("APIProvider");
