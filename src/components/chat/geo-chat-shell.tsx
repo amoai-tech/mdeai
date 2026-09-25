@@ -30,6 +30,7 @@ import { RestaurantBookingSheet } from "@/components/sheets/restaurant-booking-s
 import { VenueDetailSheet } from "@/components/sheets/venue-detail-sheet";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 function CafeBookingSheetMount() {
   const { cafeBookingTarget, cafeBookingOpen, closeCafeBooking } =
@@ -114,9 +115,7 @@ function NightlifeBookingSheetMount() {
 }
 
 export function GeoChatShell() {
-  const deterministic =
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+  const deterministic = isDeterministicE2E();
 
   return (
     <ConciergeCopilotBridge>

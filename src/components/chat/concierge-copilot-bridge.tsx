@@ -13,6 +13,7 @@ import {
   MASTRA_TOOL_IDS,
 } from "@/platform/copilot/mastra-tool-action-names";
 import { venueBookingRequestSchema } from "@/lib/venues/venue-booking-form-schema";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 function VenueBookingResultBannerSync({
   result,
@@ -123,10 +124,7 @@ function LiveConciergeCopilotBridge({ children }: ConciergeCopilotBridgeProps) {
 export function ConciergeCopilotBridge({
   children,
 }: ConciergeCopilotBridgeProps) {
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1"
-  ) {
+  if (isDeterministicE2E()) {
     return <>{children}</>;
   }
   return <LiveConciergeCopilotBridge>{children}</LiveConciergeCopilotBridge>;

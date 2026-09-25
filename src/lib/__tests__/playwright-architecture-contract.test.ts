@@ -70,7 +70,7 @@ describe("SAN-1341 Playwright architecture", () => {
       "src/components/chat/chat-center-panel.tsx",
       "utf8",
     );
-    expect(panel).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
+    expect(panel).toContain("isDeterministicE2E()");
     expect(panel).toContain("DeterministicConciergeChat");
   });
 
@@ -89,7 +89,7 @@ describe("SAN-1341 Playwright architecture", () => {
       "src/components/chat/concierge-coagent-context.tsx",
       "utf8",
     );
-    expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
+    expect(provider).toContain("isDeterministicE2E()");
     expect(provider).toContain("DeterministicConciergeCoAgentProvider");
   });
 
@@ -98,8 +98,25 @@ describe("SAN-1341 Playwright architecture", () => {
       "src/components/copilot/copilot-kit-provider.tsx",
       "utf8",
     );
-    expect(provider).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
+    expect(provider).toContain("isDeterministicE2E()");
     expect(provider).toContain("deterministicE2E");
+  });
+  it("centralizes deterministic E2E mode behind a production guard", () => {
+    const guard = fs.readFileSync("src/lib/deterministic-e2e.ts", "utf8");
+    const provider = fs.readFileSync(
+      "src/components/copilot/copilot-kit-provider.tsx",
+      "utf8",
+    );
+    expect(guard).toContain('process.env.NODE_ENV !== "production"');
+    expect(guard).toContain("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT");
+    expect(provider).toContain("isDeterministicE2E()");
+  });
+
+  it("does not retain browser traces for live production smoke", () => {
+    const prod = (config.projects ?? []).find(
+      (project) => project.name === "prod-smoke",
+    );
+    expect(prod?.use?.trace).toBe("off");
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [

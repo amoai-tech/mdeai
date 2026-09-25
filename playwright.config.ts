@@ -120,6 +120,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: prodBaseURL || "https://www.mdeai.co",
+        trace: "off",
       },
     },
   ],

@@ -8,13 +8,13 @@ import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
 function CopilotKitWithThread({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { activeThreadId } = useThreadNav();
-  const deterministicE2E =
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+  const deterministicE2E = isDeterministicE2E();
 
   // Deterministic browser tests exercise the real app/router with mocked
   // domain boundaries, but must not start live CopilotKit transport.

@@ -17,6 +17,7 @@ import { GroundedFastPathPanel } from "@/components/chat/grounded-fast-path-pane
 import { RentalFastPathPanel } from "@/components/chat/rental-fast-path-panel";
 import { RestaurantFastPathPanel } from "@/components/chat/restaurant-fast-path-panel";
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 const CONCIERGE_LABELS = {
   modalHeaderTitle: "Medellín concierge",
@@ -38,9 +39,7 @@ function ConciergeCopilotChat() {
 
 export function ChatCenterPanel() {
   const { sessionKey } = useConciergeSession();
-  const deterministic =
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+  const deterministic = isDeterministicE2E();
 
   return (
     <section

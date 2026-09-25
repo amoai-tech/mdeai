@@ -16,6 +16,7 @@ import {
   type AbstractAgent,
 } from "@copilotkit/react-core/v2";
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 type ConciergeCoAgentValue = {
   agent: AbstractAgent | undefined;
@@ -143,10 +144,7 @@ export function ConciergeCoAgentProvider({
 }: {
   children: ReactNode;
 }) {
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1"
-  ) {
+  if (isDeterministicE2E()) {
     return (
       <DeterministicConciergeCoAgentProvider>
         {children}

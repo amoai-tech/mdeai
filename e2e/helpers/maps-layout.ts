@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -14,8 +15,7 @@ export async function gotoMarketingHome(page: Page) {
   // The hero input is present in SSR markup before React is hydrated. The
   // explicit data-hydrated signal is authoritative in deterministic E2E mode,
   // where live CopilotKit transport is intentionally disabled.
-  const deterministicE2E =
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+  const deterministicE2E = isDeterministicE2E();
   const runtimeHandshake = deterministicE2E
     ? null
     : page.waitForResponse(
