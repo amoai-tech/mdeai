@@ -73,6 +73,11 @@ export function classifyHttpStatus(status) {
  * Timeouts, aborts, DNS and socket failures mean we could not obtain evidence,
  * so they are external unavailability rather than a broken reference.
  *
+ * Unrecognised errors fail **closed** as BROKEN_REFERENCE: an unknown throw is
+ * far more likely to be a defect in this script (TypeError, ReferenceError) than
+ * a provider outage, and classifying it as EXTERNAL_UNAVAILABLE would let a
+ * genuine script bug exit 0 in advisory mode.
+ *
  * @param {unknown} error
  * @returns {string}
  */
@@ -81,11 +86,16 @@ export function classifyFetchError(error) {
     const name = "name" in error ? String(error.name) : "";
     if (name === "AbortError" || name === "TimeoutError") return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
     const code = "code" in error ? String(error.code) : "";
-    if (/^(EAI_AGAIN|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|UND_ERR|EPIPE)$/.test(code)) {
+    // Undici emits prefixed codes (UND_ERR_SOCKET, UND_ERR_HEADERS_TIMEOUT, …),
+    // so match the family rather than the bare "UND_ERR" literal.
+    if (
+      /^(EAI_AGAIN|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE)$/.test(code) ||
+      code.startsWith("UND_ERR")
+    ) {
       return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
     }
   }
-  return MAPS_CHECK_CLASSES.EXTERNAL_UNAVAILABLE;
+  return MAPS_CHECK_CLASSES.BROKEN_REFERENCE;
 }
 
 /**

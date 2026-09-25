@@ -29,17 +29,43 @@ describe("Maps live-check classification", () => {
     }
   });
 
-  it("classifies thrown fetch errors as external unavailability", () => {
+  it("classifies transport failures as external unavailability", () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
     expect(classifyFetchError(abort)).toBe(EXTERNAL_UNAVAILABLE);
 
-    for (const code of ["EAI_AGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "UND_ERR_SOCKET"]) {
+    const timeout = new Error("timed out");
+    timeout.name = "TimeoutError";
+    expect(classifyFetchError(timeout)).toBe(EXTERNAL_UNAVAILABLE);
+
+    // Undici emits prefixed codes, so the family must match — not just the bare
+    // "UND_ERR" literal. This previously passed only via the catch-all default.
+    for (const code of [
+      "EAI_AGAIN",
+      "ECONNRESET",
+      "ECONNREFUSED",
+      "ENOTFOUND",
+      "ETIMEDOUT",
+      "EPIPE",
+      "UND_ERR",
+      "UND_ERR_SOCKET",
+      "UND_ERR_HEADERS_TIMEOUT",
+      "UND_ERR_CONNECT_TIMEOUT",
+    ]) {
       const error = Object.assign(new Error(code), { code });
       expect(classifyFetchError(error), code).toBe(EXTERNAL_UNAVAILABLE);
     }
-    expect(classifyFetchError(new Error("anything else"))).toBe(EXTERNAL_UNAVAILABLE);
-    expect(classifyFetchError(undefined)).toBe(EXTERNAL_UNAVAILABLE);
+  });
+
+  it("fails closed on unrecognised errors so a script bug cannot pass as an outage", () => {
+    expect(classifyFetchError(new Error("anything else"))).toBe(BROKEN_REFERENCE);
+    expect(classifyFetchError(undefined)).toBe(BROKEN_REFERENCE);
+    expect(classifyFetchError(new TypeError("x is not a function"))).toBe(BROKEN_REFERENCE);
+    expect(classifyFetchError(new ReferenceError("boom"))).toBe(BROKEN_REFERENCE);
+    // ENOENT means a missing/unreadable local file — a broken local contract.
+    expect(classifyFetchError(Object.assign(new Error("no such file"), { code: "ENOENT" }))).toBe(
+      BROKEN_REFERENCE,
+    );
   });
 
   it("defaults to strict so a misconfiguration cannot weaken drift detection", () => {

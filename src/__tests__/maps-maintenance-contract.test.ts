@@ -12,12 +12,15 @@ describe("Maps maintenance contract", () => {
     expect(body).toContain("maps-contracts:");
     expect(body).toContain("maps-live-maintenance:");
     expect(body).toContain("github.event_name != 'pull_request'");
-    expect(body).toContain("MAPS_CHECK_MODE");
-    expect(body).toContain("inputs.mode || 'strict'");
-    expect(body).toContain("default: strict");
+    expect(body).toContain("MAPS_CHECK_MODE: strict");
+    // Operator-supplied workflow_dispatch inputs are a supply-chain surface
+    // (Checkov CKV_GHA_7); the mode is fixed to strict in CI.
+    expect(body).not.toContain("inputs:");
     // A blanket step-level `continue-on-error` previously let a confirmed broken
     // reference produce a green scheduled run. The scripts now own the exit code.
     expect(body).not.toContain("continue-on-error: true");
+    // A failing first live check must not hide the second check's classification.
+    expect(body).toContain("if: ${{ !cancelled() }}");
     expect(body).toContain("check-visgl-compatibility.mjs");
     expect(body).toContain("check-google-maps-upstream.mjs");
     expect(body).toContain("check-maps-reference-links.mjs");

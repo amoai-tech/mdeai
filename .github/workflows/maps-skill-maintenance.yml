@@ -3,15 +3,11 @@ name: Maps Skill Maintenance
 on:
   schedule:
     - cron: "23 13 * * 1"
+  # Scheduled/manual maintenance only. The live checks are intentionally NOT
+  # driven by a workflow_dispatch input: operator-supplied inputs are a
+  # supply-chain surface (Checkov CKV_GHA_7), and the mode only ever needs to be
+  # strict here. `advisory` remains available to operators locally via the env var.
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "strict fails on any non-OK result; advisory tolerates only external unavailability"
-        type: choice
-        options:
-          - strict
-          - advisory
-        default: strict
   pull_request:
     branches: [main]
     paths:
@@ -67,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MAPS_CHECK_MODE: ${{ inputs.mode || 'strict' }}
+      MAPS_CHECK_MODE: strict
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,5 +71,9 @@ jobs:
           node-version-file: .nvmrc
       - name: Google Maps agent-skill upstream drift
         run: node .claude/skills/maps/scripts/check-google-maps-upstream.mjs
+      # `!cancelled()` so a failing upstream check cannot hide the reference-link
+      # classification: strict mode must report BOTH live checks, and the job still
+      # fails if either step fails.
       - name: Primary Maps reference link health
+        if: ${{ !cancelled() }}
         run: node .claude/skills/maps/scripts/check-maps-reference-links.mjs

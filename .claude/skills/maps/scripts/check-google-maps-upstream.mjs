@@ -22,10 +22,19 @@ function classified(error, classification) {
 }
 
 function pinnedCommit() {
-  const body = readFileSync(SKILL, "utf8");
+  // A missing/unreadable local file is a broken local contract, not an external
+  // outage — otherwise a genuinely absent SKILL.md would pass in advisory mode.
+  let body;
+  try {
+    body = readFileSync(SKILL, "utf8");
+  } catch (error) {
+    throw classified(
+      new Error(`Cannot read ${SKILL}: ${error instanceof Error ? error.message : String(error)}`),
+      MAPS_CHECK_CLASSES.BROKEN_REFERENCE,
+    );
+  }
   const match = body.match(/Reviewed upstream commit: `([0-9a-f]{40})`/i);
   if (!match) {
-    // The local contract is broken: the SKILL must record the reviewed commit.
     throw classified(
       new Error(`Pinned Google Maps upstream commit missing from ${SKILL}`),
       MAPS_CHECK_CLASSES.BROKEN_REFERENCE,

@@ -239,4 +239,4 @@ MAPS_CHECK_MODE=strict   node .claude/skills/maps/scripts/check-google-maps-upst
 MAPS_CHECK_MODE=advisory node .claude/skills/maps/scripts/check-maps-reference-links.mjs
 ```
 
-Scheduled maintenance runs `strict`; `workflow_dispatch` defaults to `strict` and accepts `advisory`. Each run prints a machine-readable `MAPS_CHECK_SUMMARY check=… mode=… OK=… DRIFT=… BROKEN_REFERENCE=… EXTERNAL_UNAVAILABLE=… result=PASS|FAIL`. These checks do not run on pull requests at all, so they can never block a PR.
+Scheduled and manual maintenance both run `strict`; the mode is fixed in the workflow rather than taken from a `workflow_dispatch` input, because operator-supplied inputs are a supply-chain surface (Checkov CKV_GHA_7). `advisory` stays available locally by setting the env var. Each run prints a machine-readable `MAPS_CHECK_SUMMARY check=… mode=… OK=… DRIFT=… BROKEN_REFERENCE=… EXTERNAL_UNAVAILABLE=… result=PASS|FAIL`. These checks do not run on pull requests at all, so they can never block a PR.
