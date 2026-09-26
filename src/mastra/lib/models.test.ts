@@ -88,6 +88,10 @@ describe.skipIf(!hasGeminiKey)(
       expect(toolCalls.map((call) => call.toolName)).toContain("search_rentals");
       expect(toolCalls[0]?.input).toMatchObject({
         neighborhood: expect.stringMatching(/laureles/i),
+        // "under $80" must survive into the argument. Without this the test still
+        // passed for `maxPrice: 0` — the budget silently dropped, which is the
+        // user-visible half of the request.
+        maxPrice: 80,
       });
     }, 60_000);
   },
