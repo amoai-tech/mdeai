@@ -6,6 +6,7 @@ import {
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import { NextRequest, after } from "next/server";
 import { assertCopilotKitAuthorized } from "@/lib/copilotkit-auth";
+import { resolveRequestedThread } from "@/lib/copilotkit-thread-ownership";
 import {
   checkCopilotKitDistributedIpHardCeiling,
   checkCopilotKitDistributedRateLimit,
@@ -84,19 +85,26 @@ async function handleCopilotKit(req: NextRequest) {
     return Response.json({ agents: {} });
   }
 
-  const unauthorized = assertCopilotKitAuthorized(req);
-  if (unauthorized) return unauthorized;
-
   try {
+    // 1. IP hard ceiling first — it has no secret or user dependency, so it can
+    //    shed abusive traffic before we spend a Supabase round-trip on it.
     const ipHardCeiling = await checkCopilotKitDistributedIpHardCeiling(req);
     if (ipHardCeiling) return ipHardCeiling;
 
+    // 2. Server-derived identity. Origin/Referer is routing context, never proof.
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     const userId = user?.id ?? null;
+
+    // 3. Authorization + thread ownership, BEFORE any CopilotKit/AG-UI handling.
+    //    AG-UI loads and rewrites thread metadata before downstream memory
+    //    validation, so a foreign thread must be rejected here, not later.
+    const thread = await resolveRequestedThread(req);
+    const unauthorized = assertCopilotKitAuthorized(req, { userId, thread });
+    if (unauthorized) return unauthorized;
 
     const rateLimited = await checkCopilotKitDistributedRateLimit(req, userId);
     if (rateLimited) return rateLimited;

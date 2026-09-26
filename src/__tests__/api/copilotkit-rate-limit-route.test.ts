@@ -4,6 +4,14 @@ const handleRequestMock = vi.hoisted(() => vi.fn());
 const getUserMock = vi.hoisted(() => vi.fn());
 const ipHardCeilingMock = vi.hoisted(() => vi.fn());
 const distributedRateLimitMock = vi.hoisted(() => vi.fn());
+// Explicit signatures: the inferred `null` / `{ kind: string }` shapes would
+// reject the Response and thread-kind values the tests return.
+const assertAuthorizedMock = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Response | null>(() => null),
+);
+const resolveRequestedThreadMock = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ kind: "none" })),
+);
 
 vi.mock("@copilotkit/runtime", () => ({
   CopilotRuntime: vi.fn(function CopilotRuntime() {
@@ -23,7 +31,10 @@ vi.mock("@/mastra/copilotkit/logging-mastra-agent", () => ({
 }));
 vi.mock("@/mastra/lib/log-agent-run", () => ({ logAgentRunForTurn: vi.fn() }));
 vi.mock("@/lib/copilotkit-auth", () => ({
-  assertCopilotKitAuthorized: vi.fn(() => null),
+  assertCopilotKitAuthorized: assertAuthorizedMock,
+}));
+vi.mock("@/lib/copilotkit-thread-ownership", () => ({
+  resolveRequestedThread: resolveRequestedThreadMock,
 }));
 vi.mock("@/lib/copilotkit-distributed-rate-limit", () => ({
   checkCopilotKitDistributedIpHardCeiling: (...args: unknown[]) => ipHardCeilingMock(...args),
@@ -63,7 +74,11 @@ describe("POST /api/copilotkit — distributed rate limit gate", () => {
     getUserMock.mockReset();
     ipHardCeilingMock.mockReset();
     distributedRateLimitMock.mockReset();
+    assertAuthorizedMock.mockReset();
+    resolveRequestedThreadMock.mockReset();
 
+    assertAuthorizedMock.mockReturnValue(null);
+    resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
     ipHardCeilingMock.mockResolvedValue(null);
     distributedRateLimitMock.mockResolvedValue(null);
     getUserMock.mockResolvedValue({ data: { user: null } });
@@ -124,5 +139,106 @@ describe("POST /api/copilotkit — distributed rate limit gate", () => {
     const res = await POST(postRequest("186.81.102.183") as never);
     expect(res.status).toBe(500);
     expect(getUserMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/copilotkit — authorization runs before agent execution (SAN-1358 · D20)", () => {
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT;
+    handleRequestMock.mockReset();
+    getUserMock.mockReset();
+    ipHardCeilingMock.mockReset();
+    distributedRateLimitMock.mockReset();
+    assertAuthorizedMock.mockReset();
+    resolveRequestedThreadMock.mockReset();
+
+    ipHardCeilingMock.mockResolvedValue(null);
+    distributedRateLimitMock.mockResolvedValue(null);
+    getUserMock.mockResolvedValue({ data: { user: null } });
+    handleRequestMock.mockResolvedValue(new Response("ok", { status: 200 }));
+    resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
+    assertAuthorizedMock.mockReturnValue(null);
+  });
+
+  it("resolves ownership from server-derived identity before authorizing", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    resolveRequestedThreadMock.mockResolvedValue({
+      kind: "existing",
+      threadId: "t1",
+      resourceId: "user-a",
+    });
+
+    await POST(postRequest("203.0.113.61", JSON.stringify({ threadId: "t1" })) as never);
+
+    // Identity must be established before the authorization decision is taken.
+    const getUserOrder = getUserMock.mock.invocationCallOrder[0]!;
+    const authorizeOrder = assertAuthorizedMock.mock.invocationCallOrder[0]!;
+    const handleOrder = handleRequestMock.mock.invocationCallOrder[0]!;
+    expect(getUserOrder).toBeLessThan(authorizeOrder);
+    expect(authorizeOrder).toBeLessThan(handleOrder);
+  });
+
+  it("passes the resolved thread owner into the auth decision", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    const thread = { kind: "existing" as const, threadId: "t1", resourceId: "user-b" };
+    resolveRequestedThreadMock.mockResolvedValue(thread);
+
+    await POST(postRequest("203.0.113.62", JSON.stringify({ threadId: "t1" })) as never);
+
+    expect(assertAuthorizedMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: "user-a", thread },
+    );
+  });
+
+  it("rejected authorization never reaches the CopilotKit handler", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    resolveRequestedThreadMock.mockResolvedValue({
+      kind: "existing",
+      threadId: "t1",
+      resourceId: "user-b",
+    });
+    assertAuthorizedMock.mockReturnValue(
+      new Response(JSON.stringify({ error: "unauthorized" }), { status: 403 }),
+    );
+
+    const res = await POST(postRequest("203.0.113.63", JSON.stringify({ threadId: "t1" })) as never);
+
+    expect(res.status).toBe(403);
+    expect(handleRequestMock).not.toHaveBeenCalled();
+    expect(distributedRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unauthenticated foreign request before the handler", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null } });
+    assertAuthorizedMock.mockReturnValue(
+      new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
+    );
+
+    const res = await POST(postRequest("203.0.113.64") as never);
+
+    expect(res.status).toBe(401);
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("still reaches the runtime once for an allowed authenticated request", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    resolveRequestedThreadMock.mockResolvedValue({ kind: "new", threadId: "t-new" });
+
+    const res = await POST(postRequest("203.0.113.65", JSON.stringify({ threadId: "t-new" })) as never);
+
+    expect(res.status).toBe(200);
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+    expect(distributedRateLimitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed with 500 when thread ownership cannot be verified", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    resolveRequestedThreadMock.mockRejectedValueOnce(new Error("service role client unavailable"));
+
+    const res = await POST(postRequest("203.0.113.66", JSON.stringify({ threadId: "t1" })) as never);
+
+    expect(res.status).toBe(500);
+    expect(handleRequestMock).not.toHaveBeenCalled();
   });
 });
