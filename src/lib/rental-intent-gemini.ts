@@ -23,7 +23,9 @@ export const parseRentalIntentWithGemini = async (
   if (!trimmed) return null;
 
   const { object } = await generateObject({
-    model: google("gemini-3.5-flash"),
+    // Development-phase default, matching `FLASH_MODEL`. Structured output is a
+    // supported capability of this model; see src/mastra/lib/models.ts.
+    model: google("gemini-3.5-flash-lite"),
     schema: geminiRentalIntentObjectSchema,
     prompt: `${GEMINI_RENTAL_PROMPT}\n\nUser message: ${trimmed}`,
     abortSignal: options?.signal,
