@@ -6,6 +6,12 @@
  * pricing. Unknown models fall back to the Flash rate and are flagged so a new
  * model never silently logs $0.
  *
+ * Rates re-verified against the official page on 2026-09-26, which corrected
+ * three stale entries that understated cost by roughly 3–5x. Rates are keyed by
+ * the literal model id and must never be keyed by `GEMINI_FLASH_MODEL_ID`: a
+ * price belongs to one specific model, so the table must not follow a constant
+ * that is meant to be switched.
+ *
  * @see https://ai.google.dev/gemini-api/docs/pricing
  */
 
@@ -18,12 +24,24 @@ export interface ModelRate {
 
 /** Keyed by the model id reported by the AI SDK (`google("<id>")`). */
 const MODEL_RATES: Record<string, ModelRate> = {
-  "gemini-3.5-flash": { inputPerMillion: 0.3, outputPerMillion: 2.5 },
-  "gemini-3.1-flash-lite": { inputPerMillion: 0.1, outputPerMillion: 0.4 },
-  "gemini-3.1-pro-preview": { inputPerMillion: 1.25, outputPerMillion: 10 },
+  // $1.50 in / $9.00 out (standard).
+  "gemini-3.5-flash": { inputPerMillion: 1.5, outputPerMillion: 9 },
+  // $0.30 in (text/image/video/audio) / $2.50 out.
+  "gemini-3.5-flash-lite": { inputPerMillion: 0.3, outputPerMillion: 2.5 },
+  // $0.25 in (text/image/video) / $1.50 out.
+  "gemini-3.1-flash-lite": { inputPerMillion: 0.25, outputPerMillion: 1.5 },
+  // $2.00 in / $12.00 out for prompts <= 200k tokens. The >200k tier
+  // ($4.00 / $18.00) is not modelled: this table holds one rate per model, and
+  // the small-prompt tier is the common case.
+  "gemini-3.1-pro-preview": { inputPerMillion: 2, outputPerMillion: 12 },
 };
 
-/** Used when a model id is not in {@link MODEL_RATES} — never returns 0 silently. */
+/**
+ * Used when a model id is not in {@link MODEL_RATES} — never returns 0 silently.
+ * Kept on the Flash rate. Flash is no longer the most expensive id MDE runs, but
+ * this is the rate the original conservative default was chosen around, and
+ * re-picking the fallback is a separate decision from correcting rates.
+ */
 const FALLBACK_RATE: ModelRate = MODEL_RATES["gemini-3.5-flash"]!;
 
 export interface ModelCostInput {

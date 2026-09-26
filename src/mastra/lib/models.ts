@@ -1,12 +1,15 @@
 import { google } from "@ai-sdk/google";
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 import { withTokenUsageTracking } from "./token-usage-middleware";
 
 /**
  * Development-phase default: **gemini-3.5-flash-lite** (all agents).
  *
- * MDE is still in development, and every agent routes through this one constant
- * (`CONCIERGE_MODEL` / `REASONING_MODEL` / `PLANNING_MODEL` all alias it), so
- * pointing it at the Lite model is the whole switch.
+ * The id itself lives in `src/lib/ai-model-ids.ts` so that call sites which
+ * cannot import this module — `flash-route-classifier.ts` is reachable from the
+ * client chat bundle, and this file reaches `node:async_hooks` through the
+ * token-usage sink — still share one source of identity. Switching back to
+ * `gemini-3.5-flash` is a one-line change there.
  *
  * Verified before changing rather than assumed from memory:
  *
@@ -21,18 +24,10 @@ import { withTokenUsageTracking } from "./token-usage-middleware";
  * its Gemini token usage into the active per-turn sink (token-usage-middleware).
  * The wrapper is transparent — same LanguageModelV2 contract, no behavior change.
  *
- * Switch back to `gemini-3.5-flash` when MDE leaves development; keeping this a
- * single model id is what makes that a one-line change.
- *
- * Not yet reflected in `model-cost.ts`: no verified official price exists for the
- * Lite model yet, so cost accounting falls back to the Flash rate and flags
- * `rateFallback` — the module's documented, deliberately conservative default.
- * Add the rate there once the real number is confirmed.
- *
  * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
  */
 export const FLASH_MODEL = withTokenUsageTracking(
-  google("gemini-3.5-flash-lite"),
+  google(GEMINI_FLASH_MODEL_ID),
 );
 export const PRO_MODEL = withTokenUsageTracking(
   google("gemini-3.1-pro-preview"),

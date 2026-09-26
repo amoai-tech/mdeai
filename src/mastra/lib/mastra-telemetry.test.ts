@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it, vi } from "vitest";
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 import {
   buildTurnTelemetryMetadata,
   classifyAgentError,
@@ -71,7 +72,10 @@ describe("resolveAgentModelName (AGT-00C)", () => {
   });
 
   it("falls back when model is dynamic or missing", () => {
-    expect(resolveAgentModelName({})).toBe("gemini-3.5-flash");
+    // Asserted against the shared constant, not a literal: the fallback names
+    // the model MDE actually runs, so it must follow the constant rather than
+    // pin whichever model happened to be current when this was written.
+    expect(resolveAgentModelName({})).toBe(GEMINI_FLASH_MODEL_ID);
     expect(resolveAgentModelName(null, "custom-model")).toBe("custom-model");
   });
 });

@@ -5,12 +5,14 @@
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 // Uses the raw Gemini model (not the COST-001-wrapped FLASH_MODEL): this module
 // is reachable from the client chat bundle, and the wrapped model pulls in the
-// server-only node:async_hooks token sink. Same model id as `FLASH_MODEL`
-// (development-phase `gemini-3.5-flash-lite`); the classifier is a separate,
-// FLASH_ROUTE-gated call whose tokens are not turn-attributed.
-const FLASH_MODEL = google("gemini-3.5-flash-lite");
+// server-only node:async_hooks token sink. Same model *id* via
+// `@/lib/ai-model-ids` (which has no imports, so it is safe here); the
+// classifier is a separate, FLASH_ROUTE-gated call whose tokens are not
+// turn-attributed.
+const FLASH_MODEL = google(GEMINI_FLASH_MODEL_ID);
 import {
   classifyRouterIntent,
   routerConfidenceToAction,

@@ -1,5 +1,6 @@
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it } from "vitest";
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 import {
   buildTurnTelemetryMetadata,
   TELEMETRY_SCHEMA_VERSION,
@@ -47,7 +48,10 @@ describe("SAN-589 vertical telemetry flows (AGT-00C)", () => {
     const payload = simulateFlow(tools);
     expect(payload.telemetry_version).toBe(TELEMETRY_SCHEMA_VERSION);
     expect(payload.agent_map_key).toBe("conciergeAgent");
-    expect(payload.model_name).toBe("gemini-3.5-flash");
+    // `simulateFlow` passes `agent: {}`, so this exercises the uninspectable-model
+    // fallback. Asserted against the shared constant so it tracks whichever model
+    // MDE runs instead of pinning the one current when this was written.
+    expect(payload.model_name).toBe(GEMINI_FLASH_MODEL_ID);
     expect(payload.tool_count).toBe(tools.length);
     expect(payload.tool_spans.map((s) => s.tool)).toEqual([...tools]);
     expect(payload.turn_status).toBe("success");

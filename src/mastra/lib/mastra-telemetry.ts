@@ -1,3 +1,4 @@
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 import { calculateModelCost } from "./model-cost";
 import type { ToolSpanSummary } from "./tool-audit-context";
 import { getTokenUsage, type TokenUsage } from "./tool-audit-context";
@@ -93,7 +94,12 @@ export function classifyAgentError(err: unknown): AgentErrorType {
 /** Resolve model id from a Mastra Agent's AI SDK model config when available. */
 export function resolveAgentModelName(
   agent: unknown,
-  fallback = "gemini-3.5-flash",
+  // This fallback is a *label*, not only a default rate: when the agent's model
+  // is uninspectable the turn is recorded under this name and
+  // `calculateModelCost` prices it by that name. It must therefore name the
+  // model MDE actually runs, or the identity is wrong for exactly the turns we
+  // cannot attribute any other way.
+  fallback = GEMINI_FLASH_MODEL_ID,
 ): string {
   const model = (agent as { model?: unknown })?.model;
   if (
