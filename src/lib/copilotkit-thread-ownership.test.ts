@@ -46,6 +46,13 @@ describe("extractThreadId", () => {
     expect(extractThreadId(null)).toBeNull();
     expect(extractThreadId("abc")).toBeNull();
   });
+
+  // Regression: validating the trimmed value while returning the raw one let a
+  // padded foreign thread ID miss the ownership lookup and skip the 403.
+  it("returns the trimmed id so the lookup and the handler agree", () => {
+    expect(extractThreadId({ threadId: "  abc  " })).toBe("abc");
+    expect(extractThreadId({ threadId: "\tabc\n" })).toBe("abc");
+  });
 });
 
 describe("readRequestedThreadId", () => {

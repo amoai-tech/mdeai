@@ -27,11 +27,19 @@ export type RequestedThread =
  * Pull `threadId` out of a CopilotKit request body.
  * The V1 protocol carries the AG-UI run input, whose `threadId` names the
  * conversation. Anything else (no body, non-JSON, wrong shape) yields null.
+ *
+ * The **trimmed** value is returned, not the raw one. Returning the raw value
+ * while validating the trimmed one would let a padded foreign thread ID
+ * (`" victimThread"`) miss the ownership lookup, be read as "new thread" and
+ * skip the 403 — and it would also send the handler to a different conversation
+ * than the one that was authorized.
  */
 export function extractThreadId(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const value = (payload as Record<string, unknown>).threadId;
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**
