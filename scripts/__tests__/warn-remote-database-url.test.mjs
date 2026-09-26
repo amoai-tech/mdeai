@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { warnIfRemoteDatabaseUrl } from "../warn-remote-database-url.mjs";
 
 // Resolved against this file, not the working directory, so the test still finds the script
 // when a runner (IDE, `node --test` from a subdirectory) uses a different cwd.
@@ -25,22 +29,63 @@ const CONTROLLED = [
   "TF_BUILD",
   "TEAMCITY_VERSION",
   "JENKINS_URL",
+  "MDE_DATABASE_URL_GUARD_RUNNING",
 ];
 
 const DIRECT_URL =
   "postgresql://postgres:s3cret@db.abcdefghijklmnop.supabase.co:5432/postgres";
+/** The same direct host written as a fully qualified name, with a root dot. */
+const DIRECT_URL_ROOT_DOT =
+  "postgresql://postgres:s3cret@db.abcdefghijklmnop.supabase.co.:5432/postgres";
 const POOLER_URL =
   "postgresql://postgres.abcdefghijklmnop:s3cret@aws-1-us-east-1.pooler.supabase.com:6543/postgres";
 
-function run(env = {}) {
+const fixtureDirs = [];
+
+afterEach(() => {
+  for (const dir of fixtureDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * A scratch directory to run the CLI in. Every subprocess gets one of these rather than the
+ * repo root, so a real `.env.local` in the checkout can never leak into an assertion.
+ * @param {Record<string, string>} [files] - dotenv files to create inside it.
+ * @returns {string} the directory path.
+ */
+function scratchDir(files = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mde-db-url-guard-"));
+  fixtureDirs.push(dir);
+  for (const [name, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, name), content);
+  }
+  return dir;
+}
+
+function run(env = {}, options = {}) {
   const base = { ...process.env };
   for (const name of CONTROLLED) delete base[name];
-  const result = spawnSync(process.execPath, [script], {
+  const result = spawnSync(process.execPath, [script, ...(options.args ?? [])], {
     env: { ...base, ...env },
+    cwd: options.cwd ?? scratchDir(),
     encoding: "utf8",
   });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
+
+/** Call the imported function and capture whatever it wrote. */
+function capture(env = {}, options = {}) {
+  let out = "";
+  const message = warnIfRemoteDatabaseUrl({
+    ...options,
+    env,
+    write: (text) => {
+      out += text;
+    },
+  });
+  return { message, out };
+}
+
+// ── Ambient environment ──────────────────────────────────────────────────────────────────
 
 test("warns and names the host for the Supabase direct host", () => {
   const { status, stderr } = run({ DATABASE_URL: DIRECT_URL });
@@ -113,6 +158,15 @@ test("still exempts .localhost, which is reserved to loopback", () => {
   assert.equal(stderr, "");
 });
 
+test("a fully qualified direct host with a root dot still gets the specific warning", () => {
+  const { status, stderr } = run({ DATABASE_URL: DIRECT_URL_ROOT_DOT });
+  assert.equal(status, 0);
+  assert.match(stderr, /Supabase DIRECT host/, "a trailing root dot must not downgrade the message");
+  // The root dot is normalized away before the host is printed.
+  assert.match(stderr, /db\.abcdefghijklmnop\.supabase\.co:5432/);
+  assert.doesNotMatch(stderr, /\.co\.:/);
+});
+
 test("stays silent under CI so intentional remote injection is allowed", () => {
   for (const marker of ["CI", "GITHUB_ACTIONS", "VERCEL"]) {
     const { status, stderr } = run({ DATABASE_URL: DIRECT_URL, [marker]: "true" });
@@ -168,4 +222,162 @@ test("exits 0 for every case, including remote warnings", () => {
   ]) {
     assert.equal(run(env).status, 0, JSON.stringify(env));
   }
+});
+
+// ── Dotenv files (the `next dev` path) ───────────────────────────────────────────────────
+
+test("CLI reads DATABASE_URL from .env.local, which predev runs before Next loads", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.match(stderr, /Supabase DIRECT host/);
+  assert.match(stderr, /Found in \.env\.local/);
+});
+
+test("prefers .env.local over .env, matching Next precedence", () => {
+  const cwd = scratchDir({
+    ".env.local": `DATABASE_URL=${DIRECT_URL}\n`,
+    ".env": `DATABASE_URL=${POOLER_URL}\n`,
+  });
+  const { stderr } = run({}, { cwd });
+  assert.match(stderr, /Found in \.env\.local/);
+  assert.match(stderr, /db\.abcdefghijklmnop\.supabase\.co/, "the .env.local value must win");
+});
+
+test("the ambient environment wins over every dotenv file", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run(
+    { DATABASE_URL: "postgresql://postgres:s3cret@localhost:5432/postgres" },
+    { cwd },
+  );
+  assert.equal(status, 0);
+  assert.equal(stderr, "", "a local ambient value must not be overridden by a file");
+});
+
+test("a set-but-blank ambient value suppresses the file fallback", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run({ DATABASE_URL: "" }, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "", "Next never overrides a set variable, so the file value is unused");
+});
+
+test("parses quoted values and skips comments in a dotenv file", () => {
+  const cwd = scratchDir({
+    ".env.local": `# leading comment\nDATABASE_URL="${DIRECT_URL}"\n`,
+  });
+  const { stderr } = run({}, { cwd });
+  assert.match(stderr, /Supabase DIRECT host/);
+});
+
+test("a commented-out assignment in a dotenv file is ignored", () => {
+  const cwd = scratchDir({ ".env.local": `# DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
+test("a repeated key resolves to the last assignment, as dotenv does", () => {
+  const cwd = scratchDir({
+    ".env.local":
+      "DATABASE_URL=postgresql://postgres:s3cret@localhost:5432/postgres\n" +
+      `DATABASE_URL=${DIRECT_URL}\n`,
+  });
+  const { stderr } = run({}, { cwd });
+  assert.match(stderr, /Supabase DIRECT host/, "the later assignment must win");
+});
+
+test("a blank assignment in a dotenv file counts as set and stops the search", () => {
+  const cwd = scratchDir({
+    ".env.local": "DATABASE_URL=\n",
+    ".env": `DATABASE_URL=${DIRECT_URL}\n`,
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "", "the higher-precedence blank must not fall through to .env");
+});
+
+test("expands a ${VAR} reference defined in the same dotenv file", () => {
+  const cwd = scratchDir({
+    ".env.local": `REMOTE_DB=${DIRECT_URL}\nDATABASE_URL=\${REMOTE_DB}\n`,
+  });
+  const { stderr } = run({}, { cwd });
+  assert.match(stderr, /Supabase DIRECT host/, "the reference must expand, not read as unparseable");
+});
+
+test("expands a $VAR reference to an ambient environment value", () => {
+  const cwd = scratchDir({ ".env.local": "DATABASE_URL=$SOME_REMOTE_DB\n" });
+  const { status, stderr } = run({ SOME_REMOTE_DB: DIRECT_URL }, { cwd });
+  assert.equal(status, 0);
+  assert.match(stderr, /Supabase DIRECT host/);
+});
+
+test("a reference resolving to a local host stays silent", () => {
+  const cwd = scratchDir({
+    ".env.local":
+      "LOCAL_DB=postgresql://postgres:s3cret@127.0.0.1:5432/postgres\n" +
+      "DATABASE_URL=${LOCAL_DB}\n",
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
+test("an unresolvable reference warns conservatively without printing the value", () => {
+  const cwd = scratchDir({ ".env.local": "DATABASE_URL=${NOT_DEFINED_ANYWHERE}\n" });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0, "the guard must never fail the run");
+  assert.match(stderr, /\$NOT_DEFINED_ANYWHERE/, "the unresolved variable should be named");
+  assert.match(stderr, /could not resolve/);
+  assert.doesNotMatch(stderr, /s3cret/);
+});
+
+test("--no-env-files restricts the CLI to the ambient environment", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run({}, { cwd, args: ["--no-env-files"] });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
+test("the CLI stays silent for a local value found in a dotenv file", () => {
+  const cwd = scratchDir({
+    ".env.local": "DATABASE_URL=postgresql://postgres:s3cret@127.0.0.1:5432/postgres\n",
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
+test("the suppress marker silences a child script a parent already guarded", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { status, stderr } = run({ MDE_DATABASE_URL_GUARD_RUNNING: "1" }, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
+// ── Imported call (the Vitest path) ──────────────────────────────────────────────────────
+
+test("the imported call reads no dotenv files by default", () => {
+  // Vitest does not load `.env.local` into process.env, so reading it here would warn about a
+  // value the test run never uses. This assertion is what keeps that a deliberate choice.
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { message, out } = capture({}, { cwd });
+  assert.equal(message, null);
+  assert.equal(out, "");
+});
+
+test("the imported call can opt in to reading dotenv files", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const { message, out } = capture({}, { cwd, readEnvFiles: true });
+  assert.ok(message, "expected a warning");
+  assert.match(out, /Found in \.env\.local/);
+});
+
+test("the imported call still reports an ambient remote value", () => {
+  const { message } = capture({ DATABASE_URL: DIRECT_URL }, { cwd: scratchDir() });
+  assert.ok(message);
+});
+
+test("the imported call never throws, even with an unusable cwd", () => {
+  const { message } = capture({}, { cwd: "/nonexistent-directory-for-tests", readEnvFiles: true });
+  assert.equal(message, null);
 });
