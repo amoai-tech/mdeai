@@ -23,6 +23,7 @@
  * It never drops or alters data, so it is safe against production.
  */
 import { PostgresStore } from "@mastra/pg";
+import { applyThreadOwnershipGuardTo } from "./lib/mastra-thread-ownership-guard.mjs";
 
 const connectionString = process.env.DATABASE_URL?.trim().replace(/^"|"$/g, "").trim();
 
@@ -50,7 +51,12 @@ const store = new PostgresStore({ id: "mastra-schema-init", connectionString });
 try {
   console.log(`init-mastra-schema: initializing Mastra schema on ${safeTarget(connectionString)}`);
   await store.init();
-  console.log("init-mastra-schema: ok — Mastra schema present");
+
+  // SAN-547 — a thread's owner is immutable once claimed. Applied here rather than in
+  // `supabase/migrations/**` because this script is what creates the vendor-owned
+  // `mastra_*` tables; a fresh `supabase db reset` has no `mastra_threads` to guard.
+  await applyThreadOwnershipGuardTo(connectionString);
+  console.log("init-mastra-schema: ok — Mastra schema present, thread ownership guard applied");
 } catch (error) {
   console.error(
     `init-mastra-schema: FAILED — ${error instanceof Error ? error.message : String(error)}`,
