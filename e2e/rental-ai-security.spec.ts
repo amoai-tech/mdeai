@@ -93,6 +93,16 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   let baselineSnapshot: Awaited<ReturnType<typeof fixtureSnapshot>>;
 
   /**
+   * A failed read must never be mistaken for an absent or unchanged row. Supabase returns
+   * `data: null` alongside `error`, so an unchecked `expect(data ?? null).toBeNull()` passes
+   * while the database was never actually observed — the exact false green this gate exists
+   * to prevent. Every read whose result is asserted goes through here first.
+   */
+  function assertRead(label: string, error: { message: string } | null): void {
+    if (error) throw new Error(`${label} read failed: ${error.message}`);
+  }
+
+  /**
    * Full-row snapshot of every fixture row a probe could touch. The refused-probe
    * invariant is "nothing changed", so it is asserted against complete row values rather
    * than a hand-picked subset — a denial that mutated an unlisted column (status,
@@ -111,6 +121,11 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
         .order("id"),
       admin.from("leads").select("*").eq("email", RENTER_EMAIL).order("id"),
     ]);
+    assertRead("fixture apartment snapshot", apartment.error);
+    assertRead("fixture lead snapshot", lead.error);
+    assertRead("fixture showing snapshot", showing.error);
+    assertRead("fixture landlord-profile snapshot", profiles.error);
+    assertRead("fixture renter-lead snapshot", renterLeads.error);
     return {
       apartment: apartment.data ?? null,
       lead: lead.data ?? null,
@@ -492,25 +507,28 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
 
     const admin = await getSupabaseAdmin();
 
-    const { data: leftoverApartment } = await admin
+    const { data: leftoverApartment, error: apartmentError } = await admin
       .from("apartments")
       .select("id")
       .eq("id", apartmentId)
       .maybeSingle();
+    assertRead("fixture apartment after cleanup", apartmentError);
     expect(leftoverApartment ?? null, "fixture apartment after cleanup").toBeNull();
 
-    const { data: leftoverLead } = await admin
+    const { data: leftoverLead, error: leadError } = await admin
       .from("leads")
       .select("id")
       .eq("id", leadId)
       .maybeSingle();
+    assertRead("fixture lead after cleanup", leadError);
     expect(leftoverLead ?? null, "fixture lead after cleanup").toBeNull();
 
-    const { data: leftoverShowing } = await admin
+    const { data: leftoverShowing, error: showingError } = await admin
       .from("showings")
       .select("id")
       .eq("id", showingId)
       .maybeSingle();
+    assertRead("fixture showing after cleanup", showingError);
     expect(leftoverShowing ?? null, "fixture showing after cleanup").toBeNull();
 
     // The viewing request created its own lead on the fixture apartment; cleanup above
@@ -519,6 +537,11 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
 
     for (const identity of [brokerA, brokerB]) {
       const deleted = await admin.auth.admin.getUserById(identity.userId);
+      // GoTrue reports an already-deleted user as a "not found" error, which is the success
+      // signal here — only any *other* error means the lookup itself did not work.
+      if (deleted.error && !/not found/i.test(deleted.error.message)) {
+        assertRead(`${identity.email} lookup after cleanup`, deleted.error);
+      }
       expect(deleted.data?.user ?? null, `${identity.email} after cleanup`).toBeNull();
     }
   });
