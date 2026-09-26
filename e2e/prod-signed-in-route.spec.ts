@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { hasE2eEnv, signInAsOnOrigin, QA_HOST_EMAIL } from "./helpers/auth";
 
 /**
@@ -56,5 +58,39 @@ test.describe("prod signed-in route proof", () => {
     expect(response?.status()).toBe(200);
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
+  });
+
+  test("authenticated runtime boots with the pinned CopilotKit version and every agent", async ({
+    page,
+  }) => {
+    await signInAsOnOrigin(page, baseUrl);
+
+    // Why this lives here rather than in prod-synthetic-smoke.yml: the
+    // unauthenticated runtime contract is now 401 (SAN-1358 / D20), and the gate
+    // rejects the request *before* CopilotKit/AG-UI runs. So an unauthenticated
+    // probe can prove the route is closed, but never that the runtime booted.
+    // This authenticated call is the replacement evidence for the version and
+    // agent inventory the old unauthenticated smoke assertion used to supply,
+    // and it asserts both through a real production session.
+    const response = await page.request.post(route("/api/copilotkit/info"), {
+      data: { method: "info" },
+    });
+    expect(response.status()).toBe(200);
+
+    const info = (await response.json()) as {
+      version?: string;
+      agents?: Record<string, unknown>;
+    };
+
+    const pinned = (
+      JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+        dependencies: Record<string, string>;
+      }
+    ).dependencies["@copilotkit/runtime"];
+    expect(info.version, "runtime CopilotKit version").toBe(pinned);
+
+    const expected = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
+    const missing = expected.filter((agent) => !info.agents?.[agent]);
+    expect(missing, `runtime is missing agents: ${missing.join(", ")}`).toEqual([]);
   });
 });
