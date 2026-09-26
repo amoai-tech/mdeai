@@ -1,7 +1,8 @@
 ---
 title: MDE Rentals / Real Estate — Verified Audit, PRD and Roadmap
-version: 3.6.0
+version: 3.7.0
 date: 2026-09-20
+refreshed: 2026-09-26
 status: Audit complete · implementation not started
 supersedes: docs/_archive/legacy-active-docs-2026-09-18/tasks/real-estate/real-estate-prd.md (v2.0.0, 2026-05-26)
 owners: Product + Engineering
@@ -10,6 +11,12 @@ stack: Next.js 16.3.5 · React 19.2.6 · CopilotKit 1.55.2 (v2 API) · Mastra co
 evidence_base:
   github_main: 47728db6b
   audited_at: 2026-09-20
+  originated_at: 47728db6b
+  refreshed_at: 979940c5b39f22da087e4ce1a6060494279401a5
+  refresh_note: >-
+    The findings below were gathered on 47728db6b (2026-09-20). On 2026-09-26 the branch was merged
+    with main at 979940c5b (+108 commits) and the code-level defect and count claims were
+    re-verified against current source. Where a claim changed, the text says so explicitly.
   live: https://www.mdeai.co/rentals
   supabase_project: zkwcbyxiwklihegjhuql
 ---
@@ -66,8 +73,8 @@ evidence_base:
 | Live production proof | **Absent** — no certified end-to-end journey |
 | Linear reality | 219 unique `REAL_ESTATE`/`RENTV2` issues · 96 children of SAN-1315 · **every critical-path acceptance box unchecked** · 4 conflicting readiness figures |
 | Off-label completed work | **13 tasks** shipped rental work with neither label (SAN-1333, SAN-478, SAN-381, SAN-348, SAN-545, SAN-242, SAN-409, SAN-433, SAN-243, SAN-347, SAN-349, SAN-327, SAN-331) — reconciled in §19A |
-| Confirmed defects | **20** (D1–D20, §21) with exact file/object citations, plus 4 correction notes and 1 rewritten finding. **D19** came from external review and disproved a claim this audit made (§33.1); **D20** is a verified auth-open AI surface (§38.1) |
-| **Production readiness** | **≈35%** (see §27, and its reconciliation with the forensic audit's ~53%) — lowered from ≈37% by D20 |
+| Confirmed defects | **20** (D1–D20, §21) with exact file/object citations, plus 4 correction notes and 1 rewritten finding. **D19** came from external review and disproved a claim this audit made (§33.1); **D20** was a verified auth-open AI surface (§38.1), **now fixed in PR #122** |
+| **Production readiness** | **≈35%** (see §27, and its reconciliation with the forensic audit's ~53%) — **D20 has since been fixed (PR #122); recompute before reuse** |
 
 **The one-sentence diagnosis:** the rental product is *built, wired, and not yet provably truthful.*
 
@@ -432,8 +439,8 @@ flowchart TD
     H --> O2
   end
   subgraph L5[Lane 5 · AI trust]
-    I1[SAN-547 isolation] --> I2[SAN-548 restart durability]
-    I2 --> I3[SAN-1302 → SAN-1303 Mastra pin + PostgresStore]
+    I1[SAN-547 isolation] --> I3[SAN-1302 → SAN-1303 Mastra pin + PostgresStore]
+    I3 --> I2[SAN-548 restart durability]
     I4[SAN-1054 adversarial]
     I5[SAN-1059 recovery matrix]
   end
@@ -592,8 +599,14 @@ until `apartments.fts_content` is recovered. `20260918090603_san1304a_recover_mi
 explicitly defers those columns to **SAN-1305 (SB-002C)**: *"These are not ordinary columns; restoring
 them reactivates hybrid search."*
 
-> **Therefore SAN-386 (hard filters in hybrid search) has a hard prerequisite that the epic's
-> dependency graph does not show: SAN-1305.**
+> **Therefore SAN-386 (hard filters in hybrid search) depends on SAN-1305.** Two graphs matter here
+> and they disagree: **this document's lane graph shows the edge** (§11.5 — `SAN-1305 → SAN-386`),
+> while the **SAN-1315 epic's own dependency graph does not** (§23.7).
+>
+> Per §33.3 the dependency is a prerequisite for the **chosen** architecture — a replay-safe
+> extension of `hybrid_search_listings` — **not** for the invariant itself. SAN-386 can be made
+> correct today by constraining the structured path, so the recommendation to land SAN-1305 first
+> is a deliberate design choice rather than a hard block.
 
 **Also verified:** `20260510000000_vdb01_hybrid_fts_search.sql` is an **audit record only**
 ("SQL applied directly via MCP; this file is the audit record") — it creates nothing on replay.
@@ -723,7 +736,7 @@ Percentages are evidence-weighted across seven independent axes:
 | **D1** | Expired 2025 availability rendered as available | `src/mastra/tools/search-rentals.ts:145-154` (`isAvailableForStay` returns `true` with no dates) + `src/app/rentals/page.tsx:29-34` (no dates passed) | **5 of 15 live cards** (`750e8400-…0001..0005`) show 2025 windows | SAN-486 | Vitest: `searchRentals({})` excludes `available_to < today`; E2E: no card shows a past window |
 | **D1a** | *(correction)* the filter **mechanism** already exists | SAN-409/INT-006 built `parseDateRange` + the null-safe `available_to`/`available_from` overlap filter + `sortForMonthlyStay` (commit `48ac166d3`, 12 tests) | — | SAN-486 | SAN-486 is therefore the **default-rule + boundary semantics**, not a new filter system. Reuse `isAvailableForStay` / `parseDateRange` |
 | **D2** | Semantic ranking bypasses hard filters | `src/mastra/lib/intelligence-rental-search.ts:148-152` (RPC called with no bed/price/status) | AI can return a listing violating explicit budget/bedrooms | SAN-386 (preferred fix needs SAN-1305 — see §33.3) | Vitest: high-similarity ineligible row never in results |
-| **D3** | Neighborhood filter fails open | `intelligence-rental-search.ts:312-318` — `if (filtered.length) scored.splice(...)` | Empty neighborhood match returns other neighborhoods | SAN-386 | Vitest: explicit neighborhood mismatch ⇒ empty, not unfiltered |
+| **D3** | Neighborhood filter fails open | `intelligence-rental-search.ts:350-356` — `if (filtered.length) scored.splice(...)` | Empty neighborhood match returns other neighborhoods | SAN-386 | Vitest: explicit neighborhood mismatch ⇒ empty, not unfiltered |
 | **D4** | Fabricated inventory on Supabase failure | `search-rentals.ts:409-419` returns `MOCK_RENTALS`; `page.tsx` ignores `source` | Real users can be shown 7 fake listings with fake hosts/prices | SAN-1349 | Vitest: Supabase error in production ⇒ throw/empty, never `source:'mock'` |
 | **D4a** | *(correction)* SAN-1333 fixed the **cause**, not the fallback — and the fallback **did fire in production** | SAN-1333/MDE-ENV-002 fixed 11 modules that read bare `process.env.SUPABASE_URL` (→ null client → catch → mock), via a shared resolver in `src/lib/supabase/server-env.ts` + `src/__tests__/supabase-url-env-contract.test.ts`; deployment `dpl_79QosuJ3…` (SHA `5c250c6a7`). Production logs recorded **200×** `[search-rentals] Supabase query failed, falling back to mock: Supabase client unavailable` and **600×** `[search-logs] service role unavailable` | This is not a theoretical risk: **real users were served mock listings.** The `MOCK_RENTALS` array and `searchRentalsFromMock` catch remain on `main`, so the behaviour is one env regression away from returning | SAN-1349 (which explicitly inherits "reuse, do not redo" SAN-1333) | Keep both halves: env correctness (**done**) **and** fail-closed behaviour (**open**). Vitest: Supabase error in production ⇒ throw/empty, never `source:'mock'` |
 | **D18** | Production holds smoke-test data; **all 6 showings are past-dated yet still `status='scheduled'`**; and **every rental showing sits on an expired apartment** | Live, verified together: (a) one `leads` row has `listing_id='smoke-1779608858227'` — non-UUID, non-existent; (b) all **6** showings have `scheduled_at` in the past (June–July 2026, now September) and **none** has advanced past `scheduled` — no completed/cancelled/no-show state exists; (c) the **4** rental showings attach to `750e8400-…0001` (`available_to` 2025-12-31) and `…0002` (`available_to` 2025-06-30), both **expired**; (d) the other 2 showings hang off non-rental apartments with `intent = NULL` | The only inventory that has *ever* converted is inventory that is now unavailable and still rendering — **the conversion history and the live defect are the same rows**. Separately, the showing lifecycle never closes, so "scheduled" is not a meaningful state | SAN-1349 (data) + SAN-1044 (attribution policy) + SAN-1056 (lead lifecycle) | Drift gate: no `leads.listing_id` matching a smoke/test pattern in production; no showing may remain `scheduled` past its date; no expired listing may carry an attributed lead |
@@ -734,7 +747,7 @@ Percentages are evidence-weighted across seven independent axes:
 | **D9** | All active apartments unowned | `apartments.landlord_id IS NULL` on **44/44** active (verified) | Broker RLS has nothing to authorize; publish impossible | SAN-1349 / SAN-476 | pgTAP: owner SELECT succeeds, other-broker SELECT returns 0 |
 | **D19** | *(found by external review of PR #112; also a correction to this audit)* out-of-range **clock** components were silently accepted | `src/lib/leads/schedule-viewing-time.ts` — the round trip compared only year/month/day, so `10:99` → `11:39`, `10:60` → `11:00`, `10:00:99` → `10:01:39`, `10:00:60` → `10:01:00` were **accepted and rewritten** | A renter typing an invalid time had it silently changed into a valid one; the audit's "malformed times are rejected" claim was **false for component overflow** | SAN-1203 | ✅ **Fixed** in `c29d124f7` — component range checks before `Date.UTC`; 9 regression cases + boundary values + midnight test. See §33.1 |
 | **D10** | Broker publish path cannot succeed | `transition_listing_workflow` raises `broker does not own this apartment` when `landlord_id IS NULL` (function body verified) | **The entire broker product is dead in production** | SAN-1349 | E2E: broker publishes an owned listing; DB row shows `published_at` |
-| **D20** | **CopilotKit thread endpoints are authorization-open** — verified in source | `src/app/api/copilotkit/[[...path]]/route.ts:108-110` (catch-all `GET`+`POST`), `:55-63` (`CopilotRuntime` with **no `runner`** ⇒ default in-memory runner), `src/lib/copilotkit-auth.ts:30` (`if (!expectedKey) return null` ⇒ **allow everything** when `COPILOTKIT_API_KEY` is unset) and `:35` (any same-origin request allowed). `grep COPILOTKIT scripts/check-env-contract.mjs` ⇒ **no match**, so nothing detects the key's absence | `GET /api/copilotkit/threads`, `GET /threads/:id/{messages,events,state}` and `POST /threads/clear` (global wipe) are reachable from any same-origin page; upstream issue #7198 in v2 SSE mode with the default runner, closed **without** a default-runner fix, so an upgrade does **not** remediate it | SAN-547 + SAN-1330 | Reject thread paths pre-runtime **or** supply a `userId`-scoped runner; invert `auth.ts:30` to deny in production; add the key to the env contract. Test: unauthenticated same-origin `GET /threads` ⇒ 401/404 |
+| **D20** | ~~**CopilotKit thread endpoints are authorization-open**~~ → **✅ FIXED 2026-09-26 in PR #122 (merge `979940c5b`)** | Was: `src/app/api/copilotkit/[[...path]]/route.ts` catch-all `GET`+`POST` with no `runner`; `src/lib/copilotkit-auth.ts:30` `if (!expectedKey) return null` (allow everything when the key is unset) and `:35` (same-origin allowed); `COPILOTKIT_API_KEY` absent from `scripts/check-env-contract.mjs`. **Now:** a pure two-path decision — a presented bearer is validated or rejected (`401`, *including* when the key is unconfigured), identity is server-derived, and **thread ownership is enforced** (foreign thread → `403`, shared `anonymous`/unowned → `401`); the route runs IP ceiling → `getUser()` → ownership → rate limit → runtime so a rejected request never reaches CopilotKit/AG-UI; `COPILOTKIT_API_KEY` is required in the runtime env contract. The same-origin check was **also spoofable** (it compared the `Origin` host to the `Host` header — both attacker-supplied) and is now removed entirely. | Reachability was real: a foreign-origin unauthenticated `{"method":"info"}` returned `200` + agent inventory on the stale production build. Fixed and proven on current `main` (all four probes now `401`; valid service bearer still `200`). | **Closed** — remaining follow-ups: `SAN-547` (D17 anonymous durable identity) and redeploying `main` to production | Reject thread paths pre-runtime is now implemented; test: foreign-origin unauthenticated `info` ⇒ `401` |
 | **D11** | Rental agent prompt asserts mock data is truth | `src/mastra/agents/rental-agent.ts:117` | Agent may present demo data as authoritative | **NEW (N1)** | Prompt-contract test asserting no `mock`/`demo` truth claim in rental agent instructions |
 | **D12** | `hybrid_search_listings` unreplayable | Live-only; excluded by SB-002 because `apartments.fts_content` is production-only; `san1304a…:62` defers to **SAN-1305** | `supabase db reset` cannot reproduce hybrid search; SAN-386 cannot ship a migration | SAN-1305 | Replay test: fresh reset contains `hybrid_search_listings` |
 | **D13** | *(rewritten — the original "4/9 unattributed" framing was misleading)* | Live `leads` where `intent='rental'`: **3** rows have `listing_id = NULL` **and** no `preferred_at` (chat/form leads created with no listing at all); **1** row is `source='form'` with `listing_id='smoke-1779608858227'` — a **smoke-test artifact**, correctly skipped by the DATA-020 backfill regex `^[0-9a-f-]{36}$` | There is **no evidence of a genuine mis-attribution bug**. The real issues are (a) test data polluting production (D18) and (b) leads legally created without a listing | SAN-1044 needs **re-scoping** | pgTAP: no rental lead in production carries a smoke/test `listing_id`; a rental lead without a listing is either rejected or explicitly typed |
@@ -908,10 +921,11 @@ cleanup proof.
 
 ### Lane 3 — Search + inventory correctness
 `SAN-1305` (recover `fts_content` + hybrid RPCs) → `SAN-386`
-`SAN-486` (availability rule) ∥ `SAN-468` (inventory quality) ∥ `SAN-1349` (fail closed) → feed SAN-386
+`SAN-486` (availability rule) ∥ `SAN-468` (inventory quality) ∥ `SAN-1349` (fail closed — **primary lane**) → feed SAN-386
 
 ### Lane 4 — Broker ownership / RLS
-`SAN-1349` (ownership backfill/data boundary) + `SAN-482` → `SAN-476` (owner allow / other deny)
+`SAN-1349` (ownership-backfill facet — the *same* task as Lane 3, cross-listed because it also
+backfills `apartments.landlord_id`; its primary lane is **Lane 3**) + `SAN-482` → `SAN-476` (owner allow / other deny)
 
 ### Lane 5 — AI trust + memory
 `N1` (agent prompt, 1 line) ∥ `SAN-547` → `SAN-1302` → `SAN-1303` → `SAN-548` ∥ `SAN-1054` ∥ `SAN-1059`
@@ -983,7 +997,7 @@ off-label completed-work reconciliation in §19A.
 | Truthful conversion contract | 15% | 75% | PR #112 green locally, unmerged, no Edge proof |
 | Atomic write | 20% | 25% | ↑ from 20% — SAN-347 data model + SAN-349 bridge + `p1_schedule_tour_atomic` exist. D5–D8 still live |
 | Broker ownership + authz | 15% | 30% | ↑ from 20% — the ownership model, RLS and publish FSM all shipped (SAN-1104/1105/1106). D9/D10 are a **missing backfill**, not missing design |
-| AI truth + isolation | 15% | 25% | ↓ from 40% — **D20 verified**: thread-management endpoints reachable, and a missing `COPILOTKIT_API_KEY` authorizes everything (§38.1). Plus D11, D16, D17; SAN-547/1054 unproven |
+| AI truth + isolation | 15% | 25% | ↓ from 40% at audit time because of D20 (now fixed, PR #122). Still open: D11, D16, D17; SAN-547/1054 unproven |
 | E2E + production certification | 15% | 5% | No unmocked journey, no manifest |
 | **Weighted** | | **≈35%** | |
 
@@ -1109,7 +1123,7 @@ children of SAN-1315; unparent the 45 Duplicate + 61 Canceled issues so counts s
 | `p1_schedule_tour_atomic` unused + ACL | `pg_get_functiondef` + `proacl` + bridge source read |
 | `hybrid_search_listings` live-only | Live app-function list vs migration `CREATE FUNCTION` grep |
 | Hybrid bypasses hard filters | `intelligence-rental-search.ts:148-152` source read |
-| Neighborhood fails open | `intelligence-rental-search.ts:312-318` source read |
+| Neighborhood fails open | `intelligence-rental-search.ts:350-356` source read |
 | Mock fallback | `search-rentals.ts:409-419` source read |
 | Split write | `schedule-viewing-bridge.ts:168-207` source read |
 | Broker publish blocked | `transition_listing_workflow` body read from live catalogue |
@@ -1650,7 +1664,16 @@ RPCs it depends on exist only in production.
 
 ## §38 · Stack audit findings — one new HIGH defect, and a version plan
 
-### 38.1 D20 — CopilotKit thread endpoints are authorization-open (verified in source)
+### 38.1 D20 — CopilotKit thread endpoints were authorization-open ✅ FIXED (PR #122)
+
+> **Status update 2026-09-26.** This defect was verified in source on `47728db6b` and has since been
+> **fixed and merged** in PR #122 (merge `979940c5b`). The analysis below is retained as the original
+> evidence. The fix: a pure two-path authorization decision in `copilotkit-auth.ts` (a presented bearer
+> is validated or rejected including when the key is unconfigured; identity is server-derived), plus
+> new thread-ownership enforcement (`src/lib/copilotkit-thread-ownership.ts`) — foreign thread → `403`,
+> shared `anonymous`/unowned → `401`, new thread allowed — running **before** CopilotKit/AG-UI handling.
+> `COPILOTKIT_API_KEY` is now required by the runtime env contract. Verified on current `main`: all four
+> probes return the required statuses and a valid service bearer still receives `200`.
 
 A dependency audit surfaced an upstream report; this was then **verified directly in MDE source**
 rather than accepted. The chain is real:
@@ -1774,9 +1797,18 @@ search RPCs **before** considering an extension bump or an index-strategy change
 
 Two of these change the plan rather than the score:
 
-1. **D20 raises the AI-isolation gate's severity.** SAN-547 is no longer "prove isolation" — there is
-   a **verified, unauthenticated-reachable** thread-management surface plus a fail-open secret check.
-   §27's `AI truth + isolation` score of 40 is generous; with D20 confirmed it is closer to **25**,
-   which moves the weighted total from **≈37% to ≈35%**.
-2. **§38.3 is a strong argument for SAN-1330.** The platform treats a missing secret as *allow*. A
-   fail-closed promotion gate is not hygiene here; it is the control that would have caught it.
+1. ~~**D20 raises the AI-isolation gate's severity.**~~ **✅ RESOLVED 2026-09-26 (PR #122).** D20 was a
+   **verified, unauthenticated-reachable** thread-management surface plus a fail-open secret check, and
+   it *was* live: a foreign-origin unauthenticated `info` probe returned `200` + agent inventory on the
+   stale production build. It is now fixed on `main` — thread ownership is enforced before
+   CopilotKit/AG-UI handling and a missing key fails closed. **The `AI truth + isolation` figure of 25%
+   was depressed by D20 and must be recomputed**, not carried forward. **D17 / `SAN-547` remains open**
+   and is still the binding constraint on this gate.
+2. **§38.3 is a strong argument for SAN-1330.** The platform treated a missing secret as *allow*. A
+   fail-closed promotion gate is not hygiene here; it is the control that would have caught it — and it
+   is why the env contract now requires `COPILOTKIT_API_KEY`.
+
+**Also note:** fixing the code does not fix production. As of 2026-09-26, `www.mdeai.co` was serving a
+**pre-fix build** (`dpl_HSVuMHDPY…`, 2026-09-24) — roughly 37 h older than the merge — and git-triggered
+auto-deploy had stopped 148 commits earlier at PR #86. **The D20 probes still fail against production
+until `main` is redeployed.**
