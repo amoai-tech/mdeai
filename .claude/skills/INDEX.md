@@ -25,7 +25,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 
 ## Current architecture
 
-`tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain skills remain specialist owners; `code-review` owns universal PR/diff review and `task-verifier` independently proves merge safety / Done.
+`tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain skills remain specialist owners; `code-review` owns universal PR/diff review.
 ## Skill scorecard
 
 | Skill | Score /100 | Decision | Main improvement |

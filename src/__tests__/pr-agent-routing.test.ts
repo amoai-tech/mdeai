@@ -58,6 +58,8 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["docs/database-design.md"])).toEqual(["code-review"]);
     expect(names(["src/components/PaymentForm.tsx"])).toEqual(["code-review"]);
     expect(names(["src/components/MapboxWrapper.tsx"])).toEqual(["code-review"]);
+    expect(names(["docs/striped-layout.md"])).toEqual(["code-review"]);
+    expect(names(["src/styles/pinstripe-theme.css"])).toEqual(["code-review"]);
   });
 
   it("still routes MDE ticket checkout paths that are Stripe-backed", () => {

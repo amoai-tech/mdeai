@@ -13,7 +13,7 @@ const errors = [];
 const allowedTopLevel = new Set([
   "README.md", "index-docs.md", "01-product", "02-architecture",
   "03-platform", "04-domains", "05-design", "06-testing",
-  "07-operations", "08-strategy", "tasks", "_archive",
+  "07-operations", "08-strategy", "tasks", "templates", "_archive",
 ]);
 
 for (const entry of fs.readdirSync(docs, { withFileTypes: true })) {
