@@ -298,4 +298,22 @@ Mastra:
 - [`reference-pack.md`](reference-pack.md)
 - [`roadmap.md`](roadmap.md)
 - [`diagrams.md`](diagrams.md) — current trust boundaries, workflow lifecycle, storage and observability diagrams
+- [`reference-adoption-plan-2026-09-20.md`](reference-adoption-plan-2026-09-20.md) — **which upstream repos/templates/examples to copy, and what to delete/replace/reuse**, verified against the installed stack and live DB
 - [`../README.md`](../README.md)
+
+## Adopting upstream references
+
+Before copying any CopilotKit example or Mastra template into MDE, read
+[`reference-adoption-plan-2026-09-20.md`](reference-adoption-plan-2026-09-20.md). Verified findings:
+
+- **Mastra native capability is already installed but unadopted.** `@mastra/core@1.35.0` ships `a2a`,
+  `network()`, `channels`, `browser`, `workspaces`, `background-tasks`, `mcp_clients`/`servers`,
+  `schedules`, `observational_memory`, `datasets`, `experiments` — and 15 matching live tables sit at **0 rows**.
+  Prefer the native primitive over cloning a template.
+- **`examples/showcases/a2a-travel` is a Python stack** (5 `.py` agents + `requirements.txt`) — pattern-only.
+  Use Mastra's native `A2AAgent` instead.
+- **MDE's highest-value references are the TypeScript UI ones**: `examples/canvas/mastra` and
+  `examples/showcases/generative-ui`.
+- **Identity and thread-authorization defects must be fixed before** adopting memory, MCP, channels, or
+  workspaces — otherwise a collapsible `resourceId` (`?? "anonymous"`) contaminates every new durable store.
+- `examples/v1` and `examples/v2` are legacy; never copy from them.

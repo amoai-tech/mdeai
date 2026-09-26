@@ -284,7 +284,7 @@ The diagrams distinguish current behavior from proposed improvements: solid arro
 ```mermaid
 flowchart LR
   U[User] --> CK[CopilotKit]
-  CK --> API[/api/copilotkit]
+  CK --> API["/api/copilotkit"]
   API --> RC[Mastra RequestContext]
   RC --> A[Approved Mastra Agent]
   A --> T[Typed Tools]
@@ -363,20 +363,60 @@ Mastra infrastructure storage and application authorization are separate concern
 
 | Package | package.json | Installed | Latest official (2026-09-17) |
 |---|---|---:|---:|
-| `@mastra/core` | `beta` | 1.35.0 | 1.67.0 |
-| `mastra` | `beta` | 1.1.0-alpha.3 | 1.30.0 |
-| `@mastra/pg` | `^1.1.0-alpha.2` | 1.1.0-alpha.2 | 1.25.0 |
-| `@mastra/memory` | `beta` | 1.0.1-alpha.1 | 1.30.0 |
-| `@mastra/libsql` | `beta` | 1.1.0-alpha.2 | 1.23.0 |
-| `@mastra/client-js` | `beta` | 1.19.1 | 1.46.0 |
-| `@ag-ui/mastra` | `beta` | 0.2.1-beta.2 | 1.1.4 |
+| `@mastra/core` | `1.35.0` | 1.35.0 | 1.67.0 |
+| `mastra` | `1.1.0-alpha.3` | 1.1.0-alpha.3 | 1.30.0 |
+| `@mastra/pg` | `1.11.0` | 1.11.0 | 1.25.0 |
+| `@mastra/memory` | `1.0.1-alpha.1` | 1.0.1-alpha.1 | 1.30.0 |
+| `@mastra/libsql` | `1.1.0-alpha.2` | 1.1.0-alpha.2 | 1.23.0 |
+| `@mastra/client-js` | `1.19.1` | 1.19.1 | 1.46.0 |
+| `@ag-ui/mastra` | `0.2.1-beta.2` | 0.2.1-beta.2 | 1.1.4 |
 
-Current audited installation is materially behind the current stable Mastra family, while package declarations use moving beta/alpha ranges. Safe sequence:
+Transitively installed AG-UI surface not previously recorded (relevant to GenUI/MCP adoption):
 
-1. pin the exact currently working package family;
+| Package | Installed | Significance |
+|---|---:|---|
+| `@ag-ui/a2ui-middleware` | 0.0.4 | **A2UI (agent-to-UI) capability already on disk** |
+| `@ag-ui/mcp-apps-middleware` | 0.0.3 | **MCP-app rendering capability already on disk** |
+| `@ag-ui/client` / `encoder` / `proto` | 0.0.52 | AG-UI transport core |
+| `@ag-ui/langgraph` | 0.0.27 | Installed but unused by MDE agents |
+
+> **Correction (MDE-REFADOPT-001, 2026-09-20).** This table previously recorded `package.json` as
+> `beta` / `^1.1.0-alpha.2` and claimed *"package declarations use moving beta/alpha ranges."*
+> **That is no longer true.** Every Mastra/AG-UI package is **exact-pinned** — verified by reading
+> `package.json` and each installed `package.json`. The remaining risk is **version distance**, not
+> moving ranges, so step 1 below is **already satisfied**.
+
+Current audited installation is materially behind the current stable Mastra family. Because the
+declarations are already exact pins, the safe sequence starts at step 2:
+
+1. ~~pin the exact currently working package family~~ — **already done** (exact pins confirmed);
 2. prove the current baseline;
 3. run SAN-1302 in an isolated worktree;
 4. compare MDE-relevant APIs and storage behavior;
 5. upgrade the compatible package family together only if the matrix is green.
 
 Do not partially upgrade `@mastra/core`, `@mastra/pg`, memory/client, or AG-UI packages inside feature work.
+
+## Reference-adoption plan
+
+[`reference-adoption-plan-2026-09-20.md`](reference-adoption-plan-2026-09-20.md) (Task 53.4 · MDE-REFADOPT-001)
+turns this roadmap's "reuse before building" principle into an ordered, evidence-backed task list. It
+supersedes the roadmap's LATER/MCP/multi-agent entries with concrete sequencing:
+
+| Adoption item | Why it moved | Linear |
+|---|---|---|
+| D17 anonymous resource collapse | Live defect; blocks all durable memory adoption | SAN-547 |
+| D20 thread endpoint authorization | Live defect; upstream fix is app-side only | SAN-547 · SAN-1330 |
+| Repair `audit:copilotkit-v2` | Claims coverage that does not exist | SAN-1300 |
+| Generative-UI catalogue | Highest-value copyable TS reference | — |
+| Shared-state contract | `canvas/mastra` pattern | — |
+| HITL for rental writes | Extend proven venue pattern | — |
+| Scorers/datasets/experiments | Extend existing scorers (6 live rows) | SAN-1061 · SAN-611 |
+| A2A / network / MCP / workspaces / channels / schedules / browser | **Native in installed `@mastra/core`; 15 live tables at 0 rows** | — |
+
+**Two hard sequencing rules** from that plan:
+
+1. **Fix identity (#2) and thread authorization (#3) before** adopting memory, MCP, channels, or
+   workspaces. Adopting durable stores on a collapsible `resourceId` persists cross-user contamination.
+2. **Do not port the Python `a2a-travel` example.** Mastra ships a native TypeScript `A2AAgent`;
+   importing a second orchestration stack would violate this roadmap's anti-pattern list.
