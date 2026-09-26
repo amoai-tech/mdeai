@@ -89,18 +89,35 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   let leadId = "";
   let showingId = "";
   let cleanedUp = false;
+  /** Full fixture-row state captured before any probe, compared after the denials. */
+  let baselineSnapshot: Awaited<ReturnType<typeof fixtureSnapshot>>;
 
-  /** Durable private rows this run created, re-read to prove a denial wrote nothing. */
-  async function privateRowsFor(apartment: string) {
+  /**
+   * Full-row snapshot of every fixture row a probe could touch. The refused-probe
+   * invariant is "nothing changed", so it is asserted against complete row values rather
+   * than a hand-picked subset — a denial that mutated an unlisted column (status,
+   * moderation_status, updated_at, some other lead) would otherwise pass this gate.
+   */
+  async function fixtureSnapshot() {
     const admin = await getSupabaseAdmin();
-    const [{ count: leadCount }, { count: showingCount }] = await Promise.all([
-      admin.from("leads").select("id", { count: "exact", head: true }).eq("apartment_id", apartment),
+    const [apartment, lead, showing, profiles, renterLeads] = await Promise.all([
+      admin.from("apartments").select("*").eq("id", apartmentId).maybeSingle(),
+      admin.from("leads").select("*").eq("id", leadId).maybeSingle(),
+      admin.from("showings").select("*").eq("id", showingId).maybeSingle(),
       admin
-        .from("showings")
-        .select("id", { count: "exact", head: true })
-        .eq("apartment_id", apartment),
+        .from("landlord_profiles")
+        .select("*")
+        .in("id", [landlordAId, landlordBId].filter(Boolean))
+        .order("id"),
+      admin.from("leads").select("*").eq("email", RENTER_EMAIL).order("id"),
     ]);
-    return { leadCount: leadCount ?? -1, showingCount: showingCount ?? -1 };
+    return {
+      apartment: apartment.data ?? null,
+      lead: lead.data ?? null,
+      showing: showing.data ?? null,
+      profiles: profiles.data ?? [],
+      renterLeads: renterLeads.data ?? [],
+    };
   }
 
   async function leadCountForEmail(email: string) {
@@ -190,6 +207,10 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
       .single();
     if (showingError) throw new Error(`showing insert failed: ${showingError.message}`);
     showingId = showing.id;
+
+    // Captured before any probe runs, so the later "nothing changed" assertion compares
+    // against a state no test has touched.
+    baselineSnapshot = await fixtureSnapshot();
   });
 
   // Safety net: a mid-chain failure must not orphan production rows. The explicit
@@ -278,13 +299,19 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
    * rather than swallowed.
    */
   async function cleanupIdentities(): Promise<string[]> {
+    const admin = await getSupabaseAdmin();
     const failures: string[] = [];
     for (const identity of [brokerA, brokerB]) {
       if (!identity) continue;
       try {
         await deleteThrowawayIdentity(identity);
       } catch (error) {
-        failures.push(`${identity.email}: ${(error as Error).message}`);
+        // `afterAll` retries whenever this test reports a failure, and a retry can reach
+        // an identity the previous attempt already removed. GoTrue answers a missing user
+        // with an error, which would surface as a bogus failure — so only a failure that
+        // leaves the identity actually present is real.
+        const { data } = await admin.auth.admin.getUserById(identity.userId);
+        if (data?.user) failures.push(`${identity.email}: ${(error as Error).message}`);
       }
     }
     return failures;
@@ -346,27 +373,12 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   });
 
   test("the refused probes wrote nothing to durable state", async () => {
-    const rows = await privateRowsFor(apartmentId);
-    expect(rows, "lead/showing counts after the denied probes").toEqual({
-      leadCount: 1,
-      showingCount: 1,
-    });
-
-    const admin = await getSupabaseAdmin();
-    const { data: lead } = await admin
-      .from("leads")
-      .select("id, name, email, apartment_id")
-      .eq("id", leadId)
-      .maybeSingle();
-    expect(lead?.name, "private lead unchanged").toBe(PRIVATE_LEAD_NAME);
-    expect(lead?.apartment_id, "private lead still attached to the fixture").toBe(apartmentId);
-
-    const { data: apartment } = await admin
-      .from("apartments")
-      .select("landlord_id")
-      .eq("id", apartmentId)
-      .maybeSingle();
-    expect(apartment?.landlord_id, "ownership not transferred by any probe").toBe(landlordAId);
+    // Full-row comparison, not a hand-picked subset. The claim under test is "nothing
+    // changed", so a denial that mutated a column this test did not think to re-read
+    // (status, updated_at, moderation_status, another lead) would otherwise pass.
+    expect(await fixtureSnapshot(), "fixture rows after the denied probes").toEqual(
+      baselineSnapshot,
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +395,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
       .eq("id", apartmentId);
     if (error) throw new Error(`hostile description write failed: ${error.message}`);
 
-    const before = await privateRowsFor(apartmentId);
+    const before = await fixtureSnapshot();
 
     await signInAsOnOrigin(page, baseUrl, brokerB.email);
     const res = await page.request.get(
@@ -401,7 +413,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
       PRIVATE_LEAD_NAME,
     );
 
-    const after = await privateRowsFor(apartmentId);
+    const after = await fixtureSnapshot();
     expect(after, "hostile content caused no write").toEqual(before);
   });
 
@@ -427,9 +439,13 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
     preferredAt: "2099-10-15T15:00",
   });
 
-  test("no approval and rejection write zero rows", async () => {
-    // Baseline, then two explicit non-approvals. Nothing calls the endpoint, so the
-    // durable count must stay at zero — the AI proposing a viewing is not a write.
+  test("no approval means no submission, so zero rows exist (baseline)", async () => {
+    // This asserts the baseline, not a rejection round-trip, and is named to say so.
+    // "Rejected" and "not yet approved" are the same durable state at this boundary: the
+    // HITL panel only calls the endpoint when the user confirms, so declining never
+    // reaches the server and cannot write. What is provable from outside is that the
+    // write is gated behind exactly one explicit call — the count is zero until then,
+    // exactly one after (next test), and still one on replay.
     expect(await leadCountForEmail(RENTER_EMAIL), "baseline before any approval").toBe(0);
   });
 
@@ -464,9 +480,11 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
 
   test("cleanup removes every row this run created, proven by re-query", async () => {
     const failures = [...(await cleanupFixtures()), ...(await cleanupIdentities())];
-    // Both were attempted, so a retry from afterAll would only repeat work already
-    // reported on. Mark done first, then surface the real failure.
-    cleanedUp = true;
+    // Leave the safety net armed when cleanup reported failures. Setting this
+    // unconditionally would tell `afterAll` to stand down precisely when rows may still
+    // be orphaned in production — every delete here is idempotent, so a retry is safe and
+    // a duplicate error message is far cheaper than a leaked row.
+    cleanedUp = failures.length === 0;
 
     if (failures.length > 0) {
       throw new Error(`cleanup failed — production rows may be orphaned: ${failures.join(" | ")}`);
