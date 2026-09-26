@@ -67,24 +67,26 @@ function postRequest(ip: string, body = ""): Request {
   });
 }
 
+/** Reset every mock to its passing default. Shared by both suites. */
+function setupStandardMocks() {
+  delete process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT;
+  handleRequestMock.mockReset();
+  getUserMock.mockReset();
+  ipHardCeilingMock.mockReset();
+  distributedRateLimitMock.mockReset();
+  assertAuthorizedMock.mockReset();
+  resolveRequestedThreadMock.mockReset();
+
+  assertAuthorizedMock.mockReturnValue(null);
+  resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
+  ipHardCeilingMock.mockResolvedValue(null);
+  distributedRateLimitMock.mockResolvedValue(null);
+  getUserMock.mockResolvedValue({ data: { user: null } });
+  handleRequestMock.mockResolvedValue(new Response("bad request", { status: 400 }));
+}
+
 describe("POST /api/copilotkit — distributed rate limit gate", () => {
-  beforeEach(() => {
-    delete process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT;
-    handleRequestMock.mockReset();
-    getUserMock.mockReset();
-    ipHardCeilingMock.mockReset();
-    distributedRateLimitMock.mockReset();
-    assertAuthorizedMock.mockReset();
-    resolveRequestedThreadMock.mockReset();
-
-    assertAuthorizedMock.mockReturnValue(null);
-    resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
-    ipHardCeilingMock.mockResolvedValue(null);
-    distributedRateLimitMock.mockResolvedValue(null);
-    getUserMock.mockResolvedValue({ data: { user: null } });
-    handleRequestMock.mockResolvedValue(new Response("bad request", { status: 400 }));
-  });
-
+  beforeEach(setupStandardMocks);
 
   it("returns local runtime info before auth/rate limits in deterministic E2E", async () => {
     process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT = "1";
@@ -144,20 +146,9 @@ describe("POST /api/copilotkit — distributed rate limit gate", () => {
 
 describe("POST /api/copilotkit — authorization runs before agent execution (SAN-1358 · D20)", () => {
   beforeEach(() => {
-    delete process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT;
-    handleRequestMock.mockReset();
-    getUserMock.mockReset();
-    ipHardCeilingMock.mockReset();
-    distributedRateLimitMock.mockReset();
-    assertAuthorizedMock.mockReset();
-    resolveRequestedThreadMock.mockReset();
-
-    ipHardCeilingMock.mockResolvedValue(null);
-    distributedRateLimitMock.mockResolvedValue(null);
-    getUserMock.mockResolvedValue({ data: { user: null } });
+    setupStandardMocks();
+    // This suite needs an allowed request to reach the runtime by default.
     handleRequestMock.mockResolvedValue(new Response("ok", { status: 200 }));
-    resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
-    assertAuthorizedMock.mockReturnValue(null);
   });
 
   it("resolves ownership from server-derived identity before authorizing", async () => {
