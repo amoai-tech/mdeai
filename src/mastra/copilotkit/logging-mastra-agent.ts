@@ -207,18 +207,21 @@ function filterRuntimeAgents<T extends Record<string, unknown>>(agents: T): T {
 
 export function getLocalAgentsWithLogging(options: {
   mastra: Mastra;
-  resourceId?: string;
+  /**
+   * Required: the server-derived durable owner for this turn (D17).
+   *
+   * There is deliberately no default. The previous `= "anonymous"` default read
+   * as harmless but was the write path that grew the shared bucket: any caller
+   * that forgot to pass a resource silently persisted under the one resource
+   * every unauthenticated request used to share. Making it required turns that
+   * omission into a compile error instead of a durable data-integrity bug.
+   */
+  resourceId: string;
   userId?: string | null;
   requestContext?: RequestContext;
   persistTurnLog?: PersistTurnLog;
 }): Record<string, LoggingMastraAgent> {
-  const {
-    mastra,
-    resourceId = "anonymous",
-    userId = null,
-    requestContext,
-    persistTurnLog,
-  } = options;
+  const { mastra, resourceId, userId = null, requestContext, persistTurnLog } = options;
   const agents = filterRuntimeAgents(mastra.listAgents() ?? {});
 
   return Object.entries(agents).reduce<Record<string, LoggingMastraAgent>>(

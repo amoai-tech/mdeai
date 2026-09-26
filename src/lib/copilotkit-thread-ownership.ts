@@ -18,6 +18,21 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 /** The literal resource every unauthenticated caller used to share (D17). */
 export const ANONYMOUS_RESOURCE_ID = "anonymous";
 
+/**
+ * The resource a validated service bearer owns (SAN-547 · D17).
+ *
+ * Before this existed, a service request reached the runtime with
+ * `resourceId` defaulted to `"anonymous"`, so every service turn appended to
+ * the shared bucket D20 exists to shut down — and the rows it created were
+ * then unreachable, because the browser path rejects `anonymous`-owned
+ * threads. A service principal now has its own named resource instead of
+ * silently inheriting the legacy shared one.
+ *
+ * Deliberately not a user id: a service is a distinct principal, and naming it
+ * keeps service-created conversations separable from every human's.
+ */
+export const SERVICE_RESOURCE_ID = "service:copilotkit";
+
 export type RequestedThread =
   | { kind: "none" }
   | { kind: "new"; threadId: string }
@@ -25,8 +40,22 @@ export type RequestedThread =
 
 /**
  * Pull `threadId` out of a CopilotKit request body.
- * The V1 protocol carries the AG-UI run input, whose `threadId` names the
- * conversation. Anything else (no body, non-JSON, wrong shape) yields null.
+ *
+ * A **real** browser request nests the AG-UI run input under `body`:
+ *
+ *   {"method":"agent/connect","params":{"agentId":"conciergeAgent"},
+ *    "body":{"threadId":"9c3cc549-…","runId":"…","tools":[…]}}
+ *
+ * Verified by capturing live production traffic, not inferred from the tests.
+ * The previous version read only a top-level `threadId`, so **every real
+ * request looked like "no thread named"** and the ownership gate allowed it for
+ * any authenticated caller — the 403 branch was unreachable in production and
+ * only ever exercised by hand-built test bodies.
+ *
+ * All plausible locations are checked, in priority order. Under-reading here is
+ * an authorization bypass, so the cost of one extra candidate is worth paying:
+ * a thread id the client names must always reach the ownership check. First
+ * non-empty trimmed value wins.
  *
  * The **trimmed** value is returned, not the raw one. Returning the raw value
  * while validating the trimmed one would let a padded foreign thread ID
@@ -36,10 +65,19 @@ export type RequestedThread =
  */
 export function extractThreadId(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
-  const value = (payload as Record<string, unknown>).threadId;
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const record = payload as Record<string, unknown>;
+  const nested = (key: string): unknown => {
+    const container = record[key];
+    if (!container || typeof container !== "object") return undefined;
+    return (container as Record<string, unknown>).threadId;
+  };
+
+  for (const value of [nested("body"), record.threadId, nested("params")]) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
 }
 
 /**

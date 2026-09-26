@@ -11,6 +11,7 @@ const VITEST_TESTS = "**/*.test.ts";
 const PROD_SPECS = [
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
+  "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
 ];
 

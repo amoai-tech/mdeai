@@ -53,6 +53,39 @@ describe("extractThreadId", () => {
     expect(extractThreadId({ threadId: "  abc  " })).toBe("abc");
     expect(extractThreadId({ threadId: "\tabc\n" })).toBe("abc");
   });
+
+  // THE production regression. This shape was captured from live traffic on
+  // www.mdeai.co. The AG-UI run input is nested under `body`, so a top-level-only
+  // reader returned null for every real request, the gate saw "no thread named",
+  // and the 403 branch was unreachable for real users.
+  it("reads the threadId from the real nested body shape", () => {
+    const realBody = {
+      method: "agent/connect",
+      params: { agentId: "conciergeAgent" },
+      body: {
+        threadId: "9c3cc549-0911-46a4-8b08-c4dd743d67a3",
+        runId: "36d9474f-df46-4cf1-b1ee-c23e4323d122",
+        tools: [],
+      },
+    };
+    expect(extractThreadId(realBody)).toBe("9c3cc549-0911-46a4-8b08-c4dd743d67a3");
+  });
+
+  it("reads a padded nested id, and prefers a nested id over the top level", () => {
+    expect(extractThreadId({ body: { threadId: "  nested  " } })).toBe("nested");
+    expect(extractThreadId({ threadId: "top", body: { threadId: "nested" } })).toBe("nested");
+  });
+
+  it("falls back to the top level only when the nested value is unusable", () => {
+    expect(extractThreadId({ body: { threadId: "   " }, threadId: "top" })).toBe("top");
+    expect(extractThreadId({ params: { threadId: "from-params" } })).toBe("from-params");
+  });
+
+  it("stays null for containers that are absent or not objects", () => {
+    expect(extractThreadId({ body: null, params: "x" })).toBeNull();
+    expect(extractThreadId({ body: "not-an-object" })).toBeNull();
+    expect(extractThreadId({ method: "info" })).toBeNull();
+  });
 });
 
 describe("readRequestedThreadId", () => {
