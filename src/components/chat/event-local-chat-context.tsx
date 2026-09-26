@@ -4,10 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 
 export type EventLocalChatMessage = {
   id: string;
@@ -42,15 +45,45 @@ function nextId() {
 }
 
 export function EventLocalChatProvider({ children }: { children: ReactNode }) {
+  const { agent } = useConciergeCoAgent();
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
+  const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
+  const agentRef = useRef(agent);
+
+  useEffect(() => {
+    agentRef.current = agent;
+  }, [agent]);
+
+  useEffect(() => {
+    if (!agent || pendingAgentMessagesRef.current.length === 0) return;
+    const pending = [...pendingAgentMessagesRef.current];
+    try {
+      agent.addMessages(pending);
+      pendingAgentMessagesRef.current = [];
+    } catch (error) {
+      console.error(
+        "[EventLocalChat] Failed to flush queued agent messages",
+        error,
+      );
+    }
+  }, [agent]);
+
+  const publishOrQueue = useCallback(
+    (nextMessages: EventLocalChatMessage[]) => {
+      if (agentRef.current) {
+        agentRef.current.addMessages(nextMessages);
+        return;
+      }
+      pendingAgentMessagesRef.current.push(...nextMessages);
+    },
+    [],
+  );
 
   const showClarify = useCallback(
     (userText: string, assistantText: string, kind: LocalClarifyKind) => {
-      setClarifyPending(true);
-      setClarifyKind(kind);
-      setMessages([
+      const nextMessages: EventLocalChatMessage[] = [
         { id: nextId(), role: "user", content: userText },
         {
           id: nextId(),
@@ -58,30 +91,37 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
           content: assistantText,
           isClarify: true,
         },
-      ]);
+      ];
+      setClarifyPending(true);
+      setClarifyKind(kind);
+      setMessages(nextMessages);
+      publishOrQueue(nextMessages);
     },
-    [],
+    [publishOrQueue],
   );
 
   const showExchange = useCallback(
     (userText: string, assistantText: string) => {
+      const nextMessages: EventLocalChatMessage[] = [
+        { id: nextId(), role: "user", content: userText },
+      ];
+      if (assistantText.trim()) {
+        nextMessages.push({
+          id: nextId(),
+          role: "assistant",
+          content: assistantText,
+        });
+      }
       setClarifyPending(false);
       setClarifyKind(null);
-      setMessages((prev) => {
-        const next: EventLocalChatMessage[] = [
-          ...prev,
-          { id: nextId(), role: "user", content: userText },
-        ];
-        if (assistantText.trim()) {
-          next.push({ id: nextId(), role: "assistant", content: assistantText });
-        }
-        return next;
-      });
+      setMessages((prev) => [...prev, ...nextMessages]);
+      publishOrQueue(nextMessages);
     },
-    [],
+    [publishOrQueue],
   );
 
   const clearLocalMessages = useCallback(() => {
+    pendingAgentMessagesRef.current = [];
     setMessages([]);
     setClarifyPending(false);
     setClarifyKind(null);

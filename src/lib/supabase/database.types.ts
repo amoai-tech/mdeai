@@ -7835,17 +7835,16 @@ export type Database = {
       }
       p1_schedule_tour_atomic: {
         Args: {
-          p_apartment_id: string
           p_email: string
           p_idempotency_key: string
           p_lead_metadata: Json
-          p_neighborhood_id: string
-          p_notes: string
+          p_listing_id: string
+          p_name: string
           p_phone: string
-          p_renter_notes: string
           p_scheduled_at: string
           p_showing_metadata: Json
           p_source: string
+          p_trip_id: string
           p_user_id: string
         }
         Returns: Json

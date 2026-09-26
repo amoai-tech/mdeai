@@ -69,3 +69,13 @@ test("fails stale instructional mdeapp-root references", () => {
   assert.notEqual(result.status, 0, "stale repo-root instructions must fail");
   assert.match(result.stderr, /stale repository root/i);
 });
+
+
+test("accepts required frontmatter values with colons or indented YAML values", () => {
+  const root = fixture({
+    "docs/07-operations/README.md": "---\ntitle: Operations: current runbook\nstatus: current\nupdated: 2026-09-25\nsource_of_truth:\n  - merged main\n  - Linear\n---\n# Operations\n",
+    "docs/index-docs.md": "---\ntitle: Index: canonical\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: test: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});

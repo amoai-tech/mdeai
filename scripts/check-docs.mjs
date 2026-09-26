@@ -91,9 +91,22 @@ for (const relative of normalizedMarkdown) {
   const frontmatterLines = frontmatter[1].split("\n");
   for (const key of requiredFrontmatterKeys) {
     const prefix = `${key}:`;
-    const hasValue = frontmatterLines.some((line) =>
-      line.startsWith(prefix) && line.slice(prefix.length).trim().length > 0,
-    );
+    const keyIndex = frontmatterLines.findIndex((line) => line.startsWith(prefix));
+    let hasValue = false;
+    if (keyIndex >= 0) {
+      const inlineValue = frontmatterLines[keyIndex].slice(prefix.length).trim();
+      hasValue = inlineValue.length > 0;
+      if (!hasValue) {
+        for (let index = keyIndex + 1; index < frontmatterLines.length; index += 1) {
+          const line = frontmatterLines[index];
+          if (line.length > 0 && !/^\s/.test(line)) break;
+          if (/^\s+\S/.test(line) && !/^\s+#/.test(line)) {
+            hasValue = true;
+            break;
+          }
+        }
+      }
+    }
     if (!hasValue) errors.push(`${path.relative(root, file)} -> frontmatter missing ${key}`);
   }
 }

@@ -201,5 +201,54 @@
     "expected_owner": "testing",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "nextjs-vercel-direct",
+    "input": "Deploy the Next.js app to Vercel as a preview",
+    "expected_owner": "nextjs",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "nextjs-cache-direct",
+    "input": "Fix the Next.js cache and revalidation behavior",
+    "expected_owner": "nextjs",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "nextjs-review-workflow-wins",
+    "input": "Review this Next.js pull request for caching regressions",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "nextjs-debug-workflow-wins",
+    "input": "The Next.js production build suddenly fails and we do not know why",
+    "expected_owner": "systematic-debugging",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "nextjs-verify-workflow-wins",
+    "input": "Verify this exact Next.js deployment is production ready",
+    "expected_owner": "task-verifier",
+    "risk": "S3",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-nextjs-review-owner",
+    "input": "Route this to nextjs-review",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "retired-mde-vercel-owner",
+    "input": "Route this to mde-vercel",
+    "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

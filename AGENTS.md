@@ -35,7 +35,7 @@ Use `systematic-debugging` only when the responsible domain/root cause is genuin
 
 ## Canonical skills
 
-Stack: `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`, `mde-vercel`.
+Stack: `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`.
 
 Domain: `events`, `real-estate`.
 

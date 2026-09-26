@@ -17,9 +17,9 @@ const skills = [
   ".claude/skills/copilotkit-review/SKILL.md",
   ".claude/skills/mastra-review/SKILL.md",
   ".claude/skills/supabase-review/SKILL.md",
-  ".claude/skills/maps-review/SKILL.md",
+  ".claude/skills/maps/SKILL.md",
   ".claude/skills/stripe-review/SKILL.md",
-  ".claude/skills/nextjs-review/SKILL.md",
+  ".claude/skills/nextjs/references/review.md",
 ];
 
 describe("SAN-1312 PR-Agent review contract", () => {
@@ -68,13 +68,16 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(guidelines).toContain("falsify");
   });
 
-  it("ships all required review-only specialist skills", () => {
+  it("ships all required review skills", () => {
     for (const path of skills) {
       expect(existsSync(path)).toBe(true);
       const body = read(path);
       expect(body).toContain("Source of truth");
-      expect(body).toContain("Review invariants");
-      expect(routing).toContain(path.replace(".claude/skills/", "").replace("/SKILL.md", ""));
+      expect(body.toLowerCase()).toContain("review invariants");
+      const owner = path.includes("nextjs/references/review.md")
+        ? "nextjs"
+        : path.replace(".claude/skills/", "").replace("/SKILL.md", "");
+      expect(routing).toContain(owner);
     }
   });
 
@@ -128,17 +131,22 @@ describe("SAN-1332 evidence-backed review contract", () => {
     expect(config).toContain("NEEDS VERIFICATION");
     expect(config).toContain("cannot independently block merge");
     expect(config).toContain("Exact version evidence alone does not prove a specific API claim");
-    expect(read(".claude/skills/nextjs-review/SKILL.md")).toContain("`src/proxy.ts`");
+    expect(read(".claude/skills/nextjs/references/review.md")).toContain("`src/proxy.ts`");
   });
 });
 
 describe("SAN-1332 skill-budget checkpoint", () => {
   it("keeps every package.json review skill inside the configured budget", () => {
-    const selected = [
-      "code-review", "copilotkit-review", "mastra-review", "supabase-review",
-      "maps-review", "stripe-review", "nextjs-review",
-    ];
-    const rendered = selected.map((name) => read(`.claude/skills/${name}/SKILL.md`)).join("\n\n---\n\n");
+    const rendered = [
+      read(".claude/skills/code-review/SKILL.md"),
+      read(".claude/skills/copilotkit-review/SKILL.md"),
+      read(".claude/skills/mastra-review/SKILL.md"),
+      read(".claude/skills/supabase-review/SKILL.md"),
+      read(".claude/skills/maps/SKILL.md"),
+      read(".claude/skills/stripe-review/SKILL.md"),
+      read(".claude/skills/nextjs/SKILL.md"),
+      read(".claude/skills/nextjs/references/review.md"),
+    ].join("\n\n---\n\n");
     const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {
       const encoding = getEncoding(encodingName);
       return encoding.encode(rendered).length;

@@ -21,6 +21,10 @@ Canonical navigation for running, validating, deploying, securing, and troublesh
 - [Maps and environment checks](#maps-and-environment-checks)
 - [Troubleshooting rule](#troubleshooting-rule)
 
+## Development workflow
+
+- [`agent-workflow-plan.md`](agent-workflow-plan.md) — plan for Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+
 ## Local development
 
 Run commands from the current Git checkout root. On the audited machine this is `/home/sk/mdeai`, but agents should resolve the repository root dynamically rather than hard-code machine paths.

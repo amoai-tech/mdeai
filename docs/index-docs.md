@@ -1,6 +1,6 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-20
+updated: 2026-09-25
 status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
@@ -130,6 +130,9 @@ Use for reusable test guidance, QA, release verification, and production smoke p
 
 Use for local development, deployment, security operations, observability, runbooks, and troubleshooting.
 
+Current workflow plan:
+- [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+
 ### Strategy
 [08-strategy/README.md](08-strategy/README.md)
 
@@ -137,7 +140,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (123 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
+This table lists **every active documentation file currently under `docs/`** on `main` (143 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
 
 | Area | Document | Type | Status |
 |---|---|---|---|
@@ -147,6 +150,8 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Architecture | [`02-architecture/edge-functions.md`](02-architecture/edge-functions.md) | Markdown | Current |
 | Architecture | [`02-architecture/migration-drift.md`](02-architecture/migration-drift.md) | Markdown | Current |
 | Architecture | [`02-architecture/schema-ownership.md`](02-architecture/schema-ownership.md) | Markdown | Current |
+| Architecture | [`02-architecture/skills/nextjs-skill-consolidation-design.md`](02-architecture/skills/nextjs-skill-consolidation-design.md) | Markdown | Current |
+| Architecture | [`02-architecture/skills/nextjs-skill-consolidation-plan.md`](02-architecture/skills/nextjs-skill-consolidation-plan.md) | Markdown | Current |
 | Architecture | [`02-architecture/snapshots/advisors-2026-09-17.json`](02-architecture/snapshots/advisors-2026-09-17.json) | JSON snapshot | Snapshot / evidence |
 | Architecture | [`02-architecture/snapshots/baseline-replay-audit-2026-09-17.md`](02-architecture/snapshots/baseline-replay-audit-2026-09-17.md) | Markdown | Snapshot / evidence |
 | Architecture | [`02-architecture/snapshots/generated-types-drift-2026-09-17.md`](02-architecture/snapshots/generated-types-drift-2026-09-17.md) | Markdown | Snapshot / evidence |
@@ -178,7 +183,19 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Domains | [`04-domains/partners/marketplace.md`](04-domains/partners/marketplace.md) | Markdown | Current |
 | Domains | [`04-domains/partners/payments-revenue.md`](04-domains/partners/payments-revenue.md) | Markdown | Current |
 | Domains | [`04-domains/partners/product.md`](04-domains/partners/product.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/BROKER-DASHBOARD.md`](04-domains/rentals/BROKER-DASHBOARD.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/DATA-BOUNDARIES.md`](04-domains/rentals/DATA-BOUNDARIES.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/INDEX.md`](04-domains/rentals/INDEX.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/LISTINGS.md`](04-domains/rentals/LISTINGS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/MAPS.md`](04-domains/rentals/MAPS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/OPERATIONS-RUNBOOK.md`](04-domains/rentals/OPERATIONS-RUNBOOK.md) | Markdown | Current |
 | Domains | [`04-domains/rentals/README.md`](04-domains/rentals/README.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/REFERENCES.md`](04-domains/rentals/REFERENCES.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/RENTALS.md`](04-domains/rentals/RENTALS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/REUSE-MATRIX.md`](04-domains/rentals/REUSE-MATRIX.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/SEARCH.md`](04-domains/rentals/SEARCH.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/TEST-PLAN.md`](04-domains/rentals/TEST-PLAN.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/VIEWINGS.md`](04-domains/rentals/VIEWINGS.md) | Markdown | Current |
 | Domains | [`04-domains/restaurants/README.md`](04-domains/restaurants/README.md) | Markdown | Current |
 | Domains | [`04-domains/trips/README.md`](04-domains/trips/README.md) | Markdown | Current |
 | Domains | [`04-domains/venues/README.md`](04-domains/venues/README.md) | Markdown | Current |
@@ -243,9 +260,15 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Design | [`05-design/screens/product-wireframes/venues/002-venue-details.md`](05-design/screens/product-wireframes/venues/002-venue-details.md) | Markdown | Current |
 | Testing | [`06-testing/README.md`](06-testing/README.md) | Markdown | Current |
 | Testing | [`06-testing/localhost-qa-runbook.md`](06-testing/localhost-qa-runbook.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/evidence/2026-09-24/SAN-1341-RESULTS.md`](06-testing/playwright/evidence/2026-09-24/SAN-1341-RESULTS.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/pr-agent/san-1332-pr-agent-evidence-design.md`](06-testing/pr-agent/san-1332-pr-agent-evidence-design.md) | Markdown | Current |
+| Testing | [`06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md`](06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md) | Markdown | Current |
 | Testing | [`06-testing/pr-review-guidelines.md`](06-testing/pr-review-guidelines.md) | Markdown | Current |
 | Testing | [`06-testing/ui-verification.md`](06-testing/ui-verification.md) | Markdown | Current |
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
+| Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
 | Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
 | Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
@@ -264,7 +287,6 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |
 | Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current convention/index |
 | Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current convention/index |
-
 ### Historical archive
 
 | Location | Status | Notes |

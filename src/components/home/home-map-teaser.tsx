@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { MapsShell } from "@/components/maps/MapProvider";
-import { MEDELLIN_CENTER, getGoogleMapsMapId } from "@/platform/maps/map-config";
+import { MEDELLIN_CENTER, getGoogleMapsMapId, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
 const TEASER_PINS = [
   { id: "laureles",  lat: 6.2516, lng: -75.5918, label: "Rentals in Laureles",           query: "Rentals in Laureles" },
@@ -25,6 +25,21 @@ function TeaserPin({ label }: { label: string }) {
 function MapTeaser() {
   const router = useRouter();
   const mapId = getGoogleMapsMapId();
+
+  if (isE2EMapsMockEnabled()) {
+    return (
+      <div
+        data-testid="home-map-teaser-mock"
+        className="relative h-[260px] w-full overflow-hidden rounded-2xl border border-border sm:h-[320px] md:h-[380px]"
+      >
+        {TEASER_PINS.map(({ id, label, query }) => (
+          <button key={id} type="button" onClick={() => router.push(`/chat?q=${encodeURIComponent(query)}`)}>
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-[260px] w-full overflow-hidden rounded-2xl border border-border sm:h-[320px] md:h-[380px]">

@@ -20,12 +20,12 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["src/app/auth/callback/route.ts"])).toEqual([
       "code-review",
       "supabase-review",
-      "nextjs-review",
+      "nextjs",
     ]);
     expect(names(["src/proxy.ts"])).toEqual([
       "code-review",
       "supabase-review",
-      "nextjs-review",
+      "nextjs",
     ]);
     expect(names(["src/proxy.test.ts"])).not.toContain("supabase-review");
   });
@@ -41,12 +41,12 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["src/app/api/copilotkit/route.ts"])).toEqual([
       "code-review",
       "copilotkit-review",
-      "nextjs-review",
+      "nextjs",
     ]);
   });
 
   it("routes Maps and Stripe changes independently", () => {
-    expect(names(["src/components/map/MapView.tsx"])).toContain("maps-review");
+    expect(names(["src/components/map/MapView.tsx"])).toContain("maps");
     expect(names(["src/lib/stripe/webhook.ts"])).toContain("stripe-review");
   });
 
@@ -71,12 +71,18 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
       "copilotkit-review",
       "mastra-review",
       "supabase-review",
-      "maps-review",
+      "maps",
       "stripe-review",
-      "nextjs-review",
+      "nextjs",
     ]) {
       expect(result).toContain(skill);
     }
+  });
+
+  it("includes Next.js review invariants in PR-Agent context", () => {
+    const result = selectSkills(["src/app/page.tsx"]);
+    expect(result.paths).toContain("/github/workspace/.claude/skills/nextjs");
+    expect(result.paths).toContain("/github/workspace/.claude/skills/nextjs/references/review.md");
   });
 
   it("caps the specialist context budget", () => {

@@ -80,7 +80,7 @@ Promote a hook by moving it from `_deferred/` to `hooks/` and adding its entry t
 Future subagents (deferred per `plan/` strategy):
 - `supabase-reviewer` (sonnet, W2 when first migration lands)
 - `copilotkit-reviewer` (sonnet, W3 when form-fill flow lands)
-- `maps-reviewer` (sonnet, W5 when maps lands)
+- Maps review: use the canonical `maps` skill with `code-review`; do not create a duplicate Maps reviewer skill
 - `accessibility-reviewer` (haiku, W3+ when UI lands)
 - `performance-reviewer` (sonnet, W6+ /chat bundle audit)
 - `architecture-reviewer` (opus, W4 + W7 one-shot Phase 1 fidelity)

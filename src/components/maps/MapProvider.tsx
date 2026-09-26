@@ -3,12 +3,16 @@
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { MapRefererHelp } from "@/components/maps/map-referer-help";
 import { useMapsAuthFailure } from "@/components/maps/use-maps-auth-failure";
-import { getGoogleMapsApiKey } from "@/platform/maps/map-config";
+import { getGoogleMapsApiKey, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
 /** Google Maps JS API — map panel only. Pin state lives in MapContextProvider above CopilotSidebar. */
 export function MapsShell({ children }: { children: React.ReactNode }) {
   const apiKey = getGoogleMapsApiKey();
   const authFailed = useMapsAuthFailure();
+
+  if (isE2EMapsMockEnabled()) {
+    return <>{children}</>;
+  }
 
   if (!apiKey) {
     return (

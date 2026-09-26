@@ -80,6 +80,14 @@ describe("check-env-contract — build mode", () => {
 });
 
 describe("check-env-contract — runtime mode", () => {
+  const RUNTIME_COMPLETE = {
+    DATABASE_URL: "postgresql://unit-test-host/unit-test-db",
+    SUPABASE_SERVICE_ROLE_KEY: "unit-test-service-role",
+    COPILOTKIT_API_KEY: "unit-test-copilotkit-runtime-secret",
+    NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  };
+
   it("fails when a required runtime secret is missing", () => {
     const { status, out } = run(["--mode=runtime"], {
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
@@ -87,17 +95,44 @@ describe("check-env-contract — runtime mode", () => {
     });
     expect(out).toContain("MISSING DATABASE_URL");
     expect(out).toContain("MISSING SUPABASE_SERVICE_ROLE_KEY");
+    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(status).toBe(1);
+  });
+
+  // SAN-1358 · D20 — a required service credential must fail certification when
+  // absent, otherwise a deployment can ship with the runtime's service path
+  // unvalidatable and nothing notices.
+  it("fails the runtime contract when COPILOTKIT_API_KEY is absent", () => {
+    const withoutKey: Record<string, string> = { ...RUNTIME_COMPLETE };
+    delete withoutKey.COPILOTKIT_API_KEY;
+    const { status, out } = run(["--mode=runtime"], withoutKey);
+    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(status).toBe(1);
+  });
+
+  it("fails the runtime contract when COPILOTKIT_API_KEY is blank", () => {
+    const { status, out } = run(["--mode=runtime"], {
+      ...RUNTIME_COMPLETE,
+      COPILOTKIT_API_KEY: "   ",
+    });
+    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
     expect(status).toBe(1);
   });
 
   it("passes when the runtime contract is complete", () => {
-    const { status, out } = run(["--mode=runtime"], {
-      DATABASE_URL: "postgresql://unit-test-host/unit-test-db",
-      SUPABASE_SERVICE_ROLE_KEY: "unit-test-service-role",
+    const { status, out } = run(["--mode=runtime"], RUNTIME_COMPLETE);
+    expect(out).toContain("env-contract: OK");
+    expect(status).toBe(0);
+  });
+
+  // The credential is server-only; it must never be required of the browser tier.
+  it("does not require COPILOTKIT_API_KEY in the build-time client tier", () => {
+    const { status, out } = run(["--mode=build", "--strict"], {
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: CI_CLIENT.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     });
-    expect(out).toContain("env-contract: OK");
+    expect(out).not.toContain("MISSING COPILOTKIT_API_KEY");
     expect(status).toBe(0);
   });
 
@@ -113,6 +148,7 @@ describe("check-env-contract — output safety", () => {
     const { out } = run(["--mode=runtime", "--strict"], {
       DATABASE_URL: `postgresql://user:${secret}@host/db`,
       SUPABASE_SERVICE_ROLE_KEY: secret,
+      COPILOTKIT_API_KEY: secret,
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     });
