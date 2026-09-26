@@ -140,7 +140,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (143 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
+This table lists **every active documentation file currently under `docs/`** on `main` (145 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
 
 | Area | Document | Type | Status |
 |---|---|---|---|
@@ -162,6 +162,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Platform | [`03-platform/README.md`](03-platform/README.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/README.md`](03-platform/copilotkit-mastra/README.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/diagrams.md`](03-platform/copilotkit-mastra/diagrams.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md`](03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
 | Domains | [`04-domains/README.md`](04-domains/README.md) | Markdown | Current |
@@ -196,6 +197,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Domains | [`04-domains/rentals/SEARCH.md`](04-domains/rentals/SEARCH.md) | Markdown | Current |
 | Domains | [`04-domains/rentals/TEST-PLAN.md`](04-domains/rentals/TEST-PLAN.md) | Markdown | Current |
 | Domains | [`04-domains/rentals/VIEWINGS.md`](04-domains/rentals/VIEWINGS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md`](04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md) | Markdown | Current |
 | Domains | [`04-domains/restaurants/README.md`](04-domains/restaurants/README.md) | Markdown | Current |
 | Domains | [`04-domains/trips/README.md`](04-domains/trips/README.md) | Markdown | Current |
 | Domains | [`04-domains/venues/README.md`](04-domains/venues/README.md) | Markdown | Current |

@@ -337,7 +337,7 @@
     <h4>Handoff</h4>
     <ul>
       <li><b>What this is:</b> the <code>/pricing</code> partner pricing page (D-PTR-06 · SAN-695 · MKT — Partner pricing). One page, 5 partner types via tabs; standard pricing-page pattern (no Mindtrip source page). Siblings: <code>venues-wireframe.html</code> (§07 pricing teaser links here).</li>
-      <li><b>Numbers:</b> every price/fee is <b>TBD</b> here on purpose — source of truth is <code>docs/08-strategy/ai-services.md</code>, <code>docs/08-strategy/revenue-strategy.md</code>, and <code>docs/04-domains/partners/payments-revenue.md</code>. Build fails acceptance if any number can't be traced to a revenue doc.</li>
+      <li><b>Numbers:</b> unresolved prices and fees remain <b>TBD</b>; the Free-tier monthly price is explicitly <b>$0</b>. Source of truth for unresolved numbers is <code>docs/08-strategy/ai-services.md</code>, <code>docs/08-strategy/revenue-strategy.md</code>, and <code>docs/04-domains/partners/payments-revenue.md</code>. Build fails acceptance if any other number can't be traced to a revenue doc.</li>
       <li><b>21st.dev category map:</b> hero/tiers → <code>/s/pricing</code> · comparison table → <code>/s/comparisons</code> · FAQ → <code>/s/accordions</code> · switcher → <code>/s/tabs</code>. Re-token everything to oklch vars.</li>
       <li><b>Components:</b> shadcn <code>tabs · table · accordion · badge · button</code>; tab state mirrored to <code>?type=</code> in the URL so the CTA band + table stay in sync.</li>
       <li><b>Acceptance (from spec):</b> 5 tabs render · each CTA carries the right <code>?type=</code> · no invented prices · tokens/motion rules · localhost 200 · floor green · Playwright smoke.</li>

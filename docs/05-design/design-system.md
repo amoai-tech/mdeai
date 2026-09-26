@@ -5,11 +5,11 @@ author: design synthesis — transcription of src/app/globals.css :root (verbati
 status: SOURCE OF TRUTH for tokens — supersedes DESIGN.MD where they drift (this doc wins; see §7)
 linear: SAN-568 (epic SAN-566 · project UX · labels track:ux + scr)
 related:
-  - ../../../src/app/globals.css   # THE source — every value here is transcribed from :root
-  - ../../../DESIGN.MD                     # older token doc — drifted (amber hue, teal undocumented); reconcile to this
-  - ./ia-journey.md                        # architecture (D-01)
+  - ../../src/app/globals.css   # THE source — every value here is transcribed from :root
+  - ../../DESIGN.MD                     # older token doc — drifted (amber hue, teal undocumented); reconcile to this
+  - ./foundations.md                        # current design foundations
   - ./images.md                            # photography + placeholders (D-03)
-  - ../wireframe/explore-wireframe.html    # uses these exact tokens (D-05)
+  - ./screens/mockups/explore.html    # current Explore visual reference
 sources: globals.css :root (verbatim) · concierge-os-direction.md · design-process.md §4
 ---
 

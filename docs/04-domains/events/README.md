@@ -25,7 +25,7 @@ Canonical documentation for current event discovery, hosting, ticketing, checkou
 1. Consumer discovers events at `/events`.
 2. Consumer opens `/events/[slug]`.
 3. Ticket tier selection opens the checkout modal on the event page.
-4. `/api/tickets/checkout` delegates to the Supabase `ticket-checkout` function and redirects to Stripe-hosted payment.
+4. `/api/tickets/checkout` delegates to the Supabase `ticket-checkout` function and returns JSON containing `stripeSessionUrl`; the checkout modal then navigates the browser to Stripe-hosted payment.
 5. Hosts manage events through `/host/events` and related host surfaces.
 6. Operators review booking state through `/admin/event-bookings`.
 

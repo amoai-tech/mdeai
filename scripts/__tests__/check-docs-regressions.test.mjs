@@ -79,3 +79,54 @@ test("accepts required frontmatter values with colons or indented YAML values", 
   const result = run(root);
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
+
+
+test("rejects comment-only required frontmatter values", () => {
+  const root = fixture({
+    "docs/07-operations/README.md": "---\ntitle: Operations\nstatus: current\nupdated: 2026-09-25\nsource_of_truth: # TODO\n---\n# Operations\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "comment-only frontmatter values must be rejected");
+  assert.match(result.stderr, /frontmatter missing source_of_truth/i);
+});
+
+test("does not let prose links satisfy a missing catalog table row", () => {
+  const root = fixture({
+    "docs/01-product/README.md": "# Product\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\nSee [Product](01-product/README.md) for details.\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "prose links must not count as catalog rows");
+  assert.match(result.stderr, /missing from index 01-product\/README\.md/i);
+});
+
+test("rejects duplicate catalog table rows", () => {
+  const root = fixture({
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root duplicate | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "duplicate catalog rows must fail check:docs");
+  assert.match(result.stderr, /duplicate active index entry README\.md/i);
+});
+
+
+test("rejects machine-specific checkout roots in the localhost QA guide", () => {
+  const root = fixture({
+    "docs/06-testing/localhost-qa-runbook.md": "---\ntitle: QA\nstatus: current\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# QA\n\nRepo: `/home/sk/mdeai`\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Testing | [`06-testing/localhost-qa-runbook.md`](06-testing/localhost-qa-runbook.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "canonical QA docs must not hard-code one machine checkout");
+  assert.match(result.stderr, /stale repository root/i);
+});
+
+test("rejects machine-specific cd commands in the Graphify guide", () => {
+  const root = fixture({
+    "docs/07-operations/graphify-reference.md": "---\ntitle: Graphify\nstatus: current\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Graphify\n\n`cd /home/sk/mdeai`\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "Graphify quick-start must not hard-code one machine checkout");
+  assert.match(result.stderr, /stale repository root/i);
+});

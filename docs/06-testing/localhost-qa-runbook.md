@@ -25,7 +25,7 @@ Quick verification after Maps env or grounding changes. **Persona:** Sofía (QA)
 
 ## Prerequisites
 
-- Repo: `/home/sk/mdeai`
+- Repo: current Git checkout root (`git rev-parse --show-toplevel`)
 - `.env.local` has **two** Google keys:
   - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — browser (HTTP referrer: `http://localhost:3001/*`)
   - `GOOGLE_MAPS_SERVER_API_KEY` — sidecar only (IP or unrestricted, **not** referrer)
@@ -34,11 +34,12 @@ Quick verification after Maps env or grounding changes. **Persona:** Sofía (QA)
 
 ## 0. Always start here (common mistake)
 
-**Canonical checkout root:** resolve the current Git repository root dynamically. On this machine it is `/home/sk/mdeai`; do not assume an obsolete `mdeapp/` subdirectory.
+**Canonical checkout root:** resolve the current Git repository root dynamically; do not assume a machine-specific path or an obsolete `mdeapp/` subdirectory.
 
 ```bash
-cd /home/sk/mdeai
-pwd   # must print /home/sk/mdeai
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+pwd   # must print the current checkout root
 npm run   # must list smoke:map-pins, floor, test:e2e:screens
 ```
 
@@ -54,7 +55,7 @@ curl -s -o /dev/null -w "UI: %{http_code}\n" http://localhost:3001/
 
 | If | Then |
 |----|------|
-| UI ≠ 200 | `cd /home/sk/mdeai && npm run dev` |
+| UI ≠ 200 | `repo_root="$(git rev-parse --show-toplevel)" && cd "$repo_root" && npm run dev` |
 | UI = 200 | Skip — dev already running |
 
 ```bash
@@ -63,14 +64,15 @@ curl -s http://localhost:8000/health
 
 | If | Then |
 |----|------|
-| not `{"status":"ok"}` | `bash /home/sk/mdeai/services/adk-grounding/run-dev.sh` |
+| not `{"status":"ok"}` | `repo_root="$(git rev-parse --show-toplevel)" && bash "$repo_root/services/adk-grounding/run-dev.sh"` |
 
 Mastra Studio (optional): http://localhost:4111 — should return 200 when agent dev is up.
 
 ## 2. Automated gate (copy-paste)
 
 ```bash
-cd /home/sk/mdeai
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
 
 npm test
 npm run lint

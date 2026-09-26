@@ -73,8 +73,9 @@ you have an exact identifier to anchor on.
 # Activate the venv (required before every graphify command)
 source ~/.venvs/graphify/bin/activate
 
-# Run from the repository root
-cd /home/sk/mdeai
+# Run from the current Git checkout root
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
 ```
 
 ---

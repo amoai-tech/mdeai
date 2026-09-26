@@ -95,7 +95,7 @@ for (const relative of normalizedMarkdown) {
     let hasValue = false;
     if (keyIndex >= 0) {
       const inlineValue = frontmatterLines[keyIndex].slice(prefix.length).trim();
-      hasValue = inlineValue.length > 0;
+      hasValue = inlineValue.length > 0 && !inlineValue.startsWith("#");
       if (!hasValue) {
         for (let index = keyIndex + 1; index < frontmatterLines.length; index += 1) {
           const line = frontmatterLines[index];
@@ -136,11 +136,18 @@ if (!indexFile.startsWith(docsPrefix)) {
   if (!catalogMatch) {
     errors.push("docs/index-docs.md -> missing Complete active documentation catalog section");
   } else {
-    const indexed = new Set(
-      [...catalogMatch[0].matchAll(/\]\(([^)#]+)(?:#[^)]+)?\)/g)].map((match) =>
-        decodeURIComponent(match[1]),
-      ),
-    );
+    const indexed = new Set();
+    for (const line of catalogMatch[0].split("\n")) {
+      const row = line.match(
+        /^\|\s*[^|]*\|\s*\[[^\]]*\]\(([^)#]+)(?:#[^)]+)?\)\s*\|/,
+      );
+      if (!row) continue;
+      const relative = decodeURIComponent(row[1]);
+      if (indexed.has(relative)) {
+        errors.push(`docs/index-docs.md -> duplicate active index entry ${relative}`);
+      }
+      indexed.add(relative);
+    }
     const actual = new Set(
       activeCatalogFiles.map((file) => path.relative(docs, file).split(path.sep).join("/")),
     );
@@ -154,9 +161,9 @@ if (!indexFile.startsWith(docsPrefix)) {
 }
 
 const staleRepositoryRootChecks = new Map([
-  ["06-testing/localhost-qa-runbook.md", ["/home/sk/mdeai/mdeapp"]],
+  ["06-testing/localhost-qa-runbook.md", ["/home/sk/mdeai"]],
   ["04-domains/ecommerce/api-contract.md", ["/home/sk/mdeai/mdeapp"]],
-  ["07-operations/graphify-reference.md", ["/home/sk/mdeai/mdeapp", "mdeapp/graphify-out/", "mdeapp/src/"]],
+  ["07-operations/graphify-reference.md", ["/home/sk/mdeai/mdeapp", "cd /home/sk/mdeai", "mdeapp/graphify-out/", "mdeapp/src/"]],
   ["05-design/screens/mockups/explore.html", ["mdeapp/src/app/globals.css"]],
   ["05-design/screens/mockups/dashboard.html", ["mdeapp/src/app/globals.css"]],
   ["05-design/screens/mockups/cafes.html", ["mdeapp/src/app/globals.css"]],
