@@ -4,10 +4,12 @@ const handleRequestMock = vi.hoisted(() => vi.fn());
 const getUserMock = vi.hoisted(() => vi.fn());
 const ipHardCeilingMock = vi.hoisted(() => vi.fn());
 const distributedRateLimitMock = vi.hoisted(() => vi.fn());
-// Explicit signatures: the inferred `null` / `{ kind: string }` shapes would
-// reject the Response and thread-kind values the tests return.
-const assertAuthorizedMock = vi.hoisted(() =>
-  vi.fn<(...args: unknown[]) => Response | null>(() => null),
+// Explicit signature: the inferred shape would reject the discriminated
+// authorization union the route now consumes.
+const authorizeMock = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => { allowed: true; resourceId: string; via: string } | { allowed: false; response: Response }>(
+    () => ({ allowed: true, resourceId: "rate-limit-test-user", via: "new-thread" }),
+  ),
 );
 const resolveRequestedThreadMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ kind: "none" })),
@@ -31,7 +33,7 @@ vi.mock("@/mastra/copilotkit/logging-mastra-agent", () => ({
 }));
 vi.mock("@/mastra/lib/log-agent-run", () => ({ logAgentRunForTurn: vi.fn() }));
 vi.mock("@/lib/copilotkit-auth", () => ({
-  assertCopilotKitAuthorized: assertAuthorizedMock,
+  authorizeCopilotKitRequest: authorizeMock,
 }));
 vi.mock("@/lib/copilotkit-thread-ownership", () => ({
   resolveRequestedThread: resolveRequestedThreadMock,
@@ -74,10 +76,12 @@ function setupStandardMocks() {
   getUserMock.mockReset();
   ipHardCeilingMock.mockReset();
   distributedRateLimitMock.mockReset();
-  assertAuthorizedMock.mockReset();
+  authorizeMock.mockReset();
   resolveRequestedThreadMock.mockReset();
 
-  assertAuthorizedMock.mockReturnValue(null);
+  // Authorized by default: this suite tests the rate-limit/try-catch ordering,
+  // not the authorization decision, which has its own suite.
+  authorizeMock.mockReturnValue({ allowed: true, resourceId: "user-a", via: "new-thread" });
   resolveRequestedThreadMock.mockResolvedValue({ kind: "none" });
   ipHardCeilingMock.mockResolvedValue(null);
   distributedRateLimitMock.mockResolvedValue(null);
@@ -163,7 +167,7 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
 
     // Identity must be established before the authorization decision is taken.
     const getUserOrder = getUserMock.mock.invocationCallOrder[0]!;
-    const authorizeOrder = assertAuthorizedMock.mock.invocationCallOrder[0]!;
+    const authorizeOrder = authorizeMock.mock.invocationCallOrder[0]!;
     const handleOrder = handleRequestMock.mock.invocationCallOrder[0]!;
     expect(getUserOrder).toBeLessThan(authorizeOrder);
     expect(authorizeOrder).toBeLessThan(handleOrder);
@@ -176,7 +180,7 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
 
     await POST(postRequest("203.0.113.62", JSON.stringify({ threadId: "t1" })) as never);
 
-    expect(assertAuthorizedMock).toHaveBeenCalledWith(
+    expect(authorizeMock).toHaveBeenCalledWith(
       expect.anything(),
       { userId: "user-a", thread },
     );
@@ -189,9 +193,10 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
       threadId: "t1",
       resourceId: "user-b",
     });
-    assertAuthorizedMock.mockReturnValue(
-      new Response(JSON.stringify({ error: "unauthorized" }), { status: 403 }),
-    );
+    authorizeMock.mockReturnValue({
+      allowed: false,
+      response: new Response(JSON.stringify({ error: "unauthorized" }), { status: 403 }),
+    });
 
     const res = await POST(postRequest("203.0.113.63", JSON.stringify({ threadId: "t1" })) as never);
 
@@ -202,9 +207,10 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
 
   it("rejects an unauthenticated foreign request before the handler", async () => {
     getUserMock.mockResolvedValue({ data: { user: null } });
-    assertAuthorizedMock.mockReturnValue(
-      new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
-    );
+    authorizeMock.mockReturnValue({
+      allowed: false,
+      response: new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
+    });
 
     const res = await POST(postRequest("203.0.113.64") as never);
 

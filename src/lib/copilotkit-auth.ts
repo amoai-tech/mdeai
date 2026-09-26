@@ -1,15 +1,25 @@
 import type { NextRequest } from "next/server";
-import { ANONYMOUS_RESOURCE_ID, type RequestedThread } from "@/lib/copilotkit-thread-ownership";
+import {
+  ANONYMOUS_RESOURCE_ID,
+  SERVICE_RESOURCE_ID,
+  type RequestedThread,
+} from "@/lib/copilotkit-thread-ownership";
 
 /**
- * CopilotKit runtime authorization (SAN-1358 · D20).
+ * CopilotKit runtime authorization (SAN-1358 · D20, tightened by SAN-547 · D17).
  *
- * Two distinct trust paths, and **session/resource ownership is the
- * authorization decision** — a service bearer is only service-to-service
- * *authentication*:
+ * There are two trust paths, and **resource ownership is the authorization
+ * decision on both of them**. A service bearer proves *who is calling*
+ * (authentication); it is not a licence to open someone else's conversation:
  *
- *   service bearer  → validate it, then allow
- *   browser / app   → identity comes from the server, then thread ownership decides
+ *   service bearer  → validate it, owner is `service:copilotkit`
+ *   browser / app   → owner is the server-derived Supabase user id
+ *
+ * Both paths then run the **same** ownership rule, in one place. Keeping the
+ * rule single is the point: when the service branch returned early, a valid
+ * bearer skipped ownership entirely, so it could resume a real user's durable
+ * thread and every service turn was persisted under the shared `anonymous`
+ * resource.
  *
  * What this file deliberately does **not** do:
  *
@@ -31,8 +41,20 @@ export type CopilotKitAuthContext = {
   thread?: RequestedThread;
 };
 
+/** How an allowed request proved who it is. */
+export type CopilotKitTrustPath = "service-bearer" | "thread-owner" | "new-thread";
+
 export type CopilotKitAuthResult =
-  | { allowed: true; via: "service-bearer" | "thread-owner" | "new-thread" }
+  | {
+      allowed: true;
+      via: CopilotKitTrustPath;
+      /**
+       * The resource id the runtime must persist this turn under. Always
+       * server-derived — never read from the request body — so a caller cannot
+       * nominate its own durable identity (D17).
+       */
+      resourceId: string;
+    }
   | { allowed: false; status: 401 | 403; reason: string };
 
 /**
@@ -43,12 +65,15 @@ export function evaluateCopilotKitAuth(
   req: NextRequest,
   context: CopilotKitAuthContext,
 ): CopilotKitAuthResult {
-  // ---- Trusted service path -------------------------------------------------
-  // A caller that presents a bearer is claiming to be a service. Validate that
-  // claim or reject it; never fall through to the browser path, which would let
-  // any junk Authorization header bypass the ownership check below.
   const authHeader = req.headers.get("authorization");
+
+  let ownerResourceId: string;
+  let via: CopilotKitTrustPath;
+
   if (authHeader !== null) {
+    // A caller that presents a bearer is claiming to be a service. Validate that
+    // claim or reject it; never fall through to the browser path, which would
+    // let any junk Authorization header bypass the ownership check below.
     const expectedKey = (process.env.COPILOTKIT_API_KEY ?? "").trim();
     if (!expectedKey) {
       return {
@@ -60,22 +85,27 @@ export function evaluateCopilotKitAuth(
     if (authHeader !== `Bearer ${expectedKey}`) {
       return { allowed: false, status: 401, reason: "invalid service bearer" };
     }
-    return { allowed: true, via: "service-bearer" };
+    // The service proves *who it is* here. What it may touch is still decided
+    // by the ownership rule below — a valid bearer is not cross-user authority.
+    ownerResourceId = SERVICE_RESOURCE_ID;
+    via = "service-bearer";
+  } else {
+    // Identity must be server-derived. An unauthenticated caller has no resource
+    // boundary to authorize against, so it cannot reach the runtime.
+    if (!context.userId) {
+      return { allowed: false, status: 401, reason: "no authenticated session" };
+    }
+    ownerResourceId = context.userId;
+    via = "new-thread";
   }
 
-  // ---- Browser / app path ---------------------------------------------------
-  // Identity must be server-derived. An unauthenticated caller has no resource
-  // boundary to authorize against, so it cannot reach the runtime.
-  if (!context.userId) {
-    return { allowed: false, status: 401, reason: "no authenticated session" };
-  }
-
+  // ---- Ownership: one rule, both trust paths (D17) --------------------------
   const thread = context.thread ?? { kind: "none" };
 
-  // No durable thread named, or one that does not exist yet: the authenticated
-  // caller may create it under their own resource id.
+  // No durable thread named, or one that does not exist yet: the caller may
+  // create it under its own server-derived resource id.
   if (thread.kind !== "existing") {
-    return { allowed: true, via: "new-thread" };
+    return { allowed: true, via, resourceId: ownerResourceId };
   }
 
   // D17: the shared anonymous bucket is never an ownership credential.
@@ -92,25 +122,39 @@ export function evaluateCopilotKitAuth(
     return { allowed: false, status: 401, reason: "thread has no owning resource" };
   }
 
-  if (thread.resourceId !== context.userId) {
+  if (thread.resourceId !== ownerResourceId) {
     return { allowed: false, status: 403, reason: "thread belongs to another resource" };
   }
 
-  return { allowed: true, via: "thread-owner" };
+  return { allowed: true, via: "thread-owner", resourceId: ownerResourceId };
 }
 
+export type CopilotKitAuthorization =
+  | { allowed: true; resourceId: string; via: CopilotKitTrustPath }
+  | { allowed: false; response: Response };
+
 /**
- * Route-facing wrapper returning the response to short-circuit with, or null to
- * continue. The body never echoes the configured key or any header value.
+ * Route-facing wrapper: either the server-derived resource the runtime must use,
+ * or the response to short-circuit with. The body never echoes the configured
+ * key or any header value.
+ *
+ * The resource id is returned rather than recomputed by the route so that the
+ * identity the gate authorized is exactly the identity the runtime persists
+ * under — two independent derivations could drift apart.
  */
-export function assertCopilotKitAuthorized(
+export function authorizeCopilotKitRequest(
   req: NextRequest,
   context: CopilotKitAuthContext,
-): Response | null {
+): CopilotKitAuthorization {
   const result = evaluateCopilotKitAuth(req, context);
-  if (result.allowed) return null;
-  return new Response(JSON.stringify({ error: "unauthorized" }), {
-    status: result.status,
-    headers: { "content-type": "application/json" },
-  });
+  if (result.allowed) {
+    return { allowed: true, resourceId: result.resourceId, via: result.via };
+  }
+  return {
+    allowed: false,
+    response: new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: result.status,
+      headers: { "content-type": "application/json" },
+    }),
+  };
 }

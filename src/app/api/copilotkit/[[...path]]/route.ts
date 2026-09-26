@@ -5,7 +5,7 @@ import {
 } from "@copilotkit/runtime";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import { NextRequest, after } from "next/server";
-import { assertCopilotKitAuthorized } from "@/lib/copilotkit-auth";
+import { authorizeCopilotKitRequest } from "@/lib/copilotkit-auth";
 import { resolveRequestedThread } from "@/lib/copilotkit-thread-ownership";
 import {
   checkCopilotKitDistributedIpHardCeiling,
@@ -49,10 +49,12 @@ const persistTurnLog: PersistTurnLog = (opts) => {
 
 /** Build per-request CopilotKit handler with Mastra agents and audit logging. */
 function buildHandler(options: {
+  /** Server-derived durable owner. Required: there is no shared fallback (D17). */
+  resourceId: string;
   userId: string | null;
   requestContext: RequestContext;
 }) {
-  const resourceId = options.userId ?? "anonymous";
+  const { resourceId } = options;
   const runtime = new CopilotRuntime({
     agents: getLocalAgentsWithLogging({
       mastra,
@@ -102,24 +104,33 @@ async function handleCopilotKit(req: NextRequest) {
     // 3. Authorization + thread ownership, BEFORE any CopilotKit/AG-UI handling.
     //    AG-UI loads and rewrites thread metadata before downstream memory
     //    validation, so a foreign thread must be rejected here, not later.
+    //    The gate also returns the *only* resource id this turn may persist
+    //    under, so identity is derived once and never re-guessed downstream.
     const thread = await resolveRequestedThread(req);
-    const unauthorized = assertCopilotKitAuthorized(req, { userId, thread });
-    if (unauthorized) return unauthorized;
+    const auth = authorizeCopilotKitRequest(req, { userId, thread });
+    if (!auth.allowed) return auth.response;
+    const { resourceId } = auth;
 
     const rateLimited = await checkCopilotKitDistributedRateLimit(req, userId);
     if (rateLimited) return rateLimited;
 
     const requestContext = new RequestContext();
+    // D17: every allowed runtime request carries a server-derived owner. Mastra
+    // prefers this key over any client-supplied resource, and the AG-UI adapter
+    // falls back to the client's `threadId` when no resource is set — so leaving
+    // it unset here is what let a service turn write into the shared bucket.
+    requestContext.set(MASTRA_RESOURCE_ID_KEY, resourceId);
     if (userId) {
-      requestContext.set(MASTRA_RESOURCE_ID_KEY, userId);
       setAuditUserId(requestContext, userId);
       // SAN-760 · AIE-005 — hostOpsAgent + HostDashboardState — hand the agent's
       // tools the SAME user-scoped client (RLS-governed; never service-role).
+      // Deliberately user-only: a service principal must never receive a
+      // user-scoped rental client through agent tools.
       // getHostContext reads it back.
       requestContext.set(HOST_SUPABASE_KEY, supabase);
     }
 
-    return await buildHandler({ userId, requestContext })(req);
+    return await buildHandler({ resourceId, userId, requestContext })(req);
   } catch (error) {
     console.error("[copilotkit route failed]", error);
     return new Response("CopilotKit route failed", { status: 500 });

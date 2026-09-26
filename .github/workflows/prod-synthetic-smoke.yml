@@ -108,6 +108,13 @@ jobs:
       # SAN-1314 — live signed-in proof. Runs even when the concierge synthetic
       # smoke above fails, because a broken map panel must not hide whether
       # authenticated users can still reach protected routes.
+      #
+      # SAN-547 — the isolation proof runs here too. Besides proving that one user
+      # cannot read another's thread, it is the only check that asserts a real
+      # signed-in turn actually *persists* durable memory: it fails if
+      # mastra_threads gains no row owned by the caller. A production AI-memory
+      # outage is otherwise invisible, because the app still streams a 200 while
+      # every write fails.
       - name: Verify signed-out and signed-in protected route behavior
         if: always()
         env:
@@ -118,7 +125,10 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PW_SKIP_WEBSERVER: "1"
         run: |
-          npx playwright test e2e/prod-signed-in-route.spec.ts --project=prod-smoke --workers=1
+          npx playwright test \
+            e2e/prod-signed-in-route.spec.ts \
+            e2e/prod-copilotkit-isolation.spec.ts \
+            --project=prod-smoke --workers=1
 
       - name: Upload smoke artifacts
         if: always()

@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import type { Session } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -45,18 +46,112 @@ export function hasE2eEnv(): boolean {
 }
 
 /**
+ * Service-role Supabase client for test-side setup and postconditions.
+ *
+ * Stays in the Playwright process: it is never injected into a browser context,
+ * never serialized into a cookie, and never handed to the app. SAN-547 uses it
+ * to create/delete throwaway identities and to read `mastra_threads`, which is
+ * FORCE-RLS + service-role-only and therefore unreadable to any user client.
+ */
+export async function getSupabaseAdmin() {
+  const { url, serviceKey } = supabaseEnv();
+  if (!url || !serviceKey) {
+    throw new Error("E2E Supabase admin env missing (url/serviceKey)");
+  }
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+/** A confirmed auth user that exists only for the duration of one proof run. */
+export type ThrowawayIdentity = { email: string; userId: string };
+
+/**
+ * Create a confirmed throwaway auth user (SAN-547).
+ *
+ * A second *permanent* QA account would work too, but it would accumulate every
+ * run's threads under one long-lived resource id, so "which rows belong to this
+ * run?" stops being answerable by query alone. A per-run identity makes the
+ * database postcondition exact: every row owned by this id was written by this
+ * run, and cleanup can be proven by deletion rather than inferred from a
+ * timestamp window.
+ */
+export async function createThrowawayIdentity(label: string): Promise<ThrowawayIdentity> {
+  const admin = await getSupabaseAdmin();
+  // randomUUID, not Math.random: two runs starting in the same millisecond must
+  // not be able to mint the same identity and then delete each other's rows.
+  const email = `${label}-${randomUUID()}@qa-isolation.mdeai.co`;
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    throw error ?? new Error(`createUser returned no user for ${label}`);
+  }
+  return { email, userId: data.user.id };
+}
+
+/**
+ * Delete a throwaway identity, its durable AI memory, and — unlike the auth
+ * delete alone — every thread/message the run created under it.
+ *
+ * `mastra_messages` has no foreign key to `mastra_threads`, so the messages are
+ * removed explicitly before the threads. Callers must still re-query afterwards
+ * to prove the rows are gone rather than assuming this succeeded.
+ */
+export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Promise<void> {
+  const admin = await getSupabaseAdmin();
+  const failures: string[] = [];
+
+  // Every step is attempted even if an earlier one fails, and every failure is
+  // reported. These rows are real production data: swallowing an error here
+  // would orphan a throwaway user's threads and messages permanently, with a
+  // green test run as the only evidence.
+  const { data: threads, error: selectError } = await admin
+    .from("mastra_threads")
+    .select("id")
+    .eq("resourceId", identity.userId);
+  if (selectError) {
+    // Without the id list the rows cannot be found again by thread, so this is
+    // the one failure that must never pass silently.
+    failures.push(`select threads: ${selectError.message}`);
+  }
+  const ids = (threads ?? []).map((row) => (row as { id: string }).id);
+
+  if (ids.length > 0) {
+    const { error: messagesError } = await admin
+      .from("mastra_messages")
+      .delete()
+      .in("thread_id", ids);
+    if (messagesError) failures.push(`delete messages: ${messagesError.message}`);
+
+    const { error: threadsError } = await admin
+      .from("mastra_threads")
+      .delete()
+      .eq("resourceId", identity.userId);
+    if (threadsError) failures.push(`delete threads: ${threadsError.message}`);
+  }
+
+  const { error: userError } = await admin.auth.admin.deleteUser(identity.userId);
+  if (userError) failures.push(`delete identity: ${userError.message}`);
+
+  if (failures.length > 0) {
+    throw new Error(`cleanup failed for ${identity.email} — ${failures.join("; ")}`);
+  }
+}
+
+/**
  * Mint a real Supabase session for a test user via admin magic-link → verifyOtp.
  * Retries to absorb magic-link flakiness. Never logs key values.
  */
 export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
-  const { url, anon, serviceKey } = supabaseEnv();
-  if (!url || !anon || !serviceKey) {
-    throw new Error("E2E Supabase env missing (url/anon/serviceKey)");
+  const { url, anon } = supabaseEnv();
+  if (!url || !anon) {
+    throw new Error("E2E Supabase env missing (url/anon)");
   }
+  const admin = await getSupabaseAdmin();
   const { createClient } = await import("@supabase/supabase-js");
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const client = createClient(url, anon);
 
   let lastErr: unknown;
