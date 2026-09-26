@@ -342,28 +342,11 @@ export async function waitForCafeGroundedCards(page: Page) {
   }
 }
 
-const COPILOT_SEND_CONTROL =
-  '[data-testid="copilot-chat-ready"], [data-testid="copilot-chat-request-in-progress"]';
-
-/** Wait until CopilotKit finishes the current turn (streaming → idle). */
+/** Wait until the current turn releases the application-owned composer. */
 export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
   await ensureChatInputVisible(page);
-  const send = page.locator(COPILOT_SEND_CONTROL).first();
-  try {
-    await send.waitFor({ state: "attached", timeout: 30_000 });
-  } catch {
-    // Fast-path turns may skip CopilotKit progress attrs — idle = enabled composer.
-    const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
-    await input.waitFor({ state: "visible", timeout: 15_000 });
-    await expect(input).toBeEnabled({ timeout });
-    return;
-  }
-  await expect(send)
-    .toHaveAttribute("data-copilotkit-in-progress", "true", { timeout: 15_000 })
-    .catch(() => undefined);
-  await expect(send).toHaveAttribute("data-copilotkit-in-progress", "false", {
-    timeout,
-  });
+  const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
+  await expect(input).toBeEnabled({ timeout });
 }
 
 /** @deprecated Use waitForGroundedCards — café cards replace attribution footer. */
