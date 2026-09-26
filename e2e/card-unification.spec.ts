@@ -47,7 +47,6 @@ test.describe("Card unification — one rich surface per domain", () => {
   test("restaurant cards have pin id + result kind", async ({ page }) => {
     test.setTimeout(180_000);
     await gotoHome(page);
-    await page.waitForTimeout(8_000);
     await sendConciergeMessage(page, RESTAURANT_FAST_PATH_QUERY);
     await waitForRestaurantCards(page);
 

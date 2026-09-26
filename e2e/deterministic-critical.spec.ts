@@ -103,7 +103,7 @@ async function gotoDeterministicChat(page: Page) {
   await ensureChatInputVisible(page);
 }
 
-test.describe("SAN-1341 deterministic critical journeys", () => {
+test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await mockFastPaths(page);
   });

@@ -28,8 +28,6 @@ test.describe(`${SCREEN_ID} venue detail sheet`, () => {
       await gotoHome(page);
       await sendConciergeMessage(page, RENTAL_QUERY);
       await waitForRentalCards(page);
-      await page.waitForTimeout(1500);
-
       const card = page.locator('[data-testid="rental-card"]').first();
       const pinId = await card.getAttribute("data-pin-id");
       expect(pinId).toBeTruthy();

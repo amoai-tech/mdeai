@@ -1,5 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
-import type { Session } from "@supabase/supabase-js";
+import { test, expect, type Page } from "../fixtures";
 import {
   assertConsoleClean,
   captureScreenEvidence,
@@ -7,12 +6,7 @@ import {
   MOBILE_VIEWPORT,
   watchCriticalConsoleErrors,
 } from "../helpers/screen-evidence";
-import {
-  getTestSession,
-  hasE2eEnv,
-  injectSession,
-  QA_HOST_EMAIL,
-} from "../helpers/auth";
+import { hasE2eEnv } from "../helpers/auth";
 import { cleanupQaEvents } from "../helpers/seed-event";
 
 const SCREEN_ID = "SAN-730";
@@ -23,25 +17,23 @@ const describeAuthed = hasE2eEnv() ? test.describe : test.describe.skip;
 describeAuthed(`${SCREEN_ID} host navigation rail`, () => {
   test.describe.configure({ mode: "serial" });
 
-  let session: Session;
+  let hostUserId = "";
 
-  test.beforeAll(async () => {
-    session = await getTestSession(QA_HOST_EMAIL);
-    await cleanupQaEvents(session.user.id);
+  test.beforeAll(async ({ authSession }) => {
+    hostUserId = authSession.user.id;
+    await cleanupQaEvents(hostUserId);
   });
 
   test.afterAll(async () => {
-    if (session?.user?.id) {
-      try {
-        await cleanupQaEvents(session.user.id);
-      } catch {
-        // best-effort cleanup
-      }
+    if (!hostUserId) return;
+    try {
+      await cleanupQaEvents(hostUserId);
+    } catch {
+      // best-effort cleanup
     }
   });
 
   async function gotoHostWizard(page: Page): Promise<void> {
-    await injectSession(page.context(), session);
     await page.goto("/host/event/new", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("host-nav-rail")).toBeVisible();
   }
@@ -49,7 +41,7 @@ describeAuthed(`${SCREEN_ID} host navigation rail`, () => {
   test.describe("desktop", () => {
     test.use({ viewport: DESKTOP_VIEWPORT });
 
-    test("Events link navigates to /host/events", async ({ page }) => {
+    test("Events link navigates to /host/events", async ({ authenticatedPage: page }) => {
       const errors = watchCriticalConsoleErrors(page);
       await gotoHostWizard(page);
 
@@ -78,7 +70,7 @@ describeAuthed(`${SCREEN_ID} host navigation rail`, () => {
       assertConsoleClean(errors);
     });
 
-    test("New event link is active on wizard route", async ({ page }) => {
+    test("New event link is active on wizard route", async ({ authenticatedPage: page }) => {
       await gotoHostWizard(page);
       await expect(page.getByTestId("host-nav-link-new-event")).toHaveAttribute(
         "aria-current",
@@ -90,7 +82,7 @@ describeAuthed(`${SCREEN_ID} host navigation rail`, () => {
   test.describe("tablet", () => {
     test.use({ viewport: TABLET_VIEWPORT });
 
-    test("nav rail renders and Events link works", async ({ page }) => {
+    test("nav rail renders and Events link works", async ({ authenticatedPage: page }) => {
       const errors = watchCriticalConsoleErrors(page);
       await gotoHostWizard(page);
 
@@ -106,7 +98,7 @@ describeAuthed(`${SCREEN_ID} host navigation rail`, () => {
   test.describe("mobile", () => {
     test.use({ viewport: MOBILE_VIEWPORT });
 
-    test("horizontal nav renders and Events link works", async ({ page }) => {
+    test("horizontal nav renders and Events link works", async ({ authenticatedPage: page }) => {
       const errors = watchCriticalConsoleErrors(page);
       await gotoHostWizard(page);
 

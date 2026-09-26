@@ -154,11 +154,7 @@ export async function waitForCopilotRuntime(page: Page) {
 }
 
 export async function ensureChatInputVisible(page: Page) {
-  const input = page
-    .locator(
-      '[data-testid="copilot-chat-textarea"], .copilotKitInput textarea, [role="textbox"][placeholder*="message" i]',
-    )
-    .first();
+  const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
   if (await input.isVisible().catch(() => false)) return;
   const open = page.getByRole("button", { name: /open chat/i });
   if (await open.isVisible().catch(() => false)) {
@@ -170,44 +166,16 @@ export async function ensureChatInputVisible(page: Page) {
 /** One fill plus one submit attempt (multi-strategy send cascade). */
 async function submitConciergeMessageOnce(page: Page, text: string) {
   await ensureChatInputVisible(page);
-  const input = page
-    .locator(
-      '[data-testid="copilot-chat-textarea"], .copilotKitInput textarea, [role="textbox"][placeholder*="message" i]',
-    )
-    .first();
+  const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
   await input.fill(text);
   await expect(input).toHaveValue(text);
 
-  // CopilotKit v2 chat layouts differ (center panel, sidebar, welcome screen).
-  // Try composer-scoped controls first, then broader fallbacks, then Enter.
-  // sendNearComposer — CK-V2 ConciergeChatView mount + .copilotKitInput send
-  // sendBesideInput — XPath: nearest ancestor row with buttons (legacy layouts)
-  // controlSend — global .copilotKitInputControlButton (no mount testid)
-  // namedSend — accessible "Send" label when class names drift
-  // Enter — last resort when no send button is clickable
-  const sendNearComposer = page
-    .locator(
-      '[data-testid="copilot-send-button"], [data-testid="concierge-chat-view-mounted"] .copilotKitInputControlButton, [data-testid="concierge-chat-view-mounted"] .copilotKitInput button:not([disabled])',
-    )
-    .first();
-  if (await sendNearComposer.isVisible().catch(() => false)) {
-    await expect(sendNearComposer).toBeEnabled({ timeout: 10_000 });
-    await sendNearComposer.click();
-    return;
-  }
-
-  const sendBesideInput = input
-    .locator("xpath=ancestor::div[.//button][1]//button[not(@disabled)]")
-    .last();
-  if (await sendBesideInput.isVisible().catch(() => false)) {
-    await sendBesideInput.click();
-    return;
-  }
-
-  const controlSend = page.locator(".copilotKitInputControlButton").first();
-  if (await controlSend.isVisible().catch(() => false)) {
-    await expect(controlSend).toBeEnabled({ timeout: 10_000 });
-    await controlSend.click();
+  // Prefer the explicit app contract, then the accessible Send button. Enter is
+  // the final fallback for CopilotKit layouts that submit directly from the textbox.
+  const testIdSend = page.getByTestId("copilot-send-button");
+  if (await testIdSend.isVisible().catch(() => false)) {
+    await expect(testIdSend).toBeEnabled({ timeout: 10_000 });
+    await testIdSend.click();
     return;
   }
 
@@ -236,6 +204,8 @@ export type ConciergeSubmitPort = {
   armReactionWatch: (timeoutMs: number) => Promise<boolean>;
   submit: () => Promise<void>;
 };
+
+const pendingTurnCompletion = new WeakMap<Page, Promise<void>>();
 
 /**
  * Submit at most twice, and fail loudly if neither submit made the app react.
@@ -304,7 +274,15 @@ function watchForAppApiRequest(
       },
       { timeout: timeoutMs },
     )
-    .then(() => true)
+    .then((request) => {
+      pendingTurnCompletion.set(
+        page,
+        request.response().then(async (response) => {
+          if (response) await response.finished();
+        }),
+      );
+      return true;
+    })
     .catch(() => false);
 }
 
@@ -341,22 +319,6 @@ export async function sendEventQuery(page: Page, text = EVENT_QUERY) {
   await sendConciergeMessage(page, text);
 }
 
-/** Wait for assistant prose without requiring event cards (F39 clarify path). */
-export async function waitForAssistantReply(page: Page, timeout = 120_000) {
-  await page
-    .locator(".copilotKitMessage.copilotKitAssistantMessage")
-    .last()
-    .waitFor({ state: "visible", timeout });
-}
-
-export async function waitForNoEventCards(page: Page, settleMs = 8_000) {
-  await page.waitForTimeout(settleMs);
-  const count = await page.locator('[data-testid="event-card"]').count();
-  if (count > 0) {
-    throw new Error(`Expected no event cards, found ${count}`);
-  }
-}
-
 export async function waitForGroundedCards(page: Page) {
   await page.locator('[data-testid="grounded-card"]').first().waitFor({
     state: "visible",
@@ -380,28 +342,31 @@ export async function waitForCafeGroundedCards(page: Page) {
   }
 }
 
-const COPILOT_SEND_CONTROL =
-  '[data-testid="copilot-chat-ready"], [data-testid="copilot-chat-request-in-progress"]';
-
-/** Wait until CopilotKit finishes the current turn (streaming → idle). */
+/** Wait for the accepted concierge request to finish before asserting its UI result. */
 export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
-  await ensureChatInputVisible(page);
-  const send = page.locator(COPILOT_SEND_CONTROL).first();
-  try {
-    await send.waitFor({ state: "attached", timeout: 30_000 });
-  } catch {
-    // Fast-path turns may skip CopilotKit progress attrs — idle = enabled composer.
-    const input = page.locator(".copilotKitInput textarea").first();
-    await input.waitFor({ state: "visible", timeout: 15_000 });
-    await expect(input).toBeEnabled({ timeout });
+  const completion = pendingTurnCompletion.get(page);
+  if (!completion) {
+    await ensureChatInputVisible(page);
     return;
   }
-  await expect(send)
-    .toHaveAttribute("data-copilotkit-in-progress", "true", { timeout: 15_000 })
-    .catch(() => undefined);
-  await expect(send).toHaveAttribute("data-copilotkit-in-progress", "false", {
-    timeout,
-  });
+
+  let settled = false;
+  let failure: unknown;
+  void completion.then(
+    () => {
+      settled = true;
+    },
+    (error) => {
+      failure = error;
+      settled = true;
+    },
+  );
+
+  await expect
+    .poll(() => settled, { timeout, intervals: [100, 250, 500, 1_000] })
+    .toBe(true);
+  pendingTurnCompletion.delete(page);
+  if (failure) throw failure;
 }
 
 /** @deprecated Use waitForGroundedCards — café cards replace attribution footer. */

@@ -53,21 +53,21 @@ function filterExpectedErrors(errors: string[]) {
  */
 async function waitForCardsLoose(page: Page, timeoutMs = 150_000) {
   const cards = page.locator('[data-testid="restaurant-card"]');
-  const deadline = Date.now() + timeoutMs;
+  const clarify = page.getByText(/what kind of restaurant/i).first();
   let clarified = false;
 
-  while (Date.now() < deadline) {
-    if ((await cards.count()) > 0) return;
-    if (!clarified) {
-      const clarify = page.getByText(/what kind of restaurant/i).first();
-      if (await clarify.isVisible().catch(() => false)) {
-        clarified = true;
-        await sendConciergeMessage(page, "fine dining in El Poblado");
-      }
-    }
-    await page.waitForTimeout(2_000);
-  }
-  expect(await cards.count(), "restaurant cards rendered").toBeGreaterThan(0);
+  await expect
+    .poll(
+      async () => {
+        if (!clarified && (await clarify.isVisible().catch(() => false))) {
+          clarified = true;
+          await sendConciergeMessage(page, "fine dining in El Poblado");
+        }
+        return cards.count();
+      },
+      { timeout: timeoutMs, intervals: [500, 1_000, 2_000] },
+    )
+    .toBeGreaterThan(0);
 }
 
 async function assertSheetFlow(page: Page) {
@@ -125,11 +125,12 @@ test.describe("SAN-494 live DB dual state (no mocks)", () => {
       page.locator('[data-testid="restaurant-card"]').first(),
     ).toBeVisible();
 
-    // The offerings fetch is async per card; give it a beat to settle.
-    await page.waitForTimeout(5_000);
-    const ctaCount = await page
-      .locator('[data-testid="event-venue-cta"]')
-      .count();
+    const venueCta = page.getByTestId("event-venue-cta");
+    await expect
+      .poll(() => venueCta.count(), { timeout: 5_000, intervals: [250, 500, 1_000] })
+      .toBeGreaterThan(0)
+      .catch(() => undefined);
+    const ctaCount = await venueCta.count();
 
     if (ctaCount > 0) {
       // State B — a rendered card matched a mapped, verified venue.

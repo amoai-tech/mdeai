@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 
 const PROTECTED_ROUTES = ["/trips", "/saved", "/host/event/new", "/me/tickets"];
 
-test.describe("AUTH-005 auth guards", () => {
+test.describe("AUTH-005 auth guards", { tag: ["@auth", "@smoke"] }, () => {
   for (const route of PROTECTED_ROUTES) {
     test(`anonymous ${route} redirects to /login with next`, async ({ page }) => {
       await page.goto(route);

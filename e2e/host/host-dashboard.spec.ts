@@ -1,16 +1,10 @@
-import { test, expect, type Page } from "@playwright/test";
-import type { Session } from "@supabase/supabase-js";
+import { test, expect, type Page } from "../fixtures";
 import {
   assertConsoleClean,
   captureScreenEvidence,
   watchCriticalConsoleErrors,
 } from "../helpers/screen-evidence";
-import {
-  getTestSession,
-  hasE2eEnv,
-  injectSession,
-  QA_HOST_EMAIL,
-} from "../helpers/auth";
+import { hasE2eEnv } from "../helpers/auth";
 
 const SCREEN_ID = "SAN-1194";
 
@@ -35,19 +29,12 @@ test.describe(`${SCREEN_ID} · HOST-DASH-001 — /host/dashboard auth guard`, ()
 const describeAuthed = hasE2eEnv() ? test.describe : test.describe.skip;
 
 describeAuthed(`${SCREEN_ID} · HOST-DASH-001 — Host Dashboard OS`, () => {
-  let session: Session;
-
-  test.beforeAll(async () => {
-    session = await getTestSession(QA_HOST_EMAIL);
-  });
-
   async function gotoDashboard(page: Page): Promise<void> {
-    await injectSession(page.context(), session);
     await page.goto("/host/dashboard", { waitUntil: "domcontentloaded" });
   }
 
   test("overview shell renders; Dashboard nav active; quick links + honest placeholders present", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.setViewportSize(VIEWPORTS.desktop);
     const errors = watchCriticalConsoleErrors(page);
@@ -100,7 +87,7 @@ describeAuthed(`${SCREEN_ID} · HOST-DASH-001 — Host Dashboard OS`, () => {
     assertConsoleClean(errors);
   });
 
-  test("renders responsively at tablet (768) and mobile (390x844)", async ({ page }) => {
+  test("renders responsively at tablet (768) and mobile (390x844)", async ({ authenticatedPage: page }) => {
     const errors = watchCriticalConsoleErrors(page);
 
     await page.setViewportSize(VIEWPORTS.tablet);

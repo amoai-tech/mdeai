@@ -23,7 +23,7 @@ const QUERIES = {
   cafes: "good specialty coffee in Laureles",
 } as const;
 
-test.describe("UX-034 prod synthetic smoke", () => {
+test.describe("UX-034 prod synthetic smoke", { tag: ["@prod", "@smoke"] }, () => {
   test.skip(!isProdRun, "Set PROD_SMOKE_BASE_URL (e.g. https://www.mdeai.co)");
 
   test("4-query matrix + POST budget", async ({ page }) => {
