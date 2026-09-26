@@ -55,42 +55,40 @@ jobs:
       - name: Verify production runtime contract
         env:
           PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
-          INFO_JSON: ${{ runner.temp }}/copilotkit-info.json
         run: |
           set -euo pipefail
           for path in / /events; do
             code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}${path}")
             test "$code" = "200" || { echo "::error::${path} returned ${code}, expected 200"; exit 1; }
           done
-          # /api/copilotkit/info is POST-only. A GET is *correctly* rejected with 405
-          # (Allow: POST), so "not 5xx" was never a health signal: a 404 (route missing)
-          # or a 403 would have passed it just as happily.
+          # /api/copilotkit/info is authorization-gated (SAN-1358 / D20). Every
+          # request without a valid credential is rejected before CopilotKit/AG-UI
+          # runs, so the only unauthenticated contract left to assert is rejection:
+          #   1. GET  -> 401. This is no longer 405 with Allow: POST, because the
+          #              catch-all route applies authorization to GET as well.
+          #   2. POST -> 401, and the body must not carry an agent inventory.
           #
-          # Assert the actual production contract instead:
-          #   1. GET  -> exactly 405 with Allow: POST  (protocol enforcement intact)
-          #   2. POST -> exactly 200, and the body must prove the runtime booted with the
-          #              pinned CopilotKit version and every expected agent registered.
-          get_code=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "${PROD_SMOKE_BASE_URL}/api/copilotkit/info")
-          test "$get_code" = "405" || { echo "::error::GET /api/copilotkit/info returned ${get_code}, expected 405"; exit 1; }
-
-          post_code=$(curl --silent --show-error --location --write-out '%{http_code}' \
-            --output "${RUNNER_TEMP}/copilotkit-info.json" \
-            -X POST "${PROD_SMOKE_BASE_URL}/api/copilotkit/info" \
-            -H "Content-Type: application/json" -d '{"method":"info"}')
-          test "$post_code" = "200" || { echo "::error::POST /api/copilotkit/info returned ${post_code}, expected 200"; exit 1; }
-
-          node -e '
-            const info = require(process.env.INFO_JSON);
-            const expected = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
-            if (info.version !== "1.55.2") {
-              throw new Error(`unexpected CopilotKit version: ${info.version}`);
-            }
-            const missing = expected.filter((a) => !info.agents || !info.agents[a]);
-            if (missing.length) {
-              throw new Error(`runtime is missing agents: ${missing.join(", ")}`);
-            }
-            console.log(`copilotkit info ok: v${info.version}, agents ${Object.keys(info.agents).join(", ")}`);
-          '
+          # Both assertions were verified against production on 2026-09-26; the
+          # previous 405/200 expectations described the pre-D20 build and would now
+          # fail on every run.
+          #
+          # Note the coverage change: the CopilotKit version + registered-agent proof
+          # that used to live here depended on an unauthenticated 200. It now needs an
+          # authenticated session or the service bearer, neither of which this
+          # workflow carries, so this step no longer proves the runtime booted. The
+          # signed-in route proof below covers authenticated access only.
+          for method in GET POST; do
+            out="${RUNNER_TEMP}/copilotkit-${method}.json"
+            code=$(curl --silent --show-error --location --output "$out" --write-out '%{http_code}' \
+              -X "$method" "${PROD_SMOKE_BASE_URL}/api/copilotkit/info" \
+              -H "Content-Type: application/json" -d '{"method":"info"}')
+            test "$code" = "401" || { echo "::error::${method} /api/copilotkit/info returned ${code}, expected 401 (fail-closed)"; exit 1; }
+            if grep -q '"agents"' "$out"; then
+              echo "::error::${method} /api/copilotkit/info returned an agent inventory to an unauthenticated caller"
+              exit 1
+            fi
+          done
+          echo "copilotkit info: unauthenticated GET and POST both rejected with 401 and no agent inventory"
 
       - name: Run prod synthetic smoke
         env:
