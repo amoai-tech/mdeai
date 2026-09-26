@@ -63,7 +63,7 @@ Verified against vendor documentation, not assumed:
 
 | App | In-repo lever | Effect on blocking | Not possible |
 | -- | -- | -- | -- |
-| Kilo | `REVIEW.md` at the repository root, read from the PR's **base** branch (requires the app's "Use REVIEW.md" toggle) | Shapes severity calibration, files to skip, and verification expectations. Cannot change output formatting or thread behaviour. | **There is no summary-only mode and no inline/summary key.** The only dashboard levers are Review Style (`Lenient` = critical issues only) and disabling reviews for the repository. |
+| Kilo | `REVIEW.md` at the repository root, read from the PR's **base** branch (requires the app's "Use REVIEW.md" toggle) | Shapes severity calibration, files to skip, and verification expectations. Cannot change output formatting or thread behavior. | **There is no summary-only mode and no inline/summary key.** The only dashboard levers are Review Style (`Lenient` = critical issues only) and disabling reviews for the repository. |
 | CodeRabbit | `.coderabbit.yaml` → `reviews.profile: quiet` | "Quiet for only the most important feedback" — fewer inline comments | No key moves emitted nitpicks into the summary. `request_changes_workflow: false` (already set) is what stops CodeRabbit submitting a blocking change-request. |
 | Sourcery | none documented | — | No `.sourcery.yaml` exists. Dashboard only: Review profile `Quiet` ("only bugs that should block a merge"), or disable "Enable AI review comments" for summary-only output. |
 | Codacy | `.codacy.yml` → `exclude_paths`, `engines.*`, `engines.duplication.*`, `languages.*.enabled` | Path and language scoping only | Tools and patterns **cannot** be enabled or disabled from the file, and inline-vs-summary is a UI-only setting. |
@@ -93,7 +93,7 @@ Pre-merge inline threads, read from the GitHub API rather than from memory:
 Two corrections to the original audit, both worth keeping:
 
 - PR #122 raised **3** inline threads, not 16.
-- The three review passes on PR #120 were **push-triggered re-reviews** (4 commits at 22:42, 22:46, 22:49 and 23:06), not bots re-reviewing an unchanged head. Re-review after a push is correct behaviour, not waste. The real cost driver is ~1 hand-written reply-and-resolve per inline thread.
+- The three review passes on PR #120 were **push-triggered re-reviews** (4 commits at 22:42, 22:46, 22:49 and 23:06), not bots re-reviewing an unchanged head. Re-review after a push is correct behavior, not waste. The real cost driver is ~1 hand-written reply-and-resolve per inline thread.
 
 One Kilo thread on PR #120 arrived **10 seconds after the merge** (23:11:16Z against `mergedAt` 23:11:06Z). It is still unresolved and can never be satisfied by a code change, because its head is already in `main`. Post-merge inline threads are permanent residue.
 
@@ -106,7 +106,7 @@ One Kilo thread on PR #120 arrived **10 seconds after the merge** (23:11:16Z aga
 
 ### Operating rules that follow
 
-1. Only the four sources listed as allowed above may open inline threads. A newly installed review app stays summary-only until it has a measured record in this table.
-2. An advisory bot finding is never a merge blocker on its own. When a bot finding is wrong, reply once with the disproof and resolve the thread; do not rewrite code to satisfy it.
+1. The sources listed as inline above are the ones allowed to open blocking inline threads. Kilo cannot currently be configured to stop opening them — its only in-repo lever is `REVIEW.md` — so treat a Kilo thread as advisory: answer it on the evidence, then resolve it. A newly installed review app starts summary-only until it has a measured record here.
+2. An advisory bot finding is not an approval or status-check gate, but its unresolved inline thread still blocks an ordinary merge while conversation resolution is enabled. When a bot finding is wrong, reply once with the disproof and resolve the thread; do not rewrite code to satisfy it.
 3. A finding is actionable when it names a changed-code defect with a realistic failure path. A finding that can be neither reproduced nor disproved gets one reply recording that state, then a resolve.
 4. Never merge to escape an unresolved thread. That converts an advisory finding into permanent post-merge residue (see the PR #120 case above).
