@@ -1,33 +1,28 @@
 # SAN-1360 / MDE-DEPLOY-003 — post-merge production freshness guard.
 #
-# This deliberately does NOT listen for `vercel.deployment.success`. When the Vercel
-# Git integration is broken, that repository_dispatch is never sent, so a check that
+# This deliberately does NOT listen for `vercel.deployment.success`. When production
+# deployments stop flowing, that repository_dispatch is never sent, so a check that
 # waits for it can never fire — which is exactly how production silently drifted 148
-# commits behind. This guard is driven by the GitHub push itself, so it still runs
-# when Vercel deploys nothing at all.
+# commits behind while this project's smoke workflow stayed green.
 #
-# Not a required status check: it runs after the merge, and its job is to make a
-# missing or stuck deployment fail visibly instead of silently.
+# Driven by the GitHub push itself, so it still runs when Vercel deploys nothing.
+# Not a required status check: it runs after the merge and exists to make a missing or
+# stuck deployment fail visibly.
 name: Prod deploy freshness
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      sha:
-        description: Commit SHA production must serve (defaults to the pushed commit)
-        required: false
-      window_seconds:
-        description: Seconds to wait for the deployment before failing
-        required: false
-        default: "900"
 
 permissions:
   contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Fixed window, not an input: a caller-supplied value could weaken the check, and
+  # the commit under test is always recent, so 15 minutes is sufficient.
+  WINDOW_SECONDS: "900"
 
 jobs:
   freshness:
@@ -41,15 +36,15 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          TARGET_SHA: ${{ inputs.sha || github.sha }}
-          WINDOW_SECONDS: ${{ inputs.window_seconds || '900' }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
-          # Fail on configuration, not on a confusing API response.
-          for name in VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_ORG_ID; do
+          # Fail on configuration, not on a confusing API response or an
+          # `unbound variable` abort from `set -u`.
+          for name in VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_ORG_ID TARGET_SHA WINDOW_SECONDS; do
             if [ -z "${!name:-}" ]; then
-              echo "::error::${name} is not set. VERCEL_ORG_ID is a repository variable; VERCEL_TOKEN and VERCEL_PROJECT_ID are repository secrets."
+              echo "::error::${name} is not set. VERCEL_ORG_ID is a repository variable; VERCEL_TOKEN and VERCEL_PROJECT_ID are repository secrets; TARGET_SHA comes from github.sha."
               exit 1
             fi
           done
@@ -57,35 +52,65 @@ jobs:
 
           deadline=$(( $(date +%s) + WINDOW_SECONDS ))
           while :; do
-            body=$(curl --silent --show-error \
+            # Vercel v7 supports an exact SHA filter. Querying the commit directly is
+            # simpler and safer than scanning/paginating deployment history.
+            if ! resp=$(curl --silent --show-error --write-out '\n%{http_code}' \
               -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-              "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=40")
+              "https://api.vercel.com/v7/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&sha=${TARGET_SHA}"); then
+              echo "$(date -u +%H:%M:%S) vercel api request failed; retrying"
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::the Vercel API request kept failing for the whole ${WINDOW_SECONDS}s window"
+                exit 1
+              fi
+              sleep 30
+              continue
+            fi
+            status=$(printf '%s' "$resp" | tail -n1)
+            body=$(printf '%s' "$resp" | sed '$d')
 
-            # A token that cannot see the project would otherwise look identical to
-            # "no deployment yet", and would burn the whole window before failing.
-            case "$body" in
-              *'"forbidden"'*|*'"unauthorized"'*|*'"invalidToken"'*|*'"not_authorized"'*)
-                echo "::error::the Vercel API rejected the token for project ${VERCEL_PROJECT_ID} / team ${VERCEL_ORG_ID}: $(printf '%s' "$body" | head -c 300)"
+            case "$status" in
+              200) ;;
+              401|403)
+                echo "::error::the Vercel API rejected the token for project ${VERCEL_PROJECT_ID} / team ${VERCEL_ORG_ID} (HTTP ${status}): $(printf '%s' "$body" | head -c 300)"
+                exit 1
+                ;;
+              429|5??)
+                echo "$(date -u +%H:%M:%S) vercel api returned transient HTTP ${status}; retrying"
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "::error::the Vercel API stayed unavailable (last HTTP ${status}) for the whole ${WINDOW_SECONDS}s window"
+                  exit 1
+                fi
+                sleep 30
+                continue
+                ;;
+              *)
+                echo "::error::the Vercel API returned non-retryable HTTP ${status}: $(printf '%s' "$body" | head -c 300)"
                 exit 1
                 ;;
             esac
 
             # Two things this deliberately gets right:
             #
-            # 1. A SHA can have several production deployments — one per retry. A
-            #    single failed attempt must not mask a successful one, so match on
-            #    the whole set and prefer READY. (SHA d2c21c9c4 really does have one
-            #    READY deployment alongside four that errored.)
-            # 2. Only `meta.githubCommitSha` counts, because that is what a native Git
-            #    deployment records. The manual CLI fallback records `meta.gitCommitSha`
-            #    instead, and is reported separately so a failure distinguishes
-            #    "production is stale" from "only the hand-delivered fallback ran".
-            line=$(TARGET_SHA="$TARGET_SHA" node -e '
-              const data = JSON.parse(process.argv[1]);
+            # 1. A SHA can have several production deployments — one per retry. A single
+            #    failed attempt must not mask a successful one, so match the whole set and
+            #    prefer READY. (SHA d2c21c9c4 really does have one READY deployment
+            #    alongside four that errored.)
+            # 2. Native automatic Git deploys must have BOTH source=git and the exact
+            #    githubCommitSha. CLI/redeploy/import attempts can carry Git metadata too, so
+            #    metadata alone is not enough to prove the production pipeline worked.
+            line=$(printf '%s' "$body" | TARGET_SHA="$TARGET_SHA" node -e '
+              const fs = require("fs");
+              let data;
+              try {
+                data = JSON.parse(fs.readFileSync(0, "utf8"));
+              } catch {
+                console.log("api_error gitDeployments=unparsable cliFallback=?");
+                process.exit(0);
+              }
               const sha = process.env.TARGET_SHA;
               const prod = (data.deployments || []).filter((d) => d.target === "production");
-              const git = prod.filter((d) => (d.meta || {}).githubCommitSha === sha);
-              const fallback = prod.filter((d) => (d.meta || {}).gitCommitSha === sha);
+              const git = prod.filter((d) => d.source === "git" && (d.meta || {}).githubCommitSha === sha);
+              const fallback = prod.filter((d) => d.source !== "git" && ((d.meta || {}).githubCommitSha === sha || (d.meta || {}).gitCommitSha === sha));
               const states = git.map((d) => d.readyState);
               const inFlight = ["BUILDING", "QUEUED", "INITIALIZING"];
               let verdict = "absent";
@@ -93,7 +118,7 @@ jobs:
               else if (states.some((s) => inFlight.includes(s))) verdict = "PENDING";
               else if (states.length) verdict = "FAILED";
               console.log(`${verdict} gitDeployments=${states.length ? states.join("/") : "none"} cliFallback=${fallback.length}`);
-            ' "$body")
+            ')
             verdict=${line%% *}
 
             echo "$(date -u +%H:%M:%S) sha=${TARGET_SHA:0:9} ${line}"
@@ -105,6 +130,10 @@ jobs:
                 ;;
               FAILED)
                 echo "::error::every native Git production deployment for ${TARGET_SHA} failed (${line}). Production is serving older code."
+                exit 1
+                ;;
+              api_error)
+                echo "::error::Vercel returned HTTP 200 with an invalid deployment payload (${line})"
                 exit 1
                 ;;
             esac
