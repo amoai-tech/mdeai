@@ -4,9 +4,7 @@ import {
   gotoHome,
   sendConciergeMessage,
   sendEventQuery,
-  waitForAssistantReply,
   waitForEventCards,
-  waitForNoEventCards,
   activateEventsChip,
 } from "../helpers/maps-layout";
 import {
@@ -30,12 +28,11 @@ test.describe(`${SCREEN_ID} event card polish`, () => {
       await gotoHome(page);
       await activateEventsChip(page);
       await sendConciergeMessage(page, "list events medellin");
-      await waitForAssistantReply(page);
       await expect(page.getByText(/what kind of events/i)).toBeVisible({
         timeout: 30_000,
       });
-      await waitForNoEventCards(page);
       await expect(page.getByTestId("event-sub-chips")).toBeVisible();
+      await expect(page.getByTestId("event-card")).toHaveCount(0);
       assertConsoleClean(errors);
     });
 

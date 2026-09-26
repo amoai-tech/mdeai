@@ -219,11 +219,24 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(helper).not.toContain("xpath=");
   });
 
+  it("waits for the accepted concierge request to finish instead of using composer enabled state", () => {
+    const helper = fs.readFileSync("e2e/helpers/maps-layout.ts", "utf8");
+    const idleHelper = helper.match(
+      /export async function waitForCopilotIdle[\s\S]*?\n}/,
+    )?.[0];
+    expect(idleHelper).toBeDefined();
+    expect(helper).toContain("request.response()");
+    expect(helper).toContain("response.finished()");
+    expect(idleHelper).not.toContain("toBeEnabled");
+  });
+
   it("provides opt-in shared fixtures with reusable authenticated storageState", () => {
     const fixture = fs.readFileSync("e2e/fixtures.ts", "utf8");
     expect(fixture).toContain("base.extend");
     expect(fixture).toContain("authStorageState");
     expect(fixture).toContain("storageState");
+    expect(fixture).toContain("context.setStorageState(authStorageState)");
+    expect(fixture).toContain("{ page, context, authStorageState }");
   });
 
   it("tags critical, auth, and production smoke suites for selective execution", () => {

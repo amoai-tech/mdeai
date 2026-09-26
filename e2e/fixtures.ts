@@ -35,20 +35,13 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     { scope: "worker" },
   ],
   authenticatedPage: async (
-    { browser, authStorageState, baseURL, viewport },
+    { page, context, authStorageState },
     runFixture,
   ) => {
-    const context = await browser.newContext({
-      storageState: authStorageState,
-      baseURL: baseURL ?? undefined,
-      viewport,
-    });
-    try {
-      await runFixture(await context.newPage());
-    } finally {
-      await context.close();
-    }
+    await context.setStorageState(authStorageState);
+    await runFixture(page);
   },
+
 });
 
 export { expect } from "@playwright/test";

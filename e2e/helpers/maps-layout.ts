@@ -205,6 +205,8 @@ export type ConciergeSubmitPort = {
   submit: () => Promise<void>;
 };
 
+const pendingTurnCompletion = new WeakMap<Page, Promise<void>>();
+
 /**
  * Submit at most twice, and fail loudly if neither submit made the app react.
  *
@@ -272,7 +274,15 @@ function watchForAppApiRequest(
       },
       { timeout: timeoutMs },
     )
-    .then(() => true)
+    .then((request) => {
+      pendingTurnCompletion.set(
+        page,
+        request.response().then(async (response) => {
+          if (response) await response.finished();
+        }),
+      );
+      return true;
+    })
     .catch(() => false);
 }
 
@@ -309,16 +319,6 @@ export async function sendEventQuery(page: Page, text = EVENT_QUERY) {
   await sendConciergeMessage(page, text);
 }
 
-/** Wait for the current assistant turn to finish without depending on library CSS. */
-export async function waitForAssistantReply(page: Page, timeout = 120_000) {
-  await waitForCopilotIdle(page, timeout);
-}
-
-export async function waitForNoEventCards(page: Page, timeout = 30_000) {
-  await waitForCopilotIdle(page, timeout);
-  await expect(page.getByTestId("event-card")).toHaveCount(0);
-}
-
 export async function waitForGroundedCards(page: Page) {
   await page.locator('[data-testid="grounded-card"]').first().waitFor({
     state: "visible",
@@ -342,11 +342,31 @@ export async function waitForCafeGroundedCards(page: Page) {
   }
 }
 
-/** Wait until the current turn releases the application-owned composer. */
+/** Wait for the accepted concierge request to finish before asserting its UI result. */
 export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
-  await ensureChatInputVisible(page);
-  const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
-  await expect(input).toBeEnabled({ timeout });
+  const completion = pendingTurnCompletion.get(page);
+  if (!completion) {
+    await ensureChatInputVisible(page);
+    return;
+  }
+
+  let settled = false;
+  let failure: unknown;
+  void completion.then(
+    () => {
+      settled = true;
+    },
+    (error) => {
+      failure = error;
+      settled = true;
+    },
+  );
+
+  await expect
+    .poll(() => settled, { timeout, intervals: [100, 250, 500, 1_000] })
+    .toBe(true);
+  pendingTurnCompletion.delete(page);
+  if (failure) throw failure;
 }
 
 /** @deprecated Use waitForGroundedCards — café cards replace attribution footer. */
