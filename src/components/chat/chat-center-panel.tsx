@@ -7,6 +7,8 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
+import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
+import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { CenterPanelMapResultsSlot } from "@/components/chat/center-panel-map-results-slot";
 import { EventResultsPanel } from "@/components/chat/event-results-panel";
@@ -15,6 +17,7 @@ import { GroundedFastPathPanel } from "@/components/chat/grounded-fast-path-pane
 import { RentalFastPathPanel } from "@/components/chat/rental-fast-path-panel";
 import { RestaurantFastPathPanel } from "@/components/chat/restaurant-fast-path-panel";
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 const CONCIERGE_LABELS = {
   modalHeaderTitle: "Medellín concierge",
@@ -36,6 +39,7 @@ function ConciergeCopilotChat() {
 
 export function ChatCenterPanel() {
   const { sessionKey } = useConciergeSession();
+  const deterministic = isDeterministicE2E();
 
   return (
     <section
@@ -48,7 +52,7 @@ export function ChatCenterPanel() {
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       >
         <ChatQueryBar />
-        <ChatFilterCopilotInstructions />
+        {deterministic ? null : <ChatFilterCopilotInstructions />}
         <WorkflowProgressStrip />
         <div
           id="copilot-chat-region"
@@ -60,7 +64,12 @@ export function ChatCenterPanel() {
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>
-          <ConciergeCopilotChat />
+          {deterministic ? (
+            <DeterministicConciergeChat />
+          ) : (
+            <ConciergeCopilotChat />
+          )}
+          <ConciergeLocalChatMessages />
           <RentalFastPathPanel />
           <EventFastPathPanel />
           <GroundedFastPathPanel />

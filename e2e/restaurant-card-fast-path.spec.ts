@@ -18,8 +18,6 @@ test.describe("Restaurant card fast path", () => {
     test.setTimeout(180_000);
 
     await gotoHome(page);
-    await page.waitForTimeout(8_000);
-
     await sendConciergeMessage(page, RESTAURANT_FAST_PATH_QUERY);
     await page.locator('[data-testid="restaurant-filter-c-colombian"]').click({
       timeout: 30_000,

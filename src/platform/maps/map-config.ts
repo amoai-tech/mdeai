@@ -2,6 +2,13 @@ export const MEDELLIN_CENTER = { lat: 6.2442, lng: -75.5812 } as const;
 
 export const DEFAULT_MAP_ZOOM = 13;
 
+export function isE2EMapsMockEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_MOCK_MAPS === "1"
+  );
+}
+
 let warnedMissingMapsApiKey = false;
 
 export function getGoogleMapsApiKey(): string | undefined {

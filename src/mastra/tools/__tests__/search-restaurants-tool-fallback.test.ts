@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  restaurantSchema,
-  searchRestaurantsTool,
-} from "../search-restaurants";
+import { restaurantSchema } from "../search-restaurants";
 
 /**
  * Simulate "no Supabase credentials at all".
@@ -63,8 +60,10 @@ describe("searchRestaurants fallback + envelope", () => {
 
 describe("searchRestaurantsTool execute", () => {
   it("UX-T-014 returns structured envelope for CopilotKit disabled render (no writer.custom)", async () => {
+    withNoSupabaseCredentials();
+    const { searchRestaurantsTool: isolatedTool } = await import("../search-restaurants.js");
     const custom = vi.fn().mockResolvedValue(undefined);
-    const out = (await searchRestaurantsTool.execute!(
+    const out = (await isolatedTool.execute!(
       { neighborhood: "Laureles", limit: 2 },
       { writer: { custom } },
     )) as { results: unknown[]; total: number; source: string };

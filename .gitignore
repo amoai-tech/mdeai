@@ -113,3 +113,6 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# Playwright authentication state (contains reusable session credentials)
+playwright/.auth/

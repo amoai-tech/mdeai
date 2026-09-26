@@ -55,6 +55,13 @@ const BUILD_CLIENT = [
 const RUNTIME = [
   { name: "DATABASE_URL", why: "Mastra Postgres storage — production fails closed without it" },
   { name: "SUPABASE_SERVICE_ROLE_KEY", why: "privileged server reads/writes (ai_runs, durability)" },
+  {
+    // SAN-1358 · D20 — the CopilotKit runtime authenticates trusted service
+    // callers with this bearer. It is server-only: never expose it as
+    // NEXT_PUBLIC_*. Without it the runtime's service path cannot be validated.
+    name: "COPILOTKIT_API_KEY",
+    why: "CopilotKit runtime service-to-service bearer (server-only)",
+  },
   { name: "NEXT_PUBLIC_SUPABASE_URL", why: "SSR/proxy session refresh" },
   {
     name: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",

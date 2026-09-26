@@ -18,6 +18,12 @@ This folder is the canonical home for current MDE Rentals product, architecture,
 | [`LISTINGS.md`](./LISTINGS.md) | Canonical property listing identity and relationships |
 | [`MAPS.md`](./MAPS.md) | Cards, map pins, selected listing, bounds, and location behavior |
 | [`OPERATIONS-RUNBOOK.md`](./OPERATIONS-RUNBOOK.md) | Production diagnosis, safe fallback, recovery, and smoke verification |
+| [`rentals-audit-prd-roadmap-2026-09-20.md`](./rentals-audit-prd-roadmap-2026-09-20.md) | **Evidence audit** — what actually exists, the PRD, the built-vs-trustworthy inventory, confirmed defects, and the ordered roadmap. Supersedes the archived PRD v2.0.0. |
+
+The audit document is the **evidence** layer for this folder: where the product docs above describe intended
+behaviour, the audit records what is verified to exist in `main`, what is partial, and what is actively
+defective. When they disagree, follow the source-of-truth order in Task 2 and treat the audit's verified
+findings as the current code-level truth.
 
 ## Task 2 · Source of truth
 
@@ -65,3 +71,13 @@ A repo name by itself is not an implementation plan.
 - MDE Agent Platform Migration Plan: https://linear.app/amo100/document/mde-agent-platform-migration-plan-5c76cd7d8032
 
 Superseded rental design and implementation plans from this documentation pass are archived under `docs/_archive/rentals-domain-docs-2026-09-20/`. Other older rental/real-estate material remains historical evidence until explicitly audited; it does not belong in this canonical folder and does not override this package.
+
+## Superseded: archived PRD v2.0.0
+
+The previous PRD and roadmap lived under
+`docs/_archive/legacy-active-docs-2026-09-18/tasks/real-estate/`. They are historical only.
+Their readiness claim of **74/100** is not supported by current evidence — see the
+[audit document](./rentals-audit-prd-roadmap-2026-09-20.md) for the verified figure and its per-gate basis.
+
+If you are picking up rental work, prefer the existing canonical owners (`SAN-1203`, `SAN-1286`,
+`SAN-482`, `SAN-386`, `SAN-486`, `SAN-1349`, `SAN-476`, `SAN-1205`, `SAN-483`) over creating new tasks.

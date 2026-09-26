@@ -27,6 +27,8 @@ export type RentalCardProps = RentalResultRow & {
   onSchedule?: () => void;
   onSave?: () => void;
   onOpenDetails?: () => void;
+  /** Monthly price when available (authoritative for monthly display). */
+  price_monthly?: number;
 } & Omit<CardInteractionProps, "onSelect" | "pinId"> & {
   /** Unifies to `() => void` in UX-024; callers pass listing id today. */
   onSelect?: (id: string) => void;
@@ -38,6 +40,7 @@ export function RentalCard({
   title,
   neighborhood,
   nightly_price,
+  price_monthly,
   bedrooms,
   photoUrl,
   availability,
@@ -54,7 +57,7 @@ export function RentalCard({
   onSave,
   onOpenDetails,
 }: RentalCardProps) {
-  const { nightlyLabel, monthlyLabel } = formatRentalPrices(nightly_price);
+  const { nightlyLabel, monthlyLabel } = formatRentalPrices(nightly_price, price_monthly);
   const benefits = rentalBenefitBadges({
     id,
     title,
