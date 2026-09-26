@@ -60,7 +60,7 @@ Photography scores **100 only if real photos land.** They come from Google Place
 
 **Hard rules that apply here:**
 - **`X-Goog-FieldMask` on every Places call** — request only `photos`/the fields you render, never `*`. (Cost + the maps hook.)
-- **No API key in `mdeapp/src/**`** — the proxy/edge function holds it; the client only sees `/api/places/photo`.
+- **No API key in `src/**`** — the proxy/edge function holds it; the client only sees `/api/places/photo`.
 - Cache aggressively (photos are stable per place); respect Google's attribution requirements where shown.
 
 ---

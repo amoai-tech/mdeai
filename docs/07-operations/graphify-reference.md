@@ -1,12 +1,35 @@
+---
+title: Graphify Reference — MDE AI
+description: Canonical Graphify usage, repository intelligence workflow, and limitations for MDE agents.
+status: current
+updated: 2026-09-20
+source_of_truth: current repository code and tests
+---
+
 # Graphify Reference — mdeai
 
 Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of every function, component, file, and document and the connections between them.
 
-**Package:** `graphifyy` 0.8.36  
-**Venv:** `~/.venvs/graphify`  
-**Output:** `mdeapp/graphify-out/` (gitignored)  
-**Builder:** `scripts/graphify-run.sh` (thin wrapper over the `graphify` CLI)  
+**Package:** `graphifyy` 0.8.36
+**Venv:** `~/.venvs/graphify`
+**Output:** `graphify-out/` (gitignored)
+**Builder:** `scripts/graphify-run.sh` (thin wrapper over the `graphify` CLI)
 **Current baseline:** [`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md)
+
+
+## Contents
+
+- [When to use graphify (and when not)](#when-to-use-graphify-and-when-not)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Rebuild the Graph](#rebuild-the-graph)
+- [Corpus](#corpus)
+- [Reading the Graph Report](#reading-the-graph-report)
+- [Interpreting Results](#interpreting-results)
+- [Key Findings (Phase 2, 2026-06-09)](#key-findings-phase-2-2026-06-09)
+- [Safeguards — What NOT to Do](#safeguards--what-not-to-do)
+- [Graph Stats (current build)](#graph-stats-current-build)
+- [File Reference](#file-reference)
 
 ---
 
@@ -20,10 +43,10 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 
 ```bash
 # Good — anchor on an exact symbol name
-graphify explain "conciergeAgent"          # locate + immediate neighbors
-graphify explain "HostOpsCopilotBridge"
-graphify explain "HostDashboardState"
-graphify path "useConciergeCoAgent" "concierge.ts"   # how A connects to B
+npm run graphify:explain -- "conciergeAgent"          # locate + immediate neighbors
+npm run graphify:explain -- "HostOpsCopilotBridge"
+npm run graphify:explain -- "HostDashboardState"
+npm run graphify:path -- "useConciergeCoAgent" "concierge.ts"   # how A connects to B
 ```
 
 **Do not use graphify for vague natural-language discovery** — it keyword-matches and
@@ -38,7 +61,7 @@ graphify query "what handles onboarding"
 For fuzzy or conceptual discovery, use `grep` + `Read` instead. Reach for graphify once
 you have an exact identifier to anchor on.
 
-**Verified 2026-06-18:** `graphify explain "conciergeAgent"` resolves cleanly to
+**Verified 2026-06-18:** `npm run graphify:explain -- "conciergeAgent"` resolves cleanly to
 `src/mastra/agents/concierge.ts`; the vague NL query above returned unrelated doc nodes
 (keyword-matched on "agent"). Exact symbol in → useful subgraph; vague sentence in → noise.
 
@@ -50,8 +73,9 @@ you have an exact identifier to anchor on.
 # Activate the venv (required before every graphify command)
 source ~/.venvs/graphify/bin/activate
 
-# Run from mdeapp/
-cd /home/sk/mdeai/mdeapp
+# Run from the current Git checkout root
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
 ```
 
 ---
@@ -61,7 +85,7 @@ cd /home/sk/mdeai/mdeapp
 ### path — shortest path between two things
 
 ```bash
-graphify path "useConciergeCoAgent" "concierge.ts"
+npm run graphify:path -- "useConciergeCoAgent" "concierge.ts"
 graphify path "createClient" "venue_booking_requests"
 graphify path "CafeBrowseFilters" "buildFilterUrl"
 ```
@@ -118,7 +142,7 @@ change, confirm the full caller set with `grep` — the graph only captures stat
 
 ## Rebuild the Graph
 
-Run the builder from `mdeapp/`:
+Run the builder from the current repository root:
 
 ```bash
 bash scripts/graphify-run.sh update .
@@ -151,12 +175,12 @@ graphify update src/
 ### Phase 1 — Code only
 | Source | Files | Notes |
 |---|---|---|
-| `mdeapp/src/` | 591 TS/TSX | AST extraction, zero LLM calls |
+| `src/` | 591 TS/TSX | AST extraction, zero LLM calls |
 
 ### Phase 2 — Code + Docs (current)
 | Source | Files | Notes |
 |---|---|---|
-| `mdeapp/src/` | 591 TS/TSX | Reused from Phase 1 |
+| `src/` | 591 TS/TSX | Reused from Phase 1 |
 | `docs/` | 509 `.md` | PRDs, ARCHITECTURE, LESSONS, linear.md |
 | `tasks/maps/` | 34 `.md` | MAP-001–012 specs |
 | `tasks/mastra/` | 37 `.md` | Mastra task specs |
@@ -285,7 +309,7 @@ Build time:  ~3 min
 ## File Reference
 
 ```
-mdeapp/
+./
   graphify-out/               ← gitignored, all derived outputs
     graph.json                ← queryable graph (13 MB)
     GRAPH_REPORT.md           ← human-readable report (413 KB)

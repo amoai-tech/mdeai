@@ -1,3 +1,11 @@
+---
+title: MDE Rentals / Real Estate Documentation
+description: Canonical navigation for MDE Rentals product, architecture, reuse, testing, data boundaries, and operations.
+status: current
+updated: 2026-09-25
+source_of_truth: merged main, Supabase migrations/live verification, Linear, then durable rental docs
+---
+
 # MDE Rentals / Real Estate Documentation
 
 This folder is the canonical home for current MDE Rentals product, architecture, reuse, and reference documentation.

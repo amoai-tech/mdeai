@@ -136,13 +136,13 @@ flowchart LR
 ```
 
 ### 6.7 Revenue & commerce
-Subscriptions · lead · booking · ticket · marketplace · sponsored · AI-package · white-label · commission. Flows + take rates: `./revenue/04-commerce-payments.md` + `./07-revenue.md`. Stripe live for tickets; add subscriptions + Connect payouts.
+Subscriptions · lead · booking · ticket · marketplace · sponsored · AI-package · white-label · commission. Flows + take rates: `./payments-revenue.md` + `../../08-strategy/revenue-strategy.md`. Stripe live for tickets; add subscriptions + Connect payouts.
 
 ### 6.8 AI marketing services
-Per-vertical catalog + Free/Growth/Pro/Custom tiers + delivery: `./08-ai-services.md` + `./revenue/05-service-delivery.md`.
+Per-vertical catalog + Free/Growth/Pro/Custom tiers + delivery: `./ai-services.md` + `../../08-strategy/ai-services.md`.
 
 ### 6.9 Social media + brand assets
-Postiz (IG/FB/TikTok/LinkedIn/WhatsApp/GBP): content → AI draft → approve → schedule → publish → analytics. Assets: upload → validate → AI process → store → use. `./revenue/06-assets-and-social.md`.
+Postiz (IG/FB/TikTok/LinkedIn/WhatsApp/GBP): content → AI draft → approve → schedule → publish → analytics. Assets: upload → validate → AI process → store → use. `./marketing-automation.md` + `../../08-strategy/ai-services.md`.
 
 ### 6.10 Chatwoot + WhatsApp (NEW)
 ```mermaid
