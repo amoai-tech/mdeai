@@ -1,6 +1,6 @@
 ---
 title: MDE Rentals / Real Estate — Verified Audit, PRD and Roadmap
-version: 3.7.0
+version: 3.8.0
 date: 2026-09-20
 refreshed: 2026-09-26
 status: Audit complete · implementation not started
@@ -13,10 +13,13 @@ evidence_base:
   audited_at: 2026-09-20
   originated_at: 47728db6b
   refreshed_at: 979940c5b39f22da087e4ce1a6060494279401a5
+  production_verified: 2026-09-26 · dpl_5gcpSbyBCth1SbUo29HokMrWZ4ym (main @ 416005aa8) — D20 probes re-run against www.mdeai.co
   refresh_note: >-
     The findings below were gathered on 47728db6b (2026-09-20). On 2026-09-26 the branch was merged
     with main at 979940c5b (+108 commits) and the code-level defect and count claims were
     re-verified against current source. Where a claim changed, the text says so explicitly.
+    Later the same day, main was redeployed to production and the D20 security probes were re-run
+    against www.mdeai.co, so the code-level and production claims are now both current.
   live: https://www.mdeai.co/rentals
   supabase_project: zkwcbyxiwklihegjhuql
 ---
@@ -747,7 +750,7 @@ Percentages are evidence-weighted across seven independent axes:
 | **D9** | All active apartments unowned | `apartments.landlord_id IS NULL` on **44/44** active (verified) | Broker RLS has nothing to authorize; publish impossible | SAN-1349 / SAN-476 | pgTAP: owner SELECT succeeds, other-broker SELECT returns 0 |
 | **D19** | *(found by external review of PR #112; also a correction to this audit)* out-of-range **clock** components were silently accepted | `src/lib/leads/schedule-viewing-time.ts` — the round trip compared only year/month/day, so `10:99` → `11:39`, `10:60` → `11:00`, `10:00:99` → `10:01:39`, `10:00:60` → `10:01:00` were **accepted and rewritten** | A renter typing an invalid time had it silently changed into a valid one; the audit's "malformed times are rejected" claim was **false for component overflow** | SAN-1203 | ✅ **Fixed** in `c29d124f7` — component range checks before `Date.UTC`; 9 regression cases + boundary values + midnight test. See §33.1 |
 | **D10** | Broker publish path cannot succeed | `transition_listing_workflow` raises `broker does not own this apartment` when `landlord_id IS NULL` (function body verified) | **The entire broker product is dead in production** | SAN-1349 | E2E: broker publishes an owned listing; DB row shows `published_at` |
-| **D20** | ~~**CopilotKit thread endpoints are authorization-open**~~ → **✅ FIXED 2026-09-26 in PR #122 (merge `979940c5b`)** | Was: `src/app/api/copilotkit/[[...path]]/route.ts` catch-all `GET`+`POST` with no `runner`; `src/lib/copilotkit-auth.ts:30` `if (!expectedKey) return null` (allow everything when the key is unset) and `:35` (same-origin allowed); `COPILOTKIT_API_KEY` absent from `scripts/check-env-contract.mjs`. **Now:** a pure two-path decision — a presented bearer is validated or rejected (`401`, *including* when the key is unconfigured), identity is server-derived, and **thread ownership is enforced** (foreign thread → `403`, shared `anonymous`/unowned → `401`); the route runs IP ceiling → `getUser()` → ownership → rate limit → runtime so a rejected request never reaches CopilotKit/AG-UI; `COPILOTKIT_API_KEY` is required in the runtime env contract. The same-origin check was **also spoofable** (it compared the `Origin` host to the `Host` header — both attacker-supplied) and is now removed entirely. | Reachability was real: a foreign-origin unauthenticated `{"method":"info"}` returned `200` + agent inventory on the stale production build. Fixed and proven on current `main` (all four probes now `401`; valid service bearer still `200`). | **Closed** — remaining follow-ups: `SAN-547` (D17 anonymous durable identity) and redeploying `main` to production | Reject thread paths pre-runtime is now implemented; test: foreign-origin unauthenticated `info` ⇒ `401` |
+| **D20** | ~~**CopilotKit thread endpoints are authorization-open**~~ → **✅ FIXED 2026-09-26 in PR #122 (merge `979940c5b`)** | Was: `src/app/api/copilotkit/[[...path]]/route.ts` catch-all `GET`+`POST` with no `runner`; `src/lib/copilotkit-auth.ts:30` `if (!expectedKey) return null` (allow everything when the key is unset) and `:35` (same-origin allowed); `COPILOTKIT_API_KEY` absent from `scripts/check-env-contract.mjs`. **Now:** a pure two-path decision — a presented bearer is validated or rejected (`401`, *including* when the key is unconfigured), identity is server-derived, and **thread ownership is enforced** (foreign thread → `403`, shared `anonymous`/unowned → `401`); the route runs IP ceiling → `getUser()` → ownership → rate limit → runtime so a rejected request never reaches CopilotKit/AG-UI; `COPILOTKIT_API_KEY` is required in the runtime env contract. The same-origin check was **also spoofable** (it compared the `Origin` host to the `Host` header — both attacker-supplied) and is now removed entirely. | Reachability was real: a foreign-origin unauthenticated `{"method":"info"}` returned `200` + agent inventory on the stale production build. Fixed on current `main` and verified against production on 2026-09-26: unauthenticated `info`, invalid bearer and unauthenticated `agent/run` all return `401`, the foreign-origin CORS header is gone, and an authenticated session naming a foreign thread gets `403`. The valid-service-bearer path is proven only from the **identical source in a local production-mode run** — `COPILOTKIT_API_KEY` is a write-only `sensitive` Vercel variable, so no external probe can present it (§38.6). | **Closed** — remaining follow-ups: `SAN-547` (D17 anonymous durable identity); `main` was redeployed and re-verified in production on 2026-09-26 (`dpl_5gcpSby…`, §38.6) | Reject thread paths pre-runtime is now implemented; test: foreign-origin unauthenticated `info` ⇒ `401` |
 | **D11** | Rental agent prompt asserts mock data is truth | `src/mastra/agents/rental-agent.ts:117` | Agent may present demo data as authoritative | **NEW (N1)** | Prompt-contract test asserting no `mock`/`demo` truth claim in rental agent instructions |
 | **D12** | `hybrid_search_listings` unreplayable | Live-only; excluded by SB-002 because `apartments.fts_content` is production-only; `san1304a…:62` defers to **SAN-1305** | `supabase db reset` cannot reproduce hybrid search; SAN-386 cannot ship a migration | SAN-1305 | Replay test: fresh reset contains `hybrid_search_listings` |
 | **D13** | *(rewritten — the original "4/9 unattributed" framing was misleading)* | Live `leads` where `intent='rental'`: **3** rows have `listing_id = NULL` **and** no `preferred_at` (chat/form leads created with no listing at all); **1** row is `source='form'` with `listing_id='smoke-1779608858227'` — a **smoke-test artifact**, correctly skipped by the DATA-020 backfill regex `^[0-9a-f-]{36}$` | There is **no evidence of a genuine mis-attribution bug**. The real issues are (a) test data polluting production (D18) and (b) leads legally created without a listing | SAN-1044 needs **re-scoping** | pgTAP: no rental lead in production carries a smoke/test `listing_id`; a rental lead without a listing is either rejected or explicitly typed |
@@ -1808,7 +1811,24 @@ Two of these change the plan rather than the score:
    fail-closed promotion gate is not hygiene here; it is the control that would have caught it — and it
    is why the env contract now requires `COPILOTKIT_API_KEY`.
 
-**Also note:** fixing the code does not fix production. As of 2026-09-26, `www.mdeai.co` was serving a
-**pre-fix build** (`dpl_HSVuMHDPY…`, 2026-09-24) — roughly 37 h older than the merge — and git-triggered
-auto-deploy had stopped 148 commits earlier at PR #86. **The D20 probes still fail against production
-until `main` is redeployed.**
+**Production was redeployed and verified on 2026-09-26.** `www.mdeai.co` now serves
+`dpl_5gcpSbyBCth1SbUo29HokMrWZ4ym` (Ready 2026-09-26T02:21Z), built from `main` at `416005aa8`, which
+fast-forwards past the D20 merge `979940c5b`. It replaces the pre-fix build `dpl_HSVuMHDPY…`
+(2026-09-24) that had been serving traffic roughly 37 h behind the merge.
+
+The D20 probes now pass in production: foreign-origin unauthenticated `info` → `401` (was `200` + agent
+inventory), invalid bearer → `401`, unauthenticated `agent/run` → `401` (was `400`, i.e. it reached the
+protocol handler), foreign-origin CORS `access-control-allow-origin: *` → **absent**, and an
+authenticated session naming another user's thread → `403`. A signed-in session with no thread named
+still gets `200`, so ordinary users are unaffected. `GET /chat` → `200` and the rentals search path
+returns real results. The one probe not verifiable from outside is the valid service bearer:
+`COPILOTKIT_API_KEY` is a write-only (`sensitive`) Vercel variable, so `vercel env pull` returns only a
+placeholder. The code path is proven from the identical source in a local production-mode run; it must
+be closed with the key if external proof is required.
+
+**Root cause of the staleness — still unfixed.** A Vercel deployment created through the API with
+`gitSource` pinned to `416005aa8` fails in ~3 s with `errorCode: "git_info_fail"`: the GitHub↔Vercel
+integration cannot fetch git info. Git-triggered production deploys have therefore been dead since
+`d2c21c9c4` (PR #86), and the working deploy came from the Vercel CLI on a detached worktree. **Until
+that integration is repaired, the next merge to `main` will leave production stale again by exactly the
+same mechanism** — this is a live infrastructure defect, not a one-off, and it deserves its own issue.
