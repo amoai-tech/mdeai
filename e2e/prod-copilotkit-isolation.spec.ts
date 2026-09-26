@@ -261,14 +261,28 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
         ).data ?? []
       : [];
 
-    try {
-      await deleteThrowawayIdentity(userA);
-      await deleteThrowawayIdentity(userB);
-    } finally {
-      // Mark the attempt either way: a retry from afterAll would only repeat a
-      // delete against rows this test already reported on, producing a second,
-      // less precise failure instead of the real one.
-      cleanedUp = true;
+    // Attempt BOTH identities even if the first one fails. Sequential awaits in a
+    // try/finally meant a failure on userA skipped userB entirely *and* still set
+    // `cleanedUp`, so the afterAll safety net stood down and userB's rows were
+    // orphaned in production. Collect every failure, then report.
+    const cleanupFailures: string[] = [];
+    for (const identity of [userA, userB]) {
+      try {
+        await deleteThrowawayIdentity(identity);
+      } catch (error) {
+        cleanupFailures.push((error as Error).message);
+      }
+    }
+
+    // Both were attempted, so a retry from afterAll would only repeat a delete
+    // against rows this test already reported on, producing a second, less
+    // precise failure instead of the real one.
+    cleanedUp = true;
+
+    if (cleanupFailures.length > 0) {
+      throw new Error(
+        `cleanup failed — production rows may be orphaned: ${cleanupFailures.join(" | ")}`,
+      );
     }
 
     expect(await threadsOwnedBy(userA.userId), "User A threads after cleanup").toEqual([]);
