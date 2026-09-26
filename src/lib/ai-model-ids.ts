@@ -22,3 +22,44 @@
  * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
  */
 export const GEMINI_FLASH_MODEL_ID = "gemini-3.5-flash-lite";
+
+/**
+ * The capabilities MDE's agents depend on, recorded per model id.
+ *
+ * Why this exists: the live proof in `src/mastra/lib/models.test.ts` needs a
+ * Gemini key, and CI has none, so it skips there. A skipped test protects
+ * nothing — a future model switch could drop function calling or structured
+ * output and every check would stay green while every real turn failed.
+ *
+ * So the capability claim is recorded here as data, and a **CI-enforced** test
+ * asserts the configured id has a record that declares both. Switching the model
+ * therefore fails CI until someone has actually read the model's page and
+ * written down what it supports. That does not replace the live proof; it makes
+ * the verification a required step rather than an optional one.
+ *
+ * `basis` says how each row was established, so a reader can tell a documented
+ * read from an inherited assumption.
+ */
+export type GeminiModelCapabilities = {
+  functionCalling: boolean;
+  structuredOutput: boolean;
+  /** How, and when, this was established — not a claim to trust blindly. */
+  basis: string;
+};
+
+export const GEMINI_MODEL_CAPABILITIES: Record<string, GeminiModelCapabilities> = {
+  "gemini-3.5-flash-lite": {
+    functionCalling: true,
+    structuredOutput: true,
+    basis:
+      "Official model page read 2026-09-26 (function calling + structured outputs both 'Supported'), " +
+      "and re-proven live via generateObject + a real tool call on the same date.",
+  },
+  "gemini-3.5-flash": {
+    functionCalling: true,
+    structuredOutput: true,
+    basis:
+      "Incumbent production model before the 2026-09-26 switch: MDE ran tools and generateObject " +
+      "through it successfully. Not re-proven live after the switch.",
+  },
+};

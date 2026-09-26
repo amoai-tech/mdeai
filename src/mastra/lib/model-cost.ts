@@ -1,16 +1,35 @@
 /**
  * COST-001 — single source of truth for Gemini token pricing.
  *
- * No price literals anywhere else in the codebase. Rates are USD per 1M tokens
- * and intentionally conservative defaults; update here when Google changes
- * pricing. Unknown models fall back to the Flash rate and are flagged so a new
+ * No price literals anywhere else in the codebase. Rates are USD per 1M tokens.
+ * Unknown models fall back to the highest known rate and are flagged, so a new
  * model never silently logs $0.
  *
- * Rates re-verified against the official page on 2026-09-26, which corrected
- * three stale entries that understated cost by roughly 3–5x. Rates are keyed by
- * the literal model id and must never be keyed by `GEMINI_FLASH_MODEL_ID`: a
- * price belongs to one specific model, so the table must not follow a constant
- * that is meant to be switched.
+ * **Source of every rate below.** Read from the official pricing page on
+ * 2026-09-26, "Standard" tier, quoted verbatim:
+ *
+ *   Gemini 3.5 Flash       `gemini-3.5-flash`
+ *     Input price    $1.50
+ *     Output price (including thinking tokens)  $9.00
+ *   Gemini 3.5 Flash-Lite  `gemini-3.5-flash-lite`
+ *     Input price    $0.30 (text / image / video / audio)
+ *     Output price (including thinking tokens)  $2.50
+ *   Gemini 3.1 Flash-Lite  `gemini-3.1-flash-lite`
+ *     Input price    $0.25 (text / image / video) $0.50 (audio)
+ *     Output price (including thinking tokens)  $1.50
+ *   Gemini 3.1 Pro Preview `gemini-3.1-pro-preview`
+ *     Input price    $2.00, prompts <= 200k tokens   $4.00, prompts > 200k tokens
+ *     Output price   $12.00, prompts <= 200k tokens  $18.00, prompts > 200k
+ *
+ * Re-checking corrected three stale entries that understated cost by ~3–5x; the
+ * old "flash" figures were in fact Gemini 2.5 Flash-Lite's. `model-cost.test.ts`
+ * pins these exact numbers against this citation, so an accidental edit fails
+ * rather than silently changing what the dashboard reports.
+ *
+ * Rates are keyed by the literal model id and must **never** be keyed by
+ * `GEMINI_FLASH_MODEL_ID`: a price belongs to one specific model, so the table
+ * must not follow a constant that is meant to be switched. Where a model has
+ * modality tiers, the text rate is used — MDE's calls are text.
  *
  * @see https://ai.google.dev/gemini-api/docs/pricing
  */
@@ -24,25 +43,34 @@ export interface ModelRate {
 
 /** Keyed by the model id reported by the AI SDK (`google("<id>")`). */
 const MODEL_RATES: Record<string, ModelRate> = {
-  // $1.50 in / $9.00 out (standard).
   "gemini-3.5-flash": { inputPerMillion: 1.5, outputPerMillion: 9 },
-  // $0.30 in (text/image/video/audio) / $2.50 out.
   "gemini-3.5-flash-lite": { inputPerMillion: 0.3, outputPerMillion: 2.5 },
-  // $0.25 in (text/image/video) / $1.50 out.
   "gemini-3.1-flash-lite": { inputPerMillion: 0.25, outputPerMillion: 1.5 },
-  // $2.00 in / $12.00 out for prompts <= 200k tokens. The >200k tier
-  // ($4.00 / $18.00) is not modelled: this table holds one rate per model, and
-  // the small-prompt tier is the common case.
   "gemini-3.1-pro-preview": { inputPerMillion: 2, outputPerMillion: 12 },
 };
 
 /**
  * Used when a model id is not in {@link MODEL_RATES} — never returns 0 silently.
- * Kept on the Flash rate. Flash is no longer the most expensive id MDE runs, but
- * this is the rate the original conservative default was chosen around, and
- * re-picking the fallback is a separate decision from correcting rates.
+ *
+ * Derived as the **highest** rate in the table rather than a fixed pick. The
+ * previous hard-coded Flash rate was neither the current default (Lite) nor the
+ * most expensive (Pro), so it was an arbitrary point in between. Deriving it
+ * keeps one rule that cannot go stale as models are added, and takes the
+ * direction that matters for cost control: an unrecognised id must never look
+ * cheap. `rateFallback: true` is what marks the number as an approximation.
+ *
+ * Deliberate trade-off: this over-states an unknown *cheap* model. Pricing the
+ * fallback at the current default instead would read better for the common case
+ * (a model was just switched before its rate was added) but would silently
+ * under-report spend if the new model were expensive, which is the error that
+ * goes unnoticed.
  */
-const FALLBACK_RATE: ModelRate = MODEL_RATES["gemini-3.5-flash"]!;
+const FALLBACK_RATE: ModelRate = Object.values(MODEL_RATES).reduce((max, rate) =>
+  rate.inputPerMillion + rate.outputPerMillion >
+  max.inputPerMillion + max.outputPerMillion
+    ? rate
+    : max,
+);
 
 export interface ModelCostInput {
   modelName: string | null | undefined;

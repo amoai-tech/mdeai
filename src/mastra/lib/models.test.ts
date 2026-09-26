@@ -2,7 +2,34 @@ import { google } from "@ai-sdk/google";
 import { generateObject, generateText, tool } from "ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import {
+  GEMINI_FLASH_MODEL_ID,
+  GEMINI_MODEL_CAPABILITIES,
+} from "@/lib/ai-model-ids";
+
+/**
+ * CI-enforced capability contract — runs everywhere, needs no key.
+ *
+ * The live proof below cannot run in CI (no Gemini key), so this asserts the
+ * thing CI *can* assert: that whoever configured the current model recorded what
+ * it supports, and that both capabilities MDE depends on are declared. A model
+ * switch without that record fails here rather than silently shipping a fleet
+ * that cannot call tools.
+ */
+describe("configured Gemini model capabilities are recorded", () => {
+  it(`${GEMINI_FLASH_MODEL_ID} declares the capabilities the agents need`, () => {
+    const capabilities = GEMINI_MODEL_CAPABILITIES[GEMINI_FLASH_MODEL_ID];
+    expect(
+      capabilities,
+      `No capability record for "${GEMINI_FLASH_MODEL_ID}". Read the official model page ` +
+        `before switching the model, then add a GEMINI_MODEL_CAPABILITIES entry stating ` +
+        `whether it supports function calling and structured output, and on what basis.`,
+    ).toBeDefined();
+    expect(capabilities.functionCalling, "function calling").toBe(true);
+    expect(capabilities.structuredOutput, "structured output").toBe(true);
+    expect(capabilities.basis.length).toBeGreaterThan(20);
+  });
+});
 
 /**
  * Capability proof for whichever model `GEMINI_FLASH_MODEL_ID` names.
@@ -15,8 +42,8 @@ import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
  *
  * Gated on `GOOGLE_GENERATIVE_AI_API_KEY`: CI has no Gemini key, so it skips
  * there rather than failing, and any environment that does run AI gets the
- * proof on demand. A skipped run is not evidence — run it locally when changing
- * the model id (see the PR/commit that introduced it for the recorded result).
+ * proof on demand. Because a skip is not evidence, the CI-enforced contract
+ * above carries the part CI can actually enforce.
  */
 const hasGeminiKey = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
 
