@@ -1,17 +1,11 @@
-import { test, expect, type Page } from "@playwright/test";
-import type { Session } from "@supabase/supabase-js";
+import { test, expect, type Page } from "../fixtures";
 import {
   assertConsoleClean,
   captureScreenEvidence,
   DESKTOP_VIEWPORT,
   watchCriticalConsoleErrors,
 } from "../helpers/screen-evidence";
-import {
-  getTestSession,
-  hasE2eEnv,
-  injectSession,
-  QA_HOST_EMAIL,
-} from "../helpers/auth";
+import { hasE2eEnv } from "../helpers/auth";
 
 const SCREEN_ID = "SAN-729";
 
@@ -30,18 +24,11 @@ const describeAuthed = hasE2eEnv() ? test.describe : test.describe.skip;
 
 describeAuthed(`${SCREEN_ID} · AIE-008 — Host Analytics dashboard`, () => {
   test.use({ viewport: DESKTOP_VIEWPORT });
-  let session: Session;
-
-  test.beforeAll(async () => {
-    session = await getTestSession(QA_HOST_EMAIL);
-  });
-
   async function gotoAnalytics(page: Page): Promise<void> {
-    await injectSession(page.context(), session);
     await page.goto("/host/analytics", { waitUntil: "domcontentloaded" });
   }
 
-  test("dashboard shell + empty KPI prompt render; Analytics nav is active", async ({ page }) => {
+  test("dashboard shell + empty KPI prompt render; Analytics nav is active", async ({ authenticatedPage: page }) => {
     const errors = watchCriticalConsoleErrors(page);
     await gotoAnalytics(page);
 

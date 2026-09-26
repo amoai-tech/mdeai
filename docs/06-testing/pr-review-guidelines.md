@@ -102,7 +102,12 @@ One Kilo thread on PR #120 arrived **10 seconds after the merge** (23:11:16Z aga
 - `required_conversation_resolution` **stays enabled**. Disabling it removes the guarantee that an unresolved *human* finding is addressed, and no bot setting can restore that.
 - `floor` **stays the required status check**. It is a genuine universal gate, not an advisory one.
 - CodeRabbit, Sourcery and Codacy inline findings **stay**. Silencing them would have lost the `error.cause` classification fix and the `threadId` trimming fix that are in this repository's history.
-- `required_approving_review_count` is **0 today**; the post-merge target is **1**. Branch protection lives outside the repository, so the change is applied through the GitHub API after this PR merges, not by a file in this diff. Note the operational consequence: with exactly one human collaborator and `enforce_admins: false`, the sole admin can still merge by bypass, so requiring one approval is not yet a real gate. It becomes one when a second human reviewer exists. Do **not** set `enforce_admins: true` before then — GitHub does not allow authors to approve their own pull requests, so that combination deadlocks `main`.
+- `required_approving_review_count` is **1**, applied through the GitHub API — branch protection is not a repository file. Its real effect was **measured, not assumed** (PR #124), and the consequences are easier to read as a list:
+  - **It is binding.** The pull request showed `reviewDecision: REVIEW_REQUIRED` and `mergeStateStatus: BLOCKED` before any review arrived.
+  - **A bot approval satisfies it.** `sourcery-ai[bot]` submitted the `APPROVED` review that decided the merge. The only human collaborator is the author, who cannot approve their own pull request, so this does **not** guarantee that a human read the change.
+  - **Disabling Sourcery's approvals would not strengthen it.** It removes the only approval an ordinary merge can obtain, leaving admin bypass as the sole route — and `enforce_admins: false` means the admin can bypass, so the gate degrades instead of blocking.
+  - **`require_code_owner_reviews` would not strengthen it either.** GitHub's documentation applies it only to "code with a code owner", and this repository has no `CODEOWNERS` file, so it is a no-op here.
+  - **A second human collaborator is the only configuration that produces a genuine human review gate.**
 
 ### Operating rules that follow
 

@@ -126,7 +126,7 @@
     <div class="meta-row">
       <span class="chip">audience: all partner types (supply)</span>
       <span class="chip">CTA = Start free / Talk to us — per tab</span>
-      <span class="chip">numbers: <b>docs/08-ai-services.md</b> only — never invent</span>
+      <span class="chip">numbers: <b>canonical revenue docs</b> only — never invent</span>
       <span class="chip">EN only · P1</span>
     </div>
   </div>
@@ -142,7 +142,7 @@
       <ul class="rules" style="margin:0; padding-left:18px;">
         <li><b>Sponsors</b> — placement packages (Growth/Pro) + custom</li>
         <li><b>AI services</b> — Postiz · OpenClaw · concierge — subscription / retainer</li>
-        <li><b>Source of truth:</b> <code>docs/08-ai-services.md</code> + <code>revenue/04-commerce-payments.md</code></li>
+        <li><b>Source of truth:</b> <code>docs/08-strategy/ai-services.md</code> + <code>docs/08-strategy/revenue-strategy.md</code> + <code>docs/04-domains/partners/payments-revenue.md</code></li>
       </ul>
     </div>
   </div>
@@ -244,7 +244,7 @@
           <div class="td"><span class="pl dark">Talk to us</span></div>
         </div>
       </div>
-      <div class="warn">⚠ All <span class="tbd">TBD</span> values come from <code>docs/08-ai-services.md</code> + <code>revenue/04-commerce-payments.md</code> — do NOT invent numbers in build. Wireframe placeholders only.</div>
+      <div class="warn">⚠ All <span class="tbd">TBD</span> values must resolve from <code>docs/08-strategy/ai-services.md</code>, <code>docs/08-strategy/revenue-strategy.md</code>, or <code>docs/04-domains/partners/payments-revenue.md</code> — do NOT invent numbers in build. Wireframe placeholders only.</div>
     </div>
     <aside class="spec ai-led">
       <h3>03 · Pricing table (per tab)</h3>
@@ -283,7 +283,7 @@
       <ul class="notes">
         <li>Required topics per spec: <b>fees</b> · <b>payouts via Stripe</b> · <b>cancellation</b>; +2 trust questions</li>
         <li>First item open by default; one-at-a-time expand</li>
-        <li>Payout answer names Stripe explicitly (Andrés' ticket money path) — keep copy aligned with <code>revenue/04-commerce-payments.md</code></li>
+        <li>Payout answer names Stripe explicitly (Andrés' ticket money path) — keep copy aligned with <code>docs/04-domains/partners/payments-revenue.md</code></li>
       </ul>
     </aside>
   </section>
@@ -337,7 +337,7 @@
     <h4>Handoff</h4>
     <ul>
       <li><b>What this is:</b> the <code>/pricing</code> partner pricing page (D-PTR-06 · SAN-695 · MKT — Partner pricing). One page, 5 partner types via tabs; standard pricing-page pattern (no Mindtrip source page). Siblings: <code>venues-wireframe.html</code> (§07 pricing teaser links here).</li>
-      <li><b>Numbers:</b> every price/fee is <b>TBD</b> here on purpose — source of truth is <code>docs/08-ai-services.md</code> + <code>revenue/04-commerce-payments.md</code>. Build fails acceptance if any number can't be traced to a revenue doc.</li>
+      <li><b>Numbers:</b> unresolved prices and fees remain <b>TBD</b>; the Free-tier monthly price is explicitly <b>$0</b>. Source of truth for unresolved numbers is <code>docs/08-strategy/ai-services.md</code>, <code>docs/08-strategy/revenue-strategy.md</code>, and <code>docs/04-domains/partners/payments-revenue.md</code>. Build fails acceptance if any other number can't be traced to a revenue doc.</li>
       <li><b>21st.dev category map:</b> hero/tiers → <code>/s/pricing</code> · comparison table → <code>/s/comparisons</code> · FAQ → <code>/s/accordions</code> · switcher → <code>/s/tabs</code>. Re-token everything to oklch vars.</li>
       <li><b>Components:</b> shadcn <code>tabs · table · accordion · badge · button</code>; tab state mirrored to <code>?type=</code> in the URL so the CTA band + table stay in sync.</li>
       <li><b>Acceptance (from spec):</b> 5 tabs render · each CTA carries the right <code>?type=</code> · no invented prices · tokens/motion rules · localhost 200 · floor green · Playwright smoke.</li>

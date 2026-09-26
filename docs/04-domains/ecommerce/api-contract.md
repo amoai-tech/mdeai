@@ -1,9 +1,26 @@
+---
+title: Store API field-mask policy
+description: Canonical Mercur Store API product field-mask policy used by the current MDE commerce client.
+status: current
+updated: 2026-09-20
+source_of_truth: current repository code and tests
+---
+
 # Store API field-mask policy (Mercur / mdeai)
 
 **Task:** SAN-725 · ECOM-C-022  
 **Decision:** **Option B — Policy** (no `*seller.reviews*` until reviews are seeded)  
 **ADR:** [001-standalone-mercur.md](architecture.md)  
 **Evidence:** [ecom-c-022-seller-reviews-field-mask.md](../../_archive/legacy-active-docs-2026-09-18/feature-history/ecommerce/evidence/2026-06-08/ecom-c-022-seller-reviews-field-mask.md)
+
+
+## Contents
+
+- [Problem](#problem)
+- [Approved masks](#approved-masks)
+- [Where enforced](#where-enforced)
+- [Proof commands](#proof-commands)
+- [Option A (deferred)](#option-a-deferred)
 
 ---
 
@@ -17,7 +34,7 @@ Upstream [mercurjs/b2c-marketplace-storefront](https://github.com/mercurjs/b2c-m
 
 ## Approved masks
 
-Use these for **all** Store API product list/detail calls (B2C reference, future mdeapp proxy, SDK wrapper).
+Use these for **all** Store API product list/detail calls (B2C reference, current MDE client/bridge, SDK wrapper).
 
 ### LIST_FIELDS (browse / ProductCards)
 
@@ -54,7 +71,7 @@ Document as **unsupported** — expect **500** on local Mercur. Do not use in pr
 | Surface | Location | Status |
 |---------|----------|--------|
 | B2C reference (`:3000`) | `commerce/b2c-storefront/src/lib/data/products.ts` | Local patch + auditable `.patch` in evidence |
-| mdeapp SDK (future bridge) | `src/lib/commerce/medusa-client.ts` | `COMMERCE_PRODUCT_LIST_FIELDS` / `COMMERCE_PRODUCT_DETAIL_FIELDS` on `main` — **not wired to chat yet** |
+| MDE commerce client | `src/lib/commerce/medusa-client.ts` | `COMMERCE_PRODUCT_LIST_FIELDS` / `COMMERCE_PRODUCT_DETAIL_FIELDS` on `main` — **not wired to chat yet** |
 | Mercur backend | No change | Reviews not seeded (Option A deferred) |
 
 **Rule:** Do not request optional marketplace relations in `fields` unless seeded and verified with curl.
@@ -64,7 +81,7 @@ Document as **unsupported** — expect **500** on local Mercur. Do not use in pr
 ## Proof commands
 
 ```bash
-cd /home/sk/mdeai/mdeapp
+cd /home/sk/mdeai
 source commerce/.env
 REG=reg_01KTHTXVGSPF1F6V33D3KSCQXX   # or first region from /store/regions
 PK="$MEDUSA_PUBLISHABLE_KEY"
@@ -91,7 +108,7 @@ curl -s -o /dev/null -w "reviews:%{http_code}\n" \
 
 ## Option A (deferred)
 
-When seller reviews are persona-visible (ProductCards, seller pages in mdeapp):
+When seller reviews are persona-visible (ProductCards, seller pages in MDE):
 
 1. Adopt [medusajs/examples/product-reviews](https://github.com/medusajs/examples/tree/main/product-reviews) seed in `commerce/mercur/packages/api/src/scripts/`
 2. Re-run curl — `*seller.reviews*` must return **200**

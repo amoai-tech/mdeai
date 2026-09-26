@@ -1,6 +1,6 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-21
+updated: 2026-09-25
 status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
@@ -8,6 +8,18 @@ source_of_truth: Linear for live work; merged main for shipped code; src/app for
 # MDE AI documentation index
 
 This is the canonical navigation index for active MDE AI documentation on `main`.
+
+## Contents
+
+- [Source-of-truth rules](#source-of-truth-rules)
+- [Start here](#start-here)
+- [Canonical documentation architecture](#canonical-documentation-architecture)
+- [Current canonical areas](#current-canonical-areas)
+- [Complete active documentation catalog](#complete-active-documentation-catalog)
+- [Legacy migration status](#legacy-migration-status)
+- [Stale-content rules](#stale-content-rules)
+- [Documentation decision rules](#documentation-decision-rules)
+- [Cleanup progress](#cleanup-progress)
 
 ## Source-of-truth rules
 
@@ -119,12 +131,170 @@ Use for reusable test guidance, QA, release verification, and production smoke p
 Use for local development, deployment, security operations, observability, runbooks, and troubleshooting.
 
 Current workflow plan:
-- [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, todo, changelog, GitBook, and Claude/Codex/ChatGPT collaboration.
+- [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
 
 ### Strategy
 [08-strategy/README.md](08-strategy/README.md)
 
 Use for current business, market, revenue, and experiment strategy. Historical research belongs in the archive.
+
+## Complete active documentation catalog
+
+This table lists **every active documentation file currently under `docs/`** on `main` (145 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
+
+| Area | Document | Type | Status |
+|---|---|---|---|
+| Product | [`01-product/README.md`](01-product/README.md) | Markdown | Current |
+| Architecture | [`02-architecture/README.md`](02-architecture/README.md) | Markdown | Current |
+| Architecture | [`02-architecture/data-model.md`](02-architecture/data-model.md) | Markdown | Current |
+| Architecture | [`02-architecture/edge-functions.md`](02-architecture/edge-functions.md) | Markdown | Current |
+| Architecture | [`02-architecture/migration-drift.md`](02-architecture/migration-drift.md) | Markdown | Current |
+| Architecture | [`02-architecture/schema-ownership.md`](02-architecture/schema-ownership.md) | Markdown | Current |
+| Architecture | [`02-architecture/skills/nextjs-skill-consolidation-design.md`](02-architecture/skills/nextjs-skill-consolidation-design.md) | Markdown | Current |
+| Architecture | [`02-architecture/skills/nextjs-skill-consolidation-plan.md`](02-architecture/skills/nextjs-skill-consolidation-plan.md) | Markdown | Current |
+| Architecture | [`02-architecture/snapshots/advisors-2026-09-17.json`](02-architecture/snapshots/advisors-2026-09-17.json) | JSON snapshot | Snapshot / evidence |
+| Architecture | [`02-architecture/snapshots/baseline-replay-audit-2026-09-17.md`](02-architecture/snapshots/baseline-replay-audit-2026-09-17.md) | Markdown | Snapshot / evidence |
+| Architecture | [`02-architecture/snapshots/generated-types-drift-2026-09-17.md`](02-architecture/snapshots/generated-types-drift-2026-09-17.md) | Markdown | Snapshot / evidence |
+| Architecture | [`02-architecture/snapshots/privileged-functions-2026-09-17.json`](02-architecture/snapshots/privileged-functions-2026-09-17.json) | JSON snapshot | Snapshot / evidence |
+| Architecture | [`02-architecture/snapshots/sb-002-schema-gap-inventory-2026-09-17.md`](02-architecture/snapshots/sb-002-schema-gap-inventory-2026-09-17.md) | Markdown | Snapshot / evidence |
+| Architecture | [`02-architecture/snapshots/schema-exposure-2026-09-17.json`](02-architecture/snapshots/schema-exposure-2026-09-17.json) | JSON snapshot | Snapshot / evidence |
+| Architecture | [`02-architecture/system-overview.md`](02-architecture/system-overview.md) | Markdown | Current |
+| Platform | [`03-platform/README.md`](03-platform/README.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/README.md`](03-platform/copilotkit-mastra/README.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/diagrams.md`](03-platform/copilotkit-mastra/diagrams.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md`](03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
+| Domains | [`04-domains/README.md`](04-domains/README.md) | Markdown | Current |
+| Domains | [`04-domains/cafes-nightlife/README.md`](04-domains/cafes-nightlife/README.md) | Markdown | Current |
+| Domains | [`04-domains/ecommerce/README.md`](04-domains/ecommerce/README.md) | Markdown | Current |
+| Domains | [`04-domains/ecommerce/api-contract.md`](04-domains/ecommerce/api-contract.md) | Markdown | Current |
+| Domains | [`04-domains/ecommerce/architecture.md`](04-domains/ecommerce/architecture.md) | Markdown | Current |
+| Domains | [`04-domains/ecommerce/environment.md`](04-domains/ecommerce/environment.md) | Markdown | Current |
+| Domains | [`04-domains/ecommerce/product.md`](04-domains/ecommerce/product.md) | Markdown | Current |
+| Domains | [`04-domains/events/README.md`](04-domains/events/README.md) | Markdown | Current |
+| Domains | [`04-domains/partners/README.md`](04-domains/partners/README.md) | Markdown | Current |
+| Domains | [`04-domains/partners/ai-services.md`](04-domains/partners/ai-services.md) | Markdown | Current |
+| Domains | [`04-domains/partners/concierge.md`](04-domains/partners/concierge.md) | Markdown | Current |
+| Domains | [`04-domains/partners/dashboard.md`](04-domains/partners/dashboard.md) | Markdown | Current |
+| Domains | [`04-domains/partners/growth.md`](04-domains/partners/growth.md) | Markdown | Current |
+| Domains | [`04-domains/partners/journey-maps.md`](04-domains/partners/journey-maps.md) | Markdown | Current |
+| Domains | [`04-domains/partners/landing-pages.md`](04-domains/partners/landing-pages.md) | Markdown | Current |
+| Domains | [`04-domains/partners/marketing-automation.md`](04-domains/partners/marketing-automation.md) | Markdown | Current |
+| Domains | [`04-domains/partners/marketplace.md`](04-domains/partners/marketplace.md) | Markdown | Current |
+| Domains | [`04-domains/partners/payments-revenue.md`](04-domains/partners/payments-revenue.md) | Markdown | Current |
+| Domains | [`04-domains/partners/product.md`](04-domains/partners/product.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/BROKER-DASHBOARD.md`](04-domains/rentals/BROKER-DASHBOARD.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/DATA-BOUNDARIES.md`](04-domains/rentals/DATA-BOUNDARIES.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/INDEX.md`](04-domains/rentals/INDEX.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/LISTINGS.md`](04-domains/rentals/LISTINGS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/MAPS.md`](04-domains/rentals/MAPS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/OPERATIONS-RUNBOOK.md`](04-domains/rentals/OPERATIONS-RUNBOOK.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/README.md`](04-domains/rentals/README.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/REFERENCES.md`](04-domains/rentals/REFERENCES.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/RENTALS.md`](04-domains/rentals/RENTALS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/REUSE-MATRIX.md`](04-domains/rentals/REUSE-MATRIX.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/SEARCH.md`](04-domains/rentals/SEARCH.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/TEST-PLAN.md`](04-domains/rentals/TEST-PLAN.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/VIEWINGS.md`](04-domains/rentals/VIEWINGS.md) | Markdown | Current |
+| Domains | [`04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md`](04-domains/rentals/rentals-audit-prd-roadmap-2026-09-20.md) | Markdown | Current |
+| Domains | [`04-domains/restaurants/README.md`](04-domains/restaurants/README.md) | Markdown | Current |
+| Domains | [`04-domains/trips/README.md`](04-domains/trips/README.md) | Markdown | Current |
+| Domains | [`04-domains/venues/README.md`](04-domains/venues/README.md) | Markdown | Current |
+| Design | [`05-design/README.md`](05-design/README.md) | Markdown | Current |
+| Design | [`05-design/component-mapping.md`](05-design/component-mapping.md) | Markdown | Current |
+| Design | [`05-design/concierge-direction.md`](05-design/concierge-direction.md) | Markdown | Current |
+| Design | [`05-design/design-process.md`](05-design/design-process.md) | Markdown | Current |
+| Design | [`05-design/design-system.md`](05-design/design-system.md) | Markdown | Current |
+| Design | [`05-design/foundations.md`](05-design/foundations.md) | Markdown | Current |
+| Design | [`05-design/images.md`](05-design/images.md) | Markdown | Current |
+| Design | [`05-design/marketing-pages.md`](05-design/marketing-pages.md) | Markdown | Current |
+| Design | [`05-design/patterns/discovery.md`](05-design/patterns/discovery.md) | Markdown | Current |
+| Design | [`05-design/patterns/whatsapp-mobile.md`](05-design/patterns/whatsapp-mobile.md) | Markdown | Current |
+| Design | [`05-design/screens/mockups/cafes.html`](05-design/screens/mockups/cafes.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/mockups/dashboard.html`](05-design/screens/mockups/dashboard.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/mockups/explore.html`](05-design/screens/mockups/explore.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/mockups/venue.html`](05-design/screens/mockups/venue.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/about-wireframe.html`](05-design/screens/partners/about-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/business-ai-wireframe.html`](05-design/screens/partners/business-ai-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/business-hub-wireframe.html`](05-design/screens/partners/business-hub-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/contact-wireframe.html`](05-design/screens/partners/contact-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/host-wireframe.html`](05-design/screens/partners/host-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/partner-signup-wireframe.html`](05-design/screens/partners/partner-signup-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/partners-hub-wireframe.html`](05-design/screens/partners/partners-hub-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/partners-rentals-wireframe.html`](05-design/screens/partners/partners-rentals-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/pricing-wireframe.html`](05-design/screens/partners/pricing-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/sponsors-wireframe.html`](05-design/screens/partners/sponsors-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/partners/venues-wireframe.html`](05-design/screens/partners/venues-wireframe.html) | HTML wireframe | Current |
+| Design | [`05-design/screens/product-wireframes/README.md`](05-design/screens/product-wireframes/README.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/_arch/agents.md`](05-design/screens/product-wireframes/_arch/agents.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/_arch/copilotkit.md`](05-design/screens/product-wireframes/_arch/copilotkit.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/_arch/workflows.md`](05-design/screens/product-wireframes/_arch/workflows.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/_layout/navigation.md`](05-design/screens/product-wireframes/_layout/navigation.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/_layout/three-panel.md`](05-design/screens/product-wireframes/_layout/three-panel.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/admin/001-ops-dashboard.md`](05-design/screens/product-wireframes/admin/001-ops-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/admin/002-analytics-dashboard.md`](05-design/screens/product-wireframes/admin/002-analytics-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/auth/001-login.md`](05-design/screens/product-wireframes/auth/001-login.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/auth/002-signup.md`](05-design/screens/product-wireframes/auth/002-signup.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/cafes/001-cafe-search.md`](05-design/screens/product-wireframes/cafes/001-cafe-search.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/consumer/001-home.md`](05-design/screens/product-wireframes/consumer/001-home.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/consumer/002-saved-items.md`](05-design/screens/product-wireframes/consumer/002-saved-items.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/consumer/003-user-profile.md`](05-design/screens/product-wireframes/consumer/003-user-profile.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/consumer/004-explore-map.md`](05-design/screens/product-wireframes/consumer/004-explore-map.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/crm/001-leads-pipeline.md`](05-design/screens/product-wireframes/crm/001-leads-pipeline.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/events/001-event-discovery.md`](05-design/screens/product-wireframes/events/001-event-discovery.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/events/002-event-details.md`](05-design/screens/product-wireframes/events/002-event-details.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/events/003-event-checkout.md`](05-design/screens/product-wireframes/events/003-event-checkout.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/events/004-ticket-wallet.md`](05-design/screens/product-wireframes/events/004-ticket-wallet.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/hosts/001-host-dashboard.md`](05-design/screens/product-wireframes/hosts/001-host-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/hosts/002-create-event.md`](05-design/screens/product-wireframes/hosts/002-create-event.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/hosts/003-ticket-management.md`](05-design/screens/product-wireframes/hosts/003-ticket-management.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/hosts/004-attendee-management.md`](05-design/screens/product-wireframes/hosts/004-attendee-management.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/nightlife/001-nightclub-discovery.md`](05-design/screens/product-wireframes/nightlife/001-nightclub-discovery.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/rental-hosts/001-rental-dashboard.md`](05-design/screens/product-wireframes/rental-hosts/001-rental-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/rentals/001-rental-search.md`](05-design/screens/product-wireframes/rentals/001-rental-search.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/rentals/002-rental-details.md`](05-design/screens/product-wireframes/rentals/002-rental-details.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/rentals/003-inquiry-viewing.md`](05-design/screens/product-wireframes/rentals/003-inquiry-viewing.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/restaurants/001-restaurant-search.md`](05-design/screens/product-wireframes/restaurants/001-restaurant-search.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/sponsors/001-sponsor-dashboard.md`](05-design/screens/product-wireframes/sponsors/001-sponsor-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/venue-owners/001-venue-dashboard.md`](05-design/screens/product-wireframes/venue-owners/001-venue-dashboard.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/venues/001-venue-search.md`](05-design/screens/product-wireframes/venues/001-venue-search.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/venues/002-venue-details.md`](05-design/screens/product-wireframes/venues/002-venue-details.md) | Markdown | Current |
+| Testing | [`06-testing/README.md`](06-testing/README.md) | Markdown | Current |
+| Testing | [`06-testing/localhost-qa-runbook.md`](06-testing/localhost-qa-runbook.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/evidence/2026-09-24/SAN-1341-RESULTS.md`](06-testing/playwright/evidence/2026-09-24/SAN-1341-RESULTS.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/pr-agent/san-1332-pr-agent-evidence-design.md`](06-testing/pr-agent/san-1332-pr-agent-evidence-design.md) | Markdown | Current |
+| Testing | [`06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md`](06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md) | Markdown | Current |
+| Testing | [`06-testing/pr-review-guidelines.md`](06-testing/pr-review-guidelines.md) | Markdown | Current |
+| Testing | [`06-testing/ui-verification.md`](06-testing/ui-verification.md) | Markdown | Current |
+| Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
+| Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
+| Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
+| Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
+| Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
+| Strategy | [`08-strategy/README.md`](08-strategy/README.md) | Markdown | Current |
+| Strategy | [`08-strategy/ai-services.md`](08-strategy/ai-services.md) | Markdown | Current |
+| Strategy | [`08-strategy/financial-model.md`](08-strategy/financial-model.md) | Markdown | Current |
+| Strategy | [`08-strategy/growth-strategy.md`](08-strategy/growth-strategy.md) | Markdown | Current |
+| Strategy | [`08-strategy/market-research.md`](08-strategy/market-research.md) | Markdown | Current |
+| Strategy | [`08-strategy/marketplace-strategy.md`](08-strategy/marketplace-strategy.md) | Markdown | Current |
+| Strategy | [`08-strategy/partnerships-strategy.md`](08-strategy/partnerships-strategy.md) | Markdown | Current |
+| Strategy | [`08-strategy/prioritization.md`](08-strategy/prioritization.md) | Markdown | Current |
+| Strategy | [`08-strategy/product-strategy.md`](08-strategy/product-strategy.md) | Markdown | Current |
+| Strategy | [`08-strategy/revenue-strategy.md`](08-strategy/revenue-strategy.md) | Markdown | Current |
+| Strategy | [`08-strategy/subscription-plans.md`](08-strategy/subscription-plans.md) | Markdown | Current |
+| Root | [`README.md`](README.md) | Markdown | Current |
+| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |
+| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current convention/index |
+| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current convention/index |
+### Historical archive
+
+| Location | Status | Notes |
+|---|---|---|
+| [`_archive/`](_archive/) | Historical only | Preserved audits, task exports, evidence, notes, superseded plans, generated artifacts, and legacy code snapshots. Not part of the active documentation set. |
+| [`_archive/README.md`](_archive/README.md) | Historical index/readme | Entry point for archived material. |
 
 ## Legacy migration status
 

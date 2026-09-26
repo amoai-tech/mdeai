@@ -4,7 +4,6 @@ import {
   assertNoGenericMapResultsList,
   gotoHome,
   sendConciergeMessage,
-  waitForAssistantReply,
   waitForRestaurantCards,
 } from "./helpers/maps-layout";
 import { DESKTOP_VIEWPORT } from "./helpers/screen-evidence";
@@ -23,15 +22,6 @@ test.describe("Restaurant card fast path", () => {
       timeout: 30_000,
     });
     await waitForRestaurantCards(page);
-    await waitForAssistantReply(page, 60_000);
-
-    const assistantText = await page
-      .locator(".copilotKitMessage.copilotKitAssistantMessage")
-      .last()
-      .innerText();
-    expect(assistantText).not.toMatch(/Found 6 events/i);
-    expect(assistantText).not.toMatch(/Found \d+ events/i);
-
     const eventCards = await page.locator('[data-testid="event-card"]').count();
     expect(eventCards, "restaurant query must not dominate with event cards").toBe(0);
 

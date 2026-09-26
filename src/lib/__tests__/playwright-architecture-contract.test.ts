@@ -203,6 +203,51 @@ describe("SAN-1341 Playwright architecture", () => {
     }
   });
 
+
+  it("removes fixed Playwright sleeps from the E2E suite", () => {
+    const files = fs
+      .readdirSync("e2e", { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+      .map((entry) => `${entry.parentPath}/${entry.name}`);
+    for (const file of files) {
+      expect(fs.readFileSync(file, "utf8"), file).not.toContain("waitForTimeout(");
+    }
+  });
+
+  it("removes XPath from shared concierge helpers", () => {
+    const helper = fs.readFileSync("e2e/helpers/maps-layout.ts", "utf8");
+    expect(helper).not.toContain("xpath=");
+  });
+
+  it("waits for the accepted concierge request to finish instead of using composer enabled state", () => {
+    const helper = fs.readFileSync("e2e/helpers/maps-layout.ts", "utf8");
+    const idleHelper = helper.match(
+      /export async function waitForCopilotIdle[\s\S]*?\n}/,
+    )?.[0];
+    expect(idleHelper).toBeDefined();
+    expect(helper).toContain("request.response()");
+    expect(helper).toContain("response.finished()");
+    expect(idleHelper).not.toContain("toBeEnabled");
+  });
+
+  it("provides opt-in shared fixtures with reusable authenticated storageState", () => {
+    const fixture = fs.readFileSync("e2e/fixtures.ts", "utf8");
+    expect(fixture).toContain("base.extend");
+    expect(fixture).toContain("authStorageState");
+    expect(fixture).toContain("storageState");
+    expect(fixture).toContain("context.setStorageState(authStorageState)");
+    expect(fixture).toContain("{ page, context, authStorageState }");
+  });
+
+  it("tags critical, auth, and production smoke suites for selective execution", () => {
+    const critical = fs.readFileSync("e2e/deterministic-critical.spec.ts", "utf8");
+    const auth = fs.readFileSync("e2e/auth-guard.spec.ts", "utf8");
+    const prod = fs.readFileSync("e2e/prod-synthetic-smoke.spec.ts", "utf8");
+    expect(critical).toContain('tag: ["@critical", "@deterministic"]');
+    expect(auth).toContain('tag: ["@auth", "@smoke"]');
+    expect(prod).toContain('tag: ["@prod", "@smoke"]');
+  });
+
   it("never reuses an existing web server in CI", () => {
     const configText = fs.readFileSync("playwright.config.ts", "utf8");
     expect(configText).toContain("reuseExistingServer: !process.env.CI");

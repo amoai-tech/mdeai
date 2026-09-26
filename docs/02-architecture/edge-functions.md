@@ -1,3 +1,12 @@
+---
+title: Edge Functions — MDE Supabase
+description: Dated Supabase Edge Function deployment inventory and provenance audit.
+status: snapshot
+updated: 2026-09-20
+source_of_truth: 2026-09-17 live inventory plus current repository structure
+snapshot_date: 2026-09-17
+---
+
 # Edge Functions — MDE Supabase (`zkwcbyxiwklihegjhuql`)
 
 **Snapshot:** 2026-09-17, read-only (`list_edge_functions`) · **Comparison commit:** `a9a9eb931ae602568b2be61904f2dee886c45ec4`
@@ -5,6 +14,22 @@
 
 **Result: 39 ACTIVE deployments vs 4 repo directories → 4 MATCHED, 35 UNKNOWN-PRESERVE.**
 This is the single largest provenance gap in the epic. Nothing may be deleted until the recovery path in §3 has run.
+
+
+## Contents
+
+- [Current repository vs historical deployment paths](#current-repository-vs-historical-deployment-paths)
+- [1. The four canonical (MATCHED) functions](#1-the-four-canonical-matched-functions)
+- [2. Provenance failures (35 UNKNOWN-PRESERVE)](#2-provenance-failures-35-unknown-preserve)
+- [3. Required recovery path (official, before any rewrite or deletion)](#3-required-recovery-path-official-before-any-rewrite-or-deletion)
+- [4. CORS defect (affects every function using `_shared/http.ts`)](#4-cors-defect-affects-every-function-using-_sharedhttpts)
+- [5. Classification summary](#5-classification-summary)
+
+## Current repository vs historical deployment paths
+
+The active repository is `https://github.com/amoai-tech/mdeai`, with app and Supabase source at the repository root. Treat `<repo-root>` as the current checkout root (for example, resolve it with `git rev-parse --show-toplevel`) rather than relying on a machine-specific absolute path.
+
+Paths such as `/home/sk/mdeai/mdeapp/...`, `/home/sk/mde/...`, worktree paths, and `/tmp/user_fn_*` below are **historical live deployment provenance captured on 2026-09-17**. Preserve them exactly as evidence; do not reinterpret them as current source locations.
 
 ---
 
