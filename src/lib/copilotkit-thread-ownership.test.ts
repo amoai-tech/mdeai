@@ -86,6 +86,64 @@ describe("extractThreadId", () => {
     expect(extractThreadId({ body: "not-an-object" })).toBeNull();
     expect(extractThreadId({ method: "info" })).toBeNull();
   });
+
+  // The runtime reads threadId from a different field per method
+  // (v2 fetch-handler.ts): `body` for agent/run + agent/connect, but
+  // `params.threadId` for agent/stop. Authorizing the wrong field means the
+  // gate approves one thread while the runtime acts on another.
+  describe("per-method threadId location", () => {
+    it("uses params.threadId for agent/stop", () => {
+      expect(
+        extractThreadId({
+          method: "agent/stop",
+          params: { agentId: "conciergeAgent", threadId: "stopped-thread" },
+        }),
+      ).toBe("stopped-thread");
+    });
+
+    // REGRESSION: an owned body.threadId must not be able to authorize a stop
+    // aimed at someone else's thread. The extracted id is the one the runtime
+    // stops, so the ownership gate checks — and refuses — the victim's thread.
+    it("prefers params.threadId for agent/stop even when body names an owned thread", () => {
+      expect(
+        extractThreadId({
+          method: "agent/stop",
+          params: { agentId: "conciergeAgent", threadId: "victim-thread" },
+          body: { threadId: "my-own-thread" },
+        }),
+      ).toBe("victim-thread");
+    });
+
+    it("uses body.threadId for agent/run and agent/connect", () => {
+      for (const method of ["agent/run", "agent/connect"]) {
+        expect(
+          extractThreadId({
+            method,
+            params: { agentId: "conciergeAgent", threadId: "not-what-run-uses" },
+            body: { threadId: "run-thread" },
+          }),
+        ).toBe("run-thread");
+      }
+    });
+
+    it("keeps the liberal order for an unknown method", () => {
+      expect(
+        extractThreadId({ method: "transcribe", body: { threadId: "b" }, params: { threadId: "p" } }),
+      ).toBe("b");
+      expect(extractThreadId({ body: { threadId: "b" }, params: { threadId: "p" } })).toBe("b");
+    });
+
+    // Falling back matters: `null` reads as "no thread named", which the gate
+    // allows, so an absent preferred field must not become a free pass.
+    it("still finds the id when the method's own field is absent", () => {
+      expect(
+        extractThreadId({ method: "agent/stop", body: { threadId: "fallback-body" } }),
+      ).toBe("fallback-body");
+      expect(
+        extractThreadId({ method: "agent/run", params: { threadId: "fallback-params" } }),
+      ).toBe("fallback-params");
+    });
+  });
 });
 
 describe("readRequestedThreadId", () => {

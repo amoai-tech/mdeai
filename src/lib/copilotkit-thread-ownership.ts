@@ -52,10 +52,21 @@ export type RequestedThread =
  * any authenticated caller — the 403 branch was unreachable in production and
  * only ever exercised by hand-built test bodies.
  *
- * All plausible locations are checked, in priority order. Under-reading here is
- * an authorization bypass, so the cost of one extra candidate is worth paying:
- * a thread id the client names must always reach the ownership check. First
- * non-empty trimmed value wins.
+ * The location **differs per method**, and authorization must agree with the
+ * field the runtime actually acts on. `copilotRuntimeNextJSAppRouterEndpoint`
+ * is backed by the v2 router, whose `fetch-handler.ts` reads:
+ *
+ *   agent/run | agent/connect → the AG-UI run input in `body`
+ *   agent/stop                → `params.threadId`
+ *
+ * Preferring `body` unconditionally therefore let a request authorize an owned
+ * `body.threadId` while `agent/stop` halting whatever `params.threadId` named —
+ * someone else's active thread. Known methods try the runtime's own field first.
+ *
+ * Every list keeps the remaining locations as fallbacks, because returning
+ * `null` here is **fail-open**: `null` reads as "no thread named", which the
+ * gate allows. Under-reading is the bypass, so one extra candidate is always
+ * cheaper than a missed check. First non-empty trimmed value wins.
  *
  * The **trimmed** value is returned, not the raw one. Returning the raw value
  * while validating the trimmed one would let a padded foreign thread ID
@@ -72,7 +83,17 @@ export function extractThreadId(payload: unknown): string | null {
     return (container as Record<string, unknown>).threadId;
   };
 
-  for (const value of [nested("body"), record.threadId, nested("params")]) {
+  const method = typeof record.method === "string" ? record.method : "";
+  const candidates =
+    method === "agent/stop"
+      ? // `agent/stop` ignores body.threadId entirely and stops params.threadId.
+        [nested("params"), nested("body"), record.threadId]
+      : method === "agent/run" || method === "agent/connect"
+        ? [nested("body"), nested("params"), record.threadId]
+        : // Unknown method: keep the liberal order rather than guess a field.
+          [nested("body"), record.threadId, nested("params")];
+
+  for (const value of candidates) {
     if (typeof value !== "string") continue;
     const trimmed = value.trim();
     if (trimmed.length > 0) return trimmed;
