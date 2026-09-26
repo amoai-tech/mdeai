@@ -1,3 +1,4 @@
+import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it } from "vitest";
 import { faithfulnessScorer } from "../faithfulness";
 import {
@@ -12,8 +13,10 @@ import { FaithfulnessVerdictSchema } from "../verdict-schema";
  *  - a grounded reply (only names/prices present in tool output) → faithful, score 1
  *  - a reply citing a fabricated listing + invented price → unfaithful, score < 1
  *
- * The judge is LLM-free here (no GOOGLE_GENERATIVE_AI_API_KEY in CI), so these
- * are deterministic and offline.
+ * These fixtures are deterministic and offline. The scorer's Gemini judge switches
+ * on from an ambient GOOGLE_GENERATIVE_AI_API_KEY, so the run() cases below pin it
+ * **off** explicitly through request context, and the live judge path is covered
+ * separately — key-gated — at the end of this file.
  */
 
 // Two real rentals the agent's search tool returned this turn.
@@ -98,6 +101,17 @@ describe("faithfulness core — venue hallucination (SAN-590)", () => {
 });
 
 describe("faithfulnessScorer (Mastra createScorer) — heuristic path", () => {
+  /**
+   * Pin the judge OFF so this block stays deterministic and offline on every
+   * machine, key or no key. Without this it silently became a live network test
+   * the moment a Gemini key appeared in the environment.
+   */
+  function heuristicOnly() {
+    const requestContext = new RequestContext();
+    requestContext.set("faithfulnessJudge", false);
+    return { requestContext };
+  }
+
   it("registers with the expected id/name/description", () => {
     expect(faithfulnessScorer.id).toBe("faithfulness");
     expect(faithfulnessScorer.name).toBe("Hallucination / Faithfulness");
@@ -106,6 +120,7 @@ describe("faithfulnessScorer (Mastra createScorer) — heuristic path", () => {
 
   it("run() scores the grounded reply at 1.0", async () => {
     const result = await faithfulnessScorer.run({
+      ...heuristicOnly(),
       input: TOOL_OUTPUT,
       output: { reply: GROUNDED_REPLY },
     });
@@ -114,9 +129,44 @@ describe("faithfulnessScorer (Mastra createScorer) — heuristic path", () => {
 
   it("run() scores the fabricated reply below 1.0", async () => {
     const result = await faithfulnessScorer.run({
+      ...heuristicOnly(),
       input: TOOL_OUTPUT,
       output: { reply: FABRICATED_REPLY },
     });
     expect(result.score).toBeLessThan(1);
   });
+});
+
+const hasGeminiKey = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+
+/**
+ * The live judge path — regression guard for a fail-open bug.
+ *
+ * The judge identified both inventions correctly but answered using the prompt's
+ * own `- [type] claim` decoration (`"[price] 9,900,000 COP"`). The exact-match
+ * lookup then matched nothing and dropped both, so a reply that invented a listing
+ * and a price scored 1.0 — the scorer reported a hallucination as fully grounded.
+ *
+ * Reproduced on `gemini-3.5-flash-lite` and its predecessor `gemini-3.5-flash`,
+ * which both returned the decorated strings, so this was an answer-mapping bug
+ * rather than a model weakness. Key-gated because it is a real network call.
+ */
+describe.skipIf(!hasGeminiKey)("faithfulnessScorer — live judge path", () => {
+  it("still flags the fabricated reply once the judge confirms it", async () => {
+    const result = await faithfulnessScorer.run({
+      input: TOOL_OUTPUT,
+      output: { reply: FABRICATED_REPLY },
+    });
+    expect(result.score).toBeLessThan(1);
+    // Proves the judge ran and confirmed, rather than the heuristic fallback.
+    expect(result.reason).toContain("judge-confirmed");
+  }, 60_000);
+
+  it("keeps the grounded reply at 1.0", async () => {
+    const result = await faithfulnessScorer.run({
+      input: TOOL_OUTPUT,
+      output: { reply: GROUNDED_REPLY },
+    });
+    expect(result.score).toBe(1);
+  }, 60_000);
 });
