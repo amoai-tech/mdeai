@@ -102,16 +102,43 @@ export async function createThrowawayIdentity(label: string): Promise<ThrowawayI
  */
 export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Promise<void> {
   const admin = await getSupabaseAdmin();
-  const { data: threads } = await admin
+  const failures: string[] = [];
+
+  // Every step is attempted even if an earlier one fails, and every failure is
+  // reported. These rows are real production data: swallowing an error here
+  // would orphan a throwaway user's threads and messages permanently, with a
+  // green test run as the only evidence.
+  const { data: threads, error: selectError } = await admin
     .from("mastra_threads")
     .select("id")
     .eq("resourceId", identity.userId);
-  const ids = (threads ?? []).map((row) => (row as { id: string }).id);
-  if (ids.length > 0) {
-    await admin.from("mastra_messages").delete().in("thread_id", ids);
-    await admin.from("mastra_threads").delete().eq("resourceId", identity.userId);
+  if (selectError) {
+    // Without the id list the rows cannot be found again by thread, so this is
+    // the one failure that must never pass silently.
+    failures.push(`select threads: ${selectError.message}`);
   }
-  await admin.auth.admin.deleteUser(identity.userId);
+  const ids = (threads ?? []).map((row) => (row as { id: string }).id);
+
+  if (ids.length > 0) {
+    const { error: messagesError } = await admin
+      .from("mastra_messages")
+      .delete()
+      .in("thread_id", ids);
+    if (messagesError) failures.push(`delete messages: ${messagesError.message}`);
+
+    const { error: threadsError } = await admin
+      .from("mastra_threads")
+      .delete()
+      .eq("resourceId", identity.userId);
+    if (threadsError) failures.push(`delete threads: ${threadsError.message}`);
+  }
+
+  const { error: userError } = await admin.auth.admin.deleteUser(identity.userId);
+  if (userError) failures.push(`delete identity: ${userError.message}`);
+
+  if (failures.length > 0) {
+    throw new Error(`cleanup failed for ${identity.email} — ${failures.join("; ")}`);
+  }
 }
 
 /**

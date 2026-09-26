@@ -120,8 +120,23 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   // explicit cleanup test below is the proof; this only guarantees the attempt.
   test.afterAll(async () => {
     if (cleanedUp) return;
-    if (userA) await deleteThrowawayIdentity(userA).catch(() => undefined);
-    if (userB) await deleteThrowawayIdentity(userB).catch(() => undefined);
+    // Report failures instead of swallowing them: an unremoved identity means
+    // real rows are still sitting in production, and `.catch(() => undefined)`
+    // would hide exactly that behind a green run.
+    const failures: string[] = [];
+    for (const identity of [userA, userB]) {
+      if (!identity) continue;
+      try {
+        await deleteThrowawayIdentity(identity);
+      } catch (error) {
+        failures.push((error as Error).message);
+      }
+    }
+    if (failures.length > 0) {
+      throw new Error(
+        `post-run cleanup failed — production rows may be orphaned: ${failures.join(" | ")}`,
+      );
+    }
   });
 
   test("anonymous callers reach neither the runtime nor a named thread", async ({ request }) => {
@@ -225,9 +240,15 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
         ).data ?? []
       : [];
 
-    await deleteThrowawayIdentity(userA);
-    await deleteThrowawayIdentity(userB);
-    cleanedUp = true;
+    try {
+      await deleteThrowawayIdentity(userA);
+      await deleteThrowawayIdentity(userB);
+    } finally {
+      // Mark the attempt either way: a retry from afterAll would only repeat a
+      // delete against rows this test already reported on, producing a second,
+      // less precise failure instead of the real one.
+      cleanedUp = true;
+    }
 
     expect(await threadsOwnedBy(userA.userId), "User A threads after cleanup").toEqual([]);
     expect(await threadsOwnedBy(userB.userId), "User B threads after cleanup").toEqual([]);
