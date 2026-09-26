@@ -57,6 +57,26 @@ function judgeEnabled(requestContext: unknown): boolean {
 }
 
 /**
+ * Claims are shown to the judge as `- [type] claim` bullets, and models routinely
+ * echo that decoration back verbatim. Comparing the raw strings then discards a
+ * *correct* verdict and silently un-flags a real fabrication — the scorer reports
+ * 1.0 ("fully grounded") for an invented listing, which is fail-open. Strip the
+ * bullet and the `[type]` wrapper and collapse whitespace before comparing.
+ *
+ * Verified behaviour: `gemini-3.5-flash-lite` and `gemini-3.5-flash` both return
+ * `"[price] 9,900,000 COP"` for the candidate `9,900,000 COP`, which the previous
+ * exact-match dropped (score 1.0). Both are covered by the regression test.
+ */
+function normalizeClaim(claim: string): string {
+  return claim
+    .toLowerCase()
+    .replace(/^\s*[-*•]\s*/, "")
+    .replace(/^\[[^\]]*\]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Ask Gemini which heuristically-unsupported claims are GENUINELY fabricated vs a
  * paraphrase/derivation of tool output. Returns the subset to keep flagged. On any
  * error, falls back to trusting the heuristic (fail-closed: keep all flagged).
@@ -84,10 +104,11 @@ async function judgeFabrications(
         "Return only the claims that are genuinely absent from the tool output.",
         "A claim that is a paraphrase, synonym, or directly derivable from the tool",
         "output is NOT fabricated — omit it.",
+        "Repeat each fabricated claim verbatim, without the [type] prefix.",
       ].join("\n"),
     });
-    const fabricatedSet = new Set(object.fabricated.map((s) => s.toLowerCase().trim()));
-    return unsupported.filter((c) => fabricatedSet.has(c.claim.toLowerCase().trim()));
+    const fabricatedSet = new Set(object.fabricated.map(normalizeClaim));
+    return unsupported.filter((c) => fabricatedSet.has(normalizeClaim(c.claim)));
   } catch {
     return unsupported;
   }

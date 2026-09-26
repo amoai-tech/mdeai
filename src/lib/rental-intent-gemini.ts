@@ -3,6 +3,7 @@
  */
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
+import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
 import {
   rentalIntentSchema,
   type RentalIntent,
@@ -23,7 +24,11 @@ export const parseRentalIntentWithGemini = async (
   if (!trimmed) return null;
 
   const { object } = await generateObject({
-    model: google("gemini-3.5-flash"),
+    // Shared model id: this site builds its own raw instance (not the wrapped
+    // FLASH_MODEL), so identity comes from `@/lib/ai-model-ids` rather than a
+    // second literal. Structured output is a supported capability of this
+    // model; see src/mastra/lib/models.ts.
+    model: google(GEMINI_FLASH_MODEL_ID),
     schema: geminiRentalIntentObjectSchema,
     prompt: `${GEMINI_RENTAL_PROMPT}\n\nUser message: ${trimmed}`,
     abortSignal: options?.signal,
