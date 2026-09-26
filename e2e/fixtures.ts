@@ -25,17 +25,29 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
   authStorageState: [
     async ({ browser, authSession }, runFixture) => {
       const context = await browser.newContext({ storageState: undefined });
-      await injectSession(context, authSession);
-      await runFixture(await context.storageState());
-      await context.close();
+      try {
+        await injectSession(context, authSession);
+        await runFixture(await context.storageState());
+      } finally {
+        await context.close();
+      }
     },
     { scope: "worker" },
   ],
-  authenticatedPage: async ({ browser, authStorageState }, runFixture) => {
-    const context = await browser.newContext({ storageState: authStorageState });
-    const page = await context.newPage();
-    await runFixture(page);
-    await context.close();
+  authenticatedPage: async (
+    { browser, authStorageState, baseURL, viewport },
+    runFixture,
+  ) => {
+    const context = await browser.newContext({
+      storageState: authStorageState,
+      baseURL: baseURL ?? undefined,
+      viewport,
+    });
+    try {
+      await runFixture(await context.newPage());
+    } finally {
+      await context.close();
+    }
   },
 });
 
