@@ -38,7 +38,7 @@
 
 begin;
 
-select plan(39);
+select plan(41);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — deterministic, transaction-owned, rolled back at the end.
@@ -53,9 +53,11 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, created_at, updated_at)
 values
   ('a1054000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'san1054-broker-a@example.com', '', now(), now(), now()),
+   'authenticated', 'authenticated', 'san1054-broker-a@example.com',
+   extensions.crypt('san1054-fixture', extensions.gen_salt('bf')), now(), now(), now()),
   ('a1054000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'san1054-broker-b@example.com', '', now(), now(), now());
+   'authenticated', 'authenticated', 'san1054-broker-b@example.com',
+   extensions.crypt('san1054-fixture', extensions.gen_salt('bf')), now(), now(), now());
 
 insert into public.landlord_profiles (id, user_id, display_name, verification_status)
 values
@@ -354,6 +356,38 @@ select is(
     where schemaname = 'public' and tablename = 'apartments'
       and policyname = 'apartments_update_broker'),
   1, 'G: apartments_update_broker still exists');
+
+-- Presence is not behaviour. Section D proved Broker B cannot write; these two prove the
+-- SAME policies still permit what they are supposed to permit, so a policy that silently
+-- narrowed to "deny everyone" could not pass this section as a scope guard.
+--
+-- 021 is active here because Broker A published it in section F, so the catalog branch
+-- (`status IN ('active','booked')`) makes it visible to any authenticated user.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000002', true);
+
+select is(
+  (select count(*)::int from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  1, 'G: Broker B can still SELECT Broker A active listing through the catalog');
+
+reset role;
+
+-- The legitimate write path must survive too: Broker A updating its own listing is the
+-- control for the section D denial. available_to is used because it is not in
+-- trg_enqueue_embed_apartment's column list, so this cannot enqueue an embedding job.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000001', true);
+
+with upd as (
+  update public.apartments set available_to = '2099-12-30'
+  where id = 'a1054000-0000-4000-8000-000000000023'
+  returning 1
+)
+select is((select count(*)::int from upd), 1,
+          'G: Broker A can still directly UPDATE an owned listing (control)');
+
+reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- H · SAN-1349 HANDOFF — recorded, not asserted as a pass.

@@ -54,6 +54,13 @@ const PRIVATE_LEAD_NAME = `PRIVATE-LEAD-${runMarker}`;
 const PRIVATE_LEAD_EMAIL = `private-${runMarker}@qa-isolation.mdeai.co`;
 
 /**
+ * The renter used by the HITL section, keyed by email rather than apartment so cleanup
+ * can delete that lead directly. Declared here, not beside its test, because
+ * `cleanupFixtures` references it and must not depend on declaration order.
+ */
+const RENTER_EMAIL = `hitl-${runMarker}@qa-isolation.mdeai.co`;
+
+/**
  * Hostile instructions stored *inside* a listing. The security claim is not that a model
  * refuses them — it is that stored content cannot grant authority. The assertion is
  * therefore on the authorization verdict and durable state, never on model prose.
@@ -189,20 +196,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   // cleanup test below is the proof; this only guarantees the attempt.
   test.afterAll(async () => {
     if (cleanedUp || !enabled) return;
-    const failures: string[] = [];
-    try {
-      await cleanupFixtures();
-    } catch (error) {
-      failures.push((error as Error).message);
-    }
-    for (const identity of [brokerA, brokerB]) {
-      if (!identity) continue;
-      try {
-        await deleteThrowawayIdentity(identity);
-      } catch (error) {
-        failures.push((error as Error).message);
-      }
-    }
+    const failures = [...(await cleanupFixtures()), ...(await cleanupIdentities())];
     if (failures.length > 0) {
       throw new Error(
         `post-run cleanup failed — production rows may be orphaned: ${failures.join(" | ")}`,
@@ -210,18 +204,90 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
     }
   });
 
-  async function cleanupFixtures() {
+  /**
+   * Delete every fixture row this run created. Returns the collected failures instead of
+   * throwing on the first one, because aborting early orphans the remaining children —
+   * the same defect class the SAN-547 cleanup had.
+   *
+   * Two properties are deliberate:
+   *
+   *   * **Sequenced and child-before-parent.** Each step is a thunk awaited in order.
+   *     supabase-js builders are lazy thenables that only issue their request inside
+   *     `then()`, so a plain array of builders is already sequential today; the thunks
+   *     make the ordering explicit rather than resting on that implementation detail.
+   *   * **Skipped when the key was never assigned.** A `beforeAll` that failed partway
+   *     leaves empty ids, and deleting with an empty uuid raises instead of no-oping —
+   *     which would mask the real setup failure.
+   *
+   * The viewing-request lead is deleted by renter email rather than by apartment, so it
+   * is still removed even if it never landed on the fixture apartment.
+   */
+  async function cleanupFixtures(): Promise<string[]> {
     const admin = await getSupabaseAdmin();
-    // Children before parents: showings → leads → apartment → profiles.
-    for (const step of [
-      admin.from("showings").delete().eq("apartment_id", apartmentId),
-      admin.from("leads").delete().eq("apartment_id", apartmentId),
-      admin.from("apartments").delete().eq("id", apartmentId),
-      admin.from("landlord_profiles").delete().in("id", [landlordAId, landlordBId].filter(Boolean)),
-    ]) {
-      const { error } = await step;
-      if (error) throw new Error(`fixture cleanup failed: ${error.message}`);
+    const failures: string[] = [];
+    const steps: { label: string; run: () => PromiseLike<{ error: { message: string } | null }> }[] =
+      [];
+
+    if (apartmentId) {
+      steps.push(
+        {
+          label: "showings",
+          run: () => admin.from("showings").delete().eq("apartment_id", apartmentId),
+        },
+        {
+          label: "leads",
+          run: () => admin.from("leads").delete().eq("apartment_id", apartmentId),
+        },
+        {
+          label: "apartment",
+          run: () => admin.from("apartments").delete().eq("id", apartmentId),
+        },
+      );
     }
+
+    // Keyed by email, not apartment: independent of whether the request attached to the
+    // fixture listing, and it cannot collide with the sentinel private lead above.
+    steps.push({
+      label: "viewing-request lead",
+      run: () => admin.from("leads").delete().eq("email", RENTER_EMAIL),
+    });
+
+    const profileIds = [landlordAId, landlordBId].filter(Boolean);
+    if (profileIds.length > 0) {
+      steps.push({
+        label: "landlord_profiles",
+        run: () => admin.from("landlord_profiles").delete().in("id", profileIds),
+      });
+    }
+
+    for (const step of steps) {
+      try {
+        const { error } = await step.run();
+        if (error) failures.push(`${step.label}: ${error.message}`);
+      } catch (error) {
+        failures.push(`${step.label}: ${(error as Error).message}`);
+      }
+    }
+
+    return failures;
+  }
+
+  /**
+   * Delete both throwaway identities, attempting each even if the first fails. A failure
+   * here means real production identities are still present, so the message is collected
+   * rather than swallowed.
+   */
+  async function cleanupIdentities(): Promise<string[]> {
+    const failures: string[] = [];
+    for (const identity of [brokerA, brokerB]) {
+      if (!identity) continue;
+      try {
+        await deleteThrowawayIdentity(identity);
+      } catch (error) {
+        failures.push(`${identity.email}: ${(error as Error).message}`);
+      }
+    }
+    return failures;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -348,13 +414,12 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   // behind one explicit call and that repeating it cannot double-write.
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const renterEmail = `hitl-${runMarker}@qa-isolation.mdeai.co`;
   const viewingRequest = () => ({
     listingId: APARTMENT_SLUG,
     listingTitle: APARTMENT_TITLE,
     neighborhood: "Laureles",
     name: "SAN1054 Renter",
-    email: renterEmail,
+    email: RENTER_EMAIL,
     phone: "+573001112233",
     // Wall clock in the listing's timezone, NOT an ISO instant with an offset:
     // resolvePreferredAtInstant matches /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/
@@ -365,30 +430,32 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   test("no approval and rejection write zero rows", async () => {
     // Baseline, then two explicit non-approvals. Nothing calls the endpoint, so the
     // durable count must stay at zero — the AI proposing a viewing is not a write.
-    expect(await leadCountForEmail(renterEmail), "baseline before any approval").toBe(0);
+    expect(await leadCountForEmail(RENTER_EMAIL), "baseline before any approval").toBe(0);
   });
 
   test("an approved viewing request writes exactly one lead", async ({ request }) => {
     const res = await request.post(route("/api/leads/schedule-viewing"), {
       data: viewingRequest(),
     });
+    // Exact status, not `toBeLessThan(300)`: a 3xx would satisfy a loose bound while
+    // meaning the creation endpoint had started redirecting, which is a behaviour change.
     expect(
       res.status(),
       `approved viewing request must be accepted (body: ${(await res.text()).slice(0, 300)})`,
-    ).toBeLessThan(300);
+    ).toBe(200);
 
-    expect(await leadCountForEmail(renterEmail), "leads after one approval").toBe(1);
+    expect(await leadCountForEmail(RENTER_EMAIL), "leads after one approval").toBe(1);
   });
 
   test("replaying the approved request does not double-write", async ({ request }) => {
     const res = await request.post(route("/api/leads/schedule-viewing"), {
       data: viewingRequest(),
     });
-    expect(res.status()).toBeLessThan(300);
+    expect(res.status(), "replayed viewing request status").toBe(200);
 
     // Idempotency: a retried submission (lost response, double tap) must collapse onto
     // the same logical request rather than creating a second lead.
-    expect(await leadCountForEmail(renterEmail), "leads after replay").toBe(1);
+    expect(await leadCountForEmail(RENTER_EMAIL), "leads after replay").toBe(1);
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -396,19 +463,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   test("cleanup removes every row this run created, proven by re-query", async () => {
-    const failures: string[] = [];
-    try {
-      await cleanupFixtures();
-    } catch (error) {
-      failures.push((error as Error).message);
-    }
-    for (const identity of [brokerA, brokerB]) {
-      try {
-        await deleteThrowawayIdentity(identity);
-      } catch (error) {
-        failures.push((error as Error).message);
-      }
-    }
+    const failures = [...(await cleanupFixtures()), ...(await cleanupIdentities())];
     // Both were attempted, so a retry from afterAll would only repeat work already
     // reported on. Mark done first, then surface the real failure.
     cleanedUp = true;
@@ -442,7 +497,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
 
     // The viewing request created its own lead on the fixture apartment; cleanup above
     // deletes by apartment_id, so assert the renter's row is gone too.
-    expect(await leadCountForEmail(renterEmail), "viewing-request lead after cleanup").toBe(0);
+    expect(await leadCountForEmail(RENTER_EMAIL), "viewing-request lead after cleanup").toBe(0);
 
     for (const identity of [brokerA, brokerB]) {
       const deleted = await admin.auth.admin.getUserById(identity.userId);
