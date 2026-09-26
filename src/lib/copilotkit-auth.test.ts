@@ -38,6 +38,11 @@ const sameOrigin = {
   host: "www.mdeai.co",
 };
 
+/** The most common probe shape in this suite: a same-origin browser request. */
+function sameOriginRequest(): NextRequest {
+  return request({ headers: sameOrigin });
+}
+
 /** A request carrying the valid service credential. */
 function serviceRequest(): NextRequest {
   return request({ headers: { authorization: `Bearer ${KEY}` } });
@@ -148,7 +153,7 @@ describe("browser path — identity and ownership", () => {
   // INVERTED/REGRESSION — previously "allows same-origin browser POST in production
   // without bearer". Same-origin alone must no longer authorize anything.
   it("does not authorize on same-origin headers alone", () => {
-    const result = evaluateCopilotKitAuth(request({ headers: sameOrigin }), { userId: null });
+    const result = evaluateCopilotKitAuth(sameOriginRequest(), { userId: null });
     expect(result).toMatchObject({ allowed: false, status: 401 });
   });
 
@@ -163,7 +168,7 @@ describe("browser path — identity and ownership", () => {
 
   it("allows an authenticated caller to create a new thread", () => {
     expect(
-      evaluateCopilotKitAuth(request({ headers: sameOrigin }), {
+      evaluateCopilotKitAuth(sameOriginRequest(), {
         userId: USER_A,
         thread: { kind: "new", threadId: "fresh" },
       }),
@@ -180,7 +185,7 @@ describe("browser path — identity and ownership", () => {
   });
 
   it("returns 403 for a thread owned by another user", () => {
-    const result = evaluateCopilotKitAuth(request({ headers: sameOrigin }), {
+    const result = evaluateCopilotKitAuth(sameOriginRequest(), {
       userId: USER_A,
       thread: { kind: "existing", threadId: "t", resourceId: USER_B },
     });
@@ -188,7 +193,7 @@ describe("browser path — identity and ownership", () => {
   });
 
   it("rejects an existing thread on the shared anonymous resource (D17)", () => {
-    const result = evaluateCopilotKitAuth(request({ headers: sameOrigin }), {
+    const result = evaluateCopilotKitAuth(sameOriginRequest(), {
       userId: USER_A,
       thread: { kind: "existing", threadId: "t", resourceId: ANONYMOUS_RESOURCE_ID },
     });
@@ -284,7 +289,7 @@ describe("authorizeCopilotKitRequest response", () => {
 
   it("does not return the key for a same-origin unauthenticated request", async () => {
     vi.stubEnv("COPILOTKIT_API_KEY", KEY);
-    const result = authorizeCopilotKitRequest(request({ headers: sameOrigin }), { userId: null });
+    const result = authorizeCopilotKitRequest(sameOriginRequest(), { userId: null });
     expect(result.allowed === false && result.response.status).toBe(401);
     const body = await (result.allowed === false ? result.response : new Response()).text();
     expect(body).not.toContain(KEY);

@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import type { Session } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -78,9 +79,9 @@ export type ThrowawayIdentity = { email: string; userId: string };
  */
 export async function createThrowawayIdentity(label: string): Promise<ThrowawayIdentity> {
   const admin = await getSupabaseAdmin();
-  const email = `${label}-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}@qa-isolation.mdeai.co`;
+  // randomUUID, not Math.random: two runs starting in the same millisecond must
+  // not be able to mint the same identity and then delete each other's rows.
+  const email = `${label}-${randomUUID()}@qa-isolation.mdeai.co`;
   const { data, error } = await admin.auth.admin.createUser({
     email,
     email_confirm: true,
