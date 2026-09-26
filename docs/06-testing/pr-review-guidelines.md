@@ -42,20 +42,43 @@ required_status_checks.contexts = ["floor"]     one gate, owned by deterministic
 required_conversation_resolution = enabled      every unresolved review thread also gates
 ```
 
-GitHub's conversation resolution is a single boolean and **cannot** be scoped per author or per app. So *any* unresolved inline review thread blocks the merge: human, high-value bot, or advisory bot alike. Merge cost is therefore governed by **how many inline threads get opened**, not by how many review apps are installed.
+GitHub's conversation resolution is a single boolean and **cannot** be scoped per author or per app. So *any* unresolved inline review thread blocks the merge: human, high-value bot, or advisory bot alike. Merge cost is therefore governed by **how many inline threads get opened**, not by how many review apps are installed. A required status check, by contrast, *is* scoped to one app — so a check and a conversation thread are not interchangeable gates, and the difference is the lever this policy uses.
 
-### Who may open a blocking inline thread
+### Which apps earn an inline thread
 
-| Source | Inline threads | Evidence |
+| Source | Verdict | Measured evidence |
 | -- | -- | -- |
-| Human reviewer | ✅ allowed | An unresolved human finding must keep blocking |
-| CodeRabbit | ✅ allowed | 4 of 4 threads on PR #120 resolved into fixes |
-| Sourcery | ✅ allowed | Real, security-relevant find on PR #122 (untrimmed `threadId` → 403 bypass) |
-| Codacy | ✅ allowed | 3 of 4 threads on PR #120 became real fixes (`error.cause` fallback, `UND_ERR` prefix match, `BROKEN_REFERENCE` default) |
-| PR-Agent (`review`) | ❌ summary only | Already summary-only and not a required check |
-| Kilo Code Review | ❌ summary only | 3 of 5 findings on PR #120 were factually wrong, stated confidently |
+| Human reviewer | inline | An unresolved human finding must keep blocking |
+| CodeRabbit | inline | 4 of 4 threads on PR #120 resolved into fixes |
+| Sourcery | inline | Real, security-relevant find on PR #122 (untrimmed `threadId` → 403 bypass) |
+| Codacy | inline | 3 of 4 threads on PR #120 became real fixes (`error.cause` fallback, `UND_ERR` prefix match, `BROKEN_REFERENCE` default) |
+| PR-Agent (`review`) | summary only | Already summary-only and not a required check |
+| Kilo Code Review | advisory | 3 of 5 findings on PR #120 were factually wrong, stated confidently |
 
-Three of the four review apps have produced fixes that are in `main` today, so this is not "bots are noisy" — the noise is concentrated in one app. Re-derive this table from the next three pull requests; do not assume it still holds.
+Three of the four review apps produced fixes that are in `main` today, so this is not "bots are noisy" — the noise is concentrated in one app. Re-derive this table from the next three pull requests; do not assume it still holds.
+
+### What can actually be configured
+
+Verified against vendor documentation, not assumed:
+
+| App | In-repo lever | Effect on blocking | Not possible |
+| -- | -- | -- | -- |
+| Kilo | `REVIEW.md` at the repository root, read from the PR's **base** branch (requires the app's "Use REVIEW.md" toggle) | Shapes severity calibration, files to skip, and verification expectations. Cannot change output formatting or thread behaviour. | **There is no summary-only mode and no inline/summary key.** The only dashboard levers are Review Style (`Lenient` = critical issues only) and disabling reviews for the repository. |
+| CodeRabbit | `.coderabbit.yaml` → `reviews.profile: quiet` | "Quiet for only the most important feedback" — fewer inline comments | No key moves emitted nitpicks into the summary. `request_changes_workflow: false` (already set) is what stops CodeRabbit submitting a blocking change-request. |
+| Sourcery | none documented | — | No `.sourcery.yaml` exists. Dashboard only: Review profile `Quiet` ("only bugs that should block a merge"), or disable "Enable AI review comments" for summary-only output. |
+| Codacy | `.codacy.yml` → `exclude_paths`, `engines.*`, `engines.duplication.*`, `languages.*.enabled` | Path and language scoping only | Tools and patterns **cannot** be enabled or disabled from the file, and inline-vs-summary is a UI-only setting. |
+| PR-Agent | `.pr_agent.toml` | Already summary-only | — |
+
+The consequence matters: **"make the noisy bot post a summary instead" is not achievable by configuration for Kilo.** Since Kilo cannot be made summary-only, the honest options are to keep it advisory and raise its evidence bar through `REVIEW.md`, or to remove the app. This document uses `REVIEW.md`.
+
+### Prefer required checks over conversation resolution
+
+A required status check **is** scoped to one app; conversation resolution is not. So the durable way to keep security findings blocking while removing nitpick blocking is:
+
+1. Require the check that fails only on real findings — `Sourcery review` fails only "when blocking security findings require changes", which makes it a scopable security gate.
+2. Keep nitpick-heavy apps from opening inline threads, or accept the per-thread resolve cost.
+
+The open risk of the first step is a required check that stops reporting (app removed or renamed) blocking every future merge. That is why `floor`, owned by this repository's own workflow, remains the primary gate.
 
 ### Measured baseline
 
@@ -79,6 +102,7 @@ One Kilo thread on PR #120 arrived **10 seconds after the merge** (23:11:16Z aga
 - `required_conversation_resolution` **stays enabled**. Disabling it removes the guarantee that an unresolved *human* finding is addressed, and no bot setting can restore that.
 - `floor` **stays the required status check**. It is a genuine universal gate, not an advisory one.
 - CodeRabbit, Sourcery and Codacy inline findings **stay**. Silencing them would have lost the `error.cause` classification fix and the `threadId` trimming fix that are in this repository's history.
+- `required_approving_review_count` is **1**. Branch protection lives outside the repository, so this is applied through the GitHub API, not by a file in this diff. Note the operational consequence: with exactly one human collaborator and `enforce_admins: false`, the sole admin still merges by bypass, so this is not yet a real gate. It becomes one when a second human reviewer exists. Do **not** set `enforce_admins: true` before then — GitHub does not allow authors to approve their own pull requests, so that combination deadlocks `main`.
 
 ### Operating rules that follow
 
