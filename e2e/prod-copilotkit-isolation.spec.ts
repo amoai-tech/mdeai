@@ -197,6 +197,27 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     expect(await res.json()).toEqual({ error: "unauthorized" });
   });
 
+  test("User B cannot stop User A's thread through the params-only stop shape", async ({ page }) => {
+    await signInAsOnOrigin(page, baseUrl, userB.email);
+
+    // `agent/stop` is the odd one out: the router reads `threadId` from
+    // `params`, not from the `body` run input. A gate that only read
+    // `body.threadId` would let User B pair an owned/absent body id with User A's
+    // thread in `params` and halt it. Both fields are supplied here so the test
+    // fails if extraction ever prefers the body again.
+    const res = await page.request.post(route("/api/copilotkit"), {
+      data: {
+        method: "agent/stop",
+        params: { agentId: "conciergeAgent", threadId },
+        body: { threadId: `${runMarker}-attacker-owned` },
+      },
+    });
+    expect(
+      res.status(),
+      `User B stopping User A's thread ${threadId} via params.threadId`,
+    ).toBe(403);
+  });
+
   test("User A is not refused by the gate for their own thread", async ({ page }) => {
     await signInAsOnOrigin(page, baseUrl, userA.email);
 
