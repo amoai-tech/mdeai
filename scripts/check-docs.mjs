@@ -95,12 +95,15 @@ for (const relative of normalizedMarkdown) {
     let hasValue = false;
     if (keyIndex >= 0) {
       const inlineValue = frontmatterLines[keyIndex].slice(prefix.length).trim();
-      hasValue = inlineValue.length > 0 && !inlineValue.startsWith("#");
+      const blockScalarHeader = /^[|>](?:(?:[1-9][+-]?|[+-][1-9]?))?(?:\s+#.*)?$/.test(
+        inlineValue,
+      );
+      hasValue = !blockScalarHeader && inlineValue.length > 0 && !inlineValue.startsWith("#");
       if (!hasValue) {
         for (let index = keyIndex + 1; index < frontmatterLines.length; index += 1) {
           const line = frontmatterLines[index];
           if (line.length > 0 && !/^\s/.test(line)) break;
-          if (/^\s+\S/.test(line) && !/^\s+#/.test(line)) {
+          if (/^\s+\S/.test(line) && (blockScalarHeader || !/^\s+#/.test(line))) {
             hasValue = true;
             break;
           }

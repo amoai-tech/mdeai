@@ -130,3 +130,22 @@ test("rejects machine-specific cd commands in the Graphify guide", () => {
   assert.notEqual(result.status, 0, "Graphify quick-start must not hard-code one machine checkout");
   assert.match(result.stderr, /stale repository root/i);
 });
+
+test("rejects empty YAML block-scalar required values", () => {
+  const root = fixture({
+    "docs/07-operations/README.md": "---\ntitle: Operations\nstatus: current\nupdated: 2026-09-25\nsource_of_truth: |-\n---\n# Operations\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.notEqual(result.status, 0, "empty block scalar must not satisfy required metadata");
+  assert.match(result.stderr, /frontmatter missing source_of_truth/i);
+});
+
+test("accepts nonempty YAML block scalars with chomping indicators", () => {
+  const root = fixture({
+    "docs/07-operations/README.md": "---\ntitle: Operations\nstatus: current\nupdated: 2026-09-25\nsource_of_truth: >- # provenance\n  merged main\n  Linear\n---\n# Operations\n",
+    "docs/index-docs.md": "---\ntitle: Index\nstatus: canonical\nupdated: 2026-09-25\nsource_of_truth: fixture\n---\n# Index\n\n## Complete active documentation catalog\n\n| Area | Document | Type | Status |\n|---|---|---|---|\n| Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |\n| Root | [`README.md`](README.md) | Markdown | Current |\n| Root | [`index-docs.md`](index-docs.md) | Markdown | Canonical index |\n| Task conventions | [`tasks/INDEX.md`](tasks/INDEX.md) | Markdown | Current |\n| Task conventions | [`tasks/CONVENTIONS.md`](tasks/CONVENTIONS.md) | Markdown | Current |\n\n### Historical archive\n",
+  });
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
