@@ -13,6 +13,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
+  "**/rental-ai-security.spec.ts",
 ];
 
 export default defineConfig({
