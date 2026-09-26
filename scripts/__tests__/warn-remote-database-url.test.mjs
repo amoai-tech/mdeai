@@ -46,17 +46,36 @@ afterEach(() => {
   for (const dir of fixtureDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
+/** Fixture filenames this helper will write, so a typo cannot silently create nothing. */
+const FIXTURE_NAMES = [".env.local", ".env"];
+
 /**
  * A scratch directory to run the CLI in. Every subprocess gets one of these rather than the
  * repo root, so a real `.env.local` in the checkout can never leak into an assertion.
+ *
+ * The files are written through literal basenames after a temporary `chdir`, rather than
+ * `fs.writeFileSync(path.join(dir, name), …)`. A computed path argument trips a
+ * non-literal-filename rule aimed at untrusted input, which cannot apply to a test-owned temp
+ * directory, so the literal form states plainly which files are ever created. `node --test` runs
+ * the top-level tests in one file sequentially, so the brief cwd change cannot race a sibling.
  * @param {Record<string, string>} [files] - dotenv files to create inside it.
  * @returns {string} the directory path.
  */
 function scratchDir(files = {}) {
+  for (const name of Object.keys(files)) {
+    if (!FIXTURE_NAMES.includes(name)) {
+      throw new Error(`scratchDir: unsupported fixture file ${name}`);
+    }
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mde-db-url-guard-"));
   fixtureDirs.push(dir);
-  for (const [name, content] of Object.entries(files)) {
-    fs.writeFileSync(path.join(dir, name), content);
+  const previous = process.cwd();
+  try {
+    process.chdir(dir);
+    if (files[".env.local"] !== undefined) fs.writeFileSync(".env.local", files[".env.local"]);
+    if (files[".env"] !== undefined) fs.writeFileSync(".env", files[".env"]);
+  } finally {
+    process.chdir(previous);
   }
   return dir;
 }

@@ -235,7 +235,24 @@ function envFileNames(nodeEnv) {
  * would break the moment Next relocates it. The subset is safe because anything it cannot
  * resolve stays literal and is reported rather than silently treated as absent.
  */
-const REFERENCE_PATTERN = String.raw`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`;
+const REFERENCE_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
+
+/**
+ * Substitute references from `scope`, leaving any that are unknown in place so a later check can
+ * still see them. Optionally records every referenced name in the same pass, which keeps the
+ * pattern in exactly one place.
+ * @param {string} value - the raw value.
+ * @param {Record<string, string | undefined>} scope - the names available to expand.
+ * @param {Set<string>} [referenced] - collects each referenced name, resolved or not.
+ * @returns {string} the expanded value.
+ */
+function expandReferences(value, scope, referenced) {
+  return value.replace(REFERENCE_PATTERN, (match, braced, bare) => {
+    const name = braced ?? bare;
+    referenced?.add(name);
+    return scope[name] ?? match;
+  });
+}
 
 /**
  * The variable names a value references, de-duplicated.
@@ -243,25 +260,9 @@ const REFERENCE_PATTERN = String.raw`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_]
  * @returns {string[]} the referenced names.
  */
 function referenceNames(value) {
-  const names = new Set();
-  for (const match of String(value).matchAll(new RegExp(REFERENCE_PATTERN, "g"))) {
-    names.add(match[1] ?? match[2]);
-  }
-  return [...names];
-}
-
-/**
- * Substitute references from `scope`, leaving any that are unknown in place so a later check
- * can still see them.
- * @param {string} value - the raw value.
- * @param {Record<string, string | undefined>} scope - the names available to expand.
- * @returns {string} the expanded value.
- */
-function expandReferences(value, scope) {
-  return value.replace(new RegExp(REFERENCE_PATTERN, "g"), (match, braced, bare) => {
-    const name = braced ?? bare;
-    return scope[name] ?? match;
-  });
+  const referenced = new Set();
+  expandReferences(String(value), {}, referenced);
+  return [...referenced];
 }
 
 /**
