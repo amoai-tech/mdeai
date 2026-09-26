@@ -18,6 +18,11 @@ RETIRED = {
     "tdd",
     "ci-review",
     "nextjs-review",
+    "copilotkit-review",
+    "maps-review",
+    "mastra-review",
+    "stripe-review",
+    "supabase-review",
     "mde-vercel",
 }
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED

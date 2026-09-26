@@ -25,31 +25,25 @@ Scores are audit scores, not benchmark pass rates. They combine:
 
 ## Current architecture
 
-`tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain and review skills remain specialist owners; do not collapse them into one giant skill.
+`tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain skills remain specialist owners; `code-review` owns universal PR/diff review.
 ## Skill scorecard
 
 | Skill | Score /100 | Decision | Main improvement |
 |---|---:|---|---|
-| `_template` | 62 | MOVE / EXCLUDE | Keep as authoring template but remove from active skill discovery |
 | `cloudinary` | 89 | KEEP CONDITIONAL | Verify Cloudinary is actually active before triggering |
 | `code-review` | 98 | KEEP | Universal PR/diff review; CI-specific invariants live in `references/ci-review.md` |
 | `copilotkit` | 97 | KEEP | Maintain version/source verification and v2 entrypoint accuracy |
-| `copilotkit-review` | 91 | KEEP + IMPROVE | Add adversarial review evals |
 | `events` | 91 | KEEP | Add domain references only as event rules grow |
 | `gemini` | 96 | KEEP | Maintain current-model/provider evidence |
 | `maps` | 94 | KEEP + IMPROVE | Add trigger and behavior evals |
-| `maps-review` | 90 | KEEP + IMPROVE | Add API-key/cost/grounding review evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
-| `mastra-review` | 92 | KEEP + IMPROVE | Add tenant/HITL/persistence review evals |
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
 | `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/Vercel domain owner; review/deploy/performance detail uses progressive-disclosure references |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
 | `research` | 95 | KEEP | Maintain primary-source/evidence discipline |
 | `stripe` | 94 | KEEP | Maintain payment/idempotency safety |
-| `stripe-review` | 91 | KEEP + IMPROVE | Add webhook/replay/authority review evals |
 | `supabase` | 98 | KEEP | Strong canonical owner; maintain live-schema evidence |
-| `supabase-review` | 93 | KEEP + IMPROVE | Add RLS/grant/migration review evals |
 | `systematic-debugging` | 96 | KEEP | Maintain root-cause-before-fix behavior |
 | `task-verifier` | 98 | KEEP + BENCHMARK | Add explicit Quick/Standard/Adversarial eval suite |
 | `tasks` | 98 | KEEP + BENCHMARK | Add lifecycle/worktree/PR/post-merge eval suite |
@@ -64,20 +58,19 @@ Scores are audit scores, not benchmark pass rates. They combine:
 
 | Candidate | Decision | Reason |
 |---|---|---|
-| `_template` | Remove from active discovery, keep template content | A template should not compete for triggering as a real skill |
 | former `mde-vercel` + former `nextjs-review` + `nextjs` | Consolidated | `nextjs` is the single domain owner; Vercel, performance, and review invariants load from `nextjs/references/` |
 | `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
 | `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
-| remaining specialist `*-review` skills | Review individually | Maps review is consolidated into canonical `maps`; keep other top-level review skills only where domain-specific invariants justify them |
+| former specialist `*-review` skills | Consolidated | Domain-specific invariants live with the domain owner; universal PR/diff review lives in `code-review` |
 ## Task 1 · Highest-priority actions
 
-1. **Merge PR #107 first** — it removes the redundant lifecycle skills and makes this index accurate for the intended canonical tree.
-2. **Add skill-integrity CI** — fail when `.agents/skills` contains real files, symlinks break, a canonical skill lacks `SKILL.md`, frontmatter names mismatch, retired owners reappear, or stale repo paths return.
-3. **Add eval coverage to critical routers/owners** — `tasks`, `task-verifier`, `using-mde-skills`, `maps`, and specialist review skills should have realistic positive + near-miss cases.
+1. **Keep skill-integrity CI mandatory** — fail when `.agents/skills` contains real files, symlinks break, a canonical skill lacks `SKILL.md`, frontmatter names mismatch, retired owners reappear, or stale repo paths return.
+2. **Expand routing evals** — add realistic positive + near-miss cases to critical routers and domain owners.
+3. **Benchmark critical owners** — especially `tasks`, `task-verifier`, `using-mde-skills`, and consolidated domain owners.
 4. **Benchmark consolidated `nextjs`** — exercise framework, Vercel, performance, and review-reference trigger/collision cases.
 5. **Clarify `testing` ↔ `playwright-cli`** — `testing` selects the proof ladder; `playwright-cli` performs browser automation and Playwright-specific mechanics.
-6. **Move `_template` out of active discovery** — retain it as authoring infrastructure, not a triggerable skill.
+6. **Keep templates and archives outside active discovery** — template content lives in `docs/templates/skill/`; retired Linear material lives in `docs/_archive/skills/linear/`.
 7. **Benchmark `real-estate`** — the duplicate has already been consolidated on current `main`; add realistic marketplace, MLS-near-miss, lead, and neighborhood evals.
 
 ## Task 2 · Anthropic best-practice checkpoints
