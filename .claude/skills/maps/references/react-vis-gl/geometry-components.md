@@ -1,5 +1,13 @@
 # Geometry Components (Circle, Polygon, Polyline)
 
+## Contents
+
+- Circle component
+- Polygon component
+- Polyline component
+- Real-time marker/shape synchronization
+- Common options
+
 **Important:** These components are NOT exported by `@vis.gl/react-google-maps`. Copy the implementations below into your project.
 
 ## Circle Component

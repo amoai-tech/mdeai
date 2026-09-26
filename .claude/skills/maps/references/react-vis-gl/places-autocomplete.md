@@ -1,476 +1,201 @@
-# Places Autocomplete & Geocoding
+# Places Autocomplete & Search — current React patterns
 
-## Important: Deprecation Notice
+Use this file only after checking current Google Maps JavaScript Places guidance. Prefer the modern Place APIs and keep requested fields minimal.
 
-As of **March 1st, 2025**, `google.maps.places.Autocomplete` (the widget) is **not available to new customers**. Use `AutocompleteService` with a custom UI instead.
+Primary sources:
+- https://developers.google.com/maps/documentation/javascript/place-autocomplete-data
+- https://developers.google.com/maps/documentation/javascript/place-autocomplete-new
+- https://developers.google.com/maps/documentation/javascript/places-js
+- https://developers.google.com/maps/documentation/javascript/reference/place
 
----
+## Custom autocomplete with the Place Autocomplete Data API
 
-## Custom Places Autocomplete (Recommended)
-
-Build your own autocomplete UI using `AutocompleteService`:
+For a custom React input, load the `places` library and call `AutocompleteSuggestion.fetchAutocompleteSuggestions()`. Keep one `AutocompleteSessionToken` for a user autocomplete session, then start a new token after selection. For this browser pattern, the HTTP-referrer-restricted browser key must allow both **Maps JavaScript API and Places API (New)**; keep the key limited to only the browser APIs the deployed feature actually uses.
 
 ```tsx
-// components/place-autocomplete.tsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
-interface PlaceAutocompleteProps {
-  onPlaceSelect: (place: google.maps.places.PlaceResult | null) => void;
-  placeholder?: string;
-}
+export function PlaceAutocomplete({
+  onSelect,
+}: {
+  onSelect: (place: google.maps.places.Place | null) => void;
+}) {
+  const places = useMapsLibrary('places');
+  const [input, setInput] = useState('');
+  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
+  const [sessionToken, setSessionToken] = useState<google.maps.places.AutocompleteSessionToken | null>(null);
 
-export function PlaceAutocomplete({ onPlaceSelect, placeholder = 'Search places...' }: PlaceAutocompleteProps) {
-  const placesLib = useMapsLibrary('places');
-  const [inputValue, setInputValue] = useState('');
-  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  
-  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
-  const placesService = useRef<google.maps.places.PlacesService | null>(null);
-  const sessionToken = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
-
-  // Initialize services
   useEffect(() => {
-    if (!placesLib) return;
-    
-    autocompleteService.current = new placesLib.AutocompleteService();
-    // PlacesService needs an element or map - use a dummy div
-    const div = document.createElement('div');
-    placesService.current = new placesLib.PlacesService(div);
-    sessionToken.current = new placesLib.AutocompleteSessionToken();
-  }, [placesLib]);
+    if (places) setSessionToken(new places.AutocompleteSessionToken());
+  }, [places]);
 
-  // Fetch suggestions
-  const fetchSuggestions = useCallback(async (input: string) => {
-    if (!autocompleteService.current || !input.trim()) {
+  useEffect(() => {
+    if (!places || !sessionToken || !input.trim()) {
       setSuggestions([]);
       return;
     }
 
-    try {
-      const response = await autocompleteService.current.getPlacePredictions({
-        input,
-        sessionToken: sessionToken.current!,
-        // Optional: bias results
-        // componentRestrictions: { country: 'us' },
-        // types: ['address'], // or 'establishment', 'geocode', etc.
-      });
-      
-      setSuggestions(response.predictions || []);
-      setIsOpen(true);
-    } catch (error) {
-      console.error('Autocomplete error:', error);
-      setSuggestions([]);
-    }
-  }, []);
-
-  // Debounce input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSuggestions(inputValue);
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, [inputValue, fetchSuggestions]);
-
-  // Handle suggestion selection
-  const handleSelect = useCallback((prediction: google.maps.places.AutocompletePrediction) => {
-    if (!placesService.current || !placesLib) return;
-
-    // Get full place details
-    placesService.current.getDetails(
-      {
-        placeId: prediction.place_id,
-        fields: ['geometry', 'name', 'formatted_address', 'place_id'],
-        sessionToken: sessionToken.current!,
-      },
-      (place, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && place) {
-          onPlaceSelect(place);
-          setInputValue(place.formatted_address || place.name || '');
-          setIsOpen(false);
-          // Reset session token after selection
-          sessionToken.current = new placesLib.AutocompleteSessionToken();
-        }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const { suggestions: next } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input,
+          sessionToken,
+          includedRegionCodes: ['co'],
+        });
+        if (!cancelled) setSuggestions(next);
+      } catch (error) {
+        if (!cancelled) setSuggestions([]);
+        console.error('Place autocomplete failed', error);
       }
-    );
-  }, [placesLib, onPlaceSelect]);
+    }, 250);
 
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onFocus={() => suggestions.length > 0 && setIsOpen(true)}
-        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-        placeholder={placeholder}
-        className="w-full px-4 py-2 border rounded-lg"
-      />
-      
-      {isOpen && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-          {suggestions.map((suggestion) => (
-            <li
-              key={suggestion.place_id}
-              onClick={() => handleSelect(suggestion)}
-              className="px-4 py-2 cursor-pointer hover:bg-gray-100"
-            >
-              <span className="font-medium">
-                {suggestion.structured_formatting.main_text}
-              </span>
-              <span className="text-gray-500 text-sm ml-2">
-                {suggestion.structured_formatting.secondary_text}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-```
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [input, places, sessionToken]);
 
-### Usage with Map
-
-```tsx
-function MapWithSearch() {
-  const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
-  const [markerRef, marker] = useAdvancedMarkerRef();
-
-  const position = selectedPlace?.geometry?.location
-    ? { lat: selectedPlace.geometry.location.lat(), lng: selectedPlace.geometry.location.lng() }
-    : null;
-
-  return (
-    <APIProvider apiKey={API_KEY}>
-      <div className="flex flex-col gap-4">
-        <PlaceAutocomplete onPlaceSelect={setSelectedPlace} />
-        
-        <Map
-          defaultCenter={{ lat: 40.7128, lng: -74.006 }}
-          defaultZoom={12}
-          mapId="YOUR_MAP_ID"
-          style={{ height: '400px' }}
-        >
-          {position && (
-            <AdvancedMarker ref={markerRef} position={position}>
-              <Pin />
-            </AdvancedMarker>
-          )}
-        </Map>
-      </div>
-    </APIProvider>
-  );
-}
-```
-
----
-
-## Autocomplete with MapControl
-
-Place the autocomplete inside the map:
-
-```tsx
-import { MapControl, ControlPosition } from '@vis.gl/react-google-maps';
-
-function MapWithEmbeddedSearch() {
-  const map = useMap();
-  const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
-
-  // Pan to selected place
-  useEffect(() => {
-    if (!map || !selectedPlace?.geometry?.location) return;
-    map.panTo(selectedPlace.geometry.location);
-    map.setZoom(15);
-  }, [map, selectedPlace]);
-
-  return (
-    <Map {...mapProps}>
-      <MapControl position={ControlPosition.TOP}>
-        <div className="m-4">
-          <PlaceAutocomplete onPlaceSelect={setSelectedPlace} />
-        </div>
-      </MapControl>
-      
-      {selectedPlace?.geometry?.location && (
-        <AdvancedMarker
-          position={{
-            lat: selectedPlace.geometry.location.lat(),
-            lng: selectedPlace.geometry.location.lng(),
-          }}
-        />
-      )}
-    </Map>
-  );
-}
-```
-
----
-
-## Geocoding
-
-Convert addresses to coordinates and vice versa.
-
-### Address to Coordinates (Geocoding)
-
-```tsx
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
-
-function useGeocoder() {
-  const geocodingLib = useMapsLibrary('geocoding');
-  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
-
-  useEffect(() => {
-    if (!geocodingLib) return;
-    setGeocoder(new geocodingLib.Geocoder());
-  }, [geocodingLib]);
-
-  const geocode = useCallback(async (address: string): Promise<google.maps.LatLngLiteral | null> => {
-    if (!geocoder) return null;
-
-    try {
-      const response = await geocoder.geocode({ address });
-      
-      if (response.results.length > 0) {
-        const location = response.results[0].geometry.location;
-        return { lat: location.lat(), lng: location.lng() };
-      }
-    } catch (error) {
-      console.error('Geocoding error:', error);
-    }
-    
-    return null;
-  }, [geocoder]);
-
-  return { geocode, isReady: !!geocoder };
-}
-
-// Usage
-function AddressSearch() {
-  const { geocode, isReady } = useGeocoder();
-  const [address, setAddress] = useState('');
-  const [result, setResult] = useState<google.maps.LatLngLiteral | null>(null);
-
-  const handleSearch = async () => {
-    const coords = await geocode(address);
-    if (coords) setResult(coords);
-  };
+  if (!places) return null;
 
   return (
     <div>
-      <input value={address} onChange={(e) => setAddress(e.target.value)} />
-      <button onClick={handleSearch} disabled={!isReady}>Search</button>
-      {result && <p>Lat: {result.lat}, Lng: {result.lng}</p>}
+      <input value={input} onChange={(e) => setInput(e.target.value)} />
+      {suggestions.map((suggestion) => {
+        const prediction = suggestion.placePrediction;
+        if (!prediction) return null;
+        return (
+          <button
+            key={prediction.placeId}
+            type="button"
+            onClick={async () => {
+              try {
+                const place = prediction.toPlace();
+                await place.fetchFields({
+                  fields: ['displayName', 'formattedAddress', 'location'],
+                });
+                onSelect(place);
+                setInput(place.formattedAddress ?? place.displayName ?? '');
+                setSuggestions([]);
+                setSessionToken(new places.AutocompleteSessionToken());
+              } catch (error) {
+                console.error('Place details failed', error);
+                onSelect(null);
+              }
+            }}
+          >
+            {prediction.text.toString()}
+          </button>
+        );
+      })}
     </div>
   );
 }
 ```
 
-### Coordinates to Address (Reverse Geocoding)
+Treat field names and request options as version-sensitive: verify them in the current reference before copying this pattern.
+
+## Google-provided autocomplete element
+
+When a custom UI is unnecessary, prefer Google’s current `PlaceAutocompleteElement`. On selection, convert the prediction to a `Place` and fetch only the fields the UI needs.
+
+```ts
+placeAutocomplete.addEventListener('gmp-select', async ({ placePrediction }) => {
+  try {
+    const place = placePrediction.toPlace();
+    await place.fetchFields({
+      fields: ['displayName', 'formattedAddress', 'location', 'viewport'],
+    });
+  } catch (error) {
+    console.error('Place selection failed', error);
+  }
+});
+```
+
+## Place details
+
+For a known place ID, construct a `Place`, then fetch only required fields.
 
 ```tsx
-function useReverseGeocoder() {
-  const geocodingLib = useMapsLibrary('geocoding');
-  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+const places = useMapsLibrary('places');
 
-  useEffect(() => {
-    if (!geocodingLib) return;
-    setGeocoder(new geocodingLib.Geocoder());
-  }, [geocodingLib]);
-
-  const reverseGeocode = useCallback(async (
-    latLng: google.maps.LatLngLiteral
-  ): Promise<string | null> => {
-    if (!geocoder) return null;
-
-    try {
-      const response = await geocoder.geocode({ location: latLng });
-      
-      if (response.results.length > 0) {
-        return response.results[0].formatted_address;
-      }
-    } catch (error) {
-      console.error('Reverse geocoding error:', error);
-    }
-    
+async function fetchPlace(placeId: string) {
+  if (!places) return null;
+  try {
+    const place = new places.Place({ id: placeId });
+    await place.fetchFields({
+      fields: ['displayName', 'formattedAddress', 'location'],
+    });
+    return place;
+  } catch (error) {
+    console.error('Place details failed', error);
     return null;
-  }, [geocoder]);
-
-  return { reverseGeocode, isReady: !!geocoder };
-}
-
-// Usage: Get address when clicking on map
-function ClickToAddress() {
-  const { reverseGeocode, isReady } = useReverseGeocoder();
-  const [address, setAddress] = useState<string | null>(null);
-
-  const handleMapClick = async (e: google.maps.MapMouseEvent) => {
-    if (!e.latLng || !isReady) return;
-    
-    const result = await reverseGeocode({
-      lat: e.latLng.lat(),
-      lng: e.latLng.lng(),
-    });
-    
-    setAddress(result);
-  };
-
-  return (
-    <>
-      <Map onClick={handleMapClick} {...mapProps} />
-      {address && <p>Address: {address}</p>}
-    </>
-  );
+  }
 }
 ```
 
----
+## Nearby search
 
-## Places Details
-
-Get detailed information about a place:
+Use the current `Place.searchNearby()` API and declare the minimum result fields.
 
 ```tsx
-function usePlaceDetails() {
-  const placesLib = useMapsLibrary('places');
-  const serviceRef = useRef<google.maps.places.PlacesService | null>(null);
-
-  useEffect(() => {
-    if (!placesLib) return;
-    const div = document.createElement('div');
-    serviceRef.current = new placesLib.PlacesService(div);
-  }, [placesLib]);
-
-  const getPlaceDetails = useCallback(async (
-    placeId: string,
-    fields: string[] = ['name', 'formatted_address', 'geometry', 'photos', 'rating', 'reviews']
-  ): Promise<google.maps.places.PlaceResult | null> => {
-    if (!serviceRef.current) return null;
-
-    return new Promise((resolve) => {
-      serviceRef.current!.getDetails(
-        { placeId, fields },
-        (place, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK) {
-            resolve(place);
-          } else {
-            resolve(null);
-          }
-        }
-      );
-    });
-  }, []);
-
-  return { getPlaceDetails, isReady: !!serviceRef.current };
+const { Place } = places;
+try {
+  const { places: results } = await Place.searchNearby({
+    fields: ['id', 'displayName', 'location'],
+    locationRestriction: {
+      center: { lat: 6.2442, lng: -75.5812 },
+      radius: 1500,
+    },
+    includedPrimaryTypes: ['restaurant'],
+    maxResultCount: 10,
+  });
+} catch (error) {
+  console.error('Nearby search failed', error);
 }
 ```
 
----
+## Text search
 
-## Nearby Search
-
-Find places near a location:
+Use `Place.searchByText()` when the user supplies a query rather than a nearby category filter.
 
 ```tsx
-function useNearbySearch() {
-  const placesLib = useMapsLibrary('places');
-  const map = useMap();
-  const serviceRef = useRef<google.maps.places.PlacesService | null>(null);
-
-  useEffect(() => {
-    if (!placesLib || !map) return;
-    serviceRef.current = new placesLib.PlacesService(map);
-  }, [placesLib, map]);
-
-  const searchNearby = useCallback(async (
-    location: google.maps.LatLngLiteral,
-    radius: number,
-    type?: string
-  ): Promise<google.maps.places.PlaceResult[]> => {
-    if (!serviceRef.current) return [];
-
-    return new Promise((resolve) => {
-      serviceRef.current!.nearbySearch(
-        {
-          location,
-          radius,
-          type: type as string,
-        },
-        (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            resolve(results);
-          } else {
-            resolve([]);
-          }
-        }
-      );
-    });
-  }, []);
-
-  return { searchNearby, isReady: !!serviceRef.current };
-}
-
-// Usage
-function NearbyRestaurants() {
-  const { searchNearby, isReady } = useNearbySearch();
-  const [restaurants, setRestaurants] = useState<google.maps.places.PlaceResult[]>([]);
-
-  const findRestaurants = async () => {
-    const results = await searchNearby(
-      { lat: 40.7128, lng: -74.006 },
-      1500, // 1.5km radius
-      'restaurant'
-    );
-    setRestaurants(results);
-  };
-
-  return (
-    <button onClick={findRestaurants} disabled={!isReady}>
-      Find Restaurants
-    </button>
-  );
+const { Place } = places;
+try {
+  const { places: results } = await Place.searchByText({
+    textQuery: 'coffee in Laureles Medellín',
+    fields: ['id', 'displayName', 'formattedAddress', 'location'],
+    maxResultCount: 10,
+  });
+} catch (error) {
+  console.error('Text search failed', error);
 }
 ```
 
----
+## Geocoding
 
-## Autocomplete Options Reference
+Geocoding is separate from Places search. Use the current Geocoding API/library when the intent is address ↔ coordinates rather than place discovery. Keep region/language intentional for international flows.
 
 ```tsx
-const autocompleteOptions: google.maps.places.AutocompletionRequest = {
-  input: 'pizza',
-  
-  // Bias to a location
-  locationBias: {
-    center: { lat: 40.7128, lng: -74.006 },
-    radius: 5000,
-  },
-  
-  // Or restrict to bounds
-  locationRestriction: {
-    east: -73.9,
-    west: -74.1,
-    north: 40.8,
-    south: 40.6,
-  },
-  
-  // Restrict to countries
-  componentRestrictions: { country: ['us', 'ca'] },
-  
-  // Filter by type
-  types: ['address'], // 'establishment', 'geocode', '(cities)', '(regions)'
-  
-  // Session token (for billing)
-  sessionToken: new google.maps.places.AutocompleteSessionToken(),
-};
+const geocoding = useMapsLibrary('geocoding');
+if (!geocoding) return;
+const geocoder = new geocoding.Geocoder();
+try {
+  const response = await geocoder.geocode({ address: 'Parque Lleras, Medellín' });
+  const location = response.results[0]?.geometry.location;
+} catch (error) {
+  console.error('Geocoding failed', error);
+}
 ```
 
-### Place Types
+## Review checklist
 
-- `'address'` - Street addresses
-- `'establishment'` - Businesses
-- `'geocode'` - Geographic areas
-- `'(cities)'` - Cities only
-- `'(regions)'` - Administrative regions
+- use current Place APIs for new work
+- use one autocomplete session token per user search session
+- fetch only fields the UI actually renders
+- keep country/region/language behavior intentional
+- keep browser keys restricted to approved origins and APIs
+- preserve place IDs and provider attribution
+- do not store provider-generated summary text without its provenance/disclosure contract
+- verify current Google docs before copying request-property names or billing assumptions

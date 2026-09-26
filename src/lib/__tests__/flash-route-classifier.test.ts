@@ -87,17 +87,18 @@ describe("mergeRegexAndFlashClassification", () => {
 describe("classifyRouteWithFlash", () => {
   afterEach(() => {
     vi.clearAllMocks();
-    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    vi.unstubAllEnvs();
   });
 
   it("returns null without API key", async () => {
+    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "");
     const out = await classifyRouteWithFlash("somewhere for a birthday");
     expect(out).toBeNull();
     expect(mockedGenerateObject).not.toHaveBeenCalled();
   });
 
   it("parses structured flash output", async () => {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "test-key");
     mockedGenerateObject.mockResolvedValueOnce({
       object: {
         intent: "venue_booking",

@@ -120,7 +120,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PW_SKIP_WEBSERVER: "1"
         run: |
-          npx playwright test e2e/prod-signed-in-route.spec.ts --project=chromium --workers=1
+          npx playwright test e2e/prod-signed-in-route.spec.ts --project=prod-smoke --workers=1
 
       - name: Upload smoke artifacts
         if: always()

@@ -66,18 +66,18 @@ select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault
              from pg_proc p where p.oid = to_regprocedure('public.ticket_checkout_cancel(uuid)')), false, 'R: ticket_checkout_cancel no PUBLIC');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- Rental atomic writes — service_role only until SAN-1286
--- ACL only. SAN-1286 still owns proving p_user_id = auth.uid(); this batch deliberately
--- does not touch the bodies.
+-- Rental atomic writes — service_role only.
+-- SAN-1286 keeps the RPC behind the trusted Edge/service boundary. `p_user_id` is derived
+-- by chat-lead-capture from the validated request JWT; end-user roles cannot call this RPC.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-select ok(to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)') is not null, 'R: p1_schedule_tour_atomic resolves');
-select is(has_function_privilege('anon', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT anon');
-select is(has_function_privilege('authenticated', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT authenticated');
-select is(has_function_privilege('service_role', to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)'), 'EXECUTE'), true, 'R: p1_schedule_tour_atomic keeps service_role');
+select ok(to_regprocedure('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)') is not null, 'R: p1_schedule_tour_atomic resolves');
+select is(has_function_privilege('anon', to_regprocedure('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT anon');
+select is(has_function_privilege('authenticated', to_regprocedure('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)'), 'EXECUTE'), false, 'R: p1_schedule_tour_atomic NOT authenticated');
+select is(has_function_privilege('service_role', to_regprocedure('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)'), 'EXECUTE'), true, 'R: p1_schedule_tour_atomic keeps service_role');
 select is((select exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                            where a.grantee = 0 and a.privilege_type = 'EXECUTE')
-             from pg_proc p where p.oid = to_regprocedure('public.p1_schedule_tour_atomic(uuid,text,uuid,text,text,text,text,jsonb,uuid,timestamp with time zone,text,jsonb)')), false, 'R: p1_schedule_tour_atomic no PUBLIC');
+             from pg_proc p where p.oid = to_regprocedure('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)')), false, 'R: p1_schedule_tour_atomic no PUBLIC');
 
 select ok(to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)') is not null, 'R: p1_start_rental_application_atomic resolves');
 select is(has_function_privilege('anon', to_regprocedure('public.p1_start_rental_application_atomic(uuid,text,uuid,text,text,jsonb,uuid,jsonb)'), 'EXECUTE'), false, 'R: p1_start_rental_application_atomic NOT anon');
@@ -122,7 +122,7 @@ select throws_ok($$select public.ticket_payment_refund('00000000-0000-0000-0000-
 select throws_ok($$select public.ticket_payment_finalize('00000000-0000-0000-0000-000000000000'::uuid,'pi_probe')$$, '42501', null, 'X: anon DENIED ticket_payment_finalize');
 select throws_ok($$select public.ticket_payment_finalize_response(null::public.events,null::public.event_orders,null::public.event_tickets)$$, '42501', null, 'X: anon DENIED ticket_payment_finalize_response');
 select throws_ok($$select public.ticket_checkout_cancel('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: anon DENIED ticket_checkout_cancel');
-select throws_ok($$select public.p1_schedule_tour_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::text,null::text,null::jsonb,null::uuid,null::timestamptz,null::text,null::jsonb)$$, '42501', null, 'X: anon DENIED p1_schedule_tour_atomic');
+select throws_ok($$select public.p1_schedule_tour_atomic('probe-listing',null::uuid,'probe-key-123',null::text,null::text,null::text,null::text,null::uuid,null::timestamptz,null::jsonb,null::jsonb)$$, '42501', null, 'X: anon DENIED p1_schedule_tour_atomic');
 select throws_ok($$select public.p1_start_rental_application_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::jsonb,null::uuid,null::jsonb)$$, '42501', null, 'X: anon DENIED p1_start_rental_application_atomic');
 select throws_ok($$select public.acting_landlord_ids()$$, '42501', null, 'X: anon DENIED acting_landlord_ids');
 select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: anon DENIED bump_staff_link_version');
@@ -134,7 +134,7 @@ select throws_ok($$select public.ticket_payment_refund('00000000-0000-0000-0000-
 select throws_ok($$select public.ticket_payment_finalize('00000000-0000-0000-0000-000000000000'::uuid,'pi_probe')$$, '42501', null, 'X: authenticated DENIED ticket_payment_finalize');
 select throws_ok($$select public.ticket_payment_finalize_response(null::public.events,null::public.event_orders,null::public.event_tickets)$$, '42501', null, 'X: authenticated DENIED ticket_payment_finalize_response');
 select throws_ok($$select public.ticket_checkout_cancel('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', null, 'X: authenticated DENIED ticket_checkout_cancel');
-select throws_ok($$select public.p1_schedule_tour_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::text,null::text,null::jsonb,null::uuid,null::timestamptz,null::text,null::jsonb)$$, '42501', null, 'X: authenticated DENIED p1_schedule_tour_atomic');
+select throws_ok($$select public.p1_schedule_tour_atomic('probe-listing',null::uuid,'probe-key-123',null::text,null::text,null::text,null::text,null::uuid,null::timestamptz,null::jsonb,null::jsonb)$$, '42501', null, 'X: authenticated DENIED p1_schedule_tour_atomic');
 select throws_ok($$select public.p1_start_rental_application_atomic('00000000-0000-0000-0000-000000000000'::uuid,'probe-key-123',null::uuid,null::text,null::text,null::jsonb,null::uuid,null::jsonb)$$, '42501', null, 'X: authenticated DENIED p1_start_rental_application_atomic');
 
 -- ...but it MUST still reach the two intentional contracts.

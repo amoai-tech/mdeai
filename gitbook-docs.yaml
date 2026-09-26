@@ -1,0 +1,60 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+version: 1
+site:
+  title: MDE AI Documentation
+  structure:
+    - type: space
+      key: space-product
+      title: Product
+      path: product
+      default: true
+      content:
+        directory: ./docs/01-product
+    - type: space
+      key: space-architecture
+      title: Architecture
+      path: architecture
+      content:
+        directory: ./docs/02-architecture
+    - type: space
+      key: space-platform
+      title: Platform
+      path: platform
+      content:
+        directory: ./docs/03-platform
+    - type: space
+      key: space-domains
+      title: Domains
+      path: domains
+      content:
+        directory: ./docs/04-domains
+    - type: space
+      key: space-design
+      title: Design
+      path: design
+      content:
+        directory: ./docs/05-design
+    - type: space
+      key: space-testing
+      title: Testing
+      path: testing
+      content:
+        directory: ./docs/06-testing
+    - type: space
+      key: space-operations
+      title: Operations
+      path: operations
+      content:
+        directory: ./docs/07-operations
+    - type: space
+      key: space-strategy
+      title: Strategy
+      path: strategy
+      content:
+        directory: ./docs/08-strategy
+    - type: space
+      key: space-task-conventions
+      title: Task Conventions
+      path: task-conventions
+      content:
+        directory: ./docs/tasks

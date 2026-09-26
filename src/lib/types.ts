@@ -17,6 +17,7 @@ export type ConciergeWorkingMemory = {
     genericAskPending?: boolean;
     checkIn?: string;
     checkOut?: string;
+    limit?: number;
   };
   lastRentalResults?: Array<{
     id: string;

@@ -40,6 +40,24 @@ describe("searchRentals — date params pass-through to intelligent path", () =>
     );
   });
 
+  it("falls back instead of throwing when intelligent search fails", async () => {
+    const { searchRentalsIntelligent } = await import("../../lib/intelligence-rental-search");
+    vi.mocked(searchRentalsIntelligent).mockRejectedValueOnce(
+      new Error("intelligent layer unavailable"),
+    );
+    const { searchRentals } = await import("../search-rentals");
+
+    const result = await searchRentals({
+      queryText: "digital nomad rental in Laureles",
+      neighborhood: "Laureles",
+      limit: 5,
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results.length).toBeLessThanOrEqual(5);
+    expect(result.results.every((row) => row.neighborhood === "Laureles")).toBe(true);
+  });
+
   it("does not call searchRentalsIntelligent when queryText is absent", async () => {
     const { searchRentalsIntelligent } = await import("../../lib/intelligence-rental-search");
     vi.mocked(searchRentalsIntelligent).mockClear();

@@ -79,18 +79,16 @@ function GeocodingComponent() {
 }
 ```
 
-### Available Libraries
+### Common current libraries
 
-| Library | Use Case | Key Classes |
-|---------|----------|-------------|
-| `'places'` | Places search, autocomplete | `AutocompleteService`, `PlacesService` |
+| Library | Use case | Preferred direction |
+|---------|----------|---------------------|
+| `'places'` | Place autocomplete/search/details | Current `AutocompleteSuggestion` and `Place` APIs |
 | `'geocoding'` | Address ↔ coordinates | `Geocoder` |
-| `'drawing'` | Drawing tools | `DrawingManager` |
-| `'geometry'` | Distance, area calculations | `spherical`, `poly`, `encoding` |
-| `'visualization'` | Heatmaps | `HeatmapLayer` |
-| `'marker'` | Marker utilities | `PinElement` |
-| `'routes'` | Directions | `DirectionsService`, `DirectionsRenderer` |
-| `'maps3d'` | 3D maps | `Map3DElement` |
+| `'geometry'` | Distance/area/encoding helpers | `spherical`, `poly`, `encoding` |
+| `'marker'` | Advanced Marker support | Advanced Marker APIs |
+| `'routes'` | Routes/ETA | Current `Route` APIs; verify current docs before implementation |
+| `'maps3d'` | 3D maps | Current 3D Maps APIs |
 
 ### Example: Geocoding
 
@@ -115,39 +113,10 @@ function useGeocoder() {
 }
 ```
 
-### Example: Directions
+### Routes
 
-```tsx
-function useDirections() {
-  const routesLib = useMapsLibrary('routes');
-  const map = useMap();
-  const [renderer, setRenderer] = useState<google.maps.DirectionsRenderer | null>(null);
+For routing/ETA, load the current routes library and follow the current `Route` API documentation. Do not copy older service/renderer patterns from historical examples.
 
-  useEffect(() => {
-    if (!routesLib || !map) return;
-    
-    const directionsRenderer = new routesLib.DirectionsRenderer({ map });
-    setRenderer(directionsRenderer);
-    
-    return () => directionsRenderer.setMap(null);
-  }, [routesLib, map]);
-
-  const getRoute = useCallback(async (origin: string, destination: string) => {
-    if (!routesLib || !renderer) return;
-    
-    const service = new routesLib.DirectionsService();
-    const result = await service.route({
-      origin,
-      destination,
-      travelMode: google.maps.TravelMode.DRIVING,
-    });
-    
-    renderer.setDirections(result);
-  }, [routesLib, renderer]);
-
-  return { getRoute, isReady: !!renderer };
-}
-```
 
 ---
 
@@ -189,16 +158,6 @@ const [markerRef, marker] = useAdvancedMarkerRef();
 ```
 
 ---
-
-## useMarkerRef
-
-Same as `useAdvancedMarkerRef` but for the legacy `Marker` component.
-
-```tsx
-const [markerRef, marker] = useMarkerRef();
-
-<Marker ref={markerRef} position={position} />
-```
 
 ---
 

@@ -13,6 +13,7 @@ import {
   MASTRA_TOOL_IDS,
 } from "@/platform/copilot/mastra-tool-action-names";
 import { venueBookingRequestSchema } from "@/lib/venues/venue-booking-form-schema";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 function VenueBookingResultBannerSync({
   result,
@@ -68,7 +69,10 @@ function createVenueBookingHitlRender() {
     return (
       <>
         {status === "complete" ? (
-          <VenueBookingResultBannerSync result={result} venueTitle={venueTitle} />
+          <VenueBookingResultBannerSync
+            result={result}
+            venueTitle={venueTitle}
+          />
         ) : null}
         <VenueBookingHitlPanel
           args={hitlArgs}
@@ -84,11 +88,12 @@ type ConciergeCopilotBridgeProps = {
   children: ReactNode;
 };
 
-export function ConciergeCopilotBridge({
-  children,
-}: ConciergeCopilotBridgeProps) {
+function LiveConciergeCopilotBridge({ children }: ConciergeCopilotBridgeProps) {
   useSearchToolRenders();
-  const VenueBookingHitlRender = useMemo(() => createVenueBookingHitlRender(), []);
+  const VenueBookingHitlRender = useMemo(
+    () => createVenueBookingHitlRender(),
+    [],
+  );
 
   useHumanInTheLoop(
     {
@@ -113,4 +118,14 @@ export function ConciergeCopilotBridge({
   );
 
   return <>{children}</>;
+}
+
+/** Skip CopilotKit tool/HITL registration in deterministic local E2E. */
+export function ConciergeCopilotBridge({
+  children,
+}: ConciergeCopilotBridgeProps) {
+  if (isDeterministicE2E()) {
+    return <>{children}</>;
+  }
+  return <LiveConciergeCopilotBridge>{children}</LiveConciergeCopilotBridge>;
 }

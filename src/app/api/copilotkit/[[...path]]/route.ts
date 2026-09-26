@@ -6,6 +6,7 @@ import {
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import { NextRequest, after } from "next/server";
 import { assertCopilotKitAuthorized } from "@/lib/copilotkit-auth";
+import { resolveRequestedThread } from "@/lib/copilotkit-thread-ownership";
 import {
   checkCopilotKitDistributedIpHardCeiling,
   checkCopilotKitDistributedRateLimit,
@@ -69,21 +70,41 @@ function buildHandler(options: {
   }).handleRequest;
 }
 
+function isDeterministicE2ERuntimeInfoRequest(req: NextRequest) {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1" &&
+    req.method === "GET" &&
+    new URL(req.url).pathname.endsWith("/api/copilotkit/info")
+  );
+}
+
 /** Auth, distributed rate limits, then CopilotKit/Mastra runtime. */
 async function handleCopilotKit(req: NextRequest) {
-  const unauthorized = assertCopilotKitAuthorized(req);
-  if (unauthorized) return unauthorized;
+  if (isDeterministicE2ERuntimeInfoRequest(req)) {
+    return Response.json({ agents: {} });
+  }
 
   try {
+    // 1. IP hard ceiling first — it has no secret or user dependency, so it can
+    //    shed abusive traffic before we spend a Supabase round-trip on it.
     const ipHardCeiling = await checkCopilotKitDistributedIpHardCeiling(req);
     if (ipHardCeiling) return ipHardCeiling;
 
+    // 2. Server-derived identity. Origin/Referer is routing context, never proof.
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     const userId = user?.id ?? null;
+
+    // 3. Authorization + thread ownership, BEFORE any CopilotKit/AG-UI handling.
+    //    AG-UI loads and rewrites thread metadata before downstream memory
+    //    validation, so a foreign thread must be rejected here, not later.
+    const thread = await resolveRequestedThread(req);
+    const unauthorized = assertCopilotKitAuthorized(req, { userId, thread });
+    if (unauthorized) return unauthorized;
 
     const rateLimited = await checkCopilotKitDistributedRateLimit(req, userId);
     if (rateLimited) return rateLimited;
