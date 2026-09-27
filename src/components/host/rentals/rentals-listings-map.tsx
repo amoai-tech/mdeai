@@ -9,6 +9,7 @@ import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import {
   DEFAULT_MAP_ZOOM,
   getGoogleMapsMapId,
+  isE2EMapsMockEnabled,
   MEDELLIN_CENTER,
 } from "@/platform/maps/map-config";
 
@@ -70,6 +71,31 @@ function BrokerListingsMapInner({
     }
     return MEDELLIN_CENTER;
   }, [pins, selectedId]);
+
+  // The E2E maps mock deliberately mounts no <APIProvider> (see MapsShell), and
+  // @vis.gl throws "<Map> can only be used inside an <ApiProvider> component."
+  // Render a static stand-in instead, matching ChatMap and MapTeaser.
+  if (isE2EMapsMockEnabled()) {
+    return (
+      <div
+        data-testid="rentals-listings-map"
+        data-e2e-mock-map="true"
+        className="relative h-full min-h-[280px] w-full overflow-hidden rounded-lg border border-border"
+      >
+        {pins.map((listing) => (
+          <button
+            key={listing.id}
+            type="button"
+            data-testid="map-pin"
+            data-pin-id={listing.id}
+            onClick={() => onSelect(listing.id)}
+          >
+            {listing.title}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   // SAN-1349: the map degrades on its own; it must not take the broker page with it.
   if (mapsStatus !== "ok") {

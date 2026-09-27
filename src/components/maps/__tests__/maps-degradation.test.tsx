@@ -18,6 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mocks = vi.hoisted(() => ({
   authFailed: { value: false },
   apiKey: { value: "test-key" as string | undefined },
+  e2eMock: { value: false },
 }));
 
 vi.mock("@/components/maps/use-maps-auth-failure", () => ({
@@ -27,7 +28,7 @@ vi.mock("@/components/maps/use-maps-auth-failure", () => ({
 vi.mock("@/platform/maps/map-config", () => ({
   getGoogleMapsApiKey: () => mocks.apiKey.value,
   getGoogleMapsMapId: () => "test-map-id",
-  isE2EMapsMockEnabled: () => false,
+  isE2EMapsMockEnabled: () => mocks.e2eMock.value,
   MEDELLIN_CENTER: { lat: 6.2518, lng: -75.5636 },
   DEFAULT_MAP_ZOOM: 12,
 }));
@@ -55,11 +56,13 @@ vi.mock("@/platform/maps/map-context", () => ({
 
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
-import { MapsUnavailable } from "@/components/maps/maps-status";
+import { MapsUnavailable, useMapsStatus } from "@/components/maps/maps-status";
+import { RentalsListingsMap } from "@/components/host/rentals/rentals-listings-map";
 
 beforeEach(() => {
   mocks.authFailed.value = false;
   mocks.apiKey.value = "test-key";
+  mocks.e2eMock.value = false;
 });
 
 describe("SAN-1349 · MapsShell never replaces its children", () => {
@@ -138,5 +141,66 @@ describe("SAN-1349 · MapsUnavailable copy", () => {
     const html = renderToStaticMarkup(<MapsUnavailable reason="auth-failed" />);
     expect(html).toContain('data-testid="map-auth-error"');
     expect(html).toContain("Google Maps authentication failed");
+  });
+
+  it("honours a caller className so a small slot can size the fallback", () => {
+    const html = renderToStaticMarkup(
+      <MapsUnavailable reason="auth-failed" className="custom-slot-class" />,
+    );
+    // The caller's class must land on the outer wrapper. (The inner
+    // MapRefererHelp panel keeps its own min-height; callers with a shorter slot
+    // clip it with overflow-hidden, which is why the teaser drops its border.)
+    expect(html).toContain('class="custom-slot-class"');
+  });
+});
+
+/**
+ * Review on #135: @vis.gl throws "<Map> can only be used inside an
+ * <ApiProvider> component." So anywhere MapsShell mounts children WITHOUT an
+ * APIProvider, every map slot must render a fallback rather than a <Map>.
+ * Two ways that happens: the key is missing, and the E2E maps mock is enabled.
+ */
+describe("SAN-1349 · no <Map> is ever rendered without an APIProvider", () => {
+  function Probe() {
+    return <div data-testid="status">{useMapsStatus()}</div>;
+  }
+
+  it("reports no-key (not ok) when used with no provider and no API key", () => {
+    mocks.apiKey.value = undefined;
+
+    const html = renderToStaticMarkup(<Probe />);
+
+    expect(html).toContain("no-key");
+    expect(html).not.toContain(">ok<");
+  });
+
+  it("keeps reporting auth-failed with no provider when the flag is set", () => {
+    mocks.authFailed.value = true;
+
+    const html = renderToStaticMarkup(<Probe />);
+
+    expect(html).toContain("auth-failed");
+  });
+
+  it("renders a static broker map under the E2E mock instead of throwing", () => {
+    mocks.e2eMock.value = true;
+
+    const html = renderToStaticMarkup(
+      <RentalsListingsMap
+        listings={[
+          {
+            id: "l1",
+            title: "Laureles 2BR",
+            latitude: 6.25,
+            longitude: -75.59,
+          } as never,
+        ]}
+        selectedId={null}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain('data-e2e-mock-map="true"');
+    expect(html).not.toContain('data-testid="google-map"');
   });
 });

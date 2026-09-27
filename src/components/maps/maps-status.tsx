@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import { MapRefererHelp } from "@/components/maps/map-referer-help";
 import { useMapsAuthFailure } from "@/components/maps/use-maps-auth-failure";
+import { getGoogleMapsApiKey } from "@/platform/maps/map-config";
 
 /**
  * SAN-1349 — why a map cannot render, as one value shared by `MapsShell` and the
@@ -47,13 +48,15 @@ export function MapsStatusProvider({
  * Read the shared status.
  *
  * Falls back to observing the auth-failure flag directly when no provider is
- * mounted, so a map rendered outside `MapsShell` still degrades safely instead
- * of assuming "ok" and throwing on a missing `APIProvider`.
+ * mounted, and reports "no-key" when there is no API key — because "ok" is not a
+ * safe default: a consumer would render `<Map>` without an `APIProvider`, and
+ * `@vis.gl` throws "<Map> can only be used inside an <ApiProvider> component."
  */
 export function useMapsStatus(): MapsStatus {
   const fromContext = useContext(MapsStatusContext);
   const failed = useMapsAuthFailure();
   if (fromContext !== null) return fromContext;
+  if (!getGoogleMapsApiKey()) return "no-key";
   return failed ? "auth-failed" : "ok";
 }
 

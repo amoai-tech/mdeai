@@ -44,10 +44,16 @@ function MapTeaser() {
   }
 
   // SAN-1349: the teaser degrades on its own; it must not take the page with it.
+  // No border on this wrapper — MapsUnavailable draws its own, and the inner
+  // panel also sets min-h-[280px], so a nested border plus a taller box would
+  // overflow the 260px teaser slot (review on #135).
   if (mapsStatus !== "ok") {
     return (
-      <div className="relative h-[260px] w-full overflow-hidden rounded-2xl border border-border sm:h-[320px] md:h-[380px]">
-        <MapsUnavailable reason={mapsStatus} />
+      <div className="relative h-[260px] w-full overflow-hidden rounded-2xl sm:h-[320px] md:h-[380px]">
+        <MapsUnavailable
+          reason={mapsStatus}
+          className="flex h-full w-full items-center justify-center p-6 text-center text-sm text-muted-foreground"
+        />
       </div>
     );
   }
