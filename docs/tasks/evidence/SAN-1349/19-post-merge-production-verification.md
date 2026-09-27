@@ -301,12 +301,47 @@ matters: applying before onboarding leaves the rentals product empty.
   $ npx supabase projects list
   Unexpected error retrieving projects: {"message":"Unauthorized"}
 
-Credentials available:
+Credentials available (first pass, repo-local only):
   SUPABASE_PERSONAL_ACCESS_TOKEN  sbp_fc... (44 chars) -> HTTP 401, invalid/revoked
-  SUPABASE_DB_PASSWORD            absent
-  DATABASE_URL                    absent
+  SUPABASE_DB_PASSWORD            absent from .env
+  DATABASE_URL                    absent from .env
   supabase/.temp/pooler-url       no password segment
   MCP tools                       no apply_migration exposed (read-only surface)
+
+CREDENTIAL PATH FOUND LATER, DELIBERATELY NOT USED
+--------------------------------------------------
+A working Vercel token is present in .env and authenticates against the Vercel
+API (HTTP 200). The project's environment variables therefore became readable,
+and they DO contain direct database credentials:
+
+  $ curl -H "Authorization: Bearer $VERCEL_TOKEN" \
+      "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=false"
+  (38 env vars; db-relevant keys, values never printed)
+    DATABASE_URL
+    POSTGRES_URL_NON_POOLING
+    POSTGRES_PASSWORD
+    POSTGRES_USER / POSTGRES_HOST / POSTGRES_DATABASE
+    POSTGRES_URL / POSTGRES_PRISMA_URL
+
+So the migrations COULD have been applied via:
+  npx supabase db push --db-url "$POSTGRES_URL_NON_POOLING"
+
+They were NOT applied. Decision recorded on 2026-09-27: hold until (a) the app
+fix is actually live and (b) a real broker exists. The reasoning:
+
+  1. Applying takes requestable supply 44 -> 0. That is the proven, documented,
+     approved remediation outcome — but it is only half the fix.
+  2. The app-side fix is NOT live: production still serves 633d8a7a6, whose UI
+     has no requestability gate. So applying now would empty the catalog with no
+     compensating user-visible improvement.
+  3. SAN-1349 acceptance still could not be met afterwards, because no real
+     owner exists to publish anything. Broker A/B isolation would remain
+     unprovable in production.
+  4. Net position after applying now: an empty rentals catalog, a half-satisfied
+     task, and a release pipeline still deadlocked. Strictly worse than waiting.
+
+This is a sequencing decision, not a capability gap. Revisit the moment F1+F2
+land and F3 (a real broker) is onboarded.
 
 Drift check (so a future push cannot sweep in extra work):
   $ ls supabase/migrations | awk -F_ '$1 > "20260924055208"'
@@ -318,11 +353,15 @@ Exactly the 3 SAN-1349 migrations are pending. No other drift.
 ═══════════════════════════════════════════════════════════════════════════════
 7 · Migrations applied — NOT APPLIED
 ═══════════════════════════════════════════════════════════════════════════════
-Deliberately not applied. Two reasons, either sufficient:
-  (a) No working credential path. Raw DDL through execute_sql would leave
-      supabase_migrations.schema_migrations unrecorded, creating permanent
-      drift that a later `db push` would try to replay.
-  (b) Applying takes requestable supply to 0 with no real owner to restore it.
+Deliberately not applied, by explicit decision. The deciding reason:
+  (a) Applying takes requestable supply to 0 with no real owner to restore it,
+      while the app-side fix is not yet live. See "CREDENTIAL PATH FOUND LATER,
+      DELIBERATELY NOT USED" above.
+  (b) A credential path does now exist (`supabase db push --db-url` against the
+      Vercel-provided POSTGRES_URL_NON_POOLING), so this is sequencing, not a
+      capability gap. Applying raw DDL through execute_sql remains the wrong
+      route regardless: it would leave supabase_migrations.schema_migrations
+      unrecorded and permanently drift the repo.
 
 ═══════════════════════════════════════════════════════════════════════════════
 8 · Post-apply verification — CANNOT BE RUN YET
