@@ -467,7 +467,14 @@ test("the imported call still reports an ambient remote value", () => {
   assert.ok(message);
 });
 
-test("the imported call never throws, even with an unusable cwd", () => {
-  const { message } = capture({}, { cwd: "/nonexistent-directory-for-tests", readEnvFiles: true });
-  assert.equal(message, null);
+test("direct CLI stays non-blocking when Next dotenv expansion fails", () => {
+  const validCwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const valid = run({}, { cwd: validCwd });
+  assert.equal(valid.status, 0);
+  assert.match(valid.stderr, /Supabase DIRECT host/);
+
+  const brokenCwd = scratchDir({ ".env.local": "DATABASE_URL=$DATABASE_URL\n" });
+  const broken = run({}, { cwd: brokenCwd });
+  assert.equal(broken.status, 0, "dotenv expansion failures must never block the CLI guard");
+  assert.equal(broken.stderr, "", "@next/env loader errors stay quiet when no URL resolves");
 });
