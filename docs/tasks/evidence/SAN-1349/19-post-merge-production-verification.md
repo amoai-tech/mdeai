@@ -191,6 +191,66 @@ certification is required to run against. On `www.mdeai.co` Maps works and the
 composer is present; on the candidate origin Maps fails, the Maps error state
 takes over the page, and the chat composer never becomes usable.
 
+DECISIVE A/B CONTROL (same signed-in user, same code path, different origin)
+--------------------------------------------------------------------------
+A temporary Playwright diagnostic reproduced the certification's exact signed-in
+setup against both origins: create a throwaway identity, sign in, load /chat,
+read the DOM. Both runs got `POST /api/copilotkit/info -> 200`, so both were
+authenticated and authorized.
+
+  candidate  https://mdeai-rh5d68hhb-amoco.vercel.app   (build ab1f28768)
+    {"mapsAuthFailedFlag":true, "mapsErrorText":true,
+     "chatCanvas":false, "chatMap":false,
+     "sendPresent":false, "textboxPresent":false}
+
+  live       https://www.mdeai.co                        (build 633d8a7a6)
+    {"mapsAuthFailedFlag":false, "mapsErrorText":false,
+     "chatCanvas":true, "chatMap":true,
+     "sendPresent":true, "sendDisabled":true,   <- before typing
+     "textboxPresent":true}
+    after filling "ping":
+    {"textboxValue":"ping", "sendDisabled":false, "mapsAuthFailedFlag":false}
+    PASSED — console showed only a benign "Vector Map ... Falling back to
+    Raster" notice, and zero >=400 responses.
+
+That is origin-specific and definitive: the identical signed-in flow works on
+the custom domain and destroys the chat on the Vercel deployment origin.
+
+IMPORTANT NOTE ON FALSE NEGATIVES: an ANONYMOUS visit to the candidate origin
+shows NO Maps error and a fully rendered chat
+(`__mdeMapsAuthFailed:false, chatCanvas:true, chatMap:true`). Maps only fails
+once signed-in content causes the map to actually load. Probing anonymously
+therefore gives a misleadingly green result — which is exactly the trap this
+verification fell into mid-investigation before the A/B control settled it.
+
+SECOND, INDEPENDENT DEFECT — the chat should not die with the map
+-----------------------------------------------------------------
+src/components/maps/MapProvider.tsx:33-39
+
+    if (authFailed) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <MapRefererHelp />
+        </div>
+      );
+    }
+
+`MapsShell` RETURNS THE ERROR PANEL INSTEAD OF `children`. And in
+src/components/chat/geo-chat-shell.tsx:152-163, `<MapsShell>` wraps
+`<ChatCanvas />` — the entire concierge, including the CopilotKit composer.
+
+So a Google Maps key problem unmounts the whole chat. That is why this is a
+total concierge outage and not a degraded map: `chatCanvas:false`,
+`sendPresent:false`. The chat is a text conversation and does not need the Maps
+JS API to send a message.
+
+This one defect is what converts a configuration mistake into a
+production-freezing certification failure, and it is worth fixing on its own
+merits regardless of the key. Note the composer logic itself is fine — on the
+working origin the send button enables correctly once text is entered, so the
+certification's `toBeEnabled` assertion is valid and is failing purely because
+the composer has been unmounted.
+
 This is a DEADLOCK, and it explains why the gate has never passed:
 
   certification must run against the deployment origin
@@ -440,27 +500,42 @@ SAN-1349 CANNOT be marked Done.
 ═══════════════════════════════════════════════════════════════════════════════
 EXACT FIXES, IN ORDER
 ═══════════════════════════════════════════════════════════════════════════════
-F1 · Add the Vercel deployment origins to the Google Maps browser key's HTTP
-     referrer allowlist. THIS IS THE WHOLE FREEZE, and it is a config fix, not
-     a code fix.
-     In GCP -> APIs & Services -> Credentials -> the browser key used by
-     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY -> Application restrictions -> HTTP
-     referrers, add:
-        https://*.vercel.app/*
-     or, tighter, the specific candidate origins
-        https://mdeai-*.vercel.app/*
-     Keep the existing custom-domain and localhost entries.
-     Why this is sufficient: certification must run against the deployment
-     origin, and the app's own error text names that origin as the missing
-     referrer. Once Maps loads on the deployment origin, the concierge renders,
-     the composer initializes, and the send button can enable. Confirm the fix
-     before touching anything else:
-        PROD_SMOKE_BASE_URL=<candidate> npx playwright test \
-          e2e/prod-candidate-certification.spec.ts --project=prod-smoke
-     Must reach the send step and pass, with no "Google Maps authentication
-     failed" in the error context.
+F1 · Pick ONE of these two. Either escapes the deadlock; F1a alone is the
+     minimum, F1a+F1b is the durable pair.
 
-F1b · Harden the rate-limit assertion (secondary flake, do after F1).
+  F1a (config, ~2 minutes) — add the Vercel deployment origins to the Google
+      Maps browser key's HTTP referrer allowlist.
+      In GCP -> APIs & Services -> Credentials -> the browser key used by
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY -> Application restrictions -> HTTP
+      referrers, add:
+         https://mdeai-*.vercel.app/*
+      (or https://*.vercel.app/*). Keep the custom-domain and localhost entries.
+      This is the precise fix for the confirmed A/B result: the same signed-in
+      user works on www.mdeai.co and fails on the deployment origin, and the
+      app's own error text names that origin as the missing referrer.
+
+  F1b (code, no GCP access needed) — stop MapsShell from unmounting the chat.
+      src/components/maps/MapProvider.tsx:33-39 returns <MapRefererHelp/> in
+      place of `children`, and geo-chat-shell.tsx:152-163 wraps the whole
+      <ChatCanvas/> in <MapsShell>. So a Maps key problem kills the concierge.
+      The chat does not need the Maps JS API to send a message. Render the
+      error UI in the map slot only, and keep the chat mounted.
+      This is the better long-term fix: it makes certification (and the product)
+      immune to any future Maps key/quota/referrer problem, and it is a defect
+      worth fixing on its own merits. It also avoids widening a browser key's
+      referrer allowlist, which is a security-relevant change.
+
+      Note: ChatCanvas renders ChatMapPanel, so <ChatCanvas/> must stay inside
+      an APIProvider for the map hooks; the fix is to keep APIProvider mounted
+      and swap only the map's contents, not to move ChatCanvas out.
+
+  Either way, confirm before touching anything else:
+     PROD_SMOKE_BASE_URL=<candidate> npx playwright test \
+       e2e/prod-candidate-certification.spec.ts --project=prod-smoke
+  Must reach the send step and pass, with no "Google Maps authentication
+  failed" in the error context.
+
+F1c · Harden the rate-limit assertion (secondary flake, do after F1a/F1b).
      Retry #1 of the same spec failed with 429 where 401 was expected:
         expect(response.status(), 'unauthenticated GET runtime info').toBe(401)
      The distributed IP hard ceiling sheds the runner's own repeated probes. A
