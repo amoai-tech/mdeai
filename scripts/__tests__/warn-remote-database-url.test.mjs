@@ -10,6 +10,8 @@ import { warnIfRemoteDatabaseUrl } from "../warn-remote-database-url.mjs";
 // Resolved against this file, not the working directory, so the test still finds the script
 // when a runner (IDE, `node --test` from a subdirectory) uses a different cwd.
 const script = fileURLToPath(new URL("../warn-remote-database-url.mjs", import.meta.url));
+const vitestEntry = fileURLToPath(new URL("../../node_modules/vitest/vitest.mjs", import.meta.url));
+const vitestConfig = fileURLToPath(new URL("../../vitest.config.ts", import.meta.url));
 
 /**
  * The ambient environment decides the outcome of this guard, so every case runs the script
@@ -394,6 +396,33 @@ test("the suppress marker silences a child script a parent already guarded", () 
   assert.equal(stderr, "");
 });
 
+
+test("direct Vitest/IDE starts inspect .env.local exactly once without mutating test env", () => {
+  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
+  const previous = process.cwd();
+  try {
+    process.chdir(cwd);
+    fs.mkdirSync("src", { recursive: true });
+    fs.writeFileSync(
+      "src/direct-vitest.test.ts",
+      'test("guard leaves Vitest env untouched", () => expect(process.env.DATABASE_URL).toBeUndefined());\n',
+    );
+  } finally {
+    process.chdir(previous);
+  }
+
+  const env = { ...process.env };
+  for (const name of CONTROLLED) delete env[name];
+  const result = spawnSync(
+    process.execPath,
+    [vitestEntry, "run", "src/direct-vitest.test.ts", "--config", vitestConfig],
+    { cwd, env, encoding: "utf8" },
+  );
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 0, output);
+  assert.equal((output.match(/Supabase DIRECT host/g) ?? []).length, 1, output);
+  assert.match(output, /1 passed/);
+});
 
 test("every supported Vitest npm entry point runs the file-aware guard exactly once", () => {
   const packageJson = JSON.parse(
