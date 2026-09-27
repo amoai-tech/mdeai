@@ -97,11 +97,17 @@ export interface ApartmentRow {
   slug: string | null;
   latitude: number | null;
   longitude: number | null;
-  /** SAN-1349 ownership + workflow proof. Absent/`null` values are treated as NOT requestable. */
-  landlord_id?: string | null;
-  moderation_status?: string | null;
-  listing_workflow_status?: string | null;
-  status?: string | null;
+  /**
+   * SAN-1349 ownership + workflow proof.
+   *
+   * These are REQUIRED — not optional — so a partial row cannot silently skip the
+   * requestability check. `landlord_id` is genuinely nullable in the database; the other
+   * three are `NOT NULL` there, and every select list feeding this type names them.
+   */
+  landlord_id: string | null;
+  moderation_status: string;
+  listing_workflow_status: string;
+  status: string;
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -115,6 +121,38 @@ export type RentalRequestabilityInput = {
 };
 
 /**
+ * The timezone the database uses for its availability calendar. `p1_schedule_tour_atomic`
+ * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_from` /
+ * `available_to`, so the application must read "today" in the same zone or it will disagree
+ * with the database for five hours out of every day.
+ */
+export const RENTAL_AVAILABILITY_TIME_ZONE = 'America/Bogota';
+
+const availabilityDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: RENTAL_AVAILABILITY_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * The calendar date in `America/Bogota` as `YYYY-MM-DD`, matching how Postgres DATE columns are
+ * serialized, for comparison against `available_from` / `available_to`.
+ *
+ * Built from `formatToParts` rather than `toISOString().slice(0, 10)`: the latter is the UTC
+ * date, which in Medellín (UTC−5) runs a day ahead of the local date from 19:00 local onward.
+ * A listing with `available_to = "2026-09-27"` would then be wrongly treated as expired at
+ * 2026-09-27 20:00 local. The database would have accepted it, so the mismatch only ever hid
+ * requestable listings from users.
+ */
+export function rentalAvailabilityDate(at: Date = new Date()): string {
+  const parts = availabilityDateFormatter.formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/**
  * SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
  *
  * The database is the authority: `public.p1_schedule_tour_atomic` re-checks ownership,
@@ -122,19 +160,22 @@ export type RentalRequestabilityInput = {
  * bypassed UI still fails there. This helper exists only so search results and the browse card
  * never advertise an action the database will reject.
  *
- * It proves what the UI can actually know — canonical owner, active, approved, published, and
- * the listing's current-date availability window. It cannot know the eventual viewing
- * timestamp, so it must not claim more than that.
+ * It fails CLOSED on missing proof. Every predicate is an allow-list, so an absent, null or
+ * unexpected value is rejected rather than skipped — the helper can only ever under-claim
+ * requestability, never over-claim it. It proves what the UI can actually know: canonical
+ * owner, active, approved, published, and the listing's current-date availability window. It
+ * cannot know the eventual viewing timestamp, so it must not claim more than that.
  */
 export function isRentalRequestable(
   row: RentalRequestabilityInput,
   today: Date = new Date(),
 ): boolean {
   if (!row.landlord_id) return false;
-  if (row.status != null && row.status !== 'active') return false;
+  // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
+  if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
   if (row.listing_workflow_status !== 'published') return false;
-  const isoToday = today.toISOString().slice(0, 10);
+  const isoToday = rentalAvailabilityDate(today);
   if (row.available_from && row.available_from > isoToday) return false;
   if (row.available_to && row.available_to < isoToday) return false;
   return true;
@@ -256,8 +297,10 @@ async function searchRentalsFromSupabase(
     q = q.lte('price_daily', query.maxPricePerNight);
   }
 
-  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
-  const today = new Date().toISOString().slice(0, 10);
+  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
+  // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
+  // so the query window and isRentalRequestable() cannot disagree near local midnight.
+  const today = rentalAvailabilityDate();
   const checkInDate = query.checkIn ?? today;
   q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
   if (query.checkOut) {

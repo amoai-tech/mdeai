@@ -3,6 +3,7 @@ import { parseRentalIntelligenceSlots } from "../intelligence-rental-search";
 import {
   isAvailableForStay,
   isRentalRequestable,
+  rentalAvailabilityDate,
   sortForMonthlyStay,
 } from "../../tools/search-rentals";
 import type { Rental } from "../../tools/search-rentals";
@@ -160,6 +161,84 @@ describe("isRentalRequestable", () => {
 
   it("fails closed when ownership/workflow proof is entirely absent", () => {
     expect(isRentalRequestable({}, today)).toBe(false);
+  });
+
+  // A missing `status` must reject, not fall through. The earlier `row.status != null && …`
+  // guard let null/undefined pass and would have granted a viewing CTA to a partial row.
+  it("fails closed when the status column is missing entirely", () => {
+    expect(
+      isRentalRequestable(
+        {
+          landlord_id: owned.landlord_id,
+          moderation_status: owned.moderation_status,
+          listing_workflow_status: owned.listing_workflow_status,
+          available_from: owned.available_from,
+          available_to: owned.available_to,
+        },
+        today,
+      ),
+    ).toBe(false);
+  });
+
+  it("fails closed when status is null", () => {
+    expect(isRentalRequestable({ ...owned, status: null }, today)).toBe(false);
+  });
+
+  it("fails closed when status is undefined", () => {
+    expect(isRentalRequestable({ ...owned, status: undefined }, today)).toBe(false);
+  });
+
+  it("fails closed when moderation or workflow proof is missing", () => {
+    const { landlord_id, status, available_from, available_to } = owned;
+    expect(
+      isRentalRequestable({ landlord_id, status, available_from, available_to }, today),
+    ).toBe(false);
+    expect(
+      isRentalRequestable(
+        { landlord_id, status, moderation_status: 'approved', available_from, available_to },
+        today,
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a listing requestable through the last Bogota hour of its final available day", () => {
+    // `available_to` is a Postgres DATE, so the listing is available for all of 2026-09-27 in
+    // Medellín. 2026-09-28T02:00:00Z is 2026-09-27 21:00 local. The old UTC-based comparison
+    // read "2026-09-28" and wrongly expired this still-requestable listing.
+    expect(
+      isRentalRequestable({ ...owned, available_to: "2026-09-27" }, new Date("2026-09-28T02:00:00Z")),
+    ).toBe(true);
+  });
+
+  it("expires a listing once the Bogota date has moved past available_to", () => {
+    // 2026-09-28T06:00:00Z is 2026-09-28 01:00 local, so the day really has rolled over.
+    expect(
+      isRentalRequestable({ ...owned, available_to: "2026-09-27" }, new Date("2026-09-28T06:00:00Z")),
+    ).toBe(false);
+  });
+
+  it("does not open a listing before its Bogota available_from day", () => {
+    // 2026-09-28T02:00:00Z is still 2026-09-27 local, so a listing starting 2026-09-28 is closed.
+    expect(
+      isRentalRequestable({ ...owned, available_from: "2026-09-28" }, new Date("2026-09-28T02:00:00Z")),
+    ).toBe(false);
+  });
+});
+
+// SAN-1349 — the availability calendar must be read in the same timezone the database uses
+// (`p1_schedule_tour_atomic` compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date`),
+// otherwise the app and the database disagree for five hours every day.
+describe("rentalAvailabilityDate", () => {
+  it("returns the America/Bogota calendar date, not the UTC date", () => {
+    expect(rentalAvailabilityDate(new Date("2026-09-28T02:00:00Z"))).toBe("2026-09-27");
+  });
+
+  it("returns the local date once Bogota has passed midnight", () => {
+    expect(rentalAvailabilityDate(new Date("2026-09-28T06:00:00Z"))).toBe("2026-09-28");
+  });
+
+  it("formats as zero-padded YYYY-MM-DD for direct Postgres DATE comparison", () => {
+    expect(rentalAvailabilityDate(new Date("2026-01-05T15:00:00Z"))).toBe("2026-01-05");
   });
 });
 

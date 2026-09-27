@@ -9,6 +9,7 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  rentalAvailabilityDate,
   rowToRental,
   sortForMonthlyStay,
 } from "../tools/search-rentals";
@@ -206,8 +207,9 @@ export async function searchRentalsIntelligent(
     if (typeof query.maxPricePerNight === "number") {
       q = q.lte("price_daily", query.maxPricePerNight);
     }
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
-    const today = new Date().toISOString().slice(0, 10);
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
+    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
+    const today = rentalAvailabilityDate();
     const checkInDate = query.checkIn ?? today;
     q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
     if (query.checkOut) {
@@ -247,8 +249,9 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids);
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
-    const today = new Date().toISOString().slice(0, 10);
+    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
+    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
+    const today = rentalAvailabilityDate();
     const checkInDate = query.checkIn ?? today;
     aptQ = aptQ.or(`available_to.is.null,available_to.gte.${checkInDate}`);
     if (query.checkOut) {
