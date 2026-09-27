@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -9,7 +10,6 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
-import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
@@ -19,6 +19,21 @@ if (process.env.CI && !baseUrl) {
   throw new Error("PROD_SMOKE_BASE_URL is required in CI for candidate certification");
 }
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
+
+function conciergeRunBody(threadId: string) {
+  return {
+    method: "agent/connect",
+    params: { agentId: "conciergeAgent" },
+    body: {
+      threadId,
+      runId: randomUUID(),
+      messages: [{ id: randomUUID(), role: "user", content: "ping" }],
+      tools: [],
+      context: [],
+      state: {},
+    },
+  };
+}
 
 async function threadCount(resourceId: string): Promise<number> {
   const admin = await getSupabaseAdmin();
@@ -83,10 +98,18 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       const expectedAgents = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
       expect(expectedAgents.filter((name) => !info.agents?.[name])).toEqual([]);
 
-      await gotoConcierge(page);
-      await sendConciergeMessage(page, "ping");
-      await waitForCopilotIdle(page, 120_000);
-      await expect.poll(() => threadCount(identity!.userId), { timeout: 90_000 }).toBeGreaterThan(0);
+      // The unique Vercel deployment hostname is intentionally not authorized for the
+      // production Maps browser key. Certify the AI path directly here; the deeper
+      // post-promotion smoke validates Maps and the full /chat UI on mdeai.co.
+      const threadId = `san1330-${randomUUID()}`;
+      const runResponse = await page.request.post(route("/api/copilotkit"), {
+        data: conciergeRunBody(threadId),
+        timeout: 120_000,
+      });
+      expect(runResponse.status(), "authenticated concierge agent/connect").toBe(200);
+      await expect
+        .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
+        .toBeGreaterThan(0);
     } finally {
       if (identity) {
         const userId = identity.userId;

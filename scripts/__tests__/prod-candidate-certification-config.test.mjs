@@ -18,3 +18,11 @@ test("fails closed in CI when candidate URL is missing", () => {
   assert.match(spec, /process\.env\.CI\s*&&\s*!baseUrl/);
   assert.match(spec, /throw new Error\(["']PROD_SMOKE_BASE_URL is required in CI/);
 });
+
+
+test("keeps pre-promotion certification independent of Maps browser referrer restrictions", () => {
+  assert.doesNotMatch(spec, /gotoConcierge|sendConciergeMessage|waitForCopilotIdle/);
+  assert.match(spec, /method:\s*["']agent\/connect["']/);
+  assert.match(spec, /page\.request\.post\(route\(["']\/api\/copilotkit["']\)/);
+  assert.match(spec, /messages:\s*\[/);
+});
