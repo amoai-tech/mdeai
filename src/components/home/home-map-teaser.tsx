@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
+import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { MEDELLIN_CENTER, getGoogleMapsMapId, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
 const TEASER_PINS = [
@@ -25,6 +27,7 @@ function TeaserPin({ label }: { label: string }) {
 function MapTeaser() {
   const router = useRouter();
   const mapId = getGoogleMapsMapId();
+  const mapsStatus = useMapsStatus();
 
   if (isE2EMapsMockEnabled()) {
     return (
@@ -41,30 +44,44 @@ function MapTeaser() {
     );
   }
 
+  // SAN-1349: the teaser degrades on its own; it must not take the page with it.
+  // One wrapper for both states — only the border differs, because
+  // MapsUnavailable draws its own. See map-referer-help.tsx for the clip.
+  const available = mapsStatus === "ok";
   return (
-    <div className="relative h-[260px] w-full overflow-hidden rounded-2xl border border-border sm:h-[320px] md:h-[380px]">
-      <Map
-        mapId={mapId}
-        defaultCenter={MEDELLIN_CENTER}
-        defaultZoom={12}
-        gestureHandling="none"
-        disableDefaultUI
-        className="h-full w-full"
-        aria-label="Map of Medellín showing popular areas"
-      >
-        {TEASER_PINS.map(({ id, lat, lng, label, query }) => (
-          <AdvancedMarker
-            key={id}
-            position={{ lat, lng }}
-            onClick={() => router.push(`/chat?q=${encodeURIComponent(query)}`)}
+    <div
+      className={`relative h-[260px] w-full overflow-hidden rounded-2xl sm:h-[320px] md:h-[380px] ${
+        available ? "border border-border" : ""
+      }`}
+    >
+      {available ? (
+        <>
+          <Map
+            mapId={mapId}
+            defaultCenter={MEDELLIN_CENTER}
+            defaultZoom={12}
+            gestureHandling="none"
+            disableDefaultUI
+            className="h-full w-full"
+            aria-label="Map of Medellín showing popular areas"
           >
-            <TeaserPin label={label} />
-          </AdvancedMarker>
-        ))}
-      </Map>
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-sm">
-        ▣ Google Maps
-      </div>
+            {TEASER_PINS.map(({ id, lat, lng, label, query }) => (
+              <AdvancedMarker
+                key={id}
+                position={{ lat, lng }}
+                onClick={() => router.push(`/chat?q=${encodeURIComponent(query)}`)}
+              >
+                <TeaserPin label={label} />
+              </AdvancedMarker>
+            ))}
+          </Map>
+          <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+            ▣ Google Maps
+          </div>
+        </>
+      ) : (
+        <MapsUnavailable reason={mapsStatus} />
+      )}
     </div>
   );
 }

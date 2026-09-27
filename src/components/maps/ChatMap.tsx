@@ -12,6 +12,8 @@ import { MapFocusController } from "@/components/maps/MapFocusController";
 import { MapFitBoundsController } from "@/components/maps/MapFitBoundsController";
 import { MapResizeSignal } from "@/components/maps/MapResizeSignal";
 import { useMapContext } from "@/platform/maps/map-context";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
+import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { isPinDimmed } from "@/platform/maps/active-map-category";
 import { filterRenderableMapPins } from "@/platform/maps/map-pin-filters";
 import { hasConfiguredMapId } from "@/lib/google-maps-map-id";
@@ -34,6 +36,7 @@ export function ChatMap({
   mapDomId?: string;
 }) {
   const { pins, activeMapCategory, selectedPinId, panToPin } = useMapContext();
+  const mapsStatus = useMapsStatus();
   const mapId = getGoogleMapsMapId();
   const renderablePins = filterRenderableMapPins(pins);
   const useClustering = shouldClusterMapPins(renderablePins.length);
@@ -41,6 +44,16 @@ export function ChatMap({
     selectedPinId != null
       ? renderablePins.find((p) => p.id === selectedPinId) ?? null
       : null;
+
+  // SAN-1349: degrade the MAP only. The concierge around it keeps rendering —
+  // see use-maps-auth-failure.tsx for why this used to unmount the whole chat.
+  if (mapsStatus !== "ok") {
+    return (
+      <div id={mapDomId} className="relative h-full min-h-[280px] w-full" data-testid="chat-map">
+        <MapsUnavailable reason={mapsStatus} />
+      </div>
+    );
+  }
 
   if (isE2EMapsMockEnabled()) {
     return (
