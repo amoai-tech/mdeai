@@ -1,5 +1,5 @@
-import { defineConfig } from "vitest/config";
 import path from "node:path";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    globalSetup: [path.resolve(__dirname, "./vitest.global-setup.ts")],
     environment: "node",
     globals: true,
     // `e2e/**/*.test.ts` only — Playwright keeps ownership of `*.spec.ts`, so
