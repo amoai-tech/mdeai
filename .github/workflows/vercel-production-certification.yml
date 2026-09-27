@@ -32,16 +32,16 @@ jobs:
       - name: Checkout exact deployed commit
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
 
+      - name: Validate Vercel candidate trust boundary
+        run: |
+          set -euo pipefail
+          node scripts/validate-vercel-deployment-event.mjs
+
       - name: Publish certification status to candidate SHA
         uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
         with:
           name: production-certification
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Validate Vercel candidate trust boundary
-        run: |
-          set -euo pipefail
-          node scripts/validate-vercel-deployment-event.mjs
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

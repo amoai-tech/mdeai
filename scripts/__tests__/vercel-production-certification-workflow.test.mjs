@@ -55,6 +55,11 @@ test("passes dispatch data through environment variables and validates before te
   }
   assert.match(text, /node scripts\/validate-vercel-deployment-event\.mjs/);
   assert.match(text, /npm run test:e2e:prod-candidate-certification/);
+  assert.ok(
+    text.indexOf("Validate Vercel candidate trust boundary") <
+      text.indexOf("Publish certification status to candidate SHA"),
+    "candidate identity must be validated before any certification status is written",
+  );
   for (const block of multilineRunBlocks(text)) {
     assert.doesNotMatch(block, /github\.event\.client_payload/);
   }
