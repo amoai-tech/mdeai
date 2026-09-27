@@ -15,6 +15,9 @@ import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
 const enabled = Boolean(baseUrl);
+if (process.env.CI && !baseUrl) {
+  throw new Error("PROD_SMOKE_BASE_URL is required in CI for candidate certification");
+}
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
 
 async function threadCount(resourceId: string): Promise<number> {
