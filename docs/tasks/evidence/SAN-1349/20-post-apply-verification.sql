@@ -59,17 +59,27 @@ select '2. ownership CHECK installed + validated' as check,
 -- ownership AND the availability window. Matching is case-insensitive and
 -- whitespace-normalised so a cosmetic reformat of the function body cannot
 -- silently turn this check into a false PASS (Codacy review on #134).
+--
+-- Every check below is wrapped in an aggregate subquery so it ALWAYS returns
+-- exactly one row. Selecting straight from pg_proc/pg_policies with a name
+-- filter returns ZERO rows when the object is missing — which prints no verdict
+-- at all and reads like "no problems found". That is the same false-PASS class
+-- the ILIKE change removed, and it applies to 3a, 5, 6 and 7b (CodeRabbit
+-- review on #134). Checks 1, 4, 9, 9b and 10 already used a bare aggregate.
 
 SELECT '3a. RPC body requires landlord_id' AS check,
-       'guard present' AS expected,
-       CASE WHEN regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
-                 ILIKE '%landlord_id is not null%'
-            THEN 'guard present' ELSE 'GUARD MISSING' END AS actual,
-       CASE WHEN regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
-                 ILIKE '%landlord_id is not null%'
-            THEN 'PASS' ELSE 'FAIL' END AS verdict
-FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public' AND p.proname = 'p1_schedule_tour_atomic';
+       'function present and guard present' AS expected,
+       CASE WHEN t.n > 0
+            THEN 'function present, guard present'
+            ELSE 'FUNCTION ABSENT OR GUARD MISSING' END AS actual,
+       CASE WHEN t.n > 0 THEN 'PASS' ELSE 'FAIL' END AS verdict
+FROM (
+  SELECT count(*)::int AS n
+  FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+  WHERE ns.nspname = 'public' AND p.proname = 'p1_schedule_tour_atomic'
+    AND regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
+        ILIKE '%landlord_id is not null%'
+) t;
 
 -- 3b measures what the RPC would actually ACCEPT (state + ownership +
 -- availability), not just the state columns. The two are not the same number:
@@ -118,22 +128,30 @@ where schemaname = 'public' and tablename = 'showings'
 
 -- ── 5 · Broker isolation is defined on the canonical chain alone ─────────────
 select '5. showings_select_visible uses acting_landlord_ids' as check,
-       'canonical chain only' as expected,
-       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
-            then 'canonical chain present' else 'MISSING' end as actual,
-       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
-            then 'PASS' else 'FAIL' end as verdict
-from pg_policies
-where schemaname='public' and tablename='showings' and policyname='showings_select_visible';
+       'policy present on the canonical chain' as expected,
+       case when t.n > 0 then 'canonical chain present'
+            else 'POLICY ABSENT OR NOT ON CANONICAL CHAIN' end as actual,
+       case when t.n > 0 then 'PASS' else 'FAIL' end as verdict
+from (
+  select count(*)::int as n
+  from pg_policies
+  where schemaname='public' and tablename='showings'
+    and policyname='showings_select_visible'
+    and coalesce(qual,'') ilike '%acting_landlord_ids%'
+) t;
 
 select '6. leads_select_broker_listing uses acting_landlord_ids' as check,
-       'canonical chain only' as expected,
-       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
-            then 'canonical chain present' else 'MISSING' end as actual,
-       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
-            then 'PASS' else 'FAIL' end as verdict
-from pg_policies
-where schemaname='public' and tablename='leads' and policyname='leads_select_broker_listing';
+       'policy present on the canonical chain' as expected,
+       case when t.n > 0 then 'canonical chain present'
+            else 'POLICY ABSENT OR NOT ON CANONICAL CHAIN' end as actual,
+       case when t.n > 0 then 'PASS' else 'FAIL' end as verdict
+from (
+  select count(*)::int as n
+  from pg_policies
+  where schemaname='public' and tablename='leads'
+    and policyname='leads_select_broker_listing'
+    and coalesce(qual,'') ilike '%acting_landlord_ids%'
+) t;
 
 -- ── 7 · The canonical ownership chain resolves for every owned listing ───────
 -- REPLACED. The previous version grouped apartments by landlord_id HAVING
@@ -182,13 +200,17 @@ from (
 ) per_landlord;
 
 select '7b. acting_landlord_ids is a single-owner resolver' as check,
-       'returns at most the caller''s own landlord ids' as expected,
-       case when regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
-                 ilike '%auth.uid()%'
-            then 'scoped to auth.uid()' else 'REVIEW' end as actual,
+       'function present and scoped to auth.uid()' as expected,
+       case when t.n > 0 then 'function present, scoped to auth.uid()'
+            else 'FUNCTION ABSENT OR NOT SCOPED' end as actual,
        'REVIEW' as verdict
-from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-where n.nspname='public' and p.proname='acting_landlord_ids';
+from (
+  select count(*)::int as n
+  from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+  where ns.nspname='public' and p.proname='acting_landlord_ids'
+    and regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
+        ilike '%auth.uid()%'
+) t;
 
 -- ── 8 · Historical leads and showings are intact (not deleted, not reassigned)
 -- Referential integrity is asserted here; the absolute counts are REPORTED for

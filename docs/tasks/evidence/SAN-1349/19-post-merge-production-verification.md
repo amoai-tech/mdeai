@@ -11,11 +11,28 @@ does NOT serve it. www.mdeai.co is still serving the PR #130 build, so the
 SAN-1349 defect is still live for real users.
 
 Two independent blockers:
-  B1  production-certification fails on a PRE-EXISTING CopilotKit chat 401,
-      which gates alias assignment — so nothing has been promoted since 633d8a7a6.
-  B2  The 3 migrations cannot be applied: no valid Supabase access token
-      (HTTP 401), no DB password, and no `apply_migration` tool is exposed.
-      Applying is also product-blocking: it drops requestable supply to zero.
+  B1  production-certification fails on an ORIGIN-SPECIFIC Google Maps
+      authentication failure, which gates alias assignment — so nothing has been
+      promoted since 633d8a7a6.
+      NOTE: the CopilotKit `401` is NOT this blocker. It is expected
+      fail-closed behaviour for an unauthenticated caller (see section 3), and
+      the certification's own authenticated runtime-info call returns 200. An
+      earlier draft of this document named the 401 here; that was wrong and is
+      corrected. See the SECTION 3 ROOT CAUSE for what was actually observed,
+      and for the caveat that the referrer mechanism is a hypothesis, not
+      established.
+  B2  The 3 migrations are NOT APPLIED — but they are deferred by DECISION, not
+      blocked. A working credential path exists: the Vercel token in .env
+      authenticates (HTTP 200), and the project environment exposes
+      POSTGRES_URL_NON_POOLING / POSTGRES_PASSWORD / DATABASE_URL, so
+      `supabase db push --db-url` is available. The chain was held because
+      applying it drops requestable supply to zero before the app fix is live
+      and before any real broker exists. See sections 6 and 7.
+      An earlier draft said migrations were blocked by missing credentials and
+      tools; that was only true of the first attempt and is corrected here.
+
+Both blockers are independent of SAN-1349's own code, which is merged and
+verified correct on the built artifact.
 
 ═══════════════════════════════════════════════════════════════════════════════
 1 · main contains the merge SHA — PASS
@@ -185,11 +202,43 @@ There is NO chat region in that accessibility tree. The app's own remediation
 text names the missing referrer explicitly:
 `https://mdeai-rh5d68hhb-amoco.vercel.app/*`.
 
-ROOT CAUSE: the Google Maps browser key's HTTP-referrer allowlist covers the
-custom domains and localhost, but NOT the Vercel deployment origin that
-certification is required to run against. On `www.mdeai.co` Maps works and the
-composer is present; on the candidate origin Maps fails, the Maps error state
-takes over the page, and the chat composer never becomes usable.
+WHAT IS ESTABLISHED vs WHAT IS HYPOTHESIS (corrected — CodeRabbit review on #134)
+---------------------------------------------------------------------------------
+ESTABLISHED, by the A/B control below: the Maps authentication failure is
+ORIGIN-SPECIFIC. The identical signed-in flow succeeds on `www.mdeai.co` and
+fails on the Vercel deployment origin. Maps fails, the error state takes over the
+page, and the composer never becomes usable.
+
+HYPOTHESIS, not established: that the HTTP-referrer allowlist is the *cause*.
+The review was right to push back on the earlier wording, and the reasoning is
+sound:
+
+  * `MapRefererHelp` prints the CURRENT origin as a suggested referrer for EVERY
+    Maps authentication failure. The app's own text naming
+    `https://mdeai-rh5d68hhb-amoco.vercel.app/*` is therefore boilerplate, not
+    evidence — it would say the same thing for a billing or quota failure.
+  * `useMapsAuthFailure` is driven by `window.gm_authFailure`, which fires for
+    referrer, billing, quota and API-not-enabled errors alike. It carries no
+    reason code.
+  * The two origins were served by DIFFERENT BUILDS (633d8a7a6 vs ab1f28768),
+    so the comparison is not perfectly controlled even though the Maps source
+    files are unchanged between those revisions.
+
+So: origin-specific Maps failure = fact. Referrer allowlist = leading hypothesis.
+Verify before acting:
+
+  1. In GCP, inspect the actual restrictions on the browser key used by
+     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — referrer list, API restrictions, and the
+     key's quota/billing state.
+  2. On the candidate origin, capture the specific failure. `gm_authFailure`
+     gives no detail, but the Maps JS console/network output distinguishes
+     `RefererNotAllowedMapError` from `ApiNotActivatedMapError`,
+     `BillingNotEnabledMapError` and `ExpiredKeyMapError`.
+  3. Only then choose the fix. If it is not the referrer list, the F1a
+     recommendation below does not apply.
+
+The second, independent defect below stands regardless of which Maps cause it is:
+the chat should never be unmounted by a Maps failure.
 
 DECISIVE A/B CONTROL (same signed-in user, same code path, different origin)
 --------------------------------------------------------------------------
@@ -254,12 +303,16 @@ the composer has been unmounted.
 This is a DEADLOCK, and it explains why the gate has never passed:
 
   certification must run against the deployment origin
-    -> that origin is not in the Maps key referrer allowlist
-      -> Maps fails, the composer never enables
+    -> Maps authentication fails ON THAT ORIGIN (cause TBD; referrer is the
+       leading hypothesis, see above)
+      -> MapsShell unmounts the chat, so the composer never enables
         -> certification fails
           -> deployment-alias check fails
             -> no alias, so the custom domain keeps serving the old build
               -> certification keeps being re-attempted on deployment origins
+
+Note the deadlock does NOT depend on which Maps cause it is: any origin-specific
+Maps failure reproduces it, because MapsShell turns it into a chat outage.
 
 Vercel confirms the last link directly:
 
@@ -533,16 +586,35 @@ EXACT FIXES, IN ORDER
 F1 · Pick ONE of these two. Either escapes the deadlock; F1a alone is the
      minimum, F1a+F1b is the durable pair.
 
-  F1a (config, ~2 minutes) — add the Vercel deployment origins to the Google
-      Maps browser key's HTTP referrer allowlist.
+  F1a (config) — ONLY IF step 2 above confirms a referrer rejection. Verify the
+      cause first; if the failure is billing, quota or an unenabled API, this
+      does not apply at all.
       In GCP -> APIs & Services -> Credentials -> the browser key used by
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY -> Application restrictions -> HTTP
-      referrers, add:
-         https://mdeai-*.vercel.app/*
-      (or https://*.vercel.app/*). Keep the custom-domain and localhost entries.
-      This is the precise fix for the confirmed A/B result: the same signed-in
-      user works on www.mdeai.co and fails on the deployment origin, and the
-      app's own error text names that origin as the missing referrer.
+      referrers, add the EXACT origins you trust, for example:
+         https://mdeai-rh5d68hhb-amoco.vercel.app/*
+      (one entry per deployment origin you actually need).
+
+      DO NOT use `https://mdeai-*.vercel.app/*` — this document previously
+      recommended exactly that, and the review on #134 was right to reject it:
+        * SECURITY — a wildcard that covers `*.vercel.app` lets ANY Vercel
+          subdomain (anyone on the platform) use this public browser key against
+          its permitted Maps APIs, spending the project's quota and potentially
+          incurring charges. `vercel.app` is shared infrastructure, not a
+          namespace we control.
+        * SYNTAX — Google's website restrictions wildcard a whole subdomain
+          (`https://*.example.com/*`) or a path; a partial-hostname wildcard
+          such as `https://mdeai-*.vercel.app/*` is not the documented form, so
+          it may simply not match. (Reported by review; exact origins sidestep
+          the question entirely, which is why they are recommended here.)
+        * CHURN — per-deployment origins change on every deploy, so the
+          allowlist needs constant maintenance.
+
+      PREFERRED, if the cause is confirmed as referrer: stop certifying against
+      throwaway deployment origins at all. Give the project a stable preview
+      domain under a domain you control (Vercel's `previewDeploymentSuffix`),
+      e.g. `*.preview.mdeai.co`, and allowlist that one origin. It is scoped,
+      stable across deploys, and not shared with other tenants.
 
   F1b (code, no GCP access needed) — stop MapsShell from unmounting the chat.
       src/components/maps/MapProvider.tsx:33-39 returns <MapRefererHelp/> in
