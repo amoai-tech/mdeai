@@ -154,36 +154,82 @@ Next.js chunk URL carries the serving deployment id:
   $ curl -sSL '<merged deployment>/chat?_vercel_share=...' | grep -oE 'dpl_[A-Za-z0-9]+' | sort -u
   dpl_GNiwPHFVsSobCaEQkj8268DTDzb6      <- the ab1f28768 deployment
 
-WHY THE SEND BUTTON IS DISABLED (narrowed, not fully proven)
-------------------------------------------------------------
-CopilotKit's own composer owns this button; the live element carries CopilotKit's
-`cpk:` classes. Its gating is one line:
+WHY THE SEND BUTTON IS DISABLED — ROOT CAUSE CONFIRMED
+------------------------------------------------------
+Reproduced locally against the exact stuck candidate, using the repository's own
+bypass secret and the same spec CI runs:
+
+  PROD_SMOKE_BASE_URL=https://mdeai-rh5d68hhb-amoco.vercel.app \
+    npx playwright test e2e/prod-candidate-certification.spec.ts \
+      --project=prod-smoke --workers=1
+
+  attempt 1  FAILED  toBeEnabled on copilot-send-button   (same as CI)
+  retry  1  FAILED  unauthenticated GET runtime info: expected 401, got 429
+
+The Playwright error context captured the page as it actually was. Signed in
+successfully as the throwaway QA identity, the concierge rendered:
+
+  - text: qa-san1330-...@qa-isolation.mdeai.co
+  - button "Sign out"
+  - paragraph: Google Maps authentication failed
+  - paragraph: Check these three things in GCP for the key used by
+               NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
+      - Billing enabled ...
+      - HTTP referrer allowed — add
+          https://mdeai-rh5d68hhb-amoco.vercel.app/*
+          and http://localhost:3001/*, http://localhost:3000/* ...
+      - Maps JavaScript API enabled ...
+  - alert
+
+There is NO chat region in that accessibility tree. The app's own remediation
+text names the missing referrer explicitly:
+`https://mdeai-rh5d68hhb-amoco.vercel.app/*`.
+
+ROOT CAUSE: the Google Maps browser key's HTTP-referrer allowlist covers the
+custom domains and localhost, but NOT the Vercel deployment origin that
+certification is required to run against. On `www.mdeai.co` Maps works and the
+composer is present; on the candidate origin Maps fails, the Maps error state
+takes over the page, and the chat composer never becomes usable.
+
+This is a DEADLOCK, and it explains why the gate has never passed:
+
+  certification must run against the deployment origin
+    -> that origin is not in the Maps key referrer allowlist
+      -> Maps fails, the composer never enables
+        -> certification fails
+          -> deployment-alias check fails
+            -> no alias, so the custom domain keeps serving the old build
+              -> certification keeps being re-attempted on deployment origins
+
+Vercel confirms the last link directly:
+
+  $ curl -H "Authorization: Bearer $VERCEL_TOKEN" \
+      "https://api.vercel.com/v13/deployments/dpl_3Gkth6XjsMYXwz1MLEsPk1TEsfnF?teamId=$VERCEL_TEAM_ID"
+  checks: { "deployment-alias": { "state": "failed",
+                                  "startedAt":   1790546136437,
+                                  "completedAt": 1790546398745 } }
+  aliasAssigned: false
+  alias: ["mdeai-amoco.vercel.app", "mdeai-git-main-amoco.vercel.app"]
+
+The alias check ran 2026-09-27T21:55:36Z -> 21:59:58Z (262s) and failed, which
+is exactly when the certification run failed. The custom domain was therefore
+never switched.
+
+SECONDARY FLAKE: retry #1 returned 429 instead of 401 for the unauthenticated
+runtime-info assertion — `checkCopilotKitDistributedIpHardCeiling` /
+`checkCopilotKitDistributedRateLimit` shedding the runner's repeated probes. So
+even after the Maps key is fixed, this assertion is rate-limit-sensitive and
+will retry-fail under load. Worth hardening, but it is not the primary blocker.
+
+CopilotKit's own gating, for completeness:
 
   node_modules/@copilotkit/react-core/dist/copilotkit-Cd-NrDyp.mjs:798
-    const BoundSendButton = renderSlot(sendButton, CopilotChatInput.SendButton, {
-      disabled: isProcessing ? !canStop : !canSend,
+    disabled: isProcessing ? !canStop : !canSend,
 
-So the button is disabled when the provider considers the composer either
-mid-turn (`isProcessing && !canStop`) or not sendable (`!canSend`) — typically
-because the runtime connection never became ready.
-
-That is consistent with the client-side symptom measured on the live site:
-repeated "Failed to load runtime info (/api/copilotkit/info): Failed to fetch".
-Note this is a NETWORK-level failure, not the 401 the route returns on purpose.
-The certification spec asserts the *server-side* POST returns 200 and that
-assertion PASSES, while the *client-side* fetch to the same path never resolves.
-
-Most probable cause: the client's fetch to /api/copilotkit/info is intercepted
-(the Vercel automation bypass / SSO wall) so the CopilotKit provider never
-reaches ready, leaving the composer permanently "not sendable". The spec itself
-already documents cookie fragility here — "Supabase session injection clears
-cookies, so re-establish only the same-origin Vercel bypass cookie afterwards".
-
-Discriminating test (not yet run, needs a signed-in session on the live site):
-  sign in normally at https://www.mdeai.co/chat and check whether
-  copilot-send-button enables after typing.
-    ENABLES  -> the failure is the harness's cookie/session ordering
-    STAYS OFF -> the failure is the client-side runtime connection in production
+So a composer that never reaches a ready state stays permanently "not sendable".
+The 401 seen in an anonymous curl is NOT part of this: `evaluateCopilotKitAuth`
+(src/lib/copilotkit-auth.ts:95) fails closed for an unauthenticated caller by
+design.
 
 ═══════════════════════════════════════════════════════════════════════════════
 4 · Live Supabase rental ownership re-audit (read-only) — DONE
@@ -355,25 +401,33 @@ SAN-1349 CANNOT be marked Done.
 ═══════════════════════════════════════════════════════════════════════════════
 EXACT FIXES, IN ORDER
 ═══════════════════════════════════════════════════════════════════════════════
-F1 · Fix the concierge composer step that fails certification. This is the
-     thing freezing ALL production promotion, not just SAN-1349, and the gate
-     has never passed since SAN-1330 added it.
-     The failure is NOT the 401 (that is correct fail-closed behaviour for an
-     unauthenticated caller). It is:
-        e2e/helpers/maps-layout.ts:177  expect(copilot-send-button).toBeEnabled
-     failing on a signed-in session whose runtime info call already returned 200
-     with all four agents. Narrow the cause by answering one question:
-     does the composer's send button enable for a signed-in user on the live
-     site? If YES -> the harness's session/bypass cookie ordering is at fault
-     (the spec itself notes the bypass cookie must be re-established after
-     Supabase session injection, so the client can boot against a stale
-     unauthenticated state). If NO -> it is a product bug in the composer.
-     Supporting observation: an anonymous visitor to /chat gets an enabled
-     textarea with a disabled send button and ~99 retried 401s against
-     /api/copilotkit/info, and /chat intermittently renders the Next.js error
-     boundary with "Loading chunk ... failed". Whatever the root cause, treat
-     SAN-1330's gate as unproven: it has 0 passes in 8 runs.
-     Until F1 is fixed, no merge can reach users.
+F1 · Add the Vercel deployment origins to the Google Maps browser key's HTTP
+     referrer allowlist. THIS IS THE WHOLE FREEZE, and it is a config fix, not
+     a code fix.
+     In GCP -> APIs & Services -> Credentials -> the browser key used by
+     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY -> Application restrictions -> HTTP
+     referrers, add:
+        https://*.vercel.app/*
+     or, tighter, the specific candidate origins
+        https://mdeai-*.vercel.app/*
+     Keep the existing custom-domain and localhost entries.
+     Why this is sufficient: certification must run against the deployment
+     origin, and the app's own error text names that origin as the missing
+     referrer. Once Maps loads on the deployment origin, the concierge renders,
+     the composer initializes, and the send button can enable. Confirm the fix
+     before touching anything else:
+        PROD_SMOKE_BASE_URL=<candidate> npx playwright test \
+          e2e/prod-candidate-certification.spec.ts --project=prod-smoke
+     Must reach the send step and pass, with no "Google Maps authentication
+     failed" in the error context.
+
+F1b · Harden the rate-limit assertion (secondary flake, do after F1).
+     Retry #1 of the same spec failed with 429 where 401 was expected:
+        expect(response.status(), 'unauthenticated GET runtime info').toBe(401)
+     The distributed IP hard ceiling sheds the runner's own repeated probes. A
+     429 is correct behaviour for a rate limiter; the assertion should accept
+     429 as "not 200 and no agents" rather than demanding exactly 401, or the
+     spec should back off. Otherwise this test will keep flapping under load.
 
 F2 · Once F1 is green, re-run the certification so ab1f28768 (or the then-tip)
      is promoted and aliased to www.mdeai.co. Verify with:
