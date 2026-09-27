@@ -7,12 +7,10 @@ const guardScript = fileURLToPath(new URL("./scripts/warn-remote-database-url.mj
 export default async function setup() {
   const guardEnv: NodeJS.ProcessEnv = { ...process.env };
 
-  // Vitest sets NODE_ENV=test, which makes Next skip `.env.local`. The safety guard intentionally
-  // inspects the development dotenv stack in its isolated child without changing Vitest's env.
-  if (guardEnv.NODE_ENV === "test") Reflect.deleteProperty(guardEnv, "NODE_ENV");
-
+  // Vitest storage sees ambient process.env. Do not inspect Next-only dotenv files here or the
+  // guard could warn about a DATABASE_URL the test process never uses.
   await new Promise<void>((resolve) => {
-    const child = spawn(process.execPath, [guardScript], {
+    const child = spawn(process.execPath, [guardScript, "--no-env-files"], {
       cwd: process.cwd(),
       env: guardEnv,
       stdio: ["ignore", "ignore", "inherit"],

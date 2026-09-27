@@ -2,10 +2,10 @@
 /**
  * Warn when a local dev/test process is handed a remote DATABASE_URL.
  *
- * `shouldUsePostgresStorage()` (src/mastra/lib/storage.ts) selects Postgres whenever
- * DATABASE_URL is non-empty and NODE_ENV is not "production". A local run that points it
- * at a hosted database therefore builds a real PostgresStore against that host: it either
- * fails with an opaque network error, or connects and reads/writes hosted data.
+ * `shouldUsePostgresStorage()` (src/mastra/lib/storage.ts) selects Postgres for a non-empty
+ * DATABASE_URL during local dev/test unless MASTRA_DEV_LIBSQL=1 explicitly selects LibSQL.
+ * A local Postgres run pointed at a hosted database can fail with an opaque network error,
+ * or connect and read/write hosted data.
  *
  * This guard is deliberately a warning, never a gate:
  *   - it always exits 0, so it cannot fail a build or a test run;
@@ -19,8 +19,8 @@
  *     `--no-env-files` to skip that. Set `MDE_DATABASE_URL_GUARD_RUNNING=1` to suppress a
  *     duplicate report in a child script that a parent already guarded.
  *   - Imported (`warnIfRemoteDatabaseUrl()`) evaluates only the environment handed to it.
- *     npm/Vitest entry points run the CLI guard first so `.env.local` is checked without
- *     mutating the Vitest process environment.
+ *   - Vitest global setup invokes the CLI with `--no-env-files`, because Vitest storage reads
+ *     ambient `process.env` and does not consume Next's `.env.local` DATABASE_URL.
  *
  * Usage:
  *   node scripts/warn-remote-database-url.mjs
@@ -166,6 +166,8 @@ function evaluateDatabaseUrl(rawValue, env = process.env) {
   }
   // CI may inject a remote URL on purpose; never add noise there.
   if (isCiEnvironment(env)) return { warn: false, reason: "ci" };
+  // Match storage.ts exactly: local dev/test explicitly selecting LibSQL will not use DATABASE_URL.
+  if (env?.MASTRA_DEV_LIBSQL === "1") return { warn: false, reason: "libsql-dev" };
 
   let parsed;
   try {
@@ -229,7 +231,8 @@ const NEXT_ENV_LOGGER = {
  * changing the parent shell, Next.js process, or Vitest worker environment.
  * @param {string} cwd - project directory containing `.env*` files.
  * @param {Record<string, string | undefined>} ambientEnv - environment before @next/env runs.
- * @returns {{ value: string | undefined, source?: string }} resolved value and source file.
+ * @returns {{ value: string | undefined, source?: string, env: Record<string, string | undefined> }}
+ *   resolved value, source file, and effective environment.
  */
 function resolveDatabaseUrlWithNextEnv(cwd, ambientEnv) {
   const { combinedEnv, loadedEnvFiles } = loadEnvConfig(cwd, true, NEXT_ENV_LOGGER, true);
@@ -239,7 +242,7 @@ function resolveDatabaseUrlWithNextEnv(cwd, ambientEnv) {
           Object.prototype.hasOwnProperty.call(file.env ?? {}, "DATABASE_URL"),
         )?.path
       : undefined;
-  return { value: combinedEnv.DATABASE_URL, source };
+  return { value: combinedEnv.DATABASE_URL, source, env: combinedEnv };
 }
 
 /**
@@ -286,7 +289,7 @@ if (invokedDirectly) {
     try {
       const resolved = resolveDatabaseUrlWithNextEnv(process.cwd(), ambientEnv);
       warnIfRemoteDatabaseUrl({
-        env: { ...ambientEnv, DATABASE_URL: resolved.value },
+        env: resolved.env,
         databaseUrl: resolved.value,
         source: resolved.source,
       });

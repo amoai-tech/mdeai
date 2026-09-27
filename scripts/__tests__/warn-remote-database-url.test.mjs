@@ -12,6 +12,7 @@ import { warnIfRemoteDatabaseUrl } from "../warn-remote-database-url.mjs";
 const script = fileURLToPath(new URL("../warn-remote-database-url.mjs", import.meta.url));
 const vitestEntry = fileURLToPath(new URL("../../node_modules/vitest/vitest.mjs", import.meta.url));
 const vitestConfig = fileURLToPath(new URL("../../vitest.config.ts", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 /**
  * The ambient environment decides the outcome of this guard, so every case runs the script
@@ -32,6 +33,7 @@ const CONTROLLED = [
   "TEAMCITY_VERSION",
   "JENKINS_URL",
   "MDE_DATABASE_URL_GUARD_RUNNING",
+  "MASTRA_DEV_LIBSQL",
 ];
 
 const DIRECT_URL =
@@ -202,6 +204,12 @@ test("stays silent in a deployed production runtime", () => {
   assert.equal(stderr, "");
 });
 
+test("stays silent when local dev explicitly selects LibSQL", () => {
+  const { status, stderr } = run({ DATABASE_URL: DIRECT_URL, MASTRA_DEV_LIBSQL: "1" });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
+});
+
 test("stays silent when DATABASE_URL is absent, blank, or quoted-blank", () => {
   for (const value of [undefined, "", "   ", '""']) {
     const { status, stderr } = run(value === undefined ? {} : { DATABASE_URL: value });
@@ -253,6 +261,15 @@ test("CLI reads DATABASE_URL from .env.local, which predev runs before Next load
   assert.equal(status, 0);
   assert.match(stderr, /Supabase DIRECT host/);
   assert.match(stderr, /Found in \.env\.local/);
+});
+
+test("dotenv MASTRA_DEV_LIBSQL=1 suppresses a stale remote DATABASE_URL", () => {
+  const cwd = scratchDir({
+    ".env.local": `DATABASE_URL=${DIRECT_URL}\nMASTRA_DEV_LIBSQL=1\n`,
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.equal(stderr, "");
 });
 
 test("prefers .env.local over .env, matching Next precedence", () => {
@@ -397,7 +414,7 @@ test("the suppress marker silences a child script a parent already guarded", () 
 });
 
 
-test("direct Vitest/IDE starts inspect .env.local exactly once without mutating test env", () => {
+test("direct Vitest/IDE ignores .env.local because the test process does not use it", () => {
   const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
   const previous = process.cwd();
   try {
@@ -405,7 +422,7 @@ test("direct Vitest/IDE starts inspect .env.local exactly once without mutating 
     fs.mkdirSync("src", { recursive: true });
     fs.writeFileSync(
       "src/direct-vitest.test.ts",
-      'test("guard leaves Vitest env untouched", () => expect(process.env.DATABASE_URL).toBeUndefined());\n',
+      'test("Vitest env stays ambient-only", () => expect(process.env.DATABASE_URL).toBeUndefined());\n',
     );
   } finally {
     process.chdir(previous);
@@ -420,24 +437,65 @@ test("direct Vitest/IDE starts inspect .env.local exactly once without mutating 
   );
   const output = `${result.stdout}${result.stderr}`;
   assert.equal(result.status, 0, output);
-  assert.equal((output.match(/Supabase DIRECT host/g) ?? []).length, 1, output);
+  assert.doesNotMatch(output, /Supabase DIRECT host/);
   assert.match(output, /1 passed/);
 });
 
+test("direct Vitest/IDE warns once for an ambient remote DATABASE_URL", () => {
+  const cwd = scratchDir();
+  const previous = process.cwd();
+  try {
+    process.chdir(cwd);
+    fs.mkdirSync("src", { recursive: true });
+    fs.writeFileSync(
+      "src/direct-vitest.test.ts",
+      'test("Vitest keeps the ambient URL", () => expect(process.env.DATABASE_URL).toContain("supabase.co"));\n',
+    );
+  } finally {
+    process.chdir(previous);
+  }
+
+  const env = { ...process.env };
+  for (const name of CONTROLLED) delete env[name];
+  env.DATABASE_URL = DIRECT_URL;
+  const result = spawnSync(
+    process.execPath,
+    [vitestEntry, "run", "src/direct-vitest.test.ts", "--config", vitestConfig],
+    { cwd, env, encoding: "utf8" },
+  );
+  const output = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 0, output);
+  assert.equal((output.match(/Supabase DIRECT host/g) ?? []).length, 1, output);
+});
+
 test("Vitest runs the direct-start guard in globalSetup, not during config evaluation", () => {
-  const configSource = fs.readFileSync("vitest.config.ts", "utf8");
-  const setupSource = fs.readFileSync("vitest.global-setup.ts", "utf8");
+  const previous = process.cwd();
+  let configSource;
+  let setupSource;
+  try {
+    process.chdir(repoRoot);
+    configSource = fs.readFileSync("vitest.config.ts", "utf8");
+    setupSource = fs.readFileSync("vitest.global-setup.ts", "utf8");
+  } finally {
+    process.chdir(previous);
+  }
 
   assert.doesNotMatch(configSource, /node:child_process|spawnSync\s*\(/);
   assert.match(configSource, /globalSetup:/);
   assert.match(configSource, /vitest\.global-setup\.ts/);
   assert.doesNotMatch(setupSource, /spawnSync\s*\(/, "global setup must not block on spawnSync");
+  assert.match(setupSource, /--no-env-files/, "direct Vitest must inspect ambient env only");
 });
 
-test("every supported Vitest npm entry point runs the file-aware guard exactly once", () => {
-  const packageJson = JSON.parse(
-    fs.readFileSync("package.json", "utf8"),
-  );
+test("every supported Vitest npm entry point relies on the ambient-only global guard", () => {
+  const previous = process.cwd();
+  let packageJson;
+  try {
+    process.chdir(repoRoot);
+    packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+  } finally {
+    process.chdir(previous);
+  }
   const vitestScripts = [
     "test",
     "test:watch",
@@ -448,15 +506,12 @@ test("every supported Vitest npm entry point runs the file-aware guard exactly o
     "test:api",
   ];
   for (const name of vitestScripts) {
-    assert.equal(
-      packageJson.scripts[`pre${name}`],
-      "node scripts/warn-remote-database-url.mjs",
-      `${name} must inspect Next-style dotenv files before Vitest starts`,
-    );
-    assert.match(
+    assert.equal(packageJson.scripts[`pre${name}`], undefined, `${name} must not pre-load dotenv`);
+    assert.match(packageJson.scripts[name], /^vitest(?:\s|$)/, `${name} must run Vitest directly`);
+    assert.doesNotMatch(
       packageJson.scripts[name],
-      /^MDE_DATABASE_URL_GUARD_RUNNING=1 vitest(?:\s|$)/,
-      `${name} must suppress the ambient-only Vitest fallback after the pre-hook runs`,
+      /MDE_DATABASE_URL_GUARD_RUNNING/,
+      `${name} must let Vitest globalSetup run the ambient-only guard`,
     );
   }
 });
