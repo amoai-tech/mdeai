@@ -1,0 +1,20 @@
+
+> mdeapp@0.1.0 floor
+> npm run check:skills && npm run check:db-url-guard && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm test && npm run check:mastra && npm run audit:floor
+
+
+> mdeapp@0.1.0 check:skills
+> python3 scripts/check-skill-layout.py
+
+SKILL_LAYOUT_FAIL
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/build-integration/SKILL.md
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/configure-site/SKILL.md
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/cr-create/SKILL.md
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/cr-review/SKILL.md
+- unexpected Codex exposure entry: /home/sk/mdeai/.agents/skills/supabase/CHANGELOG.md
+- unexpected Codex exposure entry: /home/sk/mdeai/.agents/skills/supabase/assets
+- unexpected Codex exposure entry: /home/sk/mdeai/.agents/skills/supabase/references
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/write-docs/SKILL.md
+- Codex exposure is not symlink: /home/sk/mdeai/.agents/skills/write-openapi/SKILL.md
+- noncanonical .agents skill entry: supabase-postgres-best-practices
+[floor exit 1]

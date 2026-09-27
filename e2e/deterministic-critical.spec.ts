@@ -37,6 +37,9 @@ const rental = {
   amenities: ["wifi", "workspace"],
   image: "",
   source_url: "https://mdeai.co/rentals/rnt_test_001",
+  // SAN-1349: the deterministic fast-path fixture models a fully owned, approved, published
+  // listing, so the browse card is expected to expose the Schedule viewing CTA.
+  can_schedule_viewing: true,
   schedule_viewing_url:
     "https://mdeai.co/rentals/rnt_test_001/schedule-viewing",
   host_name: "QA Host",
@@ -154,5 +157,37 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
       "Laureles",
     );
     await expect(page.getByTestId("map-pin").first()).toBeVisible();
+  });
+
+  // SAN-1349: an unowned / non-requestable listing stays browseable but must never expose a
+  // viewing action, so the UI cannot advertise something the database would reject.
+  test("unowned rental renders a card without a Schedule viewing CTA", async ({
+    page,
+  }) => {
+    await page.route("**/api/rentals/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [
+            {
+              ...rental,
+              can_schedule_viewing: false,
+              schedule_viewing_url: null,
+            },
+          ],
+          total: 1,
+          source: "mock",
+        }),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(0);
   });
 });

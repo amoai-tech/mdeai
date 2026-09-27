@@ -195,7 +195,7 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
       .not("price_daily", "is", null)
@@ -244,7 +244,7 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids);
     // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
@@ -370,6 +370,10 @@ export async function searchRentalsIntelligent(
   let results: IntelligenceRentalResult[] = scored.slice(0, limit).map(({ row, rankScore, sig }) => {
     const apt = aptMap.get(row.id);
     if (apt) {
+      // SAN-1349: requestability is derived ONLY from the canonical apartments row mapped by
+      // rowToRental. A hybrid-search hit is never sufficient proof on its own — if the
+      // canonical lookup could not confirm owner + workflow + availability, the mapping below
+      // returns can_schedule_viewing = false.
       const rental = rowToRental(apt as unknown as import("../tools/search-rentals").ApartmentRow);
       return {
         ...rental,
@@ -378,6 +382,8 @@ export async function searchRentalsIntelligent(
         evidenceText: sig?.source ? `Signal source: ${sig.source}` : null,
       };
     }
+    // No canonical apartments row survived the availability filter, so ownership and workflow
+    // state are unproven. Never synthesize a viewing URL from the hybrid result alone.
     return {
       id: row.id,
       title: row.title,
@@ -389,7 +395,8 @@ export async function searchRentalsIntelligent(
       amenities: row.amenities ?? [],
       image: (row.images ?? [])[0] ?? "",
       source_url: `https://mdeai.co/rentals/${row.id}`,
-      schedule_viewing_url: `https://mdeai.co/rentals/${row.id}/schedule-viewing`,
+      can_schedule_viewing: false,
+      schedule_viewing_url: null,
       host_name: "Host",
       availability: "Available now",
       tags: [],

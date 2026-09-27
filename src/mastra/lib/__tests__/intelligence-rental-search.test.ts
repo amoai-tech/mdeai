@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parseRentalIntelligenceSlots } from "../intelligence-rental-search";
-import { isAvailableForStay, sortForMonthlyStay } from "../../tools/search-rentals";
+import {
+  isAvailableForStay,
+  isRentalRequestable,
+  sortForMonthlyStay,
+} from "../../tools/search-rentals";
 import type { Rental } from "../../tools/search-rentals";
 
 describe("parseRentalIntelligenceSlots", () => {
@@ -104,6 +108,61 @@ describe("isAvailableForStay", () => {
   });
 });
 
+// SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
+// The database remains the authority; these cases pin the contract the UI and agents rely on.
+describe("isRentalRequestable", () => {
+  const owned = {
+    landlord_id: "11111111-1111-4111-8111-111111111111",
+    status: "active",
+    moderation_status: "approved",
+    listing_workflow_status: "published",
+    available_from: null,
+    available_to: null,
+  };
+  const today = new Date("2026-09-27T12:00:00Z");
+
+  it("allows an owned, active, approved, published, available listing", () => {
+    expect(isRentalRequestable(owned, today)).toBe(true);
+  });
+
+  it("refuses a listing with no canonical owner", () => {
+    expect(isRentalRequestable({ ...owned, landlord_id: null }, today)).toBe(false);
+  });
+
+  it("refuses an unapproved listing", () => {
+    expect(isRentalRequestable({ ...owned, moderation_status: "pending" }, today)).toBe(false);
+  });
+
+  it("refuses an unpublished listing", () => {
+    expect(isRentalRequestable({ ...owned, listing_workflow_status: "draft" }, today)).toBe(false);
+  });
+
+  it("refuses an inactive listing", () => {
+    expect(isRentalRequestable({ ...owned, status: "inactive" }, today)).toBe(false);
+  });
+
+  it("refuses a listing whose availability window has already closed", () => {
+    expect(isRentalRequestable({ ...owned, available_to: "2026-01-01" }, today)).toBe(false);
+  });
+
+  it("refuses a listing that is not available yet", () => {
+    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(false);
+  });
+
+  it("allows a listing whose availability window is currently open", () => {
+    expect(
+      isRentalRequestable(
+        { ...owned, available_from: "2026-01-01", available_to: "2026-12-31" },
+        today,
+      ),
+    ).toBe(true);
+  });
+
+  it("fails closed when ownership/workflow proof is entirely absent", () => {
+    expect(isRentalRequestable({}, today)).toBe(false);
+  });
+});
+
 // Minimal Rental stub for sort tests
 function makeRental(id: string, nightly: number, tags: string[]): Rental {
   return {
@@ -117,7 +176,8 @@ function makeRental(id: string, nightly: number, tags: string[]): Rental {
     amenities: [],
     image: "",
     source_url: "",
-    schedule_viewing_url: "",
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: "Host",
     availability: "Available now",
     tags,

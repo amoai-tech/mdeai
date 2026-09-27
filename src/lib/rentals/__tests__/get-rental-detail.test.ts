@@ -112,6 +112,7 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
           amenities: ["wifi"],
           image: "",
           source_url: "https://mdeai.co/rentals/laureles-2br-balcony",
+          can_schedule_viewing: true,
           schedule_viewing_url: "https://mdeai.co/rentals/laureles-2br-balcony/schedule-viewing",
           host_name: "Andrés Restrepo",
           availability: "Available now",

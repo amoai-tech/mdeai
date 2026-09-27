@@ -1,0 +1,156 @@
+[1A[2K[2m[WebServer] [22m(node:333525) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[2m[WebServer] [22m(node:333537) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[2m[WebServer] [22m[mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps
+
+
+Running 1 test using 1 worker
+
+[1A[2K(node:334165) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:334165) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/1] [local-chromium] › e2e/deterministic-critical.spec.ts:144:7 › SAN-1341 deterministic critical journeys › rental fast path renders rental card and map pin state @critical @deterministic
+[1A[2K[2m[WebServer] [22m[mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps
+
+[1A[2K[2m[WebServer] [22m[mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m[browser] [mdeai maps] NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID missing — using DEMO_MAP_ID (dev/test only). Create a Map ID at https://console.cloud.google.com/google/maps-apis/studio/maps (src/lib/google-maps-map-id.ts:33:15)
+
+[1A[2K[2m[WebServer] [22m(node:334861) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found (src/components/chat/concierge-coagent-context.tsx:40:29)
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found (src/components/chat/concierge-coagent-context.tsx:40:29)
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found
+
+[1A[2K[2m[WebServer] [22m[browser] Agent conciergeAgent not found
+
+[1A[2K[2m[WebServer] [22m[browser] Failed to load runtime info (/api/copilotkit/info): Runtime info request failed with status 401
+
+[1A[2K[2m[WebServer] [22m[browser] [CopilotKit] Agent error: Runtime info request failed with status 401 
+[2m[WebServer] [22m  Code: runtime_info_fetch_failed 
+[2m[WebServer] [22m  Context: { runtimeUrl: [32m'/api/copilotkit'[39m } 
+[2m[WebServer] [22m  Stack: Error: Runtime info request failed with status 401
+[2m[WebServer] [22m    at AgentRegistry.fetchRuntimeInfoSingle (webpack-internal:///(app-pages-browser)/./node_modules/@copilotkit/core/dist/index.mjs:1123:27)
+[2m[WebServer] [22m    at async AgentRegistry.updateRuntimeConnection (webpack-internal:///(app-pages-browser)/./node_modules/@copilotkit/core/dist/index.mjs:1049:32) 
+
+[1A[2K[2m[WebServer] [22m[browser] [CopilotKit] Agent error: HTTP 401: {"error":"unauthorized"} 
+[2m[WebServer] [22m  Code: agent_run_failed_event 
+[2m[WebServer] [22m  Context: { agentId: [32m'conciergeAgent'[39m, source: [32m'onRunFailed'[39m } 
+[2m[WebServer] [22m  Stack: Error: HTTP 401: {"error":"unauthorized"}
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/@ag-ui/client/dist/index.mjs:138:22469)
+[2m[WebServer] [22m    at doInnerSub (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:28:74)
+[2m[WebServer] [22m    at outerNext (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:22:38)
+[2m[WebServer] [22m    at OperatorSubscriber._this._next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/OperatorSubscriber.js:21:17)
+[2m[WebServer] [22m    at Subscriber.next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/Subscriber.js:47:18)
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/observable/innerFrom.js:82:28) 
+
+[1A[2K[2m[WebServer] [22m[browser] Agent execution failed: Error: HTTP 401: {"error":"unauthorized"}
+
+[1A[2K[2m[WebServer] [22m[browser] [CopilotKit] Agent error: HTTP 401: {"error":"unauthorized"} 
+[2m[WebServer] [22m  Code: agent_connect_failed 
+[2m[WebServer] [22m  Context: { agentId: [32m'conciergeAgent'[39m } 
+[2m[WebServer] [22m  Stack: Error: HTTP 401: {"error":"unauthorized"}
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/@ag-ui/client/dist/index.mjs:138:22469)
+[2m[WebServer] [22m    at doInnerSub (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:28:74)
+[2m[WebServer] [22m    at outerNext (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:22:38)
+[2m[WebServer] [22m    at OperatorSubscriber._this._next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/OperatorSubscriber.js:21:17)
+[2m[WebServer] [22m    at Subscriber.next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/Subscriber.js:47:18)
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/observable/innerFrom.js:82:28) 
+
+[1A[2K[2m[WebServer] [22m[browser] [CopilotKit] Agent error: HTTP 401: {"error":"unauthorized"} 
+[2m[WebServer] [22m  Code: agent_run_failed_event 
+[2m[WebServer] [22m  Context: { agentId: [32m'conciergeAgent'[39m, source: [32m'onRunFailed'[39m } 
+[2m[WebServer] [22m  Stack: Error: HTTP 401: {"error":"unauthorized"}
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/@ag-ui/client/dist/index.mjs:138:22469)
+[2m[WebServer] [22m    at doInnerSub (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:28:74)
+[2m[WebServer] [22m    at outerNext (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:22:38)
+[2m[WebServer] [22m    at OperatorSubscriber._this._next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/OperatorSubscriber.js:21:17)
+[2m[WebServer] [22m    at Subscriber.next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/Subscriber.js:47:18)
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/observable/innerFrom.js:82:28) 
+
+[1A[2K[2m[WebServer] [22m[browser] Agent execution failed: Error: HTTP 401: {"error":"unauthorized"}
+
+[1A[2K[2m[WebServer] [22m[browser] [CopilotKit] Agent error: HTTP 401: {"error":"unauthorized"} 
+[2m[WebServer] [22m  Code: agent_connect_failed 
+[2m[WebServer] [22m  Context: { agentId: [32m'conciergeAgent'[39m } 
+[2m[WebServer] [22m  Stack: Error: HTTP 401: {"error":"unauthorized"}
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/@ag-ui/client/dist/index.mjs:138:22469)
+[2m[WebServer] [22m    at doInnerSub (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:28:74)
+[2m[WebServer] [22m    at outerNext (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/mergeInternals.js:22:38)
+[2m[WebServer] [22m    at OperatorSubscriber._this._next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/operators/OperatorSubscriber.js:21:17)
+[2m[WebServer] [22m    at Subscriber.next (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/Subscriber.js:47:18)
+[2m[WebServer] [22m    at eval (webpack-internal:///(app-pages-browser)/./node_modules/rxjs/dist/esm5/internal/observable/innerFrom.js:82:28) 
+
+[1A[2K  1) [local-chromium] › e2e/deterministic-critical.spec.ts:144:7 › SAN-1341 deterministic critical journeys › rental fast path renders rental card and map pin state @critical @deterministic 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveAttribute[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  getByTestId('concierge-chat-view-mounted')
+    Expected: [32m"true"[39m
+    Received: [31m""[39m
+    Timeout:  30000ms
+
+    Call log:
+    [2m  - Expect "toHaveAttribute" with timeout 30000ms[22m
+    [2m  - waiting for getByTestId('concierge-chat-view-mounted')[22m
+    [2m    54 × locator resolved to <div class="contents" data-testid="concierge-chat-view-mounted">…</div>[22m
+    [2m       - unexpected value "null"[22m
+
+
+       98 |   const chat = page.getByTestId("concierge-chat-view-mounted");
+       99 |   await expect(chat).toBeVisible({ timeout: 20_000 });
+    > 100 |   await expect(chat).toHaveAttribute("data-hydrated", "true", {
+          |                      ^
+      101 |     timeout: 30_000,
+      102 |   });
+      103 |   await ensureChatInputVisible(page);
+        at gotoDeterministicChat (/home/sk/mdeai/e2e/deterministic-critical.spec.ts:100:22)
+        at /home/sk/mdeai/e2e/deterministic-critical.spec.ts:147:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/deterministic-critical-SAN-58587-ntal-card-and-map-pin-state-local-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/deterministic-critical-SAN-58587-ntal-card-and-map-pin-state-local-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/deterministic-critical-SAN-58587-ntal-card-and-map-pin-state-local-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/deterministic-critical-SAN-58587-ntal-card-and-map-pin-state-local-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K  1 failed
+    [local-chromium] › e2e/deterministic-critical.spec.ts:144:7 › SAN-1341 deterministic critical journeys › rental fast path renders rental card and map pin state @critical @deterministic 
+[exit 1]

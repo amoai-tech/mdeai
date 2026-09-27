@@ -1,0 +1,1536 @@
+Connecting to local database...
+Linting schema: extensions
+Linting schema: public
+Linting schema: sponsor
+[
+  {
+    "function": "extensions.index_advisor",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "12",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"statements\" initialization on line 11",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public.addauth",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"temp_lock_have_table\" does not exist",
+        "statement": {
+          "lineNumber": "24",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "13",
+          "text": "INSERT INTO temp_lock_have_table VALUES (getTransactionID(), lockid)"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.addgeometrycolumn",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "routine is marked as STABLE, but expression is VOLATILE",
+        "statement": {
+          "lineNumber": "5",
+          "text": "SQL statement"
+        },
+        "hint": "When you fix this issue, please, recheck other functions that uses this function.",
+        "detail": "there is a risk of unwanted behave",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.addgeometrycolumn",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "28",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "34",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "39",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "51",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "70",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "88",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"rec\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"sr\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unused parameter \"catalog_name\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.calculate_distance",
+    "issues": [
+      {
+        "level": "error",
+        "message": "type \"geography\" does not exist",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "44",
+          "text": "st_distance(\n    st_makepoint(lng1, lat1)::geography,\n    st_makepoint(lng2, lat2)::geography\n  )"
+        },
+        "sqlState": "42704"
+      }
+    ]
+  },
+  {
+    "function": "public.dropgeometrycolumn",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "34",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"myrec\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unused parameter \"catalog_name\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.dropgeometrytable",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "unused parameter \"catalog_name\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.enablelongtransactions",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "never read variable \"rec\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.get_proj4_from_srid",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "routine is marked as IMMUTABLE, but expression is STABLE",
+        "statement": {
+          "lineNumber": "3",
+          "text": "RETURN"
+        },
+        "hint": "When you fix this issue, please, recheck other functions that uses this function.",
+        "detail": "there is a risk of unwanted behave",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "expression is not pure expression",
+        "statement": {
+          "lineNumber": "3",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "1",
+          "text": "proj4text::text FROM public.spatial_ref_sys WHERE srid= $1"
+        },
+        "hint": "Maybe you forgot to use a semicolon.",
+        "detail": "there is a possibility of unwanted behave",
+        "sqlState": "42601"
+      }
+    ]
+  },
+  {
+    "function": "public.lockrow",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"authorization_table\" does not exist",
+        "statement": {
+          "lineNumber": "18",
+          "text": "EXECUTE"
+        },
+        "query": {
+          "position": "13",
+          "text": "DELETE FROM authorization_table WHERE expires \u003c now()"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.longtransactionsenabled",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "7",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"boolean\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "9",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"boolean\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"rec\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.populate_geometry_columns",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "unused variable \"gc\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"gsrid\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"gndims\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"gtype\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"query\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "unused variable \"gc_is_valid\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"stale\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.populate_geometry_columns",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "47",
+          "text": "EXECUTE"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "error",
+        "message": "record \"gc\" is not assigned yet",
+        "statement": {
+          "lineNumber": "55",
+          "text": "assignment"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "PL/pgSQL assignment \"gsrid := gc.srid\"",
+        "sqlState": "55000"
+      }
+    ]
+  },
+  {
+    "function": "public.postgis_full_version",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "routine is marked as IMMUTABLE, but expression is STABLE",
+        "statement": {
+          "lineNumber": "33",
+          "text": "SQL statement"
+        },
+        "hint": "When you fix this issue, please, recheck other functions that uses this function.",
+        "detail": "there is a risk of unwanted behave",
+        "sqlState": "00000"
+      },
+      {
+        "level": "error",
+        "message": "function public.postgis_gdal_version() does not exist",
+        "statement": {
+          "lineNumber": "35",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "8",
+          "text": "SELECT public.postgis_gdal_version()"
+        },
+        "hint": "No function matches the given name and argument types. You might need to add explicit type casts.",
+        "sqlState": "42883"
+      }
+    ]
+  },
+  {
+    "function": "public.st_findextent",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "8",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "error",
+        "message": "record \"myrec\" is not assigned yet",
+        "statement": {
+          "lineNumber": "9",
+          "text": "RETURN"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "SQL expression \"myrec.extent\"",
+        "sqlState": "55000"
+      }
+    ]
+  },
+  {
+    "function": "public.st_findextent",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "8",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "error",
+        "message": "record \"myrec\" is not assigned yet",
+        "statement": {
+          "lineNumber": "9",
+          "text": "RETURN"
+        },
+        "detail": "The tuple structure of a not-yet-assigned record is indeterminate.",
+        "context": "SQL expression \"myrec.extent\"",
+        "sqlState": "55000"
+      }
+    ]
+  },
+  {
+    "function": "public.st_letters",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "98",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"json\" type",
+        "context": "during statement block local variable \"font_default\" initialization on line 18",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public.updategeometrysrid",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "36",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unreachable code",
+        "statement": {
+          "lineNumber": "43",
+          "text": "RETURN"
+        },
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "unused parameter \"catalogn_name\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.log_outbound_click",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"public.outbound_clicks\" does not exist",
+        "statement": {
+          "lineNumber": "9",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "13",
+          "text": "INSERT INTO public.outbound_clicks (user_id, listing_id, source_url, affiliate_tag, surface)\n  VALUES (auth.uid(), p_listing_id, p_source_url, p_affiliate_tag, p_surface)\n  RETURNING id"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.insert_trip_item_for_user",
+    "issues": [
+      {
+        "level": "error",
+        "message": "column e.title does not exist",
+        "statement": {
+          "lineNumber": "28",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "8",
+          "text": "SELECT e.title, NULL::numeric, NULL::numeric, NULL::text\n                                                  FROM events e WHERE e.id = p_source_id"
+        },
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.fn_upsert_delivery_log",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"marketing.delivery_logs\" does not exist",
+        "statement": {
+          "lineNumber": "6",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "13",
+          "text": "INSERT INTO marketing.delivery_logs (\n      channel, recipient, status, metadata,\n      outbox_id, campaign_id, error_code, error_message,\n      sent_at, delivered_at, read_at\n    ) VALUES (\n      p_data-\u003e\u003e'channel', p_data-\u003e\u003e'recipient', p_data-\u003e\u003e'status',\n      COALESCE((p_data-\u003e\u003e'metadata')::jsonb, '{}'),\n      NULLIF(p_data-\u003e\u003e'outbox_id', '')::uuid,\n      NULLIF(p_data-\u003e\u003e'campaign_id', '')::uuid,\n      NULLIF(p_data-\u003e\u003e'error_code', ''),\n      NULLIF(p_data-\u003e\u003e'error_message', ''),\n      NULLIF(p_data-\u003e\u003e'sent_at', '')::timestamptz,\n      NULLIF(p_data-\u003e\u003e'delivered_at', '')::timestamptz,\n      NULLIF(p_data-\u003e\u003e'read_at', '')::timestamptz\n    )"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.approve_sponsor_application",
+    "issues": [
+      {
+        "level": "error",
+        "message": "record \"v_app\" has no field \"status\"",
+        "statement": {
+          "lineNumber": "22",
+          "text": "IF"
+        },
+        "context": "SQL expression \"v_app.status NOT IN ('submitted', 'under_review')\"",
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.fn_insert_conversation",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"marketing.openclaw_conversations\" does not exist",
+        "statement": {
+          "lineNumber": "9",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "13",
+          "text": "INSERT INTO marketing.openclaw_conversations (\n      contact_phone, direction, channel, body,\n      openclaw_message_id, campaign_id, metadata\n    ) VALUES (\n      p_data-\u003e\u003e'contact_phone',\n      p_data-\u003e\u003e'direction',\n      COALESCE(p_data-\u003e\u003e'channel', 'whatsapp'),\n      p_data-\u003e\u003e'body',\n      v_msg_id,\n      NULLIF(p_data-\u003e\u003e'campaign_id', '')::uuid,\n      COALESCE((p_data-\u003e\u003e'metadata')::jsonb, '{}')\n    )\n    ON CONFLICT (openclaw_message_id) WHERE openclaw_message_id IS NOT NULL\n    DO NOTHING\n    RETURNING id"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.fn_notify_next_in_line",
+    "issues": [
+      {
+        "level": "error",
+        "message": "column \"payload\" of relation \"notifications\" does not exist",
+        "statement": {
+          "lineNumber": "23",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "50",
+          "text": "INSERT INTO public.notifications (user_id, type, payload)\n  VALUES (\n    v_row.user_id,\n    'wait_list_spot_available',\n    jsonb_build_object(\n      'ticket_type_id', v_row.ticket_type_id,\n      'event_id',       v_row.event_id,\n      'expires_at',     (pg_catalog.now() + interval '30 minutes')\n    )\n  )\n  ON CONFLICT DO NOTHING"
+        },
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.fn_update_conversation_intent",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"marketing.openclaw_conversations\" does not exist",
+        "statement": {
+          "lineNumber": "3",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "8",
+          "text": "UPDATE marketing.openclaw_conversations SET\n    intent      = p_intent,\n    confidence  = p_confidence,\n    reply_body  = p_reply,\n    replied_at  = pg_catalog.now()\n  WHERE openclaw_message_id = p_message_id"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.p1_start_rental_application_atomic",
+    "issues": [
+      {
+        "level": "error",
+        "message": "column \"idempotency_key\" does not exist",
+        "statement": {
+          "lineNumber": "24",
+          "text": "SQL statement"
+        },
+        "query": {
+          "position": "92",
+          "text": "SELECT *              FROM public.rental_applications\n  WHERE applicant_id = p_user_id AND idempotency_key = p_idempotency_key"
+        },
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.plan",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"__tcache__\" does not exist",
+        "statement": {
+          "lineNumber": "24",
+          "text": "EXECUTE"
+        },
+        "query": {
+          "position": "18",
+          "text": "SELECT TRUE FROM __tcache__ WHERE label = 'plan'"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public.add_result",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"__tresults___numb_seq\" does not exist",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "9",
+          "text": "nextval('__tresults___numb_seq')"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public._time_trials",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "unused variable \"act_time\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.format_type_string",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "23",
+          "text": "assignment"
+        },
+        "query": {
+          "position": "1",
+          "text": "typmodin_arg := translate(substring(want_type FROM '[(][^\")]+[)]'), '()', '{}')"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"cstring[]\" type",
+        "context": "at assignment to variable \"typmodin_arg\" declared on line 18",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._def_is",
+    "issues": [
+      {
+        "level": "error",
+        "message": "function is(text, integer, text) does not exist",
+        "statement": {
+          "lineNumber": "7",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "1",
+          "text": "is( $1, $3, $4 )"
+        },
+        "hint": "No function matches the given name and argument types. You might need to add explicit type casts.",
+        "sqlState": "42883"
+      }
+    ]
+  },
+  {
+    "function": "public._cdi",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "expression is not pure expression",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "1",
+          "text": "_def_is(\n        pg_catalog.pg_get_expr(d.adbin, d.adrelid),\n        pg_catalog.format_type(a.atttypid, a.atttypmod),\n        $4, $5\n    )\n      FROM pg_catalog.pg_namespace n, pg_catalog.pg_class c, pg_catalog.pg_attribute a,\n           pg_catalog.pg_attrdef d\n     WHERE n.oid = c.relnamespace\n       AND c.oid = a.attrelid\n       AND a.atthasdef\n       AND a.attrelid = d.adrelid\n       AND a.attnum = d.adnum\n       AND n.nspname = $1\n       AND c.relname = $2\n       AND a.attnum \u003e 0\n       AND NOT a.attisdropped\n       AND a.attname = $3"
+        },
+        "hint": "Maybe you forgot to use a semicolon.",
+        "detail": "there is a possibility of unwanted behave",
+        "sqlState": "42601"
+      }
+    ]
+  },
+  {
+    "function": "public._cdi",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "expression is not pure expression",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "1",
+          "text": "_def_is(\n        pg_catalog.pg_get_expr(d.adbin, d.adrelid),\n        pg_catalog.format_type(a.atttypid, a.atttypmod),\n        $3, $4\n    )\n      FROM pg_catalog.pg_class c, pg_catalog.pg_attribute a, pg_catalog.pg_attrdef d\n     WHERE c.oid = a.attrelid\n       AND pg_table_is_visible(c.oid)\n       AND a.atthasdef\n       AND a.attrelid = d.adrelid\n       AND a.attnum = d.adnum\n       AND c.relname = $1\n       AND a.attnum \u003e 0\n       AND NOT a.attisdropped\n       AND a.attname = $2"
+        },
+        "hint": "Maybe you forgot to use a semicolon.",
+        "detail": "there is a possibility of unwanted behave",
+        "sqlState": "42601"
+      }
+    ]
+  },
+  {
+    "function": "public._constraint",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"keys\" initialization on line 4",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._constraint",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"keys\" initialization on line 4",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._prokind",
+    "issues": [
+      {
+        "level": "warning extra",
+        "message": "expression is not pure expression",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "1",
+          "text": "prokind FROM pg_catalog.pg_proc WHERE oid = p_oid"
+        },
+        "hint": "Maybe you forgot to use a semicolon.",
+        "detail": "there is a possibility of unwanted behave",
+        "sqlState": "42601"
+      },
+      {
+        "level": "error",
+        "message": "column \"proisagg\" does not exist",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "11",
+          "text": "CASE WHEN proisagg THEN 'a' WHEN proiswindow THEN 'w' ELSE 'f' END\n            FROM pg_catalog.pg_proc WHERE oid = p_oid"
+        },
+        "hint": "Perhaps you meant to reference the column \"pg_proc.prolang\".",
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.has_tablespace",
+    "issues": [
+      {
+        "level": "error",
+        "message": "column \"spclocation\" does not exist",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "160",
+          "text": "ok(\n            EXISTS(\n                SELECT true\n                  FROM pg_catalog.pg_tablespace\n                 WHERE spcname = $1\n                   AND spclocation = $2\n            ), $3\n        )"
+        },
+        "sqlState": "42703"
+      }
+    ]
+  },
+  {
+    "function": "public.check_test",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"__tresults___numb_seq\" does not exist",
+        "statement": {
+          "lineNumber": "17",
+          "text": "assignment"
+        },
+        "query": {
+          "position": "18",
+          "text": "tnumb := currval('__tresults___numb_seq')"
+        },
+        "context": "at assignment to variable \"tnumb\" declared on line 3",
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public._currtest",
+    "issues": [
+      {
+        "level": "error",
+        "message": "relation \"__tresults___numb_seq\" does not exist",
+        "statement": {
+          "lineNumber": "3",
+          "text": "RETURN"
+        },
+        "query": {
+          "position": "9",
+          "text": "currval('__tresults___numb_seq')"
+        },
+        "sqlState": "42P01"
+      }
+    ]
+  },
+  {
+    "function": "public._docomp",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"extras\" initialization on line 5",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"missing\" initialization on line 6",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "13",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "19",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public._do_ne",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "9",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"extras\" initialization on line 5",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "9",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"missing\" initialization on line 6",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"extras\"",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"missing\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public._relcomp",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "9",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"results\" initialization on line 5",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "12",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.is_empty",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "7",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"extras\" initialization on line 3",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "9",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.isnt_empty",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "7",
+          "text": "FOR over EXECUTE statement"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "warning extra",
+        "message": "never read variable \"rec\"",
+        "sqlState": "00000"
+      }
+    ]
+  },
+  {
+    "function": "public.row_eq",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "cannot determinate a result of dynamic SQL",
+        "statement": {
+          "lineNumber": "5",
+          "text": "EXECUTE"
+        },
+        "hint": "Don't use dynamic SQL and record type together, when you would check function.",
+        "detail": "There is a risk of related false alarms.",
+        "sqlState": "00000"
+      },
+      {
+        "level": "error",
+        "message": "operator does not exist: record = integer",
+        "statement": {
+          "lineNumber": "6",
+          "text": "IF"
+        },
+        "query": {
+          "position": "9",
+          "text": "NOT rec IS DISTINCT FROM $2"
+        },
+        "hint": "No operator matches the given name and argument types. You might need to add explicit type casts.",
+        "sqlState": "42883"
+      }
+    ]
+  },
+  {
+    "function": "public._get_table_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_db_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_func_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "12",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_lang_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_schema_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "14",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_tablespaceprivs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_sequence_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_ac_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "13",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_col_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "5",
+          "text": "statement block"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "during statement block local variable \"grants\" initialization on line 4",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "14",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "16",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "18",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_fdw_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  },
+  {
+    "function": "public._get_server_privs",
+    "issues": [
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "4",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "6",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      },
+      {
+        "level": "warning",
+        "message": "target type is different type than source type",
+        "statement": {
+          "lineNumber": "10",
+          "text": "RETURN"
+        },
+        "hint": "The input expression type does not have an assignment cast to the target type.",
+        "detail": "cast \"text\" value to \"text[]\" type",
+        "context": "at RETURN",
+        "sqlState": "42804"
+      }
+    ]
+  }
+]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.116.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

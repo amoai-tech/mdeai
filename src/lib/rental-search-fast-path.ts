@@ -32,6 +32,10 @@ export function rentalsToToolEnvelope(
       photo_url: r.image,
       image_url: r.image,
       source_url: r.source_url,
+      // SAN-1349: the envelope forwards the requestability contract verbatim. It never
+      // recreates the viewing URL — a URL exists only when the tool proved the listing is
+      // requestable, and it is null otherwise.
+      can_schedule_viewing: r.can_schedule_viewing,
       schedule_viewing_url: r.schedule_viewing_url,
       tags: r.tags,
       latitude: r.latitude,

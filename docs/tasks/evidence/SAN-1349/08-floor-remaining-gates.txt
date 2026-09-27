@@ -1,0 +1,133 @@
+########## npm run check:db-url-guard ##########
+✔ a repeated key resolves to the last assignment, as dotenv does (45.42626ms)
+✔ a blank assignment in a dotenv file counts as set and stops the search (43.26913ms)
+✔ expands a ${VAR} reference defined in the same dotenv file (48.764072ms)
+✔ recursively expands nested dotenv references exactly like Next (44.401165ms)
+✔ expands a $VAR reference to an ambient environment value (44.034169ms)
+✔ a reference resolving to a local host stays silent (42.079992ms)
+✔ undefined dotenv references follow Next semantics without leaking variable names (40.05524ms)
+✔ --no-env-files restricts the CLI to the ambient environment (39.53222ms)
+✔ the CLI stays silent for a local value found in a dotenv file (42.188042ms)
+✔ the suppress marker silences a child script a parent already guarded (41.31533ms)
+✔ direct Vitest/IDE ignores .env.local because the test process does not use it (853.580635ms)
+✔ direct Vitest/IDE warns once for an ambient remote DATABASE_URL (690.292944ms)
+✔ Vitest runs the direct-start guard in globalSetup, not during config evaluation (0.46861ms)
+✔ every supported Vitest npm entry point relies on the ambient-only global guard (0.67577ms)
+✔ the imported call reads no dotenv files by default (0.744085ms)
+✔ the imported call still reports an ambient remote value (1.175713ms)
+✔ direct CLI stays non-blocking when Next dotenv expansion fails (118.856119ms)
+ℹ tests 42
+ℹ suites 0
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3785.580422
+########## check:db-url-guard exit=0 ##########
+########## npm run check:env:ci ##########
+
+not enforced in this mode (runtime server tier):
+  unset   DATABASE_URL — checked at deploy/ops time
+  unset   SUPABASE_SERVICE_ROLE_KEY — checked at deploy/ops time
+  unset   COPILOTKIT_API_KEY — checked at deploy/ops time
+  set    NEXT_PUBLIC_SUPABASE_URL — checked at deploy/ops time
+  unset   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY — checked at deploy/ops time
+
+optional (never blocks a deploy):
+  unset   GOOGLE_GENERATIVE_AI_API_KEY
+  unset   GOOGLE_API_KEY
+  unset   GOOGLE_PLACES_API_KEY
+  unset   GOOGLE_MAPS_API_KEY
+  unset   GOOGLE_MAPS_SERVER_API_KEY
+  unset   ADK_GROUNDING_URL
+  unset   ADK_INTERNAL_TOKEN
+  unset   ENABLE_SEARCH_GROUNDING
+  unset   SEARCH_GROUNDING_DAILY_CAP
+  unset   NEXT_PUBLIC_SITE_URL
+
+warn: NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID absent (production-only, not required for this build)
+
+env-contract: FAIL — 2 required variable(s) missing: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+A required NEXT_PUBLIC_* value missing from the build is silently inlined as undefined, so the deployment would be READY while the feature is broken.
+Fix the environment (Vercel Project → Settings → Environment Variables) and redeploy. NEXT_PUBLIC_* is compiled in, so a redeploy is mandatory. Values are never printed here.
+########## check:env:ci exit=1 ##########
+########## npm run build ##########
+├ ƒ /host/rentals/listings
+├ ƒ /host/rentals/onboarding
+├ ƒ /login
+├ ƒ /me/tickets
+├ ƒ /me/tickets/[id]
+├ ƒ /nightlife
+├ ○ /partners
+├ ○ /partners/rentals
+├ ƒ /partners/signup
+├ ƒ /rentals
+├ ƒ /rentals/[id]
+├ ƒ /restaurants
+├ ƒ /saved
+├ ƒ /signup
+├ ○ /sponsors
+├ ƒ /trips
+├ ƒ /trips/[id]
+└ ƒ /venues
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+########## build exit=0 ##########
+########## npm run check:mastra ##########
+
+> mdeapp@0.1.0 check:mastra
+> node scripts/check-mastra.mjs && node scripts/check-mastra-schema-contract.mjs --strict
+
+check:mastra — mdeapp Mastra PR gate
+
+WARN storage.ts allows :memory: LibSQL (local dev OK; set MASTRA_REQUIRE_PG=1 on prod CI after MASTRA-003)
+
+OK — all Mastra gate checks passed
+mastra-schema-contract: scripts/mastra-schema-contract.json
+  adapter        @mastra/pg@1.11.0  (installed 1.11.0)
+  core           @mastra/core@1.35.0  (installed 1.35.0)
+  expected tables 32 public.mastra_* tables
+
+mastra-schema-contract: OK
+########## check:mastra exit=0 ##########
+########## npm run audit:floor ##########
+
+vite  8.0.0 - 8.0.15
+Severity: high
+launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows - https://github.com/advisories/GHSA-v6wh-96g9-6wx3
+vite: `server.fs.deny` bypass on Windows alternate paths - https://github.com/advisories/GHSA-fx2h-pf6j-xcff
+fix available via `npm audit fix`
+node_modules/vite
+
+
+ws  8.0.0 - 8.20.1
+Severity: high
+ws: Memory exhaustion DoS from tiny fragments and data chunks - https://github.com/advisories/GHSA-96hv-2xvq-fx4p
+fix available via `npm audit fix`
+node_modules/ws
+
+47 vulnerabilities (17 low, 18 moderate, 12 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible, run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+########## audit:floor exit=0 ##########
+  unset   ADK_INTERNAL_TOKEN
+  unset   ENABLE_SEARCH_GROUNDING
+  unset   SEARCH_GROUNDING_DAILY_CAP
+  unset   NEXT_PUBLIC_SITE_URL
+
+warn: NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID absent (production-only, not required for this build)
+
+env-contract: OK
