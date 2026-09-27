@@ -1,3 +1,26 @@
+# ANNOTATION (added in 8a1d6551d) — CodeRabbit inline review on docs/tasks/evidence/SAN-1349/07-floor.txt
+#
+# STATUS: local workspace state. This is NOT a PR gate failure, and the PR head is green for it.
+#
+# The ten reported .agents/skills entries are UNTRACKED local files, dated 2026-09-21..23
+# (before this branch existed), never committed, and absent from both the base and head trees:
+#
+#   $ git status --porcelain .agents/skills/     -> all lines begin with "??"
+#   $ git log --oneline -1 -- .agents/skills/build-integration   -> (no output; never committed)
+#
+# Clean-checkout result for the exact PR head, tracked files only:
+#
+#   $ git worktree add --detach /tmp/san1349-clean-checkout HEAD
+#   $ cd /tmp/san1349-clean-checkout && python3 scripts/check-skill-layout.py
+#   SKILL_LAYOUT_PASS active=21
+#   check:skills exit=0
+#
+# Full evidence and the raw git output: docs/tasks/evidence/SAN-1349/14-floor-gate-authority.md
+#
+# The lines below are the UNMODIFIED raw capture from the contaminated local checkout, kept
+# verbatim for traceability. Read them as "this is what the local workspace produced", not as
+# "this is what the PR produces".
+# ---------------------------------------------------------------------------------------------
 
 > mdeapp@0.1.0 floor
 > npm run check:skills && npm run check:db-url-guard && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm test && npm run check:mastra && npm run audit:floor

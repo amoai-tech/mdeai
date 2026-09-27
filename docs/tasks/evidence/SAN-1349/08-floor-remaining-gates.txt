@@ -131,3 +131,31 @@ a different dependency.
 warn: NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID absent (production-only, not required for this build)
 
 env-contract: OK
+
+##########################################################################################
+# ANNOTATION (added in 8a1d6551d) — CodeRabbit inline review, lines 51-54
+#
+# The artifact above records TWO DISTINCT check:env:ci invocations. They are now labelled,
+# with the authoritative result stated explicitly:
+#
+#   INVOCATION 1  (recorded at "########## npm run check:env:ci ##########" above)
+#     command: npm run check:env:ci
+#     env    : ambient shell only; .env NOT exported
+#     result : ########## check:env:ci exit=1 ##########
+#     reason : env-contract: FAIL — 2 required variable(s) missing:
+#                NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+#     note   : both variables ARE present with values in .env. The gate reads the process
+#              environment, and this shell exports NEXT_PUBLIC_SUPABASE_URL but not those two.
+#              No file in this PR touches env, next.config, or any script.
+#
+#   INVOCATION 2  (the unlabelled tail section above, ending "env-contract: OK")
+#     command: ( set -a; . ./.env; set +a; npm run check:env:ci )
+#     env    : identical command with .env sourced
+#     result : exit 0
+#     output : env-contract: OK
+#
+#   AUTHORITATIVE RESULT: INVOCATION 2 — exit 0, env-contract: OK.
+#   Invocation 1 is an artifact of an unsourced shell, not a property of this change.
+#
+# Supporting detail: docs/tasks/evidence/SAN-1349/14-floor-gate-authority.md
+##########################################################################################
