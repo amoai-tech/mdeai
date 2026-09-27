@@ -9,6 +9,7 @@ const baseURL = prodBaseURL || localBaseURL;
 const VITEST_TESTS = "**/*.test.ts";
 
 const PROD_SPECS = [
+  "**/prod-candidate-certification.spec.ts",
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",

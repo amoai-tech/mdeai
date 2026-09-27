@@ -6,10 +6,6 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   serverExternalPackages: ["@copilotkit/runtime"],
-  typescript: {
-    // @mastra/memory beta packages have unstable types that break strict checking
-    ignoreBuildErrors: true,
-  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
