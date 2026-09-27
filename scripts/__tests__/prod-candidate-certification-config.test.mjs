@@ -23,6 +23,10 @@ test("fails closed in CI when candidate URL is missing", () => {
 test("keeps pre-promotion certification independent of Maps browser referrer restrictions", () => {
   assert.doesNotMatch(spec, /gotoConcierge|sendConciergeMessage|waitForCopilotIdle/);
   assert.match(spec, /method:\s*["']agent\/connect["']/);
+  assert.match(spec, /agentId:\s*["']conciergeAgent["']/);
+  assert.match(spec, /threadId,/);
+  assert.match(spec, /runId:\s*randomUUID\(\)/);
+  assert.match(spec, /role:\s*["']user["']/);
+  assert.match(spec, /content:\s*["']ping["']/);
   assert.match(spec, /page\.request\.post\(route\(["']\/api\/copilotkit["']\)/);
-  assert.match(spec, /messages:\s*\[/);
 });
