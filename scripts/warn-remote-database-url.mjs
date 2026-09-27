@@ -18,19 +18,21 @@
  *     would load, because a `predev` hook runs before Next does any env loading. Pass
  *     `--no-env-files` to skip that. Set `MDE_DATABASE_URL_GUARD_RUNNING=1` to suppress a
  *     duplicate report in a child script that a parent already guarded.
- *   - Imported (`warnIfRemoteDatabaseUrl()`) reads nothing by default: the Vitest process
- *     does not load `.env.local` into `process.env`, so reading it there would warn about a
- *     value the test run never actually uses. Pass `{ readEnvFiles: true }` to opt in.
+ *   - Imported (`warnIfRemoteDatabaseUrl()`) evaluates only the environment handed to it.
+ *     npm/Vitest entry points run the CLI guard first so `.env.local` is checked without
+ *     mutating the Vitest process environment.
  *
  * Usage:
  *   node scripts/warn-remote-database-url.mjs
  *   import { warnIfRemoteDatabaseUrl } from "./warn-remote-database-url.mjs"
  */
 
-import { readFileSync } from "node:fs";
+import nextEnv from "@next/env";
 import { isIPv4 } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const { loadEnvConfig } = nextEnv;
 
 /** Marks a child dev script whose parent already ran the guard this invocation. */
 const SUPPRESS_MARKER = "MDE_DATABASE_URL_GUARD_RUNNING";
@@ -215,145 +217,42 @@ function formatDatabaseWarning(result, source) {
   return lines.join("\n");
 }
 
-/** Dotenv files a local Next run would consult, highest precedence first. */
-function envFileNames(nodeEnv) {
-  const name = (nodeEnv ?? "").trim() || "development";
-  return [
-    `.env.${name}.local`,
-    // Next skips `.env.local` when NODE_ENV is "test"; mirroring that keeps the two in step.
-    ...(name === "test" ? [] : [".env.local"]),
-    `.env.${name}`,
-    ".env",
-  ];
+/** Quiet logger for @next/env; the guard owns the user-facing warning text. */
+const NEXT_ENV_LOGGER = {
+  info: () => {},
+  error: () => {},
+};
+
+/**
+ * Resolve DATABASE_URL with the exact loader Next.js uses for `next dev`. The helper is used only
+ * by the short-lived CLI process, so @next/env may populate that process environment without
+ * changing the parent shell, Next.js process, or Vitest worker environment.
+ * @param {string} cwd - project directory containing `.env*` files.
+ * @param {Record<string, string | undefined>} ambientEnv - environment before @next/env runs.
+ * @returns {{ value: string | undefined, source?: string }} resolved value and source file.
+ */
+function resolveDatabaseUrlWithNextEnv(cwd, ambientEnv) {
+  const { combinedEnv, loadedEnvFiles } = loadEnvConfig(cwd, true, NEXT_ENV_LOGGER, true);
+  const source =
+    ambientEnv.DATABASE_URL === undefined
+      ? loadedEnvFiles.find((file) =>
+          Object.prototype.hasOwnProperty.call(file.env ?? {}, "DATABASE_URL"),
+        )?.path
+      : undefined;
+  return { value: combinedEnv.DATABASE_URL, source };
 }
 
 /**
- * `$NAME` and `${NAME}` references, the forms `@next/env` expands in dotenv values.
- *
- * This is a deliberate subset rather than an import of `@next/env`: that package is only a
- * transitive dependency of `next` (absent from our package.json), so depending on it directly
- * would break the moment Next relocates it. The subset is safe because anything it cannot
- * resolve stays literal and is reported rather than silently treated as absent.
- */
-const REFERENCE_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
-
-/**
- * Substitute references from `scope`, leaving any that are unknown in place so a later check can
- * still see them. Optionally records every referenced name in the same pass, which keeps the
- * pattern in exactly one place.
- * @param {string} value - the raw value.
- * @param {Record<string, string | undefined>} scope - the names available to expand.
- * @param {Set<string>} [referenced] - collects each referenced name, resolved or not.
- * @returns {string} the expanded value.
- */
-function expandReferences(value, scope, referenced) {
-  return value.replace(REFERENCE_PATTERN, (match, braced, bare) => {
-    const name = braced ?? bare;
-    referenced?.add(name);
-    return scope[name] ?? match;
-  });
-}
-
-/**
- * The variable names a value references, de-duplicated.
- * @param {unknown} value - the raw value.
- * @returns {string[]} the referenced names.
- */
-function referenceNames(value) {
-  const referenced = new Set();
-  expandReferences(String(value), {}, referenced);
-  return [...referenced];
-}
-
-/**
- * Parse a dotenv file into a name/value map. Deliberately minimal — the goal is to see the value
- * Next will load, not to reimplement dotenv.
- * @param {string} content - the file contents.
- * @returns {Map<string, string>} every assignment, with a repeated key resolving to the last one.
- */
-function parseEnvFile(content) {
-  const values = new Map();
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line === "" || line.startsWith("#")) continue;
-    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
-    if (!match) continue;
-    const raw = match[2].trim();
-    const quoted = /^(['"])([\s\S]*)\1$/.exec(raw);
-    // An unquoted `#` only starts a comment when whitespace precedes it; inside quotes it is data.
-    values.set(match[1], (quoted ? quoted[2] : raw.replace(/\s+#.*$/, "")).trim());
-  }
-  return values;
-}
-
-/**
- * Read one variable out of one dotenv file, expanding references the way Next would.
- * @param {string} file - absolute path of the dotenv file.
- * @param {string} name - the variable name to find.
- * @param {Record<string, string | undefined>} ambient - the environment, for references the file does not define.
- * @returns {string | null} the value (`""` when the name is set but blank), or null when absent.
- */
-function readEnvFileValue(file, name, ambient) {
-  let content;
-  try {
-    content = readFileSync(file, "utf8");
-  } catch {
-    return null;
-  }
-  const values = parseEnvFile(content);
-  if (!values.has(name)) return null;
-  return expandReferences(values.get(name), { ...ambient, ...Object.fromEntries(values) });
-}
-
-/**
- * Resolve DATABASE_URL the way a local Next run would, when the ambient environment does not
- * define it at all. Reads files only and never mutates `process.env`, so importing this module
- * cannot change what the caller's own environment resolves to.
- * @param {Record<string, string | undefined>} env - the ambient environment, for NODE_ENV and references.
- * @param {string} cwd - the project directory whose dotenv files apply.
- * @returns {{ value: string, source: string } | undefined} the value and the file it came from.
- */
-function resolveDatabaseUrlFromEnvFiles(env, cwd) {
-  for (const name of envFileNames(env?.NODE_ENV)) {
-    const value = readEnvFileValue(path.resolve(cwd, name), "DATABASE_URL", env ?? {});
-    // The first file that *mentions* the key wins, even when it sets it blank — Next stops at
-    // the highest-precedence file that defines it rather than merging lower layers.
-    if (value !== null) return { value, source: name };
-  }
-  return undefined;
-}
-
-/**
- * Warn on stderr when a local run has a remote DATABASE_URL. Never throws and never
- * changes the exit code, so callers may use it on any dev/test path.
+ * Warn on stderr when a local run has a remote DATABASE_URL. Never throws and never changes the
+ * exit code. File loading is intentionally outside this function so imported callers stay pure.
  * @param {{
  *   env?: Record<string, string | undefined>,
  *   write?: (text: string) => void,
- *   readEnvFiles?: boolean,
- *   cwd?: string,
- * }} [options] - `env`/`write` override the environment and sink (tests); `readEnvFiles` opts
- *   into resolving the value from dotenv files, which only the `next dev` path should do;
- *   `cwd` sets the directory those files resolve against.
+ *   databaseUrl?: string,
+ *   source?: string,
+ * }} [options] - environment/sink overrides plus an already-resolved value for CLI callers.
  * @returns {string | null} the warning that was written, or null when nothing was written.
  */
-/**
- * Render the conservative warning for a file value that still holds an unresolved reference.
- * It names only the referenced variables — never the raw value, which could carry credentials.
- * @param {string} source - the dotenv file that defined the value.
- * @param {string} raw - the unexpanded value.
- * @returns {string} the multi-line warning body, without a trailing newline.
- */
-function formatUnresolvedReferenceWarning(source, raw) {
-  const names = referenceNames(raw).map((name) => `$${name}`).join(", ");
-  return [
-    `⚠  DATABASE_URL in ${source} references ${names}, which this guard could not resolve.`,
-    "   It may point at a remote database, so treat it as one until you confirm otherwise.",
-    "   Prefer one of:",
-    ...REMEDIES.map((remedy) => `     • ${remedy}`),
-    "   Set CI=true to silence this warning.",
-  ].join("\n");
-}
-
 export function warnIfRemoteDatabaseUrl(options = {}) {
   const env = options.env ?? process.env;
   const write = options.write ?? ((text) => process.stderr.write(text));
@@ -361,30 +260,12 @@ export function warnIfRemoteDatabaseUrl(options = {}) {
     // A parent dev script that already reported this run must not be repeated by its children.
     if (isTruthyFlag(env?.[SUPPRESS_MARKER])) return null;
 
-    let raw = env?.DATABASE_URL;
-    let source;
-    // Only fall back to files when the ambient variable is undefined, not merely blank: Next
-    // never overrides an already-set variable, so a set-but-empty value means "use LibSQL".
-    if (raw === undefined && options.readEnvFiles) {
-      const found = resolveDatabaseUrlFromEnvFiles(env, options.cwd ?? process.cwd());
-      if (found) {
-        raw = found.value;
-        source = found.source;
-      }
-    }
-
+    const raw = Object.prototype.hasOwnProperty.call(options, "databaseUrl")
+      ? options.databaseUrl
+      : env?.DATABASE_URL;
     const result = evaluateDatabaseUrl(raw, env);
-    if (!result.warn) {
-      // A file value holding a reference we could not expand cannot be classified. Staying
-      // silent would hide a possible remote target, so report it rather than guess.
-      if (source && result.reason === "unparseable" && referenceNames(raw).length > 0) {
-        const unresolved = formatUnresolvedReferenceWarning(source, raw);
-        write(`${unresolved}\n`);
-        return unresolved;
-      }
-      return null;
-    }
-    const message = formatDatabaseWarning(result, source);
+    if (!result.warn) return null;
+    const message = formatDatabaseWarning(result, options.source);
     write(`${message}\n`);
     return message;
   } catch {
@@ -398,8 +279,21 @@ const invokedDirectly =
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (invokedDirectly) {
-  // A `predev` hook runs before Next performs any env loading, so the CLI resolves the dotenv
-  // files itself; `--no-env-files` restricts it to the ambient environment.
-  warnIfRemoteDatabaseUrl({ readEnvFiles: !process.argv.includes("--no-env-files") });
+  const ambientEnv = { ...process.env };
+  if (process.argv.includes("--no-env-files")) {
+    warnIfRemoteDatabaseUrl({ env: ambientEnv });
+  } else {
+    try {
+      const resolved = resolveDatabaseUrlWithNextEnv(process.cwd(), ambientEnv);
+      warnIfRemoteDatabaseUrl({
+        env: { ...ambientEnv, DATABASE_URL: resolved.value },
+        databaseUrl: resolved.value,
+        source: resolved.source,
+      });
+    } catch {
+      // A warning helper must never block dev/test startup; ambient coverage is still useful.
+      warnIfRemoteDatabaseUrl({ env: ambientEnv });
+    }
+  }
   process.exitCode = 0;
 }

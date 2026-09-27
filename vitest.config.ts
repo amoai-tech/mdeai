@@ -6,10 +6,10 @@ import { warnIfRemoteDatabaseUrl } from "./scripts/warn-remote-database-url.mjs"
 // PostgresStore against that host, so a local test run can read or write hosted data.
 // Warning only — it never blocks the run, and it stays silent under CI.
 //
-// Deliberately no `readEnvFiles` here: the Vitest process does not load `.env.local` into
-// `process.env` (verified — MASTRA_DEV_LIBSQL in `.env.local` never reaches vitest), so
-// resolving dotenv files here would warn about a value this run never actually uses.
-// The `predev` hooks, which run before Next loads env files, do read them.
+// Keep the config import ambient-only. Every supported npm Vitest entry point runs the CLI guard
+// first, which uses Next's own @next/env loader to inspect `.env.local` without mutating Vitest's
+// runtime environment. Those npm scripts set the suppress marker so this fallback does not print
+// twice. Direct `vitest`/IDE runs still catch an exported remote DATABASE_URL here.
 warnIfRemoteDatabaseUrl();
 
 export default defineConfig({

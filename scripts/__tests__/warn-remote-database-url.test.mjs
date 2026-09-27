@@ -288,6 +288,15 @@ test("parses quoted values and skips comments in a dotenv file", () => {
   assert.match(stderr, /Supabase DIRECT host/);
 });
 
+test("uses Next dotenv parsing for backtick-quoted DATABASE_URL values", () => {
+  const cwd = scratchDir({
+    ".env.local": `DATABASE_URL=\`${DIRECT_URL}\`\n`,
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.match(stderr, /Supabase DIRECT host/, "Next accepts backtick-quoted dotenv values");
+});
+
 test("a commented-out assignment in a dotenv file is ignored", () => {
   const cwd = scratchDir({ ".env.local": `# DATABASE_URL=${DIRECT_URL}\n` });
   const { status, stderr } = run({}, { cwd });
@@ -323,6 +332,20 @@ test("expands a ${VAR} reference defined in the same dotenv file", () => {
   assert.match(stderr, /Supabase DIRECT host/, "the reference must expand, not read as unparseable");
 });
 
+test("recursively expands nested dotenv references exactly like Next", () => {
+  const cwd = scratchDir({
+    ".env.local":
+      `REMOTE_DB=${DIRECT_URL}\n` +
+      "LEVEL_TWO=${REMOTE_DB}\n" +
+      "LEVEL_ONE=${LEVEL_TWO}\n" +
+      "DATABASE_URL=${LEVEL_ONE}\n",
+  });
+  const { status, stderr } = run({}, { cwd });
+  assert.equal(status, 0);
+  assert.match(stderr, /Supabase DIRECT host/);
+  assert.doesNotMatch(stderr, /could not resolve/, "Next recursively resolves the chain");
+});
+
 test("expands a $VAR reference to an ambient environment value", () => {
   const cwd = scratchDir({ ".env.local": "DATABASE_URL=$SOME_REMOTE_DB\n" });
   const { status, stderr } = run({ SOME_REMOTE_DB: DIRECT_URL }, { cwd });
@@ -341,13 +364,11 @@ test("a reference resolving to a local host stays silent", () => {
   assert.equal(stderr, "");
 });
 
-test("an unresolvable reference warns conservatively without printing the value", () => {
+test("undefined dotenv references follow Next semantics without leaking variable names", () => {
   const cwd = scratchDir({ ".env.local": "DATABASE_URL=${NOT_DEFINED_ANYWHERE}\n" });
   const { status, stderr } = run({}, { cwd });
   assert.equal(status, 0, "the guard must never fail the run");
-  assert.match(stderr, /\$NOT_DEFINED_ANYWHERE/, "the unresolved variable should be named");
-  assert.match(stderr, /could not resolve/);
-  assert.doesNotMatch(stderr, /s3cret/);
+  assert.equal(stderr, "", "@next/env resolves an undefined reference to an empty value");
 });
 
 test("--no-env-files restricts the CLI to the ambient environment", () => {
@@ -373,6 +394,34 @@ test("the suppress marker silences a child script a parent already guarded", () 
   assert.equal(stderr, "");
 });
 
+
+test("every supported Vitest npm entry point runs the file-aware guard exactly once", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
+  );
+  const vitestScripts = [
+    "test",
+    "test:watch",
+    "test:coverage",
+    "test:mastra",
+    "test:lib",
+    "test:hooks",
+    "test:api",
+  ];
+  for (const name of vitestScripts) {
+    assert.equal(
+      packageJson.scripts[`pre${name}`],
+      "node scripts/warn-remote-database-url.mjs",
+      `${name} must inspect Next-style dotenv files before Vitest starts`,
+    );
+    assert.match(
+      packageJson.scripts[name],
+      /^MDE_DATABASE_URL_GUARD_RUNNING=1 vitest(?:\s|$)/,
+      `${name} must suppress the ambient-only Vitest fallback after the pre-hook runs`,
+    );
+  }
+});
+
 // ── Imported call (the Vitest path) ──────────────────────────────────────────────────────
 
 test("the imported call reads no dotenv files by default", () => {
@@ -382,13 +431,6 @@ test("the imported call reads no dotenv files by default", () => {
   const { message, out } = capture({}, { cwd });
   assert.equal(message, null);
   assert.equal(out, "");
-});
-
-test("the imported call can opt in to reading dotenv files", () => {
-  const cwd = scratchDir({ ".env.local": `DATABASE_URL=${DIRECT_URL}\n` });
-  const { message, out } = capture({}, { cwd, readEnvFiles: true });
-  assert.ok(message, "expected a warning");
-  assert.match(out, /Found in \.env\.local/);
 });
 
 test("the imported call still reports an ambient remote value", () => {
