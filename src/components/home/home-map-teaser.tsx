@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { MapsUnavailable, useMapsStatus } from "@/components/maps/maps-status";
 import { MEDELLIN_CENTER, getGoogleMapsMapId, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
 const TEASER_PINS = [
@@ -25,6 +26,7 @@ function TeaserPin({ label }: { label: string }) {
 function MapTeaser() {
   const router = useRouter();
   const mapId = getGoogleMapsMapId();
+  const mapsStatus = useMapsStatus();
 
   if (isE2EMapsMockEnabled()) {
     return (
@@ -37,6 +39,15 @@ function MapTeaser() {
             {label}
           </button>
         ))}
+      </div>
+    );
+  }
+
+  // SAN-1349: the teaser degrades on its own; it must not take the page with it.
+  if (mapsStatus !== "ok") {
+    return (
+      <div className="relative h-[260px] w-full overflow-hidden rounded-2xl border border-border sm:h-[320px] md:h-[380px]">
+        <MapsUnavailable reason={mapsStatus} />
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { AdvancedMarker, Map, useMap } from "@vis.gl/react-google-maps";
 import type { BrokerListingDetail } from "@/lib/rentals/broker-listing-detail";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { MapsUnavailable, useMapsStatus } from "@/components/maps/maps-status";
 import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import {
   DEFAULT_MAP_ZOOM,
@@ -48,6 +49,7 @@ function BrokerListingsMapInner({
   onSelect,
 }: RentalsListingsMapProps) {
   const mapId = getGoogleMapsMapId();
+  const mapsStatus = useMapsStatus();
   const pins = useMemo(
     () =>
       listings.filter(
@@ -68,6 +70,18 @@ function BrokerListingsMapInner({
     }
     return MEDELLIN_CENTER;
   }, [pins, selectedId]);
+
+  // SAN-1349: the map degrades on its own; it must not take the broker page with it.
+  if (mapsStatus !== "ok") {
+    return (
+      <div
+        data-testid="rentals-listings-map"
+        className="relative h-full min-h-[280px] w-full overflow-hidden rounded-lg border border-border"
+      >
+        <MapsUnavailable reason={mapsStatus} />
+      </div>
+    );
+  }
 
   return (
     <div
