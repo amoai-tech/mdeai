@@ -79,24 +79,111 @@ Failure cause (production-certification, "Certify exact staged candidate"):
   expect(locator).toBeEnabled failed
   Locator: getByTestId('copilot-send-button')
   element(s) not found / unexpected value "disabled"
+  at e2e/helpers/maps-layout.ts:177
 
-Root cause, reproduced independently in the browser:
-  [ERROR] Failed to load resource: the server responded with a status of 401
-          https://www.mdeai.co/api/copilotkit
+The failing step is spec line 87 -> sendConciergeMessage. Everything before it
+PASSED, including:
 
-The CopilotKit runtime returns 401, chat never boots, the send button never
-enables, so certification fails and the candidate is not aliased.
+  expect(response.status(), 'unauthenticated ... runtime info').toBe(401)  PASSED
+  signInAsOnOrigin(...)                                                    PASSED
+  expect(saved?.status()).toBe(200)                                        PASSED
+  expect(infoResponse.status()).toBe(200)                                  PASSED
+  expect(info.version).toBe(pinned @copilotkit/runtime)                    PASSED
+  expect(expectedAgents.filter(n => !info.agents?.[n])).toEqual([])        PASSED
 
-PRE-EXISTING, NOT CAUSED BY SAN-1349. The prior main commit failed the same
-job for the same surface (different assertion):
-  cd4d5ec16 run 36350625270  failure  TimeoutError: locator.waitFor
-                                      input.waitFor({state:"visible"}) 15s
+So authentication WORKS, the runtime AUTHORIZES the signed-in caller (200), and
+all four agents are present. The failure is narrower: the composer's send button
+never enables within 10s.
+
+CORRECTION to this document's first draft: the `401` seen on
+`https://www.mdeai.co/api/copilotkit` is NOT the bug. `evaluateCopilotKitAuth`
+(src/lib/copilotkit-auth.ts:95) fails closed for an unauthenticated caller by
+design — "no authenticated session" -> 401. A curl with no session is supposed
+to get 401. The certification failure is a client-side composer state, not the
+auth gate.
+
+Observed in the browser on the live build:
+  /chat (anonymous): composer renders, textarea ENABLED ("Type a message..."),
+                     copilot-send-button present but DISABLED, page shows
+                     "Sign in · Sign up". Disabled-by-design when signed out.
+  /chat (anonymous): ~99 repeated "Failed to load runtime info
+                     (/api/copilotkit/info)" warnings, each a 401.
+  /chat: intermittently rendered the Next.js error boundary —
+                     "This page couldn't load / Reload to try again"
+                     alongside "Error: Loading chunk ... failed".
+                     A fresh load of /chat?fresh=1 then rendered correctly.
 
 `vercel-production-certification.yml` is triggered by
 `repository_dispatch: vercel.deployment.ready` and publishes a
-`production-certification` status used to gate alias assignment. That is why a
-failing certification silently freezes production — the exact failure mode
-prod-deploy-freshness.yml warns about in its own header comment.
+`production-certification` status used to gate alias assignment.
+
+THE GATE HAS NEVER PASSED. It was added to main by `cd4d5ec16` (SAN-1330) and
+has run 8 times:
+
+  2026-09-27T22:07:44Z  ab1f28768  skipped
+  2026-09-27T21:57:47Z  ab1f28768  FAILURE
+  2026-09-27T21:51:11Z  cd4d5ec16  skipped
+  2026-09-27T21:41:54Z  cd4d5ec16  skipped
+  2026-09-27T21:40:08Z  cd4d5ec16  skipped
+  2026-09-27T21:33:32Z  cd4d5ec16  skipped
+  2026-09-27T21:30:31Z  cd4d5ec16  skipped
+  2026-09-27T21:08:49Z  cd4d5ec16  FAILURE
+
+  $ git log --oneline -1 --diff-filter=A -- .github/workflows/vercel-production-certification.yml
+  cd4d5ec16 SAN-1330 · Certify Vercel candidates before production
+
+Two failures, zero passes. Both failures are in the same concierge-composer
+step, with different assertions:
+  cd4d5ec16 run 36350625270  TimeoutError: input.waitFor({state:"visible"}) 15s
+  ab1f28768 run 36353590714  toBeEnabled failed on copilot-send-button
+
+Because 633d8a7a6 was deployed BEFORE this gate existed, production has been
+frozen since the gate landed. SAN-1349 is the second commit stuck behind it,
+not the cause of it.
+
+This is the exact failure mode prod-deploy-freshness.yml warns about in its own
+header comment, and it confirms the size of the blast radius: this is a
+release-pipeline P0 independent of SAN-1349.
+
+Independent second confirmation that production serves 633d8a7a6 — every
+Next.js chunk URL carries the serving deployment id:
+
+  $ curl -sSL https://www.mdeai.co/chat | grep -oE 'dpl_[A-Za-z0-9]+' | sort -u
+  dpl_BB9pxTptVRCK5RTFNxTZdyVntNP8      <- the deployment for 633d8a7a6
+
+  $ curl -sSL '<merged deployment>/chat?_vercel_share=...' | grep -oE 'dpl_[A-Za-z0-9]+' | sort -u
+  dpl_GNiwPHFVsSobCaEQkj8268DTDzb6      <- the ab1f28768 deployment
+
+WHY THE SEND BUTTON IS DISABLED (narrowed, not fully proven)
+------------------------------------------------------------
+CopilotKit's own composer owns this button; the live element carries CopilotKit's
+`cpk:` classes. Its gating is one line:
+
+  node_modules/@copilotkit/react-core/dist/copilotkit-Cd-NrDyp.mjs:798
+    const BoundSendButton = renderSlot(sendButton, CopilotChatInput.SendButton, {
+      disabled: isProcessing ? !canStop : !canSend,
+
+So the button is disabled when the provider considers the composer either
+mid-turn (`isProcessing && !canStop`) or not sendable (`!canSend`) — typically
+because the runtime connection never became ready.
+
+That is consistent with the client-side symptom measured on the live site:
+repeated "Failed to load runtime info (/api/copilotkit/info): Failed to fetch".
+Note this is a NETWORK-level failure, not the 401 the route returns on purpose.
+The certification spec asserts the *server-side* POST returns 200 and that
+assertion PASSES, while the *client-side* fetch to the same path never resolves.
+
+Most probable cause: the client's fetch to /api/copilotkit/info is intercepted
+(the Vercel automation bypass / SSO wall) so the CopilotKit provider never
+reaches ready, leaving the composer permanently "not sendable". The spec itself
+already documents cookie fragility here — "Supabase session injection clears
+cookies, so re-establish only the same-origin Vercel bypass cookie afterwards".
+
+Discriminating test (not yet run, needs a signed-in session on the live site):
+  sign in normally at https://www.mdeai.co/chat and check whether
+  copilot-send-button enables after typing.
+    ENABLES  -> the failure is the harness's cookie/session ordering
+    STAYS OFF -> the failure is the client-side runtime connection in production
 
 ═══════════════════════════════════════════════════════════════════════════════
 4 · Live Supabase rental ownership re-audit (read-only) — DONE
@@ -268,11 +355,24 @@ SAN-1349 CANNOT be marked Done.
 ═══════════════════════════════════════════════════════════════════════════════
 EXACT FIXES, IN ORDER
 ═══════════════════════════════════════════════════════════════════════════════
-F1 · Unblock the CopilotKit 401 that fails certification (this is the thing
-     freezing ALL production promotion, not just SAN-1349).
-     Repro: https://www.mdeai.co/api/copilotkit -> 401.
-     Check GROQ/OPENAI/GEMINI keys and the CopilotKit runtime route's auth in
-     the production environment; the chat never boots without it.
+F1 · Fix the concierge composer step that fails certification. This is the
+     thing freezing ALL production promotion, not just SAN-1349, and the gate
+     has never passed since SAN-1330 added it.
+     The failure is NOT the 401 (that is correct fail-closed behaviour for an
+     unauthenticated caller). It is:
+        e2e/helpers/maps-layout.ts:177  expect(copilot-send-button).toBeEnabled
+     failing on a signed-in session whose runtime info call already returned 200
+     with all four agents. Narrow the cause by answering one question:
+     does the composer's send button enable for a signed-in user on the live
+     site? If YES -> the harness's session/bypass cookie ordering is at fault
+     (the spec itself notes the bypass cookie must be re-established after
+     Supabase session injection, so the client can boot against a stale
+     unauthenticated state). If NO -> it is a product bug in the composer.
+     Supporting observation: an anonymous visitor to /chat gets an enabled
+     textarea with a disabled send button and ~99 retried 401s against
+     /api/copilotkit/info, and /chat intermittently renders the Next.js error
+     boundary with "Loading chunk ... failed". Whatever the root cause, treat
+     SAN-1330's gate as unproven: it has 0 passes in 8 runs.
      Until F1 is fixed, no merge can reach users.
 
 F2 · Once F1 is green, re-run the certification so ab1f28768 (or the then-tip)
