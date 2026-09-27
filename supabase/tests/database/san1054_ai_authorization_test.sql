@@ -27,18 +27,19 @@
 --   3. A control is mandatory. Broker A publishing its own listing must SUCCEED. Without
 --      the controls in section F, a system that refused every caller would pass sections B–E.
 --
--- NOT ASSERTED HERE — SAN-1349 handoff
--- The viewing RPC predicate is `status = 'active'` plus the availability window. It does
--- NOT require `landlord_id IS NOT NULL`, `listing_workflow_status = 'published'`, or
--- `moderation_status = 'approved'`. Unowned active listings are therefore requestable
--- today, which is the SAN-1349 P0. That fix and its regression belong to SAN-1349; this
--- file records the gap with todo() so it stays visible without blocking SAN-1054's gate.
+-- SAN-1349 CLOSED THIS GAP
+-- The viewing RPC predicate used to be `status = 'active'` plus the availability window, with
+-- no owner / approved / published requirement, so unowned active listings were requestable.
+-- SAN-1349 (supabase/migrations/20260927200924_san1349_enforce_owner_boundary.sql) hardened
+-- that predicate and added the apartments_owner_required_when_published CHECK. Section H below
+-- now asserts the closed invariant instead of recording it with todo(), and the full
+-- owner/non-owner/anonymous matrix lives in san1349_broker_ownership_rls_test.sql.
 --
 -- Run with: supabase test db
 
 begin;
 
-select plan(41);
+select plan(42);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — deterministic, transaction-owned, rolled back at the end.
@@ -66,21 +67,24 @@ values
   ('a1054000-0000-4000-8000-000000000012', 'a1054000-0000-4000-8000-000000000002',
    'SAN1054 Broker B', 'approved');
 
-insert into public.apartments (id, title, slug, neighborhood, status, landlord_id,
-                               listing_workflow_status, available_to)
+insert into public.apartments (id, title, slug, neighborhood, status, moderation_status,
+                               landlord_id, listing_workflow_status, available_to)
 values
   -- owned by A, inactive, ready to publish
   ('a1054000-0000-4000-8000-000000000021', 'SAN1054 A ready', 'san1054-a-ready', 'Laureles',
-   'inactive', 'a1054000-0000-4000-8000-000000000011', 'ready_for_review', '2099-12-31'),
+   'inactive', 'pending', 'a1054000-0000-4000-8000-000000000011', 'ready_for_review', '2099-12-31'),
   -- owned by A, active, published, pausable
   ('a1054000-0000-4000-8000-000000000022', 'SAN1054 A published', 'san1054-a-published', 'Laureles',
-   'active', 'a1054000-0000-4000-8000-000000000011', 'published', '2099-12-31'),
+   'active', 'pending', 'a1054000-0000-4000-8000-000000000011', 'published', '2099-12-31'),
   -- owned by A, inactive, draft, publish-requestable
   ('a1054000-0000-4000-8000-000000000023', 'SAN1054 A draft', 'san1054-a-draft', 'Laureles',
-   'inactive', 'a1054000-0000-4000-8000-000000000011', 'draft', '2099-12-31'),
-  -- active, published, and UNOWNED — the SAN-1349 gap, not a SAN-1054 boundary
+   'inactive', 'pending', 'a1054000-0000-4000-8000-000000000011', 'draft', '2099-12-31'),
+  -- active, published, and UNOWNED. moderation_status stays 'pending' so this row is NOT
+  -- production-requestable and therefore cannot violate the SAN-1349 ownership CHECK
+  -- (active + approved + published ⇒ landlord_id IS NOT NULL). It exists only so section E can
+  -- assert that a broker resolves no landlord id for an unowned listing.
   ('a1054000-0000-4000-8000-000000000024', 'SAN1054 unowned active', 'san1054-unowned', 'Laureles',
-   'active', null, 'published', '2099-12-31');
+   'active', 'pending', null, 'published', '2099-12-31');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · CONTRACT — the ACL shape that makes the behavioural results meaningful.
@@ -390,21 +394,31 @@ select is((select count(*)::int from upd), 1,
 reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- H · SAN-1349 HANDOFF — recorded, not asserted as a pass.
+-- H · SAN-1349 INVARIANT — the gap this file used to record with todo() is now closed.
 --
--- The viewing RPC accepts an active listing with landlord_id IS NULL, so a renter can
--- book a viewing for an apartment nobody owns and the lead strands. todo() keeps the gap
--- visible in the output without failing SAN-1054's gate. When SAN-1349 establishes real
--- ownership or removes unowned listings from active supply, this starts passing and the
--- todo() should be deleted.
+-- SAN-1349 added the durable ownership CHECK and hardened the viewing RPC, so this is no
+-- longer a handoff placeholder: it is a live assertion over the whole table. It is scoped by
+-- predicate rather than by fixture id on purpose — a locally seeded demo catalogue is allowed
+-- to exist, but nothing in active + approved + published production-requestable form may be
+-- left without a canonical owner.
+--
+-- The full owner/non-owner/anonymous matrix and the RPC rejection cases live in
+-- supabase/tests/database/san1349_broker_ownership_rls_test.sql.
 -- ═══════════════════════════════════════════════════════════════════════════════
-
-select todo(1, 'SAN-1349 handoff: unowned active listings must become non-requestable');
 
 select is(
   (select count(*)::int from public.apartments
-    where status = 'active' and landlord_id is null),
-  0, 'H: no active listing is left without a real owner (owned by SAN-1349)');
+    where status = 'active'
+      and moderation_status = 'approved'
+      and listing_workflow_status = 'published'
+      and landlord_id is null),
+  0, 'H: no production-requestable listing is left without a canonical owner');
+
+select is(
+  (select convalidated from pg_constraint
+    where conrelid = 'public.apartments'::regclass
+      and conname = 'apartments_owner_required_when_published'),
+  true, 'H: the SAN-1349 ownership constraint is installed and validated');
 
 select * from finish();
 rollback;

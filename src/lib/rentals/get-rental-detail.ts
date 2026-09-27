@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
-import { searchRentals } from "@/mastra/tools/search-rentals";
+import { isRentalRequestable, searchRentals } from "@/mastra/tools/search-rentals";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -33,6 +33,12 @@ export type RentalDetail = {
   latitude: number | null;
   longitude: number | null;
   status: string | null;
+  /**
+   * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
+   * ownership + workflow + availability proof the database enforces. Every scheduling
+   * surface reads this instead of assuming a detail page is requestable.
+   */
+  canScheduleViewing: boolean;
 };
 
 const UUID_RE =
@@ -102,6 +108,16 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     status: str(row.status),
+    // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
+    // treats as unproven rather than as a reason to offer the CTA.
+    canScheduleViewing: isRentalRequestable({
+      landlord_id: str(row.landlord_id),
+      status: str(row.status),
+      moderation_status: str(row.moderation_status),
+      listing_workflow_status: str(row.listing_workflow_status),
+      available_from: str(row.available_from),
+      available_to: str(row.available_to),
+    }),
   };
 }
 
@@ -158,5 +174,7 @@ export async function getMockRentalDetail(idOrSlug: string): Promise<RentalDetai
     latitude: hit.latitude ?? null,
     longitude: hit.longitude ?? null,
     status: "active",
+    // Mock rentals carry no ownership proof, so they are never requestable (SAN-1349).
+    canScheduleViewing: hit.can_schedule_viewing && hit.schedule_viewing_url != null,
   };
 }

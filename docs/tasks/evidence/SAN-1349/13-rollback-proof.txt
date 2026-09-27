@@ -1,0 +1,32 @@
+--- 1. the OLD ordering (restore rows, then drop the constraint) must fail ---
+NOTICE:  EXPECTED: old ordering rejected with 23514 (23514)
+DO
+--- 2. the NEW ordering: drop the constraint first, then restore ---
+ALTER TABLE
+UPDATE 44
+--- 3. verification ---
+      ?column?      
+--------------------
+ stamps_remaining=0
+(1 row)
+
+            ?column?             
+---------------------------------
+ restored_ownerless_published=44
+(1 row)
+
+       ?column?        
+-----------------------
+ paused_at_still_set=0
+(1 row)
+
+         ?column?         
+--------------------------
+ orphan_leads_preserved=5
+(1 row)
+
+          ?column?           
+-----------------------------
+ orphan_showings_preserved=4
+(1 row)
+

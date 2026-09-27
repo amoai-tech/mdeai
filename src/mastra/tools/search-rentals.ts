@@ -18,7 +18,20 @@ export const rentalSchema = z.object({
   amenities: z.array(z.string()),
   image: z.string(),
   source_url: z.string(),
-  schedule_viewing_url: z.string(),
+  /**
+   * SAN-1349 — whether this listing may be requested for a viewing right now.
+   *
+   * `false` is the safe default: the listing has no canonical owner, or is not
+   * active + approved + published, or is outside its current availability window.
+   * The database re-validates the concrete requested time, so this flag is only
+   * ever allowed to under-claim requestability, never to over-claim it.
+   */
+  can_schedule_viewing: z.boolean(),
+  /**
+   * `null` — never `undefined` — when `can_schedule_viewing` is false, so tool and
+   * API serialization stays deterministic for consumers and LLM narration.
+   */
+  schedule_viewing_url: z.string().nullable(),
   host_name: z.string(),
   availability: z.string(),
   tags: z.array(z.string()),
@@ -84,9 +97,92 @@ export interface ApartmentRow {
   slug: string | null;
   latitude: number | null;
   longitude: number | null;
+  /**
+   * SAN-1349 ownership + workflow proof.
+   *
+   * These are REQUIRED — not optional — so a partial row cannot silently skip the
+   * requestability check. `landlord_id` is genuinely nullable in the database; the other
+   * three are `NOT NULL` there, and every select list feeding this type names them.
+   */
+  landlord_id: string | null;
+  moderation_status: string;
+  listing_workflow_status: string;
+  status: string;
+}
+
+/** The columns that decide whether a listing may be requested for a viewing. */
+export type RentalRequestabilityInput = {
+  landlord_id?: string | null;
+  status?: string | null;
+  moderation_status?: string | null;
+  listing_workflow_status?: string | null;
+  available_from?: string | null;
+  available_to?: string | null;
+};
+
+/**
+ * The timezone the database uses for its availability calendar. `p1_schedule_tour_atomic`
+ * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_from` /
+ * `available_to`, so the application must read "today" in the same zone or it will disagree
+ * with the database for five hours out of every day.
+ */
+export const RENTAL_AVAILABILITY_TIME_ZONE = 'America/Bogota';
+
+const availabilityDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: RENTAL_AVAILABILITY_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * The calendar date in `America/Bogota` as `YYYY-MM-DD`, matching how Postgres DATE columns are
+ * serialized, for comparison against `available_from` / `available_to`.
+ *
+ * Built from `formatToParts` rather than `toISOString().slice(0, 10)`: the latter is the UTC
+ * date, which in Medellín (UTC−5) runs a day ahead of the local date from 19:00 local onward.
+ * A listing with `available_to = "2026-09-27"` would then be wrongly treated as expired at
+ * 2026-09-27 20:00 local. The database would have accepted it, so the mismatch only ever hid
+ * requestable listings from users.
+ */
+export function rentalAvailabilityDate(at: Date = new Date()): string {
+  const parts = availabilityDateFormatter.formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/**
+ * SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
+ *
+ * The database is the authority: `public.p1_schedule_tour_atomic` re-checks ownership,
+ * moderation, workflow state and the *selected* viewing time inside the transaction, and a
+ * bypassed UI still fails there. This helper exists only so search results and the browse card
+ * never advertise an action the database will reject.
+ *
+ * It fails CLOSED on missing proof. Every predicate is an allow-list, so an absent, null or
+ * unexpected value is rejected rather than skipped — the helper can only ever under-claim
+ * requestability, never over-claim it. It proves what the UI can actually know: canonical
+ * owner, active, approved, published, and the listing's current-date availability window. It
+ * cannot know the eventual viewing timestamp, so it must not claim more than that.
+ */
+export function isRentalRequestable(
+  row: RentalRequestabilityInput,
+  today: Date = new Date(),
+): boolean {
+  if (!row.landlord_id) return false;
+  // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
+  if (row.status !== 'active') return false;
+  if (row.moderation_status !== 'approved') return false;
+  if (row.listing_workflow_status !== 'published') return false;
+  const isoToday = rentalAvailabilityDate(today);
+  if (row.available_from && row.available_from > isoToday) return false;
+  if (row.available_to && row.available_to < isoToday) return false;
+  return true;
 }
 
 export function rowToRental(r: ApartmentRow): Rental {
+  const canScheduleViewing = isRentalRequestable(r);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -98,7 +194,10 @@ export function rowToRental(r: ApartmentRow): Rental {
     amenities: r.amenities ?? [],
     image: (r.images ?? [])[0] ?? '',
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
-    schedule_viewing_url: `https://mdeai.co/rentals/${r.slug ?? r.id}/schedule-viewing`,
+    can_schedule_viewing: canScheduleViewing,
+    schedule_viewing_url: canScheduleViewing
+      ? `https://mdeai.co/rentals/${r.slug ?? r.id}/schedule-viewing`
+      : null,
     host_name: r.host_name ?? 'Host',
     availability: formatAvailability(r.available_from, r.available_to),
     tags: deriveTags({
@@ -180,7 +279,7 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
       { count: 'exact' },
     )
     .eq('status', 'active')
@@ -198,8 +297,10 @@ async function searchRentalsFromSupabase(
     q = q.lte('price_daily', query.maxPricePerNight);
   }
 
-  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today
-  const today = new Date().toISOString().slice(0, 10);
+  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
+  // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
+  // so the query window and isRentalRequestable() cannot disagree near local midnight.
+  const today = rentalAvailabilityDate();
   const checkInDate = query.checkIn ?? today;
   q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
   if (query.checkOut) {
@@ -219,7 +320,10 @@ async function searchRentalsFromSupabase(
   return { results, total: count ?? results.length, source: 'supabase' };
 }
 
-// Fallback mock kept for offline/test environments
+// Fallback mock kept for offline/test environments.
+// SAN-1349: these fixtures carry no ownership proof, so every mock is deliberately NOT
+// requestable (`can_schedule_viewing: false`, `schedule_viewing_url: null`). A mock must never
+// advertise a viewing action that the database would reject.
 const MOCK_RENTALS: Rental[] = [
   {
     id: 'rnt_lau_001',
@@ -232,7 +336,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'workspace', 'kitchen', 'balcony', 'washer'],
     image: 'https://images.unsplash.com/photo-rental-lau-001',
     source_url: 'https://mdeai.co/rentals/rnt_lau_001',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_lau_001/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Andrés Restrepo',
     availability: 'Available May 15 – Aug 30, 2026',
     tags: ['long-stay', 'remote-work', 'walkable'],
@@ -250,7 +355,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'workspace', 'kitchen', 'gym', 'rooftop'],
     image: 'https://images.unsplash.com/photo-rental-lau-002',
     source_url: 'https://mdeai.co/rentals/rnt_lau_002',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_lau_002/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Sofía Vélez',
     availability: 'Available now – Jul 10, 2026',
     tags: ['solo-traveler', 'remote-work', 'pet-friendly'],
@@ -268,7 +374,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'kitchen', 'workspace'],
     image: 'https://images.unsplash.com/photo-rental-lau-003',
     source_url: 'https://mdeai.co/rentals/rnt_lau_003',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_lau_003/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Camila Ortiz',
     availability: 'Available Jun 1 – Dec 31, 2026',
     tags: ['budget', 'long-stay', 'quiet'],
@@ -286,7 +393,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'pool', 'workspace', 'kitchen', 'washer', 'balcony'],
     image: 'https://images.unsplash.com/photo-rental-lau-004',
     source_url: 'https://mdeai.co/rentals/rnt_lau_004',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_lau_004/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Miguel Arango',
     availability: 'Available Jul 1 – Oct 31, 2026',
     tags: ['family', 'premium', 'long-stay'],
@@ -304,7 +412,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'kitchen', 'workspace', 'smart-tv'],
     image: 'https://images.unsplash.com/photo-rental-lau-005',
     source_url: 'https://mdeai.co/rentals/rnt_lau_005',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_lau_005/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Laura Gómez',
     availability: 'Available now – Sep 30, 2026',
     tags: ['nightlife', 'walkable', 'solo-traveler'],
@@ -322,7 +431,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'pool', 'gym', 'kitchen', 'concierge'],
     image: 'https://images.unsplash.com/photo-rental-pob-001',
     source_url: 'https://mdeai.co/rentals/rnt_pob_001',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_pob_001/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Patricia Lopera',
     availability: 'Available Jun 1 – Aug 31, 2026',
     tags: ['nightlife', 'walkable', 'gym'],
@@ -340,7 +450,8 @@ const MOCK_RENTALS: Rental[] = [
     amenities: ['wifi', 'kitchen'],
     image: 'https://images.unsplash.com/photo-rental-env-001',
     source_url: 'https://mdeai.co/rentals/rnt_env_001',
-    schedule_viewing_url: 'https://mdeai.co/rentals/rnt_env_001/schedule-viewing',
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
     host_name: 'Juliana Mejía',
     availability: 'Available now – Aug 15, 2026',
     tags: ['budget', 'quiet', 'long-stay'],
@@ -426,7 +537,7 @@ export async function searchRentals(
 export const searchRentalsTool = createTool({
   id: 'search-rentals',
   description:
-    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and schedule_viewing_url. Queries live Supabase apartments table; falls back to demo data if DB is unavailable.',
+    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries live Supabase apartments table; falls back to demo data if DB is unavailable. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
@@ -482,6 +593,7 @@ export const searchRentalsTool = createTool({
         availability: r.availability,
         image: r.image,
         source_url: r.source_url,
+        can_schedule_viewing: r.can_schedule_viewing,
         schedule_viewing_url: r.schedule_viewing_url,
         latitude: r.latitude,
         longitude: r.longitude,

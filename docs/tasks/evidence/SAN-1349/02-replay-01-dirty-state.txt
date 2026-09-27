@@ -1,0 +1,23 @@
+INSERT 0 44
+INSERT 0 5
+INSERT 0 4
+       ?column?       
+----------------------
+ violations_before=44
+(1 row)
+
+           ?column?            
+-------------------------------
+ nonviolating_active_before=10
+(1 row)
+
+       ?column?        
+-----------------------
+ orphan_leads_before=5
+(1 row)
+
+         ?column?         
+--------------------------
+ orphan_showings_before=4
+(1 row)
+

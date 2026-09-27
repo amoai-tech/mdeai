@@ -29,6 +29,13 @@ export type RentalCardProps = RentalResultRow & {
   onOpenDetails?: () => void;
   /** Monthly price when available (authoritative for monthly display). */
   price_monthly?: number;
+  /**
+   * SAN-1349 — server-proven viewing requestability (`can_schedule_viewing` from the
+   * search envelope). The Schedule viewing CTA renders ONLY when this is exactly `true`,
+   * so an omitted or false flag withholds the action instead of offering one the database
+   * would reject.
+   */
+  canScheduleViewing?: boolean;
 } & Omit<CardInteractionProps, "onSelect" | "pinId"> & {
   /** Unifies to `() => void` in UX-024; callers pass listing id today. */
   onSelect?: (id: string) => void;
@@ -56,6 +63,7 @@ export function RentalCard({
   onSchedule,
   onSave,
   onOpenDetails,
+  canScheduleViewing,
 }: RentalCardProps) {
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(nightly_price, price_monthly);
   const benefits = rentalBenefitBadges({
@@ -93,6 +101,11 @@ export function RentalCard({
   const cardLabel = `Rental: ${title}${neighborhood ? `, ${neighborhood}` : ""}`;
 
   const interactive = Boolean(onSelect || onOpenDetails);
+
+  // SAN-1349: the viewing action requires the server-proven requestability flag AND a
+  // handler. An omitted or false flag withholds the CTA rather than offering an action the
+  // database would reject — the same contract the browse card enforces.
+  const showScheduleCta = canScheduleViewing === true && Boolean(onSchedule);
 
   const media = photoUrl ? (
     <div className="hidden w-[200px] shrink-0 sm:block">
@@ -202,19 +215,21 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="default"
-          data-testid="rental-schedule-cta"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSchedule?.();
-          }}
-        >
-          <Calendar className="size-3.5" aria-hidden />
-          Schedule viewing
-        </Button>
+        {showScheduleCta ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="default"
+            data-testid="rental-schedule-cta"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSchedule?.();
+            }}
+          >
+            <Calendar className="size-3.5" aria-hidden />
+            Schedule viewing
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"

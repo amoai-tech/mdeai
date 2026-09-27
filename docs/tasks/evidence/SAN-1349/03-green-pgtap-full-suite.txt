@@ -1,0 +1,53 @@
+Connecting to local database...
+/home/sk/mdeai/supabase/tests/database/fashionos_rls_exposure_test.sql ..................... 
+# Failed test 1: "C: no app-owned public table is RLS-disabled while end-user roles hold DML"
+#         have: 33
+#         want: 0
+# Looks like you failed 1 test of 8
+Failed 1/8 subtests 
+/home/sk/mdeai/supabase/tests/database/san1054_ai_authorization_test.sql ................... 
+# Failed (TODO) test 7: "A: anon may not call publish_listing"
+#         have: true
+#         want: false
+# Failed (TODO) test 8: "A: anon may not call pause_listing"
+#         have: true
+#         want: false
+# Failed (TODO) test 9: "A: anon may not call request_listing_publish"
+#         have: true
+#         want: false
+ok
+/home/sk/mdeai/supabase/tests/database/san1284a_function_default_privileges_test.sql ....... ok
+/home/sk/mdeai/supabase/tests/database/san1284b_align_function_acls_test.sql ............... ok
+/home/sk/mdeai/supabase/tests/database/san1284c_trigger_internal_function_acls_test.sql .... 
+# Failed test 4: "C: every app-owned trigger function keeps service_role EXECUTE"
+#         have: 1
+#         want: 0
+# Looks like you failed 1 test of 18
+Failed 1/18 subtests 
+/home/sk/mdeai/supabase/tests/database/san1286_atomic_viewing_test.sql ..................... ok
+/home/sk/mdeai/supabase/tests/database/san1304a_recover_missing_column_contracts_test.sql .. ok
+/home/sk/mdeai/supabase/tests/database/san1306_dead_dependency_cleanup_test.sql ............ ok
+/home/sk/mdeai/supabase/tests/database/san1313_pg_cron_replay_test.sql ..................... ok
+/home/sk/mdeai/supabase/tests/database/san1313a_drop_dead_agent_jobs_test.sql .............. ok
+/home/sk/mdeai/supabase/tests/database/san1331a_trigger_search_path_test.sql ............... 
+# Failed test 1: "A: public.trigger_set_timestamps() pins search_path to the empty string"
+# Failed test 2: "A: no app-owned public routine has a role-mutable search_path"
+#         have: 1
+#         want: 0
+# Looks like you failed 2 tests of 5
+Failed 2/5 subtests 
+/home/sk/mdeai/supabase/tests/database/san1349_broker_ownership_rls_test.sql ............... ok
+/home/sk/mdeai/supabase/tests/database/sb002_live_only_recovery_test.sql ................... ok
+
+Test Summary Report
+-------------------
+/home/sk/mdeai/supabase/tests/database/fashionos_rls_exposure_test.sql                   (Wstat: 0 Tests: 8 Failed: 1)
+  Failed test:  1
+/home/sk/mdeai/supabase/tests/database/san1284c_trigger_internal_function_acls_test.sql  (Wstat: 0 Tests: 18 Failed: 1)
+  Failed test:  4
+/home/sk/mdeai/supabase/tests/database/san1331a_trigger_search_path_test.sql             (Wstat: 0 Tests: 5 Failed: 2)
+  Failed tests:  1-2
+Files=13, Tests=402,  1 wallclock secs ( 0.04 usr  0.02 sys +  0.07 cusr  0.03 csys =  0.16 CPU)
+Result: FAIL
+error running container: exit 1
+Try rerunning the command with --debug to troubleshoot the error.
