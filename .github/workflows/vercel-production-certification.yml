@@ -1,0 +1,68 @@
+# SAN-1330 — certify the exact staged Vercel production candidate before alias assignment.
+name: Vercel production certification
+
+on:
+  repository_dispatch:
+    types:
+      - vercel.deployment.ready
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  VERCEL_DEPLOYMENT_URL: ${{ github.event.client_payload.url }}
+  VERCEL_DEPLOYMENT_SHA: ${{ github.event.client_payload.git.sha }}
+  VERCEL_PROJECT_ID: ${{ github.event.client_payload.project.id }}
+  VERCEL_PROJECT_NAME: ${{ github.event.client_payload.project.name }}
+  VERCEL_ENVIRONMENT: ${{ github.event.client_payload.environment }}
+
+jobs:
+  certify:
+    name: production-certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event.client_payload.environment == 'production' &&
+      github.event.client_payload.project.id == 'prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB' &&
+      github.event.client_payload.project.name == 'mdeai'
+
+    steps:
+      - name: Checkout exact deployed commit
+        uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
+
+      - name: Validate Vercel candidate trust boundary
+        run: |
+          set -euo pipefail
+          node scripts/validate-vercel-deployment-event.mjs
+
+      - name: Publish certification status to candidate SHA
+        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
+        with:
+          name: production-certification
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Certify exact staged candidate
+        env:
+          PROD_SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+          SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+          PW_SKIP_WEBSERVER: "1"
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run test:e2e:prod-candidate-certification
