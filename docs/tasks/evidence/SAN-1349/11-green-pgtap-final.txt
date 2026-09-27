@@ -47,7 +47,7 @@ Test Summary Report
   Failed test:  4
 /home/sk/mdeai/supabase/tests/database/san1331a_trigger_search_path_test.sql             (Wstat: 0 Tests: 5 Failed: 2)
   Failed tests:  1-2
-Files=13, Tests=402,  1 wallclock secs ( 0.05 usr  0.02 sys +  0.09 cusr  0.04 csys =  0.20 CPU)
+Files=13, Tests=402,  1 wallclock secs ( 0.05 usr  0.01 sys +  0.08 cusr  0.04 csys =  0.18 CPU)
 Result: FAIL
 error running container: exit 1
 Try rerunning the command with --debug to troubleshoot the error.

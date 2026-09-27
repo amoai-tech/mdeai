@@ -145,21 +145,40 @@ Then re-run the Supabase Security Advisor and confirm **no new** SAN-1349-relate
 
 ## 6 · Rollback
 
+A full revert is a **task-level** operation, not a routine one. Order matters: the restored rows
+are ownerless **and** published, so `apartments_owner_required_when_published` would reject the
+`UPDATE` with `23514` if it were still in place. Drop the constraint first.
+
 ```sql
--- undo the data change only (never needed for correctness, useful for a product revert)
+-- 1. Drop the invariant FIRST. Restoring the rows below necessarily recreates ownerless
+--    active + approved + published listings, which the validated CHECK forbids by design.
+alter table public.apartments drop constraint apartments_owner_required_when_published;
+
+-- 2. Restore every column the remediation changed, from the stamp it wrote.
+--    `from_paused_at` may be JSON null, which casts back to SQL NULL — the pre-remediation value.
 update public.apartments
-   set status = metadata->'san1349_ownerless_remediation'->>'from_status',
-       moderation_status = metadata->'san1349_ownerless_remediation'->>'from_moderation_status',
+   set status                  = metadata->'san1349_ownerless_remediation'->>'from_status',
+       moderation_status       = metadata->'san1349_ownerless_remediation'->>'from_moderation_status',
        listing_workflow_status = metadata->'san1349_ownerless_remediation'->>'from_listing_workflow_status',
-       metadata = metadata - 'san1349_ownerless_remediation'
+       paused_at               = (metadata->'san1349_ownerless_remediation'->>'from_paused_at')::timestamptz,
+       metadata                = metadata - 'san1349_ownerless_remediation'
  where metadata ? 'san1349_ownerless_remediation';
 
--- then drop the invariant (only if the whole task is being reverted)
-alter table public.apartments drop constraint apartments_owner_required_when_published;
+-- 3. Confirm the revert is complete.
+select count(*) from public.apartments
+ where metadata ? 'san1349_ownerless_remediation';                        -- expect 0
+select count(*) from public.apartments
+ where status = 'active' and moderation_status = 'approved'
+   and listing_workflow_status = 'published' and landlord_id is null;     -- expect 44 restored
 ```
 
-The migration chain cannot be re-applied after a rollback of the constraint without also
-re-running the remediation, so treat the drop as a task-level revert, not a routine operation.
+Leads, showings and `apartments.landlord_id` are never modified by the remediation, so nothing
+else needs restoring. Rows the migration did not touch are unaffected by all three statements.
+
+The migration chain cannot be re-applied after the constraint drop without also re-running the
+remediation, so treat this as a task-level revert, not a per-incident rollback. If only the pause
+needs undoing for one listing, use the existing FSM (`paused → published`) after giving it a real
+`landlord_id` — that is the supported path and it keeps the invariant intact.
 
 ## 7 · Local proof already captured (applies to the exact same SQL)
 

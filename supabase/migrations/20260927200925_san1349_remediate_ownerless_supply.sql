@@ -38,6 +38,11 @@
 -- IDEMPOTENT: re-running matches zero rows. The migration fails loudly if any violating row
 -- survives, so 20260927200926_san1349_validate_owner_boundary.sql can never validate a
 -- database that still holds ownerless production supply.
+--
+-- REVERTIBILITY: the audit stamp records every column this migration changes (status,
+-- moderation_status, listing_workflow_status, paused_at) plus when and why. A revert must drop
+-- apartments_owner_required_when_published BEFORE restoring those rows, because the restored
+-- rows are ownerless AND published — see docs/tasks/evidence/SAN-1349/PRODUCTION-RUNBOOK.md §6.
 
 DO $$
 DECLARE
@@ -75,7 +80,10 @@ BEGIN
             'reason', 'active + approved + published without a canonical landlord_id',
             'from_status', a.status,
             'from_moderation_status', a.moderation_status,
-            'from_listing_workflow_status', a.listing_workflow_status
+            'from_listing_workflow_status', a.listing_workflow_status,
+            -- Captured so a revert can restore the pre-remediation state exactly rather than
+            -- leaving a synthetic pause timestamp behind.
+            'from_paused_at', a.paused_at
           )
         )
     WHERE a.status = 'active'
