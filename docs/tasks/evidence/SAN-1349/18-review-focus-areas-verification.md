@@ -102,6 +102,26 @@ line 31 that it authorized a broker from a column that was never populated
 (production host_id set on 0 of 49 rows). Authorization is now the
 landlord_profiles chain alone. pgTAP G2 asserts host_id alone grants no access.
 
+On `leads_select_broker_listing` specifically — the reviewer names it alongside
+showings_select_visible as a policy that "isolates broker access", but the two
+are not in the same state, and checking that is the whole point:
+
+  showings_select_visible / showings_update_visible
+      HAD the legacy `a.host_id = auth.uid()` branch (20260617022503). That is a
+      real defect, so this PR recreates them (20260927200924, lines 448-509).
+
+  leads_select_broker_listing / leads_update_broker_listing
+      NEVER had it. The live definition (20260617022503, lines 69-104) already
+      authorizes on the canonical chain alone:
+          AND a.landlord_id IN (SELECT public.acting_landlord_ids())
+      No host_id branch exists to remove.
+
+So the correct answer to "why is leads_select_broker_listing not in the diff" is
+that it needed no change, and 20260927200924 states the scoping decision
+explicitly at lines 35-36: renter, assigned-agent, partner and admin visibility
+are untouched, "including the `leads` policies (no regression test demonstrates
+a defect there)". Changing a correct policy would be churn, not hardening.
+
 Reviewer's residual question — "the application must also reject requests for
 any ownerless apartments that might exist in other states": answered. The
 constraint only constrains the requestable state (active + approved +
