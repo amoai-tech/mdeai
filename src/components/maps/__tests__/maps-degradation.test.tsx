@@ -57,10 +57,15 @@ vi.mock("@/platform/maps/map-context", () => ({
 
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
-import { MapsUnavailable } from "@/components/maps/map-referer-help";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
 import { RentalsListingsMap } from "@/components/host/rentals/rentals-listings-map";
 
 const COMPOSER = <div data-testid="concierge-composer">composer</div>;
+
+/** No `MapsStatusProvider` above it — exercises the provider-free fallback. */
+function StatusProbe() {
+  return <div data-testid="status">{useMapsStatus()}</div>;
+}
 
 beforeEach(() => {
   mocks.apiKey.value = "test-key";
@@ -111,12 +116,34 @@ describe("SAN-1349 · a broken map falls back locally", () => {
     expect(html).not.toContain('data-testid="map-referer-help"');
   });
 
-  it("reports no-key, not ok, with no provider and no API key", () => {
+  it("reports no-key, auth-failed and ok with no provider above it", () => {
+    mocks.apiKey.value = undefined;
+    expect(renderToStaticMarkup(<StatusProbe />)).toContain(
+      'data-testid="status">no-key<',
+    );
+
+    mocks.apiKey.value = "test-key";
+    expect(renderToStaticMarkup(<StatusProbe />)).toContain(
+      'data-testid="status">ok<',
+    );
+
+    (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed = true;
+    expect(renderToStaticMarkup(<StatusProbe />)).toContain(
+      'data-testid="status">auth-failed<',
+    );
+  });
+
+  it("renders the no-key fallback, not a <Map>, when the key is missing", () => {
     mocks.apiKey.value = undefined;
 
-    expect(renderToStaticMarkup(<MapsUnavailable reason="no-key" />)).toContain(
-      'data-testid="map-env-error"',
+    const html = renderToStaticMarkup(
+      <MapsShell>
+        <ChatMap mapDomId="chat-map" />
+      </MapsShell>,
     );
+
+    expect(html).toContain('data-testid="map-env-error"');
+    expect(html).not.toContain('data-testid="google-map"');
   });
 });
 
