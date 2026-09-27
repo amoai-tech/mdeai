@@ -425,9 +425,11 @@ test("direct Vitest/IDE starts inspect .env.local exactly once without mutating 
 });
 
 test("Vitest runs the direct-start guard in globalSetup, not during config evaluation", () => {
-  const configSource = fs.readFileSync(vitestConfig, "utf8");
-  const globalSetup = fileURLToPath(new URL("../../vitest.global-setup.ts", import.meta.url));
-  const setupSource = fs.readFileSync(globalSetup, "utf8");
+  const configSource = fs.readFileSync(new URL("../../vitest.config.ts", import.meta.url), "utf8");
+  const setupSource = fs.readFileSync(
+    new URL("../../vitest.global-setup.ts", import.meta.url),
+    "utf8",
+  );
 
   assert.doesNotMatch(configSource, /node:child_process|spawnSync\s*\(/);
   assert.match(configSource, /globalSetup:/);
@@ -437,7 +439,7 @@ test("Vitest runs the direct-start guard in globalSetup, not during config evalu
 
 test("every supported Vitest npm entry point runs the file-aware guard exactly once", () => {
   const packageJson = JSON.parse(
-    fs.readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
+    fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
   );
   const vitestScripts = [
     "test",
