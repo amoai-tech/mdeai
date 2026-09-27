@@ -595,6 +595,12 @@ F1 · Pick ONE of these two. Either escapes the deadlock; F1a alone is the
          https://mdeai-rh5d68hhb-amoco.vercel.app/*
       (one entry per deployment origin you actually need).
 
+      KEEP the entries that already work: the `www.mdeai.co` custom domain and
+      the `http://localhost:3000/*` / `http://localhost:3001/*` development
+      origins. This list is ADDITIVE — replacing it instead of extending it
+      takes Maps down for real users on the live site, which is the exact
+      opposite of the intent here.
+
       DO NOT use `https://mdeai-*.vercel.app/*` — this document previously
       recommended exactly that, and the review on #134 was right to reject it:
         * SECURITY — a wildcard that covers `*.vercel.app` lets ANY Vercel
