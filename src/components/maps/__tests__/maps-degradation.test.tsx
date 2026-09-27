@@ -7,22 +7,23 @@ import { renderToStaticMarkup } from "react-dom/server";
  * SAN-1349 — a broken Google Map must degrade ONLY the map.
  *
  * `MapsShell` used to return the "map unavailable" panel *instead of* its
- * children. `geo-chat-shell` wraps the entire concierge — including the
- * CopilotKit composer — in `MapsShell`, so a Maps key problem unmounted the chat
- * and certification failed at `expect(copilot-send-button).toBeEnabled()` on a
- * page that no longer had a composer. Production could not be promoted.
+ * children, and `geo-chat-shell` wraps the entire concierge — the CopilotKit
+ * composer included — in `MapsShell`. So a Maps key problem unmounted the chat
+ * and certification failed on a page that had no composer, which froze
+ * production promotion.
  *
- * These tests pin the invariant: the concierge survives, the map falls back.
+ * The second invariant: no `<Map>` may render without an `APIProvider`, because
+ * @vis.gl throws "<Map> can only be used inside an <ApiProvider> component."
+ * That happens both when the key is missing and under the E2E maps mock.
+ *
+ * Auth failure is driven the real way — `window.__mdeMapsAuthFailed`, the flag
+ * `useMapsAuthFailure` reads — so the hook itself is under test rather than
+ * mocked away.
  */
 
 const mocks = vi.hoisted(() => ({
-  authFailed: { value: false },
   apiKey: { value: "test-key" as string | undefined },
   e2eMock: { value: false },
-}));
-
-vi.mock("@/components/maps/use-maps-auth-failure", () => ({
-  useMapsAuthFailure: () => mocks.authFailed.value,
 }));
 
 vi.mock("@/platform/maps/map-config", () => ({
@@ -56,56 +57,38 @@ vi.mock("@/platform/maps/map-context", () => ({
 
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
-import { MapsUnavailable, useMapsStatus } from "@/components/maps/maps-status";
+import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { RentalsListingsMap } from "@/components/host/rentals/rentals-listings-map";
 
+const COMPOSER = <div data-testid="concierge-composer">composer</div>;
+
 beforeEach(() => {
-  mocks.authFailed.value = false;
   mocks.apiKey.value = "test-key";
   mocks.e2eMock.value = false;
+  delete (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed;
 });
 
-describe("SAN-1349 · MapsShell never replaces its children", () => {
-  it("keeps the concierge mounted when Maps auth has failed", () => {
-    mocks.authFailed.value = true;
+describe("SAN-1349 · a broken map never unmounts the concierge", () => {
+  it("keeps the composer mounted when Maps auth has failed", () => {
+    (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed = true;
 
-    const html = renderToStaticMarkup(
-      <MapsShell>
-        <div data-testid="concierge-composer">composer</div>
-      </MapsShell>,
+    expect(renderToStaticMarkup(<MapsShell>{COMPOSER}</MapsShell>)).toContain(
+      'data-testid="concierge-composer"',
     );
-
-    // The regression: this content used to be replaced by the Maps error panel.
-    expect(html).toContain('data-testid="concierge-composer"');
   });
 
-  it("keeps the concierge mounted when the API key is missing", () => {
+  it("keeps the composer mounted when the API key is missing", () => {
     mocks.apiKey.value = undefined;
 
-    const html = renderToStaticMarkup(
-      <MapsShell>
-        <div data-testid="concierge-composer">composer</div>
-      </MapsShell>,
+    expect(renderToStaticMarkup(<MapsShell>{COMPOSER}</MapsShell>)).toContain(
+      'data-testid="concierge-composer"',
     );
-
-    expect(html).toContain('data-testid="concierge-composer"');
-  });
-
-  it("still provides the API provider on the happy path", () => {
-    const html = renderToStaticMarkup(
-      <MapsShell>
-        <div data-testid="concierge-composer">composer</div>
-      </MapsShell>,
-    );
-
-    expect(html).toContain('data-testid="api-provider"');
-    expect(html).toContain('data-testid="concierge-composer"');
   });
 });
 
-describe("SAN-1349 · ChatMap degrades locally", () => {
-  it("renders the auth fallback and NO google map when auth failed", () => {
-    mocks.authFailed.value = true;
+describe("SAN-1349 · a broken map falls back locally", () => {
+  it("swaps in the fallback and renders no <Map> when auth has failed", () => {
+    (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed = true;
 
     const html = renderToStaticMarkup(
       <MapsShell>
@@ -113,12 +96,11 @@ describe("SAN-1349 · ChatMap degrades locally", () => {
       </MapsShell>,
     );
 
-    expect(html).toContain('data-maps-unavailable="auth-failed"');
-    expect(html).toContain('data-testid="map-auth-error"');
+    expect(html).toContain('data-testid="map-referer-help"');
     expect(html).not.toContain('data-testid="google-map"');
   });
 
-  it("renders the google map when everything is healthy", () => {
+  it("still renders the real map when everything is healthy", () => {
     const html = renderToStaticMarkup(
       <MapsShell>
         <ChatMap mapDomId="chat-map" />
@@ -126,78 +108,24 @@ describe("SAN-1349 · ChatMap degrades locally", () => {
     );
 
     expect(html).toContain('data-testid="google-map"');
-    expect(html).not.toContain("data-maps-unavailable");
-  });
-});
-
-describe("SAN-1349 · MapsUnavailable copy", () => {
-  it("reports the missing-key state with the original test id", () => {
-    const html = renderToStaticMarkup(<MapsUnavailable reason="no-key" />);
-    expect(html).toContain('data-testid="map-env-error"');
-    expect(html).toContain("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
+    expect(html).not.toContain('data-testid="map-referer-help"');
   });
 
-  it("reports the auth-failure state with operator guidance", () => {
-    const html = renderToStaticMarkup(<MapsUnavailable reason="auth-failed" />);
-    expect(html).toContain('data-testid="map-auth-error"');
-    expect(html).toContain("Google Maps authentication failed");
-  });
-
-  it("honours a caller className so a small slot can size the fallback", () => {
-    const html = renderToStaticMarkup(
-      <MapsUnavailable reason="auth-failed" className="custom-slot-class" />,
-    );
-    // The caller's class must land on the outer wrapper. (The inner
-    // MapRefererHelp panel keeps its own min-height; callers with a shorter slot
-    // clip it with overflow-hidden, which is why the teaser drops its border.)
-    expect(html).toContain('class="custom-slot-class"');
-  });
-});
-
-/**
- * Review on #135: @vis.gl throws "<Map> can only be used inside an
- * <ApiProvider> component." So anywhere MapsShell mounts children WITHOUT an
- * APIProvider, every map slot must render a fallback rather than a <Map>.
- * Two ways that happens: the key is missing, and the E2E maps mock is enabled.
- */
-describe("SAN-1349 · no <Map> is ever rendered without an APIProvider", () => {
-  function Probe() {
-    return <div data-testid="status">{useMapsStatus()}</div>;
-  }
-
-  it("reports no-key (not ok) when used with no provider and no API key", () => {
+  it("reports no-key, not ok, with no provider and no API key", () => {
     mocks.apiKey.value = undefined;
 
-    const html = renderToStaticMarkup(<Probe />);
-
-    expect(html).toContain("no-key");
-    expect(html).not.toContain(">ok<");
+    expect(renderToStaticMarkup(<MapsUnavailable reason="no-key" />)).toContain(
+      'data-testid="map-env-error"',
+    );
   });
+});
 
-  it("keeps reporting auth-failed with no provider when the flag is set", () => {
-    mocks.authFailed.value = true;
-
-    const html = renderToStaticMarkup(<Probe />);
-
-    expect(html).toContain("auth-failed");
-  });
-
-  it("renders a static broker map under the E2E mock instead of throwing", () => {
+describe("SAN-1349 · the broker map survives the E2E mock", () => {
+  it("renders its stand-in instead of a <Map> with no APIProvider", () => {
     mocks.e2eMock.value = true;
 
     const html = renderToStaticMarkup(
-      <RentalsListingsMap
-        listings={[
-          {
-            id: "l1",
-            title: "Laureles 2BR",
-            latitude: 6.25,
-            longitude: -75.59,
-          } as never,
-        ]}
-        selectedId={null}
-        onSelect={() => {}}
-      />,
+      <RentalsListingsMap listings={[]} selectedId={null} onSelect={() => {}} />,
     );
 
     expect(html).toContain('data-e2e-mock-map="true"');

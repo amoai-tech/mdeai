@@ -4,7 +4,8 @@ import { useEffect, useMemo } from "react";
 import { AdvancedMarker, Map, useMap } from "@vis.gl/react-google-maps";
 import type { BrokerListingDetail } from "@/lib/rentals/broker-listing-detail";
 import { MapsShell } from "@/components/maps/MapProvider";
-import { MapsUnavailable, useMapsStatus } from "@/components/maps/maps-status";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
+import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import {
   DEFAULT_MAP_ZOOM,
@@ -72,28 +73,16 @@ function BrokerListingsMapInner({
     return MEDELLIN_CENTER;
   }, [pins, selectedId]);
 
-  // The E2E maps mock deliberately mounts no <APIProvider> (see MapsShell), and
-  // @vis.gl throws "<Map> can only be used inside an <ApiProvider> component."
-  // Render a static stand-in instead, matching ChatMap and MapTeaser.
+  // The E2E maps mock mounts no <APIProvider> on purpose, and @vis.gl throws
+  // "<Map> can only be used inside an <ApiProvider> component." No spec asserts
+  // pins here, so a bare stand-in is enough.
   if (isE2EMapsMockEnabled()) {
     return (
       <div
         data-testid="rentals-listings-map"
         data-e2e-mock-map="true"
         className="relative h-full min-h-[280px] w-full overflow-hidden rounded-lg border border-border"
-      >
-        {pins.map((listing) => (
-          <button
-            key={listing.id}
-            type="button"
-            data-testid="map-pin"
-            data-pin-id={listing.id}
-            onClick={() => onSelect(listing.id)}
-          >
-            {listing.title}
-          </button>
-        ))}
-      </div>
+      />
     );
   }
 

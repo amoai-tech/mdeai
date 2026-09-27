@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { MapsUnavailableReason } from "@/components/maps/use-maps-auth-failure";
 
 const DEV_REFERRERS = [
   "http://localhost:3001/*",
@@ -8,6 +9,38 @@ const DEV_REFERRERS = [
   "http://127.0.0.1:3001/*",
   "http://127.0.0.1:3000/*",
 ] as const;
+
+/**
+ * SAN-1349 — what a map slot renders instead of a `<Map>`.
+ *
+ * Rendered *by the map slot*, never in place of a whole page: see
+ * use-maps-auth-failure.tsx for why that distinction is the whole point.
+ *
+ * ponytail: MapRefererHelp carries its own `min-h-[280px]`, so a slot shorter
+ * than that (home-map-teaser is 260px) clips the bottom of this panel via
+ * `overflow-hidden`. Ceiling: ~20px of the panel's lower border is hidden at
+ * that size. Upgrade path if it ever matters: give MapRefererHelp a compact
+ * size prop rather than copying its markup.
+ */
+export function MapsUnavailable({ reason }: { reason: MapsUnavailableReason }) {
+  if (reason === "no-key") {
+    return (
+      <div
+        data-testid="map-env-error"
+        className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground"
+      >
+        <p>
+          Map unavailable: set{" "}
+          <code className="text-xs">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> and{" "}
+          <code className="text-xs">NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID</code> in{" "}
+          <code className="text-xs">mdeapp/.env.local</code>.
+        </p>
+      </div>
+    );
+  }
+
+  return <MapRefererHelp />;
+}
 
 export function MapRefererHelp() {
   const [origin] = useState(() =>

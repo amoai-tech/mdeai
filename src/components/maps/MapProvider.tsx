@@ -1,7 +1,7 @@
 "use client";
 
 import { APIProvider } from "@vis.gl/react-google-maps";
-import { MapsStatusProvider } from "@/components/maps/maps-status";
+import { MapsStatusProvider } from "@/components/maps/use-maps-auth-failure";
 import { useMapsAuthFailure } from "@/components/maps/use-maps-auth-failure";
 import { getGoogleMapsApiKey, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
