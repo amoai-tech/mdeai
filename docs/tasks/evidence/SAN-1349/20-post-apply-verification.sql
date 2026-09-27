@@ -199,11 +199,16 @@ from (
   group by lp.display_name
 ) per_landlord;
 
+-- 7b inspects the function DEFINITION only, so a present-and-scoped function
+-- stays informational ('REVIEW'). An ABSENT or unscoped function is a hard FAIL:
+-- checks 5 and 6 both depend on acting_landlord_ids(), so a bare 'REVIEW' here is
+-- the same false-PASS class the aggregate fix removed from 3a (CodeRabbit review
+-- on #134).
 select '7b. acting_landlord_ids is a single-owner resolver' as check,
        'function present and scoped to auth.uid()' as expected,
        case when t.n > 0 then 'function present, scoped to auth.uid()'
             else 'FUNCTION ABSENT OR NOT SCOPED' end as actual,
-       'REVIEW' as verdict
+       case when t.n > 0 then 'REVIEW' else 'FAIL' end as verdict
 from (
   select count(*)::int as n
   from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
