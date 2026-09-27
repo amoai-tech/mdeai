@@ -9,11 +9,19 @@
 -- evidence record rather than something that has to be interpreted.
 --
 -- Captured PRE-APPLY baseline (2026-09-27, for comparison):
---   requestable_ownerless = 44    constraint present = no
---   rpc accepts ownerless = 44    leads = 17 (5 on ownerless)
---   showings = 6 (4 on ownerless) orphans = 0/0
+--   active+approved+published            = 44   constraint present = no
+--     ...of which ownerless              = 44
+--   RPC-acceptable (state + availability
+--     window, as of 2026-09-27 Bogota)   = 39   (5 have an expired available_to)
+--   leads = 17 (5 on ownerless)   showings = 6 (4 on ownerless)   orphans 0/0
+--
+-- NOTE the 44 vs 39 distinction, which this script now measures explicitly:
+-- the CHECK constraint and the remediation predicate are STATE-ONLY, so they
+-- cover all 44 rows. The RPC additionally requires the requested date to fall
+-- inside available_from/available_to, so only 39 were actually requestable.
+-- Reporting "RPC accepts 44" would overstate the live exposure.
 
-\echo '=== SAN-1349 post-apply verification ==='
+SELECT '=== SAN-1349 post-apply verification ===' AS notice;
 
 -- ── 1 · No ownerless production-requestable supply ───────────────────────────
 with v as (
@@ -46,79 +54,137 @@ select '2. ownership CHECK installed + validated' as check,
        then 'PASS' else 'FAIL' end as verdict;
 
 -- ── 3 · The RPC now refuses ownerless / inactive / unapproved / unpublished ──
--- The live definition must contain the landlord_id guard, and the eligibility
--- predicate must match zero production rows for the ownerless/inactive/
--- unapproved/unpublished cases while still matching owned+approved+published.
-select '3a. RPC body requires landlord_id' as check,
-       'guard present' as expected,
-       case when pg_get_functiondef(p.oid) like '%landlord_id IS NOT NULL%'
-            then 'guard present' else 'GUARD MISSING' end as actual,
-       case when pg_get_functiondef(p.oid) like '%landlord_id IS NOT NULL%'
-            then 'PASS' else 'FAIL' end as verdict
-from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-where n.nspname = 'public' and p.proname = 'p1_schedule_tour_atomic';
+-- The live definition must carry the landlord_id guard, and the eligibility
+-- counts below are measured against the RPC's FULL predicate: state AND
+-- ownership AND the availability window. Matching is case-insensitive and
+-- whitespace-normalised so a cosmetic reformat of the function body cannot
+-- silently turn this check into a false PASS (Codacy review on #134).
 
-select '3b. RPC eligibility counts' as check,
-       'inactive=0, unapproved=0, unpublished=0, ownerless=0, owned_ok>=0' as expected,
-       format('inactive=%s unapproved=%s unpublished=%s ownerless=%s owned_ok=%s',
-         (select count(*) from public.apartments where status <> 'active'),
-         (select count(*) from public.apartments where moderation_status <> 'approved'),
-         (select count(*) from public.apartments where listing_workflow_status <> 'published'),
-         (select count(*) from public.apartments
-            where status='active' and moderation_status='approved'
-              and listing_workflow_status='published' and landlord_id is null),
-         (select count(*) from public.apartments
-            where status='active' and moderation_status='approved'
-              and listing_workflow_status='published' and landlord_id is not null)
-       ) as actual,
-       case when (select count(*) from public.apartments
-                    where status='active' and moderation_status='approved'
-                      and listing_workflow_status='published' and landlord_id is null) = 0
-            then 'PASS' else 'FAIL' end as verdict;
+SELECT '3a. RPC body requires landlord_id' AS check,
+       'guard present' AS expected,
+       CASE WHEN regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
+                 ILIKE '%landlord_id is not null%'
+            THEN 'guard present' ELSE 'GUARD MISSING' END AS actual,
+       CASE WHEN regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
+                 ILIKE '%landlord_id is not null%'
+            THEN 'PASS' ELSE 'FAIL' END AS verdict
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'p1_schedule_tour_atomic';
+
+-- 3b measures what the RPC would actually ACCEPT (state + ownership +
+-- availability), not just the state columns. The two are not the same number:
+-- at baseline 44 rows met the state predicate and only 39 were RPC-acceptable.
+SELECT '3b. RPC-acceptable listings (state + owner + availability)' AS check,
+       '0 (ownerless), and 0 unowned_requestable' AS expected,
+       format('state_only=%s ownerless=%s rpc_acceptable=%s accepted_ownerless=%s',
+         (SELECT count(*) FROM public.apartments
+            WHERE status='active' AND moderation_status='approved'
+              AND listing_workflow_status='published'),
+         (SELECT count(*) FROM public.apartments
+            WHERE status='active' AND moderation_status='approved'
+              AND listing_workflow_status='published' AND landlord_id IS NULL),
+         (SELECT count(*) FROM public.apartments a,
+               (SELECT (now() AT TIME ZONE 'America/Bogota')::date AS d) t
+            WHERE a.status='active' AND a.moderation_status='approved'
+              AND a.listing_workflow_status='published'
+              AND a.landlord_id IS NOT NULL
+              AND (a.available_from IS NULL OR a.available_from <= t.d)
+              AND (a.available_to   IS NULL OR a.available_to   >= t.d)),
+         (SELECT count(*) FROM public.apartments a,
+               (SELECT (now() AT TIME ZONE 'America/Bogota')::date AS d) t
+            WHERE a.status='active' AND a.moderation_status='approved'
+              AND a.listing_workflow_status='published'
+              AND a.landlord_id IS NULL
+              AND (a.available_from IS NULL OR a.available_from <= t.d)
+              AND (a.available_to   IS NULL OR a.available_to   >= t.d))
+       ) AS actual,
+       CASE WHEN (SELECT count(*) FROM public.apartments
+                    WHERE status='active' AND moderation_status='approved'
+                      AND listing_workflow_status='published'
+                      AND landlord_id IS NULL) = 0
+            THEN 'PASS' ELSE 'FAIL' END AS verdict;
 
 -- ── 4 · Broker SELECT no longer authorizes on the legacy host_id column ──────
+-- ILIKE + whitespace normalisation: pg_get_expr output is not guaranteed to
+-- preserve the original casing or spacing (Codacy review on #134).
 select '4. showings policies free of host_id branch' as check,
        'no a.host_id = auth.uid()' as expected,
        coalesce(string_agg(distinct policyname, ', '), 'none') as actual,
        case when count(*) = 0 then 'PASS' else 'FAIL' end as verdict
 from pg_policies
 where schemaname = 'public' and tablename = 'showings'
-  and (coalesce(qual,'') || coalesce(with_check,'')) like '%host_id%';
+  and regexp_replace(coalesce(qual,'') || ' ' || coalesce(with_check,''), '\s+', ' ', 'g')
+      ILIKE '%host_id%';
 
 -- ── 5 · Broker isolation is defined on the canonical chain alone ─────────────
 select '5. showings_select_visible uses acting_landlord_ids' as check,
        'canonical chain only' as expected,
-       case when coalesce(qual,'') like '%acting_landlord_ids%'
+       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
             then 'canonical chain present' else 'MISSING' end as actual,
-       case when coalesce(qual,'') like '%acting_landlord_ids%'
+       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
             then 'PASS' else 'FAIL' end as verdict
 from pg_policies
 where schemaname='public' and tablename='showings' and policyname='showings_select_visible';
 
 select '6. leads_select_broker_listing uses acting_landlord_ids' as check,
        'canonical chain only' as expected,
-       case when coalesce(qual,'') like '%acting_landlord_ids%'
+       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
             then 'canonical chain present' else 'MISSING' end as actual,
-       case when coalesce(qual,'') like '%acting_landlord_ids%'
+       case when coalesce(qual,'') ilike '%acting_landlord_ids%'
             then 'PASS' else 'FAIL' end as verdict
 from pg_policies
 where schemaname='public' and tablename='leads' and policyname='leads_select_broker_listing';
 
--- ── 7 · Broker A / Broker B isolation across landlord profiles ───────────────
--- Two distinct landlords must never resolve to overlapping owned listings.
-select '7. no listing is owned by two landlord profiles' as check,
-       '0' as expected,
-       count(*)::text as actual,
-       case when count(*) = 0 then 'PASS' else 'FAIL' end as verdict
+-- ── 7 · The canonical ownership chain resolves for every owned listing ───────
+-- REPLACED. The previous version grouped apartments by landlord_id HAVING
+-- count(*) > 1 and FAILed on the result — which flagged a broker who simply
+-- owns two or more listings. That is legitimate and expected, so the check
+-- would have produced false FAILs in production as soon as a real broker
+-- onboarded more than one unit (Codacy review on #134).
+--
+-- A listing cannot have two owners: landlord_id is a single-valued FK. What can
+-- actually break is the CHAIN — apartments.landlord_id -> landlord_profiles.id
+-- -> landlord_profiles.user_id -> auth.users.id. That is what is asserted here.
+select '7. canonical owner chain resolves for every owned listing' as check,
+       '0 broken' as expected,
+       format('owned=%s missing_profile=%s missing_auth_user=%s',
+         (select count(*) from public.apartments where landlord_id is not null),
+         (select count(*) from public.apartments a
+            where a.landlord_id is not null
+              and not exists (select 1 from public.landlord_profiles lp
+                                where lp.id = a.landlord_id)),
+         (select count(*) from public.apartments a
+            join public.landlord_profiles lp on lp.id = a.landlord_id
+            where not exists (select 1 from auth.users u where u.id = lp.user_id))
+       ) as actual,
+       case when (select count(*) from public.apartments a
+                    where a.landlord_id is not null
+                      and not exists (select 1 from public.landlord_profiles lp
+                                        where lp.id = a.landlord_id)) = 0
+             and (select count(*) from public.apartments a
+                    join public.landlord_profiles lp on lp.id = a.landlord_id
+                    where not exists (select 1 from auth.users u where u.id = lp.user_id)) = 0
+            then 'PASS' else 'FAIL' end as verdict;
+
+-- 7a is informational: how many listings each landlord profile owns. A landlord
+-- owning many listings is CORRECT, so this never fails. It exists to make the
+-- isolation review concrete — two profiles must not share a landlord_id, which
+-- is guaranteed by the FK and asserted by check 7.
+select '7a. listings per landlord profile (informational)' as check,
+       'any distribution; no shared landlord_id' as expected,
+       coalesce(string_agg(format('%s=%s', display_name, n), ', ' order by display_name), 'none') as actual,
+       'INFO' as verdict
 from (
-  select landlord_id from public.apartments
-  where landlord_id is not null
-  group by landlord_id having count(*) > 1
-) dup;   -- informational: same landlord may legitimately own many listings
+  select lp.display_name, count(a.id) as n
+  from public.landlord_profiles lp
+  left join public.apartments a on a.landlord_id = lp.id
+  group by lp.display_name
+) per_landlord;
 
 select '7b. acting_landlord_ids is a single-owner resolver' as check,
        'returns at most the caller''s own landlord ids' as expected,
-       case when pg_get_functiondef(p.oid) like '%auth.uid()%'
+       case when regexp_replace(pg_get_functiondef(p.oid), '\s+', ' ', 'g')
+                 ilike '%auth.uid()%'
             then 'scoped to auth.uid()' else 'REVIEW' end as actual,
        'REVIEW' as verdict
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -182,4 +248,4 @@ select '10. migration ledger' as check,
 from supabase_migrations.schema_migrations
 where version in ('20260927200924','20260927200925','20260927200926');
 
-\echo '=== end SAN-1349 post-apply verification ==='
+SELECT '=== end SAN-1349 post-apply verification ===' AS notice;

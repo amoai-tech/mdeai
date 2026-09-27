@@ -335,8 +335,27 @@ Logical dry-run (read-only simulation of 20260927200925):
   violations after                        0
   requestable after (TOTAL)               0
   requestable after (owned)               0
-  RPC accepts before                     44
-  RPC accepts after                       0
+  RPC accepts before                      39
+  RPC accepts after                        0
+
+CORRECTION (raised by review on #134). An earlier draft said "RPC accepts
+before 44". That was wrong, and the review was right to catch it: the
+remediation predicate and the CHECK constraint are STATE-ONLY (status,
+moderation_status, listing_workflow_status, landlord_id), so they cover all 44
+rows — but the RPC additionally requires the requested date to fall inside
+available_from/available_to. Measured against production on 2026-09-27 (Bogota):
+
+  active+approved+published                     44
+  of which ownerless                            44
+  5 rows have an EXPIRED available_to
+  0 rows have a FUTURE available_from
+  RPC-acceptable (state + availability)         39   <- the real exposure
+
+So the live ownerless exposure the RPC would have accepted was 39, not 44, which
+agrees with the adjacent production runbook. The 44 figure is correct for the
+remediation and for the UI catalogue; it was wrong for RPC acceptance. The
+post-apply script now measures the two separately (check 3b) so the distinction
+cannot drift again.
 
 Predicate verified against production columns: apartments has status,
 moderation_status, listing_workflow_status, landlord_id, paused_at, metadata,
@@ -362,7 +381,7 @@ matters: applying before onboarding leaves the rentals product empty.
   Unexpected error retrieving projects: {"message":"Unauthorized"}
 
 Credentials available (first pass, repo-local only):
-  SUPABASE_PERSONAL_ACCESS_TOKEN  sbp_fc... (44 chars) -> HTTP 401, invalid/revoked
+  SUPABASE_PERSONAL_ACCESS_TOKEN  [REDACTED] -> HTTP 401, invalid/revoked
   SUPABASE_DB_PASSWORD            absent from .env
   DATABASE_URL                    absent from .env
   supabase/.temp/pooler-url       no password segment
@@ -488,12 +507,23 @@ listings still invites a viewing request that cannot be serviced.
 ═══════════════════════════════════════════════════════════════════════════════
 PRODUCTION READINESS
 ═══════════════════════════════════════════════════════════════════════════════
+Five equally-weighted dimensions, unweighted arithmetic mean:
+
   Code merged and correct                                  100%
   Built artifact correct (verified on the real deployment) 100%
   Served to users                                            0%
   Database migrations applied                                0%
   Acceptance verified in production                          0%
-  Overall                                                    ~35%
+                                                          ------
+  Overall  (100 + 100 + 0 + 0 + 0) / 5                   =  40%
+
+CORRECTION (raised by review on #134). An earlier draft reported "~35%" without
+showing the arithmetic. The review was right: the five listed dimensions average
+to 40%. 40% is the reproducible figure and is used from here on. (A
+deliberately harsher view exists — if "served to users" is treated as gating the
+other two engineering dimensions rather than sitting beside them, the number
+drops toward 0%, because nothing is live and nothing can be marked Done. Neither
+reading supports "35%", so it has been removed.)
 
 SAN-1349 CANNOT be marked Done.
 
