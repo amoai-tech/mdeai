@@ -157,6 +157,10 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
       "Laureles",
     );
     await expect(page.getByTestId("map-pin").first()).toBeVisible();
+    // SAN-1349 control: the fixture is owned + approved + published, so the CHAT card must
+    // expose the viewing action. Paired with the unowned case below, this pins both directions
+    // of the requestability contract on the chat surface.
+    await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(1);
   });
 
   // SAN-1349: an unowned / non-requestable listing stays browseable but must never expose a

@@ -251,6 +251,9 @@ export function RentalResults({
     wifi?: boolean;
     availability?: string;
     host_name?: string;
+    /** SAN-1349 — server-proven viewing requestability from the search envelope. */
+    can_schedule_viewing?: boolean;
+    schedule_viewing_url?: string | null;
   }>;
   const rankExplanation = filterCustomerVisibleRentalRankExplanation(
     envelope.rankExplanation ?? [],
@@ -312,6 +315,7 @@ export function RentalResults({
               amenities: r.amenities,
               availability: r.availability,
               hostName: r.host_name,
+              canScheduleViewing: r.can_schedule_viewing === true,
             });
           };
           return (
@@ -334,6 +338,7 @@ export function RentalResults({
               selected={selectedPinId === pinId}
               onSelect={() => panToPin(pinId)}
               onOpenDetails={openDetail}
+              canScheduleViewing={r.can_schedule_viewing === true}
               onSchedule={() =>
                 openScheduleViewing({
                   listingId: r.id,

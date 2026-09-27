@@ -87,10 +87,13 @@ const RentalPriceSidebar = ({
   prices,
   hostName,
   onRequest,
+  canRequestViewing,
 }: {
   prices: PriceLabels;
   hostName: string | null;
   onRequest: () => void;
+  /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
+  canRequestViewing: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
 
@@ -103,9 +106,11 @@ const RentalPriceSidebar = ({
             <div className="text-xs text-muted-foreground">{prices.nightlyLabel}</div>
           ) : null}
         </div>
-        <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
-          Request viewing
-        </Button>
+        {canRequestViewing ? (
+          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
+            Request viewing
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -126,7 +131,16 @@ const RentalPriceSidebar = ({
 };
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
-const RentalMobileCta = ({ prices, onRequest }: { prices: PriceLabels; onRequest: () => void }) => (
+const RentalMobileCta = ({
+  prices,
+  onRequest,
+  canRequestViewing,
+}: {
+  prices: PriceLabels;
+  onRequest: () => void;
+  /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
+  canRequestViewing: boolean;
+}) => (
   <div
     data-testid="rental-detail-mobile-cta"
     className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
@@ -138,9 +152,11 @@ const RentalMobileCta = ({ prices, onRequest }: { prices: PriceLabels; onRequest
         </div>
         <div className="truncate text-[11px] text-muted-foreground">{REQUEST_ONLY}</div>
       </div>
-      <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
-        Request viewing
-      </Button>
+      {canRequestViewing ? (
+        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
+          Request viewing
+        </Button>
+      ) : null}
     </div>
   </div>
 );
@@ -275,10 +291,19 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
           </section>
         </div>
 
-        <RentalPriceSidebar prices={prices} hostName={detail.hostName} onRequest={requestViewing} />
+        <RentalPriceSidebar
+          prices={prices}
+          hostName={detail.hostName}
+          onRequest={requestViewing}
+          canRequestViewing={detail.canScheduleViewing}
+        />
       </div>
 
-      <RentalMobileCta prices={prices} onRequest={requestViewing} />
+      <RentalMobileCta
+        prices={prices}
+        onRequest={requestViewing}
+        canRequestViewing={detail.canScheduleViewing}
+      />
     </main>
   );
 }

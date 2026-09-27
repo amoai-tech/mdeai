@@ -43,6 +43,11 @@ export type RentalVenueDetail = {
   amenities?: string[];
   availability?: string;
   hostName?: string;
+  /**
+   * SAN-1349 — the server-proven viewing-requestability flag for this listing.
+   * Absent means unproven, and every scheduling surface must fail closed on it.
+   */
+  canScheduleViewing?: boolean;
 };
 
 export type EventVenueSheetStep = "detail" | "checkout";

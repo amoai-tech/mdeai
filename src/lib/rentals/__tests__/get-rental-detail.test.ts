@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchRentals } from "@/mastra/tools/search-rentals";
 import { getRentalDetail, mapApartmentRowToDetail } from "../get-rental-detail";
 
-vi.mock("@/mastra/tools/search-rentals", () => ({
+// Partial mock: the real `isRentalRequestable` must stay live because
+// `mapApartmentRowToDetail` now derives `canScheduleViewing` from it (SAN-1349).
+// Mocking it out would make the requestability tests assert against a stub.
+vi.mock("@/mastra/tools/search-rentals", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/mastra/tools/search-rentals")>()),
   searchRentals: vi.fn(),
 }));
 
@@ -69,6 +73,44 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(rentalDetail.amenities).toEqual(["wifi", "ac"]);
     expect(rentalDetail.buildingAmenities).toEqual(["gym"]);
     expect(rentalDetail.images).toHaveLength(2);
+  });
+
+  // SAN-1349 — the detail page must not offer a viewing request for a listing the database
+  // would reject. Requestability is derived from the same ownership + workflow + availability
+  // proof, and fails closed when any part of it is missing.
+  describe("canScheduleViewing", () => {
+    const ownedRow = {
+      id: "abc",
+      title: "Bright Laureles 2BR",
+      neighborhood: "Laureles",
+      status: "active",
+      moderation_status: "approved",
+      listing_workflow_status: "published",
+      landlord_id: "11111111-1111-4111-8111-111111111111",
+      available_from: null,
+      available_to: null,
+    };
+
+    it("is true for an owned, active, approved, published, available listing", () => {
+      expect(mapApartmentRowToDetail(ownedRow).canScheduleViewing).toBe(true);
+    });
+
+    it("is false when the listing has no canonical owner", () => {
+      expect(mapApartmentRowToDetail({ ...ownedRow, landlord_id: null }).canScheduleViewing).toBe(false);
+    });
+
+    it("is false when the listing is unapproved or unpublished", () => {
+      expect(
+        mapApartmentRowToDetail({ ...ownedRow, moderation_status: "pending" }).canScheduleViewing,
+      ).toBe(false);
+      expect(
+        mapApartmentRowToDetail({ ...ownedRow, listing_workflow_status: "draft" }).canScheduleViewing,
+      ).toBe(false);
+    });
+
+    it("fails closed when the ownership columns are absent from the row", () => {
+      expect(mapApartmentRowToDetail({ id: "x", title: "Studio", neighborhood: "El Poblado" }).canScheduleViewing).toBe(false);
+    });
   });
 
   it("returns null for unknown/blank fields so the UI can show Data pending — never faked", () => {
