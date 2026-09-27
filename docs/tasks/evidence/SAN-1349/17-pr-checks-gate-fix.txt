@@ -1,0 +1,65 @@
+SAN-1349 · final PR #131 check state after the four-surface CTA gate fix
+Head: c1ab9afbb05ddb144367e20e2e02cda6c44cb9f6
+Captured: 2026-09-27 (post-fix, settled)
+
+Why this file exists
+--------------------
+The `deterministic chromium` job failed on the previous head because the
+"no Schedule viewing CTA for an ownerless rental" assertion found a CTA that
+the fix had not gated. Four scheduling surfaces exist; only the rental browse
+card was gated. `e2e/deterministic-critical.spec.ts` caught the gap.
+
+Fix landing: commit c1ab9afbb — gate the remaining three surfaces
+  src/components/copilot/rental-card.tsx            (canScheduleViewing prop)
+  src/components/sheets/venue-detail-sheet.tsx      (detail.canScheduleViewing)
+  src/components/rentals/rental-detail-view.tsx     (canRequestViewing)
+behind the server-derived `can_schedule_viewing` flag, failing closed when the
+flag is absent. Full write-up: 16-chat-cta-gap.md.
+
+Settled check state on c1ab9afbb
+--------------------------------
+$ gh pr checks 131
+
+Codacy Static Code Analysis   pass   0         https://app.codacy.com/gh/amoai-tech/mdeai/pull-requests/131
+CodeRabbit                    pass   0         Review rate limited
+Kilo Code Review              pass   25m30s    https://app.kilo.ai/code-reviews/84ec754f-0dc8-405b-89d4-8ebcd7d8340d
+Sourcery review               pass   42s       https://sourcery.ai
+Vercel                        pass   0         Deployment has completed
+Vercel Preview Comments       pass   0
+deterministic chromium        pass   2m48s     actions/runs/36350250983/job/108707429955
+floor                         pass   4m1s      actions/runs/36350250984/job/108707430164
+mastra-schema-init            pass   1m22s     actions/runs/36350250984/job/108707430214
+review / review               pass   1m52s     actions/runs/36350251703/job/108707432024
+review / verify-review-result pass   11s       actions/runs/36350251703/job/108707776894
+supabase-acl                  pass   3m22s     actions/runs/36350250970/job/108707429965
+GitBook (./docs/tasks)        pending 0        docs-only sync, not a required check
+
+Result: 12 pass, 0 fail. The one previously-failing job
+(`deterministic chromium`) now passes on the fixed head.
+
+Merge gate
+----------
+$ gh api repos/amoai-tech/mdeai/branches/main/protection \
+    -q '.required_status_checks.contexts[]'
+floor
+
+$ gh pr view 131 --json reviewDecision,mergeStateStatus
+reviewDecision=REVIEW_REQUIRED | mergeStateStatus=BLOCKED
+
+`mergeable=MERGEABLE`. The sole required status check (`floor`) passes. The
+remaining BLOCKED state is `REVIEW_REQUIRED` — a human approving review — not a
+failing check. GitBook's pending docs sync is not a required context.
+
+Review threads
+--------------
+$ gh api graphql ... reviewThreads
+total=6 unresolved=0
+
+All six inline threads are resolved; CodeRabbit independently posted
+"Confirmed as addressed" on its four.
+
+Production impact
+-----------------
+None. No migration has been applied to the production project; the rollout
+chain and its (pause-all-ownerless) consequence are documented in
+PRODUCTION-RUNBOOK.md. Merging this PR changes no live rental behavior.
