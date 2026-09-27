@@ -63,11 +63,15 @@ A production deployment for the exact merge SHA exists and is READY:
 
 BUT it is not serving the public domain, and the project reports live=false.
 
-  $ curl -sS https://www.mdeai.co/rentals | grep -c 'Schedule viewing'
+  $ curl -sS https://www.mdeai.co/rentals | grep -o 'Schedule viewing' | wc -l
   10
 
-  $ curl -sSL '<protected>/rentals?_vercel_share=...' | grep -c 'Schedule viewing'
+  $ curl -sSL '<protected>/rentals?_vercel_share=...' | grep -o 'Schedule viewing' | wc -l
   0        # the merged deployment — correct
+
+  (Use `grep -o ... | wc -l`, not `grep -c`: the rendered HTML is a single line,
+  so `grep -c` counts matching LINES and would print 1 regardless of how many
+  CTAs the page contains.)
 
 Build fingerprint of the vendored rental chunk (/_next/static/chunks/3794-*.js):
 
@@ -653,7 +657,7 @@ F1c · Harden the rate-limit assertion (secondary flake, do after F1a/F1b).
 
 F2 · Once F1 is green, re-run the certification so ab1f28768 (or the then-tip)
      is promoted and aliased to www.mdeai.co. Verify with:
-       curl -sS https://www.mdeai.co/rentals | grep -c 'Schedule viewing'
+       curl -sS https://www.mdeai.co/rentals | grep -o 'Schedule viewing' | wc -l
      Expected after SAN-1349 is live: 0.
 
 F3 · Onboard ONE real broker (Product/Ops — not an engineering step). Without
