@@ -191,6 +191,20 @@ describe("SAN-1330 · a completed stream must belong to the requested run", () =
     );
   });
 
+  it("rejects a non-lifecycle event that names a different run", () => {
+    // Only RUN_STARTED/RUN_FINISHED define threadId/runId in AG-UI 0.0.52, but
+    // those schemas are `passthrough`. Keying identity off the FIELDS rather than
+    // the event type means anything that names a run must name ours.
+    const events = [
+      { type: "RUN_STARTED", threadId: THREAD, runId: "run-1" },
+      { type: "STEP_STARTED", stepName: "generate", threadId: "someone-else", runId: "run-1" },
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "run-1" },
+    ] as AgUiEvent[];
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "run-1" })).toThrow(
+      /different run/,
+    );
+  });
+
   it("accepts a stream that echoes the requested threadId and generated runId", async () => {
     const { url, requests } = await serve((seen, res) =>
       ok(res, echoTurn(seen)),

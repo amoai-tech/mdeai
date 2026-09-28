@@ -134,8 +134,25 @@ export function assertRunCompleted(
     throw new Error(`agent/run emitted RUN_FINISHED before RUN_STARTED; got: ${shown}`);
   }
 
+  // Identity is required of EVERY event that names a run, keyed off the fields
+  // rather than a hardcoded type list.
+  //
+  // In AG-UI 0.0.52 only RUN_STARTED and RUN_FINISHED define `threadId`/`runId`:
+  // RUN_ERROR, STEP_*, TEXT_MESSAGE_*, TOOL_CALL_*, STATE_* and RAW/CUSTOM
+  // define none (verified against @ag-ui/core's schemas). So those two are the
+  // only events that can carry an identity — but the schemas are `passthrough`,
+  // so keying off the fields rather than the type also catches an implementation
+  // that attaches an identity to some other event.
+  //
+  // `verifyEvents`, the SDK's own structural validator, never compares threadId
+  // or runId: ordering is its job, identity is ours.
   for (const event of events) {
-    if (event.type !== "RUN_STARTED" && event.type !== "RUN_FINISHED") continue;
+    const namesARun =
+      event.type === "RUN_STARTED" ||
+      event.type === "RUN_FINISHED" ||
+      event.threadId !== undefined ||
+      event.runId !== undefined;
+    if (!namesARun) continue;
     if (event.threadId !== expected.threadId || event.runId !== expected.runId) {
       throw new Error(
         `agent/run emitted ${event.type} for a different run — expected ` +

@@ -99,6 +99,17 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       // post-promotion smoke validates Maps and the full /chat UI on mdeai.co.
       const threadId = `san1330-${randomUUID()}`;
 
+      // Non-vacuity guard for the persistence assertion below. The threadId is a
+      // fresh UUID, so this exact thread cannot exist yet. Asserting that NOW is
+      // what makes the later `toBeGreaterThan(0)` mean something: it proves the
+      // counter discriminates, so the run itself must be what created the row —
+      // the check cannot pass on a leftover thread, and cannot pass if the server
+      // echoes correct ids but never persists anything.
+      expect(
+        await threadCount(identity!.userId, threadId),
+        "a fresh threadId must not already exist",
+      ).toBe(0);
+
       // The route authorizes with a server-side `auth.getUser()`, so the
       // injected Supabase session must travel as cookies. Only cookies for this
       // exact origin are forwarded.

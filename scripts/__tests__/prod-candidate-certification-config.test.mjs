@@ -38,7 +38,22 @@ test("keeps pre-promotion certification independent of Maps browser referrer res
   // names the exact thread that was requested — not merely any thread the user owns.
   assert.match(spec, /threadCount\(identity!\.userId,\s*sentThreadId\)/);
   assert.doesNotMatch(spec, /threadCount\(identity!\.userId\)/);
+  // The persistence check must be non-vacuous: the fresh thread has to count ZERO
+  // before the run, so the later > 0 proves the RUN created the row rather than a
+  // leftover satisfying it. Asserting only > 0 would pass even if the server
+  // echoed correct ids and persisted nothing.
+  assert.match(
+    spec,
+    /threadCount\(identity!\.userId,\s*threadId\)[\s\S]{0,120}?\.toBe\(0\)/,
+  );
+  assert.match(
+    spec,
+    /threadCount\(identity!\.userId,\s*sentThreadId\)[\s\S]{0,120}?\.toBeGreaterThan\(0\)/,
+  );
+  // Cleanup proves the throwaway user owns ZERO threads afterwards — not merely
+  // that the delete call was made.
   assert.match(spec, /deleteThrowawayIdentity\(identity\)/);
+  assert.match(spec, /threadCount\(userId\)[\s\S]{0,80}?\.toBe\(0\)/);
 });
 
 test("dispatches agent/run through the official AG-UI primitives", () => {
