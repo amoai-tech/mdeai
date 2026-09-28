@@ -134,6 +134,18 @@ Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase
 
 Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this repository are dominated by heuristics that do not hold here: it reads the 64-character sha256 tree hashes in `upstream.yaml` as hard-coded credentials, rejects `#2-entry-in-rationalization-table`-style fragments that GitHub's own slug rules accept, and reports every `path.join` in a test file as dynamic path construction. Making it required would block merges on those false positives rather than on defects. A `mergeStateStatus` of `UNSTABLE` caused by Codacy is therefore expected and is not a reason to hold a merge; a real Codacy finding is worth reading on its merits.
 
+## Merge approval
+
+`main` also requires one approving review. Treat that as a real gate rather than a formality: every other condition on the merge path is checked by a machine, so the approval is the only step that asks whether the change should exist at all.
+
+An administrator merge can bypass it. When that happens, the bypass is part of the change's history and has to be written down, not left to be inferred from `mergeStateStatus`:
+
+- **#140** and **#143**, both merged 2026-09-28 with an administrator override.
+- **Why:** they were the upper layers of a stacked sequence, so the layer below blocked review of everything above it; every automated check that could run (`floor`, `deterministic chromium`, `review`, `Vercel`) was already green, and neither PR touched runtime application code — they changed skills, CI checks, and documentation.
+- **What the reviewer would have been asked to check:** whether the skill and gate changes were worth landing at all, and whether the deferred finding in #140 (eval packs with no `expectations`, tracked as **SAN-1365**) should block the merge. The second question is still open, which is why that review thread was left unresolved rather than closed.
+
+That is a recorded reason, not a precedent. A production PR — anything that changes application behavior, a database, or a deploy — should satisfy the approval requirement normally; a bypass is defensible only for a non-runtime change whose reason is written down here.
+
 ## Verification
 
 For skill/bootstrap changes, run the narrow checks first:
