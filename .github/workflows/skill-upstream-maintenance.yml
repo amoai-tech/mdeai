@@ -14,6 +14,12 @@ on:
 # GitHub API, and a required check that can fail because someone else's service is
 # down is an availability liability — the same reason maps-skill-maintenance.yml
 # keeps its live checks off pull requests.
+# A manual dispatch must not overlap the scheduled run, or two jobs report the same
+# drift twice. Read-only check, so cancelling the older run costs nothing.
+concurrency:
+  group: skill-upstream-maintenance-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -29,8 +35,14 @@ jobs:
     env:
       SKILL_DRIFT_MODE: strict
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Pinned to the same commits the rest of the repository already uses; a mutable
+      # tag could be repointed at other code without any change here.
+      # persist-credentials: false — this job only reads, so the token has no reason to
+      # remain in .git/config for later steps.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
       - name: Vendored files still match their recorded hashes

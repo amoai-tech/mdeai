@@ -62,9 +62,29 @@ test("runs in strict drift mode so confirmed drift always fails", () => {
   assert.match(workflow(), /SKILL_DRIFT_MODE:\s*strict/);
 });
 
-test("uses the repository's pinned Node setup", () => {
+test("pins every action to a full commit SHA", () => {
   const text = workflow();
-  assert.match(text, /actions\/checkout@v4/);
-  assert.match(text, /actions\/setup-node@v4/);
+  const uses = [...text.matchAll(/uses:\s*(\S+)/g)].map((m) => m[1]);
+  assert.ok(uses.length > 0, "workflow declares no actions");
+  for (const ref of uses) {
+    assert.match(
+      ref,
+      /@[0-9a-f]{40}$/,
+      `${ref} is not pinned to a commit SHA — a mutable tag can be repointed`,
+    );
+  }
+});
+
+test("uses the repository's own pinned checkout and setup-node commits", () => {
+  const text = workflow();
+  assert.match(text, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262/);
+  assert.match(text, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
   assert.match(text, /node-version-file:\s*\.nvmrc/);
+});
+
+test("does not leave the token in .git/config and cannot overlap itself", () => {
+  const text = workflow();
+  assert.match(text, /persist-credentials:\s*false/);
+  assert.match(text, /^concurrency:/m);
+  assert.match(text, /group:\s*skill-upstream-maintenance-/);
 });
