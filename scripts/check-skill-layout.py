@@ -109,6 +109,35 @@ def retired_errors(canonical: Path, exposure: Path) -> list[str]:
     ]
 
 
+def windows_checkout_entries(skill_dir: Path, exposure_dir: Path) -> list[str]:
+    """Entries that look like symlinks git checked out as plain files on Windows.
+
+    Git for Windows disables symlink support unless the account holds
+    SeCreateSymbolicLinkPrivilege or Developer Mode is on, in which case it writes a
+    regular file whose contents are the link target. Without this check a Windows
+    contributor sees one "not a symlink" error per mirrored entry — 80-odd identical
+    lines with nothing pointing at the cause.
+    """
+    found: list[str] = []
+    for entry in sorted(p.name for p in skill_dir.iterdir()):
+        link = exposure_dir / entry
+        if not link.is_file() or link.is_symlink():
+            continue
+        try:
+            if link.stat().st_size > 4096:
+                continue
+            content = link.read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            continue
+        content = content.strip()
+        # A link target is a single short relative path, not prose.
+        if not content or '\n' in content:
+            continue
+        if (link.parent / content).resolve() == (skill_dir / entry).resolve():
+            found.append(entry)
+    return found
+
+
 def mirror_errors(skill_dir: Path, exposure_dir: Path) -> list[str]:
     """Every canonical entry must appear as a relative symlink, and nothing else."""
     errors: list[str] = []
@@ -174,6 +203,17 @@ def skill_errors(canonical: Path, exposure: Path, name: str) -> list[str]:
     if not exposure_dir.is_dir() or exposure_dir.is_symlink():
         errors.append(f'Codex exposure directory is not a real directory: {exposure_dir}')
         return errors
+
+    checked_out_as_files = windows_checkout_entries(skill_dir, exposure_dir)
+    if checked_out_as_files:
+        # Report the cause once per skill instead of once per mirrored entry.
+        return errors + [
+            f'{exposure_dir}: {len(checked_out_as_files)} mirror entries are plain files '
+            f'whose contents are their link targets (e.g. {checked_out_as_files[0]}).\n'
+            '    Git for Windows disables symlinks by default, so a clone without them\n'
+            '    lands this way. Re-clone with `git clone -c core.symlinks=true`, or enable\n'
+            '    Developer Mode and check the tree out again.'
+        ]
 
     errors.extend(mirror_errors(skill_dir, exposure_dir))
     errors.extend(link_errors(skill_dir, exposure_dir, source))
