@@ -10,6 +10,7 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
+import { assertRunCompleted, runConciergeAgent } from "./helpers/agui-concierge";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
@@ -20,34 +21,22 @@ if (process.env.CI && !baseUrl) {
 }
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
 
-function conciergeRunBody(threadId: string) {
-  return {
-    // `agent/run`, NOT `agent/connect`. handleConnectAgent only opens an SSE
-    // stream for the thread: parseConnectRequest validates the SAME
-    // RunAgentInputSchema, so `messages` is accepted and then silently dropped,
-    // and the agent never runs. Only handleRunAgent does
-    // agent.setMessages(input.messages) and dispatches the turn. With
-    // `agent/connect` this certification could return 200 and persist a thread
-    // without `ping` ever being processed.
-    method: "agent/run",
-    params: { agentId: "conciergeAgent" },
-    body: {
-      threadId,
-      runId: randomUUID(),
-      messages: [{ id: randomUUID(), role: "user", content: "ping" }],
-      tools: [],
-      context: [],
-      state: {},
-    },
-  };
-}
-
-async function threadCount(resourceId: string): Promise<number> {
+/**
+ * Count persisted AG-UI/Mastra threads.
+ *
+ * With `threadId`, this is a durability proof for one exact thread: `mastra_threads.id`
+ * IS the AG-UI threadId (Mastra's own `getThreadById` queries `WHERE id = $1`), and
+ * `resourceId` is the server-derived owner. Without it, this counts every thread a
+ * resource owns, which is what the cleanup assertion needs.
+ */
+async function threadCount(resourceId: string, threadId?: string): Promise<number> {
   const admin = await getSupabaseAdmin();
-  const { count, error } = await admin
+  let query = admin
     .from("mastra_threads")
     .select("id", { count: "exact", head: true })
     .eq("resourceId", resourceId);
+  if (threadId !== undefined) query = query.eq("id", threadId);
+  const { count, error } = await query;
   if (error) throw new Error(`mastra_threads count failed: ${error.message}`);
   return count ?? 0;
 }
@@ -109,36 +98,50 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       // production Maps browser key. Certify the AI path directly here; the deeper
       // post-promotion smoke validates Maps and the full /chat UI on mdeai.co.
       const threadId = `san1330-${randomUUID()}`;
-      const runResponse = await page.request.post(route("/api/copilotkit"), {
-        data: conciergeRunBody(threadId),
-        timeout: 120_000,
+
+      // Non-vacuity guard for the persistence assertion below. The threadId is a
+      // fresh UUID, so this exact thread cannot exist yet. Asserting that NOW is
+      // what makes the later `toBeGreaterThan(0)` mean something: it proves the
+      // counter discriminates, so the run itself must be what created the row —
+      // the check cannot pass on a leftover thread, and cannot pass if the server
+      // echoes correct ids but never persists anything.
+      expect(
+        await threadCount(identity!.userId, threadId),
+        "a fresh threadId must not already exist",
+      ).toBe(0);
+
+      // The route authorizes with a server-side `auth.getUser()`, so the
+      // injected Supabase session must travel as cookies. Only cookies for this
+      // exact origin are forwarded.
+      const cookies = await page.context().cookies(route("/"));
+      const cookieHeader = cookies
+        .map((cookie) => `${cookie.name}=${cookie.value}`)
+        .join("; ");
+
+      const { events, threadId: sentThreadId, runId } = await runConciergeAgent({
+        url: route("/api/copilotkit"),
+        threadId,
+        headers: { Cookie: cookieHeader },
       });
-      expect(runResponse.status(), "authenticated concierge agent/run").toBe(200);
 
-      // A 200 here proves nothing on its own. The AG-UI handler ALWAYS answers
-      // 200 with `text/event-stream`, and the Mastra adapter signals failure via
-      // observable.error(), which createSseEventResponse only logs before closing
-      // the stream. A run that dies in agent init, a tool, or the model therefore
-      // looks identical to a success: same status, same content type, a stream
-      // that simply ends. The adapter emits RUN_FINISHED from onRunFinished() and
-      // ONLY on that path, so its presence is the real proof the turn completed —
-      // the API-level equivalent of the waitForCopilotIdle the old UI path used.
-      expect(
-        runResponse.headers()["content-type"],
-        "agent/run must answer with an AG-UI event stream",
-      ).toContain("text/event-stream");
+      // Tie the wire request to the thread we chose, so the identity check below
+      // and the durability assertion both name the same, intended thread.
+      expect(sentThreadId).toBe(threadId);
 
-      const stream = await runResponse.text();
-      expect(stream, "run must emit RUN_STARTED").toMatch(
-        /"type"\s*:\s*"RUN_STARTED"/,
-      );
-      expect(
-        stream,
-        `run must emit RUN_FINISHED — a bare HTTP 200 does not certify the turn. Stream was:\n${stream.slice(0, 800)}`,
-      ).toMatch(/"type"\s*:\s*"RUN_FINISHED"/);
+      // Requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED — and that those
+      // lifecycle events carry the threadId WE ASKED FOR and the runId this
+      // request generated. A bare 200 would not: the AG-UI handler ALWAYS answers
+      // 200 with `text/event-stream`, and a failed run is signalled by the stream
+      // closing without RUN_FINISHED. Identity matters too, or a completed stream
+      // for another thread/run would certify a turn that never happened.
+      assertRunCompleted(events, { threadId, runId });
 
+      // Separate durability assertion, and it names the EXACT thread: the
+      // completed turn was persisted under the throwaway user AND under the
+      // threadId we requested. Counting any thread for the user would pass even
+      // if this turn had been written somewhere else.
       await expect
-        .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
+        .poll(() => threadCount(identity!.userId, sentThreadId), { timeout: 90_000 })
         .toBeGreaterThan(0);
     } finally {
       if (identity) {

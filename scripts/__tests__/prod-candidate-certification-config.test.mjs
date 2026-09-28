@@ -5,6 +5,7 @@ import { test } from "node:test";
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const config = fs.readFileSync("playwright.config.ts", "utf8");
 const spec = fs.readFileSync("e2e/prod-candidate-certification.spec.ts", "utf8");
+const agui = fs.readFileSync("e2e/helpers/agui-concierge.ts", "utf8");
 
 test("registers one focused candidate-certification Playwright command", () => {
   assert.equal(
@@ -27,20 +28,67 @@ test("keeps pre-promotion certification independent of Maps browser referrer res
     spec,
     /\b(?:gotoConcierge|sendConciergeMessage|waitForCopilotIdle)\s*\(/,
   );
-  assert.match(spec, /method:\s*["']agent\/run["']/);
+  // The AG-UI request now lives in the adapter, so the shape is asserted there.
+  assert.match(spec, /\brunConciergeAgent\(/);
+  // The stream check is tied to the thread we asked for and the generated runId,
+  // so a completed stream belonging to another thread/run cannot certify the turn.
+  assert.match(spec, /\bassertRunCompleted\(\s*events\s*,\s*\{\s*threadId\s*,\s*runId\s*\}\s*\)/);
+  assert.match(spec, /expect\(sentThreadId\)\.toBe\(threadId\)/);
+  // Durable persistence stays a SEPARATE assertion from the stream check, and it
+  // names the exact thread that was requested — not merely any thread the user owns.
+  assert.match(spec, /threadCount\(identity!\.userId,\s*sentThreadId\)/);
+  assert.doesNotMatch(spec, /threadCount\(identity!\.userId\)/);
+  // The persistence check must be non-vacuous: the fresh thread has to count ZERO
+  // before the run, so the later > 0 proves the RUN created the row rather than a
+  // leftover satisfying it. Asserting only > 0 would pass even if the server
+  // echoed correct ids and persisted nothing.
+  assert.match(
+    spec,
+    /threadCount\(identity!\.userId,\s*threadId\)[\s\S]{0,120}?\.toBe\(0\)/,
+  );
+  assert.match(
+    spec,
+    /threadCount\(identity!\.userId,\s*sentThreadId\)[\s\S]{0,120}?\.toBeGreaterThan\(0\)/,
+  );
+  // Cleanup proves the throwaway user owns ZERO threads afterwards — not merely
+  // that the delete call was made.
+  assert.match(spec, /deleteThrowawayIdentity\(identity\)/);
+  assert.match(spec, /threadCount\(userId\)[\s\S]{0,80}?\.toBe\(0\)/);
+});
+
+test("dispatches agent/run through the official AG-UI primitives", () => {
   // `agent/connect` only opens an SSE stream and never dispatches `messages`, so
   // a certification built on it can pass without the agent processing "ping".
-  assert.doesNotMatch(spec, /method:\s*["']agent\/connect["']/);
-  assert.match(spec, /agentId:\s*["']conciergeAgent["']/);
-  assert.match(spec, /threadId,/);
-  assert.match(spec, /runId:\s*randomUUID\(\)/);
-  assert.match(spec, /role:\s*["']user["']/);
-  assert.match(spec, /content:\s*["']ping["']/);
-  assert.match(spec, /page\.request\.post\(route\(["']\/api\/copilotkit["']\)/);
+  assert.match(agui, /method:\s*["']agent\/run["']/);
+  assert.doesNotMatch(agui, /method:\s*["']agent\/connect["']/);
+  assert.match(agui, /RunAgentInputSchema\.parse/);
+  assert.match(agui, /runHttpRequest\(/);
+  assert.match(agui, /transformHttpEventStream\(/);
+  assert.match(agui, /content = ["']ping["']/);
+  // Never point HttpAgent at this route: it posts the raw RunAgentInput with no
+  // `method`/`params` envelope, which the CopilotKit route does not accept.
+  assert.doesNotMatch(agui, /new HttpAgent\(/);
+});
+
+test("requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED for THIS run", () => {
   // A bare HTTP 200 certifies nothing: the AG-UI handler always answers 200 with
-  // `text/event-stream`, and a failed run looks identical to a successful one.
-  // The spec must assert the terminal AG-UI event that only a completed run emits.
-  assert.match(spec, /text\/event-stream/);
-  assert.match(spec, /RUN_FINISHED/);
+  // text/event-stream, and a failed run is signalled by the stream closing early.
+  assert.match(agui, /RUN_ERROR/);
+  assert.match(agui, /RUN_STARTED/);
+  assert.match(agui, /RUN_FINISHED/);
+  // Presence alone is not certification: the lifecycle events must carry the
+  // threadId AND runId this request sent, or a complete stream for a different
+  // turn would pass.
+  assert.match(agui, /event\.threadId !== expected\.threadId/);
+  assert.match(agui, /event\.runId !== expected\.runId/);
+  assert.match(agui, /expected:\s*\{\s*threadId:\s*string;\s*runId:\s*string\s*\}/);
+  // Order is part of the contract too: a reversed stream is malformed, not a
+  // completed turn, and must not certify anything.
+  assert.match(
+    agui,
+    /types\.indexOf\(["']RUN_FINISHED["']\)\s*<\s*types\.indexOf\(["']RUN_STARTED["']\)/,
+  );
+  // Decoding is the SDK's job, not string matching on the raw body.
   assert.doesNotMatch(spec, /runResponse\.json\(\)/);
+  assert.doesNotMatch(spec, /runResponse\.text\(\)/);
 });
