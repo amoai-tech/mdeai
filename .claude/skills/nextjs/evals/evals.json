@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": "1.0.0",
   "skill_name": "nextjs",
   "evals": [
     {
@@ -7,21 +7,33 @@
       "prompt": "Handle a focused Next.js change in MDE and identify the correct implementation boundary.",
       "expected_output": "Uses nextjs as the primary specialist and keeps unrelated domains out.",
       "files": [],
-      "expectations": ["inspects current repo state", "uses current official docs for version-sensitive behavior", "makes the smallest safe change"]
+      "expectations": [
+        "inspects current repo state",
+        "uses current official docs for version-sensitive behavior",
+        "makes the smallest safe change"
+      ]
     },
     {
       "id": 2,
       "prompt": "A bug appears near Next.js, but the root cause is not known. What owns diagnosis?",
       "expected_output": "Routes diagnosis to systematic-debugging while retaining nextjs for domain evidence.",
       "files": [],
-      "expectations": ["does not guess root cause", "uses systematic-debugging for diagnosis", "keeps specialist scope bounded"]
+      "expectations": [
+        "does not guess root cause",
+        "uses systematic-debugging for diagnosis",
+        "keeps specialist scope bounded"
+      ]
     },
     {
       "id": 3,
       "prompt": "A production-critical Next.js change is ready to ship. What proof is required?",
       "expected_output": "Requires targeted tests and independent task verification before Done.",
       "files": [],
-      "expectations": ["requires current evidence", "does not self-certify", "uses task-verifier for completion proof"]
+      "expectations": [
+        "requires current evidence",
+        "does not self-certify",
+        "uses task-verifier for completion proof"
+      ]
     },
     {
       "id": 4,

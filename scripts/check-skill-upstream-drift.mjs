@@ -48,11 +48,18 @@ export function classifyComparison(status) {
   return CLASSES.DRIFT;
 }
 
-/** Classify a non-2xx response. Rate limiting and outages are not drift evidence. */
-export function classifyHttpStatus(status) {
+/**
+ * Classify a non-2xx response.
+ *
+ * A 404 is only drift evidence when the request was authenticated. GitHub reports a
+ * private repository as 404 to an unauthenticated caller, so without a token a 404
+ * means "not visible to us", not "the upstream is gone". Reading it as drift would
+ * send a maintainer hunting for a repository that is merely private.
+ */
+export function classifyHttpStatus(status, { hasToken = false } = {}) {
   if (status === 403 || status === 429) return CLASSES.UPSTREAM_UNAVAILABLE;
   if (status >= 500) return CLASSES.UPSTREAM_UNAVAILABLE;
-  if (status === 404) return CLASSES.DRIFT; // repo gone -> the pin is no longer resolvable
+  if (status === 404 && !hasToken) return CLASSES.UPSTREAM_UNAVAILABLE;
   return CLASSES.DRIFT;
 }
 
@@ -107,11 +114,12 @@ export function loadPins(root) {
 }
 
 async function fetchComparison(slug, reviewed) {
+  const hasToken = Boolean(process.env.GITHUB_TOKEN);
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "mdeai-skill-drift" };
-  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (hasToken) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const url = `https://api.github.com/repos/${slug}/compare/${reviewed}...HEAD`;
   const response = await fetch(url, { headers });
-  if (!response.ok) return { classification: classifyHttpStatus(response.status) };
+  if (!response.ok) return { classification: classifyHttpStatus(response.status, { hasToken }) };
   const body = await response.json();
   return {
     classification: classifyComparison(body.status),

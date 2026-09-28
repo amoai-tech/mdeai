@@ -40,8 +40,15 @@ test("rate limiting and outages are not drift evidence", () => {
   assert.equal(classifyHttpStatus(503), CLASSES.UPSTREAM_UNAVAILABLE);
 });
 
-test("a missing upstream repository is DRIFT, not an outage", () => {
-  assert.equal(classifyHttpStatus(404), CLASSES.DRIFT);
+test("an authenticated 404 means the upstream is gone", () => {
+  assert.equal(classifyHttpStatus(404, { hasToken: true }), CLASSES.DRIFT);
+});
+
+test("an unauthenticated 404 is not read as drift", () => {
+  // GitHub reports a private repository as 404 to an anonymous caller, so reading
+  // this as drift would send a maintainer after a repository that merely is private.
+  assert.equal(classifyHttpStatus(404), CLASSES.UPSTREAM_UNAVAILABLE);
+  assert.equal(classifyHttpStatus(404, { hasToken: false }), CLASSES.UPSTREAM_UNAVAILABLE);
 });
 
 test("an unknown throw fails closed as DRIFT", () => {

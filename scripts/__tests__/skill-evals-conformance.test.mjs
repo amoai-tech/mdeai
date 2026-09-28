@@ -48,6 +48,11 @@ test("every skill eval file follows the official schema", () => {
       problems.push(`${skill}: evals must be a non-empty array`);
       continue;
     }
+    // `version` is an MDE addition, not part of the upstream schema. Keep it one type
+    // so tooling never has to handle both 1 and "1.0.0".
+    if ("version" in data && typeof data.version !== "string") {
+      problems.push(`${skill}: version must be a string, got ${JSON.stringify(data.version)}`);
+    }
 
     const ids = data.evals.map((item) => item.id);
     const expected = data.evals.map((_, index) => index + 1);
