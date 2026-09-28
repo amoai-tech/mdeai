@@ -60,11 +60,19 @@ select is(
 );
 
 -- ── 3. No surviving foreign key targets a fashionos relation ─────────────────────────────
+-- Resolved through catalog joins rather than `confrelid::regclass::text`. The text form is
+-- search_path-dependent: with `public` absent from the path it renders `public.fashionos_x`,
+-- which does not match a `fashionos%` pattern, so the assertion would pass silently while a
+-- dependent foreign key still existed. Joining pg_class/pg_namespace with an explicit
+-- `nspname = 'public'` filter is path-independent and cannot miss that way.
 select is(
   (select count(*)::int
-     from pg_constraint
-    where contype = 'f'
-      and confrelid::regclass::text like 'fashionos%'),
+     from pg_constraint c
+     join pg_class t on t.oid = c.confrelid
+     join pg_namespace n on n.oid = t.relnamespace
+    where c.contype = 'f'
+      and n.nspname = 'public'
+      and t.relname like 'fashionos\_%'),
   0,
   'SAN-1283: no foreign key targets a fashionos relation'
 );

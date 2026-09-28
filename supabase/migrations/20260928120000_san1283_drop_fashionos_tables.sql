@@ -47,15 +47,21 @@
 -- `fashionos_leads`). If this data must be recoverable, take a dump to a SECURE LOCATION
 -- OUTSIDE THIS REPOSITORY before applying:
 --
---     supabase db dump --data-only \
---       -t public.fashionos_activity_log -t public.fashionos_companies \
---       -t public.fashionos_lead_events -t public.fashionos_leads \
---       -t public.fashionos_outreach_drafts -t public.fashionos_people \
---       -t public.fashionos_sources -t public.fashionos_workflow_runs \
---       -f /secure/off-repo/san1283-fashionos-$(date +%F).sql
+--     pg_dump --data-only --no-owner --no-privileges \
+--       --table public.fashionos_activity_log --table public.fashionos_companies \
+--       --table public.fashionos_lead_events  --table public.fashionos_leads \
+--       --table public.fashionos_outreach_drafts --table public.fashionos_people \
+--       --table public.fashionos_sources      --table public.fashionos_workflow_runs \
+--       --file /secure/off-repo/san1283-fashionos-$(date +%F).sql \
+--       "$SUPABASE_DB_URL"
 --
--- Do NOT commit that file, attach it to Linear, or paste it into a PR. `DROP ... RESTRICT`
--- makes an unnoticed dependency fail; it does not make deleted rows recoverable.
+-- `pg_dump`, not `supabase db dump`: the CLI's dump command selects whole schemas
+-- (`--schema`) or excludes `schema.table` pairs (`--exclude`); it has no per-table `-t`
+-- flag, so the eight tables cannot be selected with it.
+--
+-- The connection string comes from the environment and is NEVER written here. Do NOT commit
+-- the dump, attach it to Linear, or paste it into a PR — it is unmasked PII. `DROP ...
+-- RESTRICT` makes an unnoticed dependency fail; it does not make deleted rows recoverable.
 --
 -- IDEMPOTENT: `IF EXISTS` makes a re-run a no-op, matching the style of the migration that
 -- closed the exposure (20260920120000_fashionos_rls_and_revoke.sql).
