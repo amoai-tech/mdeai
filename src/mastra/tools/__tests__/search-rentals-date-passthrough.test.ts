@@ -25,7 +25,7 @@ vi.mock("../../lib/intelligence-rental-search", () => ({
 }));
 
 /** Two Laureles rows and one elsewhere, so the neighbourhood filter is actually proven. */
-const APARTMENT_ROWS = [
+const mockApartmentRows = [
   {
     id: "apt-lau-1",
     title: "Bright 2BR in Laureles",
@@ -103,12 +103,20 @@ const APARTMENT_ROWS = [
 /**
  * Minimal in-memory stand-in for the Supabase query builder.
  *
+ * Named with a `mock` prefix, as are the fixture rows it reads, following Vitest's
+ * convention for anything a `vi.mock` factory refers to — those factories are hoisted
+ * above these declarations. This is belt-and-braces rather than a fix for an observed
+ * failure: the factories below only *close over* these names and read them when
+ * `createClient()` runs during a test, long after this file's body has executed, so an
+ * A/B check found no temporal-dead-zone error with a static import and no prefix
+ * either. The prefix keeps that true if a factory ever reads them eagerly.
+ *
  * Only the predicates this code path relies on are implemented, and only `ilike`
  * filters rows — enough to prove the neighbourhood filter works without reaching a
  * network. Every other builder method is accepted and ignored, so the stub does not
  * break when the real query gains a clause.
  */
-function apartmentQueryStub(rows: Record<string, unknown>[]) {
+function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
   const filters: Array<(row: Record<string, unknown>) => boolean> = [];
   let limit: number | undefined;
 
@@ -142,12 +150,17 @@ function apartmentQueryStub(rows: Record<string, unknown>[]) {
   return builder;
 }
 
+// Mock the whole module, not just the one function this path calls: a partial mock
+// makes any other consumer in the dependency chain throw "No <x> export is defined",
+// which surfaces as a stderr error and silently diverts the code to its mock fallback.
 vi.mock("@/lib/supabase/server-env", () => ({
+  getSupabaseServerUrl: () => "https://stub.supabase.co",
+  getSupabaseServerAnonKey: () => "stub-anon-key",
   getSupabaseServerAnonEnv: () => ({ url: "https://stub.supabase.co", anonKey: "stub-anon-key" }),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({ from: () => apartmentQueryStub(APARTMENT_ROWS) }),
+  createClient: () => ({ from: () => mockApartmentQueryStub(mockApartmentRows) }),
 }));
 
 describe("searchRentals — date params pass-through to intelligent path", () => {
@@ -187,6 +200,10 @@ describe("searchRentals — date params pass-through to intelligent path", () =>
 
     expect(result.results.length).toBeGreaterThan(0);
     expect(result.results.length).toBeLessThanOrEqual(5);
+    // Pin the source: MOCK_RENTALS also contains a Laureles row, so a silent fallback
+    // to the in-file mock would satisfy the neighbourhood assertion below while proving
+    // nothing about the Supabase path. These ids exist only in the stub.
+    expect(result.results.map((row) => row.id)).toEqual(["apt-lau-1", "apt-lau-2"]);
     // Proves the neighbourhood filter ran: the stub holds an El Poblado row too.
     expect(result.results.every((row) => row.neighborhood === "Laureles")).toBe(true);
   });
