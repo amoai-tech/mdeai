@@ -1,8 +1,8 @@
 vendor: Google Gemini
 repository: https://github.com/google-gemini/gemini-skills
 source_path: skills
-reviewed_commit: 80dd31dda25bbe1410207df0adb3e0d591c2c634
-reviewed_at: 2026-09-15
+reviewed_commit: 6fee1bec62d6a0ca92c1d0e34d62ff11f70c498a
+reviewed_at: 2026-09-28
 policy:
   active_skill: gemini
   upstream_files_are_read_only: true
@@ -17,6 +17,8 @@ sources:
   omni_flash:
     local: references/official/gemini-omni-flash-api
     activation: reference-only-until-adopted
+# Legacy provenance only, superseded by local_integrity below: this hash came from an
+# earlier review and does not describe the bytes on disk, so it is not re-verifiable here.
 combined_tree_sha256: 9cb960898d2a22bde524ac27ea08f2f5188ae5f54814ee99d5e7e20596d8d3e9
 hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
 
@@ -24,6 +26,6 @@ local_integrity:
   algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
   verified_at: "2026-09-28"
   trees:
-    references/official/gemini-api-dev: a93179c6973e61183586766611000b7068686afe55106e11756e3eb8c7b78355
-    references/official/gemini-live-api-dev: 4c4a926ce9546b89604c8874e4eb7a6932aa2735c804c163c408c37a8113a97f
+    references/official/gemini-api-dev: 5d784df0aba23a0620ca62f6e989a9237f3b2b5370a5d6d97a8b48d02779e8dd
+    references/official/gemini-live-api-dev: 48b24c477af1f20286f289f9cb2623f24a2a4d13fe188c359089f047ef6680d6
     references/official/gemini-omni-flash-api: 96bcfe0814192a9921dea9788b4687bf22ff0f3a431afb74b339d048e1a3102d
