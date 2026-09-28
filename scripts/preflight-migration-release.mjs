@@ -18,10 +18,26 @@
  * operator — so it prints those as the exact next commands.
  *
  * THE HAZARD THIS CATCHES THAT A CLEAN-TREE CHECK MISSES
- * `supabase db push` reads the working directory, not Git. An UNTRACKED .sql file under
- * supabase/migrations/ is therefore pushed just like a committed one, while `git status`
- * looks merely "noisy". Untracked files elsewhere in the repo cannot affect a push, so they
- * are reported as a warning rather than a failure.
+ * `supabase db push` reads the working directory, not Git. Any migration file it would apply
+ * but Git does not track therefore reaches production unreviewed, while `git status` looks
+ * merely "noisy". Files outside supabase/migrations/ cannot affect a push, so they are
+ * reported as a warning rather than a failure.
+ *
+ * WHY THIS SCANS THE FILESYSTEM INSTEAD OF ASKING `git ls-files --others`
+ * "What is untracked?" is a different question from "what will be pushed?", and Git answers it
+ * wrong in both directions:
+ *
+ *   gitignored .sql       Git calls it untracked-but-ignored, so `--exclude-standard` hides it
+ *                         — yet `db push` reads the directory and WILL apply it. (Confirmed
+ *                         against a live `db push --dry-run`.) This is the dangerous one.
+ *   UPPERCASE *.SQL and   Git reports them, but the CLI rejects anything that is not a
+ *   subdirectories        `^([0-9]+)_(.*)\.sql$` file at the top level, so it never applies
+ *                         them. Flagging these would fail a release over a no-op.
+ *
+ * So the guard mirrors the CLI: scan supabase/migrations/ the way the CLI does, then subtract
+ * what Git tracks. Rule taken from supabase/cli `ListLocalMigrations`
+ * (apps/cli-go/pkg/migration/list.go) and `migrateFilePattern`
+ * (apps/cli-go/pkg/migration/file.go).
  *
  * Usage:
  *   node scripts/preflight-migration-release.mjs [--no-fetch] [--allow-tracked-dirty]
@@ -34,11 +50,22 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 export const MIGRATIONS_DIR = "supabase/migrations";
 export const EXPECTED_BRANCH = "main";
+
+/**
+ * The CLI's own migration filename rule, copied from supabase/cli:
+ *
+ *   migrateFilePattern = regexp.MustCompile(`^([0-9]+)_(.*)\.sql$`)
+ *
+ * Case matters. A file that does not match makes `db push` print "Skipping migration <name>...
+ * (file name must match pattern "<timestamp>_name.sql")" and move on. Matching it exactly is
+ * what stops this guard failing a release over a file the CLI would ignore.
+ */
+const CLI_MIGRATION_FILE_PATTERN = /^[0-9]+_.*\.sql$/;
 
 /**
  * Decide pass/fail from already-gathered git state. Pure: no I/O, no globals.
@@ -47,9 +74,13 @@ export const EXPECTED_BRANCH = "main";
  * @param {string|null} state.fetchError       set when `git fetch origin` failed
  * @param {boolean} state.fetchSkipped         true when --no-fetch was passed
  * @param {boolean} state.allowTrackedDirty    true when --allow-tracked-dirty was passed
- * @param {string[]} state.trackedDirty        porcelain lines for modified tracked files
+ * @param {string[]|null} state.trackedDirty   porcelain lines for modified tracked files; null
+ *                                             when the status command failed
  * @param {boolean} state.migrationsDirExists  whether MIGRATIONS_DIR is present
- * @param {string[]} state.untrackedMigrations untracked .sql files under MIGRATIONS_DIR
+ * @param {string[]} state.pushableMigrations  top-level migration files the CLI would apply
+ * @param {string[]|null} state.trackedMigrations top-level migration files Git tracks; null
+ *                                             when git could not answer
+ * @param {string[]} state.ignoredMigrations   migration files Git ignores (diagnostic only)
  * @param {string[]} state.untrackedOther      untracked files elsewhere
  * @param {string|null} state.branch
  * @param {string|null} state.head
@@ -75,7 +106,9 @@ export function evaluatePreflight(state) {
   }
 
   // ── 2 · No modified TRACKED files ────────────────────────────────────────────────────────
-  if (state.trackedDirty.length === 0) {
+  if (state.trackedDirty === null) {
+    add("fail", "cannot determine whether tracked files are modified — refusing to assume a clean tree");
+  } else if (state.trackedDirty.length === 0) {
     add("pass", "no modified tracked files");
   } else if (state.allowTrackedDirty) {
     add(
@@ -90,17 +123,42 @@ export function evaluatePreflight(state) {
     );
   }
 
-  // ── 3 · Untracked migrations would still be pushed ───────────────────────────────────────
+  // ── 3 · Everything the CLI would apply must be in Git ────────────────────────────────────
+  // Compare like with like: the CLI's file list against Git's. Anything on the CLI's list that
+  // Git does not track reaches production unreviewed, and a gitignored file is the quietest way
+  // for that to happen — `--exclude-standard` hides exactly the file the CLI would apply.
   if (!state.migrationsDirExists) {
     add("warn", `${MIGRATIONS_DIR} does not exist — nothing to push`);
-  } else if (state.untrackedMigrations.length === 0) {
-    add("pass", `no untracked .sql files in ${MIGRATIONS_DIR}`);
-  } else {
+  } else if (state.trackedMigrations === null) {
+    // Fail closed. Assuming "all tracked" would silently clear the exact hazard this checks.
     add(
       "fail",
-      `${state.untrackedMigrations.length} untracked migration(s) would be pushed but are not in Git`,
-      state.untrackedMigrations,
+      `cannot determine which migrations Git tracks — refusing to assume the ${state.pushableMigrations.length} file(s) in ${MIGRATIONS_DIR} are committed`,
     );
+  } else {
+    const tracked = new Set(state.trackedMigrations);
+    const ignored = new Set(state.ignoredMigrations);
+    const notInGit = state.pushableMigrations.filter((name) => !tracked.has(name));
+
+    if (notInGit.length === 0) {
+      add(
+        "pass",
+        `every migration supabase db push would apply is tracked in Git (${state.pushableMigrations.length})`,
+      );
+    } else {
+      add(
+        "fail",
+        `${notInGit.length} migration(s) would be pushed but are not in Git:`,
+        notInGit.map(
+          (name) =>
+            `${MIGRATIONS_DIR}/${name}${
+              ignored.has(name)
+                ? "  (gitignored — db push reads the directory, so .gitignore does not protect it)"
+                : ""
+            }`,
+        ),
+      );
+    }
   }
 
   // Untracked files elsewhere cannot reach production, but they mean a noisy tree.
@@ -176,10 +234,66 @@ function lines(result) {
   return result.ok ? result.value.split("\n").filter(Boolean) : [];
 }
 
+/**
+ * Like `lines`, but null when the command failed. A failed read must never be rendered as
+ * "nothing found": that turns "could not check" into a silent PASS, which is the one failure
+ * mode a release guard must not have.
+ */
+function linesOrNull(result) {
+  return result.ok ? result.value.split("\n").filter(Boolean) : null;
+}
+
 function count(result) {
   if (!result.ok) return null;
   const n = Number.parseInt(result.value, 10);
   return Number.isFinite(n) ? n : null;
+}
+
+const TRACKED_PREFIX = `${MIGRATIONS_DIR}/`;
+
+/** Strip the directory prefix from the paths `git ls-files` returns for MIGRATIONS_DIR. */
+function topLevelNames(relPaths) {
+  return relPaths
+    .filter((p) => p.startsWith(TRACKED_PREFIX))
+    .map((p) => p.slice(TRACKED_PREFIX.length))
+    .filter((name) => name && !name.includes("/"));
+}
+
+/**
+ * Migration file names `supabase db push` would consider, using the CLI's own rule: a
+ * non-directory entry at the TOP LEVEL whose name matches CLI_MIGRATION_FILE_PATTERN.
+ * Returns [] when the directory is unreadable; `migrationsDirExists` reports that case.
+ *
+ * One deliberate difference from the CLI: it also skips a legacy `<timestamp>_init.sql` older
+ * than 20211209000000, but only when that file happens to be the first directory entry. This
+ * reports such a file rather than hiding it — over-reporting is the safe direction for a
+ * release guard, and this repository has no `_init.sql`.
+ */
+export function listPushableMigrations(dir = MIGRATIONS_DIR) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => !entry.isDirectory() && CLI_MIGRATION_FILE_PATTERN.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/** Migration files Git tracks, so a committed migration is never reported as a hazard. Null
+ *  when git could not answer, because "could not check" must not look like "none found". */
+function trackedMigrations() {
+  const result = tryGit("ls-files", "--cached", MIGRATIONS_DIR);
+  return result.ok ? topLevelNames(lines(result)) : null;
+}
+
+/** Diagnostic only: lets the FAIL say "gitignored", because that changes what the fix is. */
+function ignoredMigrations() {
+  return topLevelNames(
+    lines(tryGit("ls-files", "--others", "--ignored", "--exclude-standard", MIGRATIONS_DIR)),
+  );
 }
 
 export function gatherState(argv = new Set()) {
@@ -204,11 +318,11 @@ export function gatherState(argv = new Set()) {
     fetchError,
     fetchSkipped: skipFetch,
     allowTrackedDirty,
-    trackedDirty: lines(tryGit("status", "--porcelain", "--untracked-files=no")),
+    trackedDirty: linesOrNull(tryGit("status", "--porcelain", "--untracked-files=no")),
     migrationsDirExists: existsSync(MIGRATIONS_DIR),
-    untrackedMigrations: lines(tryGit("ls-files", "--others", "--exclude-standard", MIGRATIONS_DIR)).filter(
-      (f) => f.endsWith(".sql"),
-    ),
+    pushableMigrations: listPushableMigrations(),
+    trackedMigrations: trackedMigrations(),
+    ignoredMigrations: ignoredMigrations(),
     untrackedOther: lines(tryGit("ls-files", "--others", "--exclude-standard")).filter(
       (f) => f && !f.startsWith(`${MIGRATIONS_DIR}/`),
     ),

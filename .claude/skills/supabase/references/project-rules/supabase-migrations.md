@@ -87,10 +87,27 @@ Read every line. If it contains anything outside the approved task, **stop**. Do
 | Check | Failure it prevents |
 | -- | -- |
 | Clean tracked tree | A dirty migration is pushed under a clean-looking commit. |
-| **No untracked `.sql` under `supabase/migrations/`** | `db push` reads the working directory, not Git. An untracked migration **is** pushed. A generic "working tree clean" check does not catch this because untracked files elsewhere make the tree merely *noisy*, not obviously dangerous. |
+| **Every migration `db push` would apply is tracked in Git** | `db push` reads the working directory, not Git, so an uncommitted migration **is** pushed. A generic "working tree clean" check misses it: untracked files elsewhere make the tree merely *noisy*, not obviously dangerous. |
 | Branch is `main` | **This is the SAN-1313 near-miss.** A feature branch carried two unreviewed migrations; a push from it would have sent them to production alongside the intended one. |
 | `HEAD == origin/main` | A release must ship what is on the remote, not a local commit that was never reviewed. |
 | Ledger matches Git | See below. |
+
+#### Why that check scans the directory instead of asking Git
+
+"Which files are untracked?" is a different question from "which files will be pushed?", and Git answers it wrong in both directions:
+
+| File on disk under `supabase/migrations/` | `git ls-files --others --exclude-standard` | `supabase db push` | Consequence |
+| -- | -- | -- | -- |
+| gitignored `*.sql` | hidden — `--exclude-standard` skips it | **applied** | The check says PASS while production receives an unreviewed migration. |
+| `*.SQL`, `*.Sql` | reported | skipped — *"file name must match pattern `<timestamp>_name.sql`"* | False alarm; blocks a release over a file that is never applied. |
+| anything in a subdirectory | reported | skipped — `db push` reads the top level only | False alarm. |
+
+So the guard lists what the CLI would actually apply and subtracts what Git tracks. The rule is taken from supabase/cli `ListLocalMigrations` (`apps/cli-go/pkg/migration/list.go`) and `migrateFilePattern` (`apps/cli-go/pkg/migration/file.go`), and was confirmed against a live `db push --dry-run`: the dry run pushed a gitignored `.sql` while skipping both an uppercase `.SQL` and a subdirectory file.
+
+Two things follow from the third row:
+
+* **`.gitignore` does not protect production.** A gitignored migration is still applied. Force-add it (`git add -f`) if it belongs in the release, or delete it — do not leave it on disk.
+* Archived migrations belong in a subdirectory, which is why `supabase/migrations/_archive-not-on-remote/` is inert and safe to keep.
 
 ### The ledger and Git can disagree — check both
 

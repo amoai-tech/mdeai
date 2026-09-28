@@ -9,8 +9,16 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { evaluatePreflight, EXPECTED_BRANCH, MIGRATIONS_DIR } from "../preflight-migration-release.mjs";
+import {
+  evaluatePreflight,
+  listPushableMigrations,
+  EXPECTED_BRANCH,
+  MIGRATIONS_DIR,
+} from "../preflight-migration-release.mjs";
 
 /** A state that passes every check, so each test can vary exactly one field. */
 function cleanState(overrides = {}) {
@@ -20,7 +28,9 @@ function cleanState(overrides = {}) {
     allowTrackedDirty: false,
     trackedDirty: [],
     migrationsDirExists: true,
-    untrackedMigrations: [],
+    pushableMigrations: [],
+    trackedMigrations: [],
+    ignoredMigrations: [],
     untrackedOther: [],
     branch: EXPECTED_BRANCH,
     head: "a".repeat(40),
@@ -69,13 +79,46 @@ describe("preflight-migration-release", () => {
     });
   });
 
-  describe("untracked migrations — the hazard a clean-tree check misses", () => {
-    it("fails and names an untracked .sql under the migrations directory", () => {
-      const planted = `${MIGRATIONS_DIR}/20260928150000_probe.sql`;
-      const result = evaluatePreflight(cleanState({ untrackedMigrations: [planted] }));
+  describe("migrations the CLI would apply but Git does not track", () => {
+    const PUSHED = "20260928150000_probe.sql";
+
+    it("fails and names a migration that would be pushed but is not in Git", () => {
+      const result = evaluatePreflight(cleanState({ pushableMigrations: [PUSHED] }));
       assert.equal(result.failures, 1);
       assert.match(failureMessages(result).join("\n"), /would be pushed but are not in Git/);
-      assert.deepEqual(result.checks.find((c) => c.level === "fail").details, [planted]);
+      assert.deepEqual(result.checks.find((c) => c.level === "fail").details, [
+        `${MIGRATIONS_DIR}/${PUSHED}`,
+      ]);
+    });
+
+    // The regression this change exists for. `git ls-files --others --exclude-standard` hides a
+    // gitignored migration, but `supabase db push` reads the directory and applies it — so the
+    // old check reported PASS while production would have received an unreviewed migration.
+    // Confirmed against a live `db push --dry-run`, which pushed exactly this file.
+    it("fails on a gitignored migration, and says .gitignore does not protect it", () => {
+      const result = evaluatePreflight(
+        cleanState({ pushableMigrations: [PUSHED], ignoredMigrations: [PUSHED] }),
+      );
+      assert.equal(result.failures, 1);
+      const details = result.checks.find((c) => c.level === "fail").details.join("\n");
+      assert.match(details, /gitignored/);
+      assert.match(details, /\.gitignore does not protect it/);
+    });
+
+    it("passes when every migration the CLI would apply is tracked in Git", () => {
+      const result = evaluatePreflight(
+        cleanState({ pushableMigrations: [PUSHED], trackedMigrations: [PUSHED] }),
+      );
+      assert.equal(result.failures, 0, messages(result));
+      assert.match(messages(result), /tracked in Git/);
+    });
+
+    it("fails closed when git cannot say which migrations are tracked", () => {
+      const result = evaluatePreflight(
+        cleanState({ pushableMigrations: [PUSHED], trackedMigrations: null }),
+      );
+      assert.equal(result.failures, 1);
+      assert.match(messages(result), /cannot determine which migrations Git tracks/);
     });
 
     it("only warns about untracked files outside the migrations directory", () => {
@@ -89,6 +132,54 @@ describe("preflight-migration-release", () => {
       const result = evaluatePreflight(cleanState({ migrationsDirExists: false }));
       assert.equal(result.failures, 0);
       assert.match(messages(result), /does not exist — nothing to push/);
+    });
+  });
+
+  // Fidelity to the CLI is what makes the check above trustworthy: it must not fail a release
+  // over a file `db push` would ignore. Rule taken from supabase/cli `ListLocalMigrations`
+  // (`^([0-9]+)_(.*)\.sql$`, top level only, directories skipped) and verified against a live
+  // `supabase db push --dry-run`, which pushed a gitignored .sql while skipping an UPPERCASE
+  // .SQL and a subdirectory.
+  describe("listPushableMigrations mirrors the CLI's file selection", () => {
+    function fixture(entries) {
+      const dir = mkdtempSync(join(tmpdir(), "preflight-migrations-"));
+      for (const [name, isDir] of entries) {
+        if (isDir) mkdirSync(join(dir, name));
+        else writeFileSync(join(dir, name), "-- probe\n");
+      }
+      return dir;
+    }
+
+    it("selects only top-level .sql files matching <digits>_<name>.sql", () => {
+      const dir = fixture([
+        ["20260928120000_real.sql", false],
+        ["20260928130000_also_real.sql", false],
+        ["20990101000000_uppercase.SQL", false],
+        ["notes.md", false],
+        ["_archive-not-on-remote", true],
+      ]);
+      try {
+        assert.deepEqual(listPushableMigrations(dir), [
+          "20260928120000_real.sql",
+          "20260928130000_also_real.sql",
+        ]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not descend into subdirectories, where db push never looks", () => {
+      const dir = fixture([["nested", true]]);
+      try {
+        writeFileSync(join(dir, "nested", "20260928120000_nested.sql"), "-- nested\n");
+        assert.deepEqual(listPushableMigrations(dir), []);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns nothing instead of throwing when the directory is absent", () => {
+      assert.deepEqual(listPushableMigrations(join(tmpdir(), "preflight-migrations-absent")), []);
     });
   });
 
@@ -107,6 +198,15 @@ describe("preflight-migration-release", () => {
       );
       assert.equal(result.failures, 0);
       assert.equal(result.warnings, 1);
+    });
+
+    // Regression: a failed `git status` yielded [], which rendered as "no modified tracked
+    // files" — a PASS for a check that never ran.
+    it("fails rather than assuming a clean tree when git status cannot run", () => {
+      const result = evaluatePreflight(cleanState({ trackedDirty: null }));
+      assert.equal(result.failures, 1);
+      assert.match(messages(result), /cannot determine whether tracked files are modified/);
+      assert.doesNotMatch(messages(result), /no modified tracked files/);
     });
   });
 
@@ -169,7 +269,7 @@ describe("preflight-migration-release", () => {
           head: "b".repeat(40),
           ahead: 1,
           trackedDirty: [" M package.json"],
-          untrackedMigrations: [`${MIGRATIONS_DIR}/probe.sql`],
+          pushableMigrations: ["20260928150000_probe.sql"],
         }),
       );
       assert.equal(result.failures, 4, messages(result));
