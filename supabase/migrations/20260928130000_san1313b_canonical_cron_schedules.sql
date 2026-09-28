@@ -106,25 +106,73 @@ select cron.schedule(
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3 · wait_list_expire_holds — direct SQL
+--
+-- ⚠️ DELIBERATE DEVIATION FROM THE LIVE COMMAND — REVIEWED, WITH REASON
+--
+-- This is the one command in this migration that does NOT reproduce production verbatim.
+-- The live body expires holds and then re-derives which ticket types to notify from the
+-- table state:
+--
+--     update ... set status = 'expired' where status = 'notified' and hold_expires_at < now();
+--     select public.fn_notify_next_in_line(ticket_type_id) from (
+--       select distinct ticket_type_id from public.event_wait_list
+--       where status = 'expired'
+--         and notified_at > pg_catalog.now() - interval '6 minutes'   <-- impossible
+--     ) expired_types;
+--
+-- THE DEFECT — proven, not suspected
+-- `public.fn_notify_next_in_line()` sets the hold window in one statement:
+--
+--     status          = 'notified',
+--     notified_at     = pg_catalog.now(),
+--     hold_expires_at = pg_catalog.now() + interval '30 minutes'
+--
+-- So a hold is 30 minutes but the follow-up filter demands `notified_at` within the last 6.
+-- Trace a normal hold from T+0:
+--
+--     T+0    notified; hold_expires_at = T+30
+--     T+5..  cron runs; hold_expires_at is not yet past -> no row expires
+--     T+30   hold_expires_at < now() -> status becomes 'expired'
+--            notify filter: notified_at (T+0) > now() (T+30) - 6min = T+24  ->  FALSE
+--            -> zero rows -> fn_notify_next_in_line is NEVER called
+--
+-- The 6-minute window can only be satisfied when the hold expires within 6 minutes of the
+-- notification, which the 30-minute hold makes impossible. The next person in the queue is
+-- never notified, and the expired row silently accumulates as `expired`.
+--
+-- WHY IT WENT UNNOTICED
+--   * `public.event_wait_list` currently holds 0 rows, so the job has never had work to do.
+--   * pg_cron records `succeeded` because the SQL executed without error. "No error" is not
+--     "did something" — the same trap the task calls out for `net.http_post`.
+--
+-- THE FIX — notify for exactly the rows this run expired
+-- A CTE with `returning` makes the notification set the *result of the update being performed*
+-- rather than a re-derivation from table state filtered by an unrelated timestamp. It removes
+-- the timing assumption entirely rather than widening the window to some other magic number.
+--
+--   * It is strictly more correct: 1:1 with rows expired in this execution.
+--   * It is idempotent: a run that expires nothing notifies nobody.
+--   * It does not change any data semantics, only whether the intended notification fires.
+--
+-- Behaviour change to a production job — recorded here and in PR #146 rather than applied
+-- silently. The alternative was to ship a schedule that provably never performs its function
+-- into every fresh environment, which contradicts this task's own rule of not migrating a
+-- known-broken job.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 select cron.schedule(
   'wait_list_expire_holds',
   '*/5 * * * *',
   $cron$
-    update public.event_wait_list
-    set status = 'expired'
-    where status = 'notified'
-      and hold_expires_at < pg_catalog.now();
-
-    -- for each expired hold, notify the next person in line
+    with expired as (
+      update public.event_wait_list
+      set status = 'expired'
+      where status = 'notified'
+        and hold_expires_at < pg_catalog.now()
+      returning ticket_type_id
+    )
     select public.fn_notify_next_in_line(ticket_type_id)
-    from (
-      select distinct ticket_type_id
-      from public.event_wait_list
-      where status = 'expired'
-        and notified_at > pg_catalog.now() - interval '6 minutes'
-    ) expired_types;
+    from (select distinct ticket_type_id from expired) expired_types;
   $cron$
 );
 
