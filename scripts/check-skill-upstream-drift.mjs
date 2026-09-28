@@ -31,6 +31,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const CLASSES = Object.freeze({
   OK: "OK",
@@ -108,7 +109,11 @@ export function loadPins(root) {
     const manifest = path.join(skills, entry.name, "upstream.yaml");
     if (!fs.existsSync(manifest)) continue;
     const parsed = parseManifest(fs.readFileSync(manifest, "utf8"));
-    if (parsed) pins.push({ skill: entry.name, ...parsed });
+    // Fail closed. Skipping an unreadable manifest would drop that skill from the
+    // report entirely, so a drifted tree would read as clean — the same reason
+    // `check-skill-upstream.py` refuses to skip a hash it cannot read.
+    if (!parsed) throw new Error(`${manifest}: cannot read repository/reviewed_commit`);
+    pins.push({ skill: entry.name, ...parsed });
   }
   return pins;
 }
@@ -193,5 +198,9 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-const invokedDirectly = import.meta.url === `file://${process.argv[1]}`;
+// `file://${process.argv[1]}` breaks on a Windows path separator, a drive letter, or
+// any space or non-ASCII character in the checkout path, and then silently skips
+// `main()` — the alarm would exit 0 having checked nothing.
+const invokedDirectly =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedDirectly) await main();

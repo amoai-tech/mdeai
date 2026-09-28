@@ -23,33 +23,54 @@ const output = await agent.generate("Publish listing 123", {
 });
 
 if (output.finishReason === "suspended") {
-  console.log(output.suspendPayload.toolName, output.suspendPayload.toolCallId);
+  const { toolName, toolCallId } = output.suspendPayload;
 
-  await agent.approveToolCallGenerate({
-    runId: output.runId,
-    toolCallId: output.suspendPayload.toolCallId,
-  });
-  // or: agent.declineToolCallGenerate({ runId, toolCallId })
+  // The decision comes from a person. The pause exists so that someone chooses,
+  // so approving here without asking defeats the point of the pause — and an
+  // agent that approves its own consequential write is exactly the failure this
+  // surface is meant to prevent.
+  const approved = await askHuman(`Run ${toolName}?`);
+
+  const result = approved
+    ? await agent.approveToolCallGenerate({ runId: output.runId, toolCallId })
+    : await agent.declineToolCallGenerate({ runId: output.runId, toolCallId });
 }
 ```
 
-`finishReason === "suspended"` is the signal, not an exception. Treat a missing
-`runId` or `toolCallId` as a hard failure: resuming with an invented id is how an
-approval silently attaches to the wrong call.
+`finishReason === "suspended"` is the signal, not an exception. Treat a missing `runId`
+as a hard failure: resuming with an invented id is how an approval silently attaches to
+the wrong call.
 
 ## Streaming
 
-The suspension arrives as a chunk, so a streaming UI must branch on it rather than
-assuming the stream only ends in text:
+The pending decision arrives as a chunk, so a streaming UI must branch on it rather
+than assuming the stream only ends in text:
 
 ```ts
 for await (const chunk of stream.fullStream) {
-  if (chunk.type === "tool-call-suspended" && chunk.payload.toolName === "submit_plan") {
-    const resumed = await agent.resumeStream({ action: "approved" }, { runId: stream.runId });
+  if (chunk.type === "tool-call-approval" && chunk.payload.toolName === "submit_plan") {
+    const approved = await askHuman(`Run ${chunk.payload.toolName}?`);
+    const resumed = approved
+      ? await agent.approveToolCall({ runId: stream.runId })
+      : await agent.declineToolCall({ runId: stream.runId });
     for await (const c of resumed.textStream) process.stdout.write(c);
   }
 }
 ```
+
+Approval and suspension are **different chunks with different APIs**, and mixing them
+is the most common mistake on this surface:
+
+| | Approval (`requireToolApproval` / `requireApproval`) | Custom suspend (`suspend()` / `suspendSchema`) |
+|---|---|---|
+| Stream chunk | `tool-call-approval` | `tool-call-suspended` |
+| Payload | `toolCallId`, `toolName`, `args` | the tool's `suspendSchema` shape |
+| Continue with | `approveToolCall({ runId })` / `declineToolCall({ runId })` | `resumeStream(data, { runId })` |
+| Non-streaming signal | `finishReason === "suspended"` | `finishReason === "suspended"` |
+
+`toolCallId` is optional on both `approveToolCall` and `approveToolCallGenerate`, so
+`runId` alone is enough for a single pending call. Pass it when more than one call
+could be pending and you need to name the right one.
 
 ## Resuming across turns
 

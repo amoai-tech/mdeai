@@ -11,7 +11,7 @@
     {
       "id": 2,
       "prompt": "Should we ingest this listing feed via RESO/IDX so brokers can import in bulk?",
-      "expected_output": "Do not adopt MLS/IDX/RESO guidance unless it was explicitly requested. Default to V1 marketplace guidance and confirm the request before switching models — the standards change the whole data contract.",
+      "expected_output": "Assess the requested RESO/IDX option against the V1 marketplace data contract rather than treating it as unsolicited, and require explicit confirmation before switching models — MLS/IDX/RESO changes the whole data contract, so V1 stays the default until that switch is agreed.",
       "files": []
     },
     {
