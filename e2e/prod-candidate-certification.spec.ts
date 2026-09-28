@@ -10,6 +10,7 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
+import { assertRunCompleted, runConciergeAgent } from "./helpers/agui-concierge";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
@@ -19,28 +20,6 @@ if (process.env.CI && !baseUrl) {
   throw new Error("PROD_SMOKE_BASE_URL is required in CI for candidate certification");
 }
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
-
-function conciergeRunBody(threadId: string) {
-  return {
-    // `agent/run`, NOT `agent/connect`. handleConnectAgent only opens an SSE
-    // stream for the thread: parseConnectRequest validates the SAME
-    // RunAgentInputSchema, so `messages` is accepted and then silently dropped,
-    // and the agent never runs. Only handleRunAgent does
-    // agent.setMessages(input.messages) and dispatches the turn. With
-    // `agent/connect` this certification could return 200 and persist a thread
-    // without `ping` ever being processed.
-    method: "agent/run",
-    params: { agentId: "conciergeAgent" },
-    body: {
-      threadId,
-      runId: randomUUID(),
-      messages: [{ id: randomUUID(), role: "user", content: "ping" }],
-      tools: [],
-      context: [],
-      state: {},
-    },
-  };
-}
 
 async function threadCount(resourceId: string): Promise<number> {
   const admin = await getSupabaseAdmin();
@@ -109,34 +88,29 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       // production Maps browser key. Certify the AI path directly here; the deeper
       // post-promotion smoke validates Maps and the full /chat UI on mdeai.co.
       const threadId = `san1330-${randomUUID()}`;
-      const runResponse = await page.request.post(route("/api/copilotkit"), {
-        data: conciergeRunBody(threadId),
-        timeout: 120_000,
+
+      // The route authorizes with a server-side `auth.getUser()`, so the
+      // injected Supabase session must travel as cookies. Only cookies for this
+      // exact origin are forwarded.
+      const cookies = await page.context().cookies(route("/"));
+      const cookieHeader = cookies
+        .map((cookie) => `${cookie.name}=${cookie.value}`)
+        .join("; ");
+
+      const { events } = await runConciergeAgent({
+        url: route("/api/copilotkit"),
+        threadId,
+        headers: { Cookie: cookieHeader },
       });
-      expect(runResponse.status(), "authenticated concierge agent/run").toBe(200);
 
-      // A 200 here proves nothing on its own. The AG-UI handler ALWAYS answers
-      // 200 with `text/event-stream`, and the Mastra adapter signals failure via
-      // observable.error(), which createSseEventResponse only logs before closing
-      // the stream. A run that dies in agent init, a tool, or the model therefore
-      // looks identical to a success: same status, same content type, a stream
-      // that simply ends. The adapter emits RUN_FINISHED from onRunFinished() and
-      // ONLY on that path, so its presence is the real proof the turn completed —
-      // the API-level equivalent of the waitForCopilotIdle the old UI path used.
-      expect(
-        runResponse.headers()["content-type"],
-        "agent/run must answer with an AG-UI event stream",
-      ).toContain("text/event-stream");
+      // Requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED. A bare 200 would
+      // not: the AG-UI handler ALWAYS answers 200 with `text/event-stream`, and
+      // a failed run is signalled by the stream closing without RUN_FINISHED.
+      assertRunCompleted(events);
 
-      const stream = await runResponse.text();
-      expect(stream, "run must emit RUN_STARTED").toMatch(
-        /"type"\s*:\s*"RUN_STARTED"/,
-      );
-      expect(
-        stream,
-        `run must emit RUN_FINISHED — a bare HTTP 200 does not certify the turn. Stream was:\n${stream.slice(0, 800)}`,
-      ).toMatch(/"type"\s*:\s*"RUN_FINISHED"/);
-
+      // Separate durability assertion: the completed turn is persisted under the
+      // throwaway user. Deliberately NOT folded into assertRunCompleted — the
+      // stream proves the turn ran, this proves it was stored.
       await expect
         .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
         .toBeGreaterThan(0);
