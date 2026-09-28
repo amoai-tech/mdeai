@@ -1,8 +1,8 @@
 vendor: Mastra
 repository: https://github.com/mastra-ai/skills
 source_path: skills/mastra
-reviewed_commit: 08428f9b47cdae1131d12cbd9f8e0886ff476211
-reviewed_at: 2026-09-15
+reviewed_commit: 1ddd3219f44770f5b84d9930f99fccd6fd1890ed
+reviewed_at: 2026-09-28
 policy:
   active_skill: mastra
   upstream_files_are_read_only: true
@@ -10,6 +10,8 @@ policy:
   update_flow: detect-diff-review-evals-pin
 source:
   local: references/official/mastra
+  # Legacy provenance only, superseded by local_integrity below: this hash came from an
+  # earlier review and does not describe the bytes on disk, so it is not re-verifiable here.
   tree_sha256: 8724ea72ddd1ff318c93750188172286601f76f378dc07d016bcba53e3ca69c2
 optional_upstream_skills:
 - mastra-factory
@@ -19,4 +21,4 @@ local_integrity:
   algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
   verified_at: "2026-09-28"
   trees:
-    references/official/mastra: 7ef472c4b119ddd05d55ae6ddd8df329cdedd81078523f8801132c45971aaaa6
+    references/official/mastra: d57ad5a579907ee07519026eacffe9ebe033c482225cc8958755c86121d9294d
