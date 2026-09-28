@@ -29,6 +29,42 @@ jobs:
       github.event.client_payload.project.name == 'mdeai'
 
     steps:
+      # SAN-1362 — fail closed BEFORE anything fallible, so no failure path can
+      # leave the candidate promotable with no certification result.
+      #
+      # The candidate must not be promotable until certification has actually
+      # passed. Nothing here needs the repository: the SHA arrives in the dispatch
+      # payload and `gh` is preinstalled, so this runs first — ahead of checkout
+      # and ahead of trust-boundary validation. If either of those fails, the
+      # block is already published.
+      #
+      # Root cause, from the candidate's own commit-status timeline — Vercel
+      # released the alias while this context was still `pending`:
+      #
+      #   23:47:32  Vercel = pending                     (deploying)
+      #   23:49:28  Vercel = pending    "Waiting for checks to complete"
+      #   23:49:39  production-certification = pending
+      #   23:51:42  Vercel = success                     <- alias assigned HERE
+      #   23:53:00  production-certification = success   <- 78s LATER
+      #
+      # The project's deployment check is correctly configured
+      # (`blocks: deployment-alias`, `requires: deployment-url`, timeout 900), so
+      # the gap is not misconfiguration — a non-terminal `pending` simply did not
+      # hold. Publishing a terminal `failure` removes the pending state entirely.
+      - name: Block promotion while certification is in flight
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state=failure \
+            -f context=production-certification \
+            -f description="Certification in flight — promotion blocked" \
+            -f target_url="${RUN_URL}" >/dev/null
+          echo "published production-certification=failure for ${SHA}"
+
       - name: Checkout exact deployed commit
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
 
@@ -36,12 +72,6 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/validate-vercel-deployment-event.mjs
-
-      - name: Publish certification status to candidate SHA
-        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
-        with:
-          name: production-certification
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -56,6 +86,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Certify exact staged candidate
+        id: certify
         env:
           PROD_SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
           SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
@@ -66,3 +97,33 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
+
+      # SAN-1362 — release the block only on a proven pass. `if: always()` keeps
+      # a failed certification from leaving the context stuck on the in-flight
+      # `failure`, so the real result is what a re-run and the dashboard show.
+      #
+      # `target_url` points the status "Details" link at this run; without it the
+      # failure is not diagnosable from the status list, because the candidate is
+      # a throwaway URL that no longer exists once the deployment is cleaned up.
+      - name: Publish certification result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ "${CERTIFY_OUTCOME}" = "success" ]; then
+            state=success
+            description="Candidate certified — safe to promote"
+          else
+            state=failure
+            description="Certification failed — do not promote"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="${state}" \
+            -f context=production-certification \
+            -f description="${description}" \
+            -f target_url="${RUN_URL}" >/dev/null
+          echo "published production-certification=${state} for ${SHA}"
