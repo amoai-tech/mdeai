@@ -18,7 +18,8 @@ Check 5 is the regression guard for the defect this script previously missed:
 `SKILL.md` shipped into the exposure directory while its `references/` subtree did
 not, so every relative link inside it resolved from `.claude/` and 404'd from
 `.agents/`. Markdown links inside fenced code blocks and inline code spans are
-ignored, because those are example output rather than navigable links.
+ignored, because those are example output rather than navigable links; inline and
+reference-style links outside code are both checked.
 
 Usage:
     python3 scripts/check-skill-layout.py [--root PATH]
@@ -40,8 +41,19 @@ RETIRED = {
 }
 
 LINK_RE = re.compile(r'\]\(([^)\s]+)\)')
+# A code fence closes only when nothing but whitespace follows the marker, so
+# ```text inside an open block stays content instead of ending the block early.
 FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
-INLINE_CODE_RE = re.compile(r'`[^`\n]*`')
+FENCE_CLOSE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})[ \t]*$')
+# A code span closes on a backtick run of the *same* length as its opener, so
+# ``[x](missing.md)`` is one span rather than an empty span plus a stray link.
+INLINE_CODE_RE = re.compile(r'(`+)(?!`).+?(?<!`)\1(?!`)')
+# Reference-style links: `[text][label]` / `[label][]`, resolved from `[label]: dest`.
+REF_USE_RE = re.compile(r'\[([^\]]+)\]\[([^\]]*)\]')
+REF_DEF_RE = re.compile(
+    r"""^ {0,3}\[([^\]]+)\]:[ \t]*<?([^\s>]+)>?(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$""",
+    re.MULTILINE,
+)
 
 
 def path_present(path: Path) -> bool:
@@ -52,8 +64,10 @@ def path_present(path: Path) -> bool:
 def strip_code(text: str) -> str:
     """Drop fenced code blocks and inline code spans so examples are not read as links.
 
-    A closing fence must use the same character as its opener and be at least as
-    long, so a ```` block containing a ``` line stays open instead of ending early.
+    A closing fence must use the same character as its opener, be at least as
+    long, and carry nothing but whitespace after the marker. The last rule is
+    what keeps an info string such as ```text inside an open block from closing
+    it early and turning the file's real links into discarded "code".
     """
     kept: list[str] = []
     fence_char: str | None = None
@@ -66,20 +80,48 @@ def strip_code(text: str) -> str:
                 fence_len = len(match.group(1))
                 continue
             kept.append(INLINE_CODE_RE.sub(' ', line))
-        elif match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+        elif (
+            match
+            and FENCE_CLOSE_RE.match(line)
+            and match.group(1)[0] == fence_char
+            and len(match.group(1)) >= fence_len
+        ):
             fence_char = None
             fence_len = 0
     return '\n'.join(kept)
 
 
+def relative_target(raw: str) -> str | None:
+    """Normalise a link destination, or None when it is not a checked relative path."""
+    target = raw.strip().strip('<>')
+    if not target or target.startswith(('http://', 'https://', 'mailto:', '#', '/')):
+        return None
+    target = target.split('#', 1)[0]
+    return target or None
+
+
 def markdown_links(text: str) -> list[str]:
-    """Return relative link targets that should resolve on disk."""
+    """Return relative link targets that should resolve on disk.
+
+    Inline and reference-style links are both collected. A reference whose label
+    has no definition renders as literal text rather than a link, so it is
+    skipped; a definition with a missing destination file is a finding.
+    """
+    body = strip_code(text)
+    definitions = {
+        ' '.join(label.lower().split()): dest
+        for label, dest in REF_DEF_RE.findall(body)
+    }
+
+    raw_targets = LINK_RE.findall(body)
+    for text_part, label in REF_USE_RE.findall(body):
+        dest = definitions.get(' '.join((label or text_part).lower().split()))
+        if dest:
+            raw_targets.append(dest)
+
     targets: list[str] = []
-    for raw in LINK_RE.findall(strip_code(text)):
-        target = raw.strip().strip('<>')
-        if not target or target.startswith(('http://', 'https://', 'mailto:', '#', '/')):
-            continue
-        target = target.split('#', 1)[0]
+    for raw in raw_targets:
+        target = relative_target(raw)
         if target:
             targets.append(target)
     return targets

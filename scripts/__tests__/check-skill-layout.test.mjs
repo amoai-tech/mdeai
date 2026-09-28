@@ -161,6 +161,74 @@ test("a longer fence is not closed early by a shorter one inside it", () => {
   assert.equal(result.status, 0, result.stdout);
 });
 
+test("a fence marker followed by text stays inside the code block", () => {
+  // Only a marker with nothing but whitespace after it closes a block. Teaching
+  // the checker otherwise flips fence parity and discards the file's real links
+  // as "code" — which silently disabled this check for 10 of 21 skills.
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body:
+      `${skillBody("alpha")}\n` +
+      "```text\n" +
+      "```text\n" +
+      "[Snapshot](references/inside-the-block.md)\n" +
+      "```\n",
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
+test("ignores a link inside a multi-backtick inline code span", () => {
+  // A span closes on a run of the *same* length as its opener. Treating the
+  // first two backticks as an empty span left the example to be read as a link.
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body:
+      `${skillBody("alpha")}\n` +
+      "The literal ``[x](references/missing.md)`` is example text.\n",
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
+test("fails when a used reference-style link target is missing", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body: `${skillBody("alpha")}\nSee [one][ref].\n\n[ref]: references/gone.md\n`,
+  });
+
+  const output = failing(root);
+  assert.match(output, /broken relative link in/);
+  assert.match(output, /references\/gone\.md/);
+});
+
+test("fails when a used reference-style link resolves only from the canonical tree", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    files: { "references/one.md": "# one\n" },
+    body: `${skillBody("alpha")}\nSee [one][ref].\n\n[ref]: references/one.md\n`,
+    mirrorEntries: ["SKILL.md"],
+  });
+
+  const output = failing(root);
+  assert.match(output, /link does not resolve from Codex exposure/);
+  assert.match(output, /references\/one\.md/);
+});
+
+test("does not treat an undefined reference or an in-code reference as a link", () => {
+  // An undefined `[one][ref]` renders as literal text rather than a link, and a
+  // definition inside a fence is example output, so neither is a finding.
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body:
+      `${skillBody("alpha")}\n` +
+      "See [one][ref] with no definition.\n\n" +
+      "```text\n" +
+      "[ref]: references/also-missing.md\n" +
+      "```\n",
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
 test("fails when an exposure entry is a copy rather than a symlink", () => {
   const root = writeSkill(tmpRepo(), "alpha", { copies: true });
 
