@@ -52,9 +52,35 @@ For auth/RLS/storage/functions: prove authorized success and unauthorized denial
 
 ## References
 
-- `upstream.yaml`
+Vendored and pinned read-only (`upstream.yaml` records the reviewed commit and hashes):
+
 - `references/official/supabase/SKILL.md`
 - `references/official/supabase-postgres-best-practices/SKILL.md`
-- `references/project-rules/`
+
+MDE project rules — read the matching file before changing that area:
+
+- `references/project-rules/supabase-migrations.md` — migration file shape and ordering
+- `references/project-rules/supabase-rls-policies.md` — policy authoring
+- `references/project-rules/supabase-declarative-schema.md` — schema declarations
+- `references/project-rules/supabase-database-functions.md` — function and RPC rules
+- `references/project-rules/supabase-edge-functions.md` — edge function conventions
+- `references/project-rules/supabase-realtime.md` — realtime publication and channels
+- `references/project-rules/supabase-patterns.md` — recurring MDE patterns
+- `references/project-rules/supabase-sql-style.md` — SQL formatting
+
+`references/postgres/` (34 files) — read for query and connection problems:
+`conn-pooling.md`, `conn-limits.md`, `conn-idle-timeout.md`,
+`conn-prepared-statements.md`, `advanced-jsonb-indexing.md`,
+`advanced-full-text-search.md`, `data-batch-inserts.md`.
+
+Realtime and security detail: `references/realtime/rls-policy-cookbook.md`,
+`references/realtime/migration-from-postgres-changes.md`,
+`references/docs/rls-row-level-security.md`, `references/docs/testing.md`.
+
+Storage: `references/storage/rls-policies.md`, `references/storage/api-cheatsheet.md`.
+
+Maps of the current database: `references/tables-overview.md`,
+`references/edge-functions-inventory.md`, `references/ai-edge-functions.md`.
+
 - https://supabase.com/docs
 - https://github.com/supabase/supabase

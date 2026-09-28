@@ -13,6 +13,19 @@ In this guide, you'll build a tool-calling AI agent using Mastra, then connect i
 
 You'll use [AI SDK UI](https://ai-sdk.dev/docs/ai-sdk-ui/overview) and [AI Elements](https://ai-sdk.dev/elements) to create a beautiful, interactive chat experience.
 
+## Contents
+
+- [Before you begin](#before-you-begin)
+- [Create a new React + Vite app (optional)](#create-a-new-react--vite-app-optional)
+  - [Project scaffold](#project-scaffold)
+  - [Tailwind](#tailwind)
+- [Initialize Mastra](#initialize-mastra)
+- [Install AI SDK UI & AI elements](#install-ai-sdk-ui--ai-elements)
+- [Create a chat route](#create-a-chat-route)
+- [Add the chat UI](#add-the-chat-ui)
+- [Test your agent](#test-your-agent)
+- [Next steps](#next-steps)
+
 ## Before you begin
 
 - You'll need an API key from a supported [model provider](https://mastra.ai/models). If you don't have a preference, use [OpenAI](https://mastra.ai/models/providers/openai).

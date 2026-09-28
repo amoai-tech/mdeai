@@ -14,3 +14,9 @@ source:
 optional_upstream_skills:
 - mastra-factory
 hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-09-28"
+  trees:
+    references/official/mastra: 7ef472c4b119ddd05d55ae6ddd8df329cdedd81078523f8801132c45971aaaa6

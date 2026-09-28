@@ -24,3 +24,10 @@ optional_upstream_skills:
   - inspector-workbench
   - intelligence-docs
   - setup-slack-channel
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-09-28"
+  trees:
+    references/official/copilotkit/SKILL.md: f9b67a5723637742b9afb08e9051819bdb22bde611c7764421125ef8bd6efefe
+    references/official/copilotkit-cli/SKILL.md: 669c0e0158031f8df0054138a10e5688e06aaf46acb888d54a4752a52a5b9278

@@ -15,3 +15,10 @@ sources:
     local: references/official/supabase-postgres-best-practices
 combined_tree_sha256: 2ff8ccd710c90644c4d9a34848c1ee980a387be73e0dbce9992f6e45ef0ae212
 hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-09-28"
+  trees:
+    references/official/supabase: e09414352b068cb5989cb985ee2793ebf63301bbef05e690d87baf16979020c8
+    references/official/supabase-postgres-best-practices: a714d433362542f2d52e8b7958d1691c49fa4f43c9645c9a647895fb3ca85f92
