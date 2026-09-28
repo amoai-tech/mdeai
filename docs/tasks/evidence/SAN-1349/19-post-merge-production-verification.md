@@ -1,7 +1,8 @@
 SAN-1349 · Task 1 — Post-merge production verification
 Merge SHA: ab1f28768f4b2681032a947981a65a6dd3137322
 Captured: 2026-09-27 ~22:05 UTC
-Status: BLOCKED — production is not running the merged revision
+Status at capture: BLOCKED — production was not serving the merged revision
+Status now: RESOLVED for B1 — see the update immediately below
 
 ═══════════════════════════════════════════════════════════════════════════════
 HEADLINE
@@ -10,8 +11,40 @@ The merge is correct and the built artifact is correct, but the public domain
 does NOT serve it. www.mdeai.co is still serving the PR #130 build, so the
 SAN-1349 defect is still live for real users.
 
+[TRUE WHEN CAPTURED — NO LONGER TRUE. See the update below.]
+
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE · 2026-09-27 23:51 UTC — B1 RESOLVED, production promoted
+═══════════════════════════════════════════════════════════════════════════════
+PR #135 (the Maps degradation fix) merged to main as a35c60611 at 23:47:29 UTC.
+Vercel built dpl_EwZXiJA7UtqasPRpp8JkUnNRPNT6 for that SHA and www.mdeai.co now
+serves it. Measured after promotion:
+
+  live deployment           dpl_EwZXiJA7UtqasPRpp8JkUnNRPNT6
+                            (was dpl_BB9pxTptVRCK5RTFNxTZdyVntNP8, PR #130 build)
+  /rentals CTAs             0            (was 10)
+  production-certification  success      run 36359974990 — the FIRST passing run
+                                         on record; commit statuses on a35c60611
+                                         are production-certification=success
+                                         and Vercel=success
+  chat when Maps fails      composer present and enabled — the certification
+                                         spec's blocking assertion, now passing
+
+The gate behaves exactly as diagnosed earlier in this document. ab1f28768 carried
+`production-certification: failure` plus
+`Vercel: failure — "Checks for Deployment have failed"`, so its alias was
+withheld. a35c60611 carried `Vercel: success`, so the alias was assigned 2m15s
+after the deployment became READY. A FAILING check blocks promotion; a PENDING
+one does not — which is why the alias moved while certification was still
+running.
+
+Note this resolves the promotion deadlock only. The deployment-origin Maps
+failure was made SURVIVABLE, not fixed; its cause is still undetermined (see F1),
+and the migrations remain held (see B2).
+
 Two independent blockers:
-  B1  production-certification fails on an ORIGIN-SPECIFIC Google Maps
+  B1  (RESOLVED — see the update above) production-certification failed on an
+      ORIGIN-SPECIFIC Google Maps
       authentication failure, which gates alias assignment — so nothing has been
       promoted since 633d8a7a6.
       NOTE: the CopilotKit `401` is NOT this blocker. It is expected
@@ -21,15 +54,23 @@ Two independent blockers:
       corrected. See the SECTION 3 ROOT CAUSE for what was actually observed,
       and for the caveat that the referrer mechanism is a hypothesis, not
       established.
-  B2  The 3 migrations are NOT APPLIED — but they are deferred by DECISION, not
-      blocked. A working credential path exists: the Vercel token in .env
-      authenticates (HTTP 200), and the project environment exposes
-      POSTGRES_URL_NON_POOLING / POSTGRES_PASSWORD / DATABASE_URL, so
-      `supabase db push --db-url` is available. The chain was held because
-      applying it drops requestable supply to zero before the app fix is live
-      and before any real broker exists. See sections 6 and 7.
-      An earlier draft said migrations were blocked by missing credentials and
-      tools; that was only true of the first attempt and is corrected here.
+  B2  The 3 migrations are NOT APPLIED. Two separate facts, often conflated:
+      (i) DEFERRED BY DECISION — applying drops requestable supply to zero
+          before the app fix is live and before any real broker exists; and
+      (ii) the DATABASE CREDENTIAL PATH IS UNRESOLVED — the Vercel token in
+          .env authenticates (HTTP 200), so the project's env vars can be
+          LISTED, but the db-relevant ones (POSTGRES_URL_NON_POOLING,
+          POSTGRES_PASSWORD, DATABASE_URL, POSTGRES_URL, POSTGRES_PRISMA_URL)
+          are all `sensitive`-type. Vercel returns no value for those: the API
+          gives none even with `decrypt=true`, and `vercel env pull` writes
+          "[SENSITIVE]" placeholders. NAMES are visible; usable VALUES were not
+          obtained, so `supabase db push --db-url` is NOT available from this
+          checkout. See sections 6 and 7.
+      Earlier drafts made both errors in turn: first "blocked by missing
+      credentials and tools" (too strong — a Vercel token does authenticate),
+      then "a working credential path exists" (also too strong — it rested on
+      variable names alone, never on a retrieved value). Neither survives
+      verification; (i) and (ii) above are what was actually established.
 
 Both blockers are independent of SAN-1349's own code, which is merged and
 verified correct on the built artifact.
@@ -444,23 +485,34 @@ Credentials available (first pass, repo-local only):
   supabase/.temp/pooler-url       no password segment
   MCP tools                       no apply_migration exposed (read-only surface)
 
-CREDENTIAL PATH FOUND LATER, DELIBERATELY NOT USED
---------------------------------------------------
+VARIABLE NAMES VISIBLE, VALUES NOT RETRIEVABLE
+----------------------------------------------
 A working Vercel token is present in .env and authenticates against the Vercel
-API (HTTP 200). The project's environment variables therefore became readable,
-and they DO contain direct database credentials:
+API (HTTP 200). The project's environment variables can therefore be LISTED, and
+they do include db-relevant keys — but a name is not a credential:
 
   $ curl -H "Authorization: Bearer $VERCEL_TOKEN" \
-      "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&decrypt=false"
-  (38 env vars; db-relevant keys, values never printed)
-    DATABASE_URL
-    POSTGRES_URL_NON_POOLING
-    POSTGRES_PASSWORD
-    POSTGRES_USER / POSTGRES_HOST / POSTGRES_DATABASE
-    POSTGRES_URL / POSTGRES_PRISMA_URL
+      "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?decrypt=true&teamId=$VERCEL_TEAM_ID"
+  (38 env vars)
+    POSTGRES_URL_NON_POOLING  target=[production] type=sensitive  value returned: NO
+    POSTGRES_PASSWORD         target=[production] type=sensitive  value returned: NO
+    DATABASE_URL              target=[production] type=sensitive  value returned: NO
+    POSTGRES_URL              target=[production] type=sensitive  value returned: NO
+    POSTGRES_PRISMA_URL       target=[production] type=sensitive  value returned: NO
 
-So the migrations COULD have been applied via:
+Every one of them is `sensitive`-type, and Vercel does not serve sensitive values
+back through the API — `decrypt=true` included. The CLI agrees:
+
+  $ npx vercel env pull /tmp/out.env --environment=production --token=$VERCEL_TOKEN
+  ! 21 Secret values cannot be pulled from the `production` Environment.
+    Wrote "[SENSITIVE]" as placeholders for the remaining values.
+    POSTGRES_URL_NON_POOLING -> [SENSITIVE]
+
+So the migrations could NOT have been applied from this checkout by that route:
   npx supabase db push --db-url "$POSTGRES_URL_NON_POOLING"
+`$POSTGRES_URL_NON_POOLING` has no usable value here. Obtaining one needs a path
+this checkout does not have — the Vercel dashboard as a project member, or a
+Supabase connection string supplied out of band.
 
 They were NOT applied. Decision recorded on 2026-09-27: hold until (a) the app
 fix is actually live and (b) a real broker exists. The reasoning:
@@ -476,8 +528,10 @@ fix is actually live and (b) a real broker exists. The reasoning:
   4. Net position after applying now: an empty rentals catalog, a half-satisfied
      task, and a release pipeline still deadlocked. Strictly worse than waiting.
 
-This is a sequencing decision, not a capability gap. Revisit the moment F1+F2
-land and F3 (a real broker) is onboarded.
+The HOLD is a sequencing decision. It is also currently NOT ACTIONABLE from this
+checkout, because the database credential values are unavailable — both are true
+and neither substitutes for the other. Revisit the moment F1+F2 land and F3 (a
+real broker) is onboarded, and obtain a usable DATABASE credential alongside it.
 
 Drift check (so a future push cannot sweep in extra work):
   $ ls supabase/migrations | awk -F_ '$1 > "20260924055208"'
@@ -493,11 +547,15 @@ Deliberately not applied, by explicit decision. The deciding reason:
   (a) Applying takes requestable supply to 0 with no real owner to restore it,
       while the app-side fix is not yet live. See "CREDENTIAL PATH FOUND LATER,
       DELIBERATELY NOT USED" above.
-  (b) A credential path does now exist (`supabase db push --db-url` against the
-      Vercel-provided POSTGRES_URL_NON_POOLING), so this is sequencing, not a
-      capability gap. Applying raw DDL through execute_sql remains the wrong
-      route regardless: it would leave supabase_migrations.schema_migrations
-      unrecorded and permanently drift the repo.
+  (b) The database credential path is UNRESOLVED, not available. The Vercel
+      project LISTS POSTGRES_URL_NON_POOLING and friends, but they are
+      `sensitive`-type and neither the API with `decrypt=true` nor
+      `vercel env pull` returns a value (section 6). So this is not purely
+      sequencing: applying the chain also needs a usable DATABASE credential
+      that this checkout does not have. Applying raw DDL through execute_sql
+      remains the wrong route regardless: it would leave
+      supabase_migrations.schema_migrations unrecorded and permanently drift the
+      repo.
 
 ═══════════════════════════════════════════════════════════════════════════════
 8 · Post-apply verification — CANNOT BE RUN YET
@@ -663,8 +721,10 @@ F2 · Once F1 is green, re-run the certification so ab1f28768 (or the then-tip)
 F3 · Onboard ONE real broker (Product/Ops — not an engineering step). Without
      this, F4 empties the rentals catalog.
 
-F4 · Then apply the 3 migrations in order, with a working credential
-     (SUPABASE_ACCESS_TOKEN with deploy rights, or the DB password):
+F4 · Then apply the 3 migrations in order. This needs a credential this checkout
+     does NOT currently have: a SUPABASE_ACCESS_TOKEN with deploy rights, or the
+     database password. Both are unresolved today (section 6) — the Vercel-held
+     POSTGRES_* values are `sensitive` and cannot be read back.
        20260927200924_san1349_enforce_owner_boundary.sql
        20260927200925_san1349_remediate_ownerless_supply.sql
        20260927200926_san1349_validate_owner_boundary.sql
