@@ -1,0 +1,30 @@
+{
+  "skill_name": "real-estate",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A renter in Laureles wants a 2-bedroom for June, furnished, under 4M COP. Can we surface the right listings?",
+      "expected_output": "Apply V1 marketplace semantics — structured rental rows filtered by hard criteria before any AI/vector ranking, with the neighbourhood and date eligibility treated as filters rather than ranking hints.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Should we ingest this listing feed via RESO/IDX so brokers can import in bulk?",
+      "expected_output": "Do not adopt MLS/IDX/RESO guidance unless it was explicitly requested. Default to V1 marketplace guidance and confirm the request before switching models — the standards change the whole data contract.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Camila requested a viewing on a listing and the wrong broker got notified.",
+      "expected_output": "Route by the canonical ownership chain (auth user -> landlord_profiles.user_id -> landlord_profiles.id -> apartments.landlord_id) and treat any listing without a real owner as not requestable rather than guessing an owner.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Write the marketing copy for a new 3-bedroom listing in Envigado.",
+      "expected_output": "Produce property-description content from the listing's real attributes and neighbourhood context, without inventing amenities, measurements, or availability that the record does not contain.",
+      "files": []
+    }
+  ]
+}

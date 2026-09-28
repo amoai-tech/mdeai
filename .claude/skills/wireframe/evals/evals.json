@@ -1,0 +1,24 @@
+{
+  "skill_name": "wireframe",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Design the broker Leads view before we build it. It needs to show real requests and let the broker reply to them.",
+      "expected_output": "Produce an implementation-ready wireframe covering the four data states (loading, error, empty, success), the responsive breakpoints, and the AI/HITL interaction seam — including whether the reply control is gated on approval before it is built.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "We're adding an AI reply suggestion button to the viewings panel. What should the wireframe show?",
+      "expected_output": "Show the HITL contract explicitly: what the agent proposes, what the human approves or edits, and what happens on reject — plus the disabled/loading/error states, rather than only the happy path.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The empty state for the rentals workspace is just a blank area. Can you fill it in?",
+      "expected_output": "Specify actionable empty-state copy that tells the user what to do next, and confirm it matches the existing surface-state contract instead of inventing a second one.",
+      "files": []
+    }
+  ]
+}
