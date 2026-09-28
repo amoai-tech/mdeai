@@ -21,12 +21,22 @@ if (process.env.CI && !baseUrl) {
 }
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
 
-async function threadCount(resourceId: string): Promise<number> {
+/**
+ * Count persisted AG-UI/Mastra threads.
+ *
+ * With `threadId`, this is a durability proof for one exact thread: `mastra_threads.id`
+ * IS the AG-UI threadId (Mastra's own `getThreadById` queries `WHERE id = $1`), and
+ * `resourceId` is the server-derived owner. Without it, this counts every thread a
+ * resource owns, which is what the cleanup assertion needs.
+ */
+async function threadCount(resourceId: string, threadId?: string): Promise<number> {
   const admin = await getSupabaseAdmin();
-  const { count, error } = await admin
+  let query = admin
     .from("mastra_threads")
     .select("id", { count: "exact", head: true })
     .eq("resourceId", resourceId);
+  if (threadId !== undefined) query = query.eq("id", threadId);
+  const { count, error } = await query;
   if (error) throw new Error(`mastra_threads count failed: ${error.message}`);
   return count ?? 0;
 }
@@ -97,22 +107,30 @@ test.describe("SAN-1330 staged production candidate certification", () => {
         .map((cookie) => `${cookie.name}=${cookie.value}`)
         .join("; ");
 
-      const { events } = await runConciergeAgent({
+      const { events, threadId: sentThreadId, runId } = await runConciergeAgent({
         url: route("/api/copilotkit"),
         threadId,
         headers: { Cookie: cookieHeader },
       });
 
-      // Requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED. A bare 200 would
-      // not: the AG-UI handler ALWAYS answers 200 with `text/event-stream`, and
-      // a failed run is signalled by the stream closing without RUN_FINISHED.
-      assertRunCompleted(events);
+      // Tie the wire request to the thread we chose, so the identity check below
+      // and the durability assertion both name the same, intended thread.
+      expect(sentThreadId).toBe(threadId);
 
-      // Separate durability assertion: the completed turn is persisted under the
-      // throwaway user. Deliberately NOT folded into assertRunCompleted — the
-      // stream proves the turn ran, this proves it was stored.
+      // Requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED — and that those
+      // lifecycle events carry the threadId WE ASKED FOR and the runId this
+      // request generated. A bare 200 would not: the AG-UI handler ALWAYS answers
+      // 200 with `text/event-stream`, and a failed run is signalled by the stream
+      // closing without RUN_FINISHED. Identity matters too, or a completed stream
+      // for another thread/run would certify a turn that never happened.
+      assertRunCompleted(events, { threadId, runId });
+
+      // Separate durability assertion, and it names the EXACT thread: the
+      // completed turn was persisted under the throwaway user AND under the
+      // threadId we requested. Counting any thread for the user would pass even
+      // if this turn had been written somewhere else.
       await expect
-        .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
+        .poll(() => threadCount(identity!.userId, sentThreadId), { timeout: 90_000 })
         .toBeGreaterThan(0);
     } finally {
       if (identity) {

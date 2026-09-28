@@ -3,6 +3,7 @@ import {
   RunAgentInputSchema,
   runHttpRequest,
   transformHttpEventStream,
+  type RunAgentInput,
 } from "@ag-ui/client";
 
 /**
@@ -33,10 +34,19 @@ export type AgUiEvent = { type: string } & Record<string, unknown>;
 export type ConciergeRunEnvelope = {
   method: "agent/run";
   params: { agentId: string };
-  body: unknown;
+  body: RunAgentInput;
 };
 
-export type ConciergeRunResult = { events: AgUiEvent[] };
+/**
+ * `threadId`/`runId` are the ids that were actually sent on the wire — read back
+ * from the parsed envelope, not the pre-parse input, so a caller asserts against
+ * the real request rather than a value it re-derived by hand.
+ */
+export type ConciergeRunResult = {
+  events: AgUiEvent[];
+  threadId: string;
+  runId: string;
+};
 
 /** Build the AG-UI run input for one throwaway turn. */
 export function buildRunAgentInput(threadId: string, content = "ping") {
@@ -69,13 +79,29 @@ export function buildConciergeRunEnvelope(
 }
 
 /**
- * Require that the run actually completed.
+ * Require that the run actually completed — and that it was OURS.
  *
  * A 200 proves nothing here: the AG-UI handler always answers 200 with
  * `text/event-stream`, and a failed run is signalled by the stream closing
- * without `RUN_FINISHED`. These three checks are the whole success condition.
+ * without `RUN_FINISHED`. So the first three checks are about completeness.
+ *
+ * The fourth is about identity, and it is not optional. A stream can be
+ * perfectly complete and still describe a different turn: an intermediary, a
+ * stale thread, or a mis-routed request can hand back `RUN_STARTED` /
+ * `RUN_FINISHED` for someone else's `threadId`, or for an earlier `runId` on the
+ * same thread. Presence-only checks accept that and certify a turn that never
+ * happened, so every lifecycle event must carry the `threadId` and `runId` this
+ * request actually sent.
+ *
+ * Both ids are echoed by the real stack, so this does not weaken the check
+ * against production: the CopilotKit route sets `agent.threadId = input.threadId`
+ * and passes `input.runId` through, and the Mastra adapter emits
+ * `{ type: RUN_STARTED | RUN_FINISHED, threadId, runId }` straight from that input.
  */
-export function assertRunCompleted(events: AgUiEvent[]): void {
+export function assertRunCompleted(
+  events: AgUiEvent[],
+  expected: { threadId: string; runId: string },
+): void {
   const types = events.map((event) => event.type);
   const shown = types.join(", ") || "(no events)";
 
@@ -91,6 +117,17 @@ export function assertRunCompleted(events: AgUiEvent[]): void {
       `agent/run never emitted RUN_FINISHED — a bare HTTP 200 does not certify the turn; got: ${shown}`,
     );
   }
+
+  for (const event of events) {
+    if (event.type !== "RUN_STARTED" && event.type !== "RUN_FINISHED") continue;
+    if (event.threadId !== expected.threadId || event.runId !== expected.runId) {
+      throw new Error(
+        `agent/run emitted ${event.type} for a different run — expected ` +
+          `threadId=${expected.threadId} runId=${expected.runId}, got ` +
+          `threadId=${String(event.threadId)} runId=${String(event.runId)}; got: ${shown}`,
+      );
+    }
+  }
 }
 
 /**
@@ -100,6 +137,9 @@ export function assertRunCompleted(events: AgUiEvent[]): void {
  * server-side `auth.getUser()`, so a cookie-less fetch is a 401. Passing them
  * explicitly is what lets us keep the official transport while preserving
  * existing authentication.
+ *
+ * Returns the ids that were actually sent, so `assertRunCompleted` can be called
+ * on the very request that produced these events.
  */
 export async function runConciergeAgent(options: {
   url: string;
@@ -140,7 +180,6 @@ export async function runConciergeAgent(options: {
         signal: controller.signal,
       }),
     );
-
     const collected = new Promise<AgUiEvent[]>((resolve, reject) => {
       const events: AgUiEvent[] = [];
       events$.subscribe({
@@ -164,7 +203,13 @@ export async function runConciergeAgent(options: {
       }, timeoutMs);
     });
 
-    return { events: await Promise.race([collected, timeout]) };
+    return {
+      events: await Promise.race([collected, timeout]),
+      // Read back from the parsed envelope: these are the exact ids the server
+      // was handed, so the caller can tie the stream it gets back to this request.
+      threadId: envelope.body.threadId,
+      runId: envelope.body.runId,
+    };
   } catch (error) {
     // A bare AbortError from the cancelled fetch is not useful on its own.
     if (timedOut) throw new Error(`agent/run timed out after ${timeoutMs}ms`);

@@ -30,9 +30,14 @@ test("keeps pre-promotion certification independent of Maps browser referrer res
   );
   // The AG-UI request now lives in the adapter, so the shape is asserted there.
   assert.match(spec, /\brunConciergeAgent\(/);
-  assert.match(spec, /\bassertRunCompleted\(/);
-  // Durable persistence stays a SEPARATE assertion from the stream check.
-  assert.match(spec, /threadCount\(identity!\.userId\)/);
+  // The stream check is tied to the thread we asked for and the generated runId,
+  // so a completed stream belonging to another thread/run cannot certify the turn.
+  assert.match(spec, /\bassertRunCompleted\(\s*events\s*,\s*\{\s*threadId\s*,\s*runId\s*\}\s*\)/);
+  assert.match(spec, /expect\(sentThreadId\)\.toBe\(threadId\)/);
+  // Durable persistence stays a SEPARATE assertion from the stream check, and it
+  // names the exact thread that was requested — not merely any thread the user owns.
+  assert.match(spec, /threadCount\(identity!\.userId,\s*sentThreadId\)/);
+  assert.doesNotMatch(spec, /threadCount\(identity!\.userId\)/);
   assert.match(spec, /deleteThrowawayIdentity\(identity\)/);
 });
 
@@ -50,12 +55,18 @@ test("dispatches agent/run through the official AG-UI primitives", () => {
   assert.doesNotMatch(agui, /new HttpAgent\(/);
 });
 
-test("requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED", () => {
+test("requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED for THIS run", () => {
   // A bare HTTP 200 certifies nothing: the AG-UI handler always answers 200 with
   // text/event-stream, and a failed run is signalled by the stream closing early.
   assert.match(agui, /RUN_ERROR/);
   assert.match(agui, /RUN_STARTED/);
   assert.match(agui, /RUN_FINISHED/);
+  // Presence alone is not certification: the lifecycle events must carry the
+  // threadId AND runId this request sent, or a complete stream for a different
+  // turn would pass.
+  assert.match(agui, /event\.threadId !== expected\.threadId/);
+  assert.match(agui, /event\.runId !== expected\.runId/);
+  assert.match(agui, /expected:\s*\{\s*threadId:\s*string;\s*runId:\s*string\s*\}/);
   // Decoding is the SDK's job, not string matching on the raw body.
   assert.doesNotMatch(spec, /runResponse\.json\(\)/);
   assert.doesNotMatch(spec, /runResponse\.text\(\)/);

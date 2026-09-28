@@ -21,7 +21,7 @@ import {
 type Envelope = {
   method?: string;
   params?: { agentId?: string };
-  body?: { threadId?: string };
+  body?: { threadId?: string; runId?: string };
 };
 
 type Seen = Envelope & { url?: string };
@@ -69,6 +69,17 @@ const sse = (events: unknown[]) =>
 const eventStream = (types: string[]) =>
   sse(types.map((type) => ({ type, threadId: "t", runId: "r" })));
 
+/**
+ * The two lifecycle events a healthy server echoes back: it copies the
+ * threadId and runId it was handed, exactly as the CopilotKit route + Mastra
+ * adapter do (`agent.threadId = input.threadId`, `runId: input.runId`).
+ */
+const echoLifecycle = (seen: Seen, type: string) => ({
+  type,
+  threadId: seen.body?.threadId,
+  runId: seen.body?.runId,
+});
+
 const ok = (res: ServerResponse, body: string) => {
   res.writeHead(200, { "Content-Type": "text/event-stream" });
   res.end(body);
@@ -95,8 +106,8 @@ describe("SAN-1330 · CopilotKit envelope", () => {
   });
 
   it("sends the requested agentId and threadId on the wire", async () => {
-    const { url, requests } = await serve((_seen, res) =>
-      ok(res, eventStream(["RUN_STARTED", "RUN_FINISHED"])),
+    const { url, requests } = await serve((seen, res) =>
+      ok(res, sse([echoLifecycle(seen, "RUN_STARTED"), echoLifecycle(seen, "RUN_FINISHED")])),
     );
 
     await runConciergeAgent({ url, threadId: THREAD, agentId: "conciergeAgent" });
@@ -109,34 +120,26 @@ describe("SAN-1330 · CopilotKit envelope", () => {
 });
 
 describe("SAN-1330 · a bare 200 does not certify the turn", () => {
-  it("throws when the stream carries no RUN_FINISHED (agent/connect behaviour)", async () => {
-    // Exactly what handleConnectAgent produces: 200, text/event-stream, and a
-    // stream that ends without ever running the agent.
-    const { url } = await serve((_seen, res) => ok(res, eventStream(["RUN_STARTED"])));
-    const { events } = await runConciergeAgent({ url, threadId: THREAD });
-    expect(events.map((e) => e.type)).toEqual(["RUN_STARTED"]);
-    expect(() => assertRunCompleted(events)).toThrow(/RUN_FINISHED/);
-  });
-
-  it("throws when the stream is empty", async () => {
-    const { url } = await serve((_seen, res) => ok(res, ""));
-    const { events } = await runConciergeAgent({ url, threadId: THREAD });
-    expect(() => assertRunCompleted(events)).toThrow(/RUN_STARTED/);
-  });
-
-  it("throws when RUN_STARTED is missing", async () => {
-    const { url } = await serve((_seen, res) => ok(res, eventStream(["RUN_FINISHED"])));
-    const { events } = await runConciergeAgent({ url, threadId: THREAD });
-    expect(() => assertRunCompleted(events)).toThrow(/RUN_STARTED/);
+  it.each<{ label: string; types: string[]; expected: RegExp }>([
+    { label: "no RUN_FINISHED at all (agent/connect behaviour)", types: ["RUN_STARTED"], expected: /RUN_FINISHED/ },
+    { label: "no events at all", types: [], expected: /RUN_STARTED/ },
+    { label: "no RUN_STARTED", types: ["RUN_FINISHED"], expected: /RUN_STARTED/ },
+  ])("throws when the stream has $label", async ({ types, expected }) => {
+    // `handleConnectAgent` produces exactly this shape: 200, text/event-stream,
+    // and a stream that ends without ever running the agent.
+    const { url } = await serve((_seen, res) => ok(res, eventStream(types)));
+    const { events, threadId, runId } = await runConciergeAgent({ url, threadId: THREAD });
+    expect(events.map((e) => e.type)).toEqual(types);
+    expect(() => assertRunCompleted(events, { threadId, runId })).toThrow(expected);
   });
 
   it("throws on RUN_ERROR even when RUN_FINISHED also arrives", () => {
     const events = [
-      { type: "RUN_STARTED" },
+      { type: "RUN_STARTED", threadId: THREAD, runId: "r" },
       { type: "RUN_ERROR", message: "model unavailable" },
-      { type: "RUN_FINISHED" },
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r" },
     ] as AgUiEvent[];
-    expect(() => assertRunCompleted(events)).toThrow(/RUN_ERROR/);
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(/RUN_ERROR/);
   });
 
   it("fails the request itself on a non-2xx reply", async () => {
@@ -145,6 +148,61 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
       res.end(JSON.stringify({ error: "no authenticated session" }));
     });
     await expect(runConciergeAgent({ url, threadId: THREAD })).rejects.toThrow();
+  });
+});
+
+/**
+ * The stream must belong to THIS run. A completed stream for someone else's
+ * thread — or a stale run on the same thread — proves the turn we asked for did
+ * not happen, so presence-only checks are not a certification.
+ */
+describe("SAN-1330 · a completed stream must belong to the requested run", () => {
+  const started = (over: Partial<AgUiEvent> = {}) =>
+    ({ type: "RUN_STARTED", threadId: THREAD, runId: "run-1", ...over }) as AgUiEvent;
+  const finished = (over: Partial<AgUiEvent> = {}) =>
+    ({ type: "RUN_FINISHED", threadId: THREAD, runId: "run-1", ...over }) as AgUiEvent;
+
+  it.each<{ label: string; first: AgUiEvent; last: AgUiEvent }>([
+    { label: "RUN_FINISHED for another thread", first: started(), last: finished({ threadId: "someone-else" }) },
+    { label: "RUN_FINISHED for another run on this thread", first: started(), last: finished({ runId: "other-run" }) },
+    { label: "RUN_STARTED for another thread", first: started({ threadId: "someone-else" }), last: finished() },
+    { label: "RUN_STARTED for another run on this thread", first: started({ runId: "other-run" }), last: finished() },
+  ])("throws on $label", ({ first, last }) => {
+    expect(() => assertRunCompleted([first, last], { threadId: THREAD, runId: "run-1" })).toThrow(
+      /different run/,
+    );
+  });
+
+  it("accepts a stream that echoes the requested threadId and generated runId", async () => {
+    const { url, requests } = await serve((seen, res) =>
+      ok(res, sse([echoLifecycle(seen, "RUN_STARTED"), echoLifecycle(seen, "RUN_FINISHED")])),
+    );
+
+    const { events, threadId, runId } = await runConciergeAgent({ url, threadId: THREAD });
+
+    // The helper reports the ids it actually sent, so the caller asserts against
+    // the real request rather than a value it re-derived by hand.
+    expect(threadId).toBe(THREAD);
+    expect(runId).toBe(requests[0].body?.runId);
+    expect(runId).not.toBe("");
+    expect(() => assertRunCompleted(events, { threadId, runId })).not.toThrow();
+  });
+
+  it("rejects a real completed stream that belongs to another thread", async () => {
+    const { url } = await serve((_seen, res) =>
+      ok(
+        res,
+        sse([
+          { type: "RUN_STARTED", threadId: "another-thread", runId: "another-run" },
+          { type: "RUN_FINISHED", threadId: "another-thread", runId: "another-run" },
+        ]),
+      ),
+    );
+
+    const { events, threadId, runId } = await runConciergeAgent({ url, threadId: THREAD });
+
+    expect(events.map((e) => e.type)).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
+    expect(() => assertRunCompleted(events, { threadId, runId })).toThrow(/different run/);
   });
 });
 
@@ -165,11 +223,11 @@ describe("SAN-1330 · transport and decoding use the official primitives", () =>
     ];
     const { url } = await serve((_seen, res) => ok(res, sse(observed)));
 
-    const { events } = await runConciergeAgent({ url, threadId: THREAD });
+    const { events } = await runConciergeAgent({ url, threadId: "t" });
 
     expect(events.map((e) => e.type)).toEqual(observed.map((e) => e.type));
     expect(events.some((e) => e.type === "STATE_DELTA")).toBe(true);
-    expect(() => assertRunCompleted(events)).not.toThrow();
+    expect(() => assertRunCompleted(events, { threadId: "t", runId: "r" })).not.toThrow();
   });
 
   it("aborts a stalled stream instead of hanging", async () => {
