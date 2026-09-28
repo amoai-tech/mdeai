@@ -1,0 +1,1 @@
+../../../.claude/skills/supabase/edge-functions.md

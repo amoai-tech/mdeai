@@ -1,0 +1,1 @@
+../../../.claude/skills/supabase/client-and-auth.md

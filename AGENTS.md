@@ -7,9 +7,33 @@ Portable repository guidance for coding agents working from the current Git chec
 - Remote: `https://github.com/amoai-tech/mdeai.git`.
 - Package/app source lives at the repository root.
 - Main stack: Next.js 16, React 19, CopilotKit 1.55.2 v2 APIs, Mastra, Supabase, Gemini, Google Maps, Cloudinary, Playwright, and Vitest.
-- `.claude/skills/` is the canonical project skill library. `.agents/skills/` exposes the same canonical skills to Codex via symlinks so both agents use one source of truth.
+- `.claude/skills/` is the canonical project skill library. `.agents/skills/` mirrors every canonical entry (`SKILL.md`, `references/`, `scripts/`, `evals/`) as relative symlinks so other agents resolve the same files. Never copy skill content into `.agents/`; `npm run check:skills` fails when the two trees disagree.
 - Linear is the durable task/progress source of truth for substantial SAN work.
 - Never rely on machine-specific absolute paths; resolve the current checkout root dynamically.
+
+## Build and test commands
+
+```bash
+npm ci                    # install
+npm run dev               # Next.js :3001 + Mastra :4111
+npm run lint              # ESLint, --max-warnings 0
+npm run typecheck         # tsc --noEmit
+npm test                  # Vitest, run once
+npm run test:e2e          # Playwright
+npx supabase test db      # database (pgTAP) tests
+npm run check:env:ci      # env contract, strict
+npm run check:skills      # skill library + agent exposure mirror
+npm run floor             # full gate — run before claiming done
+npm run graphify:query -- "<question>"
+```
+
+`npm run floor` runs `check:skills → check:db-url-guard → check:release-gates → lint → typecheck → check:env:ci → build → test → check:mastra → audit:floor`.
+
+Traps worth knowing before you debug them:
+
+- `check:env:ci` fails in a fresh worktree with no `.env`; export `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` first.
+- `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
+- Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
 
 ## Skill routing
 
@@ -35,11 +59,9 @@ Use `systematic-debugging` only when the responsible domain/root cause is genuin
 
 ## Canonical skills
 
-Stack: `copilotkit`, `mastra`, `supabase`, `gemini`, `maps`, `stripe`, `nextjs`, `cloudinary`.
+`.claude/skills/INDEX.md` is the authoritative list of active skills with its score and keep/consolidate decision. Read it instead of a list maintained here; a parallel catalogue drifts. `npm run check:skills` fails when `.claude/skills/` and the `.agents/skills/` mirror disagree.
 
-Domain: `events`, `real-estate`.
-
-Workflow: `using-mde-skills`, `tasks`, `systematic-debugging`, `testing`, `research`, `code-review`, `task-verifier`, `writing-skills`, `wireframe`, `mermaid-diagrams`.
+Skills group into **stack** (framework and platform owners), **domain** (product-domain owners), and **workflow** (task lifecycle, verification, research, review, and reasoning owners). Ownership routing lives in the section above and in `Shared invariants` below.
 
 ## Graphify repo intelligence
 
@@ -68,18 +90,49 @@ Do not duplicate detailed operating rules here when a canonical skill owns them.
 - Mastra agent/tool/workflow rules → `mastra`.
 - Google Maps/Places field masks and marker configuration → `maps`.
 - Gemini model/provider details → `gemini`.
+- Next.js App Router, RSC boundaries, caching, and Vercel deploy/config → `nextjs`.
+- Payments, checkout, webhooks, Connect, and refunds → `stripe`.
+- Cloudinary uploads, transformations, and media lifecycle → `cloudinary`.
+- Event creation, publishing, tickets, and attendee flows → `events`.
+- Rental/property discovery, listings, broker and host flows, viewings → `real-estate`.
 
-Repository-wide invariants that remain explicit:
+## Boundaries
 
-- Production AI uses Gemini. Verify current model/provider contracts before changing model names.
-- CopilotKit stays on the v2 API surface; do not mix bare v1 imports with `/v2` imports.
+✅ **Always**
+
 - New Supabase tables require RLS and an explicit authorization policy.
-- Google Places requests must use intentional field masks; Maps markers require the correct map configuration, unless the owning Maps skill or current task documents a specific supported exception.
-- Never expose secrets or service-role credentials to client code.
-- Do not reset, clean, or discard unrelated working-tree changes.
-- Do not mark work Done without current evidence from the relevant tests/runtime.
+- Google Places requests must use intentional field masks; Maps markers require the correct map configuration, unless the owning Maps skill or the current task documents a specific supported exception.
 - Prefer the fewest necessary independently reviewable PRs.
 - Treat repository skills as trusted executable instructions: review skill changes before relying on them.
+- Run the narrowest relevant proof before calling anything done.
+
+⚠️ **Ask first**
+
+- Production AI model/provider changes. Production uses Gemini; verify the current contract before changing model names.
+- Destructive or irreversible production-data changes.
+- Editing a release gate, a required check, or `.github/workflows/**`.
+
+🚫 **Never**
+
+- Expose secrets or service-role credentials to client code.
+- Mix bare CopilotKit v1 imports with `/v2` imports.
+- Reset, clean, or discard unrelated working-tree changes.
+- Mark work Done without current evidence from the relevant tests/runtime.
+- Weaken a gate, or fabricate data, to make a check pass.
+
+## Enforced automatically
+
+`.claude/hooks/` blocks these mechanically, so expect a failure rather than a warning:
+
+`guard-sensitive-paths` · `scan-secrets` · `no-service-role-in-src` · `gemini-model-pin` · `copilotkit-version-pin` · `places-api-field-mask` · `advanced-marker-needs-mapid` · `dist-leak-scan` (PreToolUse) · `lint-edited-ts` · `typecheck-edited-ts` (PostToolUse) · `stop-rls-gate` · `stop-plain-language-gate` (Stop) · `session-start` (SessionStart).
+
+Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase-rls-audit`. Review subagents: `mdeai-auto-reviewer`, `pr-scope-reviewer`, `security-reviewer`.
+
+## CI checks
+
+`floor` is the only required status check on `main`, so it is the only check that gates a merge. It runs on every pull request regardless of base branch, because a stacked PR based on another feature branch is still a PR that needs the same proof.
+
+Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this repository are dominated by heuristics that do not hold here: it reads the 64-character sha256 tree hashes in `upstream.yaml` as hard-coded credentials, rejects `#2-entry-in-rationalization-table`-style fragments that GitHub's own slug rules accept, and reports every `path.join` in a test file as dynamic path construction. Making it required would block merges on those false positives rather than on defects. A `mergeStateStatus` of `UNSTABLE` caused by Codacy is therefore expected and is not a reason to hold a merge; a real Codacy finding is worth reading on its merits.
 
 ## Verification
 

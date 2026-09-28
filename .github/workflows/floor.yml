@@ -2,8 +2,11 @@
 name: Floor
 
 on:
+  # Every pull request, whatever base it targets. Restricting this to `branches: [main]`
+  # meant a stacked PR — one based on another feature branch — got no floor run at all,
+  # which is precisely when its diff is least independently verified. The required check
+  # for `main` is unchanged, because the job name is.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
@@ -20,9 +23,11 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to immutable commits: a repointed `@v4` tag would run other code here
+      # without a single change to this repository. Same commits as the other workflows.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -68,9 +73,9 @@ jobs:
           --health-retries 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: npm
