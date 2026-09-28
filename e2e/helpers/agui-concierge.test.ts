@@ -157,12 +157,15 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
     );
   });
 
-  it("fails the request itself on a non-2xx reply", async () => {
+  it("fails the request itself on a non-2xx reply, keeping the real error", async () => {
     const { url } = await serve((_seen, res) => {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "no authenticated session" }));
     });
-    await expect(runConciergeAgent({ url, threadId: THREAD })).rejects.toThrow();
+    // The transport error must survive verbatim. `collected.catch(() => {})` only
+    // guards a rejection that arrives AFTER the race has settled; a failure that
+    // arrives first is what the race rejects with, so it is never swallowed.
+    await expect(runConciergeAgent({ url, threadId: THREAD })).rejects.toThrow(/HTTP 401/);
   });
 });
 
@@ -255,9 +258,12 @@ describe("SAN-1330 · transport and decoding use the official primitives", () =>
       // never end: the run stalls
     });
 
-    await expect(
-      runConciergeAgent({ url, threadId: THREAD, timeoutMs: 250 }),
-    ).rejects.toThrow(/timed out/);
+    // A stall has to be diagnosable from the failure alone, so the message names
+    // the endpoint and the thread (never the cookies).
+    const stalled = runConciergeAgent({ url, threadId: THREAD, timeoutMs: 250 });
+    await expect(stalled).rejects.toThrow(/timed out after 250ms/);
+    await expect(stalled).rejects.toThrow(`threadId=${THREAD}`);
+    await expect(stalled).rejects.toThrow(`url=${url}`);
   }, 10_000);
 
   it("rejects a malformed event rather than certifying a garbled stream", async () => {

@@ -29,7 +29,16 @@ import {
  * not a document to grep, it is a sequence of events to parse.
  */
 
-export type AgUiEvent = { type: string } & Record<string, unknown>;
+/**
+ * Decoded AG-UI events are open-ended, but the fields this helper reads are
+ * named here so the identity check is type-checked rather than trusting an
+ * index signature.
+ */
+export type AgUiEvent = {
+  type: string;
+  threadId?: string;
+  runId?: string;
+} & Record<string, unknown>;
 
 export type ConciergeRunEnvelope = {
   method: "agent/run";
@@ -131,7 +140,8 @@ export function assertRunCompleted(
       throw new Error(
         `agent/run emitted ${event.type} for a different run — expected ` +
           `threadId=${expected.threadId} runId=${expected.runId}, got ` +
-          `threadId=${String(event.threadId)} runId=${String(event.runId)}; got: ${shown}`,
+          `threadId=${event.threadId ?? "<missing>"} runId=${event.runId ?? "<missing>"}; ` +
+          `got: ${shown}`,
       );
     }
   }
@@ -168,6 +178,11 @@ export async function runConciergeAgent(options: {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
+
+  // A stall is diagnosed from the operator's side, so the message names the
+  // endpoint and thread. Cookies are never included.
+  const timeoutMessage = () =>
+    `agent/run timed out after ${timeoutMs}ms — url=${url} threadId=${threadId}`;
 
   try {
     const envelope = buildConciergeRunEnvelope(
@@ -206,7 +221,7 @@ export async function runConciergeAgent(options: {
         // Abort with no reason: passing an Error here makes Node surface it as an
         // unhandled rejection alongside the observable error.
         controller.abort();
-        reject(new Error(`agent/run timed out after ${timeoutMs}ms`));
+        reject(new Error(timeoutMessage()));
       }, timeoutMs);
     });
 
@@ -219,7 +234,7 @@ export async function runConciergeAgent(options: {
     };
   } catch (error) {
     // A bare AbortError from the cancelled fetch is not useful on its own.
-    if (timedOut) throw new Error(`agent/run timed out after ${timeoutMs}ms`);
+    if (timedOut) throw new Error(timeoutMessage());
     throw error;
   } finally {
     if (timer) clearTimeout(timer);
