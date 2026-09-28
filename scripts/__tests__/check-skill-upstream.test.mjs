@@ -170,3 +170,115 @@ test("the committed repository passes", () => {
   );
   assert.match(result.stdout, /SKILL_UPSTREAM_PASS trees=\d+/);
 });
+
+/** Write a manifest whose local_integrity block is formatted by hand. */
+function customManifest(root, name, manifest) {
+  const dir = path.join(root, ".claude", "skills", name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "SKILL.md"),
+    `---\nname: ${name}\ndescription: Use when exercising the parser.\n---\n\n# ${name}\n`,
+  );
+  fs.mkdirSync(path.join(dir, "references/official/a"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "references/official/a/one.md"), "# one\n");
+  fs.writeFileSync(path.join(dir, "upstream.yaml"), manifest);
+  return root;
+}
+
+const HASH = "a".repeat(64);
+
+test("records hashes whatever the indentation", () => {
+  // A re-review that reindents the block must not silently stop protecting the tree.
+  const root = customManifest(
+    tmpRepo(),
+    "alpha",
+    [
+      "vendor: Test",
+      "repository: https://example.com/alpha",
+      "reviewed_commit: abcdef1234567890abcdef1234567890abcdef12",
+      "source:",
+      "  local: references/official/a",
+      "local_integrity:",
+      "    trees:",
+      "        references/official/a: " + HASH,
+      "",
+    ].join("\n"),
+  );
+
+  // The hash is deliberately wrong, so reaching the hash comparison proves it parsed.
+  const result = runChecker(root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stdout, /vendored files changed since they were reviewed/);
+  assert.doesNotMatch(result.stdout, /no recorded hash/);
+});
+
+test("ignores a trailing comment on a recorded hash", () => {
+  const root = customManifest(
+    tmpRepo(),
+    "alpha",
+    [
+      "reviewed_commit: abcdef1234567890abcdef1234567890abcdef12",
+      "source:",
+      "  local: references/official/a",
+      "local_integrity:",
+      "  trees:",
+      `    references/official/a: ${HASH}  # reviewed by hand`,
+      "",
+    ].join("\n"),
+  );
+
+  const result = runChecker(root);
+  assert.match(result.stdout, /vendored files changed since they were reviewed/);
+  assert.doesNotMatch(result.stdout, /not a `path: <sha256>` entry/);
+});
+
+test("fails closed on an unreadable entry under trees", () => {
+  const root = customManifest(
+    tmpRepo(),
+    "alpha",
+    [
+      "reviewed_commit: abcdef1234567890abcdef1234567890abcdef12",
+      "source:",
+      "  local: references/official/a",
+      "local_integrity:",
+      "  trees:",
+      "    references/official/a: not-a-hash",
+      "",
+    ].join("\n"),
+  );
+
+  const result = runChecker(root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stdout, /not a `path: <sha256>` entry/);
+});
+
+test("fails closed when local_integrity yields no mapping", () => {
+  const root = customManifest(
+    tmpRepo(),
+    "alpha",
+    [
+      "reviewed_commit: abcdef1234567890abcdef1234567890abcdef12",
+      "source:",
+      "  local: references/official/a",
+      "local_integrity:",
+      "  algorithm: sha256(...)",
+      "",
+    ].join("\n"),
+  );
+
+  const result = runChecker(root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stdout, /no trees mapping could be read/);
+});
+
+test("OS leftovers do not change a tree's hash", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    vendored: { "references/official/a/one.md": "# one\n" },
+  });
+  adoptHashes(root, "alpha");
+  assert.equal(runChecker(root).status, 0);
+
+  fs.writeFileSync(path.join(root, ".claude/skills/alpha/references/official/a/.DS_Store"), "junk");
+  const result = runChecker(root);
+  assert.equal(result.status, 0, `a stray .DS_Store must not fail the gate:\n${result.stdout}`);
+});

@@ -36,6 +36,11 @@ import sys
 from pathlib import Path
 
 ALGORITHM = "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+
+# OS and editor leftovers are excluded so a stray .DS_Store in a vendored tree cannot
+# change its hash and fail the gate for everyone. Everything else is hashed, including
+# legitimate dotfiles such as a vendored .gitignore.
+IGNORED_NAMES = {'.DS_Store', 'Thumbs.db', 'desktop.ini'}
 TREES_KEY = 'trees'
 REVIEWED_COMMIT_RE = re.compile(r'^reviewed_commit:\s*["\']?([0-9a-f]{7,40})["\']?\s*$')
 
@@ -50,7 +55,11 @@ def tree_hash(target: Path) -> str:
         entries = [(target.name, target)]
     else:
         entries = sorted(
-            ((p.relative_to(target).as_posix(), p) for p in target.rglob('*') if p.is_file()),
+            (
+                (p.relative_to(target).as_posix(), p)
+                for p in target.rglob('*')
+                if p.is_file() and p.name not in IGNORED_NAMES
+            ),
             key=lambda pair: pair[0],
         )
     digest = hashlib.sha256()
@@ -62,51 +71,95 @@ def tree_hash(target: Path) -> str:
     return digest.hexdigest()
 
 
-def parse_upstream(path: Path) -> tuple[str | None, list[str], dict[str, str]]:
-    """Extract the reviewed commit, vendored directories, and recorded hashes.
+def strip_comment(line: str) -> str:
+    """Remove a trailing YAML comment, ignoring a '#' inside a quoted scalar."""
+    kept: list[str] = []
+    quote: str | None = None
+    for index, char in enumerate(line):
+        if quote:
+            kept.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in ('"', "'"):
+            quote = char
+            kept.append(char)
+            continue
+        if char == '#' and (index == 0 or line[index - 1] in ' \t'):
+            break
+        kept.append(char)
+    return ''.join(kept).rstrip()
 
-    A focused reader rather than a YAML parser: these files are machine-generated
-    and only three shapes matter — the `reviewed_commit` scalar, `local: <path>`
-    entries, and the `local_integrity.trees` map.
+
+def parse_upstream(path: Path) -> tuple[str | None, list[str], dict[str, str], list[str]]:
+    """Extract the reviewed commit, vendored paths, recorded hashes, and problems.
+
+    A focused reader rather than a full YAML parser, because the script must run with
+    nothing but `python3` on a CI runner. The trade is that it must fail closed: a
+    manifest it cannot read has to be an error, never a silent pass. Anything it meets
+    inside `local_integrity.trees` that is not `path: <sha256>` is reported instead of
+    skipped, because a hash that quietly goes unread is a hash that stops protecting
+    anything.
+
+    Indentation is not assumed, and comments are stripped quote-aware, so re-reviewing
+    a manifest by hand cannot silently invalidate the recorded baseline.
     """
     text = path.read_text(encoding='utf-8')
     reviewed: str | None = None
     locals_: list[str] = []
     recorded: dict[str, str] = {}
+    problems: list[str] = []
 
-    in_trees = False
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].rstrip()
-        if not line.strip():
+    trees_indent: int | None = None
+    saw_integrity = False
+
+    for lineno, raw in enumerate(text.splitlines(), 1):
+        line = strip_comment(raw)
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+
+        if stripped == 'local_integrity:':
+            saw_integrity = True
+            trees_indent = None
+            continue
+        if stripped == f'{TREES_KEY}:':
+            trees_indent = indent
             continue
 
-        commit = REVIEWED_COMMIT_RE.match(line.strip())
+        if trees_indent is not None:
+            if indent > trees_indent:
+                entry = re.fullmatch(
+                    r'([^:\s][^:]*):\s*["\']?([0-9a-f]{64})["\']?', stripped
+                )
+                if entry:
+                    recorded[entry.group(1).strip()] = entry.group(2)
+                else:
+                    problems.append(
+                        f'{path}:{lineno}: not a `path: <sha256>` entry under '
+                        f'{TREES_KEY}: {stripped!r}'
+                    )
+                continue
+            trees_indent = None  # dedented out of the block
+
+        commit = REVIEWED_COMMIT_RE.match(stripped)
         if commit:
             reviewed = commit.group(1)
             continue
 
-        stripped = line.strip()
-        if stripped == f'{TREES_KEY}:':
-            in_trees = True
-            continue
-
-        indent = len(line) - len(line.lstrip())
-
-        if in_trees and indent == 4:
-            entry = re.fullmatch(r'([^:]+):\s*["\']?([0-9a-f]{64})["\']?', stripped)
-            if entry:
-                recorded[entry.group(1).strip()] = entry.group(2)
-            continue
-        if in_trees and indent <= 2 and stripped != f'{TREES_KEY}:':
-            in_trees = False
-
         local = re.fullmatch(
-            r'(?:[A-Za-z_][\w-]*\.)?local:\s*["\']?([^"\']+?)["\']?\s*', stripped
+            r'(?:[A-Za-z_][\w-]*\.)?local:\s*["\']?([^"\']+?)["\']?', stripped
         )
         if local:
             locals_.append(local.group(1))
 
-    return reviewed, list(dict.fromkeys(locals_)), recorded
+    if saw_integrity and not recorded:
+        problems.append(
+            f'{path}: local_integrity is declared but no {TREES_KEY} mapping could be read'
+        )
+
+    return reviewed, list(dict.fromkeys(locals_)), recorded, problems
 
 
 def check(root: Path) -> tuple[list[str], int]:
@@ -117,8 +170,9 @@ def check(root: Path) -> tuple[list[str], int]:
     manifests = sorted(skills.glob('*/upstream.yaml'))
     for manifest in manifests:
         skill = manifest.parent.name
-        reviewed, locals_, recorded = parse_upstream(manifest)
+        reviewed, locals_, recorded, problems = parse_upstream(manifest)
 
+        errors.extend(problems)
         if not reviewed:
             errors.append(f'{manifest}: missing reviewed_commit')
         if not locals_:
