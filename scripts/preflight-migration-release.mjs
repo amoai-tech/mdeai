@@ -77,7 +77,8 @@ const CLI_MIGRATION_FILE_PATTERN = /^[0-9]+_.*\.sql$/;
  * @param {string[]|null} state.trackedDirty   porcelain lines for modified tracked files; null
  *                                             when the status command failed
  * @param {boolean} state.migrationsDirExists  whether MIGRATIONS_DIR is present
- * @param {string[]} state.pushableMigrations  top-level migration files the CLI would apply
+ * @param {string[]|null} state.pushableMigrations top-level migration files the CLI would apply;
+ *                                             null when the directory could not be read
  * @param {string[]|null} state.trackedMigrations top-level migration files Git tracks; null
  *                                             when git could not answer
  * @param {string[]} state.ignoredMigrations   migration files Git ignores (diagnostic only)
@@ -129,6 +130,8 @@ export function evaluatePreflight(state) {
   // for that to happen — `--exclude-standard` hides exactly the file the CLI would apply.
   if (!state.migrationsDirExists) {
     add("warn", `${MIGRATIONS_DIR} does not exist — nothing to push`);
+  } else if (state.pushableMigrations === null) {
+    add("fail", `cannot read ${MIGRATIONS_DIR} — refusing to assume it holds nothing pushable`);
   } else if (state.trackedMigrations === null) {
     // Fail closed. Assuming "all tracked" would silently clear the exact hazard this checks.
     add(
@@ -262,7 +265,8 @@ function topLevelNames(relPaths) {
 /**
  * Migration file names `supabase db push` would consider, using the CLI's own rule: a
  * non-directory entry at the TOP LEVEL whose name matches CLI_MIGRATION_FILE_PATTERN.
- * Returns [] when the directory is unreadable; `migrationsDirExists` reports that case.
+ * [] when the directory is absent (nothing to push); null when it is present but unreadable,
+ * because "I could not look" must not render as "there is nothing there".
  *
  * One deliberate difference from the CLI: it also skips a legacy `<timestamp>_init.sql` older
  * than 20211209000000, but only when that file happens to be the first directory entry. This
@@ -273,8 +277,8 @@ export function listPushableMigrations(dir = MIGRATIONS_DIR) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (err) {
+    return err?.code === "ENOENT" ? [] : null;
   }
   return entries
     .filter((entry) => !entry.isDirectory() && CLI_MIGRATION_FILE_PATTERN.test(entry.name))

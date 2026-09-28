@@ -121,6 +121,15 @@ describe("preflight-migration-release", () => {
       assert.match(messages(result), /cannot determine which migrations Git tracks/);
     });
 
+    it("fails closed when the migrations directory is present but unreadable", () => {
+      // [] would mean "nothing to push"; null means "I could not look". Same false-PASS class
+      // as the failed-`git status` case above, so it fails the same way.
+      const result = evaluatePreflight(cleanState({ pushableMigrations: null }));
+      assert.equal(result.failures, 1);
+      assert.match(messages(result), /cannot read supabase\/migrations/);
+      assert.doesNotMatch(messages(result), /tracked in Git/);
+    });
+
     it("only warns about untracked files outside the migrations directory", () => {
       const result = evaluatePreflight(cleanState({ untrackedOther: ["docs/plan/x.md"] }));
       assert.equal(result.failures, 0, "untracked docs cannot reach production");
