@@ -22,7 +22,10 @@ test("fails closed in CI when candidate URL is missing", () => {
 
 test("keeps pre-promotion certification independent of Maps browser referrer restrictions", () => {
   assert.doesNotMatch(spec, /gotoConcierge|sendConciergeMessage|waitForCopilotIdle/);
-  assert.match(spec, /method:\s*["']agent\/connect["']/);
+  assert.match(spec, /method:\s*["']agent\/run["']/);
+  // `agent/connect` only opens an SSE stream and never dispatches `messages`, so
+  // a certification built on it can pass without the agent processing "ping".
+  assert.doesNotMatch(spec, /method:\s*["']agent\/connect["']/);
   assert.match(spec, /agentId:\s*["']conciergeAgent["']/);
   assert.match(spec, /threadId,/);
   assert.match(spec, /runId:\s*randomUUID\(\)/);

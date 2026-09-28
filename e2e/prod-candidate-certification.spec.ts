@@ -22,7 +22,14 @@ const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
 
 function conciergeRunBody(threadId: string) {
   return {
-    method: "agent/connect",
+    // `agent/run`, NOT `agent/connect`. handleConnectAgent only opens an SSE
+    // stream for the thread: parseConnectRequest validates the SAME
+    // RunAgentInputSchema, so `messages` is accepted and then silently dropped,
+    // and the agent never runs. Only handleRunAgent does
+    // agent.setMessages(input.messages) and dispatches the turn. With
+    // `agent/connect` this certification could return 200 and persist a thread
+    // without `ping` ever being processed.
+    method: "agent/run",
     params: { agentId: "conciergeAgent" },
     body: {
       threadId,
@@ -106,7 +113,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
         data: conciergeRunBody(threadId),
         timeout: 120_000,
       });
-      expect(runResponse.status(), "authenticated concierge agent/connect").toBe(200);
+      expect(runResponse.status(), "authenticated concierge agent/run").toBe(200);
       await expect
         .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
         .toBeGreaterThan(0);
