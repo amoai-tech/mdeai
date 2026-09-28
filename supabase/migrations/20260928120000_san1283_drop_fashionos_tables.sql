@@ -59,6 +59,15 @@
 -- (`--schema`) or excludes `schema.table` pairs (`--exclude`); it has no per-table `-t`
 -- flag, so the eight tables cannot be selected with it.
 --
+-- RESTORE PATH — a data-only dump is not self-contained. `--table` does not carry the table
+-- definitions, so the dump cannot be restored into an empty database on its own. To recover:
+--
+--     1. re-apply 20260628050558_fashionos_lead_finder_mvp_namespaced.sql to recreate the
+--        eight tables (and the migration that follows it for the RLS/revoke state), then
+--     2. restore this data-only dump into those tables.
+--
+-- Recorded here because a backup whose restore path is undocumented is not a backup.
+--
 -- The connection string comes from the environment and is NEVER written here. Do NOT commit
 -- the dump, attach it to Linear, or paste it into a PR — it is unmasked PII. `DROP ...
 -- RESTRICT` makes an unnoticed dependency fail; it does not make deleted rows recoverable.
