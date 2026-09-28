@@ -37,11 +37,27 @@ jobs:
           set -euo pipefail
           node scripts/validate-vercel-deployment-event.mjs
 
-      - name: Publish certification status to candidate SHA
-        uses: vercel/repository-dispatch/actions/status@30f760c6640485cd92f8c785ef361382555fb712 # v1
-        with:
-          name: production-certification
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+      # SAN-1362 — fail closed while certification is in flight.
+      #
+      # The candidate must not be promotable until certification has actually
+      # passed. Publishing an explicit `failure` here (rather than letting the
+      # helper publish `pending`) makes the block unambiguous: Vercel assigns the
+      # production alias only once this context reports `success`.
+      #
+      # Observed race this closes: for a35c60611 the alias was assigned at
+      # 23:51:42 while certification only reported success at 23:53:00 — 78s
+      # early, i.e. the production alias served an uncertified build.
+      - name: Block promotion while certification is in flight
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state=failure \
+            -f context=production-certification \
+            -f description="Certification in flight — promotion blocked" >/dev/null
+          echo "published production-certification=failure for ${SHA}"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -56,6 +72,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Certify exact staged candidate
+        id: certify
         env:
           PROD_SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
           SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
@@ -66,3 +83,27 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
+
+      # SAN-1362 — release the block only on a proven pass. `if: always()` keeps
+      # a failed certification from leaving the context stuck on the in-flight
+      # `failure`, so the real result is what a re-run and the dashboard show.
+      - name: Publish certification result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${CERTIFY_OUTCOME}" = "success" ]; then
+            state=success
+            description="Candidate certified — safe to promote"
+          else
+            state=failure
+            description="Certification failed — do not promote"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="${state}" \
+            -f context=production-certification \
+            -f description="${description}" >/dev/null
+          echo "published production-certification=${state} for ${SHA}"
