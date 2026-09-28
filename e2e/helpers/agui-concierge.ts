@@ -118,6 +118,13 @@ export function assertRunCompleted(
     );
   }
 
+  // Order is part of the contract. The server emits through AG-UI's own
+  // `verifyEvents`, which refuses a stream whose first event is not RUN_STARTED,
+  // so a reversed stream did not come from a healthy run.
+  if (types.indexOf("RUN_FINISHED") < types.indexOf("RUN_STARTED")) {
+    throw new Error(`agent/run emitted RUN_FINISHED before RUN_STARTED; got: ${shown}`);
+  }
+
   for (const event of events) {
     if (event.type !== "RUN_STARTED" && event.type !== "RUN_FINISHED") continue;
     if (event.threadId !== expected.threadId || event.runId !== expected.runId) {

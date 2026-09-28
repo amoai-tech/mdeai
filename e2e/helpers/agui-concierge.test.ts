@@ -70,15 +70,17 @@ const eventStream = (types: string[]) =>
   sse(types.map((type) => ({ type, threadId: "t", runId: "r" })));
 
 /**
- * The two lifecycle events a healthy server echoes back: it copies the
- * threadId and runId it was handed, exactly as the CopilotKit route + Mastra
- * adapter do (`agent.threadId = input.threadId`, `runId: input.runId`).
+ * The exact SSE body a healthy server returns: it copies the threadId and runId
+ * it was handed, exactly as the CopilotKit route + Mastra adapter do
+ * (`agent.threadId = input.threadId`, `runId: input.runId`).
+ *
+ * Written out rather than fed through the generic `sse` loop: these two events
+ * are the whole response, and keeping request-derived values out of a generic
+ * loop keeps it obvious that nothing here interprets the payload.
  */
-const echoLifecycle = (seen: Seen, type: string) => ({
-  type,
-  threadId: seen.body?.threadId,
-  runId: seen.body?.runId,
-});
+const echoTurn = (seen: Seen) =>
+  `data: ${JSON.stringify({ type: "RUN_STARTED", threadId: seen.body?.threadId, runId: seen.body?.runId })}\n\n` +
+  `data: ${JSON.stringify({ type: "RUN_FINISHED", threadId: seen.body?.threadId, runId: seen.body?.runId })}\n\n`;
 
 const ok = (res: ServerResponse, body: string) => {
   res.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -107,7 +109,7 @@ describe("SAN-1330 · CopilotKit envelope", () => {
 
   it("sends the requested agentId and threadId on the wire", async () => {
     const { url, requests } = await serve((seen, res) =>
-      ok(res, sse([echoLifecycle(seen, "RUN_STARTED"), echoLifecycle(seen, "RUN_FINISHED")])),
+      ok(res, echoTurn(seen)),
     );
 
     await runConciergeAgent({ url, threadId: THREAD, agentId: "conciergeAgent" });
@@ -140,6 +142,19 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
       { type: "RUN_FINISHED", threadId: THREAD, runId: "r" },
     ] as AgUiEvent[];
     expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(/RUN_ERROR/);
+  });
+
+  it("throws when RUN_FINISHED arrives before RUN_STARTED", () => {
+    // Order is part of the contract: the server emits through AG-UI's own
+    // `verifyEvents`, which refuses a stream whose first event is not
+    // RUN_STARTED. A reversed stream is therefore malformed, not a finished turn.
+    const events = [
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r" },
+      { type: "RUN_STARTED", threadId: THREAD, runId: "r" },
+    ] as AgUiEvent[];
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(
+      /before RUN_STARTED/,
+    );
   });
 
   it("fails the request itself on a non-2xx reply", async () => {
@@ -175,7 +190,7 @@ describe("SAN-1330 · a completed stream must belong to the requested run", () =
 
   it("accepts a stream that echoes the requested threadId and generated runId", async () => {
     const { url, requests } = await serve((seen, res) =>
-      ok(res, sse([echoLifecycle(seen, "RUN_STARTED"), echoLifecycle(seen, "RUN_FINISHED")])),
+      ok(res, echoTurn(seen)),
     );
 
     const { events, threadId, runId } = await runConciergeAgent({ url, threadId: THREAD });

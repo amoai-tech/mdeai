@@ -67,6 +67,12 @@ test("requires RUN_STARTED, no RUN_ERROR, and RUN_FINISHED for THIS run", () => 
   assert.match(agui, /event\.threadId !== expected\.threadId/);
   assert.match(agui, /event\.runId !== expected\.runId/);
   assert.match(agui, /expected:\s*\{\s*threadId:\s*string;\s*runId:\s*string\s*\}/);
+  // Order is part of the contract too: a reversed stream is malformed, not a
+  // completed turn, and must not certify anything.
+  assert.match(
+    agui,
+    /types\.indexOf\(["']RUN_FINISHED["']\)\s*<\s*types\.indexOf\(["']RUN_STARTED["']\)/,
+  );
   // Decoding is the SDK's job, not string matching on the raw body.
   assert.doesNotMatch(spec, /runResponse\.json\(\)/);
   assert.doesNotMatch(spec, /runResponse\.text\(\)/);
