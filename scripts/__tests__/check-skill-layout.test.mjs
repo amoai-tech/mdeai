@@ -29,8 +29,9 @@ function skillBody(name) {
  * Write a canonical skill and (by default) a faithful exposure mirror.
  *
  * `mirrorEntries` lets a test ship an intentionally incomplete mirror, which is
- * the defect this checker previously missed. `absoluteLink` swaps the relative
- * symlink for an absolute one, which must also be rejected.
+ * the defect this checker previously missed. `linkMode` selects how the exposure
+ * entry is written: a relative symlink (the contract), an absolute symlink, or a
+ * plain copy — the latter two must both be rejected.
  */
 function writeSkill(
   root,
@@ -40,8 +41,7 @@ function writeSkill(
     files = {},
     mirror = true,
     mirrorEntries,
-    copies = false,
-    absoluteLink = false,
+    linkMode = "relative",
     extraExposure = [],
   } = {},
 ) {
@@ -63,8 +63,8 @@ function writeSkill(
   for (const entry of new Set(mirrorEntries ?? topLevel)) {
     const link = path.join(expoDir, entry);
     const canonicalEntry = path.join(skillDir, entry);
-    if (copies) fs.writeFileSync(link, "copy of canonical content");
-    else if (absoluteLink) fs.symlinkSync(canonicalEntry, link);
+    if (linkMode === "copy") fs.writeFileSync(link, "copy of canonical content");
+    else if (linkMode === "absolute") fs.symlinkSync(canonicalEntry, link);
     else fs.symlinkSync(path.relative(expoDir, canonicalEntry), link);
   }
   for (const entry of extraExposure) fs.writeFileSync(path.join(expoDir, entry), "extra");
@@ -162,14 +162,14 @@ test("a longer fence is not closed early by a shorter one inside it", () => {
 });
 
 test("fails when an exposure entry is a copy rather than a symlink", () => {
-  const root = writeSkill(tmpRepo(), "alpha", { copies: true });
+  const root = writeSkill(tmpRepo(), "alpha", { linkMode: "copy" });
 
   const output = failing(root);
   assert.match(output, /Codex exposure entry is not a symlink/);
 });
 
 test("fails when an exposure symlink is absolute", () => {
-  const root = writeSkill(tmpRepo(), "alpha", { absoluteLink: true });
+  const root = writeSkill(tmpRepo(), "alpha", { linkMode: "absolute" });
 
   const output = failing(root);
   assert.match(output, /symlink is absolute, expected relative/);
