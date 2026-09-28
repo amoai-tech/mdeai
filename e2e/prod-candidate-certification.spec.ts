@@ -114,6 +114,29 @@ test.describe("SAN-1330 staged production candidate certification", () => {
         timeout: 120_000,
       });
       expect(runResponse.status(), "authenticated concierge agent/run").toBe(200);
+
+      // A 200 here proves nothing on its own. The AG-UI handler ALWAYS answers
+      // 200 with `text/event-stream`, and the Mastra adapter signals failure via
+      // observable.error(), which createSseEventResponse only logs before closing
+      // the stream. A run that dies in agent init, a tool, or the model therefore
+      // looks identical to a success: same status, same content type, a stream
+      // that simply ends. The adapter emits RUN_FINISHED from onRunFinished() and
+      // ONLY on that path, so its presence is the real proof the turn completed —
+      // the API-level equivalent of the waitForCopilotIdle the old UI path used.
+      expect(
+        runResponse.headers()["content-type"],
+        "agent/run must answer with an AG-UI event stream",
+      ).toContain("text/event-stream");
+
+      const stream = await runResponse.text();
+      expect(stream, "run must emit RUN_STARTED").toMatch(
+        /"type"\s*:\s*"RUN_STARTED"/,
+      );
+      expect(
+        stream,
+        `run must emit RUN_FINISHED — a bare HTTP 200 does not certify the turn. Stream was:\n${stream.slice(0, 800)}`,
+      ).toMatch(/"type"\s*:\s*"RUN_FINISHED"/);
+
       await expect
         .poll(() => threadCount(identity!.userId), { timeout: 90_000 })
         .toBeGreaterThan(0);

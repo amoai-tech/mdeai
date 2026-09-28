@@ -21,7 +21,12 @@ test("fails closed in CI when candidate URL is missing", () => {
 
 
 test("keeps pre-promotion certification independent of Maps browser referrer restrictions", () => {
-  assert.doesNotMatch(spec, /gotoConcierge|sendConciergeMessage|waitForCopilotIdle/);
+  // Require a CALL, not a mention: the spec legitimately names these helpers in
+  // comments explaining why it avoids the Maps-dependent UI path.
+  assert.doesNotMatch(
+    spec,
+    /\b(?:gotoConcierge|sendConciergeMessage|waitForCopilotIdle)\s*\(/,
+  );
   assert.match(spec, /method:\s*["']agent\/run["']/);
   // `agent/connect` only opens an SSE stream and never dispatches `messages`, so
   // a certification built on it can pass without the agent processing "ping".
@@ -32,4 +37,10 @@ test("keeps pre-promotion certification independent of Maps browser referrer res
   assert.match(spec, /role:\s*["']user["']/);
   assert.match(spec, /content:\s*["']ping["']/);
   assert.match(spec, /page\.request\.post\(route\(["']\/api\/copilotkit["']\)/);
+  // A bare HTTP 200 certifies nothing: the AG-UI handler always answers 200 with
+  // `text/event-stream`, and a failed run looks identical to a successful one.
+  // The spec must assert the terminal AG-UI event that only a completed run emits.
+  assert.match(spec, /text\/event-stream/);
+  assert.match(spec, /RUN_FINISHED/);
+  assert.doesNotMatch(spec, /runResponse\.json\(\)/);
 });
