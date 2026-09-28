@@ -1,5 +1,6 @@
 {
   "skill_name": "code-review",
+  "version": "1.0.0",
   "evals": [
     {
       "id": 1,

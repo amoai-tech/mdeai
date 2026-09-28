@@ -1,5 +1,6 @@
 {
   "skill_name": "testing",
+  "version": "1.0.0",
   "evals": [
     {
       "id": 1,
