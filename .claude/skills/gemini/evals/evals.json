@@ -1,6 +1,6 @@
 {
   "skill_name": "gemini",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "evals": [
     {
       "id": 1,
@@ -31,6 +31,78 @@
       "files": [],
       "expectations": [
         "Does not route generic Mastra workflow logic to Gemini"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Find current rooftop restaurants near tonight's event and explain why each is relevant.",
+      "expected_output": "Routes fresh discovery to Google Search and place/location reasoning to Maps Grounding where supported, preserves citations/attribution, and does not perform an authenticated booking action.",
+      "files": [],
+      "expectations": [
+        "Uses current-information grounding rather than stale remembered facts",
+        "Separates Maps grounding from Maps UI/routes concerns",
+        "Preserves citations or grounding metadata",
+        "Does not mutate booking or database state"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Read this venue URL and tell me the event time, ticket rules, and nearby dinner options.",
+      "expected_output": "Uses URL Context for the supplied public page, adds Search or Maps only if needed for missing/current/place information, and keeps the tool set scoped.",
+      "files": [],
+      "expectations": [
+        "Prefers URL Context for a known public URL",
+        "Does not send private/authenticated URLs",
+        "Uses additional grounding tools only when needed",
+        "Accounts for citation and attribution requirements"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Book a viewing for this apartment.",
+      "expected_output": "Does not treat Gemini grounding as the action layer; routes the authenticated booking action through the MDE/Mastra domain tool and backend authorization path.",
+      "files": [],
+      "expectations": [
+        "Separates information gathering from authenticated actions",
+        "Routes booking to an MDE/Mastra domain tool",
+        "Keeps persisted mutation behind authenticated backend/Supabase"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Research this venue for 20 minutes and notify me when finished.",
+      "expected_output": "Recognizes a long-running workflow, preserves the existing CopilotKit/Mastra runtime by default, and evaluates bounded polling versus a validated idempotent webhook rather than inventing an unnecessary async architecture.",
+      "files": [],
+      "expectations": [
+        "Recognizes the request as potentially long-running",
+        "Does not replace the existing runtime without need",
+        "Requires bounded polling or validated idempotent webhook behavior",
+        "Requires persisted job/correlation state for background work"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Move all MDE agents to Gemini managed agents so we can use agent environments, credentials, and hooks everywhere.",
+      "expected_output": "Does not redesign MDE automatically; explains that Mastra remains the default orchestrator and requires an architecture review before adopting managed agents.",
+      "files": [],
+      "expectations": [
+        "Keeps Mastra as the default orchestration owner",
+        "Requires a concrete capability gap before adopting managed agents",
+        "Requires review of auth, tenant isolation, credentials, retention, observability, cost, and cancellation",
+        "Does not treat user approval as backend authorization"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Our concierge uses Search, URL Context, Maps Grounding, and several custom tools on every request. Make it faster and cheaper without breaking grounded answers.",
+      "expected_output": "Applies tool-budget and model-class guidance: use the smallest capable model, skip unnecessary retrieval, reuse evidence, bound calls/loops, preserve citations, and verify latency/token/fallback behavior.",
+      "files": [],
+      "expectations": [
+        "Uses the smallest capable model class rather than hard-coding a future model name",
+        "Removes unnecessary grounding/tool calls",
+        "Adds explicit stop/timeout conditions",
+        "Preserves grounding metadata and graceful fallback",
+        "Calls for latency/token/tool-count verification"
       ]
     }
   ]
