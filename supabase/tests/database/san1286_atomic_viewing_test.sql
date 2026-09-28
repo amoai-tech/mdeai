@@ -3,13 +3,28 @@
 -- full rental contract, and is idempotent for authenticated and guest callers.
 
 begin;
-select plan(60);
+select plan(61);
 
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
 values
   ('a2860000-0000-4000-8000-000000000001', 'san1286-renter@example.com', 'SAN 1286 Renter'),
   ('a2860000-0000-4000-8000-000000000003', 'san1286-other@example.com', 'SAN 1286 Other');
+
+-- SAN-1349: a requestable listing must have a canonical owner. These fixtures were designed
+-- before owner enforcement existed, so the owner chain is added here rather than weakening the
+-- RPC predicate. landlord_profiles.user_id is FK → auth.users(id), hence the real auth row.
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
+                        email_confirmed_at, created_at, updated_at)
+values
+  ('a2860000-0000-4000-8000-000000000020', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'san1286-broker@example.com',
+   extensions.crypt('san1286-fixture', extensions.gen_salt('bf')), now(), now(), now());
+
+insert into public.landlord_profiles (id, user_id, display_name, verification_status)
+values
+  ('a2860000-0000-4000-8000-000000000021', 'a2860000-0000-4000-8000-000000000020',
+   'SAN1286 Broker', 'approved');
 
 insert into public.trips (id, user_id, title, start_date, end_date)
 values
@@ -35,11 +50,32 @@ values
     '2099-10-31'
   );
 
-insert into public.apartments (id, title, slug, neighborhood, status, available_to)
+-- SAN-1349: a requestable listing is active AND moderation-approved AND published AND
+-- canonically owned. `san1286-inactive` intentionally stays outside the published state.
+insert into public.apartments
+  (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
+   landlord_id, available_to)
 values
-  ('a2860000-0000-4000-8000-000000000010', 'SAN-1286 Active', 'san1286-active', 'Laureles', 'active', '2099-12-31'),
-  ('a2860000-0000-4000-8000-000000000011', 'SAN-1286 Inactive', 'san1286-inactive', 'Laureles', 'inactive', '2099-12-31'),
-  ('a2860000-0000-4000-8000-000000000012', 'SAN-1286 Other', 'san1286-other', 'Laureles', 'active', '2099-12-31');
+  ('a2860000-0000-4000-8000-000000000010', 'SAN-1286 Active', 'san1286-active', 'Laureles',
+   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2099-12-31'),
+  ('a2860000-0000-4000-8000-000000000011', 'SAN-1286 Inactive', 'san1286-inactive', 'Laureles',
+   'inactive', 'approved', 'paused', 'a2860000-0000-4000-8000-000000000021', '2099-12-31'),
+  ('a2860000-0000-4000-8000-000000000012', 'SAN-1286 Other', 'san1286-other', 'Laureles',
+   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2099-12-31');
+
+-- Fixture integrity: the two listings these tests expect to be requestable really do satisfy
+-- every SAN-1349 eligibility precondition. Without this, a later edit could quietly make the
+-- success assertions pass for the wrong reason.
+select is(
+  (select count(*)::int from public.apartments
+    where slug in ('san1286-active', 'san1286-other')
+      and status = 'active'
+      and moderation_status = 'approved'
+      and listing_workflow_status = 'published'
+      and landlord_id is not null),
+  2,
+  'requestable fixtures carry a canonical owner and the approved + published workflow state'
+);
 
 -- Contract / ACL / index shape.
 select ok(

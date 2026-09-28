@@ -1,0 +1,636 @@
+
+> mdeapp@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.6 /home/sk/mdeai
+
+ ✓ src/__tests__/maps-upstream-drift.test.ts (2 tests) 150ms
+ ✓ src/mastra/lib/search-grounding-quota.test.ts (2 tests) 181ms
+ ✓ src/mastra/lib/__tests__/places-retry.test.ts (6 tests) 332ms
+     ✓ retries then succeeds on transient error  324ms
+ ✓ src/__tests__/skill-layout-contract.test.ts (5 tests) 268ms
+ ✓ src/__tests__/maps-check-classification.test.ts (12 tests) 273ms
+stderr | src/mastra/tools/__tests__/search-rentals-date-passthrough.test.ts > searchRentals — date params pass-through to intelligent path > forwards checkIn/checkOut/stayType when queryText is present
+[search-logs] service role unavailable — skip insert
+
+ ✓ src/mastra/lib/__tests__/intelligence-event-search-errors.test.ts (1 test) 507ms
+     ✓ throws when structured events query fails (not empty success)  504ms
+stderr | src/mastra/tools/__tests__/search-rentals-date-passthrough.test.ts > searchRentals — date params pass-through to intelligent path > falls back instead of throwing when intelligent search fails
+[search-rentals] intelligent search failed, falling back to structured search: intelligent layer unavailable
+
+stderr | src/mastra/tools/__tests__/search-rentals-date-passthrough.test.ts > searchRentals — date params pass-through to intelligent path > falls back instead of throwing when intelligent search fails
+[search-rentals] Supabase query failed, falling back to mock: Supabase client unavailable
+
+stderr | src/mastra/tools/__tests__/search-rentals-date-passthrough.test.ts > searchRentals — date params pass-through to intelligent path > does not call searchRentalsIntelligent when queryText is absent
+[search-rentals] Supabase query failed, falling back to mock: Supabase client unavailable
+
+ ✓ src/mastra/tools/__tests__/search-rentals-date-passthrough.test.ts (3 tests) 335ms
+     ✓ forwards checkIn/checkOut/stayType when queryText is present  328ms
+stdout | src/mastra/tools/__tests__/search-rentals-monthly-price.test.ts > searchRentals — SAN-1356 monthly price projection > preserves price_monthly through the Mastra tool output envelope
+[audit:pre] search-rentals { risk: 'low' }
+
+stdout | src/mastra/tools/__tests__/search-rentals-monthly-price.test.ts > searchRentals — SAN-1356 monthly price projection > preserves price_monthly through the Mastra tool output envelope
+[audit:post] search-rentals { duration_ms: 1, status: 'ok' }
+
+ ✓ src/mastra/tools/__tests__/search-rentals-monthly-price.test.ts (2 tests) 463ms
+     ✓ selects price_monthly so stored monthly rent reaches rental cards  455ms
+ ✓ src/mastra/lib/__tests__/intelligence-event-search-coverage.test.ts (3 tests) 595ms
+     ✓ returns fallback when Supabase env is missing  567ms
+ ✓ src/mastra/lib/__tests__/intelligence-rental-search-availability.test.ts (5 tests) 396ms
+     ✓ drops expired hybrid rows and preserves stored monthly price  381ms
+stderr | src/__tests__/api/partners-activate.test.ts > POST /api/partners/activate > returns generic message for server errors
+[/api/partners/activate] insert_failed relation "partners" does not exist
+
+ ✓ src/__tests__/api/partners-activate.test.ts (16 tests) 317ms
+stderr | src/lib/__tests__/distributed-rate-limit.test.ts > distributed-rate-limit > fails open when RPC errors
+[distributed-rate-limit] RPC error, failing open: connection failed
+
+ ✓ src/lib/__tests__/distributed-rate-limit.test.ts (8 tests) 56ms
+ ✓ src/__tests__/check-env-contract.test.ts (12 tests) 861ms
+ ✓ src/lib/leads/__tests__/submit-schedule-viewing.test.ts (8 tests) 63ms
+stderr | src/lib/__tests__/copilotkit-distributed-rate-limit.test.ts > copilotkit-distributed-rate-limit > returns 429 on the 31st anonymous request from one IP
+[copilotkit rate limit] {
+  route: 'copilotkit',
+  scope: 'anon',
+  ip: '203.0.*.*',
+  userId: null,
+  count: 31,
+  max: 30,
+  storeAvailable: true
+}
+
+stderr | src/lib/__tests__/copilotkit-distributed-rate-limit.test.ts > copilotkit-distributed-rate-limit > returns 429 when authenticated user exceeds the user limit
+[copilotkit rate limit] {
+  route: 'copilotkit',
+  scope: 'user',
+  ip: '203.0.*.*',
+  userId: 'bbbbbbbb…',
+  count: 121,
+  max: 120,
+  storeAvailable: true
+}
+
+stderr | src/lib/__tests__/copilotkit-distributed-rate-limit.test.ts > copilotkit-distributed-rate-limit > returns 429 when IP hard ceiling is exceeded before auth
+[copilotkit rate limit] {
+  route: 'copilotkit',
+  scope: 'ip-hard',
+  ip: '186.81.*.*',
+  userId: null,
+  count: 301,
+  max: 300,
+  storeAvailable: true
+}
+
+ ✓ src/app/api/leads/schedule-viewing/route.test.ts (12 tests) 128ms
+stderr | src/lib/__tests__/copilotkit-distributed-rate-limit.test.ts > copilotkit-distributed-rate-limit > fails closed on obvious local flood when durable store is unavailable
+[copilotkit rate limit] {
+  route: 'copilotkit',
+  scope: 'ip-hard:emergency-local',
+  ip: '203.0.*.*',
+  userId: null,
+  count: 0,
+  max: 300,
+  storeAvailable: false
+}
+
+ ✓ src/lib/__tests__/copilotkit-distributed-rate-limit.test.ts (8 tests) 98ms
+ ✓ src/lib/__tests__/dist-leak-scan-hook.test.ts (15 tests) 1200ms
+stdout | src/mastra/workflows/event-venue-booking-workflow.test.ts > eventVenueBookingWorkflow > validates then suspends for admin review
+[mastra-storage] using local dev LibSQL
+
+ ✓ src/mastra/workflows/event-venue-booking-workflow.test.ts (3 tests) 132ms
+ ✓ src/components/host/__tests__/host-events-grid.test.tsx (1 test) 90ms
+ ✓ src/__tests__/pr-agent-skills-contract.test.ts (10 tests) 1412ms
+     ✓ keeps every package.json review skill inside the configured budget  1401ms
+ ✓ src/__tests__/real-estate-skill-canonical.test.ts (2 tests) 111ms
+ ✓ src/__tests__/maps-network-retry.test.ts (5 tests) 57ms
+ ✓ src/components/host/__tests__/host-event-card.test.tsx (5 tests) 66ms
+ ✓ src/components/copilot/__tests__/rental-card-copy.test.tsx (3 tests) 93ms
+ ✓ src/components/sheets/__tests__/event-venue-detail-body.test.tsx (2 tests) 87ms
+ ✓ src/components/copilot/__tests__/event-card.test.tsx (2 tests) 59ms
+ ✓ src/lib/__tests__/places-photo-rate-limit.test.ts (4 tests) 67ms
+ ✓ src/components/rentals/__tests__/rental-browse-card.test.tsx (9 tests) 97ms
+ ✓ src/lib/__tests__/places-detail-rate-limit.test.ts (8 tests) 81ms
+ ✓ src/__tests__/approval-panel.test.tsx (2 tests) 32ms
+ ✓ src/__tests__/check-mastra-schema-contract.test.ts (17 tests) 1886ms
+     ✓ rejects a contract path outside the project root before reading it  842ms
+ ✓ src/components/modals/__tests__/schedule-viewing-modal-submit.test.tsx (4 tests) 251ms
+ ✓ src/lib/leads/__tests__/schedule-viewing-time.test.ts (11 tests) 14ms
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > publishes a fast-path exchange into the CopilotKit agent message stream
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > queues a fast-path exchange until the agent becomes available
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > retains queued messages when agent hydration flush throws and retries later
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > queues a clarification until the agent becomes available
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > does not replay queued messages after local chat is cleared
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > publishes a clarification into the same agent message stream
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > preserves the CopilotKit transcript order supplied by the agent
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-local-chat-placement.test.tsx > Concierge transcript ownership > does not override CopilotKit welcome-screen ownership
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/chat/__tests__/concierge-local-chat-placement.test.tsx (8 tests) 77ms
+ ✓ src/components/host/__tests__/host-os-body.test.tsx (6 tests) 203ms
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > does not send when isReady is false
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > does not send when isLoading is true
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > sends when both isReady is true and isLoading is false
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > does not duplicate a pending send across readiness reconnect transitions
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > releases the send gate on handled === false
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > releases the send gate on handled === false
+The current testing environment is not configured to support act(...)
+
+ ✓ src/lib/events/__tests__/sales-insights-core.test.ts (18 tests) 44ms
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > releases the send gate on promise rejection
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > releases the send gate on promise rejection
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > strips empty query and replaces URL without sending
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx > ConciergeInitialPrompt — SAN-1356 send gate behavior > only replaces URL after successful handling
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx (8 tests) 103ms
+ ✓ src/__tests__/pr-agent-evidence.test.ts (12 tests) 100ms
+ ✓ src/lib/events/__tests__/host-dashboard-result.test.ts (17 tests) 42ms
+stderr | src/components/maps/__tests__/clustered-category-markers.test.tsx > ClusteredCategoryMarkers (MAP-009) > calls clearMarkers on unmount (P3 cleanup)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/events/__tests__/event-host-block.test.tsx (3 tests) 16ms
+ ✓ src/components/maps/__tests__/clustered-category-markers.test.tsx (3 tests) 34ms
+ ✓ src/components/sheets/__tests__/event-venue-offerings-sheet.test.tsx (3 tests) 26ms
+ ✓ src/lib/supabase/__tests__/user-scoped.test.ts (1 test) 62ms
+ ✓ src/lib/events/__tests__/format-event.test.ts (8 tests) 30ms
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > rejects whitespace-only business name
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > rejects whitespace-only business name
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/copilot/__tests__/restaurant-card.test.tsx (7 tests) 44ms
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > shows API error when activation fails
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > shows API error when activation fails
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > redirects to login when activation returns 401
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/tickets/__tests__/my-tickets-list.test.tsx (4 tests) 70ms
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > redirects to login when activation returns 401
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > shows deferred success when dashboard is not live
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/platform/maps/__tests__/maps-security.test.ts (1 test) 15ms
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > shows deferred success when dashboard is not live
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > redirects immediately when dashboard redirect is not deferred
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/partners/__tests__/partner-signup-wizard.test.tsx > PartnerSignupWizard (submit flow) > redirects immediately when dashboard redirect is not deferred
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/partners/__tests__/partner-signup-wizard.test.tsx (9 tests) 208ms
+ ✓ src/components/partners/__tests__/partner-signup-type-picker.test.tsx (8 tests) 28ms
+ ✓ src/components/events/__tests__/event-browse-card.test.tsx (2 tests) 51ms
+ ✓ src/__tests__/partners/activate-client.test.ts (8 tests) 29ms
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > returns isReady=false when no agent is available
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > returns isReady=false when runtimeUrl is missing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > returns isReady=false while runtime is connecting
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > reacts to the cold runtime connecting -> connected subscription event
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > uses a ready local provider without live CopilotKit transport in deterministic E2E mode
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/chat/__tests__/concierge-coagent-readiness.test.tsx > ConciergeCoAgentProvider — readiness behavior > returns isReady=true when runtime is already connected
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/chat/__tests__/concierge-coagent-readiness.test.tsx (6 tests) 28ms
+ ✓ src/components/browse/__tests__/venue-card-shell.test.tsx (5 tests) 21ms
+ ✓ src/__tests__/api/places-detail-route.test.ts (3 tests) 18ms
+stderr | src/__tests__/api/copilotkit-rate-limit-route.test.ts > POST /api/copilotkit — distributed rate limit gate > returns 500 when hard-ceiling check throws inside try/catch
+[copilotkit route failed] Error: rpc exploded
+    at /home/sk/mdeai/src/__tests__/api/copilotkit-rate-limit-route.test.ts:143:45
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+stderr | src/__tests__/api/copilotkit-rate-limit-route.test.ts > POST /api/copilotkit — authorization runs before agent execution (SAN-1358 · D20) > fails closed with 500 when thread ownership cannot be verified
+[copilotkit route failed] Error: service role client unavailable
+    at /home/sk/mdeai/src/__tests__/api/copilotkit-rate-limit-route.test.ts:234:54
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///home/sk/mdeai/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+
+ ✓ src/__tests__/api/copilotkit-rate-limit-route.test.ts (11 tests) 21ms
+ ✓ src/lib/leads/__tests__/commerce-schemas.test.ts (7 tests) 23ms
+ ✓ src/lib/events/__tests__/host-dashboard-kpis.test.ts (6 tests) 19ms
+ ✓ src/components/modals/__tests__/schedule-viewing-modal.test.tsx (12 tests) 32ms
+ ✓ src/lib/trips/__tests__/itinerary-logic.test.ts (3 tests) 20ms
+ ✓ src/lib/place-details-client-fetch.test.ts (3 tests) 27ms
+ ✓ src/components/sheets/__tests__/event-proposal-shell.test.tsx (3 tests) 35ms
+ ✓ src/components/copilot/__tests__/domain-results.test.tsx (4 tests) 26ms
+ ✓ src/components/events/__tests__/event-venue-section.test.tsx (1 test) 14ms
+ ✓ src/lib/__tests__/event-search-fast-path.test.ts (20 tests) 12ms
+ ✓ src/mastra/tools/__tests__/search-grounded-places-fallback.test.ts (5 tests) 10ms
+ ✓ src/lib/__tests__/rental-display.test.ts (4 tests) 19ms
+ ✓ src/mastra/tools/__tests__/hostops-insight-tool.test.ts (4 tests) 10ms
+ ✓ src/lib/copilotkit-thread-ownership.test.ts (23 tests) 21ms
+ ✓ src/lib/trips/__tests__/format-trip-dates.test.ts (1 test) 18ms
+ ✓ src/app/api/admin/event-bookings/route.test.ts (7 tests) 15ms
+ ✓ src/lib/venues/submit-venue-booking.test.ts (3 tests) 28ms
+ ✓ src/lib/copilotkit-auth.test.ts (24 tests) 20ms
+ ✓ src/components/cafe/__tests__/cafe-detail-panel-enrichment.test.tsx (1 test) 24ms
+ ✓ src/app/api/places/photo/route.test.ts (3 tests) 33ms
+stderr | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurants fallback + envelope > MA-P0-05 returns curated fallback when Supabase client unavailable
+[search-restaurants] Supabase client unavailable — using fallback list
+
+stderr | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurants fallback + envelope > MA-P0-07 envelope includes results, total, and source
+[search-restaurants] Supabase client unavailable — using fallback list
+
+stdout | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > UX-T-014 returns structured envelope for CopilotKit disabled render (no writer.custom)
+[audit:pre] search-restaurants { risk: 'low' }
+
+stderr | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > UX-T-014 returns structured envelope for CopilotKit disabled render (no writer.custom)
+[search-restaurants] Supabase client unavailable — using fallback list
+
+stdout | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > UX-T-014 returns structured envelope for CopilotKit disabled render (no writer.custom)
+[audit:post] search-restaurants { duration_ms: 0, status: 'ok' }
+
+stdout | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable
+[audit:pre] search-restaurants { risk: 'low' }
+
+stderr | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable
+[search-restaurants] Supabase client unavailable — using fallback list
+
+stdout | src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts > searchRestaurantsTool execute > MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable
+[audit:post] search-restaurants { duration_ms: 1, status: 'ok' }
+
+ ✓ src/mastra/tools/__tests__/search-restaurants-tool-fallback.test.ts (4 tests) 25ms
+ ✓ src/components/browse/__tests__/venue-browse-card.test.tsx (4 tests) 29ms
+ ✓ src/lib/events/__tests__/load-host-dashboard.test.ts (3 tests) 20ms
+ ✓ src/components/host/__tests__/host-analytics-panels.test.tsx (10 tests) 28ms
+ ✓ src/components/host/__tests__/host-dashboard-overview.test.tsx (9 tests) 36ms
+ ✓ src/lib/__tests__/intent-slots.test.ts (9 tests) 16ms
+ ✓ src/lib/supabase/__tests__/middleware-host-public.test.ts (11 tests) 17ms
+ ✓ src/lib/__tests__/api-ip-rate-limit.test.ts (4 tests) 12ms
+ ✓ src/components/partners/__tests__/partner-signup-nav.test.tsx (2 tests) 23ms
+ ✓ src/lib/__tests__/rental-prompt-injection.test.ts (6 tests) 10ms
+ ✓ src/components/admin/__tests__/event-bookings-status.test.tsx (6 tests) 23ms
+ ✓ src/components/copilot/__tests__/attraction-card.test.tsx (1 test) 23ms
+ ✓ src/lib/venues/venue-booking-status-display.test.ts (7 tests) 5ms
+stderr | src/app/api/grounded/search/__tests__/route.test.ts > POST /api/grounded/search > forwards intent nightlife to grounded tool
+[api/grounded/search] empty results { query: 'popular venues tonight in Provenza', metadata: undefined }
+
+ ✓ src/app/api/grounded/search/__tests__/route.test.ts (2 tests) 13ms
+ ✓ src/components/copilot/__tests__/cafe-result-card.test.tsx (2 tests) 26ms
+ ✓ src/mastra/scorers/__tests__/faithfulness.test.ts (10 tests | 2 skipped) 18ms
+ ✓ src/components/venues/__tests__/venue-booking-status-chip.test.tsx (3 tests) 16ms
+ ✓ src/components/maps/__tests__/selected-place-overlay-card.test.tsx (2 tests) 14ms
+stderr | src/lib/venues/fetch-event-venue-offerings.test.ts > fetchEventVenueOfferingsByPlaceId > returns null when venue_event_offerings table is absent (prod-safe)
+[fetchEventVenueOfferings] partner_locations.00000000-0000-4001-8201-000000000001 has no partner_id — proposal CTA will be absent
+
+ ✓ src/app/api/events/proposal/route.test.ts (6 tests) 18ms
+ ✓ src/lib/venues/fetch-event-venue-offerings.test.ts (5 tests) 11ms
+ ✓ src/components/empty/__tests__/empty-state.test.tsx (1 test) 20ms
+ ✓ src/components/chat/__tests__/concierge-error-notice.test.tsx (4 tests) 16ms
+ ✓ src/mastra/tools/__tests__/search-grounded-places-cafe-fallback.test.ts (3 tests) 12ms
+ ✓ src/lib/__tests__/router-intent.test.ts (28 tests) 16ms
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > returns sign-in message when user is anonymous
+[audit:pre] request-venue-booking { risk: 'medium' }
+
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > returns sign-in message when user is anonymous
+[audit:post] request-venue-booking { duration_ms: 1, status: 'ok' }
+
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > inserts pending row for authenticated user
+[audit:pre] request-venue-booking { risk: 'medium' }
+
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > inserts pending row for authenticated user
+[audit:post] request-venue-booking { duration_ms: 1, status: 'ok' }
+
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > surfaces idempotency conflict
+[audit:pre] request-venue-booking { risk: 'medium' }
+
+stdout | src/mastra/tools/__tests__/request-venue-booking.test.ts > requestVenueBookingTool > surfaces idempotency conflict
+[audit:post] request-venue-booking { duration_ms: 1, status: 'ok' }
+
+ ✓ src/lib/__tests__/classify-router-parity.test.ts (10 tests) 18ms
+ ✓ src/mastra/tools/__tests__/request-venue-booking.test.ts (3 tests) 15ms
+ ✓ src/components/copilot/__tests__/grounded-place-card.test.tsx (5 tests) 16ms
+ ✓ src/lib/__tests__/cafe-search-fast-path.test.ts (5 tests) 13ms
+ ✓ src/lib/__tests__/flash-route-classifier.test.ts (8 tests) 17ms
+ ✓ src/mastra/lib/__tests__/intelligence-restaurant-venue-wrapper.test.ts (11 tests) 14ms
+ ✓ src/lib/__tests__/restaurant-search-fast-path.test.ts (11 tests) 22ms
+ ✓ src/lib/events/__tests__/admin-event-bookings-core.test.ts (8 tests) 13ms
+ ✓ src/mastra/lib/__tests__/intelligence-rental-search.test.ts (26 tests) 9ms
+ ✓ src/mastra/lib/storage.test.ts (11 tests) 21ms
+stderr | src/mastra/lib/__tests__/query-embedding.test.ts > embedQueryText > returns null on HTTP error response
+[query-embedding] embed API failed: HTTP 429 — hybrid search will use keyword fallback
+
+stderr | src/mastra/lib/__tests__/query-embedding.test.ts > embedQueryText > embedQueryTextDetailed reports HTTP 403 as http_error
+[query-embedding] embed API failed: HTTP 403 — hybrid search will use keyword fallback
+
+stderr | src/mastra/lib/__tests__/query-embedding.test.ts > embedQueryText > returns null when fetch throws (network failure)
+[query-embedding] fetch error: network error — hybrid search will use keyword fallback
+
+stderr | src/mastra/lib/__tests__/query-embedding.test.ts > embedQueryText > returns null when embedding values are missing from response
+[query-embedding] empty embedding response — hybrid search will use keyword fallback
+
+ ✓ src/mastra/lib/__tests__/query-embedding.test.ts (8 tests) 12ms
+ ✓ src/components/copilot/__tests__/place-result-card.test.tsx (2 tests) 13ms
+ ✓ src/lib/__tests__/event-query-classifier.test.ts (12 tests) 12ms
+ ✓ src/mastra/lib/mastra-telemetry.test.ts (8 tests) 10ms
+ ✓ src/app/api/restaurants/search/route.test.ts (3 tests) 15ms
+ ✓ src/__tests__/maps-skill-canonical.test.ts (3 tests) 13ms
+ ✓ src/lib/__tests__/playwright-architecture-contract.test.ts (24 tests) 14ms
+ ✓ src/lib/__tests__/event-venue-booking-fast-path.test.ts (3 tests) 14ms
+ ✓ src/mastra/scorers/__tests__/grounding-coverage.test.ts (3 tests) 11ms
+ ✓ src/lib/rentals/__tests__/build-broker-dashboard-view.test.ts (3 tests) 24ms
+ ✓ src/__tests__/partner-schema-migrations.test.ts (9 tests) 10ms
+ ✓ src/lib/events/event-venue-booking-workflow-core.test.ts (6 tests) 18ms
+ ✓ src/lib/__tests__/event-venue-booking-intent.test.ts (13 tests) 11ms
+ ✓ src/lib/__tests__/parse-grounded-tool-result.test.ts (8 tests) 11ms
+ ✓ src/components/host/__tests__/host-os-nav.test.tsx (4 tests) 30ms
+ ✓ src/lib/events/event-venue-booking-core.test.ts (16 tests) 27ms
+ ✓ src/mastra/lib/adk-grounding-client.test.ts (6 tests) 19ms
+ ✓ src/lib/venues/venue-booking-core.test.ts (5 tests) 37ms
+ ✓ src/components/browse/__tests__/venue-card-placeholder.test.tsx (2 tests) 22ms
+stderr | src/mastra/tools/__tests__/search-restaurants-logic.test.ts > searchRestaurants — intelligent search fallback > falls back to curated list when intelligent search returns empty results
+[search-restaurants] intelligent path empty — using curated fallback
+
+ ✓ src/components/chat/__tests__/center-panel-map-results-slot.test.tsx (3 tests) 21ms
+stderr | src/mastra/tools/__tests__/search-restaurants-logic.test.ts > neighborhood sanitization > strips PostgREST special chars from neighborhood before filter
+[search-restaurants] Supabase client unavailable — using fallback list
+
+ ✓ src/mastra/tools/__tests__/search-restaurants-logic.test.ts (12 tests) 26ms
+ ✓ src/lib/__tests__/rental-date-filter.test.ts (12 tests) 19ms
+ ✓ src/mastra/lib/tool-audit-context.test.ts (7 tests) 10ms
+ ✓ src/lib/__tests__/concierge-send-user-message.test.ts (5 tests) 25ms
+ ✓ src/mastra/lib/token-usage-middleware.test.ts (4 tests) 22ms
+ ✓ src/components/chat/__tests__/concierge-thinking-indicator.test.tsx (4 tests) 15ms
+ ✓ src/components/copilot/__tests__/web-citation-list.test.tsx (3 tests) 14ms
+ ✓ src/components/chat/__tests__/lead-confirmation-banner.test.tsx (8 tests) 35ms
+ ✓ src/mastra/lib/run-audited-search.test.ts (3 tests) 19ms
+ ✓ src/__tests__/maps-reference-index.test.ts (3 tests) 15ms
+ ✓ src/components/browse/__tests__/browse-layout.test.tsx (1 test) 16ms
+ ✓ src/lib/commerce/__tests__/medusa-client.test.ts (9 tests) 25ms
+ ✓ src/app/api/venue-booking/request/route.test.ts (3 tests) 35ms
+ ✓ src/__tests__/pr-agent-routing.test.ts (11 tests) 16ms
+ ✓ src/__tests__/maps-skill-quality.test.ts (7 tests) 14ms
+ ✓ src/lib/__tests__/copilotkit-client-props.test.ts (3 tests) 9ms
+ ✓ src/mastra/tools/__tests__/search-events-logic.test.ts (8 tests) 12ms
+ ✓ src/platform/contracts/__tests__/map-ui-state.test.ts (2 tests) 8ms
+ ✓ src/lib/events/__tests__/hostops-read-core.test.ts (7 tests) 18ms
+ ✓ src/lib/venues/venue-booking-form-schema.test.ts (3 tests) 8ms
+ ✓ src/lib/__tests__/rental-query-parser.test.ts (28 tests) 20ms
+ ✓ e2e/helpers/maps-layout.send-retry.test.ts (9 tests) 13ms
+ ✓ src/lib/host/__tests__/host-os-nav.test.ts (21 tests) 12ms
+ ✓ src/lib/__tests__/rental-intent-schema.test.ts (4 tests) 16ms
+ ✓ src/components/sheets/__tests__/event-proposal-shell-core.test.ts (11 tests) 18ms
+ ✓ src/platform/copilot/__tests__/mastra-tool-action-names.test.ts (4 tests) 6ms
+ ✓ src/lib/events/__tests__/resolve-approval-commit.test.ts (6 tests) 10ms
+ ✓ src/lib/__tests__/rental-search-fast-path.test.ts (9 tests) 9ms
+ ✓ src/mastra/tools/__tests__/audit-wrapper.test.ts (1 test) 6ms
+ ✓ src/mastra/lib/map-adk-grounding-pins.test.ts (5 tests) 5ms
+ ✓ src/lib/events/__tests__/trusted-event-sources.test.ts (3 tests) 7ms
+ ✓ src/lib/rentals/__tests__/filter-broker-listings.test.ts (3 tests) 7ms
+ ✓ src/__tests__/review-testing-skill-consolidation.test.ts (3 tests) 5ms
+ ✓ src/mastra/tools/__tests__/search-attractions-logic.test.ts (12 tests) 10ms
+ ✓ src/lib/rentals/__tests__/broker-onboarding-validate.test.ts (7 tests) 7ms
+ ✓ src/lib/__tests__/intelligence-telemetry.test.ts (6 tests) 11ms
+ ✓ src/mastra/lib/__tests__/intelligence-event-search.test.ts (16 tests) 13ms
+ ✓ src/lib/place-details-cache.test.ts (5 tests) 17ms
+ ✓ src/mastra/lib/__tests__/intelligence-anchor-search.test.ts (7 tests) 8ms
+ ✓ src/lib/__tests__/google-maps-map-id.test.ts (9 tests) 10ms
+stdout | src/__tests__/smoke.test.ts
+[mastra-storage] using local dev LibSQL
+
+ ✓ src/components/maps/markers/category-map-marker.test.ts (6 tests) 5ms
+ ✓ src/components/chat/venue-booking-direct-hitl-core.test.ts (3 tests) 8ms
+stdout | src/__tests__/host-event-agent.test.ts
+[mastra-storage] using local dev LibSQL
+
+ ✓ src/lib/events/__tests__/list-published-events.test.ts (3 tests) 14ms
+ ✓ src/lib/subagents/subagent-contract.test.ts (12 tests) 9ms
+ ✓ src/lib/commerce/__tests__/commerce-env.test.ts (6 tests) 5ms
+ ✓ src/lib/supabase/__tests__/server-env.test.ts (19 tests) 10ms
+ ✓ src/lib/__tests__/rental-intent-gemini.test.ts (3 tests) 10ms
+ ✓ src/mastra/tools/__tests__/search-web-grounded-events.test.ts (3 tests) 9ms
+ ✓ src/mastra/tools/__tests__/search-grounded-places-quality.test.ts (11 tests) 9ms
+ ✓ src/app/api/events/[id]/public/__tests__/route.test.ts (2 tests) 9ms
+ ✓ src/lib/events/__tests__/event-row-to-host-card.test.ts (5 tests) 4ms
+ ✓ src/__tests__/event-draft.test.ts (5 tests) 9ms
+ ✓ src/mastra/lib/google-places-client.test.ts (11 tests) 14ms
+ ✓ src/__tests__/partners/parse-partner-signup-params.test.ts (11 tests) 7ms
+ ✓ src/mastra/lib/search-grounding-types.test.ts (3 tests) 10ms
+stderr | src/mastra/lib/ai-runs.test.ts > recordMastraRun > returns void when env vars are missing (no throw)
+[ai-runs] Supabase URL/key missing (need SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, or NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SECRET_KEY) — skipping insert
+
+stderr | src/mastra/lib/ai-runs.test.ts > recordMastraRun > does not throw when insert fails
+[ai-runs] insert failed: db down
+
+ ✓ src/mastra/lib/ai-runs.test.ts (4 tests) 16ms
+ ✓ src/lib/__tests__/is-search-grounding-enabled.test.ts (3 tests) 5ms
+ ✓ src/__tests__/pr-agent-review-policy.test.ts (10 tests) 7ms
+ ✓ src/platform/copilot/__tests__/chat-filter-chips.test.ts (5 tests) 8ms
+ ✓ src/platform/maps/__tests__/normalize-tool-output.test.ts (5 tests) 14ms
+ ✓ src/lib/venues/fetch-latest-venue-booking-status.test.ts (2 tests) 13ms
+ ✓ src/mastra/copilotkit/logging-mastra-agent.test.ts (1 test) 13ms
+ ✓ src/lib/venues/is-schema-unavailable-error.test.ts (2 tests) 5ms
+ ✓ src/mastra/lib/search-intent-router.test.ts (6 tests) 9ms
+ ✓ src/lib/deepseek/verify-deepseek-routing.test.ts (3 tests) 15ms
+ ✓ src/mastra/lib/model-cost.test.ts (12 tests) 9ms
+ ✓ src/mastra/tools/__tests__/classify-intent.test.ts (6 tests) 10ms
+ ✓ src/lib/__tests__/restaurant-place-photo.test.ts (4 tests) 9ms
+ ✓ src/mastra/lib/token-usage-als.test.ts (5 tests) 9ms
+ ✓ src/mastra/lib/__tests__/mastra-storage-domains.test.ts (2 tests) 10ms
+ ✓ src/mastra/lib/__tests__/attach-web-grounding.test.ts (3 tests) 15ms
+ ✓ src/__tests__/build-event-insert.test.ts (6 tests) 13ms
+ ✓ src/__tests__/host-event-agent.test.ts (6 tests) 9ms
+ ✓ src/lib/nightlife-browse.test.ts (4 tests) 6ms
+ ✓ src/lib/normalize-tool-envelope.test.ts (7 tests) 11ms
+ ✓ src/__tests__/smoke.test.ts (9 tests) 12ms
+ ✓ src/lib/__tests__/rental-failure-recovery.test.ts (4 tests) 7ms
+ ✓ src/platform/maps/__tests__/map-pin-filters.test.ts (4 tests) 7ms
+ ✓ src/lib/place-details.test.ts (2 tests) 10ms
+ ✓ src/__tests__/maps-maintenance-contract.test.ts (4 tests) 10ms
+ ✓ src/components/copilot/__tests__/grounded-place-card.test.ts (1 test) 4ms
+ ✓ src/lib/types/__tests__/host-dashboard.test.ts (4 tests) 10ms
+ ✓ src/platform/contracts/__tests__/map-pin.test.ts (3 tests) 10ms
+stdout | src/mastra/agents/__tests__/concierge.test.ts
+[mastra-storage] using local dev LibSQL
+
+ ✓ src/mastra/agents/__tests__/concierge.test.ts (14 tests) 20ms
+ ✓ src/components/copilot/__tests__/search-tool-renders-v2.test.tsx (4 tests) 7ms
+ ✓ src/__tests__/repo-hygiene.test.ts (1 test) 9ms
+ ✓ src/lib/rentals/__tests__/get-rental-detail.test.ts (4 tests) 11ms
+ ✓ src/lib/__tests__/event-venue-party-plural.test.ts (1 test) 7ms
+ ✓ src/mastra/lib/__tests__/agent-input-processors.test.ts (3 tests) 7ms
+ ✓ src/components/chat/__tests__/event-clarify.test.tsx (2 tests) 11ms
+ ✓ src/__tests__/approval-commit-schema.test.ts (3 tests) 12ms
+ ✓ src/__tests__/pr-agent-shared-core-contract.test.ts (4 tests) 9ms
+ ✓ src/mastra/lib/log-agent-run.test.ts (4 tests) 15ms
+ ✓ src/mastra/lib/mastra-telemetry-flows.test.ts (4 tests) 14ms
+ ✓ src/lib/supabase/__tests__/env.test.ts (6 tests) 14ms
+ ✓ src/platform/copilot/__tests__/workflow-steps.test.ts (3 tests) 8ms
+ ✓ src/lib/cafe-browse.test.ts (4 tests) 11ms
+ ✓ src/lib/events/__tests__/host-event-wizard-tool-handlers.test.ts (4 tests) 12ms
+ ✓ src/components/host/__tests__/host-nav-rail.test.ts (9 tests) 16ms
+ ✓ src/lib/__tests__/sanitize-assistant-chat-content.test.ts (8 tests) 13ms
+ ✓ src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts (2 tests) 6ms
+ ✓ src/lib/__tests__/tool-render-state.test.ts (3 tests) 5ms
+ ✓ src/lib/__tests__/concierge-pending-store.test.ts (3 tests) 5ms
+ ✓ src/lib/__tests__/map-ui-summary.test.ts (2 tests) 5ms
+ ✓ src/components/chat/__tests__/restaurant-filter-chips.test.tsx (2 tests) 5ms
+ ✓ src/lib/__tests__/venue-booking-slot-parse.test.ts (3 tests) 7ms
+ ✓ src/lib/leads/__tests__/schedule-prefill.test.ts (8 tests) 4ms
+ ✓ src/lib/rentals/__tests__/broker-route-gate.test.ts (7 tests) 4ms
+ ✓ src/lib/rentals/__tests__/map-broker-listing-row.test.ts (2 tests) 5ms
+ ✓ src/lib/__tests__/map-clustering.test.ts (3 tests) 4ms
+ ✓ src/components/cards/__tests__/card-interaction-props.test.ts (1 test) 3ms
+ ✓ src/mastra/lib/__tests__/tool-audit-context.test.ts (2 tests) 3ms
+ ✓ src/mastra/lib/grounding-quota.test.ts (2 tests) 4ms
+ ✓ src/mastra/lib/__tests__/search-003-ranking.integration.test.ts (8 tests | 5 skipped) 4ms
+ ✓ src/mastra/lib/__tests__/intelligence-restaurant-search.test.ts (10 tests) 5ms
+ ✓ src/platform/maps/__tests__/merge-pins-by-category.test.ts (4 tests) 6ms
+ ✓ src/components/maps/google-places-summary.test.tsx (4 tests) 6ms
+ ✓ src/lib/rentals/__tests__/broker-surface-state.test.ts (2 tests) 4ms
+ ✓ src/lib/rentals/__tests__/resolve-publish-rpc.test.ts (6 tests) 4ms
+ ✓ src/components/host/__tests__/host-context-provider.test.ts (4 tests) 5ms
+ ✓ src/mastra/workspaces.test.ts (3 tests | 1 skipped) 3ms
+ ✓ src/lib/events/__tests__/parse-host-display.test.ts (4 tests) 4ms
+ ✓ src/lib/rentals/__tests__/listing-workflow.test.ts (5 tests) 4ms
+ ✓ src/mastra/lib/__tests__/grounding-location-bias.test.ts (2 tests) 4ms
+ ✓ src/platform/maps/__tests__/active-map-category.test.ts (4 tests) 4ms
+ ✓ src/__tests__/nextjs-skill-consolidation.test.ts (3 tests) 4ms
+ ✓ src/mastra/tools/__tests__/hostops-read-tools.test.ts (4 tests) 5ms
+ ✓ src/__tests__/partners/partner-landing-placeholders.test.tsx (24 tests) 7ms
+ ✓ src/lib/__tests__/grounded-venue-kind.test.ts (3 tests) 4ms
+ ✓ src/lib/rentals/__tests__/filter-owned-broker-listings.test.ts (2 tests) 4ms
+ ✓ src/lib/venues/to-restaurant-venue-detail.test.ts (1 test) 4ms
+ ✓ src/lib/rentals/__tests__/publish-transition-mapper.test.ts (2 tests) 5ms
+ ✓ src/platform/copilot/__tests__/rich-card-results.test.ts (2 tests) 5ms
+ ✓ src/mastra/lib/__tests__/rental-search-engine.test.ts (2 tests) 4ms
+ ✓ src/hooks/use-venue-booking-status.test.ts (1 test) 3ms
+ ✓ src/components/copilot/__tests__/rental-rank-explanation-visibility.test.ts (1 test) 4ms
+ ✓ src/__tests__/san1284c-trigger-acl-migration.test.ts (1 test) 3ms
+ ✓ src/lib/rentals/__tests__/publish-broker-listing.test.ts (1 test) 4ms
+ ✓ src/mastra/lib/__tests__/event-date-window.test.ts (3 tests) 5ms
+ ✓ src/mastra/lib/models.test.ts (3 tests | 2 skipped) 4ms
+ ↓ src/mastra/lib/__tests__/anchor-ranking.integration.test.ts (5 tests | 5 skipped)
+ ✓ src/__tests__/partners/partner-hub.test.tsx (12 tests) 8ms
+ ✓ src/mastra/agents/__tests__/router.test.ts (4 tests) 4ms
+ ↓ src/mastra/lib/storage-durability.integration.test.ts (1 test | 1 skipped)
+ ✓ src/components/partners/__tests__/event-host-landing.test.tsx (6 tests) 4ms
+ ✓ src/__tests__/supabase-url-env-contract.test.ts (18 tests) 12ms
+
+ Test Files  272 passed | 2 skipped (274)
+      Tests  1645 passed | 16 skipped (1661)
+   Start at  15:16:47
+   Duration  9.97s (transform 36.84s, setup 0ms, import 74.33s, tests 14.76s, environment 16.06s)
+

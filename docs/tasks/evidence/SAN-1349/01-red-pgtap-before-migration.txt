@@ -1,0 +1,45 @@
+Connecting to local database...
+/home/sk/mdeai/supabase/tests/database/san1349_broker_ownership_rls_test.sql .. 
+# Failed test 5: "B1: apartments_owner_required_when_published exists"
+#         have: 0
+#         want: 1
+# Failed test 6: "B2: the ownership constraint is VALIDATED against existing rows"
+#         have: NULL
+#         want: true
+# Failed test 7: "B3: the constraint binds landlord_id to the approved + published workflow state"
+#     (test result was NULL)
+# Failed test 20: "G2: legacy host_id alone does NOT grant Broker B access to the showing"
+#         have: 1
+#         want: 0
+# Failed test 22: "H2: owned but unapproved listing is rejected before any write"
+#       caught: no exception
+#       wanted: P0001
+# Failed test 23: "H3: owned but unpublished listing is rejected before any write"
+#       caught: no exception
+#       wanted: P0001
+# Failed test 24: "H4: active but OWNERLESS listing is rejected before any write"
+#       caught: no exception
+#       wanted: P0001
+# Failed test 26: "H6: only the owned requestable listing created a lead"
+#         have: 4
+#         want: 1
+# Failed test 27: "H7: only the owned requestable listing created a showing"
+#         have: 4
+#         want: 1
+# Failed test 30: "I1: a new active + approved + published OWNERLESS listing is rejected by the constraint"
+#       caught: no exception
+#       wanted: 23514
+# Failed test 32: "I3: an UPDATE that strips ownership from a published listing is rejected"
+#       caught: no exception
+#       wanted: 23514
+# Looks like you failed 11 tests of 32
+Failed 11/32 subtests 
+
+Test Summary Report
+-------------------
+/home/sk/mdeai/supabase/tests/database/san1349_broker_ownership_rls_test.sql (Wstat: 0 Tests: 32 Failed: 11)
+  Failed tests:  5-7, 20, 22-24, 26-27, 30, 32
+Files=1, Tests=32,  0 wallclock secs ( 0.01 usr +  0.00 sys =  0.01 CPU)
+Result: FAIL
+error running container: exit 1
+Try rerunning the command with --debug to troubleshoot the error.

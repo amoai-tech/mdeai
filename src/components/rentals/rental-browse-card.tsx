@@ -122,6 +122,10 @@ export function RentalBrowseCard({
   const chips = topAmenities(rental.amenities);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = `rental-${rental.id}`;
+  // SAN-1349: the viewing action requires BOTH the explicit requestability proof and a URL.
+  // A listing with no canonical owner stays browseable but can never expose a viewing CTA,
+  // so the UI cannot advertise an action the database will reject.
+  const scheduleViewingUrl = rental.can_schedule_viewing ? rental.schedule_viewing_url : null;
   const preview = () => onSelect?.();
   const interactive = Boolean(onSelect);
 
@@ -157,7 +161,7 @@ export function RentalBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {rental.schedule_viewing_url ? (
+          {scheduleViewingUrl ? (
             <Button
               type="button"
               size="sm"
@@ -166,7 +170,7 @@ export function RentalBrowseCard({
               className={cn(buttonVariants({ size: "sm", variant: "default" }))}
               onClick={(e) => {
                 e.stopPropagation();
-                openScheduleViewing(rental.schedule_viewing_url);
+                openScheduleViewing(scheduleViewingUrl);
               }}
             >
               <Calendar data-icon="inline-start" aria-hidden />

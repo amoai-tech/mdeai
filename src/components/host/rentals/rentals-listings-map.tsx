@@ -4,10 +4,13 @@ import { useEffect, useMemo } from "react";
 import { AdvancedMarker, Map, useMap } from "@vis.gl/react-google-maps";
 import type { BrokerListingDetail } from "@/lib/rentals/broker-listing-detail";
 import { MapsShell } from "@/components/maps/MapProvider";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
+import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import {
   DEFAULT_MAP_ZOOM,
   getGoogleMapsMapId,
+  isE2EMapsMockEnabled,
   MEDELLIN_CENTER,
 } from "@/platform/maps/map-config";
 
@@ -48,6 +51,7 @@ function BrokerListingsMapInner({
   onSelect,
 }: RentalsListingsMapProps) {
   const mapId = getGoogleMapsMapId();
+  const mapsStatus = useMapsStatus();
   const pins = useMemo(
     () =>
       listings.filter(
@@ -68,6 +72,31 @@ function BrokerListingsMapInner({
     }
     return MEDELLIN_CENTER;
   }, [pins, selectedId]);
+
+  // The E2E maps mock mounts no <APIProvider> on purpose, and @vis.gl throws
+  // "<Map> can only be used inside an <ApiProvider> component." No spec asserts
+  // pins here, so a bare stand-in is enough.
+  if (isE2EMapsMockEnabled()) {
+    return (
+      <div
+        data-testid="rentals-listings-map"
+        data-e2e-mock-map="true"
+        className="relative h-full min-h-[280px] w-full overflow-hidden rounded-lg border border-border"
+      />
+    );
+  }
+
+  // SAN-1349: the map degrades on its own; it must not take the broker page with it.
+  if (mapsStatus !== "ok") {
+    return (
+      <div
+        data-testid="rentals-listings-map"
+        className="relative h-full min-h-[280px] w-full overflow-hidden rounded-lg border border-border"
+      >
+        <MapsUnavailable reason={mapsStatus} />
+      </div>
+    );
+  }
 
   return (
     <div

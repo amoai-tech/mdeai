@@ -1,0 +1,24 @@
+=== applying 20260927200924_san1349_enforce_owner_boundary.sql
+NOTICE:  constraint "apartments_owner_required_when_published" of relation "apartments" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMENT
+DROP POLICY
+CREATE POLICY
+DROP POLICY
+CREATE POLICY
+=== OK
+=== applying 20260927200925_san1349_remediate_ownerless_supply.sql
+NOTICE:  SAN-1349 pre-remediation audit: 5 lead(s) and 4 showing(s) reference an ownerless apartment (left untouched; no broker can read them through the canonical policies)
+NOTICE:  SAN-1349 remediation: 44 ownerless production listing(s) unpublished; 0 violations remain
+DO
+=== OK
+=== applying 20260927200926_san1349_validate_owner_boundary.sql
+DO
+ALTER TABLE
+COMMENT
+=== OK

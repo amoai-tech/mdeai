@@ -58,21 +58,25 @@ function RentalDetailBody({
         ) : null}
       </dl>
       <SheetFooter className="px-0">
-        <Button
-          type="button"
-          data-testid="venue-detail-schedule-cta"
-          onClick={() => {
-            closeVenueDetail();
-            openScheduleViewing({
-              listingId: detail.listingId,
-              title: detail.title,
-              neighborhood: detail.neighborhood,
-            });
-          }}
-        >
-          <Calendar className="size-4" aria-hidden />
-          Schedule viewing
-        </Button>
+        {/* SAN-1349: only a listing with a proved owner + approved + published state inside
+            its availability window may offer a viewing. Absent or false fails closed. */}
+        {detail.canScheduleViewing === true ? (
+          <Button
+            type="button"
+            data-testid="venue-detail-schedule-cta"
+            onClick={() => {
+              closeVenueDetail();
+              openScheduleViewing({
+                listingId: detail.listingId,
+                title: detail.title,
+                neighborhood: detail.neighborhood,
+              });
+            }}
+          >
+            <Calendar className="size-4" aria-hidden />
+            Schedule viewing
+          </Button>
+        ) : null}
       </SheetFooter>
     </>
   );

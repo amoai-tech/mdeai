@@ -1,0 +1,22 @@
+NOTICE:  PASS: 44 remediated, 0 violations, 10 demo rows untouched, 5 leads + 4 showings preserved, constraint validated, new violation rejected with 23514
+DO
+      ?column?      
+--------------------
+ violations_after=0
+(1 row)
+
+      ?column?      
+--------------------
+ remediated_rows=44
+(1 row)
+
+         ?column?          
+---------------------------
+ constraint_validated=true
+(1 row)
+
+       ?column?       
+----------------------
+ orphan_leads_after=5
+(1 row)
+

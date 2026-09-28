@@ -1,0 +1,29 @@
+SAN-1349 · pre-migration baseline vs post-migration comparison
+Baseline DB = pg_restore of a snapshot taken BEFORE the SAN-1349 migrations were applied.
+Generated: 2026-09-27T20:13:14Z
+
+--- fashionos_rls_exposure_test (pre-migration baseline): not_ok=1
+not ok 1 - C: no app-owned public table is RLS-disabled while end-user roles hold DML
+--- san1284c_trigger_internal_function_acls_test (pre-migration baseline): not_ok=1
+not ok 4 - C: every app-owned trigger function keeps service_role EXECUTE
+--- san1331a_trigger_search_path_test (pre-migration baseline): not_ok=2
+not ok 1 - A: public.trigger_set_timestamps() pins search_path to the empty string
+not ok 2 - A: no app-owned public routine has a role-mutable search_path
+--- san1054_ai_authorization_test (pre-migration baseline): not_ok=4
+not ok 7 - A: anon may not call publish_listing # TODO SAN-1054 Gate 1: anon retains EXECUTE on the lifecycle wrappers; runtime check still denies
+not ok 8 - A: anon may not call pause_listing # TODO SAN-1054 Gate 1: anon retains EXECUTE on the lifecycle wrappers; runtime check still denies
+not ok 9 - A: anon may not call request_listing_publish # TODO SAN-1054 Gate 1: anon retains EXECUTE on the lifecycle wrappers; runtime check still denies
+not ok 42 - H: the SAN-1349 ownership constraint is installed and validated
+--- san1286_atomic_viewing_test (pre-migration baseline): not_ok=0
+--- san1349_broker_ownership_rls_test (pre-migration baseline): not_ok=11
+not ok 5 - B1: apartments_owner_required_when_published exists
+not ok 6 - B2: the ownership constraint is VALIDATED against existing rows
+not ok 7 - B3: the constraint binds landlord_id to the approved + published workflow state
+not ok 20 - G2: legacy host_id alone does NOT grant Broker B access to the showing
+not ok 22 - H2: owned but unapproved listing is rejected before any write
+not ok 23 - H3: owned but unpublished listing is rejected before any write
+not ok 24 - H4: active but OWNERLESS listing is rejected before any write
+not ok 26 - H6: only the owned requestable listing created a lead
+not ok 27 - H7: only the owned requestable listing created a showing
+not ok 30 - I1: a new active + approved + published OWNERLESS listing is rejected by the constraint
+not ok 32 - I3: an UPDATE that strips ownership from a published listing is rejected
