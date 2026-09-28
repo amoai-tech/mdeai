@@ -1,5 +1,6 @@
 {
   "skill_name": "copilotkit",
+  "version": "1.0.0",
   "evals": [
     {
       "id": 1,

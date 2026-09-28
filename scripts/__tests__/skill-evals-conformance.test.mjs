@@ -9,7 +9,13 @@ const SKILLS = path.resolve(".claude/skills");
  * Schema: anthropics/claude-plugins-official skill-creator references/schemas.md
  * `skill_name` (matching the skill's frontmatter) and `evals[].id` are required.
  * Three skills previously drifted to a shape without either, and nothing caught it.
+ *
+ * `version` is an MDE addition and `files`/`expectations` are upstream-optional, but
+ * the key set is closed: two shapes for the same file type is what let this drift in
+ * the first place, so an unknown key is reported rather than silently accepted.
  */
+const TOP_LEVEL_KEYS = ["skill_name", "version", "evals"];
+const EVAL_KEYS = ["id", "prompt", "expected_output", "files", "expectations"];
 function evalFiles() {
   return fs
     .readdirSync(SKILLS, { withFileTypes: true })
@@ -48,9 +54,17 @@ test("every skill eval file follows the official schema", () => {
       problems.push(`${skill}: evals must be a non-empty array`);
       continue;
     }
-    // `version` is an MDE addition, not part of the upstream schema. Keep it one type
-    // so tooling never has to handle both 1 and "1.0.0".
-    if ("version" in data && typeof data.version !== "string") {
+    const extraTopLevel = Object.keys(data).filter((key) => !TOP_LEVEL_KEYS.includes(key));
+    if (extraTopLevel.length > 0) {
+      problems.push(
+        `${skill}: unexpected top-level key(s) ${extraTopLevel.join(", ")}; canonical shape is ${TOP_LEVEL_KEYS.join(", ")}`,
+      );
+    }
+    // `version` is an MDE addition, not part of the upstream schema. Requiring it
+    // everywhere keeps one shape, so tooling never handles both present and absent.
+    if (!("version" in data)) {
+      problems.push(`${skill}: version is required`);
+    } else if (typeof data.version !== "string") {
       problems.push(`${skill}: version must be a string, got ${JSON.stringify(data.version)}`);
     }
 
@@ -60,6 +74,12 @@ test("every skill eval file follows the official schema", () => {
       problems.push(`${skill}: evals[].id must be 1..n without gaps or duplicates, got ${JSON.stringify(ids)}`);
     }
     data.evals.forEach((item, index) => {
+      const extraKeys = Object.keys(item).filter((key) => !EVAL_KEYS.includes(key));
+      if (extraKeys.length > 0) {
+        problems.push(
+          `${skill}: evals[${index}] has unexpected key(s) ${extraKeys.join(", ")}; canonical shape is ${EVAL_KEYS.join(", ")}`,
+        );
+      }
       if (!item.prompt?.trim()) problems.push(`${skill}: evals[${index}] has no prompt`);
       if (!item.expected_output?.trim()) problems.push(`${skill}: evals[${index}] has no expected_output`);
       if ("files" in item && !Array.isArray(item.files)) {
