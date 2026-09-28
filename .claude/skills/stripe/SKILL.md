@@ -2,11 +2,30 @@
 name: stripe
 description: >-
   Use when MDE work touches Stripe checkout, payment intents, ticket payments, Connect, webhooks, refunds, idempotency, or payment security.
+metadata:
+  verified-package: "stripe@14.21.0 — Deno edge functions via esm.sh; no npm SDK installed"
+  verified-api-version: "2026-04-22"
+  verified-at: "2026-09-28"
 ---
 
 # Stripe
 
 Own Stripe-specific implementation and payment safety. Do not own general ticket-domain rules or Supabase policy design.
+
+## Where Stripe actually runs
+
+There is **no Stripe npm dependency** in this repo. Stripe is imported inside the
+Deno edge functions:
+
+```ts
+import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
+```
+
+`supabase/functions/ticket-checkout/` and `supabase/functions/ticket-payment-webhook/`
+pin `apiVersion: "2026-04-22"`. Re-verify both the module version and the API version
+before changing payment code — an API-version bump can change field shapes a webhook
+handler depends on. Next.js route handlers under `src/app/api/tickets/` call into
+those functions rather than the Stripe SDK directly.
 
 ## Source order
 

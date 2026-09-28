@@ -2,6 +2,37 @@
 
 **Load this reference when:** creating or editing skills, before deployment, to verify they work under pressure and resist rationalization.
 
+## Contents
+
+- [Overview](#overview)
+- [When to Use](#when-to-use)
+- [TDD Mapping for Skill Testing](#tdd-mapping-for-skill-testing)
+- [RED Phase: Baseline Testing (Watch It Fail)](#red-phase-baseline-testing-watch-it-fail)
+- [GREEN Phase: Write Minimal Skill (Make It Pass)](#green-phase-write-minimal-skill-make-it-pass)
+- [VERIFY GREEN: Pressure Testing](#verify-green-pressure-testing)
+  - [Writing Pressure Scenarios](#writing-pressure-scenarios)
+  - [Pressure Types](#pressure-types)
+  - [Key Elements of Good Scenarios](#key-elements-of-good-scenarios)
+  - [Testing Setup](#testing-setup)
+- [REFACTOR Phase: Close Loopholes (Stay Green)](#refactor-phase-close-loopholes-stay-green)
+  - [Plugging Each Hole](#plugging-each-hole)
+  - [1. Explicit Negation in Rules](#1-explicit-negation-in-rules)
+  - [2. Entry in Rationalization Table](#2-entry-in-rationalization-table)
+  - [3. Red Flag Entry](#3-red-flag-entry)
+  - [4. Update description](#4-update-description)
+  - [Re-verify After Refactoring](#re-verify-after-refactoring)
+- [Meta-Testing (When GREEN Isn't Working)](#meta-testing-when-green-isnt-working)
+- [When Skill is Bulletproof](#when-skill-is-bulletproof)
+- [Example: TDD Skill Bulletproofing](#example-tdd-skill-bulletproofing)
+  - [Initial Test (Failed)](#initial-test-failed)
+  - [Iteration 1 - Add Counter](#iteration-1---add-counter)
+  - [Iteration 2 - Add Foundational Principle](#iteration-2---add-foundational-principle)
+- [Testing Checklist (TDD for Skills)](#testing-checklist-tdd-for-skills)
+- [Common Mistakes (Same as TDD)](#common-mistakes-same-as-tdd)
+- [Quick Reference (TDD Cycle)](#quick-reference-tdd-cycle)
+- [The Bottom Line](#the-bottom-line)
+- [Real-World Impact](#real-world-impact)
+
 ## Overview
 
 **Testing skills is just TDD applied to process documentation.**

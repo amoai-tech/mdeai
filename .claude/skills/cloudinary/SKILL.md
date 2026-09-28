@@ -2,11 +2,22 @@
 name: cloudinary
 description: >-
   Use when MDE work explicitly introduces or changes Cloudinary uploads, assets, transformations, delivery URLs, signatures, webhooks, or media lifecycle behavior.
+metadata:
+  verified-package: "none — Cloudinary is not installed and not wired"
+  verified-at: "2026-09-28"
 ---
 
 # Cloudinary
 
 Own Cloudinary-specific media behavior. Do not assume Cloudinary is active merely because the project may use media assets.
+
+## Verified current state (2026-09-28)
+
+No Cloudinary SDK is declared in `package.json`, and no source file under `src/**`
+or `supabase/functions/**` imports Cloudinary or references a `cloudinary://` URL.
+This skill is therefore **reference-only** today: it covers how to do Cloudinary work
+correctly when it is introduced, not how to maintain a live integration. Confirm with
+a fresh search before assuming an integration exists.
 
 ## Current-state rule
 

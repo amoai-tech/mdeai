@@ -5,10 +5,32 @@ description: >-
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "08428f9b47cdae1131d12cbd9f8e0886ff476211"
-  installed-baseline: "@mastra/core beta / @mastra/memory beta / @mastra/pg ^1.1.0-alpha.2"
+  verified-package: "@mastra/core 1.35.0"
+  verified-at: "2026-09-28"
 ---
 
 # Mastra — official upstream + MDE overlay
+
+## Package maturity — read before trusting a signature
+
+MDE runs a **mixed** Mastra surface: a stable core beside prerelease satellites.
+An API you find in the docs may sit in a package line that is still alpha here, so
+check the installed type definition rather than assuming coherence.
+
+| Package | Installed | Line |
+|---|---|---|
+| `@mastra/core` | 1.35.0 | stable |
+| `@mastra/pg` | 1.11.0 | stable |
+| `@mastra/client-js` | 1.19.1 | stable |
+| `@mastra/memory` | 1.0.1-alpha.1 | **alpha** |
+| `@mastra/libsql` | 1.1.0-alpha.2 | **alpha** |
+| `mastra` | 1.1.0-alpha.3 | **alpha** |
+| `@ag-ui/mastra` | 0.2.1-beta.2 | **beta** |
+
+Known consequence: `@mastra/memory`'s `Memory.recall()` return shape does not match
+what `@mastra/core` expects, which the repo suppresses in `src/mastra/agents/index.ts`.
+Expect this class of drift and verify against the installed `.d.ts` before relying on
+a documented shape.
 
 ## Source order
 
@@ -52,12 +74,28 @@ Run typecheck/tests for the affected surface and exercise the real agent/workflo
 
 ## References
 
-- `upstream.yaml`
-- `references/official/mastra/SKILL.md`
-- `references/official/mastra/references/embedded-docs.md`
-- `references/official/mastra/references/common-errors.md`
-- `references/official/mastra/references/core-concepts.md`
-- `references/official/mastra/references/mastra-api.md`
-- `references/official/mastra/references/model-selection.md`
+- `upstream.yaml` — pinned provenance, reviewed commit, and integrity hashes
+- `references/human-in-the-loop.md` — approval, suspend/resume, durable runs
+- `references/official/mastra/SKILL.md` — vendored vendor skill, read-only
+
+MDE overlays — read the one matching the affected contract:
+
+| Area | Reference |
+|---|---|
+| Concierge agent | `references/mdeai-concierge.md` |
+| CopilotKit bridge | `references/copilotkit.md`, `references/headless-ui.md`, `references/display-only.md` |
+| Memory | `references/memory.md`, `references/supabase-auth.md` |
+| Workflows | `references/workflows.md`, `references/workspace.md`, `references/workspace-skills.md` |
+| Tools and approval | `references/tools.md`, `references/human-in-the-loop.md` |
+| Streaming | `references/streaming.md` |
+| Multi-agent | `references/multi-agent.md`, `references/agents-supervisor.md` |
+| RAG | `references/rag-mastra.md`, `references/rag-pgvector.md` |
+| Models | `references/model-providers.md`, `references/gemini.md`, `references/openai.md`, `references/ai-sdk.md` |
+| MCP | `references/mcp.md`, `references/mcp-apps.md`, `references/mcp-docs-lookup.md` |
+| Skills and routing | `references/topic-routing.md`, `references/embedded-docs.md`, `references/remote-docs.md` |
+| First setup and migration | `references/create-mastra.md`, `references/migration-guide.md` |
+| Errors | `references/common-errors.md` |
+| UI surface | `references/browser.md`, `references/react.md`, `references/slots.md` |
+
 - https://mastra.ai/docs
 - https://github.com/mastra-ai/mastra

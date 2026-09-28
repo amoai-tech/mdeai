@@ -12,6 +12,33 @@ mdeapp: defer-v2
 
 > Customize any part of the chat UI by overriding individual sub-components via slots.
 
+## Contents
+
+- [What is this?](#what-is-this)
+- [Tailwind Classes](#tailwind-classes)
+- [Props Override](#props-override)
+- [Custom Components](#custom-components)
+- [Nested Slots (Drill-Down)](#nested-slots-drill-down)
+  - [Two levels deep](#two-levels-deep)
+  - [Three levels deep](#three-levels-deep)
+  - [Input sub-slots](#input-sub-slots)
+  - [Scroll view sub-slots](#scroll-view-sub-slots)
+  - [Suggestion view sub-slots](#suggestion-view-sub-slots)
+- [Children Render Function](#children-render-function)
+- [Labels](#labels)
+- [Available Slots](#available-slots)
+  - [`CopilotChat` / `CopilotSidebar` / `CopilotPopup`](#copilotchat--copilotsidebar--copilotpopup)
+  - [`messageView` sub-slots](#messageview-sub-slots)
+  - [`assistantMessage` sub-slots](#assistantmessage-sub-slots)
+  - [`userMessage` sub-slots](#usermessage-sub-slots)
+  - [`reasoningMessage` sub-slots](#reasoningmessage-sub-slots)
+  - [`input` sub-slots](#input-sub-slots)
+  - [`scrollView` sub-slots](#scrollview-sub-slots)
+  - [`suggestionView` sub-slots](#suggestionview-sub-slots)
+  - [`welcomeScreen` sub-slots](#welcomescreen-sub-slots)
+  - [`header` sub-slots (Sidebar/Popup only)](#header-sub-slots-sidebarpopup-only)
+  - [`toggleButton` sub-slots (Sidebar/Popup only)](#togglebutton-sub-slots-sidebarpopup-only)
+
 ## What is this?
 
 Every CopilotKit chat component is built from composable **slots** — named sub-components that you can override individually. The slot system gives you three levels of customization without needing to rebuild the entire UI:

@@ -19,6 +19,21 @@ Mastra currently supports two MCP classes:
 1. `MCPClient`: Connects to one or many MCP servers to access their tools, resources, prompts, and handle elicitation requests.
 2. `MCPServer`: Exposes Mastra tools, agents, workflows, prompts, and resources to MCP-compatible clients.
 
+## Contents
+
+- [Get started](#get-started)
+- [Configuring `MCPClient`](#configuring-mcpclient)
+- [Using `MCPClient` with an agent](#using-mcpclient-with-an-agent)
+- [Tool approval](#tool-approval)
+- [Configuring `MCPServer`](#configuring-mcpserver)
+- [Registering an `MCPServer`](#registering-an-mcpserver)
+- [Static and dynamic tools](#static-and-dynamic-tools)
+  - [Static tools](#static-tools)
+  - [Dynamic tools](#dynamic-tools)
+- [Connecting to an MCP registry](#connecting-to-an-mcp-registry)
+- [MCP Apps](#mcp-apps)
+- [Related](#related)
+
 ## Get started
 
 To use MCP, install the required dependency:

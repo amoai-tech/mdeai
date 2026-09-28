@@ -2,6 +2,9 @@
 name: nextjs
 description: >-
   Own MDE Next.js and Vercel application-platform work. Use this skill whenever a task changes or diagnoses Next.js App Router pages, layouts, route handlers, Server/Client Component boundaries, Async Request APIs, caching/revalidation, metadata, proxy/middleware behavior, RSC/streaming, bundle or Core Web Vitals performance, or Vercel preview/production deployment, environment, domain, rollback, or runtime configuration. For PR/diff review, root-cause debugging, test strategy, or final production-readiness proof, keep the workflow owner (`code-review`, `systematic-debugging`, `testing`, or `task-verifier`) and load the relevant Next.js reference from this skill.
+metadata:
+  verified-package: "next 16.3.5"
+  verified-at: "2026-09-28"
 ---
 
 # Next.js

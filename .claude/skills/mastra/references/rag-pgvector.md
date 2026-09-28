@@ -18,6 +18,23 @@ mdeapp: phase2-defer
 
 After generating embeddings, you need to store them in a database that supports vector similarity search. Mastra provides a consistent interface for storing and querying embeddings across various vector databases.
 
+## Contents
+
+- [Supported databases](#supported-databases)
+  - [Using PostgreSQL with pgvector](#using-postgresql-with-pgvector)
+  - [Using Elasticsearch](#using-elasticsearch)
+  - [Using LanceDB](#using-lancedb)
+- [Using vector storage](#using-vector-storage)
+  - [Creating Indexes](#creating-indexes)
+  - [Naming Rules for Databases](#naming-rules-for-databases)
+  - [Upserting Embeddings](#upserting-embeddings)
+- [Adding metadata](#adding-metadata)
+- [Deleting vectors](#deleting-vectors)
+  - [Delete by Metadata Filter](#delete-by-metadata-filter)
+  - [Delete Multiple Documents](#delete-multiple-documents)
+  - [Delete by Vector IDs](#delete-by-vector-ids)
+- [Best practices](#best-practices)
+
 ## Supported databases
 
 **PgVector**:

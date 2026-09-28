@@ -24,6 +24,32 @@ A workspace supports the following features:
 - **[Search](https://mastra.ai/docs/workspace/search)**: BM25, vector, or hybrid search over indexed content
 - **[Skills](https://mastra.ai/docs/workspace/skills)**: Reusable instructions for agents
 
+## Contents
+
+- [When to use workspaces](#when-to-use-workspaces)
+- [How it works](#how-it-works)
+- [Usage](#usage)
+  - [Creating a workspace](#creating-a-workspace)
+  - [Global workspace](#global-workspace)
+  - [Agent-level workspace](#agent-level-workspace)
+- [Configuration patterns](#configuration-patterns)
+  - [Filesystem + sandbox (local)](#filesystem--sandbox-local)
+  - [Mounts + sandbox (cloud storage)](#mounts--sandbox-cloud-storage)
+  - [Filesystem only](#filesystem-only)
+  - [Sandbox only](#sandbox-only)
+  - [Dynamic filesystem (per-request)](#dynamic-filesystem-per-request)
+  - [Which pattern should I use?](#which-pattern-should-i-use)
+- [Tool configuration](#tool-configuration)
+  - [Tool options](#tool-options)
+  - [Dynamic tool configuration](#dynamic-tool-configuration)
+  - [Tool name remapping](#tool-name-remapping)
+- [LSP inspection](#lsp-inspection)
+  - [Output truncation](#output-truncation)
+  - [Read-before-write](#read-before-write)
+- [Initialization](#initialization)
+  - [What `init()` does](#what-init-does)
+- [Related](#related)
+
 ## When to use workspaces
 
 Use a workspace when your agent needs access to the local filesystem, shell commands, semantic code inspection, indexed search, or reusable skill instructions.

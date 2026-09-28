@@ -12,6 +12,9 @@ paths:
   - "src/mastra/tools/*place*"
   - "supabase/functions/*maps*/**"
   - "supabase/functions/*places*/**"
+metadata:
+  verified-package: "@googlemaps/places 2.4.1 / @vis.gl/react-google-maps 1.8.3 / @googlemaps/markerclusterer 2.6.2"
+  verified-at: "2026-09-28"
 ---
 
 # maps — Google Maps Platform

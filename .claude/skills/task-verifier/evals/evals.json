@@ -1,0 +1,30 @@
+{
+  "skill_name": "task-verifier",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "SAN-1234 is marked Done in Linear and the description says the migration was applied. Can you confirm it's done?",
+      "expected_output": "Do not accept the task's own prose as evidence. Require current evidence — applied migration row, constraint state, or a live query — and distinguish a written specification from an executed proof. Absent that evidence, report the claim as unsupported rather than Done.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The PR had a green floor run, then I pushed a formatting commit. Are we good to merge?",
+      "expected_output": "No. Exact-head evidence goes stale after a push, so the earlier run proves nothing about the new commit. Require a green run on the current head SHA before merge.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The e2e suite passed locally against my dev server. Is that enough to certify production?",
+      "expected_output": "No. A local dev-server run is not production proof. Certification needs the exact immutable candidate (pinned SHA or deployment ID) plus the deployed runtime path, and a stated limitation where a required proof could not be executed.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The eval definition validates against its JSON schema and the harness reports it as passing. Can I mark the behavioral eval as passed?",
+      "expected_output": "No. Schema validation proves the definition is well-formed, not that the behavior was executed. A structural eval is a specification until it actually runs; report it as unexecuted.",
+      "files": []
+    }
+  ]
+}
