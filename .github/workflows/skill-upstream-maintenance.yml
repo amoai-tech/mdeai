@@ -1,0 +1,45 @@
+name: Skill Upstream Maintenance
+
+on:
+  schedule:
+    # Weekly, offset from the Maps maintenance run so the two alarms do not collide.
+    - cron: "41 13 * * 1"
+  # Manual maintenance only. Deliberately no `workflow_dispatch` inputs: operator
+  # supplied inputs are a supply-chain surface (Checkov CKV_GHA_7), and the mode
+  # only ever needs to be strict here. `advisory` stays available locally via
+  # SKILL_DRIFT_MODE.
+  workflow_dispatch:
+
+# Live upstream checks never run on pull_request. This job depends on the public
+# GitHub API, and a required check that can fail because someone else's service is
+# down is an availability liability — the same reason maps-skill-maintenance.yml
+# keeps its live checks off pull requests.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  skill-upstream-drift:
+    if: github.event_name != 'pull_request'
+    name: vendored skill upstream drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SKILL_DRIFT_MODE: strict
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Vendored files still match their recorded hashes
+        run: python3 scripts/check-skill-upstream.py
+      # `!cancelled()` so a local-integrity failure cannot hide the drift
+      # classification: strict mode must report BOTH, and the job fails if either
+      # step fails. Confirmed drift is never downgraded to a warning.
+      - name: Pinned upstream commits have not moved
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-skill-upstream-drift.mjs
