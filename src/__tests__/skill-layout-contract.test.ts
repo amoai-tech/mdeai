@@ -82,7 +82,13 @@ describe("skill layout enforcement", () => {
   it("is part of the required floor gate", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
       scripts?: Record<string, string>;
-    };    expect(pkg.scripts?.["check:skills"]).toBe("python3 scripts/check-skill-layout.py");
+    };
+    const checkSkills = pkg.scripts?.["check:skills"] ?? "";
+    // Both halves of the skill gate must run: the layout/exposure mirror, and the
+    // vendored-upstream integrity hashes. Assert each step rather than pinning the
+    // whole command string, so adding a third checker does not fail this contract.
+    expect(checkSkills).toContain("python3 scripts/check-skill-layout.py");
+    expect(checkSkills).toContain("python3 scripts/check-skill-upstream.py");
     expect(pkg.scripts?.floor).toContain("npm run check:skills");
   });
 });
