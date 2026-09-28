@@ -14,6 +14,24 @@ mdeapp: phase2-defer
 
 A supervisor agent coordinates multiple subagents using [`Agent.stream()`](https://mastra.ai/reference/streaming/agents/stream) or [`Agent.generate()`](https://mastra.ai/reference/agents/generate). You configure subagents on the supervisor's `agents` property, and the supervisor uses its instructions and each subagent's `description` to decide when and how to delegate tasks.
 
+## Contents
+
+- [When to use supervisor agents](#when-to-use-supervisor-agents)
+- [Quickstart](#quickstart)
+- [Delegation hooks](#delegation-hooks)
+  - [`onDelegationStart`](#ondelegationstart)
+  - [`onDelegationComplete`](#ondelegationcomplete)
+- [Message filtering](#message-filtering)
+- [Subagent result context](#subagent-result-context)
+- [Iteration monitoring](#iteration-monitoring)
+- [Memory isolation](#memory-isolation)
+- [Tool approval propagation](#tool-approval-propagation)
+- [Task completion scoring](#task-completion-scoring)
+- [Writing effective instructions](#writing-effective-instructions)
+- [Running subagents in the background](#running-subagents-in-the-background)
+- [Subagent versioning](#subagent-versioning)
+- [Related](#related)
+
 ## When to use supervisor agents
 
 Use supervisor agents when a task requires multiple agents with different specializations to work together. The supervisor handles delegation decisions, context passing, and result synthesis.

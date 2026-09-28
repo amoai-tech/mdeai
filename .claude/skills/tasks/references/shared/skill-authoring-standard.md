@@ -6,9 +6,9 @@ It adapts Anthropic's official `skill-creator` guidance to MDE.
 ## 1. Discovery metadata
 
 - `name` is lowercase kebab-case, concise, and stable.
-- `description` starts with `Use when` and describes trigger conditions only.
+- `description` starts with `Use when`, then states both what the skill does and which contexts should load it. Stating what the skill does is required for matching: a trigger-only description under-triggers, because the router sees the trigger words but not the capability.
 - Include concrete symptoms, technologies, user intents, and synonyms that improve discovery.
-- Do not summarize the skill workflow in the description; agents may shortcut the body.
+- Do not restate the procedure or its step order in the description; an agent may follow the summary instead of reading the body.
 - Keep descriptions concise; MDE target is <=500 characters.
 
 ## 2. Progressive disclosure

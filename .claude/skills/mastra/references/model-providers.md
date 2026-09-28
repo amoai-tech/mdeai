@@ -11,6 +11,21 @@ tags: mastra, models, providers, router
 
 Mastra provides a unified interface for working with LLMs across multiple providers, giving you access to 3893 models from 109 providers through a single API.
 
+## Contents
+
+- [Features](#features)
+- [Basic usage](#basic-usage)
+- [Model directory](#model-directory)
+- [Mix and match models](#mix-and-match-models)
+- [Dynamic model selection](#dynamic-model-selection)
+- [Provider-specific options](#provider-specific-options)
+- [Custom headers](#custom-headers)
+- [Model fallbacks](#model-fallbacks)
+  - [Per-model settings](#per-model-settings)
+- [Use local models with Mastra](#use-local-models-with-mastra)
+  - [Example: LMStudio](#example-lmstudio)
+- [Use AI SDK with Mastra](#use-ai-sdk-with-mastra)
+
 ## Features
 
 - **One API for any model**: Access any model without having to install and manage additional provider dependencies.

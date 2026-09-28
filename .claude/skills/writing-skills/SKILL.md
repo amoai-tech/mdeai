@@ -26,7 +26,7 @@ Do not duplicate these standards inside individual skills. A skill should add on
 1. **Capture intent first.** State the job, trigger conditions, expected output, dependencies, and success criteria.
 2. **Check for overlap.** Prefer improving an existing canonical skill over creating a second skill that owns the same workflow.
 3. **Use progressive disclosure.** Keep the main `SKILL.md` concise; move heavy reference material to `references/`, deterministic helpers to `scripts/`, and reusable output assets to `assets/`.
-4. **Optimize discovery.** `name` uses lowercase letters/numbers/hyphens. `description` starts with `Use when`, contains trigger conditions only, and never summarizes the skill workflow.
+4. **Optimize discovery.** `name` uses lowercase letters/numbers/hyphens. Open the `description` with a trigger phrase and then say **both** what the skill does and which contexts should load it. Claude under-triggers skills, so name concrete symptoms, file types, tools, and the adjacent-but-wrong cases this skill should *not* claim — a bare topic list will not fire when it should. Keep it to a few sentences: the description sits in context on every turn, so length is a standing cost, but omitting what the skill does makes it harder to match, which costs more.
 5. **Write imperative instructions.** Explain why important constraints exist; avoid repetitive MUST-heavy prose when a short rationale is clearer.
 6. **Use repository truth.** Project-specific rules belong in the project skill or project instructions, not copied into generic skills.
 7. **Add examples only when they reduce ambiguity.** Examples should teach the invariant, not accidentally narrow the skill to one project.
@@ -49,7 +49,7 @@ skill-name/
 ## Quality gate
 
 Before considering a skill ready:
-- Frontmatter has a lowercase kebab-case `name` and a concise `description` that starts with `Use when` and contains trigger conditions only.
+- Frontmatter has a lowercase kebab-case `name` and a `description` that opens with a trigger phrase and states both what the skill does and when to load it.
 - Main file is preferably <500 lines and has no duplicated reference dump.
 - Relative links resolve.
 - No stale project/repo paths or copied domain terminology remain.

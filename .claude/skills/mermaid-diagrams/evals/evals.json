@@ -1,0 +1,24 @@
+{
+  "skill_name": "mermaid-diagrams",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We have three rental ownership changes landing next sprint and nobody can tell which system owns the publish state. Can you draw it?",
+      "expected_output": "Choose the smallest diagram that exposes the ambiguity — a state or sequence view of the publish path rather than a decorative architecture overview — and state which ownership/trust boundary the diagram makes explicit.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Add a diagram to the PR description for a bug fix in the ticket checkout webhook.",
+      "expected_output": "Prefer no diagram when the change is a local fix. If a diagram is warranted, use a sequence diagram of the webhook retry/duplicate path because that is where the failure and recovery behaviour actually lives.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I sketched a flowchart last week but the code has since changed and it no longer matches.",
+      "expected_output": "Update the diagram to match the code before continuing, or drop it. Never force the implementation to match a stale diagram — an out-of-date diagram is worse than none.",
+      "files": []
+    }
+  ]
+}

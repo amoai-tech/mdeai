@@ -137,9 +137,14 @@ def frontmatter_name(path: Path) -> str | None:
     for line in lines[1:]:
         if line.strip() == '---':
             break
-        match = re.fullmatch(r'\s*name:\s*["\']?([a-z0-9-]+)["\']?\s*', line)
-        if match:
-            return match.group(1)
+        if line.lstrip().startswith('name:'):
+            raw = line.split(':', 1)[1].strip()
+            # Accept a bare scalar or a properly matched quote pair; an unbalanced
+            # quote is left intact so it fails the kebab-case check instead of
+            # silently matching a truncated name.
+            if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+                raw = raw[1:-1]
+            return raw if re.fullmatch(r'[a-z0-9-]+', raw) else None
     return None
 
 

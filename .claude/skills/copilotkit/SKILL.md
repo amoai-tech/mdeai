@@ -32,6 +32,50 @@ Own the browser-facing agent bridge: provider/hooks, same-origin runtime, AG-UI 
 - Treat AG-UI messages/events as the frontend-agent transport contract; do not create parallel ad-hoc chat state.
 - Keep provider props stable across renders.
 
+## v1 vs v2 imports — the mistake this skill exists to prevent
+
+Both surfaces ship in one install, so a v1 import will compile, run, and still be
+wrong. MDE is v2-only.
+
+| Need | v2 (use this) | v1 (do not use) |
+|---|---|---|
+| React hooks | `@copilotkit/react-core/v2` | `@copilotkit/react-core` |
+| Runtime | `@copilotkit/runtime/v2` | `@copilotkit/runtime` |
+| Route handler | `createCopilotRuntimeHandler` | `copilotRuntimeNextJSAppRouterEndpoint` |
+
+## Two kinds of human-in-the-loop
+
+Pick by where the tool actually executes, not by which hook you saw first:
+
+- **Frontend tool** → `useHumanInTheLoop`. The render callback owns the UI and calls
+  `respond(...)`.
+- **Backend tool** → mark the tool approval-gated and use `useInterrupt`. A backend
+  write such as the listing publish RPC is *not* gated by `useHumanInTheLoop`; that
+  hook would render an approval that never blocks the real mutation.
+
+```tsx
+import { useHumanInTheLoop } from "@copilotkit/react-core/v2";
+
+useHumanInTheLoop({
+  name: "approvalRequired", // must match the Mastra tool-map key, not a createTool() id
+  description: "Request user approval for an operation",
+  parameters: z.object({ operation: z.string() }),
+  render: ({ args, respond, status }) => {
+    if (status !== "executing") return null;
+    return (
+      <>
+        <button onClick={() => respond?.("approved")}>Approve</button>
+        <button onClick={() => respond?.("rejected")}>Reject</button>
+      </>
+    );
+  },
+});
+```
+
+Approval records intent, never authorization. The backend path must still revalidate
+the user, ownership, record version, and legal transition. `mastra` owns that half —
+see its `references/human-in-the-loop.md`.
+
 ## Workflow
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.

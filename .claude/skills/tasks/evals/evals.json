@@ -1,0 +1,30 @@
+{
+  "skill_name": "tasks",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Take SAN-1234 and ship it. It's a rental listing publish bug — brokers see a stale status after approving a listing.",
+      "expected_output": "Classify complexity, verify the current code/runtime before trusting the issue text, resolve the correct base branch, then execute a dependency-ordered runbook with an explicit Checkpoint after each group (success criterion + proof command + STOP rule), updating Linear after each verified checkpoint.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "SAN-1234 needs a migration, an API change, and a UI change. Should I open three PRs so each one is small?",
+      "expected_output": "No. Create the fewest independently reviewable PRs; split only at a real dependency, risk, ownership, or independently-shippable boundary. A migration + API + UI that must land together for one behavior is one PR.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The Linear task says the onboarding RPC is missing, but I can see `create_broker_onboarding_draft` in the migrations. What do I do?",
+      "expected_output": "Trust the higher source of truth (current code/runtime over archived task prose), record the divergence, update the task's verified-current-state section, and change the plan rather than the code. Never rebuild something that already exists.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "My worktree is gone and I have to hand this task to another agent. What do they need?",
+      "expected_output": "A handoff resumable from the Linear issue alone: current state, verified progress %, the exact next file/workflow, evidence links, blockers, and the remaining Done gates — plus any explicit STOP conditions.",
+      "files": []
+    }
+  ]
+}

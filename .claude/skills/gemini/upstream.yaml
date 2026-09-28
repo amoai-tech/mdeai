@@ -19,3 +19,11 @@ sources:
     activation: reference-only-until-adopted
 combined_tree_sha256: 9cb960898d2a22bde524ac27ea08f2f5188ae5f54814ee99d5e7e20596d8d3e9
 hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-09-28"
+  trees:
+    references/official/gemini-api-dev: a93179c6973e61183586766611000b7068686afe55106e11756e3eb8c7b78355
+    references/official/gemini-live-api-dev: 4c4a926ce9546b89604c8874e4eb7a6932aa2735c804c163c408c37a8113a97f
+    references/official/gemini-omni-flash-api: 96bcfe0814192a9921dea9788b4687bf22ff0f3a431afb74b339d048e1a3102d

@@ -1,0 +1,24 @@
+{
+  "skill_name": "playwright-cli",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The rentals browse page shows zero cards in staging but the API returns 40 listings. Help me work out what the browser is actually doing.",
+      "expected_output": "Drive a real browser session to reproduce, capture the console and network evidence for the failing request, and report what the page did rather than editing application code — implementation ownership stays with the affected domain skill.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Write Playwright tests for the schedule-viewing modal.",
+      "expected_output": "Own the browser-automation mechanics — selectors, waits, storage state, trace capture — and defer test strategy and seam selection to `testing`. Assert on user-visible behaviour, not implementation detail.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "A Playwright test fails only in CI. Can you rerun it a few times to see if it's flaky?",
+      "expected_output": "Treat the flake as a defect to diagnose, not something to rerun until green. Capture a trace and identify the actual race or timing assumption; masking it with retries is not a fix.",
+      "files": []
+    }
+  ]
+}

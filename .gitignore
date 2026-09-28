@@ -116,3 +116,7 @@ ds-bundle/
 
 # Playwright authentication state (contains reusable session credentials)
 playwright/.auth/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
