@@ -3,14 +3,22 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 
 const CHECKER = path.resolve("scripts/check-skill-layout.py");
 const REPO_ROOT = path.resolve(".");
 
+const tempDirs = [];
+
+after(() => {
+  for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 /** Build an isolated repository-shaped fixture so the checker can run without deps. */
 function tmpRepo() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "skill-layout-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "skill-layout-"));
+  tempDirs.push(dir);
+  return dir;
 }
 
 function skillBody(name) {
@@ -21,12 +29,21 @@ function skillBody(name) {
  * Write a canonical skill and (by default) a faithful exposure mirror.
  *
  * `mirrorEntries` lets a test ship an intentionally incomplete mirror, which is
- * the defect this checker previously missed.
+ * the defect this checker previously missed. `absoluteLink` swaps the relative
+ * symlink for an absolute one, which must also be rejected.
  */
 function writeSkill(
   root,
   name,
-  { body, files = {}, mirror = true, mirrorEntries, copies = false, extraExposure = [] } = {},
+  {
+    body,
+    files = {},
+    mirror = true,
+    mirrorEntries,
+    copies = false,
+    absoluteLink = false,
+    extraExposure = [],
+  } = {},
 ) {
   const skillDir = path.join(root, ".claude", "skills", name);
   fs.mkdirSync(skillDir, { recursive: true });
@@ -45,8 +62,10 @@ function writeSkill(
   const topLevel = ["SKILL.md", ...Object.keys(files).map((rel) => rel.split("/")[0])];
   for (const entry of new Set(mirrorEntries ?? topLevel)) {
     const link = path.join(expoDir, entry);
+    const canonicalEntry = path.join(skillDir, entry);
     if (copies) fs.writeFileSync(link, "copy of canonical content");
-    else fs.symlinkSync(path.relative(expoDir, path.join(skillDir, entry)), link);
+    else if (absoluteLink) fs.symlinkSync(canonicalEntry, link);
+    else fs.symlinkSync(path.relative(expoDir, canonicalEntry), link);
   }
   for (const entry of extraExposure) fs.writeFileSync(path.join(expoDir, entry), "extra");
 
@@ -125,11 +144,35 @@ test("ignores links inside fenced code blocks and inline code spans", () => {
   assert.equal(result.status, 0, result.stdout);
 });
 
+test("a longer fence is not closed early by a shorter one inside it", () => {
+  // If the parser normalised every fence to three characters, the inner ``` line
+  // would end the block and the link would be reported as broken.
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body:
+      `${skillBody("alpha")}\n` +
+      "````text\n" +
+      "```\n" +
+      "[Snapshot](references/inside-the-block.md)\n" +
+      "```\n" +
+      "````\n",
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
 test("fails when an exposure entry is a copy rather than a symlink", () => {
   const root = writeSkill(tmpRepo(), "alpha", { copies: true });
 
   const output = failing(root);
   assert.match(output, /Codex exposure entry is not a symlink/);
+});
+
+test("fails when an exposure symlink is absolute", () => {
+  const root = writeSkill(tmpRepo(), "alpha", { absoluteLink: true });
+
+  const output = failing(root);
+  assert.match(output, /symlink is absolute, expected relative/);
 });
 
 test("fails on an exposure entry that has no canonical counterpart", () => {
