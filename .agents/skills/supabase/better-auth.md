@@ -1,0 +1,1 @@
+../../../.claude/skills/supabase/better-auth.md

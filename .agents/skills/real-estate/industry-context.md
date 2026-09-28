@@ -1,0 +1,1 @@
+../../../.claude/skills/real-estate/industry-context.md
