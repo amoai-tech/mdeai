@@ -82,6 +82,21 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       expect(body).not.toContain('"agents"');
     }
 
+    // Sibling-prefix routing, proven by request rather than by reading the
+    // directory layout. Single-route mode ignores the request path (every path is
+    // the one envelope endpoint), so path scoping is Next.js route scope: the
+    // catch-all lives under /api/copilotkit/, and a sibling must never reach the app.
+    const sibling = await page.request.post(`${baseUrl}/api/copilotkit-evil`, {
+      maxRedirects: 0,
+      failOnStatusCode: false,
+      data: { method: "info" },
+    });
+    expect(
+      sibling.status(),
+      `sibling path /api/copilotkit-evil returned ${sibling.status()}; expected 404. ` +
+        `A 200 means it reached the runtime; a 302 means the bypass did not apply.`,
+    ).toBe(404);
+
     let identity: ThrowawayIdentity | undefined;
     try {
       identity = await createThrowawayIdentity("qa-san1330");

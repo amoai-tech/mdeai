@@ -90,20 +90,26 @@ describe("Step 10 · route contract — v2 fetch handler", () => {
     // scan cannot pass this assertion vacuously.
     expect(files.length).toBeGreaterThan(100);
 
-    const offenders = files.flatMap((rel) =>
-      importLines(read(rel))
-        .filter((line) => /from\s+"@copilotkit\/runtime"/.test(line))
-        .map((line) => `${rel}: ${line.trim()}`),
-    );
+    // Whole-source match, not line-by-line: a multiline import puts its `from`
+    // clause on a continuation line that does not itself begin with `import`, so
+    // a line filter would miss it. `\s*` spans the newline. The trailing quote is
+    // required, so the `/v2` subpath can never match the bare form.
+    //
+    // The bare specifier is deliberately NOT spelled out in this comment. These
+    // scanners match raw source, so writing it here would make this file its own
+    // offender — the same self-match that made the v1 compatibility inventory
+    // count this suite as a provider boundary.
+    const BARE_RUNTIME = /\bfrom\s*["']@copilotkit\/runtime["']|import\s*["']@copilotkit\/runtime["']/;
+    const V2_RUNTIME = /\bfrom\s*["']@copilotkit\/runtime\/v2["']|import\s*["']@copilotkit\/runtime\/v2["']/;
+
+    const offenders = files.filter((rel) => BARE_RUNTIME.test(read(rel)));
 
     expect(offenders).toEqual([]);
 
     // And prove the same walk finds the v2 import, so "no offenders" cannot be
     // explained by the scanner matching nothing at all.
-    const v2Imports = files.flatMap((rel) =>
-      importLines(read(rel)).filter((line) => line.includes('"@copilotkit/runtime/v2"')),
-    );
-    expect(v2Imports.length).toBeGreaterThan(0);
+    const v2Files = files.filter((rel) => V2_RUNTIME.test(read(rel)));
+    expect(v2Files.length).toBeGreaterThan(0);
   });
 
   it("imports the runtime from @copilotkit/runtime/v2", () => {
