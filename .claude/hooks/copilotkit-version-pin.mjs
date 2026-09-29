@@ -19,7 +19,9 @@
 // MDE stays on the v2 API through the `/v2` subpath of the pinned packages
 // (@copilotkit/react-core/v2). That is allowed; the full-rewrite package line is not.
 //
-// Exit 2 = block. Bypass for a deliberate upgrade: MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1.
+// Exit 2 = block. The bypass MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1 authorizes ONE act — moving a
+// committed certified pin (point 4). It deliberately does not authorize points 1-3: a bare v1
+// import or a caret range is not made safe by an operator intending to upgrade.
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
@@ -70,12 +72,29 @@ if (/\.claude\/hooks\//.test(rel) || /\.test\.(ts|tsx|mjs|js)$/.test(rel) || /__
   process.exit(0);
 }
 
-const bypass = process.env.MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE === "1";
+const upgradeAuthorized = process.env.MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE === "1";
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const isExactVersion = (value) => typeof value === "string" && EXACT_VERSION.test(value);
-const block = (message) => {
-  process.stderr.write(`${message}\nTo bypass once: MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1\n`);
-  process.exit(bypass ? 0 : 2);
+
+/**
+ * Exit 2 unconditionally. Used for the safety invariants — the forbidden package lines and the
+ * exact/aligned shape of the pair. No environment variable authorizes these, because intent to
+ * upgrade does not make a bare `@copilotkit/react-core` import or a `^` range correct.
+ */
+const deny = (message) => {
+  process.stderr.write(`${message}\n`);
+  process.exit(2);
+};
+
+/**
+ * The one deliberately authorizable act: moving a committed certified pin. The bypass lives ONLY
+ * here, so `MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1` cannot smuggle a change past the invariants
+ * above. Both checks shared one bypass-aware `block()` before, which meant authorizing a version
+ * change also disabled the forbidden-import and non-exact-range checks.
+ */
+const denyVersionMove = (message) => {
+  if (upgradeAuthorized) process.exit(0);
+  deny(`${message}\nTo authorize this version change: MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1`);
 };
 
 const candidates = [];
@@ -97,7 +116,7 @@ if (isPackageJson) {
     while ((match = re.exec(text)) !== null) {
       const [, pkg, rawVersion] = match;
       if (FULL_REWRITE_PACKAGES.includes(pkg)) {
-        block(
+        deny(
           `BLOCKED: @copilotkit/${pkg} is the v2 FULL-REWRITE package line.\n` +
             `MDE uses the v2 API through the /v2 subpath of the certified packages ` +
             `(@copilotkit/react-core/v2, @copilotkit/runtime/v2) — not @copilotkit/react|core|agent|sdk-js.\n` +
@@ -107,7 +126,7 @@ if (isPackageJson) {
       if (!ALIGNED_PACKAGES.includes(pkg)) continue;
       declared.set(pkg, rawVersion);
       if (!isExactVersion(rawVersion)) {
-        block(
+        deny(
           `BLOCKED: @copilotkit/${pkg} must be an exact version, got "${rawVersion}".\n` +
             `A range, caret, tilde, "latest" or "*" makes the SAN-1301-certified matrix ` +
             `unreproducible, so the migration cannot be rolled back to a known-good graph.`,
@@ -145,7 +164,7 @@ if (isPackageJson) {
     if (before === undefined || after === undefined) continue;
     // A non-exact committed value is already a violation; allow the write so it can be repaired.
     if (!isExactVersion(before) || before === after) continue;
-    block(
+    denyVersionMove(
       `BLOCKED: @copilotkit/${pkg} would move from "${before}" to "${after}".\n` +
         `The CopilotKit matrix is certified by SAN-1301, and changing a certified pin is a ` +
         `deliberate, authorized act — it must not pass silently.`,
@@ -156,7 +175,7 @@ if (isPackageJson) {
     const core = declared.get("react-core");
     const runtime = declared.get("runtime");
     if (core !== runtime) {
-      block(
+      deny(
         `BLOCKED: @copilotkit/react-core ("${core}") and @copilotkit/runtime ("${runtime}") ` +
           `must stay version-aligned.`,
       );
@@ -181,7 +200,7 @@ if (isSrc) {
     for (const { name, re } of fullRewriteMarkers) {
       const match = text.match(re);
       if (match) {
-        block(
+        deny(
           `BLOCKED: CopilotKit v2 FULL-REWRITE reference (${name}) in ${rel}.\n` +
             `Match: ${match[0]}\n` +
             `Use the /v2 subpath instead (@copilotkit/react-core/v2). Do NOT introduce the ` +

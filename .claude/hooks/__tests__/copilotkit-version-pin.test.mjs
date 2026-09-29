@@ -17,7 +17,9 @@ import { after, test } from "node:test";
  * 2. the policy is release-agnostic — no version literal is baked in, so an authorized upgrade
  *    never becomes a false failure;
  * 3. the *committed* certified pins cannot be moved without the documented bypass, so a
- *    full-file write that changes both packages together is not a way around the matrix.
+ *    full-file write that changes both packages together is not a way around the matrix;
+ * 4. the bypass authorizes that one act and *nothing else* — it must not silence the
+ *    forbidden-package, exactness, or alignment checks.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -235,3 +237,86 @@ test("ignores unrelated files", () => {
   const r = run(resolve(root, "docs/notes.md"), { content: "@copilotkit/react-core 1.55.2" });
   assert.equal(r.status, 0, "non-package, non-source files are out of scope");
 });
+
+// ---------- bypass scope ----------
+// The bypass authorizes exactly ONE act: moving a committed certified pin. A single bypass-aware
+// `block()` used to serve every check, so setting the upgrade variable also silenced the
+// forbidden-package, exactness and alignment checks. This table is the negative control for that
+// regression: with the bypass ON, only the version move may exit 0.
+const BYPASSED = { MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE: "1" };
+
+const bypassScope = [
+  {
+    what: "moving a certified pin",
+    expected: 0,
+    // The positive control: without this the rest of the table proves only that nothing works.
+    build: () => ({
+      filePath: resolve(makeRoot(CERTIFIED), "package.json"),
+      edit: { content: pkg({ "@copilotkit/react-core": "9.9.9", "@copilotkit/runtime": "9.9.9" }) },
+    }),
+  },
+  {
+    what: "the @copilotkit/react full-rewrite package line",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "package.json"),
+      edit: { content: pkg({ "@copilotkit/react": "9.9.9" }) },
+    }),
+  },
+  {
+    what: "a caret range",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "package.json"),
+      edit: {
+        content: pkg({ "@copilotkit/react-core": "^9.9.9", "@copilotkit/runtime": "^9.9.9" }),
+      },
+    }),
+  },
+  {
+    what: "a misaligned pair",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "package.json"),
+      edit: { content: pkg({ "@copilotkit/react-core": "9.9.9", "@copilotkit/runtime": "9.9.8" }) },
+    }),
+  },
+  {
+    what: "a bare @copilotkit/react-core import",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "src/app/page.tsx"),
+      edit: { new_string: 'import { useCopilotChat } from "@copilotkit/react-core";' },
+    }),
+  },
+  {
+    what: "BuiltInAgent",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "src/app/page.tsx"),
+      edit: { new_string: "const agent = new BuiltInAgent({});" },
+    }),
+  },
+  {
+    what: "createCopilotEndpoint",
+    expected: 2,
+    build: () => ({
+      filePath: resolve(root, "src/app/api/route.ts"),
+      edit: { new_string: 'import { createCopilotEndpoint } from "@copilotkit/runtime/v2";' },
+    }),
+  },
+];
+
+for (const { what, expected, build } of bypassScope) {
+  test(`bypass does not authorize ${what}`, () => {
+    const { filePath, edit } = build();
+    const r = run(filePath, edit, BYPASSED);
+    assert.equal(
+      r.status,
+      expected,
+      expected === 0
+        ? `the bypass must permit a deliberate upgrade:\n${r.stderr}`
+        : `${what} must stay blocked even with the bypass set:\n${r.stderr}`,
+    );
+  });
+}
