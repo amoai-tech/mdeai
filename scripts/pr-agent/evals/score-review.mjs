@@ -27,6 +27,11 @@ const FINDING_STATE_RE = /<!--\s*pr-agent-review-state:v1\s*([\s\S]*?)-->/g;
  * Drop fenced code blocks. Review bodies quote the code they reviewed, and that code is
  * PR-controlled, so a marker-shaped string inside a fence is quoted evidence — never the bot's own
  * appended state.
+ *
+ * ponytail: fence pairing is heuristic. Balanced fences cover every review seen so far (measured:
+ * 0, 0, 4, 4 in the recorded fixtures), and the failure is graceful — an unbalanced fence leaves the
+ * quoted marker visible, which the "more than one marker" rule below then rejects. The upgrade path
+ * is the SAN-1332 step 6 envelope, which carries provenance explicitly and retires the guess.
  */
 function withoutFencedCode(body) {
   return String(body ?? "").replace(/(?:```|~~~)[\s\S]*?(?:```|~~~)/g, "");
@@ -58,20 +63,50 @@ function firstLine(text) {
 }
 
 /**
- * Turn a raw finding body into a scored unit. Severity and status are read only from an explicit
- * label inside THIS finding, never from the review's risk summary or another finding.
+ * Labelled fields are anchored to a line-leading `Label:` / `Label=`, never searched for as bare
+ * words. A bare word search reads prose as a label: a finding that says "this claim is not VERIFIED"
+ * would have parsed as `verification=VERIFIED`, which — now that VERIFIED gates materiality — would
+ * make an explicitly unverified claim block a merge.
+ */
+const SEVERITY_LABEL_RE = /\bseverity\s*[:=]\s*["'`*]*\s*(BLOCKER|HIGH|MEDIUM|LOW)\b/i;
+const STATUS_LABEL_RE = /(?:^|\n)[ \t]*(?:status|merge status)[ \t]*[:=][ \t]*["'`*]*[ \t]*([^\n]*)/i;
+const VERIFICATION_LABEL_RE =
+  /(?:^|\n)[ \t]*verification(?:[ \t]+state)?[ \t]*[:=][ \t]*["'`*]*[ \t]*([^\n]*)/i;
+
+/** The declared status, or null when the finding does not declare one. */
+function readStatus(body) {
+  const raw = (STATUS_LABEL_RE.exec(body)?.[1] ?? "").trim();
+  if (/^changes_required\b/i.test(raw)) return "changes_required";
+  if (/^advisory\b/i.test(raw)) return "advisory";
+  return null;
+}
+
+/**
+ * The declared verification state. A verification label whose value cannot be read as VERIFIED is
+ * NEEDS VERIFICATION, not null: a merge gate must fail closed on an ambiguous claim, and
+ * "Verification state: NOT VERIFIED" must never be read as proof.
+ */
+function readVerification(body) {
+  const match = VERIFICATION_LABEL_RE.exec(body);
+  if (!match) return null;
+  const raw = match[1].trim();
+  if (/^needs verification\b/i.test(raw)) return "NEEDS VERIFICATION";
+  if (/^verified\b/i.test(raw)) return "VERIFIED";
+  return "NEEDS VERIFICATION";
+}
+
+/**
+ * Turn a raw finding body into a scored unit. Every label is read only from an explicit, anchored
+ * field inside THIS finding — never from the review's risk summary, another finding, or prose.
  */
 function toFinding(rawBody, meta = {}) {
   const body = String(rawBody ?? "").trim();
   return {
     title: firstLine(body),
     body,
-    severity:
-      /\bseverity\s*[:=]\s*["'`*]*\s*(BLOCKER|HIGH|MEDIUM|LOW)\b/i.exec(body)?.[1]?.toUpperCase() ??
-      null,
-    status: /\b(changes_required|advisory)\b/i.exec(body)?.[1]?.toLowerCase() ?? null,
-    verification:
-      /\b(NEEDS VERIFICATION|VERIFIED)\b/i.exec(body)?.[1]?.toUpperCase() ?? null,
+    severity: SEVERITY_LABEL_RE.exec(body)?.[1]?.toUpperCase() ?? null,
+    status: readStatus(body),
+    verification: readVerification(body),
     hasEvidence: /\bevidence\s*:/i.test(body),
     hasFailureScenario: /\bfailure scenario\s*:/i.test(body),
     state: String(meta.state ?? "").toUpperCase() || null,

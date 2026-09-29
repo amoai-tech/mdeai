@@ -87,6 +87,54 @@ describe("SAN-1332 verified blocking semantics", () => {
     assert.equal(isMaterialFinding(entry), false);
   });
 
+  it("does not read prose as a verification label", () => {
+    // A bare word search read "not VERIFIED" as verification=VERIFIED. With VERIFIED now gating
+    // materiality that inverted the rule: an explicitly unverified claim would block a merge.
+    const entry = onlyFinding(review(finding("this claim is not VERIFIED")));
+    assert.notEqual(entry.verification, "VERIFIED", "negated prose must never read as verified");
+  });
+
+  it("does not read prose as a status label", () => {
+    // Built without a Status line on purpose: the finding() helper always emits a real label, which
+    // would make this pass for the wrong reason.
+    const body = [
+      "## MDE PR Review",
+      "",
+      "Severity: HIGH",
+      "Problem: the previous status was changes_required but it was resolved",
+      "",
+      "Merge recommendation: Changes requested",
+    ].join("\n");
+    const entry = parseFindings(body).findings[0];
+    assert.equal(entry.status, null, "prose must not supply the status");
+  });
+
+  it("treats an unreadable verification value as unverified, never as verified", () => {
+    for (const value of ["NOT VERIFIED", "unconfirmed", "pending", "TBD"]) {
+      const entry = onlyFinding(review(finding("evidence", { verification: value })));
+      assert.equal(entry.verification, "NEEDS VERIFICATION", `${value} must fail closed`);
+      assert.equal(isMaterialFinding(entry), false, `${value} must not block`);
+    }
+  });
+
+  it("does not let a negated verification label block a merge", () => {
+    const body = [
+      "## MDE PR Review",
+      "",
+      "Severity: HIGH",
+      "Problem: `auth.getClaims()` may not exist",
+      "Verification state: NOT VERIFIED",
+      "Status: changes_required",
+      "",
+      "Merge recommendation: Changes requested",
+    ].join("\n");
+    const entry = parseFindings(body).findings[0];
+    assert.equal(entry.verification, "NEEDS VERIFICATION");
+    assert.equal(isMaterialFinding(entry), false);
+    const result = scoreReview(CASES_BY_ID["docs-only-control"], body);
+    assert.equal(result.falsePositive, false, "an explicitly unverified claim is not an invented defect");
+  });
+
   it("does not score an unverified HIGH as an invented defect on a clean control", () => {
     // The SAN-1332 failure mode end to end: a framework/API suspicion marked NEEDS VERIFICATION must
     // not become a false positive on a clean PR.
