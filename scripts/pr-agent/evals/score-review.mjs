@@ -20,6 +20,30 @@ export const MATERIAL_SEVERITIES = ["BLOCKER", "HIGH"];
 
 /** PR-Agent's persistent finding state marker: machine-readable, per-finding, and stable. */
 const FINDING_STATE_RE = /<!--\s*pr-agent-review-state:v1\s*([\s\S]*?)-->/;
+const FINDING_STATE_RE_GLOBAL = new RegExp(FINDING_STATE_RE.source, "g");
+
+/**
+ * Drop fenced code blocks. Review bodies quote the code they reviewed, and that code is
+ * PR-controlled, so a marker-shaped string inside a fence is quoted evidence — never the bot's own
+ * appended state.
+ */
+function withoutFencedCode(body) {
+  return String(body ?? "").replace(/(?:```|~~~)[\s\S]*?(?:```|~~~)/g, "");
+}
+
+/** A state marker that exists but cannot be trusted. Never the same thing as "zero findings". */
+function invalidState(reason) {
+  return {
+    source: "state",
+    stateParsed: true,
+    stateValid: false,
+    stateError: reason,
+    runComplete: null,
+    runKind: null,
+    runHeadSha: null,
+    findings: [],
+  };
+}
 
 /** Review comments this harness can score. Either marker means PR-Agent published a review. */
 export const REVIEW_MARKERS = ["<!-- pr-agent:review:full -->", "<!-- pr-agent:review:incremental -->"];
@@ -90,33 +114,41 @@ function labelledFindings(body) {
 export function parseFindings(text) {
   const body = typeof text === "string" ? text : "";
 
-  const marker = FINDING_STATE_RE.exec(body);
+  // Marker provenance (SAN-1332 step 2). The review body quotes PR-controlled diff content, so a PR
+  // could otherwise smuggle a marker-shaped string into a fenced block and have it read as the
+  // bot's own authoritative state — a false "zero findings". Strip quoted code first, then refuse
+  // to choose between several markers instead of silently taking the first.
+  const markers = [...withoutFencedCode(body).matchAll(FINDING_STATE_RE_GLOBAL)];
+  if (markers.length > 1) {
+    return invalidState(
+      `INVALID_FINDING_STATE: ${markers.length} state markers found where exactly one is expected`,
+    );
+  }
+  const marker = markers[0];
   if (marker) {
     let payload = null;
     try {
       payload = JSON.parse(marker[1].trim());
-    } catch {
-      payload = null;
+    } catch (error) {
+      return invalidState(
+        `INVALID_FINDING_STATE: state marker is not valid JSON (${error instanceof Error ? error.message : error})`,
+      );
     }
-    if (payload && Array.isArray(payload.findings) && payload.findings.length > 0) {
-      return {
-        source: "state",
-        stateParsed: true,
-        runComplete: payload.last_run?.complete ?? null,
-        runKind: payload.last_run?.kind ?? null,
-        runHeadSha: payload.last_run?.head_sha ?? null,
-        findings: payload.findings.map((entry) =>
-          toFinding(entry.body, { state: entry.state, path: entry.path ?? null, source: "state" }),
-        ),
-      };
+    if (!payload || !Array.isArray(payload.findings)) {
+      return invalidState("INVALID_FINDING_STATE: state marker has no findings array");
     }
+    // A structurally valid marker with an empty findings array is a legitimate clean review.
     return {
       source: "state",
       stateParsed: true,
-      runComplete: payload?.last_run?.complete ?? null,
-      runKind: payload?.last_run?.kind ?? null,
-      runHeadSha: payload?.last_run?.head_sha ?? null,
-      findings: [],
+      stateValid: true,
+      stateError: null,
+      runComplete: payload.last_run?.complete ?? null,
+      runKind: payload.last_run?.kind ?? null,
+      runHeadSha: payload.last_run?.head_sha ?? null,
+      findings: payload.findings.map((entry) =>
+        toFinding(entry.body, { state: entry.state, path: entry.path ?? null, source: "state" }),
+      ),
     };
   }
 
@@ -134,6 +166,8 @@ export function parseFindings(text) {
   return {
     source: merged.length === 0 ? "none" : rendered.length > 0 ? "rendered" : "labelled",
     stateParsed: false,
+    stateValid: true,
+    stateError: null,
     runComplete: null,
     runKind: null,
     runHeadSha: null,
@@ -141,9 +175,26 @@ export function parseFindings(text) {
   };
 }
 
-/** A finding asserts a merge-blocking defect only when it says so about itself. */
+/**
+ * THE canonical blocking predicate (SAN-1332 step 1). A finding may assert a merge-blocking defect
+ * only when its own labels support that, and an explicitly unverified framework/API claim may never
+ * block a merge — that is the rule this task exists to enforce. `isMaterialFinding`, the clean-case
+ * false-positive check, `blockingVerdict`, and `findingVerdict` all derive from this one function.
+ *
+ * The unlabelled branch is deliberate and narrow: the captured model output carries no severity,
+ * status, or verification label at all, and refusing those outright would silently discard a real
+ * detection. `detectionQuality: "unlabelled"` marks it so it is never mistaken for labelled proof.
+ */
 export function isMaterialFinding(finding) {
   if (finding.state === "RESOLVED") return false;
+  if (finding.verification === "NEEDS VERIFICATION") return false;
+  if (finding.verification === "VERIFIED") {
+    return Boolean(
+      finding.status === "changes_required" &&
+        finding.severity &&
+        MATERIAL_SEVERITIES.includes(finding.severity),
+    );
+  }
   if (finding.severity && MATERIAL_SEVERITIES.includes(finding.severity)) return true;
   return finding.status === "changes_required";
 }
@@ -192,16 +243,7 @@ export function matchCase(caseDef, finding) {
 }
 
 function blockingVerdict(signals, findings) {
-  if (
-    findings.some(
-      (finding) =>
-        finding.state !== "RESOLVED" &&
-        (finding.status === "changes_required" ||
-          (finding.severity && MATERIAL_SEVERITIES.includes(finding.severity))),
-    )
-  ) {
-    return true;
-  }
+  if (findings.some((finding) => isMaterialFinding(finding))) return true;
   return signals.recommendation !== "" && !signals.safeToMerge;
 }
 
@@ -212,13 +254,13 @@ function blockingVerdict(signals, findings) {
  * finding's HIGH severity must not supply the verdict for a different finding: otherwise one
  * strong finding anywhere in the review would launder a weak, unlabelled match into a PASS.
  *
- * When the finding labels itself non-material, that is the end of it. When it carries no labels at
- * all — which is what the one captured model output does — the review's own recommendation may
- * stand in, and `detectionQuality` marks the result `unlabelled`.
+ * When the finding labels itself non-material — including a finding whose only label is
+ * `NEEDS VERIFICATION` — that is the end of it. When it carries no labels at all, the review's own
+ * recommendation may stand in, and `detectionQuality` marks the result `unlabelled`.
  */
 export function findingVerdict(finding, signals) {
   if (isMaterialFinding(finding)) return true;
-  if (finding.severity || finding.status) return false;
+  if (finding.severity || finding.status || finding.verification) return false;
   return signals.recommendation !== "" && !signals.safeToMerge;
 }
 
@@ -285,6 +327,8 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
     findingCount: findings.length,
     materialFindings: materialFindings.map((finding) => finding.title),
     findingSource: parsed.source,
+    stateValid: parsed.stateValid,
+    stateError: parsed.stateError,
     runComplete: parsed.runComplete,
     runHeadSha: parsed.runHeadSha,
     blockingVerdict: blocking,
@@ -394,6 +438,13 @@ async function runCli() {
       ? resolvedSources.map((file) => readFileSync(resolve(process.cwd(), file), "utf8")).join("\n")
       : null;
   const result = scoreReview(caseDef, readFileSync(reviewPath, "utf8"), { sourceText });
+  // A corrupted marker must never score as a clean review. Report the state failure as its own
+  // verdict rather than letting zero findings pass a clean case.
+  if (result.stateValid === false) {
+    process.stdout.write(`case=${result.id} kind=${result.kind} verdict=INVALID_FINDING_STATE\n`);
+    process.stdout.write(`state_error=${result.stateError}\n`);
+    process.exit(1);
+  }
   const verdict = caseDef.kind === "clean" ? !result.falsePositive : result.detected;
   process.stdout.write(`case=${result.id} kind=${result.kind} verdict=${verdict ? "PASS" : "FAIL"}\n`);
   process.stdout.write(
