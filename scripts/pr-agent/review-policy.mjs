@@ -26,6 +26,50 @@ export function hasCertificationForBase(body, baseSha) {
   return (body ?? "").toLowerCase().includes(markerPrefix);
 }
 
+/**
+ * True when a recorded review marker names this exact head. Used to pick the one review comment
+ * that belongs to a target head, so an earlier push's review is never scored as if it were current.
+ */
+export function hasCertificationForHead(body, headSha) {
+  assertSha(headSha, "headSha");
+  return (body ?? "").toLowerCase().includes(`head=${headSha.toLowerCase()}`);
+}
+
+/**
+ * Select the single review comment that the recorded marker for `headSha` certified.
+ *
+ * The verification job writes the marker immediately after a review completes, so the certified
+ * review is the newest review comment published no later than that marker. Returns the comment and
+ * the marker, or a reason — never a guess and never more than one comment.
+ */
+export function selectCertifiedReviewForHead({ comments, headSha, reviewMarkers }) {
+  assertSha(headSha, "headSha");
+  const isBot = (comment) => comment?.user?.login === "github-actions[bot]";
+  const markers = (comments ?? []).filter(
+    (comment) => isBot(comment) && hasCertificationForHead(comment.body ?? "", headSha),
+  );
+  if (markers.length === 0) {
+    return { comment: null, reason: `no recorded review marker for head ${headSha}` };
+  }
+  const marker = markers.reduce((left, right) =>
+    new Date(right.updated_at).getTime() > new Date(left.updated_at).getTime() ? right : left,
+  );
+  const markerTime = new Date(marker.updated_at).getTime();
+  const candidates = (comments ?? []).filter(
+    (comment) =>
+      isBot(comment) &&
+      (reviewMarkers ?? []).some((token) => (comment.body ?? "").includes(token)) &&
+      new Date(comment.updated_at).getTime() <= markerTime,
+  );
+  if (candidates.length === 0) {
+    return { comment: null, reason: `no review comment published before the marker for head ${headSha}` };
+  }
+  const comment = candidates.reduce((left, right) =>
+    new Date(right.updated_at).getTime() > new Date(left.updated_at).getTime() ? right : left,
+  );
+  return { comment, marker, consideredReviews: candidates.length, reason: "certified review selected" };
+}
+
 export function appendCertification(body, { baseSha, headSha }) {
   const marker = certificationMarker({ baseSha, headSha });
   if ((body ?? "").includes(marker)) return body;

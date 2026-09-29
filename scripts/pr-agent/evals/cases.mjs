@@ -15,10 +15,24 @@ const semverBoundary = {
   provenance: "Real MDE false negative. Recorded v0.45 review scored 95/100 and said Safe to merge with 0 findings.",
   changedFiles: ["scripts/check-mastra.mjs"],
   expectedOwnerSkills: ["code-review"],
-  minSignals: 3,
-  // A boundary finding without a concrete failing input is the vague kind of finding this task
-  // exists to eliminate, so that group is required rather than merely counted.
-  mandatorySignals: ["cites a concrete malformed input"],
+  // Contract, all inside ONE finding:
+  //   MUST  identify the validator
+  //   MUST  cite at least one literal malformed input
+  //   PLUS  explain enough boundary behavior to show why it fails
+  minSignals: 2,
+  mandatorySignals: ["names the validator"],
+  // Literals rather than a pattern: a generic regex can be satisfied by ordinary prose, and an
+  // example the reviewer never actually named is not evidence that it tested the boundary.
+  requiredExamples: [
+    "01.2.3",
+    "1.02.3",
+    "1.2.3-01",
+    "1.2.3-alpha..1",
+    "1.2.3-a..b",
+    "1.2.3-a.",
+    "1.2.3-.a",
+    "1.2.3+build.",
+  ],
   signals: [
     {
       name: "names the validator",
@@ -31,10 +45,6 @@ const semverBoundary = {
     {
       name: "states the empty-identifier or build-metadata boundary",
       any: [/prerelease|pre-release/i, /build metadata/i, /empty (?:dot[- ]separated )?identifier/i, /\ba\.\.b\b/],
-    },
-    {
-      name: "cites a concrete malformed input",
-      any: [/\b0\d+\.\d+\.\d+/, /\b\d+\.\d+\.\d+-/, /\b\d+\.\d+\.\d+\+/, /\ba\.\.b\b/],
     },
   ],
 };

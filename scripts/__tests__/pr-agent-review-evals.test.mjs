@@ -1,3 +1,17 @@
+// SAN-1312 · MDE-PR-REVIEW-001
+//
+// Scope, stated plainly so nobody mistakes this for behavioural certification:
+//
+//   THIS FILE PROVES   the scorer, the corpus contract, the finding extraction, the router wiring,
+//                      and that the recorded model outputs still score as they did.
+//   THIS FILE DOES NOT PROVE   that PR-Agent finds anything. Every "catching" review below is
+//                      synthetic wording written by this test. Behavioural certification needs a
+//                      real model run captured from a canary PR — see the captured fixtures and
+//                      `scripts/pr-agent/evals/README.md`.
+//
+// The synthetic cases are still worth gating: they are cheap, deterministic, and they fail loudly
+// if the scorer is loosened back into a whole-body word match that a fake PASS could satisfy.
+
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -5,38 +19,42 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 import { CASES, CASES_BY_ID, REQUIRED_PROBE_ANCHORS } from "../pr-agent/evals/cases.mjs";
-import { parseReviewSignals, scoreReview } from "../pr-agent/evals/score-review.mjs";
+import {
+  isMaterialFinding,
+  matchCase,
+  parseFindings,
+  parseReviewSignals,
+  scoreReview,
+} from "../pr-agent/evals/score-review.mjs";
 import { selectSkills } from "../select-pr-agent-skills.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixture = (name) => readFileSync(join(REPO_ROOT, "scripts/pr-agent/evals/fixtures", name), "utf8");
 
-/** Recorded v0.45 production reviews, captured from the real PR comments. */
-const RECORDED_BASELINES = {
+/**
+ * Recorded production reviews, captured verbatim from the real PR comments.
+ * `pr-163` is a real model-generated review of a seeded defect — not synthetic wording.
+ */
+const RECORDED = {
   "semver-boundary": "pr-157-v045-recorded.md",
   "docs-only-control": "pr-158-v045-recorded.md",
 };
 
-/** Wrap evidence in the review envelope MDE's contract requires. */
-const review = (evidence) =>
-  [
-    "## MDE PR Review",
-    "",
-    "**Key Issues**",
-    "",
-    evidence,
-    "",
-    "Severity: HIGH",
-    "Status: changes_required",
-    "Merge recommendation: Changes requested",
-  ].join("\n");
+const canaryRecorded = fixture("pr-163-canary-v045-recorded.md");
 
-/** Minimal evidence text that satisfies each defect case's required signals. */
+/** Build one finding in the structure MDE's review contract requires. */
+const finding = (evidence, { severity = "HIGH", status = "changes_required" } = {}) =>
+  [`Severity: ${severity}`, "Problem: a defect the reviewer asserts", evidence, `Status: ${status}`].join("\n");
+
+const review = (...findings) =>
+  ["## MDE PR Review", ...findings, "", "Merge recommendation: Changes requested"].join("\n\n");
+
+/** Evidence text that satisfies each defect case's contract, scoped to one finding. */
 const CATCHING_EVIDENCE = {
   "semver-boundary": [
     "The new EXACT_VERSION pattern accepts malformed versions. `01.2.3` passes because each core",
-    "component uses \\d+ and permits a leading zero. `1.2.3-a..b` and `1.2.3+build.` also pass because",
-    "the prerelease and build metadata classes allow empty dot-separated identifiers.",
+    "component permits a leading zero, and `1.2.3-alpha..1` passes because the prerelease class",
+    "allows empty dot-separated identifiers.",
   ].join("\n"),
   "supabase-rls-cross-tenant": [
     "This migration leaves a cross-tenant read path open: the table has RLS enabled but the policy",
@@ -78,109 +96,223 @@ describe("SAN-1312 PR-Agent review-quality corpus", () => {
       }
     }
     for (const entry of defectCases) {
-      assert.ok(entry.signals.length >= 3, `${entry.id} needs at least three required signals`);
+      assert.ok(entry.signals.length >= 2, `${entry.id} needs at least two required signals`);
       assert.ok(entry.minSignals >= 1 && entry.minSignals <= entry.signals.length);
+      for (const name of entry.mandatorySignals ?? []) {
+        assert.ok(
+          entry.signals.some((signal) => signal.name === name),
+          `${entry.id} mandatory signal "${name}" is not one of its declared signals`,
+        );
+      }
     }
     for (const entry of cleanCases) {
       assert.equal(entry.signals.length, 0, `${entry.id} must not require any defect signal`);
     }
   });
 
-  it("reproduces the recorded v0.45 false negative on PR #157", () => {
-    const baseline = parseReviewSignals(fixture(RECORDED_BASELINES["semver-boundary"]));
-    assert.equal(baseline.recommendation, "Safe to merge");
-    assert.equal(baseline.score, 95);
-    assert.equal(baseline.materialSeverity, false);
-    assert.equal(baseline.materialFinding, false);
+  it("requires literal malformed examples in the semver case", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    assert.ok(named.requiredExamples.includes("01.2.3"));
+    assert.ok(named.requiredExamples.includes("1.2.3-alpha..1"));
+    assert.ok(named.requiredExamples.includes("1.2.3+build."));
+    // A pattern that can be satisfied by ordinary prose must not be used as example evidence.
+    for (const entry of CASES) {
+      for (const signal of entry.signals) {
+        for (const pattern of signal.any) {
+          assert.notEqual(pattern.source, "\\.\\s*$", `${entry.id} must not use a sentence-final-period matcher`);
+        }
+      }
+    }
+  });
+});
 
-    const result = scoreReview(CASES_BY_ID["semver-boundary"], fixture(RECORDED_BASELINES["semver-boundary"]));
+describe("SAN-1312 finding-level extraction", () => {
+  it("parses the persistent finding state of a real captured review", () => {
+    const parsed = parseFindings(canaryRecorded);
+    assert.equal(parsed.source, "state");
+    assert.equal(parsed.stateParsed, true);
+    assert.equal(parsed.runComplete, true);
+    assert.equal(parsed.runHeadSha, "283412878f08ed370fb91e8cab58b463962c2059");
+    assert.equal(parsed.findings.length, 2);
+    for (const entry of parsed.findings) {
+      assert.equal(entry.state, "ACTIVE");
+      // The model returned prose, not the Severity/Evidence/Status structure the config requires.
+      assert.equal(entry.severity, null);
+      assert.equal(entry.status, null);
+      assert.equal(entry.hasEvidence, false);
+      assert.equal(entry.hasFailureScenario, false);
+    }
+  });
+
+  it("does not invent findings for a review with none", () => {
+    for (const path of Object.values(RECORDED)) {
+      const parsed = parseFindings(fixture(path));
+      assert.equal(parsed.findings.length, 0, `${path} must parse as zero findings`);
+    }
+  });
+
+  it("reads severity and status only from within a finding", () => {
+    const labelled = parseFindings("Severity: HIGH\nStatus: changes_required\nProblem: x");
+    assert.equal(labelled.findings.length, 1);
+    assert.equal(labelled.findings[0].severity, "HIGH");
+    assert.equal(labelled.findings[0].status, "changes_required");
+    assert.equal(isMaterialFinding(labelled.findings[0]), true);
+
+    const advisory = parseFindings("Severity: LOW\nStatus: advisory\nProblem: nit");
+    assert.equal(isMaterialFinding(advisory.findings[0]), false);
+
+    const resolved = parseFindings(
+      '<!-- pr-agent-review-state:v1\n{"findings":[{"body":"Severity: HIGH","state":"RESOLVED"}],"last_run":{"complete":true}}\n-->',
+    );
+    assert.equal(isMaterialFinding(resolved.findings[0]), false, "a resolved finding is not material");
+  });
+});
+
+describe("SAN-1312 recorded baselines", () => {
+  it("reproduces the recorded v0.45 false negative on PR #157", () => {
+    const signals = parseReviewSignals(fixture(RECORDED["semver-boundary"]));
+    assert.equal(signals.recommendation, "Safe to merge");
+    assert.equal(signals.score, 95);
+
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], fixture(RECORDED["semver-boundary"]));
+    assert.equal(result.findingCount, 0);
     assert.equal(result.detected, false, "the recorded v0.45 review must score as a miss — that is the defect this task closes");
   });
 
-  it("does not read a risk label or the format contract as a material finding", () => {
-    // A high risk assessment with no finding, and the reviewer's own severity enumeration,
-    // must both stay non-material — neither is a finding.
-    const riskOnly = parseReviewSignals("Risk level: High\n\n- Merge recommendation: Safe to merge");
-    assert.equal(riskOnly.materialSeverity, false);
-    assert.equal(riskOnly.materialFinding, false);
-
-    const contractEcho = parseReviewSignals(
-      "Structure issue_content with these sections:\nSeverity: BLOCKER | HIGH | MEDIUM | LOW\nProblem: ...",
-    );
-    assert.equal(contractEcho.materialSeverity, false);
-    assert.equal(contractEcho.materialFinding, false);
-
-    const realFinding = parseReviewSignals("Severity: HIGH\nStatus: changes_required");
-    assert.equal(realFinding.materialSeverity, true);
-    assert.equal(realFinding.materialFinding, true);
-
-    // And the live PR #161 control review parses as non-material.
-    const liveControl = parseReviewSignals(fixture(RECORDED_BASELINES["docs-only-control"]));
-    assert.equal(liveControl.materialFinding, false);
-  });
-
-  it("requires the concrete malformed input before crediting a boundary finding", () => {
-    const named = CASES_BY_ID["semver-boundary"];
-    assert.deepEqual(named.mandatorySignals, ["cites a concrete malformed input"]);
-
-    const vague = [
-      "The new EXACT_VERSION pattern permits a leading zero in every core component, and the",
-      "prerelease and build metadata classes accept empty dot-separated identifiers.",
-    ].join("\n");
-    const vagueResult = scoreReview(named, review(vague));
-    assert.equal(
-      vagueResult.detected,
-      false,
-      "a boundary finding that never names a failing input must not count as detection",
-    );
-    assert.ok(vagueResult.reasons.some((reason) => reason.includes("missing mandatory signal")));
-
-    // The same review plus one concrete input is credited.
-    const concrete = scoreReview(named, review(`${vague} For example 01.2.3 passes today.`));
-    assert.equal(concrete.detected, true);
-  });
-
   it("keeps the recorded v0.45 docs-only control clean", () => {
-    const result = scoreReview(CASES_BY_ID["docs-only-control"], fixture(RECORDED_BASELINES["docs-only-control"]));
-    assert.equal(result.falsePositive, false, "the recorded v0.45 review invented nothing on the clean control");
+    const result = scoreReview(CASES_BY_ID["docs-only-control"], fixture(RECORDED["docs-only-control"]));
+    assert.equal(result.falsePositive, false);
     assert.equal(result.signals.safeToMerge, true);
   });
 
-  it("recognises a review that does catch each seeded defect", () => {
+  it("scores the real captured canary review as a miss despite its blocking verdict", () => {
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], canaryRecorded);
+    assert.equal(result.findingCount, 2, "the canary review asserted two findings");
+    assert.equal(result.blockingVerdict, true, "it recommended changes");
+    assert.equal(result.detected, false, "neither finding identified the real boundary defect");
+    // Neither finding is labelled, so nothing may be claimed as material.
+    assert.deepEqual(result.materialFindings, []);
+    assert.equal(result.runHeadSha, "283412878f08ed370fb91e8cab58b463962c2059");
+  });
+});
+
+describe("SAN-1312 scoring invariants", () => {
+  it("never treats an overall risk level as a finding severity", () => {
+    const riskOnly = [
+      "## MDE PR Review",
+      "Risk level: High",
+      "No material defects found",
+      "Merge recommendation: Safe to merge",
+    ].join("\n");
+
+    assert.equal(parseFindings(riskOnly).findings.length, 0);
+    assert.equal(parseReviewSignals(riskOnly).risk, "High");
+    assert.equal(scoreReview(CASES_BY_ID["docs-only-control"], riskOnly).falsePositive, false);
+    assert.equal(scoreReview(CASES_BY_ID["semver-boundary"], riskOnly).detected, false);
+  });
+
+  it("does not treat a conservative merge recommendation as an invented finding", () => {
+    const conservative = [
+      "## MDE PR Review",
+      "No material findings.",
+      "Merge recommendation: Merge with caution — tests are still running",
+    ].join("\n");
+    const result = scoreReview(CASES_BY_ID["docs-only-control"], conservative);
+    assert.equal(result.findingCount, 0);
+    assert.equal(result.signals.safeToMerge, false, "the recommendation is not an unqualified merge");
+    assert.equal(result.falsePositive, false, "a conservative recommendation is not an invented defect");
+  });
+
+  it("counts only a material finding as a clean-control false positive", () => {
+    const nonMaterial = review(
+      "<details><summary><strong>Consider renaming the helper</strong></summary>\nMinor naming nit only.\n</details>",
+    )
+      .replace("Severity: HIGH\n\nProblem: a defect the reviewer asserts\n\n", "")
+      .replace("Merge recommendation: Changes requested", "Merge recommendation: Safe to merge");
+    assert.equal(parseFindings(nonMaterial).findings.length, 1);
+    assert.equal(scoreReview(CASES_BY_ID["docs-only-control"], nonMaterial).falsePositive, false);
+
+    const invented = review(finding("BLOCKER: the docs wording might confuse a reader."));
+    const inventedResult = scoreReview(CASES_BY_ID["docs-only-control"], invented);
+    assert.equal(inventedResult.falsePositive, true);
+    assert.equal(inventedResult.materialFindings.length, 1);
+  });
+
+  it("credits a defect only when one finding carries the whole contract", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+
+    // Evidence split across two findings must not add up to a PASS.
+    const split = review(
+      finding("The EXACT_VERSION gate is documented as an exact-version pin for dependencies."),
+      finding("A malformed version such as 01.2.3 passes the current pattern because of a leading zero."),
+    );
+    const splitResult = scoreReview(named, split);
+    assert.equal(splitResult.findingCount, 2);
+    assert.equal(splitResult.detected, false, "validator name and example in different findings must not be credited");
+
+    // One finding carrying everything is credited.
+    const together = scoreReview(named, review(finding(CATCHING_EVIDENCE["semver-boundary"])));
+    assert.equal(together.detected, true);
+    assert.equal(together.citedExamples.includes("01.2.3"), true);
+    assert.equal(together.detectionQuality, "labelled");
+  });
+
+  it("requires a literal malformed example, not just boundary prose", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    const vague = review(
+      finding(
+        "The new EXACT_VERSION pattern permits a leading zero in every core component, and the prerelease and build metadata classes accept empty dot-separated identifiers.",
+      ),
+    );
+    const vagueResult = scoreReview(named, vague);
+    assert.equal(vagueResult.detected, false);
+    assert.ok(vagueResult.reasons.some((reason) => reason.includes("no literal malformed example cited")));
+
+    const cited = scoreReview(named, review(finding(`${CATCHING_EVIDENCE["semver-boundary"]} For example 01.2.3 passes today.`)));
+    assert.equal(cited.detected, true);
+  });
+
+  it("does not credit a finding that is not blocking", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    const advisory = review(finding(CATCHING_EVIDENCE["semver-boundary"], { severity: "LOW", status: "advisory" }))
+      .replace("Merge recommendation: Changes requested", "Merge recommendation: Safe to merge");
+    const result = scoreReview(named, advisory);
+    assert.equal(result.detected, false, "a safe-to-merge verdict can never count as detection");
+  });
+
+  it("matches one finding against each case contract", () => {
     for (const entry of defectCases) {
-      const evidence = CATCHING_EVIDENCE[entry.id];
-      assert.ok(evidence, `${entry.id} needs catching evidence in this test`);
-      const result = scoreReview(entry, review(evidence));
+      const parsed = parseFindings(review(finding(CATCHING_EVIDENCE[entry.id])));
+      assert.equal(parsed.findings.length, 1, `${entry.id} evidence must parse as one finding`);
+      const match = matchCase(entry, parsed.findings[0]);
       assert.equal(
-        result.detected,
+        match.credits,
         true,
-        `${entry.id} was not recognised as detected (matched ${result.matchedSignals.length}/${entry.minSignals}: ${result.reasons.join("; ")})`,
+        `${entry.id} evidence did not satisfy its own contract (matched ${match.matchedSignals.length}/${entry.minSignals}: ${match.matchedSignals.join(", ")})`,
       );
     }
   });
 
-  it("flags an invented material finding on the clean control", () => {
-    const overAggressive = [
-      "Merge recommendation: Changes requested",
-      "Severity: HIGH",
-      "BLOCKER: the AGENTS.md wording change might confuse a reader and should be reconsidered.",
-      "Status: changes_required",
-    ].join("\n");
-    const result = scoreReview(CASES_BY_ID["docs-only-control"], overAggressive);
-    assert.equal(result.falsePositive, true, "an invented BLOCKER on a docs-only control must be scored as a false positive");
-
-    // And the controls stay differentiated: the same text cannot rescue the true defect case either.
-    const safeOnDefect = scoreReview(CASES_BY_ID["semver-boundary"], "Merge recommendation: Safe to merge");
-    assert.equal(safeOnDefect.detected, false, "a safe-to-merge verdict can never count as detection");
+  it("recognises a review that does catch each seeded defect", () => {
+    for (const entry of defectCases) {
+      const result = scoreReview(entry, review(finding(CATCHING_EVIDENCE[entry.id])));
+      assert.equal(
+        result.detected,
+        true,
+        `${entry.id} was not recognised as detected (${result.reasons.join("; ")})`,
+      );
+    }
   });
+});
 
+describe("SAN-1312 corpus wiring", () => {
   it("routes every case to the owner skill its findings require", () => {
     for (const entry of CASES) {
       const { skills, paths } = selectSkills(entry.changedFiles);
       for (const owner of entry.expectedOwnerSkills) {
         assert.ok(skills.includes(owner), `${entry.id} did not route to ${owner} (got ${skills.join(", ")})`);
       }
-      assert.ok(paths.length === skills.length, `${entry.id} must select one path per skill`);
+      assert.equal(paths.length, skills.length, `${entry.id} must select one path per skill`);
     }
   });
 
@@ -189,7 +321,6 @@ describe("SAN-1312 PR-Agent review-quality corpus", () => {
       const body = readFileSync(join(REPO_ROOT, anchor.skill), "utf8");
       assert.match(body, anchor.matches, `${anchor.skill} no longer documents: ${anchor.probe}`);
     }
-    // The universal boundary probe must reach the reviewer on every PR, not only specialist ones.
     const universal = selectSkills(["README.md"]);
     assert.ok(
       universal.paths.includes("/github/workspace/.claude/skills/code-review/SKILL.md"),

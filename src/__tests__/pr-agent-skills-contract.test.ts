@@ -131,18 +131,49 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).not.toContain("malformed near-miss");
   });
 
-  it("ships the review-quality eval corpus and its recorded v0.45 baselines", () => {
+  it("ships the review-quality eval corpus and its recorded model outputs", () => {
     for (const path of [
       "scripts/pr-agent/evals/cases.mjs",
       "scripts/pr-agent/evals/score-review.mjs",
+      "scripts/pr-agent/evals/capture-review.mjs",
       "scripts/pr-agent/evals/fixtures/pr-157-v045-recorded.md",
       "scripts/pr-agent/evals/fixtures/pr-158-v045-recorded.md",
+      "scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md",
     ]) {
       expect(existsSync(path)).toBe(true);
     }
     expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("semver-boundary");
     expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("docs-only-control");
     expect(read("scripts/pr-agent/evals/fixtures/pr-157-v045-recorded.md")).toContain("Safe to merge");
+    // A real model-generated review, not synthetic wording.
+    expect(read("scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md")).toContain(
+      "pr-agent-review-state:v1",
+    );
+  });
+
+  it("scores one finding, never the whole review body", () => {
+    const scorer = read("scripts/pr-agent/evals/score-review.mjs");
+    expect(scorer).toContain("export function parseFindings");
+    expect(scorer).toContain("export function isMaterialFinding");
+    expect(scorer).toContain("export function matchCase");
+    expect(scorer).toContain("pr-agent-review-state:v1");
+    // Materiality must never be inferred from a bare severity word anywhere in the body:
+    // "Risk level: High" is a risk assessment, not a finding.
+    expect(scorer).not.toMatch(/body\.toUpperCase\(\)\.match\(/);
+    expect(scorer).toContain("Risk level");
+    // The example contract is literal, not a pattern that prose can satisfy.
+    expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("requiredExamples");
+  });
+
+  it("selects one certified review per head instead of concatenating reviews", () => {
+    const policy = read("scripts/pr-agent/review-policy.mjs");
+    expect(policy).toContain("export function hasCertificationForHead");
+    expect(policy).toContain("export function selectCertifiedReviewForHead");
+    const capture = read("scripts/pr-agent/evals/capture-review.mjs");
+    expect(capture).toContain("selectCertifiedReviewForHead");
+    expect(capture).toContain("refusing to score an unverified review");
+    // The README must not document the older newest-wins shell selection.
+    expect(read("scripts/pr-agent/evals/README.md")).not.toContain("sort_by(.updatedAt)");
   });
 
   it("does not configure keys the pinned PR-Agent cannot read", () => {
