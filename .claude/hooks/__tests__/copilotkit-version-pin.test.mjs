@@ -256,6 +256,27 @@ const bypassScope = [
     }),
   },
   {
+    what: "a misaligned pair produced by a pin move",
+    expected: 2,
+    // Regression: the bypass used to exit 0 from inside the move loop, which sits above the
+    // alignment check, so authorizing a move also authorized landing a misaligned pair.
+    build: () => ({
+      filePath: resolve(makeRoot(CERTIFIED), "package.json"),
+      edit: {
+        new_string: '"@copilotkit/react-core": "2.4.1",\n    "@copilotkit/runtime": "2.4.0"',
+      },
+    }),
+  },
+  {
+    what: "drift produced by a single-package move",
+    expected: 2,
+    // The likeliest real path to the bug: someone bumps one of the pair, not both.
+    build: () => ({
+      filePath: resolve(makeRoot(CERTIFIED), "package.json"),
+      edit: { new_string: '"@copilotkit/react-core": "2.4.1"' },
+    }),
+  },
+  {
     what: "the @copilotkit/react full-rewrite package line",
     expected: 2,
     build: () => ({
