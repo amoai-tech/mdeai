@@ -27,7 +27,7 @@ npm run floor             # full gate — run before claiming done
 npm run graphify:query -- "<question>"
 ```
 
-`npm run floor` runs `check:skills → check:db-url-guard → check:release-gates → lint → typecheck → check:env:ci → build → test → check:mastra → audit:floor`.
+`npm run floor` runs `check:skills → check:db-url-guard → check:release-gates → audit:copilotkit-v2 → lint → typecheck → check:env:ci → build → test → check:mastra → audit:floor`.
 
 Traps worth knowing before you debug them:
 

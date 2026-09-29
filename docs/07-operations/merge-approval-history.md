@@ -57,6 +57,45 @@ paths — rather than worked around repeatedly.
 deploy — satisfies the approval requirement normally. A bypass is defensible only for a non-runtime
 change whose reason is written down here.
 
+## 2026-09-29 — PR #155
+
+**Merged with an administrator override.**
+
+**Why:** the same structural blocker as PR #150. The repository has exactly one collaborator —
+`amoai-tech` — which was also the PR author, so GitHub did not permit the required approval from any
+account. `floor` (4m28s), `deterministic chromium`, `deterministic Maps contracts`,
+`mastra-schema-init`, `supabase-acl`, `review / review`, `review / verify-review-result`,
+`Kilo Code Review` and `Vercel` were all green on the exact merged head `1b6580d2a`. The only failing
+check was `Codacy Static Code Analysis` (6 findings, all one false-positive class), which does not
+gate a merge on this repository.
+
+**What the reviewer would have been asked to check:** whether `floor` is the right owner for the
+CopilotKit architecture contract, whether the deliberate alias indirection is preferable to inlining
+the command, and whether running the guard at step 4 rather than later in the chain is the correct
+fail-fast position.
+
+**Nothing unreviewed rode along:** the merged tree was diffed against the reviewed head and is
+byte-identical. Two files, `+157/-2`: `package.json` and
+`scripts/__tests__/copilotkit-v2-guard.test.mjs`. Merge commit `88cc3c3e9`.
+
+**Two review bots did not actually review this head, and their green status should not be read as
+coverage.** CodeRabbit reported `pass` while its own comment says "Review limit reached"; Sourcery
+reported `skipping` because the 250,000-character weekly diff budget was exhausted.
+
+**Codacy disposition — 6 findings, all verified false positives.** Every finding was the same rule,
+"The application dynamically constructs file or path information", on the new test's temp-root fixture
+lines. No request, environment, CLI, or network input reaches those paths, so the heuristic's premise
+does not hold for a hermetic test harness. This is a different class from the one catalogued in
+`.claude/skills/code-review/references/ci-review.md`, which covers only the prose-absolute heuristic.
+It is a candidate for that catalogue rather than a code change.
+
+**Not a precedent — and now the second consecutive override.** PR #150 and PR #155 were both bypassed
+for the same one-collaborator reason, which is the repetition this file's own open question from #150
+warned against: *"a protected branch with a one-member review requirement can never be satisfied …
+This should be fixed deliberately — invite a second reviewer, or scope the review requirement so it
+excludes docs-only paths — rather than worked around repeatedly."* Two overrides in two merges is that
+pattern. The structural fix remains open and is the reason a third entry should not be needed.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
