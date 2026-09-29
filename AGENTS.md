@@ -46,6 +46,7 @@ If the request clearly names or belongs to a canonical domain skill, route direc
 Use `systematic-debugging` only when the responsible domain/root cause is genuinely unknown.
 
 - Simple domain/stack work → relevant specialist skill.
+- Reuse-before-build and the source receipt, for any task that would write code → `ponytail` (runs *before* implementation ownership; it does not replace the domain owner).
 - Substantial or ambiguous implementation → `tasks`.
 - Unknown failure/root cause → `systematic-debugging`.
 - Test strategy, test-first implementation, and regression proof → `testing`.
@@ -73,15 +74,74 @@ Before broad repository searching on substantial code tasks:
 4. Fall back to normal search when the question is conceptual, Graphify has no useful match, runtime behavior needs verification, or direct source evidence is more appropriate.
 5. Treat static graph results as navigation evidence rather than sufficient deletion proof; confirm risky conclusions against source, runtime behavior, and relevant tests.
 
-## Ponytail engineering rule
+## Ponytail — reuse before build
 
-Before writing custom code, prefer the earliest rung that safely satisfies the task: skip unnecessary work; reuse existing repository code; prefer the standard library or native platform; reuse an installed dependency; use a small direct change; only then add the minimum new implementation required. Preserve required validation, error handling, security, accessibility, data integrity, and tests rather than trading them away merely to reduce code size.
+Canonical owner: `ponytail`. This section is the obligation; load the skill for the ladder in full,
+the worked example, and `references/source-map.md` — the authoritative source to check per area.
+
+**Every task opens with one written line** answering *is there a faster, smaller, or better-supported
+way to do this than building it?* Name the rung you stopped at:
+
+1. Does this need to be built at all?
+2. Does the repo already have it? Reuse the helper, util, or pattern.
+3. Does the standard library do it?
+4. Does a native platform feature cover it?
+5. Does an already-installed dependency solve it?
+6. Can it be one line?
+7. Only then: write the minimum that works.
+
+Climb **after** understanding the problem: read the task and the code it touches, trace the real flow,
+then pick a rung. A small diff in the wrong place is a second bug, not efficiency. Prefer the
+dashboard, the CLI, and prebuilt modules to authoring equivalents — check the platform's own
+primitives and `package.json` before writing anything new.
+
+**Not lazy about:** understanding the problem first, input validation at trust boundaries, error
+handling that prevents data loss, security, accessibility, and anything explicitly requested. Never
+trade these for a smaller diff.
+
+**Root cause, not symptom.** A report names a symptom. Grep every caller of the function you touch
+and fix the shared function once; patching only the path in the ticket leaves sibling callers broken.
+
+**Non-trivial logic leaves one runnable check behind** — the smallest thing that fails if the logic
+breaks. Trivial one-liners need none. Mark a deliberate ceiling with a `ponytail:` comment naming the
+ceiling and its upgrade path.
+
+### Source receipts — every external reference has an implementation step
+
+Reading a doc is not reusing it. Every external source you consult **and act on** produces one row,
+in the PR body or the task evidence. A source with no row did not influence the work and must not be
+cited as its justification.
+
+| Field | Required |
+| -- | -- |
+| **URL** | The full URL — not a domain, not "the docs" |
+| **Source** | The exact file, section, symbol, or example inside it |
+| **Disposition** | `COPY` · `ADAPT` · `MODEL` · `REFERENCE ONLY` |
+| **Destination** | The exact path in this repo where it lands (`—` for `REFERENCE ONLY`) |
+| **Verification** | The exact command or test that proves the result |
+
+`COPY` = verbatim, keeps its attribution, takes no local edits. `ADAPT` = same approach in our
+conventions; say what changed. `MODEL` = follow the shape, write our own; say what diverged.
+`REFERENCE ONLY` = ships nothing, so it **requires a stated reason and the alternative you
+rejected** — left unexplained, it is the escape hatch that makes this whole rule decorative.
+
+Prefer the installed version (`node_modules/`), the library's own repository, examples, and official
+docs over tutorials and recall, and cite the primary source rather than the blog that led you to it.
+
+### Verify what the decision depends on
+
+Confirm every claim the decision rests on — versions, API shapes, config keys, security behavior,
+production impact — against a primary source: official docs, the library's own source, or the live
+system. Never assert these from memory, and never round an unverified claim up to a fact. State what
+you checked and what you could not. "Verified" means confirmed against that source, at that version,
+on that date — not that the change is guaranteed defect-free.
 
 ## Shared invariants
 
 Do not duplicate detailed operating rules here when a canonical skill owns them. Load the relevant skill and follow its current instructions.
 
 - Git/worktree safety and execution sequencing → `tasks`.
+- Reuse-before-build ladder, source receipts, root-cause discipline → `ponytail`.
 - Verification and anti-fake-Done requirements → `task-verifier`.
 - Root-cause methodology → `systematic-debugging`.
 - Test selection, TDD, and regression proof → `testing`.
