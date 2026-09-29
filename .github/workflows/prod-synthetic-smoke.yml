@@ -190,7 +190,12 @@ jobs:
           # SAN-1366 production run found 59 of 65 published events already in the past, which is
           # why "salsa events this weekend" legitimately renders the events empty state. Stale
           # inventory is a business-state fact, so it belongs here and not in the runtime smoke.
-          events_total=$(count "$anon" "events" "")
+          if [ -n "$svc" ]; then
+            events_total=$(count "$svc" "events" "")
+          else
+            events_total="unavailable (service role not configured)"
+          fi
+          # Anon + RLS: what a consumer can actually reach for upcoming events.
           events_upcoming=$(count "$anon" "events" "&event_start_time=gte.$(date -u +%Y-%m-%dT%H:%M:%SZ)")
 
           {
