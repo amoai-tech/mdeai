@@ -39,7 +39,7 @@
 
 begin;
 
-select plan(42);
+select plan(61);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — deterministic, transaction-owned, rolled back at the end.
@@ -419,6 +419,166 @@ select is(
     where conrelid = 'public.apartments'::regclass
       and conname = 'apartments_owner_required_when_published'),
   true, 'H: the SAN-1349 ownership constraint is installed and validated');
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- I · SAN-1106 — PUBLISH RECORDS MODERATION APPROVAL
+--
+-- Regression proof for the publish state machine correction in
+-- 20260929120000_san1106_publish_sets_moderation_approved.sql.
+--
+-- Before that change nothing in the product ever wrote moderation_status = 'approved': the only
+-- approved rows were migration-seeded (and ownerless) and the only owned rows came from owner
+-- onboarding (and stayed pending). Since isRentalRequestable() requires owner + active + approved
+-- + published, no owner-created listing could ever become requestable. These assertions pin the
+-- corrected behaviour so it cannot silently regress.
+--
+-- Preconditions are re-established here rather than inherited from the sections above, so this
+-- block does not depend on the accumulated state of earlier sections.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+
+update public.apartments
+   set listing_workflow_status = 'ready_for_review', status = 'inactive', moderation_status = 'pending'
+ where id = 'a1054000-0000-4000-8000-000000000021';
+
+update public.apartments
+   set listing_workflow_status = 'draft', status = 'inactive', moderation_status = 'pending'
+ where id = 'a1054000-0000-4000-8000-000000000023';
+
+-- ── I.1 · the owning broker publishes: approval is recorded ────────────────────
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000001', true);
+
+select lives_ok(
+  $$select public.publish_listing('a1054000-0000-4000-8000-000000000021'::uuid)$$,
+  'I1: Broker A publishes an owned ready_for_review listing');
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'approved', 'I2: publishing records moderation approval');
+
+select is(
+  (select status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'active', 'I3: publishing activates the listing');
+
+select is(
+  (select listing_workflow_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'published', 'I4: publishing reaches the published workflow state');
+
+select ok(
+  (select landlord_id is not null
+      and status = 'active'
+      and moderation_status = 'approved'
+      and listing_workflow_status = 'published'
+   from public.apartments
+   where id = 'a1054000-0000-4000-8000-000000000021'),
+  'I5: the published listing now satisfies the full renter requestability contract');
+
+-- ── I.2 · pausing must NOT erase approval ─────────────────────────────────────
+-- A paused listing has already been vetted; clearing approval would strand it behind a gate
+-- nothing can re-open, because nothing else writes 'approved'.
+select lives_ok(
+  $$select public.pause_listing('a1054000-0000-4000-8000-000000000021'::uuid)$$,
+  'I6: Broker A pauses the published listing');
+
+select is(
+  (select status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'inactive', 'I7: pausing deactivates the listing');
+
+select is(
+  (select listing_workflow_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'paused', 'I8: pausing reaches the paused workflow state');
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'approved', 'I9: pausing does NOT erase moderation approval');
+
+select lives_ok(
+  $$select public.publish_listing('a1054000-0000-4000-8000-000000000021'::uuid)$$,
+  'I10: Broker A re-publishes a paused listing');
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'approved', 'I11: re-publishing keeps the listing approved');
+
+select is(
+  (select status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000021'),
+  'active', 'I12: re-publishing reactivates the listing');
+
+-- ── I.3 · a foreign broker cannot cause approval ──────────────────────────────
+reset role;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000001', true);
+
+update public.apartments
+   set listing_workflow_status = 'ready_for_review', status = 'inactive', moderation_status = 'pending'
+ where id = 'a1054000-0000-4000-8000-000000000023';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000002', true);
+
+select throws_ok(
+  $$select public.publish_listing('a1054000-0000-4000-8000-000000000023'::uuid)$$,
+  '42501', null, 'I13: Broker B DENIED publish on Broker A listing');
+
+reset role;
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000023'),
+  'pending', 'I14: a denied publish leaves moderation unapproved');
+
+-- ── I.4 · a rejected listing returning to draft re-enters review ───────────────
+-- published → rejected is not a legal transition and no public wrapper rejects, so the FSM cannot
+-- reach an approved + rejected row. The state is forced directly to exercise the defensive branch:
+-- if it ever becomes reachable, returning to draft must clear the earlier approval.
+reset role;
+select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000001', true);
+
+update public.apartments
+   set listing_workflow_status = 'rejected', moderation_status = 'approved', rejection_reason = 'fixture'
+ where id = 'a1054000-0000-4000-8000-000000000023';
+
+select lives_ok(
+  $$select public.transition_listing_workflow('a1054000-0000-4000-8000-000000000023'::uuid, 'draft')$$,
+  'I15: rejected → draft is a legal transition');
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000023'),
+  'pending', 'I16: returning to draft clears approval so the listing re-enters review');
+
+select is(
+  (select rejection_reason from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000023'),
+  null, 'I17: returning to draft clears the rejection reason');
+
+-- ── I.5 · the SAN-1349 ownership CHECK now has teeth ──────────────────────────
+-- This transition sets active + approved + published together, so
+-- `apartments_owner_required_when_published` stops being unreachable dead code. An ownerless
+-- listing can no longer be forced into the requestable shape by any path.
+select throws_ok(
+  $$update public.apartments
+       set status = 'active', moderation_status = 'approved', listing_workflow_status = 'published'
+     where id = 'a1054000-0000-4000-8000-000000000024'$$,
+  '23514', null, 'I18: an ownerless listing cannot be forced into the requestable shape');
+
+select is(
+  (select moderation_status from public.apartments
+    where id = 'a1054000-0000-4000-8000-000000000024'),
+  'pending', 'I19: the refused write left the ownerless row unapproved');
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
 
 select * from finish();
 rollback;
