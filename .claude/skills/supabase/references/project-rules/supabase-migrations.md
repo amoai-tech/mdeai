@@ -78,6 +78,27 @@ Steps 1–4 are automated:
 npm run preflight:migration          # add --no-fetch to skip the network fetch
 ```
 
+### One-command release, gates included
+
+```bash
+MDEAI_CONFIRM_PUSH=1 npm run push:migration
+```
+
+That runs the steps above in order — **preflight → dry-run → acknowledgement → push** — and stops at
+the first that fails, so the push cannot happen as a side effect of running a single command:
+
+- The `preflight:migration` gate runs first. On a feature branch, a dirty tree, or a `HEAD` that is
+  not `origin/main` it fails and nothing reaches the database.
+- `supabase db push --dry-run` prints the manifest immediately before the push, so the list you
+  approve is the list that is applied in that same run.
+- `scripts/confirm-migration-push.mjs` refuses unless `SUPABASE_DB_URL` is set **and**
+  `MDEAI_CONFIRM_PUSH=1`. Without the acknowledgement the run stops after the dry-run.
+
+The acknowledgement is required deliberately. The preflight checks Git and cannot see the database,
+so the dry-run list is the only place an unreviewed migration becomes visible — which makes reading
+it the one step a convenient wrapper must not skip. `npm run migration:dry-run` runs that step alone;
+the individual pieces stay available for the cases where you need them separately.
+
 ### The dry-run list **is** the deployment manifest
 
 Read every line. If it contains anything outside the approved task, **stop**. Do not skim it.

@@ -101,6 +101,8 @@
     "test:api": "vitest run src/app/api/",
     "check:db-url-guard": "node --test scripts/__tests__/warn-remote-database-url.test.mjs",
     "preflight:migration": "node scripts/preflight-migration-release.mjs",
+    "migration:dry-run": "npx supabase db push --dry-run --db-url \"$SUPABASE_DB_URL\"",
+    "push:migration": "npm run preflight:migration && npm run migration:dry-run && node scripts/confirm-migration-push.mjs && npx supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "check:release-gates": "node --test scripts/__tests__/*.test.mjs",
     "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs",
     "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts --project=local-chromium --workers=1",
