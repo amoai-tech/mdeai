@@ -19,7 +19,15 @@ const INVENTORY = JSON.parse(fs.readFileSync(path.resolve(INVENTORY_REL), "utf8"
 
 const VALID_CLASSIFICATIONS = new Set(INVENTORY.classifications);
 
-const SCAN_ROOTS = ["src", "e2e", "scripts"];
+/**
+ * Scan roots must cover every root the no-new-v1 write-time guard covers, or the
+ * inventory can silently miss a consumer the guard would block. The guard's own
+ * contract is `.claude/hooks/copilotkit-version-pin.mjs:67`:
+ *   /^(src|supabase\/functions)\//
+ * `e2e` and `scripts` are additional here because test and tooling code consumes
+ * CopilotKit too, and neither is a guard root.
+ */
+const SCAN_ROOTS = ["src", "supabase/functions", "e2e", "scripts"];
 const SCAN_EXT = /\.(ts|tsx|js|jsx|mjs)$/;
 
 /** The four compatibility boundaries, each owned by a migration step. */
