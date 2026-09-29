@@ -144,6 +144,37 @@ test("allows repairing a non-exact committed pin without the bypass", () => {
   assert.equal(r.status, 0, `remediation must pass:\n${r.stderr}`);
 });
 
+test("checks every MultiEdit fragment, not just the first", () => {
+  // A MultiEdit splits one logical change across several edits. If only `content` and
+  // `new_string` were scanned, a pair could be changed in two fragments and slip past both the
+  // certified-value check and the alignment check.
+  const dir = makeRoot(CERTIFIED);
+  const edits = [
+    { old_string: "a", new_string: '"@copilotkit/react-core": "1.75.0"' },
+    { old_string: "b", new_string: '"@copilotkit/runtime": "1.74.0"' },
+  ];
+  assert.equal(
+    run(resolve(dir, "package.json"), { edits }).status,
+    2,
+    "a pair split across MultiEdit fragments must be blocked",
+  );
+});
+
+test("honours the bypass for a MultiEdit that moves both pins", () => {
+  const dir = makeRoot(CERTIFIED);
+  const edits = [
+    { old_string: "a", new_string: '"@copilotkit/react-core": "2.4.1"' },
+    { old_string: "b", new_string: '"@copilotkit/runtime": "2.4.1"' },
+  ];
+  const target = resolve(dir, "package.json");
+  assert.equal(run(target, { edits }).status, 2, "without bypass it must block");
+  assert.equal(
+    run(target, { edits }, { MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE: "1" }).status,
+    0,
+    "with bypass it must pass",
+  );
+});
+
 test("blocks a caret range", () => {
   const r = run(resolve(root, "package.json"), { content: pkg({ "@copilotkit/react-core": "^1.75.0" }) });
   assert.equal(r.status, 2, `ranges make the matrix unreproducible:\n${r.stderr}`);
