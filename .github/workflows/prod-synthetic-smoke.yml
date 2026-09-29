@@ -1,5 +1,13 @@
-# UX-034 / SAN-322 — nightly synthetic prod smoke (4 verticals + artifacts).
-name: Prod synthetic smoke
+# SAN-1366 / SAN-1367 — Production Runtime Smoke (4 verticals + artifacts).
+#
+# Canonical signal name: **Production Runtime Smoke**. It asserts that each vertical's chat
+# results reach a valid rendered terminal state — result cards, or the vertical's own explicit
+# empty state. It does NOT assert that live inventory exists: zero published listings is a valid
+# product state and is reported separately as **Marketplace Health**, which never gates this job.
+#
+# Before SAN-1366 this job asserted `count() > 0` on four verticals, so a healthy app with an
+# empty marketplace was reported as a broken app on every run from 2026-09-28.
+name: Production Runtime Smoke
 
 on:
   repository_dispatch:
@@ -16,10 +24,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  prod-smoke:
-    name: prod 4-query smoke
+  runtime-smoke:
+    name: Production Runtime Smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 40 minutes, up from 25: SAN-1366 split the single 4-query matrix into four independent
+    # tests, each with its own home load, so the worst case is longer by design. The wait is a
+    # real ceiling rather than a hidden one — a red vertical no longer aborts the other three.
+    timeout-minutes: 40
     if: ${{ vars.PROD_SMOKE_ENABLED == 'true' && (github.event_name != 'repository_dispatch' || github.event.client_payload.environment == 'production') }}
 
     steps:
@@ -130,10 +141,90 @@ jobs:
             e2e/prod-copilotkit-isolation.spec.ts \
             --project=prod-smoke --workers=1
 
+      # SAN-1367 — **Marketplace Health**: live inventory is a business-state observation, not a
+      # runtime claim. It is reported separately, on the existing reporting path (step summary),
+      # and can never fail this job. `continue-on-error` plus `exit 0` on every branch means an
+      # outage here is invisible, which is correct: this signal does not gate a release.
+      - name: Observe Marketplace Health
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "Marketplace Health: unavailable (Supabase read credentials are not configured)"
+            exit 0
+          fi
+
+          # Extracts the exact count PostgREST reports in `Content-Range: 0-0/<total>`.
+          #
+          # The key matters and is a required argument. The anon key is subject to RLS, so an anon
+          # "apartments total" is really "rows this consumer can see" — measured at 0 on
+          # 2026-09-29 while the table held 4 rows. Reporting that as "total" would be exactly the
+          # kind of overclaiming this pair of tasks exists to remove, so the true table size is read
+          # with the service role and the consumer-visible figure is read with the anon key.
+          count() {
+            curl --silent --show-error --output /dev/null --dump-header - \
+              -H "apikey: $1" \
+              -H "Authorization: Bearer $1" \
+              -H "Prefer: count=exact" \
+              -H "Range: 0-0" \
+              "${SUPABASE_URL}/rest/v1/$2?select=id$3" \
+              | tr -d '\r' \
+              | awk 'tolower($1) == "content-range:" { split($2, a, "/"); print a[2] }'
+          }
+
+          anon="${SUPABASE_ANON_KEY}"
+          svc="${SUPABASE_SERVICE_ROLE_KEY:-}"
+          if [ -n "$svc" ]; then
+            rentals_total=$(count "$svc" "apartments" "")
+          else
+            rentals_total="unavailable (service role not configured)"
+          fi
+          # Anon + RLS: what a renter can actually reach.
+          rentals_visible=$(count "$anon" "apartments" "&status=eq.active")
+          rentals_requestable=$(count "$anon" "apartments" "&status=eq.active&moderation_status=eq.approved&listing_workflow_status=eq.published")
+          # SAN-1366 production run found 59 of 65 published events already in the past, which is
+          # why "salsa events this weekend" legitimately renders the events empty state. Stale
+          # inventory is a business-state fact, so it belongs here and not in the runtime smoke.
+          if [ -n "$svc" ]; then
+            events_total=$(count "$svc" "events" "")
+          else
+            events_total="unavailable (service role not configured)"
+          fi
+          # Anon + RLS: what a consumer can actually reach for upcoming events.
+          events_upcoming=$(count "$anon" "events" "&event_start_time=gte.$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+
+          {
+            echo "### Marketplace Health"
+            echo ""
+            echo "Non-blocking observation. An empty marketplace is a valid product state and does not"
+            echo "fail Production Runtime Smoke."
+            echo ""
+            echo "| Metric | Value |"
+            echo "| -- | -- |"
+            echo "| rentals · rows in table | ${rentals_total:-unknown} |"
+            echo "| rentals · renter-visible (anon + RLS, active) | ${rentals_visible:-unknown} |"
+            echo "| rentals · requestable-eligible (active + approved + published) | ${rentals_requestable:-unknown} |"
+            echo "| events · rows in table | ${events_total:-unknown} |"
+            echo "| events · upcoming | ${events_upcoming:-unknown} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Marketplace Health: rentals rows=${rentals_total:-unknown} renter-visible=${rentals_visible:-unknown} requestable-eligible=${rentals_requestable:-unknown}; events rows=${events_total:-unknown} upcoming=${events_upcoming:-unknown}"
+          if [ "${rentals_requestable:-0}" = "0" ]; then
+            echo "Marketplace currently has 0 requestable rentals — not an application failure"
+          fi
+          if [ -n "${events_upcoming:-}" ] && [ "${events_upcoming}" = "0" ]; then
+            echo "Marketplace currently has 0 upcoming events — not an application failure"
+          fi
+
       - name: Upload smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prod-synthetic-smoke-${{ github.run_id }}
+          name: production-runtime-smoke-${{ github.run_id }}
           path: tmp/prod-synthetic-smoke/**
           if-no-files-found: ignore

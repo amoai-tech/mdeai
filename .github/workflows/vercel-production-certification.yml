@@ -1,5 +1,11 @@
 # SAN-1330 — certify the exact staged Vercel production candidate before alias assignment.
-name: Vercel production certification
+#
+# SAN-1367 canonical signal name: **Candidate Runtime Certification**.
+# It proves the candidate's *runtime* only — the app boots, auth works, and one concierge turn
+# completes and persists. It deliberately does NOT read mutable marketplace inventory, so it can
+# never claim anything about live listings. Inventory presence is a separate, non-blocking
+# signal: **Marketplace Health** (see `prod-synthetic-smoke.yml`).
+name: Candidate Runtime Certification
 
 on:
   repository_dispatch:
@@ -20,6 +26,12 @@ env:
 
 jobs:
   certify:
+    # SAN-1367: this job name is deliberately identical to the commit-status context
+    # (`production-certification`) published below, because the Vercel project's deployment check
+    # blocks alias assignment on that exact context. It is a wire identifier, not operator copy —
+    # renaming it would diverge the Actions check from the blocking status and silently detach the
+    # promotion block. The canonical, operator-facing signal name is the workflow `name:` above and
+    # the scoped `description` on each status publication.
     name: production-certification
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -58,10 +70,14 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          # SAN-1367: the commit-status `context` string is an identifier, not operator-facing copy.
+          # It stays `production-certification` because the Vercel project's deployment check is
+          # configured to block alias assignment on exactly that context; renaming it would silently
+          # detach the promotion block. The *description* is where the claim is scoped.
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
             -f state=failure \
             -f context=production-certification \
-            -f description="Certification in flight — promotion blocked" \
+            -f description="Candidate runtime certification in flight — promotion blocked" \
             -f target_url="${RUN_URL}" >/dev/null
           echo "published production-certification=failure for ${SHA}"
 
@@ -116,10 +132,13 @@ jobs:
           set -euo pipefail
           if [ "${CERTIFY_OUTCOME}" = "success" ]; then
             state=success
-            description="Candidate certified — safe to promote"
+            # SAN-1367: must not be readable as "everything is healthy". Names exactly what passed
+            # (runtime) and exactly what was not evaluated (marketplace inventory). GitHub caps a
+            # commit-status description at 140 characters.
+            description="Candidate runtime certified — promotion checks passed. Marketplace inventory not evaluated."
           else
             state=failure
-            description="Certification failed — do not promote"
+            description="Candidate runtime certification failed — do not promote"
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
             -f state="${state}" \
