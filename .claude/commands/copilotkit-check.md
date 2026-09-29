@@ -28,7 +28,7 @@ targets `@copilotkit/runtime/v2`. The compatibility `<CopilotKit>` export and th
 ## Workflow
 
 1. `Read package.json` — list every `@copilotkit/*` entry and check exactness + core/runtime alignment.
-2. `Grep -rn "from \"@copilotkit/" src supabase/functions` — flag bare `@copilotkit/react-core` and any full-rewrite package.
+2. `Grep -rnE "from ['\"]@copilotkit/" src supabase/functions` — flag bare `@copilotkit/react-core` and any full-rewrite package (`@copilotkit/react`, `@copilotkit/core`, `@copilotkit/agent`, `@copilotkit/sdk-js`), for both single- and double-quoted imports.
 3. `Grep -rn "<CopilotKit" src` — inventory remaining compatibility boundaries (informational).
 4. `Read src/app/api/copilotkit/[[...path]]/route.ts` — report whether it still imports the bare
    `@copilotkit/runtime` adapter or already uses `@copilotkit/runtime/v2`.

@@ -103,6 +103,23 @@ test("blocks the v2 full-rewrite package line", () => {
   assert.equal(r.status, 2, `full-rewrite line must be rejected:\n${r.stderr}`);
 });
 
+test("blocks a single-package edit that creates drift", () => {
+  // A realistic Edit touches only one declaration. The guard must compare against the
+  // counterpart already committed at the target path, or the drift slips through.
+  const target = resolve(root, "package.json");
+  writeFileSync(target, pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.75.0" }));
+  const r = run(target, { new_string: '"@copilotkit/runtime": "1.74.0"' });
+  assert.equal(r.status, 2, `single-package drift must be blocked:\n${r.stderr}`);
+});
+
+test("allows a single-package edit that keeps the pair aligned", () => {
+  const target = resolve(root, "package.json");
+  writeFileSync(target, pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.76.0" }));
+  const r = run(target, { new_string: '"@copilotkit/runtime": "1.75.0"' });
+  assert.equal(r.status, 0, `re-aligning one package must pass:\n${r.stderr}`);
+  writeFileSync(target, "{}\n");
+});
+
 test("honours the explicit upgrade bypass", () => {
   const r = run(
     resolve(root, "package.json"),

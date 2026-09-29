@@ -69,7 +69,7 @@ Promote a hook by moving it from `_deferred/` to `hooks/` and adding its entry t
 |---|---|
 | `/verify-floor` | Pre-commit floor: build + audit + tsc + RLS evidence (~60s) |
 | `/supabase-rls-audit` | RLS audit on public schema via Supabase MCP (~15s) |
-| `/copilotkit-check` | Verify CK exact+aligned pin, single mount, agent-name consistency (~20s) |
+| `/copilotkit-check` | Verify CK exact+aligned pins, approved `/v2` surface, agent-name consistency; reports remaining `<CopilotKit>` boundaries as migration inventory (~20s) |
 
 ## Subagents
 

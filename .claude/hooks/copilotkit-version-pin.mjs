@@ -66,6 +66,8 @@ if (/\.claude\/hooks\//.test(rel) || /\.test\.(ts|tsx|mjs|js)$/.test(rel) || /__
 }
 
 const bypass = process.env.MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE === "1";
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const isExactVersion = (value) => typeof value === "string" && EXACT_VERSION.test(value);
 const block = (message) => {
   process.stderr.write(`${message}\nTo bypass once: MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1\n`);
   process.exit(bypass ? 0 : 2);
@@ -99,7 +101,7 @@ if (isPackageJson) {
       }
       if (!ALIGNED_PACKAGES.includes(pkg)) continue;
       declared.set(pkg, rawVersion);
-      if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(rawVersion)) {
+      if (!isExactVersion(rawVersion)) {
         block(
           `BLOCKED: @copilotkit/${pkg} must be an exact version, got "${rawVersion}".\n` +
             `A range, caret, tilde, "latest" or "*" makes the SAN-1301-certified matrix ` +
@@ -108,7 +110,22 @@ if (isPackageJson) {
       }
     }
   }
-  // Only enforceable when a single write carries both declarations (e.g. a full-file write).
+  // A single-package edit carries only one side of the aligned pair, so fall back to the value
+  // already committed at the target path. Without this, editing only `runtime` (or only
+  // `react-core`) silently introduced exactly the drift this guard exists to prevent. Only exact
+  // on-disk values are used, so a pre-existing range cannot manufacture a false alignment error.
+  if (isAbsolute(filePath) && existsSync(filePath)) {
+    try {
+      const onDisk = JSON.parse(readFileSync(filePath, "utf8"));
+      const deps = { ...(onDisk.dependencies ?? {}), ...(onDisk.devDependencies ?? {}) };
+      for (const pkg of ALIGNED_PACKAGES) {
+        const committed = deps[`@copilotkit/${pkg}`];
+        if (!declared.has(pkg) && isExactVersion(committed)) declared.set(pkg, committed);
+      }
+    } catch {
+      // Unparseable target: fall back to enforcing only what this edit declares.
+    }
+  }
   if (declared.has("react-core") && declared.has("runtime")) {
     const core = declared.get("react-core");
     const runtime = declared.get("runtime");
