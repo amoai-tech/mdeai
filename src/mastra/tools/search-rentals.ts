@@ -374,6 +374,12 @@ async function searchRentalsFromSupabase(
     )
     .eq('status', 'active')
     .or(rentalPricePredicate(maxNightly))
+    // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
+    // every nightly-priced row and two different currencies are never meaningfully ordered
+    // against each other. Comparing 80,000 COP to 78 USD is the same unit error the predicate
+    // above refuses to make, so a normalised sort would be a lie dressed as a feature.
+    // Upgrade path: once a canonical currency (or an FX source) exists, order by a single
+    // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
     .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
 
