@@ -12,6 +12,20 @@ const routing = read("scripts/select-pr-agent-skills.mjs");
 const reviewPolicy = read("scripts/pr-agent/review-policy.mjs");
 const evidenceBuilder = read("scripts/pr-agent/build-evidence.mjs");
 
+/**
+ * Built once at module scope, not inside the test.
+ *
+ * `getEncoding` re-loads a multi-megabyte BPE vocabulary on every call and does not cache it:
+ * measured at ~140ms for `cl100k_base` and ~380ms for `o200k_base` on an idle machine, again
+ * on each repeat. Paying that inside the test put the whole test at ~460ms of pure vocabulary
+ * loading, which under the full 281-file suite (many workers loading the same vocabularies at
+ * once) could exceed the 5s default timeout and fail `floor` intermittently.
+ *
+ * Hoisting removes the load from the timed region. The measured budget is unchanged: same
+ * encodings, same files, same 6000-token ceiling.
+ */
+const REVIEW_ENCODINGS = [getEncoding("cl100k_base"), getEncoding("o200k_base")];
+
 const skills = [
   ".claude/skills/code-review/SKILL.md",
   ".claude/skills/copilotkit/references/review.md",
@@ -244,10 +258,7 @@ describe("SAN-1332 skill-budget checkpoint", () => {
       read(".claude/skills/stripe/references/review.md"),
       read(".claude/skills/nextjs/references/review.md"),
     ].join("\n\n---\n\n");
-    const tokenCounts = (["cl100k_base", "o200k_base"] as const).map((encodingName) => {
-      const encoding = getEncoding(encodingName);
-      return encoding.encode(rendered).length;
-    });
+    const tokenCounts = REVIEW_ENCODINGS.map((encoding) => encoding.encode(rendered).length);
     expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(6000);
     const packageJson = JSON.parse(read("package.json")) as { devDependencies?: Record<string, string> };
     expect(packageJson.devDependencies?.["js-tiktoken"]).toBe("1.0.21");
