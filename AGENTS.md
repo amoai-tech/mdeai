@@ -72,7 +72,7 @@ Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, 
 Load the owning skill and follow its current instructions.
 
 - Git/worktree safety and execution sequencing → `tasks`.
-- PR body standard, reviewer fast path, exact-head rule, post-merge checks → `tasks/references/github-pr.md`.
+- PR body standard, reviewer fast path, exact-head rule, post-merge checks → `tasks`.
 - Reuse ladder, evidence receipts, root-cause discipline → `ponytail`.
 - Anti-fake-Done and independent verification → `task-verifier`.
 - Root-cause methodology → `systematic-debugging`.

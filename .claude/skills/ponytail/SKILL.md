@@ -150,21 +150,27 @@ navigation were already solved by the component that shipped.
 Task: stop an unreviewed migration reaching production before `supabase db push`.
 
 - Rung 1 — does a check need to exist? Yes: a live near-miss had already happened.
-- Rung 2 — does the repo already have it? Partly: `scripts/preflight-migration-release.mjs` existed.
+- Rung 2 — does the repo already have it? No guard existed; what was reusable was the CLI's own rule.
 - Rung 3/4 — **the platform already implements the rule.** `supabase db push` decides which files it
-  applies via `ListLocalMigrations`, so the guard must mirror that, not invent a heuristic.
+  applies via `ListLocalMigrations`, so the guard mirrors that instead of inventing a heuristic.
 
 The first version asked Git "which files are untracked?" — rung 3 skipped, and it was wrong in both
 directions (a gitignored migration was applied while the guard said PASS; an uppercase `.SQL` was
-reported but never applied). Mirroring the CLI's own rule fixed both. Receipt:
+reported but never applied). Mirroring the CLI's own rule fixed both.
+
+Receipt — the Destination is an **open pull request, not `main`**, so that path does not resolve in
+this checkout yet. A receipt may name unlanded work, but it must say so:
 
 | Field | Value |
 | -- | -- |
 | URL | `https://github.com/supabase/cli/blob/develop/apps/cli-go/pkg/migration/list.go` |
 | Source | `ListLocalMigrations` (`fs.ReadDir`, top level only, directories skipped) and `migrateFilePattern` in `apps/cli-go/pkg/migration/file.go` |
+| Decision | Which files does `supabase db push` actually apply, and how must the guard select the same set? |
 | Disposition | ADAPT |
-| Destination | `scripts/preflight-migration-release.mjs` (`CLI_MIGRATION_FILE_PATTERN`, `listPushableMigrations`) |
+| Destination | `scripts/preflight-migration-release.mjs` — **in PR #147, not yet on `main`** |
+| Implementation | Mirror the CLI filename rule as `CLI_MIGRATION_FILE_PATTERN` + `listPushableMigrations` |
 | Verification | `node --test scripts/__tests__/preflight-migration-release.test.mjs`, plus a live `db push --dry-run` on the planted-file fixture |
+| Version / commit | Supabase CLI 2.118.0 as installed (this repo does not pin it); rule read at `develop` |
 
 ## References
 
