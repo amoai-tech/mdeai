@@ -124,10 +124,15 @@ function normalizeHostname(hostname) {
 
 /**
  * Whether a hostname names the local machine or a container-forwarded dev port.
+ *
+ * Exported because `scripts/require-safe-e2e-backend.mjs` must agree with this file about
+ * what "local" means. A second copy of that rule would drift, and that guard fails closed
+ * on anything it cannot prove is local.
+ *
  * @param {string} hostname - the parsed URL hostname.
  * @returns {boolean} true when the host is local (an empty host means a unix socket).
  */
-function isLocalHostname(hostname) {
+export function isLocalHostname(hostname) {
   if (!hostname) return true;
   const host = normalizeHostname(hostname);
   if (LOCAL_HOSTNAMES.has(host)) return true;
