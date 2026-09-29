@@ -19,9 +19,15 @@ import { pathToFileURL } from "node:url";
 export const MATERIAL_SEVERITIES = ["BLOCKER", "HIGH"];
 
 /** PR-Agent's persistent finding state marker: machine-readable, per-finding, and stable. */
-// Global so every marker in the body can be counted, not just the first. A literal, not a
-// constructed pattern: the source is fixed at module load and never comes from input.
-const FINDING_STATE_RE = /<!--\s*pr-agent-review-state:v1\s*([\s\S]*?)-->/g;
+// Mirrors upstream's own framing and match semantics exactly. `serialize_review_state` emits
+// `<!-- pr-agent-review-state:v1\n<payload>\n-->`, and upstream's parser terminates only on a
+// newline-delimited `\n-->` (it compiles its pattern with re.DOTALL, so the payload may span lines).
+// Matching that framing — instead of stopping at the first `-->` anywhere — is what keeps a finding
+// that quotes `-->` from truncating the marker. Verified by executing the real v0.45.0 and v0.46.0
+// producers: both emit bytes upstream reads as valid state, while the earlier regex of ours reported
+// INVALID_FINDING_STATE for the very same input.
+const STATE_MARKER_NAMESPACE = "<!-- pr-agent-review-state";
+const FINDING_STATE_RE = /<!--[ \t]*pr-agent-review-state:v1\n([\s\S]*?)\n-->/g;
 
 /**
  * Drop fenced code blocks. Review bodies quote the code they reviewed, and that code is
@@ -152,19 +158,29 @@ export function parseFindings(text) {
 
   // Marker provenance (SAN-1332 step 2). The review body quotes PR-controlled diff content, so a PR
   // could otherwise smuggle a marker-shaped string into a fenced block and have it read as the
-  // bot's own authoritative state — a false "zero findings". Strip quoted code first, then refuse
-  // to choose between several markers instead of silently taking the first.
-  const markers = [...withoutFencedCode(body).matchAll(FINDING_STATE_RE)];
-  if (markers.length > 1) {
-    return invalidState(
-      `INVALID_FINDING_STATE: ${markers.length} state markers found where exactly one is expected`,
-    );
-  }
-  const marker = markers[0];
-  if (marker) {
+  // bot's own authoritative state — a false "zero findings". Strip quoted code first.
+  //
+  // The namespace is then counted separately from the strict newline-framed match, which is how
+  // upstream does it. That distinction matters: a *truncated* marker does not match the strict
+  // pattern, and treating "no match" as "no state" would let a cut-off marker read as a clean review.
+  // Present-but-unparseable must fail closed; only a genuinely absent marker falls through.
+  const unquoted = withoutFencedCode(body);
+  const namespaceCount = unquoted.split(STATE_MARKER_NAMESPACE).length - 1;
+  if (namespaceCount > 0) {
+    if (namespaceCount !== 1) {
+      return invalidState(
+        `INVALID_FINDING_STATE: ${namespaceCount} state markers found where exactly one is expected`,
+      );
+    }
+    const matches = [...unquoted.matchAll(FINDING_STATE_RE)];
+    if (matches.length !== 1) {
+      return invalidState(
+        "INVALID_FINDING_STATE: state marker is present but not correctly framed, or is truncated",
+      );
+    }
     let payload = null;
     try {
-      payload = JSON.parse(marker[1].trim());
+      payload = JSON.parse(matches[0][1].trim());
     } catch (error) {
       return invalidState(
         `INVALID_FINDING_STATE: state marker is not valid JSON (${error instanceof Error ? error.message : error})`,
