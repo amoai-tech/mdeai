@@ -36,14 +36,23 @@ node --test scripts/__tests__/pr-agent-review-evals.test.mjs
 
 ## Score a live review
 
-After a canary PR has produced a PR-Agent review on the exact head, save the review comment body to
-a file and score it against its case:
+After a canary PR has produced a PR-Agent review on the exact head, save **that head's** review
+comment body to a file and score it against its case. Take only the newest full review, so an
+earlier push's review body is never concatenated with the current one:
 
 ```bash
 gh pr view <number> --json comments \
-  --jq '.comments[] | select(.author.login=="github-actions") | select(.body | contains("pr-agent:review:full")) | .body' \
+  --jq '[.comments[] | select(.author.login=="github-actions") | select(.body | contains("pr-agent:review:full"))] | sort_by(.updatedAt) | last | .body' \
   > /tmp/review.md
 node scripts/pr-agent/evals/score-review.mjs semver-boundary /tmp/review.md
+```
+
+For a target head other than the latest, pin it explicitly with the recorded marker instead:
+
+```bash
+gh pr view <number> --json comments \
+  --jq --arg head "<head-sha>" '[.comments[] | select(.body | contains("mde-pr-agent-cert") and contains("head=" + $head))] | last | .body' \
+  > /tmp/review.md
 ```
 
 Exit `0` means the case expectation was met; exit `1` prints which required signals were missing.

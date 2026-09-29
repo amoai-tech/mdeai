@@ -15,7 +15,12 @@ export const MATERIAL_SEVERITIES = ["BLOCKER", "HIGH"];
 
 /**
  * Extract the machine-readable signals MDE's review contract requires from a review body.
- * Handles both the rendered PR-Agent table and plain `Severity: HIGH` style output.
+ *
+ * Severity is read only from a line that declares a single explicit `Severity:` value, which
+ * MDE's `extra_instructions` requires inside every finding. Two false-positive sources are
+ * therefore excluded: "Risk level: High" — a risk assessment with no finding at all — and the
+ * reviewer's own format contract, which lists the values as the alternation
+ * `Severity: BLOCKER | HIGH | MEDIUM | LOW`.
  */
 export function parseReviewSignals(text) {
   const body = typeof text === "string" ? text : "";
@@ -24,17 +29,31 @@ export function parseReviewSignals(text) {
   const risk = /Risk level(?:\s*<\/strong>)?\s*:\s*([^<\n]+)/i.exec(body)?.[1]?.trim() ?? "";
   const scoreRaw = /Score(?:\s*<\/strong>)?\s*:\s*(\d{1,3})/i.exec(body)?.[1];
   const severities = [
-    ...new Set(body.toUpperCase().match(/\b(?:BLOCKER|HIGH|MEDIUM|LOW)\b/g) ?? []),
+    ...new Set(
+      body
+        .split("\n")
+        .filter((line) => !line.includes("|"))
+        .flatMap((line) => [
+          ...line.matchAll(/severity\s*[:=]\s*["'`*]*\s*(BLOCKER|HIGH|MEDIUM|LOW)\b/gi),
+        ])
+        .map((match) => match[1].toUpperCase()),
+    ),
   ];
+  const materialSeverity = severities.some((severity) => MATERIAL_SEVERITIES.includes(severity));
+  const changesRequired = /\bchanges_required\b/i.test(body);
+  const safeToMerge = /safe to merge/i.test(recommendation);
 
   return {
     recommendation,
     risk,
     score: scoreRaw === undefined ? null : Number(scoreRaw),
     severities,
-    materialSeverity: severities.some((severity) => MATERIAL_SEVERITIES.includes(severity)),
-    changesRequired: /\bchanges_required\b/i.test(body),
-    safeToMerge: /safe to merge/i.test(recommendation),
+    materialSeverity,
+    changesRequired,
+    safeToMerge,
+    // A review asserted a material problem when it declared a material severity, asked for
+    // changes, or declined an unqualified merge.
+    materialFinding: materialSeverity || changesRequired || (recommendation !== "" && !safeToMerge),
   };
 }
 
@@ -49,17 +68,20 @@ function matchedSignalNames(caseDef, reviewText) {
  * Score one review body against one corpus case.
  *
  * A seeded defect counts as detected only when the review names enough of the case's required
- * signals, states a material severity, and does not recommend an unqualified merge. A clean
- * control is a false positive when it gains a material severity, a `changes_required`, or loses
- * its safe-to-merge recommendation.
+ * signals — including any the case marks mandatory — asserts a material problem, and does not
+ * recommend an unqualified merge. A clean control is a false positive when it asserts a material
+ * problem at all.
  */
 export function scoreReview(caseDef, reviewText) {
   const signals = parseReviewSignals(reviewText);
   const matchedSignals = matchedSignalNames(caseDef, reviewText);
   const requiredSignals = caseDef.minSignals ?? (caseDef.signals ?? []).length;
+  const missingMandatory = (caseDef.mandatorySignals ?? []).filter(
+    (name) => !matchedSignals.includes(name),
+  );
 
   if (caseDef.kind === "clean") {
-    const falsePositive = signals.materialSeverity || signals.changesRequired || !signals.safeToMerge;
+    const falsePositive = signals.materialFinding;
     return {
       id: caseDef.id,
       kind: "clean",
@@ -75,13 +97,16 @@ export function scoreReview(caseDef, reviewText) {
     };
   }
 
-  const detected = matchedSignals.length >= requiredSignals && signals.materialSeverity && !signals.safeToMerge;
+  const detected =
+    matchedSignals.length >= requiredSignals && missingMandatory.length === 0 && signals.materialFinding;
   const reasons = [];
   if (matchedSignals.length < requiredSignals) {
     reasons.push(`matched ${matchedSignals.length}/${requiredSignals} required signals`);
   }
-  if (!signals.materialSeverity) reasons.push("no BLOCKER/HIGH severity reported");
-  if (signals.safeToMerge) reasons.push("recommended an unqualified merge");
+  if (missingMandatory.length > 0) {
+    reasons.push(`missing mandatory signal(s): ${missingMandatory.join(", ")}`);
+  }
+  if (!signals.materialFinding) reasons.push("no material finding asserted");
 
   return {
     id: caseDef.id,

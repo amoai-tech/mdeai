@@ -16,6 +16,9 @@ const semverBoundary = {
   changedFiles: ["scripts/check-mastra.mjs"],
   expectedOwnerSkills: ["code-review"],
   minSignals: 3,
+  // A boundary finding without a concrete failing input is the vague kind of finding this task
+  // exists to eliminate, so that group is required rather than merely counted.
+  mandatorySignals: ["cites a concrete malformed input"],
   signals: [
     {
       name: "names the validator",
@@ -31,7 +34,7 @@ const semverBoundary = {
     },
     {
       name: "cites a concrete malformed input",
-      any: [/\b0\d\.\d+\.\d+/, /1\.2\.3[-+]/, /\ba\.\.b\b/, /\.\s*$/m],
+      any: [/\b0\d+\.\d+\.\d+/, /\b\d+\.\d+\.\d+-/, /\b\d+\.\d+\.\d+\+/, /\ba\.\.b\b/],
     },
   ],
 };

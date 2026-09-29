@@ -91,9 +91,53 @@ describe("SAN-1312 PR-Agent review-quality corpus", () => {
     assert.equal(baseline.recommendation, "Safe to merge");
     assert.equal(baseline.score, 95);
     assert.equal(baseline.materialSeverity, false);
+    assert.equal(baseline.materialFinding, false);
 
     const result = scoreReview(CASES_BY_ID["semver-boundary"], fixture(RECORDED_BASELINES["semver-boundary"]));
     assert.equal(result.detected, false, "the recorded v0.45 review must score as a miss — that is the defect this task closes");
+  });
+
+  it("does not read a risk label or the format contract as a material finding", () => {
+    // A high risk assessment with no finding, and the reviewer's own severity enumeration,
+    // must both stay non-material — neither is a finding.
+    const riskOnly = parseReviewSignals("Risk level: High\n\n- Merge recommendation: Safe to merge");
+    assert.equal(riskOnly.materialSeverity, false);
+    assert.equal(riskOnly.materialFinding, false);
+
+    const contractEcho = parseReviewSignals(
+      "Structure issue_content with these sections:\nSeverity: BLOCKER | HIGH | MEDIUM | LOW\nProblem: ...",
+    );
+    assert.equal(contractEcho.materialSeverity, false);
+    assert.equal(contractEcho.materialFinding, false);
+
+    const realFinding = parseReviewSignals("Severity: HIGH\nStatus: changes_required");
+    assert.equal(realFinding.materialSeverity, true);
+    assert.equal(realFinding.materialFinding, true);
+
+    // And the live PR #161 control review parses as non-material.
+    const liveControl = parseReviewSignals(fixture(RECORDED_BASELINES["docs-only-control"]));
+    assert.equal(liveControl.materialFinding, false);
+  });
+
+  it("requires the concrete malformed input before crediting a boundary finding", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    assert.deepEqual(named.mandatorySignals, ["cites a concrete malformed input"]);
+
+    const vague = [
+      "The new EXACT_VERSION pattern permits a leading zero in every core component, and the",
+      "prerelease and build metadata classes accept empty dot-separated identifiers.",
+    ].join("\n");
+    const vagueResult = scoreReview(named, review(vague));
+    assert.equal(
+      vagueResult.detected,
+      false,
+      "a boundary finding that never names a failing input must not count as detection",
+    );
+    assert.ok(vagueResult.reasons.some((reason) => reason.includes("missing mandatory signal")));
+
+    // The same review plus one concrete input is credited.
+    const concrete = scoreReview(named, review(`${vague} For example 01.2.3 passes today.`));
+    assert.equal(concrete.detected, true);
   });
 
   it("keeps the recorded v0.45 docs-only control clean", () => {
