@@ -79,6 +79,8 @@ export async function fetchBrokerDashboard(
   let viewingsBookedCount = 0;
   let unansweredLeads: BrokerLeadRow[] = [];
   let upcomingShowings: BrokerShowingRow[] = [];
+  let requestShowings: BrokerShowingRow[] = [];
+  let requestLeads: BrokerLeadRow[] = [];
   let leads30dCount: number | null = null;
 
   if (apartmentIds.length > 0) {
@@ -146,6 +148,34 @@ export async function fetchBrokerDashboard(
       return failDashboard("upcoming_showings", showingsError);
     }
     upcomingShowings = (showingsData ?? []) as BrokerShowingRow[];
+
+    // SAN-1204 — the broker's real viewing requests. This is deliberately NOT limited to
+    // upcoming showings: a request whose slot has passed still needs the broker's attention,
+    // and hiding it would silently drop a real enquiry.
+    const { data: requestShowingsData, error: requestShowingsError } = await supabase
+      .from("showings")
+      .select("id, apartment_id, scheduled_at, status, lead_id")
+      .in("apartment_id", apartmentIds)
+      .order("scheduled_at", { ascending: false })
+      .limit(20);
+
+    if (requestShowingsError) {
+      return failDashboard("request_showings", requestShowingsError);
+    }
+    requestShowings = (requestShowingsData ?? []) as BrokerShowingRow[];
+
+    const requestLeadIds = [...new Set(requestShowings.map((s) => s.lead_id))];
+    if (requestLeadIds.length > 0) {
+      const { data: requestLeadsData, error: requestLeadsError } = await supabase
+        .from("leads")
+        .select("id, name, email, status, created_at, last_contacted_at, apartment_id")
+        .in("id", requestLeadIds);
+
+      if (requestLeadsError) {
+        return failDashboard("request_leads", requestLeadsError);
+      }
+      requestLeads = (requestLeadsData ?? []) as BrokerLeadRow[];
+    }
   }
 
   const view = buildBrokerDashboardView({
@@ -157,6 +187,8 @@ export async function fetchBrokerDashboard(
     apartmentCount: apartmentIds.length,
     unansweredLeads,
     upcomingShowings,
+    requestShowings,
+    requestLeads,
     leads30dCount,
     views30dCount: null,
   });

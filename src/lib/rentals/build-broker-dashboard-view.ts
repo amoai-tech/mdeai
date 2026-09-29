@@ -1,4 +1,5 @@
 import type { BrokerListingDetail } from "./broker-listing-detail";
+import { LISTING_TIME_ZONE } from "@/lib/leads/schedule-viewing-time";
 import { listingCompletenessChecks } from "./listing-completeness";
 import { DATA_PENDING_LABEL } from "./data-pending";
 import type {
@@ -7,11 +8,13 @@ import type {
   BrokerDashboardKpi,
   BrokerDashboardView,
   BrokerTrendCard,
+  BrokerViewingRequest,
 } from "./broker-dashboard-types";
 
 export type BrokerLeadRow = {
   id: string;
   name: string | null;
+  email?: string | null;
   status: string;
   created_at: string;
   last_contacted_at: string | null;
@@ -35,12 +38,77 @@ export type BuildBrokerDashboardInput = {
   apartmentCount: number;
   unansweredLeads: BrokerLeadRow[];
   upcomingShowings: BrokerShowingRow[];
+  /** SAN-1204 · every showing for the broker's own apartments, not only upcoming ones. */
+  requestShowings: BrokerShowingRow[];
+  /** SAN-1204 · leads backing `requestShowings`, joined for the renter's display name. */
+  requestLeads: BrokerLeadRow[];
   leads30dCount: number | null;
   views30dCount: number | null;
 };
 
+/** Shared viewing-time label. Computed once on the server so SSR and hydration agree. */
+function formatScheduledLabel(scheduledAt: string): string { // skipcq: JS-0067 - module-local helper
+  // The listing timezone is explicit and shared with the viewing-scheduling contract. Without
+  // it this renders in the *server's* zone — Vercel runs UTC — so a 2:00 PM Medellín viewing
+  // was shown to the broker as 7:00 PM, five hours wrong.
+  return new Date(scheduledAt).toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: LISTING_TIME_ZONE,
+  });
+}
+
+/**
+ * SAN-1204 · collapse each persisted showing into exactly one visible viewing request.
+ *
+ * Pure and order-stable so the "one card per request" rule can be unit-tested without Supabase.
+ * Requests are sorted newest-scheduled-first, and a showing is never emitted twice.
+ */
+// skipcq: JS-0067 - ES module export; not browser global scope
+export function buildViewingRequests(input: {
+  showings: BrokerShowingRow[];
+  leads: BrokerLeadRow[];
+  listings: Pick<BrokerListingDetail, "id" | "title">[];
+}): BrokerViewingRequest[] {
+  const titleByApartmentId = new Map(input.listings.map((l) => [l.id, l.title]));
+  const leadById = new Map(input.leads.map((l) => [l.id, l]));
+  const seen = new Set<string>();
+
+  const requests: BrokerViewingRequest[] = [];
+  for (const showing of input.showings) {
+    if (seen.has(showing.id)) {
+      continue;
+    }
+    seen.add(showing.id);
+
+    const lead = leadById.get(showing.lead_id);
+    const renterName = lead?.name?.trim() || lead?.email?.trim() || null;
+
+    requests.push({
+      leadId: showing.lead_id,
+      showingId: showing.id,
+      apartmentId: showing.apartment_id,
+      apartmentTitle: titleByApartmentId.get(showing.apartment_id) ?? null,
+      renterName,
+      scheduledAt: showing.scheduled_at,
+      scheduledLabel: formatScheduledLabel(showing.scheduled_at),
+      status: showing.status,
+    });
+  }
+
+  return requests.sort((a, b) => (a.scheduledAt < b.scheduledAt ? 1 : a.scheduledAt > b.scheduledAt ? -1 : 0));
+}
+
 function greetingFor(name: string | null): string { // skipcq: JS-0067 - module-local helper
-  const hour = new Date().getHours();
+  // Same server-timezone trap as the viewing label: the hour must be the broker's local hour,
+  // not the Vercel process hour, or "Good morning" arrives in the afternoon.
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: LISTING_TIME_ZONE })
+      .format(new Date()),
+  );
   const salutation = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return name?.trim() ? `${salutation}, ${name.trim()}.` : `${salutation}.`;
 }
@@ -114,13 +182,7 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
   }
 
   for (const showing of input.upcomingShowings.filter((s) => s.status === "scheduled").slice(0, 5)) {
-    const when = new Date(showing.scheduled_at).toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const when = formatScheduledLabel(showing.scheduled_at);
     attention.push({
       id: `showing-${showing.id}`,
       kind: "viewing_confirm",
@@ -194,10 +256,17 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
     input.leads7dCount === 0 &&
     input.viewingsBookedCount === 0;
 
+  const viewingRequests = buildViewingRequests({
+    showings: input.requestShowings,
+    leads: input.requestLeads,
+    listings: input.listings,
+  });
+
   return {
     displayName: input.displayName,
     kpis,
     attention,
+    viewingRequests,
     trends,
     briefing,
     isEmpty,

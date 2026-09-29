@@ -57,6 +57,25 @@ describe("buildBrokerDashboardView", () => {
           lead_id: "l1",
         },
       ],
+      requestShowings: [
+        {
+          id: "s1",
+          apartment_id: "a1",
+          scheduled_at: "2030-01-01T12:00:00.000Z",
+          status: "scheduled",
+          lead_id: "l1",
+        },
+      ],
+      requestLeads: [
+        {
+          id: "l1",
+          name: "María",
+          status: "new",
+          created_at: "",
+          last_contacted_at: null,
+          apartment_id: "a1",
+        },
+      ],
       leads30dCount: 18,
       views30dCount: null,
     });
@@ -90,6 +109,8 @@ describe("buildBrokerDashboardView", () => {
         },
       ],
       upcomingShowings: [],
+      requestShowings: [],
+      requestLeads: [],
       leads30dCount: 18,
       views30dCount: null,
     });
@@ -110,6 +131,8 @@ describe("buildBrokerDashboardView", () => {
       apartmentCount: 0,
       unansweredLeads: [],
       upcomingShowings: [],
+      requestShowings: [],
+      requestLeads: [],
       leads30dCount: 0,
       views30dCount: null,
     });

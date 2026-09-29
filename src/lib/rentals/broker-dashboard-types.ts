@@ -36,10 +36,29 @@ export type BrokerDashboardBriefing = {
   bullets: string[];
 };
 
+/**
+ * SAN-1204 · one real viewing request, keyed on the persisted rows.
+ *
+ * A viewing request is one lead and one showing. Rendering them separately would show the
+ * same request twice, so a request collapses to exactly one of these.
+ */
+export type BrokerViewingRequest = {
+  leadId: string;
+  showingId: string;
+  apartmentId: string;
+  apartmentTitle: string | null;
+  renterName: string | null;
+  scheduledAt: string;
+  /** Formatted on the server so the client cannot disagree with it during hydration. */
+  scheduledLabel: string;
+  status: string;
+};
+
 export type BrokerDashboardView = {
   displayName: string | null;
   kpis: BrokerDashboardKpi[];
   attention: BrokerAttentionItem[];
+  viewingRequests: BrokerViewingRequest[];
   trends: BrokerTrendCard[];
   briefing: BrokerDashboardBriefing;
   isEmpty: boolean;

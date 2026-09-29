@@ -68,7 +68,10 @@ export {
   type BrokerRouteGateAction,
   type BrokerRouteGateInput,
 } from "./broker-route-gate";
-export { buildBrokerDashboardView } from "./build-broker-dashboard-view";
+export {
+  buildBrokerDashboardView,
+  buildViewingRequests,
+} from "./build-broker-dashboard-view";
 export type {
   BrokerAttentionItem,
   BrokerAttentionKind,
@@ -76,6 +79,7 @@ export type {
   BrokerDashboardKpi,
   BrokerDashboardView,
   BrokerTrendCard,
+  BrokerViewingRequest,
   FetchBrokerDashboardResult,
 } from "./broker-dashboard-types";
 export { fetchBrokerDashboard } from "./fetch-broker-dashboard";
