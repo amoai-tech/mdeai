@@ -19,22 +19,47 @@ The ladder and discipline below are the MDE form of it; the source receipt is ou
 ## The ladder
 
 Read the task and the code it touches, trace the real flow end to end, **then** stop at the first
-rung that holds:
+rung that safely satisfies the requirement:
 
 1. Does this need to be built at all? (YAGNI)
-2. Does it already exist in this repo? Reuse the helper, util, or pattern that is already here.
+2. Does an existing repository helper, component, or pattern already do it?
 3. Does the standard library already do this?
-4. Does a native platform feature cover it?
+4. Does a native platform capability cover it — including an official dashboard or CLI surface?
 5. Does an already-installed dependency solve it?
-6. Can this be one line?
+6. Does an official template, example, recipe, or CLI command cover it?
 7. Only then: write the minimum code that works.
 
-The ladder runs *after* understanding, never instead of it. Rungs 3–5 are where most tasks are won:
-check the platform's own primitives and the dependency list before inventing anything.
+The ladder runs *after* understanding, never instead of it. Rungs 3–6 are where most tasks are won:
+the platform and the dependency list usually already ship the answer.
+
+Choose the earliest rung that satisfies **correctness, security, testability, reproducibility,
+version compatibility, and automation**. A dashboard-only configuration is not sufficient when it
+must be reproducible from Git — a setting that has to replay in every environment belongs in a
+migration or committed config, not a console.
+
+Do not build a custom abstraction merely because it is easy to write.
 
 **Not lazy about:** understanding the problem first, input validation at trust boundaries, error
 handling that prevents data loss, security, accessibility, and anything explicitly requested. Never
 trade any of these for a smaller diff.
+
+## Efficient implementation order
+
+For substantial work, before writing custom code:
+
+1. Check whether the requirement needs to exist.
+2. Search this repository for an existing implementation.
+3. Check installed packages and platform-native capabilities.
+4. Check official dashboard, CLI, and configuration surfaces where relevant.
+5. Read the official documentation for the exact installed version.
+6. Inspect the official repository or a working example when behaviour matters.
+7. Prefer an official template, example, recipe, CLI command, or prebuilt module.
+8. Adapt the smallest supported solution.
+9. Write custom code only for the remaining gap.
+10. Leave a runnable verification proving the chosen solution.
+
+Steps 5–7 are also where the source receipt comes from: the source you actually used is the one
+worth recording.
 
 ## Bug fixes climb from the root
 
@@ -110,6 +135,15 @@ Before the first edit, answer in one line: *is there a faster, smaller, or bette
 this than building it?* Name the rung you stopped at. When the answer is "write it ourselves", name
 the rungs you checked and why each failed. This is the whole rule in practice — the ladder is only
 real if the rung is stated.
+
+## Example — adding a UI component
+
+| Bad sequence | Preferred sequence |
+| -- | -- |
+| requirements → write a custom modal → debug focus trapping → debug keyboard navigation → patch accessibility → ship | requirements → search existing MDE components → check the installed UI package → check the official component recipe → adapt the accessible component → add only MDE-specific behaviour → Playwright verification |
+
+The preferred sequence is shorter *and* lands more accessible, because focus handling and keyboard
+navigation were already solved by the component that shipped.
 
 ## Worked example (this repo)
 

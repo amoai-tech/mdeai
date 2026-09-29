@@ -26,11 +26,36 @@ Closes SAN-___ · <SPEC-ID> — <full Linear title>
 
 <!-- If over budget, justify or note the follow-up split: -->
 
+## Faster / smaller solution considered
+<!--
+  AGENTS.md § Ponytail. What existing/native/prebuilt option did you check first, and why did it not
+  win? "Nothing existed" is a valid answer — but name what you looked at.
+  - does not need to exist? · already in this repo? · standard library? · native platform or CLI?
+  - installed dependency? · official template, example, or recipe? · only then custom code?
+-->
+- [ ] Checked the reuse ladder and stopped at the earliest rung that works
+<!-- If the platform only offers a dashboard/console path: is it reproducible from Git? If not, it belongs in a migration or committed config. -->
+
+## Source receipts
+<!--
+  AGENTS.md § Evidence rules. One row per external source that MATERIALLY affected the solution.
+  Background reading gets no row — an inflated table buries the rows that mattered.
+  REFERENCE ONLY must state why nothing was adopted and what alternative was rejected.
+-->
+
+| URL | Source (file/section/command) | Decision | Disposition | Destination | Implementation | Verification | Version/commit |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |
+
+- [ ] None needed — no external source materially affected this change
+
 ## Test plan & evidence
 - [ ] `npm run floor` green (lint · typecheck · build · test · audit)
 - [ ] Tests added/updated for the change (unit for logic, e2e for a user path)
 - [ ] Evidence: `docs/tasks/testing/evidence/YYYY-MM-DD/<id>-RESULTS.md` (link below)
 <!-- Paste the floor result / test counts / evidence path here. State honestly what was NOT run. -->
+<!-- Source proof and implementation proof are different: a URL is not a test, and a passing test does not validate an unchecked assumption. -->
+
 
 ## Self-review
 - [ ] No secrets / service-role keys added under `src/**` (F13 carve-outs only)

@@ -89,61 +89,68 @@ Load the owning skill and follow its current instructions.
 
 ## Ponytail — reuse before build
 
-Before implementation:
+Trace the real user/runtime flow first, then stop at the first rung that safely satisfies the requirement:
 
-1. Trace the real user/runtime flow.
-2. Ask: is there a faster, smaller, or better-supported solution?
-3. Stop at the first valid rung:
-   - it does not need to exist;
-   - it already exists in this repo;
-   - the standard library does it;
-   - a native platform capability covers it;
-   - an already-installed dependency solves it;
-   - it is one direct line or change;
-   - only then, the minimum custom implementation.
-4. Fix the shared root cause rather than duplicating a patch per caller.
-5. Leave one runnable verification proving the decision.
+1. it does not need to exist;
+2. an existing repository helper, component, or pattern already does it;
+3. the standard library does it;
+4. a native platform capability covers it — including an official dashboard or CLI surface;
+5. an already-installed dependency solves it;
+6. an official template, example, recipe, or CLI command covers it;
+7. only then, the minimum custom implementation.
+
+Choose the earliest rung that satisfies correctness, security, testability, reproducibility, version compatibility, and automation. **A dashboard-only configuration is not sufficient when it must be reproducible from Git** — a setting that has to replay in every environment belongs in a migration or committed config, not a console.
+
+Do not build a custom abstraction merely because it is easy to write. Then fix the shared root cause rather than duplicating a patch per caller, and leave one runnable verification proving the decision.
 
 **Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility, and anything explicitly requested. Never trade these for a smaller diff. Mark a deliberate ceiling with a `ponytail:` comment naming the ceiling and its upgrade path.
 
-Detailed rules, examples, and the source map live in `.claude/skills/ponytail/SKILL.md`.
+The expanded implementation order, examples, and the source map live in `.claude/skills/ponytail/SKILL.md`.
 
 ## Evidence rules
 
-### Verify the current contract first
+### Source priority — verify the current contract first
 
-Determine the version or API shape this repository actually uses before copying any example. In order:
+Determine what this repository actually uses before copying any example. In order:
 
-1. the installed package or pinned version (`node_modules/`, lockfile);
-2. current source and types in this repo;
-3. official documentation **for that version**;
-4. official repository examples;
-5. third-party examples, only when primary sources are insufficient.
+1. the installed package, pinned version, generated types, or CLI help;
+2. official documentation **for that version**;
+3. the official source repository at the matching version or commit;
+4. official examples, templates, recipes, and starter projects;
+5. existing implementation in this repo;
+6. third-party examples, only when primary sources are insufficient.
 
-Never adapt a current upstream example when this repo is pinned to an older API. This matters most for CopilotKit, Mastra, Next.js, the Supabase CLI, Google Maps, and Gemini.
+A blog, tutorial, or model recall is never authority when the official implementation is available. Our pins lag upstream — a current upstream example applied to an older API is a new bug wearing a citation. This matters most for CopilotKit, Mastra, Next.js, the Supabase CLI, Google Maps, and Gemini.
 
 ### Two kinds of proof
 
-Source verification and implementation verification are different, and neither substitutes for the other.
+Source evidence and implementation evidence prove different things, and neither substitutes for the other.
 
-- **Source proof** confirms the API, behaviour, version, security property, or platform capability.
-- **Implementation proof** confirms this repository actually uses it correctly.
+| | Answers |
+| -- | -- |
+| **Source proof** | Does this API exist? What arguments or configuration does it support? What does the platform officially guarantee? |
+| **Implementation proof** | Did we use it correctly here? Does the integration work? Does the user journey succeed? Are security and data integrity preserved? |
 
-A primary-source URL cannot replace a test. A passing test cannot prove an external API claim that was never verified. The Supabase CLI source confirms which migration filenames `db push` discovers; our guard's tests prove our code matches it. Doing one and claiming both is the failure this rule exists to prevent.
+A URL cannot replace a test. A passing test cannot establish an undocumented external contract. Use both whenever the decision depends on both: the Supabase CLI source proves which migration filenames `db push` discovers, and our regression test proves the guard follows the same rule.
 
 ### Source receipts
 
-Record a receipt **only** for an external source that materially affects the implementation or the decision. Background reading gets none — an inflated citation table is documentation noise, not evidence.
+Record a receipt **only** for an external source that materially affects the implementation or the decision. Background reading gets none — an inflated citation table buries the rows that mattered.
 
 | Field | Requirement |
 | -- | -- |
 | **URL** | Exact full URL |
-| **Source** | Exact file, section, API, symbol, or example |
+| **Source** | Exact file, section, symbol, command, example, recipe, or template |
+| **Decision** | The engineering question this source answered |
 | **Disposition** | `COPY` · `ADAPT` · `MODEL` · `REFERENCE ONLY` |
-| **Destination** | Exact repository path, or `—` |
-| **Verification** | Exact command or test proving the result |
+| **Destination** | Exact repository path changed because of it, or `—` |
+| **Implementation** | The exact change to make |
+| **Verification** | Exact command, test, query, or runtime proof |
+| **Version / commit** | Version, tag, or commit, when behaviour may drift |
 
-`COPY` is verbatim with attribution and no local edits. `ADAPT` is the same approach in our conventions; say what changed. `MODEL` follows the shape; say what diverged. `REFERENCE ONLY` ships nothing and **must explain why nothing was adopted and what alternative was rejected** — otherwise it is the escape hatch that makes this rule decorative.
+A receipt with neither an implementation consequence nor an explicit rejection is incomplete — that is what stops "I read the docs" from counting as engineering proof.
+
+**Dispositions.** *`COPY`* — substantially unchanged, licence permitting, with the upstream version recorded. *`ADAPT`* — an official implementation used as the starting pattern, modified for MDE's architecture, versions, security, or naming. *`MODEL`* — do not reuse the implementation; reproduce the design, structure, or decision pattern in MDE-specific code. *`REFERENCE ONLY`* — informed the decision, nothing implemented from it: state why nothing was adopted, the alternative considered, and why that alternative was rejected.
 
 Never assert a decision-critical claim from memory, and never round an unverified claim up to a fact. State what you checked and what you could not.
 

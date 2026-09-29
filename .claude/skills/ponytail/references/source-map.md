@@ -117,6 +117,23 @@ Never mix bare v1 imports with `/v2` imports — check the version in `package.j
 | https://github.com/medusajs/medusa | `@medusajs/js-sdk` behavior | ADAPT |
 | https://docs.medusajs.com | Store API surface | MODEL |
 
+## This repo's own conventions (skills, PRs, agent wiring)
+
+Check these before inventing a process or a skill shape — they are the primary sources for how this
+repository is organised.
+
+| Source | Look for | Usual disposition |
+| -- | -- | -- |
+| https://github.com/anthropics/claude-code/tree/main/plugins/plugin-dev/skills/skill-development | Official skill structure, frontmatter, progressive disclosure, example skills | MODEL |
+| https://github.com/supabase/agent-skills | How a production project organises project-scoped skills and references | MODEL |
+| https://supabase.com/docs/guides/ai-tools/ai-skills | Installing and using project-scoped skills | REFERENCE ONLY |
+| https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository | Exact PR-template location and behaviour — `pull_request_template.md` on the default branch is auto-inserted | ADAPT |
+| https://docs.github.com/en/pull-requests/reference/managing-and-standardizing-pull-requests | What a standard PR should capture: testing, context, checklist | MODEL |
+| https://github.com/vercel/next.js/tree/canary/examples | Official working Next.js examples | ADAPT |
+
+Verify template behaviour against a real PR, not the documentation alone: open one and inspect the
+populated body.
+
 ## Finding a prebuilt answer when this map has no entry
 
 Order matters — stop at the first that answers the question:
