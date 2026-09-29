@@ -199,6 +199,8 @@ Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this 
 
 A PR body is the durable record of a change, and it is written for a reviewer who has not read the task. State it so the body stands alone after the branch is deleted.
 
+**The body lives on GitHub, and creating the PR is part of the task.** Write it with `gh pr create --body-file <file>`, keep the file out of the commit, and re-run `gh pr edit <n> --body-file <file>` whenever the change moves — after review fixes, after a scope change, after a check flips. A body describing an earlier revision is worse than no body, because it reads as current. Set the title in the same step (`gh pr edit <n> --title`), since a title is the only part most readers ever see.
+
 **Title** — real-world and plain. Say what changes for a person, not the internal mechanism.
 
 - ✅ `Stop an unreviewed database migration from reaching production`
