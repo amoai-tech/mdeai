@@ -208,16 +208,20 @@ export async function runConciergeAgent(options: {
     );
 
     const events$ = transformHttpEventStream(
-      runHttpRequest(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          ...headers,
-        },
-        body: JSON.stringify(envelope),
-        signal: controller.signal,
-      }),
+      // @ag-ui/client 0.0.59 changed runHttpRequest from (url, init) to a single
+      // thunk that performs the fetch. MDE's call is unchanged; only the shape is.
+      runHttpRequest(() =>
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            ...headers,
+          },
+          body: JSON.stringify(envelope),
+          signal: controller.signal,
+        }),
+      ),
     );
     const collected = new Promise<AgUiEvent[]>((resolve, reject) => {
       const events: AgUiEvent[] = [];
