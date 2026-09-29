@@ -17,10 +17,12 @@ const SRC = path.join(ROOT, "src");
 // this file. Other @copilotkit/* packages are NOT required to share this version — the no-v1
 // scanner and dependency-cruiser own the legacy-package contract.
 const COPILOTKIT_ALIGNED_PACKAGES = ["@copilotkit/react-core", "@copilotkit/runtime"];
-// Exact semver only. Rejects range operators ("^", "~", ">="), wildcards ("1.x", "*"),
-// dist-tags ("latest", "next"), and partial versions ("1"). A prerelease suffix is still
-// exact, so an exact prerelease pin is accepted.
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+// Exact SemVer 2.0.0 only — deliberately not a range. Rejects range operators ("^", "~", ">="),
+// wildcards ("1.x", "*"), dist-tags ("latest", "next"), partial versions ("1", "1.2"), leading
+// zeros ("01.2.3", "1.2.3-01") and empty dot-separated identifiers ("1.2.3-a..b"). A well-formed
+// prerelease or build suffix is still an exact pin, so those are accepted.
+const EXACT_VERSION =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const DEPRECATED_GEMINI = [
   "gemini-2.0",
   "gemini-2.5",
