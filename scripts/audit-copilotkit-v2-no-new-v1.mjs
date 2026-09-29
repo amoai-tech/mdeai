@@ -3,6 +3,10 @@
  * CK-V2-012 · SAN-910 · Migration CI guardrails (audit dashboard + no-new-v1 gate) —
  * fail new v1 CopilotKit hook/import usage outside allowlist.
  * Exempt: copilotkit-v2-allowlist.json · *-v1.tsx rollback twins · __tests__ · e2e/
+ *
+ * The allowlist is a migration ledger, not a permanent exemption. Every entry must still hide a
+ * real v1 usage; a stale entry is itself a failure, because it pre-approves whatever is written at
+ * that path next.
  */
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
@@ -18,6 +22,23 @@ const FORBIDDEN = [
   { id: "@copilotkit/react-ui", re: /@copilotkit\/react-ui/ },
   { id: "@copilotkit/react-core-v1", re: /@copilotkit\/react-core(?!\/v2)/ },
 ];
+
+/**
+ * ponytail: a comment-stripper, not a parser. Matching raw text made a doc comment the sole reason
+ * an exemption survived: `src/app/chat/page.tsx` carries only `Retire @copilotkit/react-ui.` in a
+ * comment, which kept it allowlisted — and an allowlisted path silently pre-approves a real v1
+ * import later. `//` requires a preceding non-colon so a `https://` URL is not truncated; upgrade
+ * to a real tokenizer only if a string literal ever defeats this.
+ */
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+/** v1 hits in code, ignoring comment prose. */
+function v1Hits(text) {
+  const code = stripComments(text);
+  return FORBIDDEN.filter(({ re }) => re.test(code)).map((f) => f.id);
+}
 
 function isExemptPath(rel) {
   if (rel.includes("/__tests__/")) return true;
@@ -52,7 +73,7 @@ async function scanForAllowlist() {
     const rel = relative(ROOT, abs).replace(/\\/g, "/");
     if (isExemptPath(rel)) continue;
     const text = await readFile(abs, "utf8");
-    const hits = FORBIDDEN.filter(({ re }) => re.test(text)).map((f) => f.id);
+    const hits = v1Hits(text);
     if (hits.length) offenders.push(rel);
   }
   return offenders.sort();
@@ -62,16 +83,55 @@ async function writeAllowlistFromDisk() {
   const offenders = await scanForAllowlist();
   const payload = {
     description:
-      "CK-V2-012 · SAN-910 · Migration CI guardrails (audit dashboard + no-new-v1 gate) — files allowed to use v1 CopilotKit hooks/imports until migrated. Regenerate via: node scripts/audit-copilotkit-v2-no-new-v1.mjs --write-allowlist",
-    mainSha: process.env.MAIN_SHA ?? "fbcf8d3",
+      "CK-V2-012 · SAN-910 · Migration CI guardrails (audit dashboard + no-new-v1 gate) — files still using v1 CopilotKit hooks/imports. A migration ledger, not a permanent exemption: the guard fails when an entry no longer hides a real v1 usage. Regenerate via: node scripts/audit-copilotkit-v2-no-new-v1.mjs --write-allowlist",
+    // No mainSha: it was a hand-copied literal that had already gone stale (`fbcf8d3`), the same
+    // class of bug as the version literals removed in SAN-1357 Step 5. Git records provenance.
     files: offenders,
   };
   await writeFile(ALLOWLIST_PATH, `${JSON.stringify(payload, null, 2)}\n`);
   console.log(`Wrote ${offenders.length} paths to ${relative(ROOT, ALLOWLIST_PATH)}`);
 }
 
+/**
+ * An allowlist entry earns its exemption only while the file it names still contains a v1 pattern.
+ * Without this check the ledger rots silently: all 29 entries had gone stale — none still contained
+ * a v1 pattern and 8 named files that no longer exist — so appending a bare v1 import to an
+ * already-listed provider file produced `OK — 29 allowlisted` and exit 0.
+ */
+async function findStaleAllowances(allowlist) {
+  const stale = [];
+  for (const rel of allowlist) {
+    let text;
+    try {
+      text = await readFile(join(ROOT, rel), "utf8");
+    } catch {
+      stale.push({ file: rel, reason: "the file no longer exists" });
+      continue;
+    }
+    const hits = v1Hits(text);
+    if (!hits.length) stale.push({ file: rel, reason: "no v1 pattern remains" });
+  }
+  return stale.sort((a, b) => a.file.localeCompare(b.file));
+}
+
 async function audit(extraPaths = []) {
   const allowlist = await loadAllowlist();
+  const stale = await findStaleAllowances(allowlist);
+
+  if (stale.length) {
+    console.error("# CK-V2 allowlist entries that no longer earn their exemption\n");
+    for (const { file, reason } of stale) {
+      console.error(`- ${file}: ${reason}`);
+    }
+    console.error(
+      `\n${stale.length} entr${stale.length === 1 ? "y" : "ies"} in scripts/copilotkit-v2-allowlist.json ` +
+        `no longer hide a real v1 usage. An exemption that outlives its usage silently pre-approves ` +
+        `whatever is written at that path next. Remove ${stale.length === 1 ? "it" : "them"}:\n` +
+        `  node scripts/audit-copilotkit-v2-no-new-v1.mjs --write-allowlist`,
+    );
+    process.exit(1);
+  }
+
   const files = [...(await walk(SRC)), ...extraPaths.map((p) => join(ROOT, p))];
   const violations = [];
 
@@ -82,7 +142,7 @@ async function audit(extraPaths = []) {
     if (allowlist.has(rel)) continue;
 
     const text = await readFile(abs, "utf8");
-    const hits = FORBIDDEN.filter(({ re }) => re.test(text)).map((f) => f.id);
+    const hits = v1Hits(text);
     if (hits.length) violations.push({ file: rel, hits });
   }
 

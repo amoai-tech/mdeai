@@ -124,6 +124,64 @@ test("honours the allowlist for an explicitly exempted file", () => {
   assert.equal(result.status, 0, `allowlisted file must pass:\n${result.stdout}${result.stderr}`);
 });
 
+// ---------- the allowlist is a ledger, not a permanent exemption ----------
+// Before SAN-1357 Step 7 nothing checked the other direction: an entry whose v1 usage had already
+// been migrated away stayed forever, and an allowlisted path silently pre-approves whatever is
+// written there next. All 29 shipped entries were in exactly that state.
+
+test("fails when an allowlisted file no longer contains a v1 pattern", () => {
+  const rel = "src/legacy/already-migrated.tsx";
+  const root = fixture({ [rel]: CLEAN_SOURCE }, [rel]);
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "a stale exemption must fail the guard");
+  const output = `${result.stdout}${result.stderr}`;
+  assert.match(output, /no longer earn their exemption/i, "the failure must name the problem");
+  assert.match(output, /already-migrated\.tsx/, "the failure must name the stale entry");
+  assert.match(output, /--write-allowlist/, "the failure must give the regeneration command");
+});
+
+test("fails when an allowlisted file no longer exists", () => {
+  const root = fixture({}, ["src/legacy/deleted-long-ago.tsx"]);
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "an entry pointing at a deleted file must fail the guard");
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /deleted-long-ago\.tsx: the file no longer exists/,
+    "the failure must distinguish a missing file from a migrated one",
+  );
+});
+
+test("does not treat v1 prose in a comment as a v1 usage", () => {
+  // `src/app/chat/page.tsx` ships exactly this shape: a doc comment naming the retired package,
+  // which used to be the sole reason it stayed on the allowlist.
+  const root = fixture({
+    "src/components/commented.tsx":
+      "/** v2-only after SAN-891 — Retire @copilotkit/react-ui. */\n" +
+      'import { CopilotKitProvider } from "@copilotkit/react-core/v2";\n' +
+      "export const x = CopilotKitProvider;\n",
+  });
+  const result = runGuard(root);
+
+  assert.equal(
+    result.status,
+    0,
+    `comment prose must not create or sustain a violation:\n${result.stdout}${result.stderr}`,
+  );
+});
+
+test("the shipped allowlist has no stale entries and permits nothing", () => {
+  const data = JSON.parse(fs.readFileSync(ALLOWLIST_SRC, "utf8"));
+  assert.ok(Array.isArray(data.files), "the allowlist must expose a files array");
+  assert.equal(
+    data.files.length,
+    0,
+    "every v1 usage is migrated, so the ledger must be empty; a non-empty ledger means the guard " +
+      "is pre-approving that path rather than protecting it",
+  );
+});
+
 test("honours the *-v1.tsx and __tests__ path exemptions", () => {
   const root = fixture({
     "src/legacy/rollback-v1.tsx": "export const a = useCoAgent;\n",
