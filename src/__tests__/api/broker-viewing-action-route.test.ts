@@ -181,7 +181,19 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
     it("keeps the same hour meaning regardless of the process timezone", async () => {
       const original = process.env.TZ;
       try {
+        // Prove the premise before relying on it. If the runtime ignores a mid-process TZ
+        // change, this test would still pass while exercising nothing — a check that cannot
+        // fail. Tokyo is UTC+9 and the listing zone is UTC-5, so the offsets must differ.
+        const baselineOffset = new Date("2099-11-21T15:00").getTimezoneOffset();
         process.env.TZ = "Asia/Tokyo";
+        const tokyoOffset = new Date("2099-11-21T15:00").getTimezoneOffset();
+
+        expect(
+          tokyoOffset,
+          "the TZ change must take effect, or this test proves nothing",
+        ).toBe(-540);
+        expect(tokyoOffset).not.toBe(baselineOffset);
+
         const response = await patch({
           action: "reschedule",
           ...expectation(),
@@ -227,9 +239,9 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
 
   describe("database refusals map to the documented HTTP statuses", () => {
     it.each([
-      ["P1206", 409],
+      ["PT409", 409],
       ["42501", 403],
-      ["P0002", 404],
+      ["PT404", 404],
       ["22023", 400],
       ["XX000", 500],
     ] as const)("maps %s to %i", async (code, expectedStatus) => {
@@ -244,6 +256,47 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
       await expect(response.json()).resolves.toMatchObject({
         error: expect.stringContaining(code),
       });
+    });
+
+    // The database is the authority on why a transition was refused, so a SQLSTATE that is
+    // present must decide the status by itself. An earlier revision OR'd the code and message
+    // checks with a bare `/cannot be/` pattern and listed the 409 branch first, so a genuine
+    // 42501 whose prose contained those words answered 409 — telling the broker to refresh a
+    // page that was never stale, instead of surfacing a refusal.
+    it("lets a present SQLSTATE win over a misleading message", async () => {
+      state.rpcResponse = {
+        data: null,
+        error: { message: "a scheduled viewing cannot be completed", code: "42501" },
+      };
+
+      const response = await patch({ action: "confirm", ...expectation() });
+
+      expect(response.status).toBe(403);
+    });
+
+    // No code at all means the message is the only signal available, and the narrow patterns
+    // still classify the documented refusals.
+    it("falls back to the message when no SQLSTATE reached the server", async () => {
+      state.rpcResponse = {
+        data: null,
+        error: { message: "showing changed since it was loaded (status confirmed)" },
+      };
+
+      const response = await patch({ action: "confirm", ...expectation() });
+
+      expect(response.status).toBe(409);
+    });
+
+    it("does not classify an unanchored phrase as a conflict", async () => {
+      // The removed `/cannot be/` pattern matched this and produced a 409 for an unknown error.
+      state.rpcResponse = {
+        data: null,
+        error: { message: "upstream request cannot be satisfied right now" },
+      };
+
+      const response = await patch({ action: "confirm", ...expectation() });
+
+      expect(response.status).toBe(500);
     });
 
     it("500s an RPC payload that is not the canonical showing", async () => {

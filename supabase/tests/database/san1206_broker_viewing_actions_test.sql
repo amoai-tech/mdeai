@@ -19,7 +19,7 @@
 --
 --   owning broker  -> confirm / cancel / reschedule succeeds, on the SAME showing row
 --   exact replay   -> idempotent success; never a second showing
---   stale expected -> deterministic conflict (P1206); never overwrites a newer outcome
+--   stale expected -> deterministic conflict (PT409); never overwrites a newer outcome
 --   renter         -> cannot write authoritative status/time, directly or through the RPC
 --   other broker   -> cannot read or write it
 --   anonymous      -> cannot read or write it
@@ -339,7 +339,7 @@ select throws_ok(format($q$
     %L::uuid, 'reschedule', 'scheduled', %L::timestamptz, %L::timestamptz)
 $q$, current_setting('san1206.showing2'), current_setting('san1206.t2'),
      current_setting('san1206.t4')),
-  'P1206', NULL, 'F1: a reschedule based on the superseded time is refused deterministically');
+  'PT409', NULL, 'F1: a reschedule based on the superseded time is refused deterministically');
 
 reset role;
 
@@ -575,7 +575,7 @@ select throws_ok(format($q$
     %L::uuid, 'reschedule', 'cancelled', %L::timestamptz, %L::timestamptz)
 $q$, current_setting('san1206.showing2'), current_setting('san1206.t3'),
      current_setting('san1206.t5')),
-  'P1206', NULL, 'N3: rescheduling onto a day the same lead already occupies conflicts deterministically');
+  'PT409', NULL, 'N3: rescheduling onto a day the same lead already occupies conflicts deterministically');
 reset role;
 
 select is(

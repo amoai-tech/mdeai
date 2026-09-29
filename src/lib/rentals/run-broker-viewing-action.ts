@@ -26,34 +26,57 @@ export type BrokerViewingActionParams = {
 };
 
 /**
- * Map the database error contract onto HTTP statuses.
+ * The SQLSTATE contract raised deliberately by p1_broker_update_showing.
  *
- * The codes are raised deliberately by p1_broker_update_showing, so this mapping is a contract
- * rather than a guess:
- *   42501 authentication/authorization refused
- *   P0002 showing not found
- *   22023 malformed or non-future reschedule input
- *   P1206 stale expected state, or a transition the current state does not permit
+ *   42501 authentication/authorization refused      -> 403
+ *   PT404 showing not found                         -> 404
+ *   22023 malformed or non-future reschedule input  -> 400
+ *   PT409 stale expected state, or a transition the current state does not permit -> 409
  *
- * The message fallbacks exist so a future change that loses the code still lands on a sane
- * status instead of leaking a 500 for what is really a conflict.
+ * PT404/PT409 are PostgREST's documented HTTP mapping, so the RPC carries the right status on
+ * its own at /rest/v1/rpc/... as well. The route repeats the mapping rather than trusting the
+ * transport, because the status the caller sees must not depend on which layer got there first.
  */
+const RPC_CODE_STATUS: Record<string, 400 | 403 | 404 | 409> = {
+  PT409: 409,
+  "42501": 403,
+  PT404: 404,
+  "22023": 400,
+};
+
+/**
+ * Patterns for a failure that reached us with no SQLSTATE at all — a transport or client error.
+ *
+ * Deliberately narrow, and only ever consulted when no code is present. A message is prose the
+ * RPC is free to reword, so matching on it can silently reclassify a refusal: an earlier
+ * revision OR'd the code and message checks together with a bare `/cannot be/` pattern and a
+ * 409 branch listed first, which turned a genuine 42501 whose text happened to contain those
+ * words into a 409. The database is the authority on why a transition was refused, so a code
+ * that IS present decides the status on its own.
+ */
+const MESSAGE_STATUS: Array<[RegExp, 400 | 403 | 404 | 409]> = [
+  [/showing changed since it was loaded|another viewing already occupies that day/i, 409],
+  [/authentication required|does not own this showing/i, 403],
+  [/showing not found/i, 404],
+  [/reschedule (requires|time must)/i, 400],
+];
+
 function viewingActionFailure(
   message: string,
   code?: string,
 ): Extract<RunBrokerViewingActionResult, { ok: false }> {
-  if (code === "P1206" || /showing changed since it was loaded|cannot be|already occupies that day/i.test(message)) {
-    return { ok: false, message, status: 409 };
+  if (code) {
+    // Recognised codes map to their contract status. An UNRECOGNISED code is not guessed at
+    // from the message — we cannot classify it, and 500 is the honest answer.
+    return { ok: false, message, status: RPC_CODE_STATUS[code] ?? 500 };
   }
-  if (code === "42501" || /authentication required|does not own this showing/i.test(message)) {
-    return { ok: false, message, status: 403 };
+
+  for (const [pattern, status] of MESSAGE_STATUS) {
+    if (pattern.test(message)) {
+      return { ok: false, message, status };
+    }
   }
-  if (code === "P0002" || /showing not found/i.test(message)) {
-    return { ok: false, message, status: 404 };
-  }
-  if (code === "22023" || /reschedule (requires|time must)/i.test(message)) {
-    return { ok: false, message, status: 400 };
-  }
+
   return { ok: false, message, status: 500 };
 }
 

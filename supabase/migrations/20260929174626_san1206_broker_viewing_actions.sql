@@ -61,13 +61,27 @@
 -- ERROR CONTRACT
 --
 --   42501 authentication/authorization refused      -> route 403
---   P0002 showing not found                         -> route 404
+--   PT404 showing not found                       -> route 404
 --   22023 malformed or non-future reschedule input  -> route 400
---   P1206 stale expected state, or a transition the current state does not permit
+--   PT409 stale expected state, or a transition the current state does not permit
 --         (including a reschedule onto a day the same renter already occupies)
 --                                                    -> route 409, refresh and retry
 --
--- P1206 follows the P<task-id> convention SAN-1286 established for its own conflict code.
+-- WHY PT409 AND NOT A P<task-id> CODE
+--
+-- PostgREST translates PostgreSQL error codes into HTTP statuses, and class P0 (PL/pgSQL error)
+-- is not a conflict: measured against this stack, a P1206 raised here came back from
+-- /rest/v1/rpc/... as HTTP 400. That made the same refusal a 409 through the application route
+-- and a 400 to any direct RPC caller, and a routine "this request changed" logged as a client
+-- error rather than a conflict. PostgREST's documented PTxyz form maps straight through:
+-- PT409 -> 409 and PT404 -> 404, so the RPC and the route now agree.
+--
+-- This is deliberately not the P<task-id> convention SAN-1286 used for its own code. That code
+-- is raised on a replay path where the HTTP status is never the contract; here it is.
+--
+-- Refs:
+--   https://docs.postgrest.org/en/v11/references/errors.html#http-status-codes
+--   https://docs.postgrest.org/en/v11/references/errors.html#raise-errors-with-http-status-codes
 --
 -- ponytail: this RPC changes the row and tells nobody. Notifying the renter (email/push) is
 -- deliberately out of scope because there is no identity-bound renter acceptance surface yet;
@@ -91,9 +105,15 @@ GRANT SELECT ON TABLE public.showings TO authenticated;
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- B · Authoritative mutation is broker/admin only
 --
--- The renter and assigned-agent branch is removed from UPDATE only. It is deliberately left
--- intact on SELECT and DELETE: the renter may still see their own viewing, and removing a
--- booking from the renter's side is a separate product decision.
+-- The renter and assigned-agent branch is removed from UPDATE. It still passes SELECT, so a
+-- renter keeps seeing their own viewing.
+--
+-- DELETE is worth stating precisely, because the policy and the grant now disagree on purpose:
+-- `showings_delete_admin_or_parties` is left in place as defence in depth, but section A revoked
+-- DELETE from `authenticated`, so no signed-in role can reach it and renter-side deletion is not
+-- currently possible. Only `authenticated` SELECT survives on this table. If deleting a booking
+-- from the renter's side is wanted, it needs its own decision and its own grant — not a
+-- side effect of narrowing UPDATE.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 DROP POLICY IF EXISTS showings_update_visible ON public.showings;
@@ -164,7 +184,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'showing not found' USING ERRCODE = 'P0002';
+    RAISE EXCEPTION 'showing not found' USING ERRCODE = 'PT404';
   END IF;
 
   -- Explicit and unavoidable: the definer owns showings, so RLS does not apply inside this
@@ -194,7 +214,7 @@ BEGIN
        OR v_row.scheduled_at IS DISTINCT FROM p_expected_scheduled_at THEN
       RAISE EXCEPTION 'showing changed since it was loaded (status %, scheduled_at %)',
         v_row.status, v_row.scheduled_at
-        USING ERRCODE = 'P1206', HINT = 'Refresh and try again.';
+        USING ERRCODE = 'PT409', HINT = 'Refresh and try again.';
     END IF;
 
     -- confirm and reschedule are only meaningful for a request the renter has not had
@@ -202,7 +222,7 @@ BEGIN
     -- renter communication/acceptance contract for that yet.
     IF p_action IN ('confirm', 'reschedule') AND v_row.status <> 'scheduled' THEN
       RAISE EXCEPTION 'a % viewing cannot be %', v_row.status, p_action
-        USING ERRCODE = 'P1206', HINT = 'Refresh and try again.';
+        USING ERRCODE = 'PT409', HINT = 'Refresh and try again.';
     END IF;
 
     IF p_action = 'reschedule' THEN
@@ -235,7 +255,7 @@ BEGIN
         -- lead may legitimately hold showings on two different days, so moving one onto the
         -- other's day is reachable and must read as a conflict, not an opaque 23505.
         RAISE EXCEPTION 'another viewing already occupies that day for this renter and listing'
-          USING ERRCODE = 'P1206', HINT = 'Choose a different day.';
+          USING ERRCODE = 'PT409', HINT = 'Choose a different day.';
     END;
   END IF;
 
