@@ -44,6 +44,14 @@ jobs:
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
         run: npm run test:e2e:deterministic
 
+      # SAN-1357: the long-chat virtualization proof is a *permanent* regression, so it must
+      # run on every PR. `test:e2e:deterministic` only runs deterministic-critical.spec.ts,
+      # so without this step the 500-message proof would exist but silently stop protecting
+      # main. The npm script owns its own safe dummy environment and web-server command, so
+      # nothing is duplicated here.
+      - name: Prove long-chat virtualization
+        run: npm run test:e2e:chat-virtualization
+
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

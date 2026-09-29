@@ -201,6 +201,17 @@ test.describe(
 
       expect(layout.hydrated, "the probe must hydrate before any measurement").toBe("true");
 
+      // The probe is designed to need NO runtime transport: the agent is registered locally,
+      // so the provider configures no `runtimeUrl`. The stubs registered above exist only so
+      // that an unexpected request can never reach MDE's authenticated route. This assertion
+      // is what makes the intended architecture executable rather than merely logged —
+      // without it, a future CopilotKit change could start runtime discovery, be quietly
+      // satisfied by the stub, and leave the "no runtime transport required" claim false.
+      expect(
+        runtimeInfoRequests,
+        "the virtualization probe must not require runtime transport",
+      ).toEqual([]);
+
       // The virtualized branch is the only one that emits `data-index`.
       expect(layout.mountedRows, "mounted virtual rows ([data-index])").toBeGreaterThan(0);
       expect(layout.mountedRows, "mounted rows must be far below the logical count").toBeLessThan(
