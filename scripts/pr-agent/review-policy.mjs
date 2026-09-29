@@ -1,3 +1,12 @@
+// Records that a fresh PR-Agent review was published for an exact base/head pair, and decides
+// whether a push can reuse an incremental review.
+//
+// What this proves: a review result exists for the current base context, so a stale review cannot
+// be mistaken for a current one.
+// What this does NOT prove: that the model's findings are correct, complete, or free of false
+// positives. Deterministic CI (`floor`), required checks, and human/independent review remain the
+// real certification. The exported names below are kept for shared-workflow compatibility; the
+// operator-visible wording states only what is actually established.
 const SHA_RE = /^[0-9a-f]{40}$/i;
 export const CERT_HISTORY_MARKER = "<!-- mde-pr-agent-cert-history -->";
 
@@ -22,7 +31,7 @@ export function appendCertification(body, { baseSha, headSha }) {
   if ((body ?? "").includes(marker)) return body;
   const prefix = (body ?? "").includes(CERT_HISTORY_MARKER)
     ? body.trimEnd()
-    : `${CERT_HISTORY_MARKER}\nPR-Agent certified review contexts:`;
+    : `${CERT_HISTORY_MARKER}\nFresh PR-Agent reviews recorded for exact base/head:`;
   return `${prefix}\n${marker}\n`;
 }
 

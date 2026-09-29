@@ -105,6 +105,56 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(reviewPolicy).toContain("mde-pr-agent-cert base=");
   });
 
+  it("states only freshness, never correctness certification", () => {
+    // The exported names stay for shared-workflow compatibility; the operator-visible
+    // wording must not imply the model review certifies correctness.
+    expect(reviewPolicy).toContain("Fresh PR-Agent reviews recorded for exact base/head:");
+    expect(reviewPolicy).not.toContain("PR-Agent certified review contexts");
+    expect(reviewPolicy).toContain("does NOT prove");
+  });
+
+  it("validates the exact selected path instead of a rebuilt parent path", () => {
+    expect(routing).toContain("export function toRepoPath");
+    expect(routing).toContain("export function assertSelectedPathsExist");
+    expect(routing).toContain("assertSelectedPathsExist(result.paths)");
+    expect(routing).toContain("CONTAINER_WORKSPACE");
+    // The old check looped over skill names and validated `<skill>/SKILL.md`.
+    expect(routing).not.toContain("for (const skill of result.skills)");
+  });
+
+  it("owns the adversarial boundary-validation rule in the universal skill", () => {
+    const codeReviewSkill = read(".claude/skills/code-review/SKILL.md");
+    expect(codeReviewSkill).toContain("malformed near-miss inputs");
+    expect(codeReviewSkill).toContain("leading zeros");
+    expect(codeReviewSkill).toContain("standards-compliant library");
+    // One owner: the rule is not duplicated into the always-on config layer.
+    expect(config).not.toContain("malformed near-miss");
+  });
+
+  it("ships the review-quality eval corpus and its recorded v0.45 baselines", () => {
+    for (const path of [
+      "scripts/pr-agent/evals/cases.mjs",
+      "scripts/pr-agent/evals/score-review.mjs",
+      "scripts/pr-agent/evals/fixtures/pr-157-v045-recorded.md",
+      "scripts/pr-agent/evals/fixtures/pr-158-v045-recorded.md",
+    ]) {
+      expect(existsSync(path)).toBe(true);
+    }
+    expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("semver-boundary");
+    expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("docs-only-control");
+    expect(read("scripts/pr-agent/evals/fixtures/pr-157-v045-recorded.md")).toContain("Safe to merge");
+  });
+
+  it("does not configure keys the pinned PR-Agent cannot read", () => {
+    // Verified against the shipped binary: `publish_error_details` first appears in the
+    // v0.46.0 `settings/configuration.toml` and has no reader in v0.45.0. On the pinned
+    // image it is a silent no-op, so the config must not claim the feature is active.
+    if (workflow.includes("v0.45.0")) {
+      expect(config).not.toMatch(/^\s*publish_error_details\s*=/m);
+    }
+    expect(config).toContain("publish_error_details` is a v0.46+ key");
+  });
+
   it("keeps repo-local routing while shared core owns review orchestration", () => {
     expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(routing).toContain("required trusted PR-Agent skill missing");
