@@ -8,6 +8,7 @@ import {
   runConciergeAgent,
   type AgUiEvent,
 } from "./agui-concierge";
+import { classifyAgentError } from "@/mastra/lib/mastra-telemetry";
 
 /**
  * SAN-1330 — failure-proof coverage for the CopilotKit/AG-UI certification call.
@@ -288,4 +289,112 @@ describe("SAN-1330 · transport and decoding use the official primitives", () =>
     );
     await expect(runConciergeAgent({ url, threadId: THREAD })).rejects.toThrow();
   });
+});
+
+/**
+ * SAN-1301 · MDE-CK-UPGRADE-001 — the Stop contract.
+ *
+ * The telemetry half already exists: `classifyAgentError` maps an `AbortError`
+ * to `client_abort` (`src/mastra/lib/mastra-telemetry.test.ts`). These cases
+ * cover the transport half — that cancelling an active run actually terminates
+ * it and that nothing arrives afterwards, which is what "no post-abort result"
+ * means in practice.
+ */
+describe("SAN-1301 · Stop cancels the active run and nothing arrives after it", () => {
+  it("terminates the run on Stop and certifies nothing as success", async () => {
+    const { url } = await serve((_seen, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.write(sse([{ type: "RUN_STARTED", threadId: THREAD, runId: "r" }]));
+      // This frame is scheduled to arrive AFTER Stop is pressed. Observing it
+      // would be exactly the bug: a post-abort assistant/tool result.
+      setTimeout(() => {
+        try {
+          res.write(sse([{ type: "RUN_FINISHED", threadId: THREAD, runId: "r" }]));
+        } catch {
+          // The abort already tore down the socket.
+        }
+      }, 400);
+      // Deliberately never ends: the run is still active when Stop happens.
+    });
+
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const run = runConciergeAgent({
+      url,
+      threadId: THREAD,
+      signal: controller.signal,
+      onEvent: (event: AgUiEvent) => seen.push(event.type),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 120)); // let RUN_STARTED land
+    controller.abort();
+
+    // `@ag-ui/client` 0.0.59 surfaces a client abort as a structured RUN_ERROR
+    // and completes the stream, so the helper resolves rather than rejecting.
+    const { events } = await run;
+    const types = events.map((event) => event.type);
+    expect(types).toContain("RUN_ERROR");
+    expect(types).not.toContain("RUN_FINISHED");
+
+    // The decisive assertion: an aborted turn can never be certified as success.
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(
+      /RUN_ERROR/,
+    );
+
+    // Wait past the scheduled frame: nothing may arrive after the abort settled.
+    const settled = seen.length;
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(seen.length).toBe(settled);
+    expect(seen).not.toContain("RUN_FINISHED");
+  }, 10_000);
+
+  it("records a Stop as a client abort, not a stall or a failure", async () => {
+    const { url } = await serve((_seen, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.write(sse([{ type: "RUN_STARTED", threadId: THREAD, runId: "r" }]));
+    });
+
+    const controller = new AbortController();
+    const run = runConciergeAgent({
+      url,
+      threadId: THREAD,
+      signal: controller.signal,
+      // Long enough that a timeout cannot be the cause of what follows.
+      timeoutMs: 5_000,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    controller.abort();
+
+    const { events } = await run;
+    const abortEvent = events.find((event) => event.type === "RUN_ERROR") as
+      | { code?: string; rawEvent?: unknown }
+      | undefined;
+
+    expect(abortEvent, "a Stop must surface as a structured RUN_ERROR").toBeDefined();
+    expect(abortEvent?.code).toBe("abort");
+
+    // Tie the transport event to the classifier the runtime records the turn with:
+    // a Stop is a client abort, never a timeout and never a generic failure.
+    expect(classifyAgentError(abortEvent?.rawEvent)).toBe("client_abort");
+    expect(classifyAgentError(abortEvent?.rawEvent)).not.toBe("timeout");
+  }, 10_000);
+
+  it("still completes normally when no Stop is pressed", async () => {
+    // Negative control: the abort wiring must not disturb the happy path.
+    const { url } = await serve((_seen, res) =>
+      ok(
+        res,
+        `data: ${JSON.stringify({ type: "RUN_STARTED", threadId: THREAD, runId: "r" })}\n\n` +
+          `data: ${JSON.stringify({ type: "RUN_FINISHED", threadId: THREAD, runId: "r" })}\n\n`,
+      ),
+    );
+    const controller = new AbortController();
+    const { events } = await runConciergeAgent({
+      url,
+      threadId: THREAD,
+      signal: controller.signal,
+    });
+    expect(events.map((e) => e.type)).toEqual(["RUN_STARTED", "RUN_FINISHED"]);
+  }, 10_000);
 });
