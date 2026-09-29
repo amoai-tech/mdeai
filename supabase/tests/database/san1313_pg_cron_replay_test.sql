@@ -2,7 +2,11 @@
 --
 -- Proves the extension and schema exist after a fresh replay, that the documented
 -- privileges are present, and — equally important — that B1 changed NOTHING else:
--- no agent_jobs table and no schedules introduced.
+-- no agent_jobs table and no resurrected agent_jobs function.
+--
+-- SCOPE NARROWED (2026-09-28): the two schedule assertions this file used to carry were
+-- transitional. B2 now declares the approved schedules forward, so they are false by design
+-- and have moved to san1313b_pg_cron_schedule_replay_test.sql. See the note at the end.
 --
 -- CROSS-TASK EDIT (2026-09-18): assertion 7 originally pinned "the 8 dead agent_jobs
 -- functions are still present", which was B1's way of proving it had not overreached.
@@ -13,7 +17,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(9);
+select plan(7);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- The extension and its schema
@@ -58,16 +62,22 @@ select is(
                                 'realtime_broadcast_agent_jobs'])),
   0, 'B1/A: 0 dead agent_jobs functions remain (B1 added none; Migration A dropped all 8)');
 
-select is(
-  (select count(*)::int from cron.job),
-  0, 'B1: ZERO schedules introduced — this increment is extension-only');
-
--- Documents the accepted migration-ordering behaviour rather than hiding it:
--- 20260501204538 has a lower timestamp and guards on the extension existing, so it
--- still takes its skip branch during replay. B2 must declare this schedule forward.
-select ok(
-  not exists (select 1 from cron.job where jobname = 'mdeai_analytics_daily_snapshot'),
-  'B1: mdeai_analytics_daily_snapshot still absent in replay (ordering accepted; B2 recreates it forward)');
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SCHEDULE ASSERTIONS MOVED TO B2 (2026-09-28)
+--
+-- This file previously pinned two transitional truths:
+--   * `count(*) from cron.job = 0`
+--   * `mdeai_analytics_daily_snapshot` still absent, documenting the accepted ordering
+--     behaviour where 20260501204538 skips because it runs before pg_cron exists.
+--
+-- Both were correct for B1 and are now FALSE by design: B2
+-- (20260928130000_san1313b_canonical_cron_schedules) declares all four approved schedules
+-- forward, which is exactly what those comments said had to happen.
+--
+-- They now live in san1313b_pg_cron_schedule_replay_test.sql as an exact-manifest assertion.
+-- This file keeps only what B1 owns: the extension, its schema, the documented privileges,
+-- and the guarantee that B1/A resurrected no dead agent_jobs object.
+-- ─────────────────────────────────────────────────────────────────────────────
 
 select * from finish();
 rollback;
