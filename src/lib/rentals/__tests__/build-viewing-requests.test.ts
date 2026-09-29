@@ -13,6 +13,7 @@ function showing(overrides: Partial<BrokerShowingRow> = {}): BrokerShowingRow {
     scheduled_at: "2030-01-01T14:00:00.000Z",
     status: "scheduled",
     lead_id: "lead-1",
+    created_at: "2030-01-01T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -103,17 +104,31 @@ describe("buildViewingRequests", () => {
     expect(requests[0]?.apartmentTitle).toBeNull();
   });
 
-  it("orders the newest requested viewing first and returns nothing when there are none", () => {
+  it("orders by when the request arrived, not by appointment date", () => {
+    // The defect this pins: the query ordered by created_at while the builder re-sorted by
+    // scheduled_at, silently restoring "farthest-future first". The two keys must agree.
     const requests = buildViewingRequests({
       showings: [
-        showing({ id: "old", scheduled_at: "2030-01-01T14:00:00.000Z" }),
-        showing({ id: "new", scheduled_at: "2030-06-01T14:00:00.000Z" }),
+        // Arrived first, but booked far in the future.
+        showing({
+          id: "arrived-first",
+          created_at: "2030-01-01T00:00:00.000Z",
+          scheduled_at: "2099-01-01T14:00:00.000Z",
+        }),
+        // Arrived later, but booked sooner.
+        showing({
+          id: "arrived-later",
+          created_at: "2030-06-01T00:00:00.000Z",
+          scheduled_at: "2030-06-02T14:00:00.000Z",
+        }),
       ],
       leads: [lead()],
       listings: LISTINGS,
     });
 
-    expect(requests.map((r) => r.showingId)).toEqual(["new", "old"]);
+    // Newest arrival wins even though its appointment is much later.
+    expect(requests.map((r) => r.showingId)).toEqual(["arrived-later", "arrived-first"]);
+    expect(requests[0]?.createdAt).toBe("2030-06-01T00:00:00.000Z");
 
     expect(buildViewingRequests({ showings: [], leads: [], listings: [] })).toEqual([]);
   });

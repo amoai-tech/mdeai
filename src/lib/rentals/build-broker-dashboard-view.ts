@@ -27,6 +27,8 @@ export type BrokerShowingRow = {
   scheduled_at: string;
   status: string;
   lead_id: string;
+  /** Ordering key for the request queue. Present on every query that builds these rows. */
+  created_at: string;
 };
 
 export type BuildBrokerDashboardInput = {
@@ -97,11 +99,20 @@ export function buildViewingRequests(input: {
       renterName,
       scheduledAt: showing.scheduled_at,
       scheduledLabel: formatScheduledLabel(showing.scheduled_at),
+      createdAt: showing.created_at,
       status: showing.status,
     });
   }
 
-  return requests.sort((a, b) => (a.scheduledAt < b.scheduledAt ? 1 : a.scheduledAt > b.scheduledAt ? -1 : 0));
+  // Newest request first, matching the query's `created_at desc`. The builder must not
+  // re-sort by another key: an earlier revision ordered the query by created_at and then
+  // re-sorted here by scheduled_at, which silently undid the query order and put the
+  // FARTHEST-FUTURE appointments at the top. The soonest-appointment-first view belongs to the
+  // broker schedule surface (SAN-1206), not to this request inbox.
+  return requests.sort((a, b) => {
+    if (a.createdAt === b.createdAt) return 0;
+    return a.createdAt < b.createdAt ? 1 : -1;
+  });
 }
 
 function greetingFor(name: string | null): string { // skipcq: JS-0067 - module-local helper

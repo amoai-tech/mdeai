@@ -55,6 +55,7 @@ describe("buildBrokerDashboardView", () => {
           scheduled_at: "2030-01-01T12:00:00.000Z",
           status: "scheduled",
           lead_id: "l1",
+          created_at: "2030-01-01T00:00:00.000Z",
         },
       ],
       requestShowings: [
@@ -64,6 +65,7 @@ describe("buildBrokerDashboardView", () => {
           scheduled_at: "2030-01-01T12:00:00.000Z",
           status: "scheduled",
           lead_id: "l1",
+          created_at: "2030-01-01T00:00:00.000Z",
         },
       ],
       requestShowingsTotal: 1,
@@ -161,6 +163,7 @@ describe("buildBrokerDashboardView", () => {
           scheduled_at: "2030-01-01T12:00:00.000Z",
           status: "scheduled",
           lead_id: "l1",
+          created_at: "2030-01-01T00:00:00.000Z",
         },
       ],
       requestShowingsTotal: 137,

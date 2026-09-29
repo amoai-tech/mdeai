@@ -51,6 +51,8 @@ export type BrokerViewingRequest = {
   scheduledAt: string;
   /** Formatted on the server so the client cannot disagree with it during hydration. */
   scheduledLabel: string;
+  /** When the request arrived. The queue is ordered by this, newest first. */
+  createdAt: string;
   status: string;
 };
 

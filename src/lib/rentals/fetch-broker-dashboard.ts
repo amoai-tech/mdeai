@@ -141,7 +141,7 @@ export async function fetchBrokerDashboard(
 
     const { data: showingsData, error: showingsError } = await supabase
       .from("showings")
-      .select("id, apartment_id, scheduled_at, status, lead_id")
+      .select("id, apartment_id, scheduled_at, status, lead_id, created_at")
       .in("apartment_id", apartmentIds)
       .gte("scheduled_at", nowIso)
       .in("status", ["scheduled", "confirmed"])
@@ -168,7 +168,7 @@ export async function fetchBrokerDashboard(
       error: requestShowingsError,
     } = await supabase
       .from("showings")
-      .select("id, apartment_id, scheduled_at, status, lead_id", { count: "exact" })
+      .select("id, apartment_id, scheduled_at, status, lead_id, created_at", { count: "exact" })
       .in("apartment_id", apartmentIds)
       .order("created_at", { ascending: false })
       .limit(REQUEST_PAGE_SIZE);
