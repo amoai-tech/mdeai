@@ -8,8 +8,8 @@ import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import {
   COPILOTKIT_BASE_PATH,
   COPILOTKIT_HANDLER_MODE,
-  COPILOTKIT_TRANSPORT_AGREES,
   COPILOTKIT_USE_SINGLE_ENDPOINT,
+  type AssertTransportAgreement,
 } from "@/lib/copilotkit-transport";
 
 /**
@@ -138,7 +138,11 @@ describe("Step 9 + 10 · transport agreement", () => {
     expect(COPILOTKIT_HANDLER_MODE).toBe("single-route");
     expect(COPILOTKIT_USE_SINGLE_ENDPOINT).toBe(true);
     // Compile-time guard: the two halves agree, or this does not typecheck.
-    expect(COPILOTKIT_TRANSPORT_AGREES).toBe(true);
+    // `AssertTransportAgreement` resolves to `never` when they disagree, so this
+    // assignment fails to compile. `tsc --noEmit` is the check that runs it; the
+    // runtime assertion below keeps the intent visible in this suite.
+    const agreement: AssertTransportAgreement = true;
+    expect(agreement).toBe(true);
   });
 
   it("client props consume the shared constants rather than literals", () => {

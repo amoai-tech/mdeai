@@ -49,5 +49,32 @@ export type CopilotKitTransportAgreement = [
   ? true
   : never;
 
-/** Fails to compile if the two halves above stop agreeing. */
-export const COPILOTKIT_TRANSPORT_AGREES: CopilotKitTransportAgreement = true;
+/**
+ * Compile-time assertion of the pair above.
+ *
+ * Type-only on purpose: it emits no runtime value, because nothing reads it at
+ * runtime — its entire job is to make a mismatched pair fail the build. `tsc`
+ * evaluates it because it is exported into the declaration emit.
+ */
+export type AssertTransportAgreement = CopilotKitTransportAgreement extends true
+  ? true
+  : never;
+
+/**
+ * ponytail: ceiling — single-route mode does not expose CopilotKit Rich Threads.
+ *
+ * Read from the handler's own `info` payload at 1.75.0, not inferred:
+ *
+ *     single-route -> threadEndpoints { list: false, inspect: false }
+ *     multi-route  -> threadEndpoints { list: true,  inspect: true  }
+ *
+ * So CopilotKit's own thread list and inspect endpoints are unavailable here.
+ * MDE does not need them: thread navigation is owned by `ThreadNavProvider` on
+ * top of Supabase ownership and the `ai_runs` ledger, not by CopilotKit's thread
+ * store. This is a recorded ceiling, not a defect.
+ *
+ * Upgrade path: switch `COPILOTKIT_HANDLER_MODE` to `"multi-route"` **and** drop
+ * the client's pinned `useSingleEndpoint` in the same change, because single
+ * route is only half of the pair — a partial move is the "looks connected"
+ * failure the assertion above refuses to compile.
+ */

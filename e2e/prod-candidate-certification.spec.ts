@@ -58,11 +58,28 @@ test.describe("SAN-1330 staged production candidate certification", () => {
     }
 
     for (const method of ["get", "post"] as const) {
-      const response = await page.request[method](route("/api/copilotkit/info"),
-        method === "post" ? { data: { method: "info" } } : undefined,
-      );
-      expect(response.status(), `unauthenticated ${method.toUpperCase()} runtime info`).toBe(401);
-      expect(await response.text()).not.toContain('"agents"');
+      const response = await page.request[method](route("/api/copilotkit/info"), {
+        // Do NOT follow redirects. An un-bypassed request 302s to Vercel's
+        // deployment-authentication page, which then answers 200 — so following
+        // the redirect silently measures the protection page and reports it as
+        // "the runtime returned 200". That false result is what this guard makes
+        // impossible, and it is exactly how this spec failed against a PR preview.
+        maxRedirects: 0,
+        ...(method === "post" ? { data: { method: "info" } } : {}),
+      });
+      const status = response.status();
+      const body = await response.text();
+
+      expect(
+        status,
+        `unauthenticated ${method.toUpperCase()} runtime info returned ${status}; expected 401 ` +
+          `with a JSON body. A 302 or an HTML body means the Vercel automation bypass did not ` +
+          `apply and this measured the deployment protection page, not the runtime. ` +
+          `Body starts: ${body.slice(0, 80)}`,
+      ).toBe(401);
+      // Positive identification that we reached the app rather than the edge.
+      expect(body, "body identifies the runtime, not Vercel protection").toContain("unauthorized");
+      expect(body).not.toContain('"agents"');
     }
 
     let identity: ThrowawayIdentity | undefined;
