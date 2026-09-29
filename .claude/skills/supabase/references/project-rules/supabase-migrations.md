@@ -80,24 +80,43 @@ npm run preflight:migration          # add --no-fetch to skip the network fetch
 
 ### One-command release, gates included
 
+Inspect the manifest **before** applying. `migration:dry-run` runs that one step and touches nothing:
+
+```bash
+npm run migration:dry-run
+```
+
+Read every line. Only once you have, apply:
+
 ```bash
 MDEAI_CONFIRM_PUSH=1 npm run push:migration
 ```
 
-That runs the steps above in order — **preflight → dry-run → acknowledgement → push** — and stops at
-the first that fails, so the push cannot happen as a side effect of running a single command:
+`push:migration` runs the steps above in order — **preflight → dry-run → acknowledgement → push** —
+in one process and stops at the first that fails:
 
 - The `preflight:migration` gate runs first. On a feature branch, a dirty tree, or a `HEAD` that is
   not `origin/main` it fails and nothing reaches the database.
-- `supabase db push --dry-run` prints the manifest immediately before the push, so the list you
-  approve is the list that is applied in that same run.
+- `supabase db push --dry-run` re-prints the manifest immediately before the push, so the list
+  printed in that run is the list applied in that same run.
 - `scripts/confirm-migration-push.mjs` refuses unless `SUPABASE_DB_URL` is set **and**
-  `MDEAI_CONFIRM_PUSH=1`. Without the acknowledgement the run stops after the dry-run.
+  `MDEAI_CONFIRM_PUSH=1`. Without the token the run stops after the dry-run.
 
-The acknowledgement is required deliberately. The preflight checks Git and cannot see the database,
-so the dry-run list is the only place an unreviewed migration becomes visible — which makes reading
-it the one step a convenient wrapper must not skip. `npm run migration:dry-run` runs that step alone;
-the individual pieces stay available for the cases where you need them separately.
+`MDEAI_CONFIRM_PUSH=1` is a **deliberate-intent token, not proof that the manifest was read.** It is
+set before the dry-run runs, so it cannot attest to what the dry-run printed — which means the
+acknowledged command *does* push as a side effect of a single invocation. What it buys is that the
+push cannot happen by accident, or from a remembered command; it cannot stop an operator who sets
+the token without looking. That is why the inspection step above is mandatory rather than an
+optimisation, and why running `migration:dry-run` and `push:migration` as two separate commands is
+the recommended flow. The individual pieces stay available for the cases where you need them
+separately.
+
+These npm scripts interpolate the connection string with POSIX shell syntax
+(`"$SUPABASE_DB_URL"`), so they assume a POSIX shell — macOS, Linux, WSL, or Git Bash. Under
+`cmd.exe` or PowerShell the variable is not expanded and Supabase rejects the literal
+`$SUPABASE_DB_URL`: the command fails before reaching the database, which is the safe direction but
+not a useful one. On Windows, use WSL/Git Bash or call `npx supabase db push --db-url <url>`
+directly.
 
 ### The dry-run list **is** the deployment manifest
 
@@ -138,6 +157,26 @@ Two things follow from the third row:
 * **In the ledger, not in Git** — the migration was applied from an uncommitted local state under a **different timestamp**. `db push` refuses to run at all in this case.
 
 SAN-1286 was applied to production as `20260924055208` while the repository held it as `20260922095853` — the same migration, two version numbers, and a timestamp that never existed in Git. `db push` failed with *"Remote migration versions not found in local migrations directory"* until the ledger was reconciled.
+
+**First prove the two versions are the same migration.** `migration repair` changes history only, so
+`--status applied` marks the canonical version complete **without executing its SQL**. If the stray
+ledger row ran different SQL — or none — repairing skips that migration and the schema never
+receives it. A ledger that disagrees about *content* is a different problem from one that disagrees
+about a timestamp, and repairing would hide it.
+
+So confirm the canonical migration's changes are already live before repairing. Both checks are
+read-only:
+
+* **Compare the SQL.** The ledger keeps a `statements` array for CLI-applied migrations, so a
+  read-only query against `supabase_migrations.schema_migrations` returns the stray row's SQL
+  verbatim; compare it with the canonical file. `docs/02-architecture/migration-drift.md` §2.2
+  records a worked recovery of two migrations by exactly this method.
+* **Or check the objects.** The column, index, or function the canonical file defines must exist live
+  with the definition that migration would have produced.
+  `docs/02-architecture/migration-drift.md` §2.3 calls this "evidence its effect is live".
+
+If either check shows the canonical changes are **not** already present, stop and investigate instead
+of repairing, and decide explicitly whether the canonical migration must actually run.
 
 **Prefer reconciling both sides over replaying:**
 

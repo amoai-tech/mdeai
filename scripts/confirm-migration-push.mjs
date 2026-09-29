@@ -7,9 +7,14 @@
  * place an unreviewed migration becomes visible, which makes reading it the one step in the
  * release runbook that a convenient one-command wrapper must not silently skip.
  *
- * So `npm run push:migration` runs: preflight -> dry-run -> THIS -> push. This exits non-zero
- * unless the operator has seen the manifest and acknowledged it, which keeps the push from
- * happening as a side effect of running one command.
+ * So `npm run push:migration` runs: preflight -> dry-run -> THIS -> push.
+ *
+ * WHAT THIS CAN AND CANNOT PROVE
+ * `MDEAI_CONFIRM_PUSH=1` is a deliberate-intent token: it shows the operator asked for a push rather
+ * than running a remembered command, so the push cannot happen by accident. It is set BEFORE the
+ * dry-run runs, so it is not evidence that the manifest was read — no in-process check can be. Read
+ * the manifest first with `npm run migration:dry-run`; this script makes skipping that step a
+ * decision rather than an oversight, and that is all it claims.
  *
  * Usage:
  *   MDEAI_CONFIRM_PUSH=1 npm run push:migration
