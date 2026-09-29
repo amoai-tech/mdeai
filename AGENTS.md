@@ -57,7 +57,8 @@ Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-sk
 - Substantial or ambiguous implementation, PR creation, review handling → `tasks`.
 - Unknown failure/root cause → `systematic-debugging`.
 - Test strategy, test-first work, regression proof → `testing`.
-- Existing diff/PR review → `code-review`.
+- Existing diff/PR review → `code-review`; when Codacy is available, layer `codacy-code-review` on top rather than replacing the review owner.
+- Codacy PR loop → local `codacy-analysis` preflight first; after fixes/tests and push, run `codacy pull-request <PR> --reanalyze-and-wait`, then `--diff`. Cloud reanalysis is separate from Codacy AI Reviewer; request AI Reviewer only on the final pushed HEAD when its review comments are wanted.
 - Research needing primary sources → `research`.
 - Done, merge, or production claims → `task-verifier`.
 - UI state/interaction design → `wireframe`.

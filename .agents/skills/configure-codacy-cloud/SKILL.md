@@ -1,0 +1,1 @@
+../../../.claude/skills/configure-codacy-cloud/SKILL.md
