@@ -48,7 +48,7 @@ dependency chain.**
 | --- | --- | --- |
 | 1 | **Rentals** | Deterministic eligibility over real inventory, map/card synchronization, trust signals, and an **atomic, identity-bound commitment** (lead + showing) with correct operator visibility. The highest-correctness write path. |
 | 2 | **Events + Ticketing** | A **real money loop**: external payment authority, exactly-once webhook finalization, entitlement delivery, a wallet that reflects truth, and **host payout/revenue state that reconciles**. |
-| 3 | **AI Concierge + Local Discovery** | The shared layer every other surface depends on: intent routing, grounded facts, structured output, session continuity, and safe authenticated tool actions. |
+| 3 | **AI Concierge + Local Discovery** | Shared capabilities used across every surface — intent routing, grounded facts, structured output, session continuity, safe authenticated tool actions. Consumed by the other loops; it does not gate their execution. |
 
 Rentals prove trustworthy supply and safe commitment. Events prove money, entitlement and host payout.
 The concierge proves the intelligence layer is grounded and user-scoped. Any two of the three can pass
@@ -342,8 +342,8 @@ flowchart TD
         direction LR
         R1["SAN-386 · MDE Rentals — Apply Hard Filters Before AI/Vector Ranking"]
         R2["SAN-1364 · GEM-004 · Define and prove Gemini tool combination across MDE"]
-        R3["SAN-1235 · RE-TRUST-001 — Listing Trust, Duplicate and Staleness Signals"]
-        R5["SAN-1229 · RE-REQ-006 · Match-score result cards plus map pins"]
+        R3["SAN-1235 · RE-TRUST-001 — Listing Trust, Duplicate & Staleness Signals"]
+        R5["SAN-1229 · RE-REQ-006 · Match-score result cards + map pins (generative UI)"]
         R6["SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing"]
         R8["SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End"]
         R7["SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate"]
@@ -373,7 +373,7 @@ enriches displayed results and must never block the chain.
 | Edge Function source provenance — SAN-1295 · Task 48.2H.8A · MDE-EDGE-001 — Recover and Canonicalize All 39 Live Edge Functions | ✅ | | Live source cannot be fully accounted for from Git alone, so the deployed surface is not fully reviewable |
 | Edge Function runtime defects — SAN-1296 · Stop Edge Functions from Losing Rental Reminders or Running Unsafe Actions | ✅ | | Rental reminders can be lost silently and some Edge actions are unsafe to expose |
 | Edge Function tests and drift gates — SAN-1297 · Task 48.2H.8C · MDE-EDGE-003 — Add Edge Function Tests, Deployment Provenance, and Drift Gates | ⚪ | | Prevents recurrence of the provenance drift; certification can be performed manually without it |
-| Mastra PostgresStore hardening — SAN-1303 · Task 53.M.25 · MDE-MASTRA-PG-001 — Harden native Mastra PostgresStore on Supabase | ⚪ | | Only its durability-matrix portion gates `SAN-548 · MDE Rentals — Prove Rental Chat Memory Survives a Fresh Runtime`; SSL, pool and fail-fast hardening are not themselves a launch journey |
+| Chat memory durability — SAN-1303 · Task 53.M.25 · MDE-MASTRA-PG-001 — Make AI chat memory survive restarts safely on Supabase | ⚪ | | Only its durability-matrix portion gates `SAN-548 · MDE Rentals — Prove Rental Chat Memory Survives a Fresh Runtime`; SSL, pool and fail-fast hardening are not themselves a launch journey |
 | Neighborhood intelligence — SAN-1033 · GEM-RE-013 — Neighborhood intelligence | ⚪ | | Enriches displayed results; a renter can find and commit without it |
 | Saved rental search — SAN-1077 · RE-SAVEDSEARCH-001 — Saved searches | | ✅ | Adds scheduling and repeated search without proving the core rental transaction |
 | Re-match alerts — SAN-1237 · RE-REQ-016 · Saved requests + re-match alerts (suggested) | | ✅ | Needs saved search, change detection, notification idempotency and quiet hours |
