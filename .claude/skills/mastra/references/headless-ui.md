@@ -1,6 +1,6 @@
 ---
 title: CopilotKit v2 headless UI (defer)
-description: Do NOT load for mdeapp Phase 1. CopilotKit v2 headless chat — mdeapp uses CopilotKit 1.55.2 v1 components.
+description: CopilotKit v2 headless chat. Reference only — verify against the installed pins before use.
 parent: mastra
 impact: LOW
 impactDescription: CK v2 headless — wrong stack for mdeapp

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# task-verifier — disk probe for mdeapp claims
+# task-verifier — disk probe for MDE claims
 # Usage:
 #   bash .claude/skills/task-verifier/scripts/probe-disk.sh           # all probes
 #   bash .claude/skills/task-verifier/scripts/probe-disk.sh F09       # filter to F09 probes
@@ -9,7 +9,9 @@
 
 set -uo pipefail
 
-REPO="${REPO:-/home/sk/mdeai}"
+# Resolve the checkout root from this script's own location so the probe works in the main
+# checkout and in any worktree. Override with REPO=<path> when probing somewhere else.
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
 APP="$REPO/mdeapp"
 FILTER="${1:-}"
 
@@ -96,14 +98,28 @@ fi
 # ---------- Pinned versions ----------
 if in_filter pins; then
   echo "## Pinned versions (regression check)"
-  ck_ver=$(node -p "require('$APP/package.json').dependencies['@copilotkit/react-core'] || ''")
-  case "$ck_ver" in
-    "1.55.2") ok "CopilotKit pin held at 1.55.2";;
-    "") fail "CopilotKit react-core missing";;
-    *) fail "CopilotKit pin drift: $ck_ver (expected 1.55.2)";;
-  esac
+  # The app package lives at the repository root. `$APP` still points at the legacy mdeapp/
+  # subdirectory that other probe sections expect, so prefer the root and fall back.
+  CK_PKG="$REPO/package.json"
+  [ -f "$CK_PKG" ] || CK_PKG="$APP/package.json"
+  ck_rc=$(node -p "require('$CK_PKG').dependencies['@copilotkit/react-core'] || ''")
+  ck_rt=$(node -p "require('$CK_PKG').dependencies['@copilotkit/runtime'] || ''")
+  # Mirrors the SAN-1301-owned contract and scripts/check-mastra.mjs: exact pins, with
+  # react-core and runtime aligned. No release number is hard-coded here, so an intentional
+  # certified upgrade does not fail this probe and a stale literal cannot mask real drift.
+  if [ -z "$ck_rc" ]; then
+    fail "CopilotKit react-core missing"
+  elif ! printf '%s' "$ck_rc" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+    fail "CopilotKit react-core is not an exact pin: '$ck_rc'"
+  elif [ -z "$ck_rt" ]; then
+    fail "CopilotKit runtime missing"
+  elif [ "$ck_rc" != "$ck_rt" ]; then
+    fail "CopilotKit core/runtime misaligned: react-core=$ck_rc runtime=$ck_rt"
+  else
+    ok "CopilotKit react-core/runtime aligned + exact at $ck_rc"
+  fi
 
-  next_ver=$(node -p "require('$APP/package.json').dependencies['next'] || ''")
+  next_ver=$(node -p "require('$CK_PKG').dependencies['next'] || ''")
   case "$next_ver" in
     16.*) ok "Next.js v16 ($next_ver)";;
     "") fail "Next missing";;

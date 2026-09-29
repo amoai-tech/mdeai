@@ -90,7 +90,7 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/canvas/mastra
 
 **License:** MIT, verified from the repository `LICENSE` at the pinned revision.
 
-**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit 1.55.2 before implementation.
+**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit pins before implementation.
 
 **Permalink:** https://github.com/CopilotKit/CopilotKit/tree/5eec9b0d025cc8c84558145be6ebbeaa7e2321fa/examples/canvas/mastra
 
@@ -121,7 +121,7 @@ https://github.com/CopilotKit/CopilotKit/tree/main/examples/showcases/generative
 
 **License:** MIT, verified from the repository `LICENSE` at the pinned revision.
 
-**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit 1.55.2 before implementation.
+**Verification:** example path exists at the pinned revision; source-level reuse still requires compatibility proof against MDE's installed CopilotKit pins before implementation.
 
 **Permalink:** https://github.com/CopilotKit/CopilotKit/tree/5eec9b0d025cc8c84558145be6ebbeaa7e2321fa/examples/showcases/generative-ui
 

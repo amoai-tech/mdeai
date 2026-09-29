@@ -1,11 +1,11 @@
 ---
 title: CopilotKit v2 slots (defer)
-description: Do NOT load for mdeapp Phase 1. CopilotKit v2 slot overrides — use v1 hooks and shadcn in mdeapp.
+description: CopilotKit v2 slot overrides. Reference only — MDE is on the v2 surface.
 parent: mastra
 impact: LOW
 impactDescription: CK v2 slots — wrong stack for mdeapp
 tags: copilotkit, v2, defer
-mdeapp: defer-v2
+mdeapp: v2
 ---
 
 # Slots

@@ -42,7 +42,7 @@ The current upstream examples index contains 61 consolidated examples across int
 
 ## CopilotKit — MDE-specific rule
 
-Current MDE packages are pinned to `1.55.2`, while React application code uses `@copilotkit/react-core/v2`.
+Current MDE packages are pinned to the exact aligned versions in `package.json`, while React application code uses `@copilotkit/react-core/v2`.
 
 Do not copy code from current upstream examples blindly. Current upstream examples may target newer APIs/runtime wiring. Before adapting any example:
 

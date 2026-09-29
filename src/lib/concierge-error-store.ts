@@ -1,9 +1,10 @@
 /** Module-level store for concierge RUN_ERROR signals.
  *
  * CopilotKit's ToastProvider suppresses bannerError in production (enabled=false when
- * not localhost). Wiring onError at <CopilotKit> level is the only reliable cross-env
- * way to detect stream failures. This tiny store bridges that callback to UI subscribers
- * via useSyncExternalStore, avoiding setState-in-effect and ref-read-in-render rules.
+ * not localhost). Wiring onError at the CopilotKit provider boundary is the only reliable
+ * cross-env way to detect stream failures. This tiny store bridges that callback to UI
+ * subscribers via useSyncExternalStore, avoiding setState-in-effect and ref-read-in-render
+ * rules.
  */
 
 let _errorVersion = 0;

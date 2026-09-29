@@ -543,7 +543,7 @@ Research refreshed on 2026-06-04. Scores reflect fit for mdeai, not general popu
 
 | Repo/Resource | Why Use It | What To Copy | What Not To Copy | Score |
 |---|---|---|---|---:|
-| https://github.com/CopilotKit/CopilotKit | Current agent UI stack; docs mention generative UI, shared state, HITL | Product-card rendering, `useAgent`, actions, generative UI | Do not upgrade from pinned v1.55.2 without testing | 90 |
+| https://github.com/CopilotKit/CopilotKit | Current agent UI stack; docs mention generative UI, shared state, HITL | Product-card rendering, `useAgent`, actions, generative UI | Do not change the certified CopilotKit matrix without testing | 90 |
 | https://docs.copilotkit.ai/ | Integration docs for Mastra, Google ADK, and agent frameworks | AG-UI and agent integration patterns | Do not create a separate chat product | 88 |
 
 ### Mastra

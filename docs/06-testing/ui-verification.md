@@ -73,7 +73,7 @@ Required:
 - [ ] **Persona browser journey** driven end-to-end (Claude in Chrome)
 - [ ] `/api/copilotkit` POST returns **200**
 - [ ] **No POST storm** (request budget respected — cf. `e2e/copilotkit-request-budget.spec.ts`)
-- [ ] **No v1/v2 mixing errors** in console (v2 `/v2` imports only, pinned 1.55.2)
+- [ ] **No v1/v2 mixing errors** in console (v2 `/v2` imports only, pinned to the exact matrix in `package.json`)
 - [ ] **HITL approval tested** if the flow has a `renderAndWaitForResponse` step (confirm `respond()` unblocks the agent)
 - [ ] **`ai_runs` row or telemetry proof** if the task claims a run was recorded (note: `ai_runs` writes in a Next `after()` callback post-response — linger ~20s or poll the DB; an e2e that closes the context immediately drops the row)
 - [ ] Playwright e2e **added or extended**

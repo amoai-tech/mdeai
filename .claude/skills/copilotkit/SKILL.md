@@ -5,7 +5,7 @@ description: >-
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "8a7446186cd3e0d368ec885e61c5913f0918ef5d"
-  verified-package: "@copilotkit/react-core 1.55.2 / @copilotkit/runtime 1.55.2"
+  verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
 
 # CopilotKit — official upstream + MDE overlay

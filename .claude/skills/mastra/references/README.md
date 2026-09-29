@@ -28,7 +28,7 @@ Read **one** reference file per task (plus [`topic-routing.md`](topic-routing.md
 | [`agents-supervisor.md`](agents-supervisor.md) | Supervisor + subagents (Phase 2 defer for mdeapp) |
 | [`multi-agent.md`](multi-agent.md) | Multi-agent concepts and patterns |
 | [`mdeai-concierge.md`](mdeai-concierge.md) | `my-mastra-app` concierge / legacy transport |
-| [`../../copilotkit/references/mastra-bridge.md`](../../copilotkit/references/mastra-bridge.md) | **mdeapp** CopilotKit 1.55.2 Pattern 1 (`getLocalAgents`) |
+| [`../../copilotkit/references/mastra-bridge.md`](../../copilotkit/references/mastra-bridge.md) | MDE CopilotKit v2 Pattern 1 (`getLocalAgents`) |
 | [`copilotkit.md`](copilotkit.md) | Mastra **separate-server** + CopilotKit (not mdeapp default) |
 | [`display-only.md`](display-only.md) | CopilotKit **v2** display-only — **defer** Phase 1 mdeapp |
 | [`headless-ui.md`](headless-ui.md) | CopilotKit **v2** headless — **defer** Phase 1 mdeapp |
@@ -47,4 +47,4 @@ Read **one** reference file per task (plus [`topic-routing.md`](topic-routing.md
 | [`rag-mastra.md`](rag-mastra.md) | RAG overview (Phase 2 defer) |
 | [`rag-pgvector.md`](rag-pgvector.md) | PgVector embedding storage |
 
-**mdeapp rule:** Production agents use **Gemini only** + **CopilotKit 1.55.2 v1** — not OpenAI examples in vendor docs unless explicitly prototyping.
+**mdeapp rule:** Production agents use **Gemini only** + **CopilotKit v2** — not OpenAI examples in vendor docs unless explicitly prototyping.

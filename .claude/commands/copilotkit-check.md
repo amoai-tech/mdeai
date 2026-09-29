@@ -1,44 +1,61 @@
 ---
-description: Verify CopilotKit v1.55.2 hygiene — single mount, no v2 mix, agent name matches Mastra
+description: Verify CopilotKit v2 hygiene — exact aligned pins, /v2 surface only, agent name matches Mastra
 allowed-tools: Bash, Read, Grep, Glob, Agent
 ---
 
-# /copilotkit-check — CopilotKit 1.55.2 hygiene audit
+# /copilotkit-check — CopilotKit v2 hygiene audit
 
-Verify the four invariants of the Phase 1 CopilotKit + Mastra integration:
+Verify the invariants of the MDE CopilotKit + Mastra integration.
 
-1. **One `<CopilotKit>` mount** (in `mdeapp/src/app/layout.tsx`)
-2. **All `@copilotkit/*` packages pinned to `1.55.2`** in `mdeapp/package.json`
-3. **No v2 imports** (`@copilotkit/react`, `@copilotkit/core`, `@copilotkit/agent`, `useFrontendTool`, `BuiltInAgent`, `CopilotKitProvider`)
-4. **`agent={name}` prop matches a key in `Mastra({ agents })`** in `mdeapp/src/mastra/index.ts`
+MDE is **v2-only**: React APIs come from `@copilotkit/react-core/v2` and the runtime route
+targets `@copilotkit/runtime/v2`. The compatibility `<CopilotKit>` export and the bare
+`@copilotkit/runtime` adapter are legacy boundaries being removed by SAN-1357 — they are
+**not** the target architecture.
+
+## Invariants
+
+1. **Exact, aligned pins** in the root `package.json`: `@copilotkit/react-core` and
+   `@copilotkit/runtime` are the same exact version (no `^`, `~`, `>=`, `latest`, `*`).
+   The certified matrix is recorded by SAN-1301 — read it from `package.json`, never hard-code it.
+2. **Approved v2 surface only** — `@copilotkit/react-core/v2` and `@copilotkit/runtime/v2`.
+   The full-rewrite line (`@copilotkit/react`, `@copilotkit/core`, `@copilotkit/agent`,
+   `@copilotkit/sdk-js`) must have 0 matches.
+3. **Legacy boundaries are inventory, not violations.** Report how many provider boundaries
+   still use `<CopilotKit>` and whether the route still imports the bare-runtime adapter.
+   SAN-1357 removes them; do not flag them as errors.
+4. **Agent name matches a Mastra agent key** — parse from source, never assume.
 
 ## Workflow
 
-1. `Read mdeapp/package.json` — list all `@copilotkit/*` entries; flag any not == `1.55.2`.
-2. `Grep -rn "@copilotkit/" mdeapp/src` — flag imports of `@copilotkit/react`, `@copilotkit/core`, `@copilotkit/agent`, `@copilotkit/sdk-js`.
-3. `Grep -rn "<CopilotKit" mdeapp/src` — must find exactly one match in `layout.tsx`.
-4. `Read mdeapp/src/app/layout.tsx` — extract `agent="…"` value (call it `X`).
-5. `Read mdeapp/src/mastra/index.ts` — extract keys of `agents: { … }` (call them `Y`).
-6. Assert `X ∈ Y`. If not, flag the mismatch with line refs.
-7. `Grep -rn "useFrontendTool\|BuiltInAgent\|CopilotKitProvider" mdeapp/src` — must be 0 matches.
+1. `Read package.json` — list every `@copilotkit/*` entry and check exactness + core/runtime alignment.
+2. `Grep -rn "from \"@copilotkit/" src supabase/functions` — flag bare `@copilotkit/react-core` and any full-rewrite package.
+3. `Grep -rn "<CopilotKit" src` — inventory remaining compatibility boundaries (informational).
+4. `Read src/app/api/copilotkit/[[...path]]/route.ts` — report whether it still imports the bare
+   `@copilotkit/runtime` adapter or already uses `@copilotkit/runtime/v2`.
+5. `Read` the provider that owns the active surface and extract its agent id (call it `X`).
+6. `Read src/mastra/index.ts` — extract the keys of `agents: { … }` (call them `Y`).
+7. Assert `X ∈ Y`, with line refs on mismatch.
 
 ## Expected output
 
 ```
-## CopilotKit hygiene — 2026-05-19
+## CopilotKit hygiene — <date>
 
 | Check | Result | Detail |
 |-------|--------|--------|
-| 1.55.2 pin | ✅/❌ | "@copilotkit/react-core": "1.55.2", "@copilotkit/react-ui": "1.55.2", "@copilotkit/runtime": "1.55.2" |
-| v1 import only | ✅/❌ | 0 v2 imports found |
-| Single <CopilotKit> mount | ✅/❌ | mdeapp/src/app/layout.tsx:32 |
-| agent name matches Mastra | ✅/❌ | layout.tsx uses "pingAgent", mastra/index.ts exports {pingAgent} ✅ |
+| exact aligned pins | ✅/❌ | "@copilotkit/react-core": "<v>", "@copilotkit/runtime": "<v>" |
+| approved v2 surface | ✅/❌ | 0 full-rewrite imports found |
+| legacy boundaries | ℹ️ | N provider(s) still on <CopilotKit>; route uses <bare runtime \| runtime/v2> |
+| agent name matches Mastra | ✅/❌ | provider uses "<X>"; mastra/index.ts exports {...} |
 
-(If any ❌, escalate to copilotkit-reviewer subagent for line-level fixes.)
+(If any ❌, escalate to the copilotkit owner for line-level fixes.)
 ```
 
 ## Anti-patterns
 
-- Do not auto-fix v2 import drift here — surface the issue for human decision (might be intentional migration in progress).
-- Do not bump `@copilotkit/*` version — that's an explicit Phase 2 decision.
-- Do not assume the agent name; always parse from `mastra/index.ts` to avoid stale memory.
+- Do not hard-code a CopilotKit release in this check or anywhere else — read `package.json`.
+- Do not flag `@copilotkit/react-core/v2`, `CopilotKitProvider` or `createCopilotRuntimeHandler` as
+  violations; those are the target surface.
+- Do not flag a remaining `<CopilotKit>` boundary as a bug — it is a tracked migration step (SAN-1357).
+- Do not bump `@copilotkit/*` here — a matrix change is a deliberate, reviewed decision.
+- Do not assume the agent name; always parse it from source to avoid stale memory.

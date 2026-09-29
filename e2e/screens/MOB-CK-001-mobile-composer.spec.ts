@@ -7,10 +7,10 @@ import {
   watchCriticalConsoleErrors,
 } from "../helpers/screen-evidence";
 
-// MOB-CK-001 — CopilotKit v1.55.2 mobile composer best practices.
+// MOB-CK-001 — CopilotKit mobile composer best practices.
 //
 // The composer is a custom textarea (CopilotKit's Input is not exported in
-// 1.55.2) reusing CK's class names; the mobile fixes live in globals.css
+// the legacy pinned version) reusing CK's class names; the mobile fixes live in globals.css
 // (overrides CK's bundled defaults) + concierge-chat-input.tsx (input attrs +
 // auto-grow). These assertions prove the fixes are actually applied on disk —
 // the spec previously claimed them "already implemented" while none existed.

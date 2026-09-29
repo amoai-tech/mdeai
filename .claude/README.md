@@ -33,7 +33,7 @@ If skills vanish after clone: `ln -sf .claude/agents/.agents .agents` — then `
 | PreToolUse Edit/Write/MultiEdit | `scan-secrets.mjs` | **blocking** | Block writes containing Stripe/OpenAI/Anthropic/Google/GitHub PAT/known-leaked patterns |
 | PreToolUse Edit/Write/MultiEdit | `no-service-role-in-src.mjs` | **blocking** | Block service-role keys in mdeapp/src/** (per CLAUDE.md hard rule) |
 | PreToolUse Edit/Write/MultiEdit | `gemini-model-pin.mjs` | **blocking** | Block deprecated Gemini models + @ai-sdk/openai + @anthropic-ai/* in mdeapp/src |
-| PreToolUse Edit/Write/MultiEdit | `copilotkit-version-pin.mjs` | **blocking** | Block @copilotkit/* != 1.55.2 in package.json; block v2 imports in src |
+| PreToolUse Edit/Write/MultiEdit | `copilotkit-version-pin.mjs` | **blocking** | Block non-exact or misaligned @copilotkit/react-core & @copilotkit/runtime pins; block full-rewrite imports in src |
 | PreToolUse Bash | `dist-leak-scan.mjs` | **blocking** | Scan .next/ + .vercel/output/ for leaked secrets before deploy commands |
 | PostToolUse Edit/Write/MultiEdit | `lint-edited-ts.mjs` | warning | ESLint just the edited file (no-op if config missing) |
 | PostToolUse Edit/Write/MultiEdit | `typecheck-edited-ts.mjs` | warning | tsc --noEmit for the edited file's project |
@@ -69,7 +69,7 @@ Promote a hook by moving it from `_deferred/` to `hooks/` and adding its entry t
 |---|---|
 | `/verify-floor` | Pre-commit floor: build + audit + tsc + RLS evidence (~60s) |
 | `/supabase-rls-audit` | RLS audit on public schema via Supabase MCP (~15s) |
-| `/copilotkit-check` | Verify CK 1.55.2 pin, single mount, no v2 imports, agent-name consistency (~20s) |
+| `/copilotkit-check` | Verify CK exact+aligned pin, single mount, agent-name consistency (~20s) |
 
 ## Subagents
 

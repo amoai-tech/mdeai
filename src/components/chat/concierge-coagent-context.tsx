@@ -46,7 +46,7 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
     ],
   });
 
-  // Installed @copilotkit/react-core 1.55.2 does not expose useAgent().isReady.
+  // Custom readiness plumbing written before useAgent().isReady existed; re-verify against the installed pins before simplifying.
   // CopilotKitCore is an external mutable store. useSyncExternalStore reads a
   // current snapshot after subscribing, so a cold connecting -> connected
   // transition cannot be lost between render and the subscription effect.

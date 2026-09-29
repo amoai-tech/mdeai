@@ -35,7 +35,7 @@ Search this file for a keyword (`field mask`, `service-role`, `dedupe`, `latency
 
 - ❌ `useCopilotAction` / tool renders defined **inline with no stable ref** → re-registers every render → infinite `POST /api/copilotkit` → `ERR_INSUFFICIENT_RESOURCES`, search dies (Camila gets nothing).
 - ✅ **Module-level** render components (`*ToolRender` in `search-tool-renders.tsx`); ref-stable actions (`focus-map-pin-action.tsx`, `[]` deps); `useSingleEndpoint: true` (`copilotkit-client-props.ts`); catch-all `api/copilotkit/[[...path]]/route.ts` exporting **GET+POST**.
-- ❌ Reviewing v1 code with **v2 docs** — `copilotkit-develop` skill is **v2**; mdeapp is pinned **1.55.2 (v1)**.
+- ❌ Reviewing v1 code with **v2 docs** — `copilotkit-develop` skill is **v2**; MDE also uses the **v2** API surface through the `/v2` entrypoints.
 - ✅ Use `copilotkit-integrations` → `mastra.md`. **Never mix v1/v2 imports.** Verify via CopilotKit MCP if unsure.
 
 ## 2. Mastra — agents & workflows

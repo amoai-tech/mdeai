@@ -199,7 +199,7 @@ erDiagram
 Key tables: `organizations`, `partners` (type, status, completion_score), `locations`, `assets`, `partner_services`, `subscriptions`, `leads`, `bookings`, `campaigns`, `automations`, `conversations`, `messages`, `revenue_ledger`, `partner_drafts`. **RLS-tight**; service-role only in server routes (F13 carve-out). Reuse existing `events`, `rentals`, `venue_signals`.
 
 ## 8. Tech stack
-Next.js 16 · React 19 · Tailwind v4 · shadcn/ui · CopilotKit 1.55.2 · Mastra · Gemini (`gemini-3.5-flash`) · Supabase (PG · pgvector · RLS · realtime) · Maps/Places/grounding · Chatwoot/WhatsApp/email · Postiz · OpenClaw · Stripe. **No non-Gemini LLM SDK in prod.**
+Next.js 16 · React 19 · Tailwind v4 · shadcn/ui · CopilotKit v2 · Mastra · Gemini (`gemini-3.5-flash`) · Supabase (PG · pgvector · RLS · realtime) · Maps/Places/grounding · Chatwoot/WhatsApp/email · Postiz · OpenClaw · Stripe. **No non-Gemini LLM SDK in prod.**
 
 ## 9. MVP roadmap
 Phase 1 MVP → Phase 5 Automation Platform, with features/revenue/dependencies/KPIs: `./13-roadmap.md`. Milestones (M1 Acquire → M5 Expand): `./revenue/07-linear-structure.md`.

@@ -70,7 +70,7 @@ The CopilotKit route at `src/app/api/copilotkit/[[...path]]/route.ts`:
 
 ## Current package/API rule
 
-MDE currently pins CopilotKit packages to `1.55.2`, while application React code uses the `@copilotkit/react-core/v2` API surface.
+MDE pins CopilotKit packages to exact aligned versions in `package.json` (matrix certified by SAN-1301), and application React code uses the `@copilotkit/react-core/v2` API surface.
 
 Do not describe this as “v1-only.” The production rule is:
 
