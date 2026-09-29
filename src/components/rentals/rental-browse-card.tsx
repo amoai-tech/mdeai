@@ -16,17 +16,6 @@ function bedroomLabel(bedrooms: number | null): string {
   return `${bedrooms} BR`;
 }
 
-function openScheduleViewing(url: string) {
-  try {
-    const { protocol } = new URL(url);
-    if (protocol === "http:" || protocol === "https:") {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  } catch {
-    // malformed URL — silently ignore
-  }
-}
-
 const FEATURED_AMENITIES = ["wifi", "workspace", "kitchen", "gym", "pool", "balcony", "parking"];
 
 const AMENITY_LABELS: Record<string, string> = {
@@ -68,6 +57,17 @@ type RentalBrowseCardProps = {
   testId?: string;
   selected?: boolean;
   onSelect?: () => void;
+  /**
+   * SAN-478 — opens the shared viewing modal in place.
+   *
+   * The card must not navigate to a URL for this action. The previous implementation
+   * called `window.open("<listing>/schedule-viewing")`, a route that does not exist, so
+   * every renter who clicked "Schedule viewing" on a browse card landed on a 404. The
+   * detail card and the chat card already open the modal through `useRentalUi()`; this
+   * card now follows the same pattern, which also makes the CTA a truthful signal —
+   * without a handler there is nothing to open, so no CTA is rendered.
+   */
+  onSchedule?: () => void;
 };
 
 function RentalBrowseCardMedia({
@@ -117,6 +117,7 @@ export function RentalBrowseCard({
   testId,
   selected,
   onSelect,
+  onSchedule,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
@@ -127,10 +128,11 @@ export function RentalBrowseCard({
   const chips = topAmenities(rental.amenities);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = `rental-${rental.id}`;
-  // SAN-1349: the viewing action requires BOTH the explicit requestability proof and a URL.
-  // A listing with no canonical owner stays browseable but can never expose a viewing CTA,
-  // so the UI cannot advertise an action the database will reject.
-  const scheduleViewingUrl = rental.can_schedule_viewing ? rental.schedule_viewing_url : null;
+  // SAN-1349: the viewing action requires the explicit requestability proof.
+  // SAN-478: it also requires somewhere to send the click. A listing with no canonical
+  // owner stays browseable but can never expose a viewing CTA, so the UI cannot advertise
+  // an action the database will reject — and with no handler there is nothing to open.
+  const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   const preview = () => onSelect?.();
   const interactive = Boolean(onSelect);
 
@@ -166,7 +168,7 @@ export function RentalBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {scheduleViewingUrl ? (
+          {showScheduleCta ? (
             <Button
               type="button"
               size="sm"
@@ -175,7 +177,7 @@ export function RentalBrowseCard({
               className={cn(buttonVariants({ size: "sm", variant: "default" }))}
               onClick={(e) => {
                 e.stopPropagation();
-                openScheduleViewing(scheduleViewingUrl);
+                onSchedule?.();
               }}
             >
               <Calendar data-icon="inline-start" aria-hidden />
