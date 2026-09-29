@@ -169,6 +169,36 @@ test("CLI exits 0 when the override permits a remote backend", () => {
   assert.ok(run.stderr.includes("ALLOW_PROD_CERTIFICATION is set"));
 });
 
+test("refuses a hostless or non-HTTP value that would otherwise read as local", () => {
+  // Regression: `isLocalHostname` treats an empty host as local because a Postgres connection
+  // string may name a unix socket. Reusing it unguarded let `file:///tmp/evil` — which has no
+  // host — be allowed. A Supabase URL is always HTTP(S) over a real host.
+  for (const url of ["file:///tmp/evil", "file://", "ftp://example.com", "data:text/plain,x"]) {
+    const decision = evaluateE2eBackend(url, env());
+    assert.equal(decision.allowed, false, url);
+    assert.equal(decision.reason, "unparseable", url);
+  }
+});
+
+test("refuses a hostless value even with the override set", () => {
+  const decision = evaluateE2eBackend("file:///tmp/evil", env({ [PROD_CERTIFICATION_OVERRIDE]: "1" }));
+  assert.equal(decision.allowed, false);
+});
+
+test("still allows genuine loopback hosts, including IPv6 and mixed case", () => {
+  for (const url of ["HTTP://LOCALHOST:54321", "http://[::1]:54321", "http://127.1.2.3:54321"]) {
+    assert.equal(evaluateE2eBackend(url, env()).allowed, true, url);
+  }
+});
+
+test("does not treat a loopback-looking remote name as local", () => {
+  for (const url of ["https://localhost.evil.com", "https://127.0.0.1.evil.com"]) {
+    const decision = evaluateE2eBackend(url, env());
+    assert.equal(decision.allowed, false, url);
+    assert.equal(decision.reason, "remote", url);
+  }
+});
+
 test("CLI names the real environment variable, not an internal option name", () => {
   // Regression: the CLI resolves the value before calling the guard, so an earlier revision
   // printed the internal option name ("supabaseUrl") instead of the variable an operator can

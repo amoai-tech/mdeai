@@ -109,9 +109,20 @@ export function evaluateE2eBackend(rawUrl, env = process.env) {
   const override = isTruthyFlag(env?.[PROD_CERTIFICATION_OVERRIDE]);
 
   let hostname;
+  let protocol;
   try {
-    hostname = new URL(url).hostname ?? "";
+    const parsed = new URL(url);
+    hostname = parsed.hostname ?? "";
+    protocol = parsed.protocol;
   } catch {
+    return { allowed: false, reason: "unparseable", override };
+  }
+
+  // A Supabase URL is always HTTP(S) over a real host, so anything else is refused rather than
+  // read as local. This check cannot live in `isLocalHostname`: that predicate deliberately
+  // treats an empty host as local, because a Postgres connection string may legitimately name a
+  // unix socket. Reusing it unguarded let `file:///tmp/x` — which has no host — read as local.
+  if ((protocol !== "http:" && protocol !== "https:") || !hostname) {
     return { allowed: false, reason: "unparseable", override };
   }
 
@@ -199,11 +210,10 @@ export function requireSafeE2eBackend(options = {}) {
  * CLI process, so @next/env may populate that process without affecting the parent shell or the
  * dev server Next.js later starts.
  * @param {string} cwd - project directory containing `.env*` files.
- * @param {Record<string, string | undefined>} ambientEnv - environment before @next/env runs.
  * @returns {{ target: { name: string, value: string } | null, env: Record<string, string | undefined> }}
  *   the winning variable and the effective environment.
  */
-function resolveWithNextEnv(cwd, ambientEnv) {
+function resolveWithNextEnv(cwd) {
   const { combinedEnv } = loadEnvConfig(cwd, true, NEXT_ENV_LOGGER, true);
   return { target: resolveSupabaseTarget(combinedEnv), env: combinedEnv };
 }
@@ -219,7 +229,7 @@ if (invokedDirectly) {
     resolved = { target: resolveSupabaseTarget(ambientEnv), env: ambientEnv };
   } else {
     try {
-      resolved = resolveWithNextEnv(process.cwd(), ambientEnv);
+      resolved = resolveWithNextEnv(process.cwd());
     } catch {
       // If the dotenv files cannot be read, judge only what the caller exported. The remote
       // check still fails closed for an explicitly exported URL.
