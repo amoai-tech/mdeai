@@ -105,10 +105,30 @@ node scripts/pr-agent/evals/capture-review.mjs --pr <number> --out /tmp/review.m
 node scripts/pr-agent/evals/score-review.mjs semver-boundary /tmp/review.md
 ```
 
-The capture step selects the review comment that the recorded `mde-pr-agent-cert … head=<sha>`
-marker certified, so an earlier push's review can never be concatenated with the current one, and it
-exits non-zero when no marker exists for the requested head. `--head <sha>` scores a head that is no
-longer the PR tip.
+The capture step refuses to score a review it cannot tie to the requested head, because the
+certification marker comment is **edited in place**: it accumulates every head it has ever certified,
+so its timestamp is the time of its *last* certification, not this head's. A boundary drawn from it
+alone hands back the newest review whatever head that review belongs to — which is how a canary
+scores the wrong review and reports success. So:
+
+- a marker must match the whole `<!-- mde-pr-agent-cert base=<sha> head=<sha> -->` shape — a bare
+  `head=<sha>` substring inside prose does not certify anything;
+- a comment carrying a review marker (`<!-- pr-agent:review:full -->`) is a review, never a
+  certification record, even when it quotes a marker;
+- the selected review must **record the head it reviewed** (the persistent review state names it).
+  If none of the candidates names the requested head, the command exits non-zero rather than guess.
+
+`--head <sha>` scores a head that is no longer the PR tip. `--allow-unconfirmed-head` opts back into
+the boundary-only guess for a head no review records (incremental reviews carry no state of their
+own); it prints that the head was unconfirmed, and it is never the default.
+
+Verified against the real canary PR — replaying the recorded head returns the exact certified comment:
+
+```bash
+node scripts/pr-agent/evals/capture-review.mjs --pr 163 \
+  --head 283412878f08ed370fb91e8cab58b463962c2059 --out /tmp/canary-replay.md
+cmp /tmp/canary-replay.md scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md
+```
 
 Exit `0` means the case expectation was met; exit `1` prints which part of the contract failed. For a
 `clean` case the expectation is inverted: the command fails when a **material finding** was invented.

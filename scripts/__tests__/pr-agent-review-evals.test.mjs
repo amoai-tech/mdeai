@@ -13,6 +13,7 @@
 // if the scorer is loosened back into a whole-body word match that a fake PASS could satisfy.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +34,11 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixture = (name) => readFileSync(join(REPO_ROOT, "scripts/pr-agent/evals/fixtures", name), "utf8");
 
 /**
- * Recorded production reviews, captured verbatim from the real PR comments.
+ * Recorded production reviews, captured verbatim from the real PR comments — each file is the
+ * comment body byte-for-byte, so a fixture can be re-verified with `gh api`.
+ *   pr-157-v045-recorded.md        <- issue comment 5886176567
+ *   pr-158-v045-recorded.md        <- issue comment 5886206854
+ *   pr-163-canary-v045-recorded.md <- issue comment 5887740888
  * `pr-163` is a real model-generated review of a seeded defect — not synthetic wording.
  */
 const RECORDED = {
@@ -42,6 +47,7 @@ const RECORDED = {
 };
 
 const canaryRecorded = fixture("pr-163-canary-v045-recorded.md");
+const CANARY_HEAD = "283412878f08ed370fb91e8cab58b463962c2059";
 
 /** Build one finding in the structure MDE's review contract requires. */
 const finding = (evidence, { severity = "HIGH", status = "changes_required" } = {}) =>
@@ -409,5 +415,37 @@ describe("SAN-1312 corpus wiring", () => {
       universal.paths.includes("/github/workspace/.claude/skills/code-review/SKILL.md"),
       "the universal code-review skill must load on every review",
     );
+  });
+});
+
+describe("SAN-1312 exact-head capture", () => {
+  it("records the head the canary review's own state advanced to", () => {
+    // The replay procedure pins the exact head with this field; if a future recapture drops it,
+    // capture-review.mjs refuses instead of scoring an unconfirmed review.
+    assert.equal(parseFindings(canaryRecorded).runHeadSha, CANARY_HEAD);
+  });
+
+  it("accepts that a clean review carries no head record, so a clean control is boundary-pinned", () => {
+    // Load-bearing limitation, verified against the recorded production reviews: a review with
+    // findings persists its state (and therefore its head); a clean review persists nothing, so it
+    // can only be captured with --allow-unconfirmed-head and must be reported as unconfirmed.
+    for (const name of Object.values(RECORDED)) {
+      assert.equal(
+        parseFindings(fixture(name)).runHeadSha,
+        null,
+        `${name} unexpectedly records a head — the documented clean-review limitation changed`,
+      );
+    }
+  });
+
+  it("fails with an actionable message when the GitHub CLI is unavailable", () => {
+    const script = join(REPO_ROOT, "scripts/pr-agent/evals/capture-review.mjs");
+    const result = spawnSync(process.execPath, [script, "--pr", "1"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: "/nonexistent-path-for-gh-lookup" },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /GitHub CLI \(`gh`\) is not installed or not on PATH/);
+    assert.match(result.stderr, /gh auth login/);
   });
 });
