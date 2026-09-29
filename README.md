@@ -58,7 +58,7 @@ The versions below are taken from the repository package manifest on this branch
 |---|---|
 | Web app | Next.js `16.2.6`, React `19.2.1`, TypeScript |
 | Styling/UI | Tailwind CSS 4, Base UI, shadcn, Lucide |
-| AI UI/runtime bridge | CopilotKit `1.55.2`, AG-UI |
+| AI UI/runtime bridge | CopilotKit v2 (exact pins in `package.json`), AG-UI |
 | Agent runtime | Mastra beta |
 | Default AI model | Gemini `3.5 Flash` via `@ai-sdk/google` |
 | Data/auth | Supabase |

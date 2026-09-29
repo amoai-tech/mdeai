@@ -1,6 +1,6 @@
 ---
 title: CopilotKit v2 display-only (defer)
-description: Do NOT load for mdeapp Phase 1. CopilotKit v2 useComponent pattern — mdeapp uses 1.55.2 v1 useCopilotAction. Reference only.
+description: CopilotKit v2 `useComponent` pattern. Reference only — MDE is on the v2 surface; verify against the installed pins before use.
 parent: mastra
 impact: LOW
 impactDescription: CK v2 generative UI — wrong stack for mdeapp

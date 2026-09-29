@@ -36,7 +36,7 @@
     },
     {
       "id": 4,
-      "prompt": "Can we copy a CopilotKit main-branch example into our app? We are on @copilotkit/react-core 1.55.2.",
+      "prompt": "Can we copy a CopilotKit main-branch example into our app? We are on the pinned @copilotkit/react-core.",
       "expected_output": "Checks installed package/version and pinned/current official source first; preserves v2 import/runtime contract and refuses blind latest-main copying.",
       "files": [],
       "expectations": [

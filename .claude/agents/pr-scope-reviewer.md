@@ -41,7 +41,7 @@ If intent is ambiguous, say so and review against the dominant theme of the comm
 | 🔴 **Legacy-tree edit** | any path under `/home/sk/mde/**` | frozen tree — only P0 security fixes belong there, never in a feature PR |
 | 🔴 **Secret/env file** | `.env*`, `*credentials*` in the diff | never belongs in a PR; the secret-scan hook guards it, but call it out |
 | 🟠 **Dependency pollution** | `package.json` / `package-lock.json` changed when intent isn't a dep change | silent transitive bumps the reviewer can't see |
-| 🟠 **CopilotKit drift** | `@copilotkit/*` version ≠ `1.55.2` in `package.json` | hard-rule violation — Phase 1 is pinned, v1 only |
+| 🟠 **CopilotKit drift** | `@copilotkit/react-core` / `@copilotkit/runtime` non-exact, misaligned, or the `/v2` surface abandoned | hard-rule violation — matrix certified by SAN-1301 |
 | 🟠 **Off-domain spread** | changed files span ≥2 unrelated top-level areas (e.g. `src/lib/maps/**` *and* `src/app/(auth)/**`) for a single-theme PR | the "PR intended for Maps contains auth changes" classic |
 | 🟠 **Accidental refactor** | large line deltas or mass renames in files unrelated to the stated feature; formatting-only churn mixed with logic | bloats review surface, hides the real change |
 | 🟠 **Stacked branch** | merge-base not on `main`, or commits from another feature present | rebase debt + force-push risk |

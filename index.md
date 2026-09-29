@@ -1,8 +1,8 @@
 # mdeapp — Repository Index
 
-Navigational map of `/home/sk/mdeai/mdeapp/` — the project root for the **mdeai** app (`github.com/amo-tech-ai/mdeapp`). Next.js 16 (App Router, React 19, Turbopack, Tailwind v4) wiring **CopilotKit 1.55.2** → a local **Mastra** agent over **AG-UI**, on **Supabase**. Production AI = **Gemini only**.
+Navigational map of the repository root — the **mdeai** app (`github.com/amoai-tech/mdeai`). Next.js 16 (App Router, React 19, Turbopack, Tailwind v4) wiring **CopilotKit v2** (exact pins in `package.json`) → a local **Mastra** agent over **AG-UI**, on **Supabase**. Production AI = **Gemini only**.
 
-> **Repo split:** the sibling planning/workspace repo `github.com/amo-tech-ai/mdeai` lives one level up at `/home/sk/mdeai/` and `.gitignore`s `mdeapp/`. This repo (mdeapp) is self-contained for build/run/test; planning history lives in the parent. All paths below are **mdeapp-root-relative**.
+> **Repo split:** the sibling planning/workspace repo `github.com/amo-tech-ai/mdeai` lives one level above this checkout and `.gitignore`s `mdeapp/`. This repository is self-contained for build/run/test; planning history lives in the parent. All paths below are **repository-root-relative**.
 
 **Last indexed:** 2026-06-10 (post [PR #158](https://github.com/amo-tech-ai/mdeapp/pull/158) docs restore on `main` @ `6542210`)
 

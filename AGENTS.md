@@ -6,7 +6,7 @@ Portable repository guidance for coding agents working from the current Git chec
 
 - Remote: `https://github.com/amoai-tech/mdeai.git`.
 - Package/app source lives at the repository root.
-- Main stack: Next.js 16, React 19, CopilotKit 1.55.2 v2 APIs, Mastra, Supabase, Gemini, Google Maps, Cloudinary, Playwright, and Vitest.
+- Main stack: Next.js 16, React 19, CopilotKit v2 APIs (exact pins recorded by SAN-1301; see package.json), Mastra, Supabase, Gemini, Google Maps, Cloudinary, Playwright, and Vitest.
 - `.claude/skills/` is the canonical project skill library. `.agents/skills/` mirrors every canonical entry (`SKILL.md`, `references/`, `scripts/`, `evals/`) as **relative symlinks** so other agents resolve the same files. `npm run check:skills` fails on a copy, an absolute link, or a missing entry; if a mirror genuinely needs a different shape, change the checker in the same PR and say why.
 - Linear is the durable task/progress source of truth for substantial SAN work.
 - Never rely on machine-specific absolute paths; resolve the current checkout root dynamically.

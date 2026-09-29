@@ -68,7 +68,7 @@ For TSX/JSX files in `mdeapp/src/**`:
 
 ### 6. Dependency vulnerabilities (P2, advisory)
 
-Read `mdeapp/package.json` overrides. If overrides shrank or were removed, flag
+Read `package.json` overrides. If overrides shrank or were removed, flag
 as a regression vs. `tasks/core/F01b-vulnerability-triage.md`.
 
 ### 7. Open redirect / SSRF (P1)
@@ -88,7 +88,7 @@ Always produce this table — even on a clean review, print the table with one
 |-----|----------|-----------|---------|---------------|
 | P0 | Service-role in src | mdeapp/src/lib/db.ts:14 | imports supabaseAdmin from createClient(…SERVICE_ROLE) | Move to mdeapp/supabase/functions/admin/ |
 | P1 | XSS | mdeapp/src/components/RentalDescription.tsx:42 | dangerouslySetInnerHTML without sanitization | Use DOMPurify or render as text |
-| P2 | Dependency | mdeapp/package.json | prismjs override removed | Restore "prismjs": ">=1.30.0" |
+| P2 | Dependency | package.json | prismjs override removed | Restore "prismjs": ">=1.30.0" |
 
 **Summary:** 1 P0 · 1 P1 · 1 P2.
 **Verdict:** ❌ Block until P0 resolved.

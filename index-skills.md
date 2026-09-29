@@ -1,7 +1,7 @@
 ---
 title: mdeai Skills Index — graded vs PRD v6.0
 date: 2026-06-08
-plan: ./prd.md (CopilotKit 1.55.2 + Mastra + Next.js 16 @ mdeapp root)
+plan: ./prd.md (CopilotKit v2 + Mastra + Next.js 16 @ repo root)
 progress: ../progress/may30.md
 task_router: todo.md § Skill + MCP gate
 audit: ../plan/audit/01-plan-audit.md
@@ -24,7 +24,7 @@ Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/
 | **Per-task routing** | [`todo.md`](./todo.md) § **Skill + MCP gate** — mandatory before Done |
 | **Enforcement** | [`.cursor/rules/mdeai-task-skill-mcp-gate.mdc`](../.cursor/rules/mdeai-task-skill-mcp-gate.mdc) |
 | **Load cap** | **≤5 skills** per task — pick one row below or todo matrix row |
-| **MDE stack** | Next.js 16 + React 19 + CopilotKit **1.55.2 using `/v2` React API entrypoints** + Mastra + Supabase + Gemini + Google Maps |
+| **MDE stack** | Next.js 16 + React 19 + CopilotKit **v2 React API entrypoints** (exact pins in `package.json`) + Mastra + Supabase + Gemini + Google Maps |
 | **Routing rule** | Use the canonical owner directly; `.agents/skills` is compatibility-only |
 | **100% before Done** | Skills read + MCP called + `task-verifier` Evidence Score ≥ **90** (P0) |
 
@@ -69,7 +69,7 @@ Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/
 
 > Historical record only. Do not use this section for current skill routing, ownership, package API selection, or symlink direction; use the current architecture above.
 
-**North star:** App at `/home/sk/mdeai/mdeapp/` from `CopilotKit/examples/integrations/mastra/`. **7 Mastra agents**, 3 workflows, Supabase, Stripe, Maps. CopilotKit **1.55.2** (not v2).
+**North star:** App at the repository root, modelled on `CopilotKit/examples/integrations/mastra/`. **7 Mastra agents**, 3 workflows, Supabase, Stripe, Maps. CopilotKit **v2** (exact pins in `package.json`).
 
 **Layout:** `.claude/skills/` is the canonical skill library. `.agents/skills/` contains compatibility symlinks only.
 
@@ -91,7 +91,7 @@ Canonical per-skill audit scorecard: [`.claude/skills/INDEX.md`](.claude/skills/
 
 | Skill | Score | Path |
 |-------|------:|------|
-| copilotkitV1 | 97 | symlink — **v1 hooks for mdeapp** (1.55.2) |
+| copilotkitV1 | 97 | symlink — **legacy v1 hooks** (retired; MDE is v2-only) |
 | copilotkit | 98 | `.agents` → symlink `.claude` |
 | copilotkit-setup | 96 | symlink |
 | copilotkit-integrations | 98 | symlink — **Mastra wiring** |
@@ -207,7 +207,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 
 | PRD requirement | Skill status | Gap |
 |-----------------|-------------|-----|
-| CopilotKit 1.55.2 + Mastra | 🟢 `copilotkit` + `mastra` | Current app code uses `@copilotkit/react-core/v2` entrypoints; verify the exact installed API surface before changing provider/hooks |
+| CopilotKit v2 + Mastra | 🟢 `copilotkit` + `mastra` | Current app code uses `@copilotkit/react-core/v2` entrypoints; verify the exact installed API surface before changing provider/hooks |
 | Supabase reuse | 🟢 supabase | Edge fn forensic W5 — use symlink + MCP |
 | Gemini **`3.5-flash`** | 🟢 gemini + MCP | CLAUDE.md registry; CTI-004/011 use `@ai-sdk/google` |
 | Maps W5–W6 | 🟢 maps | Remove `google-maps-api` / `react-google-maps` from default load |
@@ -227,7 +227,7 @@ Includes: `ai-building-chatbots-vendor`, `better-chatbot-vendor`, `google-maps-s
 3. Route work through the canonical owner names in the current architecture table; do not resurrect retired or superseded aliases.
 4. Keep `real-estate` as the single canonical real-estate owner; do not recreate retired aliases.
 5. Verify skill changes with symlink integrity, routing-contract tests, session-start tests, and `git diff --check`.
-6. For CopilotKit, inspect the installed package and imports before changing APIs; this repo currently uses `@copilotkit/react-core/v2` entrypoints on package `1.55.2`.
+6. For CopilotKit, inspect the installed package and imports before changing APIs; this repo currently uses `@copilotkit/react-core/v2` entrypoints on the exact pinned package.
 
 ---
 
