@@ -11,7 +11,18 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const SRC = path.join(ROOT, "src");
-const COPILOTKIT_PIN = "1.55.2";
+// SAN-1301 · MDE-CK-UPGRADE-001: the CopilotKit target is deliberately NOT hard-coded here.
+// `package.json` selects one exact version; this gate only asserts that the two packages MDE
+// ships stay mutually aligned and exactly pinned, so a certified upgrade does not need to edit
+// this file. Other @copilotkit/* packages are NOT required to share this version — the no-v1
+// scanner and dependency-cruiser own the legacy-package contract.
+const COPILOTKIT_ALIGNED_PACKAGES = ["@copilotkit/react-core", "@copilotkit/runtime"];
+// Exact SemVer 2.0.0 only — deliberately not a range. Rejects range operators ("^", "~", ">="),
+// wildcards ("1.x", "*"), dist-tags ("latest", "next"), partial versions ("1", "1.2"), leading
+// zeros ("01.2.3", "1.2.3-01") and empty dot-separated identifiers ("1.2.3-a..b"). A well-formed
+// prerelease or build suffix is still an exact pin, so those are accepted.
+const EXACT_VERSION =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const DEPRECATED_GEMINI = [
   "gemini-2.0",
   "gemini-2.5",
@@ -67,13 +78,34 @@ function checkAgentNames() {
   }
 }
 
-/** 2 — CopilotKit pin (1.55.2) + no BARE v1 imports in app/components (v2 = /v2 subpath only, post SAN-886 · CK-V2-000) */
+/** 2 — CopilotKit aligned-pair exact pinning (target lives in package.json) + no BARE v1 imports */
 function checkCopilotKitPin() {
   const pkg = JSON.parse(read("package.json"));
-  for (const [dep, ver] of Object.entries(pkg.dependencies ?? {})) {
-    if (dep.startsWith("@copilotkit/") && ver !== COPILOTKIT_PIN) {
-      failures.push(`${dep} pinned ${ver}, expected ${COPILOTKIT_PIN}`);
+  const deps = pkg.dependencies ?? {};
+
+  const versions = new Map();
+  for (const dep of COPILOTKIT_ALIGNED_PACKAGES) {
+    const ver = deps[dep];
+    if (ver === undefined) {
+      failures.push(`${dep} is missing from dependencies — MDE requires it`);
+      continue;
     }
+    versions.set(dep, ver);
+    if (!EXACT_VERSION.test(String(ver))) {
+      failures.push(
+        `${dep} is "${ver}" — must be an exact version, not a range (^, ~, latest, *)`,
+      );
+    }
+  }
+
+  // Pair-only rule: these two are published and consumed together, so they must match exactly.
+  // Other @copilotkit/* packages may legitimately version independently.
+  const core = versions.get("@copilotkit/react-core");
+  const runtime = versions.get("@copilotkit/runtime");
+  if (core !== undefined && runtime !== undefined && core !== runtime) {
+    failures.push(
+      `@copilotkit/react-core (${core}) and @copilotkit/runtime (${runtime}) must stay version-aligned`,
+    );
   }
 
   const scanRoots = [path.join(SRC, "app"), path.join(SRC, "components")];
