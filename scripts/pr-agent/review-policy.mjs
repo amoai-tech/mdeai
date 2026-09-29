@@ -50,17 +50,33 @@ export function hasCertificationForHead(body, headSha) {
 }
 
 /**
+ * The standalone fallback review PR-Agent publishes when it cannot update the persistent comment.
+ * It is a real review result — `verifyReviewResult` accepts it as fresh — but it carries no review
+ * token and no persistent state, so it records no head of its own.
+ */
+export function isStandaloneReview(body) {
+  return (
+    (body ?? "").includes("## Standalone PR Review") &&
+    (body ?? "").includes("PR-Agent could not safely update the persistent review") &&
+    (body ?? "").includes("## MDE PR Review")
+  );
+}
+
+/**
  * Select the single review comment that belongs to `headSha`, or refuse.
  *
  * The marker comment is a single comment that is *edited in place*, so it accumulates every head it
  * has ever certified and its timestamp is the time of its **last** certification — not this head's.
  * A boundary derived from it therefore hands back the newest review whatever head that review
- * belongs to. So the certification marker only narrows the candidate set; the authoritative pin is
- * the review's own record of the head it reviewed, read through `headShaOf`.
+ * belongs to, which is how a canary scores the wrong review.
  *
- * `allowUnconfirmedHead` opts back into the boundary-only guess. It exists for heads that cannot be
- * confirmed (see the README); it is never the default, because an unconfirmed guess is how a
- * canary scores the wrong review and reports success.
+ * Identity is therefore established from the strongest available evidence, and the basis is
+ * reported in `headEvidence`:
+ *
+ *   - `review-recorded` — the review's own persistent state names this head (`headShaOf`);
+ *   - `newest-certified-head` — nothing names the head, but this head is the **last** marker in the
+ *     newest certification comment, so no later certification exists to confuse the boundary with;
+ *   - `unconfirmed` — neither holds, and only `allowUnconfirmedHead` will return a guess.
  *
  * @param {object} options
  * @param {unknown[]} options.comments
@@ -68,7 +84,8 @@ export function hasCertificationForHead(body, headSha) {
  * @param {string[]} options.reviewMarkers
  * @param {(body: string) => (string | null | undefined)} [options.headShaOf] reads a review's own
  *   record of the head it reviewed; absent means no review can confirm a head.
- * @param {boolean} [options.allowUnconfirmedHead]
+ * @param {boolean} [options.allowUnconfirmedHead] trust the boundary even when this head is not the
+ *   newest certification. Only for an operator who holds separate proof; never a default.
  */
 export function selectCertifiedReviewForHead({
   comments,
@@ -82,17 +99,23 @@ export function selectCertifiedReviewForHead({
   const isBot = (comment) => comment?.user?.login === "github-actions[bot]";
   const reviewTokens = reviewMarkers ?? [];
   const carriesReviewMarker = (body) => reviewTokens.some((token) => body.includes(token));
+  const isReview = (body) => carriesReviewMarker(body) || isStandaloneReview(body);
   // A review comment is never a certification record, even when it quotes a marker. The marker
   // comment names heads while carrying no review token; without this check a review that quoted a
   // marker could bound the candidate window — and be returned — as if it were the certification.
   const markers = (comments ?? []).filter(
     (comment) =>
       isBot(comment) &&
-      !carriesReviewMarker(comment.body ?? "") &&
+      !isReview(comment.body ?? "") &&
       hasCertificationForHead(comment.body ?? "", headSha),
   );
   if (markers.length === 0) {
-    return { comment: null, headConfirmed: false, reason: `no recorded review marker for head ${headSha}` };
+    return {
+      comment: null,
+      headConfirmed: false,
+      headEvidence: "none",
+      reason: `no recorded review marker for head ${headSha}`,
+    };
   }
   const newest = (list) =>
     list.reduce((left, right) =>
@@ -100,45 +123,60 @@ export function selectCertifiedReviewForHead({
     );
   const marker = newest(markers);
   const markerTime = new Date(marker.updated_at).getTime();
+  // `appendCertification` appends, so the last marker in the newest certification comment is the
+  // most recent certification. A boundary is only sound for that head.
+  const latestCertifiedHead = certificationMarkers(marker.body ?? "").at(-1)?.headSha ?? null;
   const candidates = (comments ?? []).filter(
     (comment) =>
-      isBot(comment) &&
-      carriesReviewMarker(comment.body ?? "") &&
-      new Date(comment.updated_at).getTime() <= markerTime,
+      isBot(comment) && isReview(comment.body ?? "") && new Date(comment.updated_at).getTime() <= markerTime,
   );
   if (candidates.length === 0) {
     return {
       comment: null,
       headConfirmed: false,
+      headEvidence: "none",
       reason: `no review comment published before the marker for head ${headSha}`,
     };
   }
   const named = candidates.filter(
     (comment) => String(headOf(comment.body ?? "") ?? "").toLowerCase() === headSha,
   );
-  if (named.length === 0) {
-    if (!allowUnconfirmedHead) {
-      return {
-        comment: null,
-        headConfirmed: false,
-        consideredReviews: candidates.length,
-        reason: `no review among ${candidates.length} candidate(s) records head ${headSha}; the marker lists it, but no review names it — capture the full review for this head instead of guessing`,
-      };
-    }
+  if (named.length > 0) {
+    return {
+      comment: newest(named),
+      marker,
+      headConfirmed: true,
+      headEvidence: "review-recorded",
+      consideredReviews: candidates.length,
+      reason: `review records head ${headSha}${named.length > 1 ? ` (${named.length} did; newest selected)` : ""}`,
+    };
+  }
+  if (latestCertifiedHead === headSha) {
     return {
       comment: newest(candidates),
       marker,
-      headConfirmed: false,
+      headConfirmed: true,
+      headEvidence: "newest-certified-head",
       consideredReviews: candidates.length,
-      reason: "selected from the marker boundary only; no review records this head (unconfirmed)",
+      reason: `head ${headSha} is the newest certification, so the boundary is unambiguous; the review carries no head of its own`,
+    };
+  }
+  if (!allowUnconfirmedHead) {
+    return {
+      comment: null,
+      headConfirmed: false,
+      headEvidence: "unconfirmed",
+      consideredReviews: candidates.length,
+      reason: `no review among ${candidates.length} candidate(s) records head ${headSha}, and it is not the newest certification — refusing to guess`,
     };
   }
   return {
-    comment: newest(named),
+    comment: newest(candidates),
     marker,
-    headConfirmed: true,
+    headConfirmed: false,
+    headEvidence: "unconfirmed",
     consideredReviews: candidates.length,
-    reason: `review records head ${headSha}${named.length > 1 ? ` (${named.length} did; newest selected)` : ""}`,
+    reason: `selected from the marker boundary only; not the newest certification and no review records head ${headSha} (unconfirmed)`,
   };
 }
 
@@ -182,10 +220,7 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
     if (!isBotComment(comment) || new Date(comment.updated_at).getTime() < startedAt) return false;
     const body = comment.body ?? "";
     const canonical = body.includes(expectedMarker);
-    const standalone =
-      body.includes("## Standalone PR Review") &&
-      body.includes("PR-Agent could not safely update the persistent review") &&
-      body.includes("## MDE PR Review");
+    const standalone = isStandaloneReview(body);
     const incrementalSkipped =
       reviewCommand === "/review -i" &&
       priorSameBaseCertification &&

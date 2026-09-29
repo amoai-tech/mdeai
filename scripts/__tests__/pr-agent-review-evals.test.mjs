@@ -49,6 +49,17 @@ const RECORDED = {
 const canaryRecorded = fixture("pr-163-canary-v045-recorded.md");
 const CANARY_HEAD = "283412878f08ed370fb91e8cab58b463962c2059";
 
+/**
+ * The post-merge canary run: PR #163 head 7d86a2a58, reviewed by main carrying this policy.
+ * `postMergeReview` is the review comment body byte-for-byte; the two sources are
+ * `scripts/check-agui-pin.mjs` and `scripts/__tests__/agui-pin.test.mjs` at that same head, which
+ * are the only files the PR changed.
+ */
+const postMergeReview = fixture("pr-163-canary-postmerge-recorded.md");
+const postMergeSource =
+  fixture("pr-163-canary-postmerge-source.mjs") + "\n" + fixture("pr-163-canary-postmerge-test.mjs");
+const postMergeCheckOnly = fixture("pr-163-canary-postmerge-source.mjs");
+
 /** Build one finding in the structure MDE's review contract requires. */
 const finding = (evidence, { severity = "HIGH", status = "changes_required" } = {}) =>
   [`Severity: ${severity}`, "Problem: a defect the reviewer asserts", evidence, `Status: ${status}`].join("\n");
@@ -200,6 +211,34 @@ describe("SAN-1312 recorded baselines", () => {
     // Neither finding is labelled, so nothing may be claimed as material.
     assert.deepEqual(result.materialFindings, []);
     assert.equal(result.runHeadSha, "283412878f08ed370fb91e8cab58b463962c2059");
+  });
+
+  it("scores the post-merge canary review as the behavioural proof", () => {
+    // Captured from PR #163 head 7d86a2a58 (comment 5888541563) — the first PR-Agent review
+    // produced after this policy reached main. Unlike the earlier canary run, this one found the
+    // real defect and quoted the code that is actually in the file.
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], postMergeReview, {
+      sourceText: postMergeSource,
+    });
+
+    assert.equal(result.detected, true, "the real boundary defect must be credited");
+    assert.equal(result.blockingVerdict, true, "the review recommended changes");
+    assert.deepEqual(result.citedExamples, ["01.2.3", "1.2.3-alpha..1", "1.2.3+build."]);
+    assert.deepEqual(result.grounding.filter((entry) => entry.grounded === false), []);
+  });
+
+  it("keeps the post-merge canary grounded only against the files it reviewed", () => {
+    // The review quotes the checker and the test; grounding against one file alone would report a
+    // false UNGROUNDED for the quotes that live in the other changed file.
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], postMergeReview, {
+      sourceText: postMergeCheckOnly,
+    });
+    const ungrounded = result.grounding.filter((entry) => entry.grounded === false);
+    assert.equal(result.detected, true, "crediting must not depend on the grounding source set");
+    assert.ok(
+      ungrounded.some((entry) => entry.ungrounded.some((fragment) => fragment.includes("should be rejected"))),
+      "the test-file quotes are absent from the checker alone, so they are reported — hence the CLI takes every changed file",
+    );
   });
 });
 

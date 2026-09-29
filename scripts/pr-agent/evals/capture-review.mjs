@@ -102,7 +102,7 @@ function main() {
     process.stdout.write(body);
   }
   console.error(
-    `review comment ${selection.comment.id}; ${selection.consideredReviews} candidate review(s) considered; marker ${selection.marker.id}; ${selection.reason}`,
+    `review comment ${selection.comment.id}; ${selection.consideredReviews} candidate review(s) considered; marker ${selection.marker.id}; head ${headSha} ${selection.headConfirmed ? "confirmed" : "UNCONFIRMED"} via ${selection.headEvidence}; ${selection.reason}`,
   );
 }
 

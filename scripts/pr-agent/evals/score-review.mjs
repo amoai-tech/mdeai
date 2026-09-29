@@ -370,22 +370,29 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
 // Exits 0 when the case expectation is met, 1 otherwise, so the same command works in CI.
 async function runCli() {
   const { CASES_BY_ID } = await import("./cases.mjs");
-  const [caseId, reviewPath] = process.argv.slice(2);
+  const [caseId, reviewPath, ...sourcePaths] = process.argv.slice(2);
   const caseDef = CASES_BY_ID[caseId];
   if (!caseDef) {
     console.error(`unknown case: ${caseId}\nknown cases: ${Object.keys(CASES_BY_ID).join(", ")}`);
     process.exit(1);
   }
   if (!reviewPath) {
-    console.error("usage: score-review.mjs <case-id> <review-body-file>");
+    console.error(
+      "usage: score-review.mjs <case-id> <review-body-file> [source-file ...]\n" +
+        "  source-file overrides the case's anchor file. Pass EVERY file the review actually read\n" +
+        "  (a PR's changed files, not just one) so a finding quoting a second changed file is not\n" +
+        "  reported as ungrounded.",
+    );
     process.exit(1);
   }
 
   const { readFileSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const sourceText = caseDef.sourceFile
-    ? readFileSync(join(process.cwd(), caseDef.sourceFile), "utf8")
-    : null;
+  const { resolve } = await import("node:path");
+  const resolvedSources = sourcePaths.length > 0 ? sourcePaths : [caseDef.sourceFile].filter(Boolean);
+  const sourceText =
+    resolvedSources.length > 0
+      ? resolvedSources.map((file) => readFileSync(resolve(process.cwd(), file), "utf8")).join("\n")
+      : null;
   const result = scoreReview(caseDef, readFileSync(reviewPath, "utf8"), { sourceText });
   const verdict = caseDef.kind === "clean" ? !result.falsePositive : result.detected;
   process.stdout.write(`case=${result.id} kind=${result.kind} verdict=${verdict ? "PASS" : "FAIL"}\n`);

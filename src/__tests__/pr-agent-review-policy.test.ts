@@ -17,6 +17,19 @@ const REVIEW_MARKERS = ["<!-- pr-agent:review:full -->", "<!-- pr-agent:review:i
 const REVIEW_FULL = "## MDE PR Review\n\n<!-- pr-agent:review:full -->\n\nbody";
 const REVIEW_INCREMENTAL = "## Incremental MDE PR Review\n\n<!-- pr-agent:review:incremental -->\n\nbody";
 
+/** The fallback PR-Agent publishes when it cannot update the persistent review: no token, no head. */
+function standaloneReview(body: string) {
+  return [
+    "## Standalone PR Review",
+    "",
+    "_PR-Agent could not safely update the persistent review. This standalone result will not replace the canonical review._",
+    "",
+    "## MDE PR Review 🔍",
+    "",
+    body,
+  ].join("\n");
+}
+
 function comment(body: string, updatedAt: string, login = "github-actions[bot]") {
   return { body, updated_at: updatedAt, user: { login } };
 }
@@ -89,10 +102,13 @@ describe("PR-Agent certified-review selection for a head", () => {
     expect(selection.comment).toBeNull();
   });
 
-  it("refuses to guess a head the review does not record", () => {
-    // The accumulating marker lists HEAD_A, but no review names it — so the boundary cannot say
-    // which review belongs to HEAD_A, and a guess would score a review for a different head.
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
+  it("refuses to guess a head that is not the newest certification", () => {
+    // HEAD_A is certified, but a later certification for HEAD_C exists. The boundary now belongs to
+    // HEAD_C, so nothing ties a review to HEAD_A — and a guess would score a different head's review.
+    const marker = appendCertification(
+      appendCertification("", { baseSha: BASE_A, headSha: HEAD_A }),
+      { baseSha: BASE_A, headSha: "d".repeat(40) },
+    );
     const selection = selectCertifiedReviewForHead({
       comments: [
         comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
@@ -103,7 +119,64 @@ describe("PR-Agent certified-review selection for a head", () => {
     });
     expect(selection.comment).toBeNull();
     expect(selection.headConfirmed).toBe(false);
-    expect(selection.reason).toContain("no review among 1 candidate(s) records head");
+    expect(selection.headEvidence).toBe("unconfirmed");
+    expect(selection.reason).toContain("not the newest certification");
+  });
+
+  it("trusts the boundary when the head is the newest certification", () => {
+    // The last marker is the most recent certification, so no later certification can confuse it.
+    // This is the live canary case: a standalone review that carries no head of its own.
+    const marker = appendCertification(
+      appendCertification("", { baseSha: BASE_A, headSha: "d".repeat(40) }),
+      { baseSha: BASE_B, headSha: HEAD_A },
+    );
+    const selection = selectCertifiedReviewForHead({
+      comments: [
+        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
+        comment(standaloneReview("a real finding"), "2026-09-20T00:30:00Z"),
+        comment(marker, "2026-09-20T00:31:00Z"),
+      ],
+      headSha: HEAD_A,
+      reviewMarkers: REVIEW_MARKERS,
+    });
+    expect(selection.comment?.updated_at).toBe("2026-09-20T00:30:00Z");
+    expect(selection.headConfirmed).toBe(true);
+    expect(selection.headEvidence).toBe("newest-certified-head");
+  });
+
+  it("recognises a standalone review as a review, not as a certification record", () => {
+    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
+    const review = standaloneReview(`quoted marker:\n<!-- mde-pr-agent-cert base=${BASE_A} head=${HEAD_A} -->`);
+    const selection = selectCertifiedReviewForHead({
+      comments: [
+        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
+        comment(review, "2026-09-20T00:20:00Z"),
+        comment(marker, "2026-09-20T00:21:00Z"),
+      ],
+      headSha: HEAD_A,
+      reviewMarkers: REVIEW_MARKERS,
+    });
+    expect(selection.comment?.body).toBe(review);
+    expect(selection.marker?.body).toBe(marker);
+  });
+
+  it("only guesses an older head when the operator explicitly allows it", () => {
+    const marker = appendCertification(
+      appendCertification("", { baseSha: BASE_A, headSha: HEAD_A }),
+      { baseSha: BASE_A, headSha: "d".repeat(40) },
+    );
+    const selection = selectCertifiedReviewForHead({
+      comments: [
+        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
+        comment(marker, "2026-09-20T00:31:00Z"),
+      ],
+      headSha: HEAD_A,
+      reviewMarkers: REVIEW_MARKERS,
+      allowUnconfirmedHead: true,
+    });
+    expect(selection.comment?.body).toBe(REVIEW_FULL);
+    expect(selection.headConfirmed).toBe(false);
+    expect(selection.headEvidence).toBe("unconfirmed");
   });
 
   it("pins the exact head instead of the newest review under the marker", () => {
