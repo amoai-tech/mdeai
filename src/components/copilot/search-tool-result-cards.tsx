@@ -243,6 +243,8 @@ export function RentalResults({
     neighborhood: string;
     nightly_price?: number;
     price_monthly?: number;
+    /** The listing's own currency; the search envelope already carries it. */
+    currency?: string;
     bedrooms?: number;
     photo_url?: string;
     image_url?: string;
@@ -327,6 +329,7 @@ export function RentalResults({
               neighborhood={r.neighborhood}
               nightly_price={r.nightly_price}
               price_monthly={r.price_monthly}
+              currency={r.currency}
               bedrooms={r.bedrooms}
               photoUrl={r.photo_url ?? r.image_url}
               wifi={r.wifi}

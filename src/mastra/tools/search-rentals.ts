@@ -12,7 +12,12 @@ export const rentalSchema = z.object({
   title: z.string(),
   neighborhood: z.string(),
   nightly_price: z.number(),
-  currency: z.literal('USD'),
+  /**
+   * The listing's own currency (`apartments.currency`). Previously a `z.literal('USD')`,
+   * which silently relabelled every COP listing — the currency owner onboarding writes — as
+   * USD, making a 2,400,000 COP monthly rent read as a USD figure.
+   */
+  currency: z.string(),
   bedrooms: z.number(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
@@ -82,8 +87,18 @@ export interface ApartmentRow {
   title: string;
   neighborhood: string;
   bedrooms: number | null;
-  price_daily: number;
+  /**
+   * Genuinely nullable in the database. It was declared non-null here, which is what let
+   * `Number(null) === 0` pass unnoticed and turn a monthly-only listing into "$0/night".
+   * `price_monthly` is the column the owner onboarding flow actually writes.
+   */
+  price_daily: number | null;
   price_monthly: number | null;
+  /**
+   * The apartment's own currency. `NOT NULL DEFAULT 'USD'` in the database, but selected
+   * defensively so a projection that forgets the column cannot silently claim USD.
+   */
+  currency: string | null;
   wifi_speed: number | null;
   amenities: string[] | null;
   images: string[] | null;
@@ -181,14 +196,86 @@ export function isRentalRequestable(
   return true;
 }
 
+/**
+ * The nightly price used for display, sorting and budget comparison.
+ *
+ * Listings created through the product's own owner onboarding carry **only**
+ * `price_monthly` (`src/lib/rentals/submit-broker-onboarding.ts`). Requiring `price_daily`
+ * therefore excluded every listing the product could actually create.
+ *
+ * This derives the same indicative nightly the intelligent search path already uses
+ * (`intelligence-rental-search.ts`), so both paths agree on what a monthly listing costs
+ * per night. It never invents a price: it is fully determined by the owner's own monthly
+ * figure, and a row with neither price yields `0`.
+ */
+export function nightlyPriceFrom(row: {
+  price_daily?: number | string | null;
+  price_monthly?: number | string | null;
+}): number {
+  const daily = row.price_daily == null ? null : Number(row.price_daily);
+  if (daily != null && Number.isFinite(daily)) return daily;
+  const monthly = row.price_monthly == null ? null : Number(row.price_monthly);
+  if (monthly != null && Number.isFinite(monthly)) return Math.round(monthly / 30);
+  return 0;
+}
+
+/**
+ * The currency `maxPricePerNight` is expressed in.
+ *
+ * The tool schema documents it as "USD per night" and the short-stay catalogue is priced in
+ * USD. There is no exchange-rate source anywhere in this repository, so a budget can only be
+ * applied to a listing priced in the same currency.
+ */
+export const NIGHTLY_BUDGET_CURRENCY = 'USD';
+
+/**
+ * The monthly ceiling equivalent to `Math.round(monthly / 30) <= nightlyCap`.
+ *
+ * Display derives the nightly price by **rounding**, so a raw `monthly <= cap * 30` filter
+ * disagrees with the label at the boundary: 2414 / 30 rounds to 80, inside an $80 cap, but
+ * `2414 <= 2400` is false — the listing would be filtered out while its label said it
+ * qualified. `round(x) <= cap` is `x < cap + 0.5`, so for whole units the largest qualifying
+ * monthly price is `cap * 30 + 14`.
+ */
+export function monthlyCeilingForNightlyCap(nightlyCap: number): number {
+  return nightlyCap * 30 + 14;
+}
+
+/**
+ * The `or=(...)` predicate deciding which apartments a search may return.
+ *
+ * Always requires a price. When a nightly budget is supplied it is applied **only to listings
+ * in the budget's own currency**. A listing priced in another currency — the COP monthly
+ * inventory that owner onboarding creates — is kept rather than compared, because
+ * `2,400,000 COP <= 2400` is not a budget check, it is a unit error that silently deletes real
+ * supply. The card shows that listing's own currency, so the renter can judge it themselves.
+ */
+export function rentalPricePredicate(maxNightly: number | null): string {
+  if (maxNightly == null) {
+    return 'price_daily.not.is.null,price_monthly.not.is.null';
+  }
+  const ceiling = monthlyCeilingForNightlyCap(maxNightly);
+  const sameCurrency = `currency.eq.${NIGHTLY_BUDGET_CURRENCY}`;
+  const otherCurrency = `currency.neq.${NIGHTLY_BUDGET_CURRENCY}`;
+  return [
+    // Comparable currency? No — keep it, and never compare it to the budget.
+    `and(${otherCurrency},price_daily.not.is.null)`,
+    `and(${otherCurrency},price_monthly.not.is.null)`,
+    // Same currency: the budget applies to the stored nightly price, or to a monthly-only row.
+    `and(${sameCurrency},price_daily.not.is.null,price_daily.lte.${maxNightly})`,
+    `and(${sameCurrency},price_daily.is.null,price_monthly.not.is.null,price_monthly.lte.${ceiling})`,
+  ].join(',');
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
+  const nightlyPrice = nightlyPriceFrom(r);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
     neighborhood: r.neighborhood,
-    nightly_price: Number(r.price_daily),
-    currency: 'USD' as const,
+    nightly_price: nightlyPrice,
+    currency: (r.currency ?? 'USD').toUpperCase(),
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
@@ -206,7 +293,7 @@ export function rowToRental(r: ApartmentRow): Rental {
       parking_included: r.parking_included,
       minimum_stay_days: r.minimum_stay_days,
       wifi_speed: r.wifi_speed,
-      price_daily: Number(r.price_daily),
+      price_daily: nightlyPrice,
     }),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
@@ -274,17 +361,26 @@ async function searchRentalsFromSupabase(
   }
 
   const limit = query.limit ?? 8;
+  // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
+  const maxNightly =
+    typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
       { count: 'exact' },
     )
     .eq('status', 'active')
-    .not('price_daily', 'is', null)
-    .order('price_daily', { ascending: true })
+    .or(rentalPricePredicate(maxNightly))
+    // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
+    // every nightly-priced row and two different currencies are never meaningfully ordered
+    // against each other. Comparing 80,000 COP to 78 USD is the same unit error the predicate
+    // above refuses to make, so a normalised sort would be a lie dressed as a feature.
+    // Upgrade path: once a canonical currency (or an FX source) exists, order by a single
+    // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
+    .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
 
   if (query.neighborhood) {
@@ -292,9 +388,6 @@ async function searchRentalsFromSupabase(
   }
   if (typeof query.minBedrooms === 'number') {
     q = q.gte('bedrooms', query.minBedrooms);
-  }
-  if (typeof query.maxPricePerNight === 'number') {
-    q = q.lte('price_daily', query.maxPricePerNight);
   }
 
   // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.

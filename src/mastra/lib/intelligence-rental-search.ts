@@ -9,7 +9,9 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  nightlyPriceFrom,
   rentalAvailabilityDate,
+  rentalPricePredicate,
   rowToRental,
   sortForMonthlyStay,
 } from "../tools/search-rentals";
@@ -30,6 +32,8 @@ type HybridListingRow = {
   neighborhood: string | null;
   city: string | null;
   price_monthly: number | string | null;
+  /** The apartment's own currency, so a COP listing is never rendered as USD. */
+  currency: string | null;
   bedrooms: number | null;
   bathrooms: number | string | null;
   rating: number | string | null;
@@ -196,17 +200,18 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
-      .not("price_daily", "is", null)
-      .order("price_daily", { ascending: true })
+      // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
+      // which listings are priced or how a nightly budget applies across currencies.
+      .or(rentalPricePredicate(
+        typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
+      ))
+      .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
-    if (typeof query.maxPricePerNight === "number") {
-      q = q.lte("price_daily", query.maxPricePerNight);
-    }
     // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
     // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
     const today = rentalAvailabilityDate();
@@ -227,6 +232,7 @@ export async function searchRentalsIntelligent(
       neighborhood: r.neighborhood as string | null,
       city: null,
       price_monthly: (r.price_monthly as number | string | null) ?? null,
+      currency: (r.currency as string | null) ?? null,
       bedrooms: r.bedrooms as number | null,
       bathrooms: null,
       rating: null,
@@ -246,7 +252,7 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids);
     // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
@@ -391,8 +397,8 @@ export async function searchRentalsIntelligent(
       id: row.id,
       title: row.title,
       neighborhood: row.neighborhood ?? neighborhood ?? "Medellín",
-      nightly_price: num(row.price_monthly) ? Math.round(num(row.price_monthly)! / 30) : 0,
-      currency: "USD" as const,
+      nightly_price: nightlyPriceFrom({ price_monthly: row.price_monthly }),
+      currency: (row.currency ?? "USD").toUpperCase(),
       bedrooms: row.bedrooms ?? 0,
       wifi: true,
       amenities: row.amenities ?? [],

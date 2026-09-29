@@ -6,6 +6,12 @@ export type RentalResultRow = {
   neighborhood: string;
   nightly_price?: number;
   price_monthly?: number;
+  /**
+   * The listing's own currency (`apartments.currency`), not the searcher's budget currency.
+   * Owner onboarding stores COP; the short-stay catalogue is USD. A COP monthly rent labelled
+   * with a USD symbol is a lie about the amount, so callers must pass this through.
+   */
+  currency?: string;
   bedrooms?: number;
   wifi?: boolean;
   amenities?: string[];
@@ -26,19 +32,38 @@ const BENEFIT_MAP: Array<{ re: RegExp; label: string }> = [
   { re: /\bsafe|security\b/i, label: "Secure building" },
 ];
 
-export function formatRentalPrices(nightly?: number, monthly?: number): {
+/**
+ * Format a listing's prices in **the listing's own currency**.
+ *
+ * `currency` must be the apartment's currency, never assumed. A COP monthly rent rendered as
+ * "$2,400,000/mo" tells the reader the wrong unit; USD keeps the familiar `$` symbol so the
+ * short-stay catalogue is unchanged, and every other currency is prefixed with its code.
+ *
+ * A monthly figure is only estimated from the nightly price when no stored monthly price
+ * exists, and is marked `~` when it is.
+ */
+export function formatRentalPrices(
+  nightly?: number | null,
+  monthly?: number | null,
+  currency: string = "USD",
+): {
   nightlyLabel: string | null;
   monthlyLabel: string | null;
 } {
-  if (nightly == null || !Number.isFinite(nightly)) {
+  const hasNightly = nightly != null && Number.isFinite(nightly);
+  const hasMonthly = monthly != null && Number.isFinite(monthly);
+  if (!hasNightly && !hasMonthly) {
     return { nightlyLabel: null, monthlyLabel: null };
   }
-  const nightlyLabel = `$${nightly.toLocaleString("en-US")}/night`;
-  // Use stored monthly price when present; otherwise estimate from nightly
-  const monthlyLabel = monthly != null && Number.isFinite(monthly)
-    ? `$${monthly.toLocaleString("en-US")}/mo`
-    : `~$${Math.round(nightly * 30).toLocaleString("en-US")}/mo`;
-  return { nightlyLabel, monthlyLabel };
+  const unit = (currency || "USD").toUpperCase();
+  const money = (amount: number) =>
+    `${unit === "USD" ? "$" : `${unit} `}${amount.toLocaleString("en-US")}`;
+  return {
+    nightlyLabel: hasNightly ? `${money(nightly)}/night` : null,
+    monthlyLabel: hasMonthly
+      ? `${money(monthly)}/mo`
+      : `~${money(Math.round((nightly as number) * 30))}/mo`,
+  };
 }
 
 export function rentalBenefitBadges(row: RentalResultRow): string[] {
