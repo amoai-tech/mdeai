@@ -389,20 +389,18 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
   });
   expect(rpcError, "p1_schedule_tour_atomic").toBeNull();
 
-  const { data: leadRows, error: leadError } = await admin
-    .from("leads")
-    .select("id")
-    .eq("idempotency_key", fixture.idempotencyKey);
-  expect(leadError, "lead lookup").toBeNull();
-  fixture.leadId = leadRows?.[0]?.id ?? null;
+  // Retried on purpose: cleanup deletes by these ids, so a transient Supabase failure here would
+  // leave leadId/showingId null and strand the rows the RPC just committed.
+  const leadResult = await retryCall("lead lookup", () =>
+    admin.from("leads").select("id").eq("idempotency_key", fixture.idempotencyKey),
+  );
+  fixture.leadId = leadResult.data?.[0]?.id ?? null;
   expect(fixture.leadId, "the RPC must have committed one lead").toBeTruthy();
 
-  const { data: showingRows, error: showingError } = await admin
-    .from("showings")
-    .select("id")
-    .eq("lead_id", fixture.leadId!);
-  expect(showingError, "showing lookup").toBeNull();
-  fixture.showingId = showingRows?.[0]?.id ?? null;
+  const showingResult = await retryCall("showing lookup", () =>
+    admin.from("showings").select("id").eq("lead_id", fixture.leadId!),
+  );
+  fixture.showingId = showingResult.data?.[0]?.id ?? null;
   expect(fixture.showingId, "the RPC must have committed one showing").toBeTruthy();
 }
 
@@ -571,7 +569,23 @@ test.describe("SAN-1204 · the owning broker sees the real viewing request", () 
     const cleanupFailures = await cleanupFixture(admin, fixture);
     const residue = await assertNoResidue(admin, fixture);
 
-    if (journeyFailure) throw journeyFailure;
+    if (journeyFailure) {
+      // The journey error is what this test surfaces, so it must not swallow cleanup problems:
+      // a failing journey that also stranded production rows would otherwise look like a plain
+      // assertion failure. Report the residue loudly, then rethrow the real cause.
+      if (cleanupFailures.length > 0) {
+        console.error(
+          `[san-1204] cleanup incomplete after a failing journey: ${cleanupFailures.join("; ")}`,
+        );
+      }
+      if (residue.length > 0) {
+        console.error(
+          `[san-1204] PRODUCTION RESIDUE after a failing journey: ${residue.join("; ")}`,
+        );
+      }
+      throw journeyFailure;
+    }
+
     expect(cleanupFailures, "SAN-1204 cleanup must not leave production residue").toEqual([]);
     expect(residue, "SAN-1204 cleanup must be verified, not assumed").toEqual([]);
   });
