@@ -39,6 +39,9 @@ export default defineConfig({
       testIgnore: [
         VITEST_TESTS,
         "**/deterministic-critical.spec.ts",
+        // SAN-1357: the probe route only exists when NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT=1,
+        // which this project does not set. It runs under `local-chromium` instead.
+        "**/chat-virtualization.spec.ts",
         ...PROD_SPECS,
       ],
       workers: 1,
@@ -46,7 +49,11 @@ export default defineConfig({
     },
     {
       name: "local-chromium",
-      testMatch: ["**/deterministic-critical.spec.ts", "**/auth-guard.spec.ts"],
+      testMatch: [
+        "**/deterministic-critical.spec.ts",
+        "**/auth-guard.spec.ts",
+        "**/chat-virtualization.spec.ts",
+      ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,
       workers: 1,
