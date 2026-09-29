@@ -10,6 +10,7 @@
  */
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { stripComments } from "./lib/strip-comments.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SRC = join(ROOT, "src");
@@ -22,17 +23,6 @@ const FORBIDDEN = [
   { id: "@copilotkit/react-ui", re: /@copilotkit\/react-ui/ },
   { id: "@copilotkit/react-core-v1", re: /@copilotkit\/react-core(?!\/v2)/ },
 ];
-
-/**
- * ponytail: a comment-stripper, not a parser. Matching raw text made a doc comment the sole reason
- * an exemption survived: `src/app/chat/page.tsx` carries only `Retire @copilotkit/react-ui.` in a
- * comment, which kept it allowlisted — and an allowlisted path silently pre-approves a real v1
- * import later. `//` requires a preceding non-colon so a `https://` URL is not truncated; upgrade
- * to a real tokenizer only if a string literal ever defeats this.
- */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-}
 
 /** v1 hits in code, ignoring comment prose. */
 function v1Hits(text) {

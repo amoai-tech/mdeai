@@ -1,17 +1,19 @@
 {
-  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs: every detected consumer must be listed, no listed file may vanish, and the compatibility <CopilotKit> boundaries must be exactly the four below.",
+  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and the compatibility <CopilotKit> boundaries must be exactly the four below.",
   "classifications": ["migrate", "keep", "test-only", "compatibility-required", "remove"],
   "consumers": [
     {
       "file": "src/lib/copilotkit-client-props.ts",
       "classification": "migrate",
       "step": 9,
+      "implicitContract": true,
       "note": "Not a @copilotkit importer — it declares the shared props shape locally. Holds the v1-shaped `agent:` and `showDevConsole: false`; `agent` is not a v2 prop and will fail typecheck."
     },
     {
       "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
       "classification": "migrate",
       "step": 9,
+      "implicitContract": true,
       "note": "Asserts the shared props shape, including `showDevConsole: false`. Must fail if a legacy prop reappears."
     },
     {
@@ -55,11 +57,6 @@
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."
-    },
-    {
-      "file": "src/app/chat/page.tsx",
-      "classification": "keep",
-      "note": "Names the retired package in a doc comment only; no CopilotKit import. Kept as the case that proved the guard matched comment prose."
     },
     {
       "file": "src/app/dev/chat-virtualization/page.tsx",
@@ -159,6 +156,11 @@
     },
 
     {
+      "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
+      "classification": "test-only",
+      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
+    },
+    {
       "file": "src/__tests__/pr-agent-evidence.test.ts",
       "classification": "test-only",
       "note": "Reads package.json dependency names as data."
@@ -186,7 +188,8 @@
     {
       "file": "e2e/chat-virtualization.spec.ts",
       "classification": "test-only",
-      "note": "Browser proof from PR #171; cites installed dist line numbers in a comment."
+      "implicitContract": true,
+      "note": "Browser proof from PR #171 and permanent regression 1 of 9. Drives the CopilotKit dev probe and cites installed dist line numbers in a comment, but imports nothing."
     },
     {
       "file": "e2e/prod-candidate-certification.spec.ts",

@@ -20,6 +20,7 @@ import { afterEach, test } from "node:test";
 
 const GUARD_REL = "scripts/audit-copilotkit-v2-no-new-v1.mjs";
 const ALLOWLIST_REL = "scripts/copilotkit-v2-allowlist.json";
+const LIB_REL = "scripts/lib/strip-comments.mjs";
 
 const GUARD_SRC = path.resolve(GUARD_REL);
 const ALLOWLIST_SRC = path.resolve(ALLOWLIST_REL);
@@ -53,11 +54,12 @@ function fixture(files = {}, allowlistFiles = []) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mde-ck-v2-guard-"));
   fixtureRoots.push(root);
 
-  for (const rel of [GUARD_REL, ALLOWLIST_REL]) {
+  for (const rel of [GUARD_REL, ALLOWLIST_REL, LIB_REL]) {
     const dest = path.join(root, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
   }
   fs.copyFileSync(GUARD_SRC, path.join(root, GUARD_REL));
+  fs.copyFileSync(path.resolve(LIB_REL), path.join(root, LIB_REL));
   fs.writeFileSync(
     path.join(root, ALLOWLIST_REL),
     `${JSON.stringify({ description: "test fixture", mainSha: "test", files: allowlistFiles }, null, 2)}\n`,
@@ -151,6 +153,46 @@ test("fails when an allowlisted file no longer exists", () => {
     /deleted-long-ago\.tsx: the file no longer exists/,
     "the failure must distinguish a missing file from a migrated one",
   );
+});
+
+test("catches a v1 usage that an unpaired /* in a comment would otherwise hide", () => {
+  // Regression for a real false negative. The previous stripper was
+  // `replace(/\/\*[\s\S]*?\*\//g, "")`, which paired the bare `/*` in `@copilotkit/*` — a LINE
+  // comment, exactly as scripts/check-mastra.mjs writes it — with the next genuine `*/` and deleted
+  // everything between, including a real v1 hook. The guard printed `OK` and exited 0 while the
+  // file used useCoAgent. A false-positive fix must never buy a false negative.
+  const root = fixture({
+    "src/components/hidden.tsx":
+      "// v2-only. Other @copilotkit/* packages are not required to match.\n" +
+      "export function Bad() { return useCoAgent; }\n" +
+      "\n" +
+      "/* a genuine trailing block comment */\n" +
+      "export const ok = 1;\n",
+  });
+  const result = runGuard(root);
+
+  assert.notEqual(
+    result.status,
+    0,
+    `a real v1 usage must never be hidden by comment stripping:\n${result.stdout}${result.stderr}`,
+  );
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /hidden\.tsx: useCoAgent/,
+    "the violation must name the file and the hook",
+  );
+});
+
+test("still flags a v1 module specifier inside a string literal", () => {
+  // The guard exists to find `"@copilotkit/react-ui"`, so string CONTENTS must survive stripping.
+  // Blanking strings would defeat the guard's main purpose.
+  const root = fixture({
+    "src/components/specifier.tsx": 'import "@copilotkit/react-ui";\n',
+  });
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "a specifier inside a string must still be found");
+  assert.match(`${result.stdout}${result.stderr}`, /specifier\.tsx/);
 });
 
 test("does not treat v1 prose in a comment as a v1 usage", () => {

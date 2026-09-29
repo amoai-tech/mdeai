@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
+import { stripComments } from "../lib/strip-comments.mjs";
 
 /**
  * SAN-1357 Step 8 · The CopilotKit consumer inventory must stay true to the tree.
@@ -42,11 +43,7 @@ function walk(dir, acc = []) {
   return acc;
 }
 
-/** Same comment-stripping rule the no-new-v1 guard uses: prose is not an import. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-}
-
+/** Same comment-stripping rule the no-new-v1 guard uses, so the two cannot drift. */
 const strip = (rel) => stripComments(fs.readFileSync(rel, "utf8"));
 
 /** This file necessarily names the symbols it checks, so it is not its own subject. */
@@ -57,14 +54,31 @@ const ALL_FILES = SCAN_ROOTS
   .filter((rel) => rel !== SELF)
   .sort();
 
-/** A consumer references the package scope, or renders any CopilotKit provider. */
+/**
+ * A consumer references the package scope, or renders any CopilotKit provider.
+ *
+ * The character class accepts an escaped slash so a guard that names the packages inside a regex
+ * literal is still recognised — `scripts/check-mastra.mjs` matches `@copilotkit\/react-core`, and a
+ * plain `/@copilotkit\//` test silently dropped it from the inventory.
+ */
 function isConsumer(rel) {
   const code = strip(rel);
   return (
-    /@copilotkit\//.test(code) ||
+    /@copilotkit[/\\]/.test(code) ||
     /<CopilotKit(Provider|ChatConfigurationProvider)?(?![A-Za-z])/.test(code)
   );
 }
+
+/**
+ * Files that own or exercise the CopilotKit contract without importing it. Each declares
+ * `implicitContract: true` and carries a reason. Widening this set is a deliberate two-file change,
+ * exactly like the compatibility-boundary set below.
+ */
+const IMPLICIT_CONTRACT = [
+  "e2e/chat-virtualization.spec.ts",
+  "src/lib/__tests__/copilotkit-client-props.test.ts",
+  "src/lib/copilotkit-client-props.ts",
+];
 
 const classified = new Map(INVENTORY.consumers.map((c) => [c.file, c.classification]));
 
@@ -81,6 +95,34 @@ test("every CopilotKit consumer in the tree is classified", () => {
     unclassified,
     [],
     `these files consume CopilotKit but are absent from ${INVENTORY_REL}:\n${unclassified.join("\n")}`,
+  );
+});
+
+test("every classified entry is still a consumer, or declares why it is not", () => {
+  // The mirror of the completeness check above. Without it the inventory rots the same way the v1
+  // allowlist did: once a file stops consuming CopilotKit its entry stays, the suite stays green,
+  // and the list becomes a ledger of things that used to be true.
+  const undeclared = INVENTORY.consumers
+    .filter((c) => !isConsumer(c.file) && c.implicitContract !== true)
+    .map((c) => c.file);
+  const unexplained = INVENTORY.consumers
+    .filter((c) => c.implicitContract === true && !c.note)
+    .map((c) => c.file);
+  assert.deepEqual(
+    [...undeclared, ...unexplained],
+    [],
+    "these entries no longer consume CopilotKit and do not say why. Remove the entry, or set " +
+      `implicitContract: true and explain it:\n${[...undeclared, ...unexplained].join("\n")}`,
+  );
+
+  const declared = INVENTORY.consumers
+    .filter((c) => c.implicitContract === true)
+    .map((c) => c.file)
+    .sort();
+  assert.deepEqual(
+    declared,
+    IMPLICIT_CONTRACT,
+    "the implicit-contract exception set changed; say why in the PR before widening it",
   );
 });
 
