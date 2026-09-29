@@ -48,6 +48,7 @@ export function RentalCard({
   neighborhood,
   nightly_price,
   price_monthly,
+  currency,
   bedrooms,
   photoUrl,
   availability,
@@ -65,7 +66,12 @@ export function RentalCard({
   onOpenDetails,
   canScheduleViewing,
 }: RentalCardProps) {
-  const { nightlyLabel, monthlyLabel } = formatRentalPrices(nightly_price, price_monthly);
+  // The listing's own currency — never assumed USD.
+  const { nightlyLabel, monthlyLabel } = formatRentalPrices(
+    nightly_price,
+    price_monthly,
+    currency,
+  );
   const benefits = rentalBenefitBadges({
     id,
     title,

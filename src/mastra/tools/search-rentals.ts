@@ -12,7 +12,12 @@ export const rentalSchema = z.object({
   title: z.string(),
   neighborhood: z.string(),
   nightly_price: z.number(),
-  currency: z.literal('USD'),
+  /**
+   * The listing's own currency (`apartments.currency`). Previously a `z.literal('USD')`,
+   * which silently relabelled every COP listing — the currency owner onboarding writes — as
+   * USD, making a 2,400,000 COP monthly rent read as a USD figure.
+   */
+  currency: z.string(),
   bedrooms: z.number(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
@@ -89,6 +94,11 @@ export interface ApartmentRow {
    */
   price_daily: number | null;
   price_monthly: number | null;
+  /**
+   * The apartment's own currency. `NOT NULL DEFAULT 'USD'` in the database, but selected
+   * defensively so a projection that forgets the column cannot silently claim USD.
+   */
+  currency: string | null;
   wifi_speed: number | null;
   amenities: string[] | null;
   images: string[] | null;
@@ -209,6 +219,54 @@ export function nightlyPriceFrom(row: {
   return 0;
 }
 
+/**
+ * The currency `maxPricePerNight` is expressed in.
+ *
+ * The tool schema documents it as "USD per night" and the short-stay catalogue is priced in
+ * USD. There is no exchange-rate source anywhere in this repository, so a budget can only be
+ * applied to a listing priced in the same currency.
+ */
+export const NIGHTLY_BUDGET_CURRENCY = 'USD';
+
+/**
+ * The monthly ceiling equivalent to `Math.round(monthly / 30) <= nightlyCap`.
+ *
+ * Display derives the nightly price by **rounding**, so a raw `monthly <= cap * 30` filter
+ * disagrees with the label at the boundary: 2414 / 30 rounds to 80, inside an $80 cap, but
+ * `2414 <= 2400` is false — the listing would be filtered out while its label said it
+ * qualified. `round(x) <= cap` is `x < cap + 0.5`, so for whole units the largest qualifying
+ * monthly price is `cap * 30 + 14`.
+ */
+export function monthlyCeilingForNightlyCap(nightlyCap: number): number {
+  return nightlyCap * 30 + 14;
+}
+
+/**
+ * The `or=(...)` predicate deciding which apartments a search may return.
+ *
+ * Always requires a price. When a nightly budget is supplied it is applied **only to listings
+ * in the budget's own currency**. A listing priced in another currency — the COP monthly
+ * inventory that owner onboarding creates — is kept rather than compared, because
+ * `2,400,000 COP <= 2400` is not a budget check, it is a unit error that silently deletes real
+ * supply. The card shows that listing's own currency, so the renter can judge it themselves.
+ */
+export function rentalPricePredicate(maxNightly: number | null): string {
+  if (maxNightly == null) {
+    return 'price_daily.not.is.null,price_monthly.not.is.null';
+  }
+  const ceiling = monthlyCeilingForNightlyCap(maxNightly);
+  const sameCurrency = `currency.eq.${NIGHTLY_BUDGET_CURRENCY}`;
+  const otherCurrency = `currency.neq.${NIGHTLY_BUDGET_CURRENCY}`;
+  return [
+    // Comparable currency? No — keep it, and never compare it to the budget.
+    `and(${otherCurrency},price_daily.not.is.null)`,
+    `and(${otherCurrency},price_monthly.not.is.null)`,
+    // Same currency: the budget applies to the stored nightly price, or to a monthly-only row.
+    `and(${sameCurrency},price_daily.not.is.null,price_daily.lte.${maxNightly})`,
+    `and(${sameCurrency},price_daily.is.null,price_monthly.not.is.null,price_monthly.lte.${ceiling})`,
+  ].join(',');
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
@@ -217,7 +275,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     title: r.title,
     neighborhood: r.neighborhood,
     nightly_price: nightlyPrice,
-    currency: 'USD' as const,
+    currency: (r.currency ?? 'USD').toUpperCase(),
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
@@ -303,8 +361,7 @@ async function searchRentalsFromSupabase(
   }
 
   const limit = query.limit ?? 8;
-  // A nightly budget is compared against the effective nightly price, so a monthly-only
-  // listing is judged by the same `Math.round(monthly / 30)` figure used for display.
+  // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
@@ -312,17 +369,11 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
       { count: 'exact' },
     )
     .eq('status', 'active')
-    // A listing is priced if it has EITHER price. Requiring `price_daily` excluded every
-    // listing the owner onboarding flow can create, because that flow writes `price_monthly`.
-    .or(
-      maxNightly == null
-        ? 'price_daily.not.is.null,price_monthly.not.is.null'
-        : `and(price_daily.not.is.null,price_daily.lte.${maxNightly}),and(price_monthly.not.is.null,price_monthly.lte.${Math.round(maxNightly * 30)})`,
-    )
+    .or(rentalPricePredicate(maxNightly))
     .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
 

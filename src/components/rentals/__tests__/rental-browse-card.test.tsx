@@ -17,6 +17,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     bedrooms: 2,
     price_daily: 78,
     price_monthly: null,
+    currency: "USD",
     wifi_speed: 100,
     amenities: ["wifi", "workspace"],
     images: ["https://images.example/photo.jpg"],

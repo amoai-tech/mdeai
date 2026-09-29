@@ -212,7 +212,7 @@ function RentalDescription({ description }: { description?: string | null }) {
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
 function RentalDetailInner({ detail }: { detail: RentalDetail }) {
   const { openScheduleViewing } = useRentalUi();
-  const prices = formatRentalPrices(detail.priceNightly ?? undefined);
+  const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
   const requestViewing = () =>
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
