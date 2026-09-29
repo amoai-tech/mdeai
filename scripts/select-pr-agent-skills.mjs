@@ -2,6 +2,11 @@
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// The shared PR-Agent workflow reads these paths inside the action container, which mounts
+// the repository at /github/workspace. Validation runs on the runner host before the container
+// starts, so each selected container path is mapped back to the same file in this checkout.
+const CONTAINER_WORKSPACE = "/github/workspace";
+
 const UNIVERSAL = "code-review";
 const SPECIALISTS = [
   "copilotkit",
@@ -59,15 +64,39 @@ export function selectSkills(files) {
   };
 }
 
+/**
+ * Map a path PR-Agent will read inside its container to the same file in this checkout.
+ * The prefix is stripped rather than rebuilt from a skill name, so validation always follows
+ * the exact path that was selected.
+ */
+export function toRepoPath(containerPath) {
+  const prefix = `${CONTAINER_WORKSPACE}/`;
+  if (typeof containerPath !== "string" || !containerPath.startsWith(prefix)) {
+    throw new Error(`selected PR-Agent skill path must be inside ${CONTAINER_WORKSPACE}: ${containerPath}`);
+  }
+  return containerPath.slice(prefix.length);
+}
+
+/**
+ * Fail loudly when any exact file PR-Agent is about to load is absent. A parent `SKILL.md`
+ * existing is not sufficient evidence: specialist selections load `references/review.md`.
+ * `exists` is injectable so a regression test can prove the check against a fixture tree.
+ */
+export function assertSelectedPathsExist(paths, exists = existsSync) {
+  for (const containerPath of paths) {
+    const repoPath = toRepoPath(containerPath);
+    if (!exists(repoPath)) {
+      throw new Error(`required trusted PR-Agent skill missing: ${repoPath} (selected as ${containerPath})`);
+    }
+  }
+}
+
 function runCli() {
   const raw = process.env.CHANGED_FILES_JSON ?? "[]";
   const files = JSON.parse(raw);
   const result = selectSkills(files);
 
-  for (const skill of result.skills) {
-    const file = `.claude/skills/${skill}/SKILL.md`;
-    if (!existsSync(file)) throw new Error(`required trusted PR-Agent skill missing: ${file}`);
-  }
+  assertSelectedPathsExist(result.paths);
 
   process.stdout.write("enabled=true\n");
   process.stdout.write(`paths=${JSON.stringify(result.paths)}\n`);

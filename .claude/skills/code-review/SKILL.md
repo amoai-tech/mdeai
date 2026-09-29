@@ -54,6 +54,10 @@ Apply this universal order to every PR:
 
 Before declaring a change safe, run an adversarial falsification pass: assume the PR is subtly wrong and try to prove it through silent skips, false-green tests, exit-code mistakes, stale assumptions, misplaced permission checks, retry/replay races, wrong identifiers, or missing negative tests. Inspect unchanged surrounding callers/contracts when needed, but report only defects introduced or exposed by this PR.
 
+### Boundary validation for new parsers and gates
+
+A new or changed validator, parser, regex, version gate, identifier parser, permission gate, or custom implementation of a published standard is not proven by the author's own examples. Enumerate malformed near-miss inputs yourself and report the concrete inputs that pass when they should not: leading or trailing separators, empty identifiers, leading zeros, whitespace, malformed composite values, missing or duplicated components, and values immediately outside the accepted grammar. A suite that exercises only well-formed inputs is a test gap, not proof. Prefer an already-installed standards-compliant library over a hand-written pattern when it safely fits the requirement.
+
 ## Two-axis review
 
 ### 1. Spec fit

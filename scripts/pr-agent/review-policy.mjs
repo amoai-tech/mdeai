@@ -1,8 +1,30 @@
+// Records that a fresh PR-Agent review was published for an exact base/head pair, and decides
+// whether a push can reuse an incremental review.
+//
+// What this proves: a review result exists for the current base context, so a stale review cannot
+// be mistaken for a current one.
+// What this does NOT prove: that the model's findings are correct, complete, or free of false
+// positives. Deterministic CI (`floor`), required checks, and human/independent review remain the
+// real certification. The exported names below are kept for shared-workflow compatibility; the
+// operator-visible wording states only what is actually established.
 const SHA_RE = /^[0-9a-f]{40}$/i;
 export const CERT_HISTORY_MARKER = "<!-- mde-pr-agent-cert-history -->";
+// Matches the marker `certificationMarker()` writes as a whole shape, rather than a bare
+// `head=<sha>` substring. PR-Agent reviews embed the diff they are reviewing, so a review comment
+// can contain marker-shaped text — including a real, non-placeholder one on a PR that edits a
+// fixture. Only a comment carrying the marker verbatim may certify a head.
+const CERT_MARKER_RE = /<!--\s*mde-pr-agent-cert\s+base=([0-9a-f]{40})\s+head=([0-9a-f]{40})\s*-->/gi;
 
 function assertSha(value, label) {
   if (!SHA_RE.test(value ?? "")) throw new Error(`${label} must be a 40-character git SHA`);
+}
+
+/** Every certification marker in a body, normalized to lowercase `{ baseSha, headSha }` pairs. */
+export function certificationMarkers(body) {
+  return [...(body ?? "").matchAll(CERT_MARKER_RE)].map((match) => ({
+    baseSha: match[1].toLowerCase(),
+    headSha: match[2].toLowerCase(),
+  }));
 }
 
 export function certificationMarker({ baseSha, headSha }) {
@@ -13,8 +35,111 @@ export function certificationMarker({ baseSha, headSha }) {
 
 export function hasCertificationForBase(body, baseSha) {
   assertSha(baseSha, "baseSha");
-  const markerPrefix = `<!-- mde-pr-agent-cert base=${baseSha.toLowerCase()} head=`;
-  return (body ?? "").toLowerCase().includes(markerPrefix);
+  const wanted = baseSha.toLowerCase();
+  return certificationMarkers(body).some((marker) => marker.baseSha === wanted);
+}
+
+/**
+ * True when a recorded review marker names this exact head. Used to pick the one review comment
+ * that belongs to a target head, so an earlier push's review is never scored as if it were current.
+ */
+export function hasCertificationForHead(body, headSha) {
+  assertSha(headSha, "headSha");
+  const wanted = headSha.toLowerCase();
+  return certificationMarkers(body).some((marker) => marker.headSha === wanted);
+}
+
+/**
+ * Select the single review comment that belongs to `headSha`, or refuse.
+ *
+ * The marker comment is a single comment that is *edited in place*, so it accumulates every head it
+ * has ever certified and its timestamp is the time of its **last** certification — not this head's.
+ * A boundary derived from it therefore hands back the newest review whatever head that review
+ * belongs to. So the certification marker only narrows the candidate set; the authoritative pin is
+ * the review's own record of the head it reviewed, read through `headShaOf`.
+ *
+ * `allowUnconfirmedHead` opts back into the boundary-only guess. It exists for heads that cannot be
+ * confirmed (see the README); it is never the default, because an unconfirmed guess is how a
+ * canary scores the wrong review and reports success.
+ *
+ * @param {object} options
+ * @param {unknown[]} options.comments
+ * @param {string} options.headSha
+ * @param {string[]} options.reviewMarkers
+ * @param {(body: string) => (string | null | undefined)} [options.headShaOf] reads a review's own
+ *   record of the head it reviewed; absent means no review can confirm a head.
+ * @param {boolean} [options.allowUnconfirmedHead]
+ */
+export function selectCertifiedReviewForHead({
+  comments,
+  headSha,
+  reviewMarkers,
+  headShaOf,
+  allowUnconfirmedHead = false,
+}) {
+  assertSha(headSha, "headSha");
+  const headOf = headShaOf ?? (() => null);
+  const isBot = (comment) => comment?.user?.login === "github-actions[bot]";
+  const reviewTokens = reviewMarkers ?? [];
+  const carriesReviewMarker = (body) => reviewTokens.some((token) => body.includes(token));
+  // A review comment is never a certification record, even when it quotes a marker. The marker
+  // comment names heads while carrying no review token; without this check a review that quoted a
+  // marker could bound the candidate window — and be returned — as if it were the certification.
+  const markers = (comments ?? []).filter(
+    (comment) =>
+      isBot(comment) &&
+      !carriesReviewMarker(comment.body ?? "") &&
+      hasCertificationForHead(comment.body ?? "", headSha),
+  );
+  if (markers.length === 0) {
+    return { comment: null, headConfirmed: false, reason: `no recorded review marker for head ${headSha}` };
+  }
+  const newest = (list) =>
+    list.reduce((left, right) =>
+      new Date(right.updated_at).getTime() > new Date(left.updated_at).getTime() ? right : left,
+    );
+  const marker = newest(markers);
+  const markerTime = new Date(marker.updated_at).getTime();
+  const candidates = (comments ?? []).filter(
+    (comment) =>
+      isBot(comment) &&
+      carriesReviewMarker(comment.body ?? "") &&
+      new Date(comment.updated_at).getTime() <= markerTime,
+  );
+  if (candidates.length === 0) {
+    return {
+      comment: null,
+      headConfirmed: false,
+      reason: `no review comment published before the marker for head ${headSha}`,
+    };
+  }
+  const named = candidates.filter(
+    (comment) => String(headOf(comment.body ?? "") ?? "").toLowerCase() === headSha,
+  );
+  if (named.length === 0) {
+    if (!allowUnconfirmedHead) {
+      return {
+        comment: null,
+        headConfirmed: false,
+        consideredReviews: candidates.length,
+        reason: `no review among ${candidates.length} candidate(s) records head ${headSha}; the marker lists it, but no review names it — capture the full review for this head instead of guessing`,
+      };
+    }
+    return {
+      comment: newest(candidates),
+      marker,
+      headConfirmed: false,
+      consideredReviews: candidates.length,
+      reason: "selected from the marker boundary only; no review records this head (unconfirmed)",
+    };
+  }
+  return {
+    comment: newest(named),
+    marker,
+    headConfirmed: true,
+    consideredReviews: candidates.length,
+    reason: `review records head ${headSha}${named.length > 1 ? ` (${named.length} did; newest selected)` : ""}`,
+  };
 }
 
 export function appendCertification(body, { baseSha, headSha }) {
@@ -22,7 +147,7 @@ export function appendCertification(body, { baseSha, headSha }) {
   if ((body ?? "").includes(marker)) return body;
   const prefix = (body ?? "").includes(CERT_HISTORY_MARKER)
     ? body.trimEnd()
-    : `${CERT_HISTORY_MARKER}\nPR-Agent certified review contexts:`;
+    : `${CERT_HISTORY_MARKER}\nFresh PR-Agent reviews recorded for exact base/head:`;
   return `${prefix}\n${marker}\n`;
 }
 

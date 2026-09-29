@@ -45,7 +45,10 @@ require_ticket_analysis_review = false
 require_risk_assessment = true
 require_merge_recommendation = true
 require_priority_files = true
-publish_error_details = true
+# `publish_error_details` is a v0.46+ key. The shared workflow pins v0.45.0, where no reader
+# exists for it, so setting it here would be a silent no-op that claims a feature MDE does not
+# have. Re-add it in the same change that adopts v0.46 by immutable digest.
+# publish_error_details = true
 persistent_comment = true
 persistent_finding_state = true
 num_max_findings = 6
