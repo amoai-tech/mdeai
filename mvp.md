@@ -44,13 +44,13 @@ claims and no vertical alone does:
 | Loop | What it proves that the others do not |
 | --- | --- |
 | **1 · Rentals** | Deterministic eligibility over real inventory, map/card synchronization, trust signals, and an **atomic, identity-bound commitment** (lead + showing) with correct operator visibility. The highest-correctness write path. |
-| **2 · Events + Ticketing** | A **real money loop**: external payment authority, exactly-once webhook finalization, entitlement delivery, and a wallet that reflects truth. |
+| **2 · Events + Ticketing** | A **real money loop**: external payment authority, exactly-once webhook finalization, entitlement delivery, a wallet that reflects truth, and **host payout/revenue state that reconciles**. |
 | **3 · AI Concierge + Local Discovery** | The layer every other surface depends on: intent routing, grounded facts, structured output, session continuity, and safe authenticated tool actions. |
 
-Rentals prove trustworthy supply and safe commitment. Events prove money and entitlement. The
-concierge proves the intelligence layer is grounded and user-scoped. Any two of the three can pass
-while the third hides a launch-blocking defect — which is why all three are launch gates rather than
-parallel feature tracks.
+Rentals prove trustworthy supply and safe commitment. Events prove money, entitlement and host
+payout. The concierge proves the intelligence layer is grounded and user-scoped. Any two of the
+three can pass while the third hides a launch-blocking defect — which is why all three are launch
+gates rather than parallel feature tracks.
 
 Real-world shape of the goal: a renter searching **“2BR in Laureles under $80/night, quiet for remote
 work”** gets only eligible listings, sees pins that match the cards, and books a viewing the *owning*
@@ -62,7 +62,10 @@ gets grounded, sourced options on a synchronized map.
 
 ## 3 · MVP priority order
 
-Priority is dependency order, not preference. Each loop depends on the ones above it.
+Priority is **launch focus order — what to make launch-ready first — not a dependency chain.**
+Rentals and Events do not depend on each other, so events work can proceed alongside rentals (§12).
+The AI Concierge is the shared layer *beneath* both — grounding, identity, safe tool execution —
+listed third by launch focus, not by dependency.
 
 ### Priority 1 · Rentals MVP
 
@@ -110,11 +113,12 @@ Rental coordination epic: **[SAN-1315 · EPIC · Finish the rental journey from 
 | 6 | SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End | `MVP · Launch Blocker` — **the immediate blocker** |
 | 7 | SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate | `MVP · Launch Blocker` |
 
-**`SAN-1205` is the gate that turns a search result into a proven business outcome**, and it is
-currently unwalkable: production has **0 consumer-visible rentals**, the broker surface cannot yet
-show a lead, and the atomic write path has never run in production. The recorded decision is
-**Option A — publish a small amount of real, owner-verified inventory.** Do not seed or fabricate
-listings: the empty-state journey is *degraded-state* certification, not launch certification.
+**`SAN-1205` is the gate that turns a search result into a proven business outcome.** It can pass
+only once three stable launch conditions hold: production carries consumer-visible inventory, the
+broker surface shows the resulting lead, and the atomic write path has run for a real request. The
+recorded decision is **Option A — publish a small amount of real, owner-verified inventory.** Do not
+seed or fabricate listings: the empty-state journey is *degraded-state* certification, not launch
+certification. Current status of each condition belongs to Linear (§14).
 
 The last three steps are distinct responsibilities, and skipping the middle one is the specific
 mistake this document exists to prevent:
@@ -131,11 +135,10 @@ This lane must **not** replace the rental journey chain: **SAN-1315 → SAN-1205
 plan's own rule is the one this release already learned the hard way: **scheduler enqueue ≠ function
 success ≠ provider delivery.**
 
-**Pre-certification cleanup (`SAN-483` prerequisite).** Two classes of fake lead were found in
-production and must not be mixed with real customer leads at certification: the `e2e_san_1095` leakage
-(2 leads + 2 showings — **removed**) and a 6-row synthetic seed set (`40000000-…` ids, identical
-timestamps — classified, removal pending confirmation). Five further pre-invariant leads are believed
-genuine and must be annotated, not deleted.
+**Pre-certification cleanup (`SAN-483` prerequisite).** Certification must run against real customer
+data only: no synthetic or test-generated lead may be present, and any genuine pre-invariant lead must
+be annotated rather than deleted. The row-level inventory, counts and disposition are evidence, and
+belong to `SAN-483`.
 
 **Conversion lane — what is committed.** A renter *finding* an apartment is not the MVP. Clicking
 **Schedule Viewing**, saving the lead and viewing, and having the correct broker receive it is.
@@ -182,6 +185,7 @@ host publishes event
   → webhook finalizes exactly once
   → ticket/QR delivered
   → ticket appears in wallet
+  → host payout/revenue state reconciles
 ```
 
 Not in this priority: advanced sponsor automation, broad marketplace commissions across every
@@ -210,7 +214,7 @@ states · persistent thread/session where required · safe authenticated tool ac
 | AI Concierge | Intent routing, grounded answers, structured results, safe authenticated actions | Ask in plain language and get something usable, not a wall of text | Grounded facts, user-scoped tools, working degraded state |
 | Rentals | Natural-language + structured search, eligibility, detail, viewing request | Find an eligible place and request a viewing without leaving MDE | Hard-filter violations = 0; exactly one lead + showing per request |
 | Events | Discovery, detail, host publish/manage | Find a real event and see truthful details | Publish path works for a real host |
-| Ticketing | Checkout, payment finalization, QR/ticket, wallet | Buy a ticket and hold usable proof of it | Exactly-once finalization; ticket in the correct wallet |
+| Ticketing | Checkout, payment finalization, QR/ticket, wallet, host payout | Buy a ticket and hold usable proof of it; the host can reconcile their proceeds | Exactly-once finalization; ticket in the correct wallet; host payout/revenue state traceable |
 | Maps / Places | Pins, card↔pin sync, place detail, field-masked Places calls | Understand where options actually are | Pins match visible results; no model-invented coordinates |
 | Restaurants / cafés / nightlife discovery | One consistent card + map + chat discovery experience | Ask for a mood and get real places | Grounded results, attributable sources |
 | Authentication | Supabase Auth, authenticated routes, ownership enforcement | Actions belong to the right person | Cross-user access = 0 |
@@ -280,7 +284,8 @@ viewing → atomic lead + showing → correct broker visibility`
 Original Listing`
 
 **Journey 3 · Event purchase**
-`discover event → event detail → checkout → payment → trusted webhook → ticket → wallet`
+`discover event → event detail → checkout → payment → trusted webhook → ticket → wallet → host
+payout/revenue state reconciles`
 
 **Journey 4 · Grounded local discovery**
 `user asks for restaurant/café/nightlife/place → grounded search → structured cards → map →
@@ -359,7 +364,7 @@ MVP is not ready because screens exist. Every gate below is a release gate.
 | **Product** | Critical user journeys complete end-to-end |
 | **Data** | No critical stale or invalid production data presented as trustworthy |
 | **Security** | RLS / auth / ownership negative tests pass |
-| **Transaction** | Payments and viewing mutations are idempotent and atomic where required |
+| **Transaction** | Payments, payouts and viewing mutations are idempotent, atomic and traceable where required |
 | **AI** | Grounded facts, user isolation, no unauthorized tool actions |
 | **Failure** | Timeout / provider / API failures degrade safely |
 | **Diagnostics** | Every launch-journey operation emits a minimum record — **correlation ID + operation + result + safe error + latency/failure signal** — for Rentals, Events and Concierge. Enough to answer "why did this fail", not a monitoring platform |
@@ -384,6 +389,7 @@ Measurable pass/fail. `0` means zero, not "few".
 - one real or production-safe checkout flow completes end to end
 - webhook replay does not duplicate fulfillment
 - the purchased ticket appears in the **correct** user's wallet
+- host payout/revenue state is traceable to the ticket sale it settles (SAN-1264 · PAY-EVT-PAYOUT — Host payout / Stripe Connect)
 
 **AI**
 - current facts come from trusted/grounded data
@@ -421,6 +427,7 @@ Binary. If a box cannot be checked with current evidence, MVP is not ready.
 - [ ] Checkout completes and payment finalizes exactly once
 - [ ] Webhook replay is idempotent
 - [ ] Ticket/QR reaches the buyer and appears in the correct wallet
+- [ ] Host payout/revenue state reconciles to the settled ticket sale (SAN-1264 · PAY-EVT-PAYOUT)
 
 **4 · AI**
 - [ ] Answers derive from grounded/trusted data
@@ -526,8 +533,8 @@ must never block the chain.
 | Autonomous multi-agent operations | | ✅ | Directly contradicts "prove the loop" |
 | Native mobile application | | ✅ | Responsive web covers the mobile gate |
 | Mobile event checkout — SAN-526 · PAY-005 — Mobile Checkout UX (Stripe + Apple/Google Pay + QR) | ✅ `MVP · Launch Blocker` | | Owns phone → event → checkout → payment → ticket/QR; no separate mobile payment flow is added |
-| Edge Function source provenance — SAN-1295 · Task 48.2H.8A · MDE-EDGE-001 — Recover and Canonicalize All 39 Live Edge Functions | ✅ `MVP · Launch Blocker` | | **"39 live" is the recorded SAN-1295 baseline; independent enumeration is currently blocked by a Supabase Management API 401.** Independently verified: `lead-reminder-tick` is deployed, `pg_cron`-called, returning HTTP 500, and absent from active source |
-| Edge Function runtime defects — SAN-1296 · Stop Edge Functions from Losing Rental Reminders or Running Unsafe Actions | ✅ `MVP · Launch Blocker` | | Rental reminders silently lost (HTTP 500); wildcard `*.vercel.app` CORS trust; fail-open environment gate; a GET that mutates production state |
+| Edge Function source provenance — SAN-1295 · Task 48.2H.8A · MDE-EDGE-001 — Recover and Canonicalize All 39 Live Edge Functions | ✅ `MVP · Launch Blocker` | | Git source cannot yet account for every deployed function, so the live Edge surface is not fully reviewable from the repository; `SAN-1295` owns live enumeration and the recorded baseline |
+| Edge Function runtime defects — SAN-1296 · Stop Edge Functions from Losing Rental Reminders or Running Unsafe Actions | ✅ `MVP · Launch Blocker` | | Rental reminders can be lost silently and at least one Edge action is unsafe to expose to callers; `SAN-1296` owns the defect inventory and its repair evidence |
 | Edge Function tests and drift gates — SAN-1297 · Task 48.2H.8C · MDE-EDGE-003 — Add Edge Function Tests, Deployment Provenance, and Drift Gates | ⚪ `MVP · Launch Supporting` | | Prevents recurrence of the provenance drift above; certification can be performed manually without it |
 | Mastra PostgresStore hardening — SAN-1303 · Task 53.M.25 · MDE-MASTRA-PG-001 — Harden native Mastra PostgresStore on Supabase | ⚪ `MVP · Launch Supporting` | | Only its durability-matrix portion gates SAN-548; SSL, pool and fail-fast hardening are not themselves a launch journey |
 
