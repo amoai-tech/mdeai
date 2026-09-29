@@ -15,6 +15,7 @@ const PROD_SPECS = [
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
+  "**/san-1204-broker-viewing-requests.spec.ts",
 ];
 
 export default defineConfig({
