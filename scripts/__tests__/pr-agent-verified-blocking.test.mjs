@@ -191,6 +191,27 @@ describe("SAN-1332 persistent-state validity", () => {
     assert.notEqual(parsed.source, "state");
   });
 
+  it("preserves fenced code inside authoritative state byte-for-byte", () => {
+    const body = [
+      "Severity: HIGH",
+      "Verification: VERIFIED",
+      "Evidence:",
+      "```ts",
+      "dangerousCall()",
+      "```",
+      "Failure scenario: boom",
+    ].join("\n");
+    const payload = JSON.stringify({
+      findings: [{ body, state: "ACTIVE", path: "src/parser.js", finding_id: "abc123" }],
+      last_run: { complete: true },
+      schema_version: 1,
+    });
+    const parsed = parseFindings(`<!-- pr-agent-review-state:v1\n${payload}\n-->`);
+    assert.equal(parsed.stateValid, true);
+    assert.equal(parsed.findings.length, 1);
+    assert.equal(parsed.findings[0].body, body, "authoritative state must not be rewritten before scoring");
+  });
+
   it("parses state whose payload quotes a comment terminator", () => {
     // Executed against the real v0.45.0 producer: upstream frames the payload as ":v1\n<payload>\n-->",
     // and a finding body quoting "-->" from the diff stays INSIDE the single-line payload. Upstream's
