@@ -32,7 +32,11 @@ export function RentalsDynamicWorkspace({
   const requests = dashboard?.viewingRequests ?? [];
 
   const requestsSurface = (
-    <BrokerViewingRequests requests={requests} loadError={loadError} />
+    <BrokerViewingRequests
+      requests={requests}
+      total={dashboard?.viewingRequestsTotal}
+      loadError={loadError}
+    />
   );
 
   if (mode === "overview") {

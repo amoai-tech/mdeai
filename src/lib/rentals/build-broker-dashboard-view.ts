@@ -40,6 +40,8 @@ export type BuildBrokerDashboardInput = {
   upcomingShowings: BrokerShowingRow[];
   /** SAN-1204 · every showing for the broker's own apartments, not only upcoming ones. */
   requestShowings: BrokerShowingRow[];
+  /** SAN-1204 · how many requests exist in total, so a capped page is never presented as all. */
+  requestShowingsTotal: number;
   /** SAN-1204 · leads backing `requestShowings`, joined for the renter's display name. */
   requestLeads: BrokerLeadRow[];
   leads30dCount: number | null;
@@ -267,6 +269,7 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
     kpis,
     attention,
     viewingRequests,
+    viewingRequestsTotal: Math.max(input.requestShowingsTotal, viewingRequests.length),
     trends,
     briefing,
     isEmpty,

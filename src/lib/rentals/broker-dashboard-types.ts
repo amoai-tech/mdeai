@@ -59,6 +59,8 @@ export type BrokerDashboardView = {
   kpis: BrokerDashboardKpi[];
   attention: BrokerAttentionItem[];
   viewingRequests: BrokerViewingRequest[];
+  /** Total requests that exist, so the UI can say when the list is a page rather than all of it. */
+  viewingRequestsTotal: number;
   trends: BrokerTrendCard[];
   briefing: BrokerDashboardBriefing;
   isEmpty: boolean;

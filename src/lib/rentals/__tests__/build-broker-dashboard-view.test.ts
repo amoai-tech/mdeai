@@ -66,6 +66,7 @@ describe("buildBrokerDashboardView", () => {
           lead_id: "l1",
         },
       ],
+      requestShowingsTotal: 1,
       requestLeads: [
         {
           id: "l1",
@@ -110,6 +111,7 @@ describe("buildBrokerDashboardView", () => {
       ],
       upcomingShowings: [],
       requestShowings: [],
+      requestShowingsTotal: 0,
       requestLeads: [],
       leads30dCount: 18,
       views30dCount: null,
@@ -132,11 +134,42 @@ describe("buildBrokerDashboardView", () => {
       unansweredLeads: [],
       upcomingShowings: [],
       requestShowings: [],
+      requestShowingsTotal: 0,
       requestLeads: [],
       leads30dCount: 0,
       views30dCount: null,
     });
     expect(view.isEmpty).toBe(true);
     expect(view.kpis.every((k) => k.value === "0" || k.value === DATA_PENDING_LABEL)).toBe(true);
+  });
+
+  it("reports the true request total even when the page is capped", () => {
+    const page = buildBrokerDashboardView({
+      displayName: "Ana",
+      listings: [listing({ id: "a1", listingWorkflowStatus: "published" })],
+      publishedListingsCount: 1,
+      leads7dCount: 0,
+      viewingsBookedCount: 0,
+      apartmentCount: 1,
+      unansweredLeads: [],
+      upcomingShowings: [],
+      // One row rendered, but 137 requests actually exist.
+      requestShowings: [
+        {
+          id: "s1",
+          apartment_id: "a1",
+          scheduled_at: "2030-01-01T12:00:00.000Z",
+          status: "scheduled",
+          lead_id: "l1",
+        },
+      ],
+      requestShowingsTotal: 137,
+      requestLeads: [],
+      leads30dCount: 0,
+      views30dCount: null,
+    });
+
+    expect(page.viewingRequests).toHaveLength(1);
+    expect(page.viewingRequestsTotal).toBe(137);
   });
 });

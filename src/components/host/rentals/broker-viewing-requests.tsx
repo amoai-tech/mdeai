@@ -7,6 +7,8 @@ import type { BrokerViewingRequest } from "@/lib/rentals/broker-dashboard-types"
 
 type BrokerViewingRequestsProps = {
   requests: BrokerViewingRequest[];
+  /** Total requests that exist. When larger than `requests`, the list is a page, not everything. */
+  total?: number;
   loadError: string | null;
 };
 
@@ -26,7 +28,7 @@ function statusLabel(status: string): string { // skipcq: JS-0067 - module-local
  * with the row that actually exists.
  */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function BrokerViewingRequests({ requests, loadError }: BrokerViewingRequestsProps) {
+export function BrokerViewingRequests({ requests, total, loadError }: BrokerViewingRequestsProps) {
   if (loadError) {
     return (
       <EmptyState
@@ -47,10 +49,22 @@ export function BrokerViewingRequests({ requests, loadError }: BrokerViewingRequ
     );
   }
 
+  const totalCount = Math.max(total ?? requests.length, requests.length);
+  const hiddenCount = totalCount - requests.length;
+
   return (
-    <ul data-testid="viewing-requests" className="space-y-2">
-      {requests.map((request) => (
-        <li
+    <div className="space-y-2">
+      {hiddenCount > 0 ? (
+        <p
+          data-testid="viewing-requests-truncated"
+          className="text-xs text-muted-foreground"
+        >
+          Showing the {requests.length} most recent of {totalCount} requests.
+        </p>
+      ) : null}
+      <ul data-testid="viewing-requests" className="space-y-2">
+        {requests.map((request) => (
+          <li
           key={request.showingId}
           data-testid={`viewing-request-${request.showingId}`}
           data-lead-id={request.leadId}
@@ -85,7 +99,8 @@ export function BrokerViewingRequests({ requests, loadError }: BrokerViewingRequ
             </span>
           </p>
         </li>
-      ))}
-    </ul>
+        ))}
+      </ul>
+    </div>
   );
 }
