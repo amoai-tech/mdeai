@@ -60,17 +60,13 @@ Trivial one-liners need none. Delete the check only when you delete the logic.
 
 ## Source receipts
 
-Reading a doc is not reusing it. **Any external source you consult and act on produces one row** —
-in the PR body, or in the task's evidence file. A reference with no row did not influence the work,
-so it must not be cited as justification.
+Reading a doc is not reusing it. An external source that **materially affects the implementation or
+the decision** produces one row — in the PR body, or in the task's evidence file. Background reading
+gets none: an inflated citation table is documentation noise, and it buries the rows that mattered.
+A source with no row did not influence the work, so it must not be cited as its justification.
 
-| Field | Required content |
-| -- | -- |
-| **URL** | The full URL — not a domain, not "the docs" |
-| **Source** | The exact file, section, symbol, or example inside it |
-| **Disposition** | `COPY` · `ADAPT` · `MODEL` · `REFERENCE ONLY` |
-| **Destination** | The exact path in this repo where it lands (`—` for `REFERENCE ONLY`) |
-| **Verification** | The exact command or test that proves the result |
+The required fields are the contract in `AGENTS.md` § Evidence rules → Source receipts. This skill
+owns the judgement, which is the part that gets misused:
 
 - **COPY** — verbatim. Keeps its license/attribution and takes no local edits.
 - **ADAPT** — same approach, changed to our conventions. State what changed.
@@ -81,6 +77,32 @@ so it must not be cited as justification.
 
 A receipt is cheap. The failure it prevents is expensive: six weeks later nobody can tell whether a
 pattern was copied from a current official example or recalled from memory.
+
+## Two kinds of proof
+
+Do not confuse verifying the source with verifying our use of it.
+
+- **Source proof** — the API, behaviour, version, security property, or platform capability is
+  confirmed against a primary source.
+- **Implementation proof** — this repository is confirmed to use it correctly.
+
+One never substitutes for the other. A URL is not a test; a passing test does not validate an
+assumption nobody checked. Both are required, and the difference is where this repository's most
+expensive mistakes have come from.
+
+## Verify the current contract before copying an example
+
+Determine what this repository actually uses, in this order:
+
+1. the installed package or pinned version (`node_modules/`, lockfile);
+2. current source and types in this repo;
+3. official documentation **for that version**;
+4. official repository examples;
+5. third-party examples, only when primary sources are insufficient.
+
+Our pins lag upstream more often than not. A current upstream example applied to an older pinned API
+is a new bug wearing a citation.
+
 
 ## Every task opens with one written line
 
