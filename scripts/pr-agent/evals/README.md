@@ -185,3 +185,25 @@ One honest limit remains: neither control exercised the rule on a PR that is **b
 `main` and clean**. The clean control predates the rule reaching `main`, so it proves the scorer does
 not credit an invented defect but does not yet prove the new rule refrains from over-reporting on a
 clean post-merge PR. The next clean PR reviewed on the new `main` closes that.
+
+### The post-merge clean control
+
+That next PR was the harness change itself — PR #168, based on `main` after the rule landed. The
+hardened reviewer had to review the very code that pins reviews to heads, and it stayed quiet:
+
+```
+$ node scripts/pr-agent/evals/capture-review.mjs --pr 168 \
+    --head f79894cf502674f4480566ecc8f0172e4fea6f99 --out /tmp/clean-postmerge.md
+review comment 5888962639; head f79894cf5… confirmed via newest-certified-head
+```
+
+| Field | Value |
+| -- | -- |
+| Risk level | Low |
+| Merge recommendation | **Safe to merge** |
+| Score | 92 |
+| Findings | 0 — "No major issues detected" |
+| Base | `41cec28f` (contains the hardened rule) |
+
+So all three live runs are recorded: the bad canary detects and blocks, the historical docs-only
+control stays quiet, and a real post-merge code PR stays quiet instead of inventing a blocker.
