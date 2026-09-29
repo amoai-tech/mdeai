@@ -319,14 +319,26 @@ describe("SAN-1301 · Stop cancels the active run and nothing arrives after it",
 
     const controller = new AbortController();
     const seen: string[] = [];
+    // Gate the abort on the event this test actually waits for, not on a wall-clock guess.
+    // A fixed 120ms sleep made the assertion below timing-dependent: if scheduler delay pushed
+    // the abort past the server's 400ms frame, RUN_FINISHED could land first and fail the test
+    // for a reason unrelated to the Stop contract. It also never proved RUN_STARTED arrived,
+    // despite the comment claiming that was the point of waiting.
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     const run = runConciergeAgent({
       url,
       threadId: THREAD,
       signal: controller.signal,
-      onEvent: (event: AgUiEvent) => seen.push(event.type),
+      onEvent: (event: AgUiEvent) => {
+        seen.push(event.type);
+        if (event.type === "RUN_STARTED") markStarted?.();
+      },
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 120)); // let RUN_STARTED land
+    await started;
     controller.abort();
 
     // `@ag-ui/client` 0.0.59 surfaces a client abort as a structured RUN_ERROR
@@ -355,15 +367,23 @@ describe("SAN-1301 · Stop cancels the active run and nothing arrives after it",
     });
 
     const controller = new AbortController();
+    // Same deterministic gate as the case above: wait for RUN_STARTED, then Stop.
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     const run = runConciergeAgent({
       url,
       threadId: THREAD,
       signal: controller.signal,
       // Long enough that a timeout cannot be the cause of what follows.
       timeoutMs: 5_000,
+      onEvent: (event: AgUiEvent) => {
+        if (event.type === "RUN_STARTED") markStarted?.();
+      },
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await started;
     controller.abort();
 
     const { events } = await run;
