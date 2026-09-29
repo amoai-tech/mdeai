@@ -182,6 +182,10 @@ export async function runConciergeAgent(options: {
   agentId?: string;
   headers?: Record<string, string>;
   timeoutMs?: number;
+  /** Models the user pressing Stop: cancels the run while the server may still be streaming. */
+  signal?: AbortSignal;
+  /** Observe events as they arrive, so a test can assert none arrive after an abort. */
+  onEvent?: (event: AgUiEvent) => void;
 }): Promise<ConciergeRunResult> {
   const {
     url,
@@ -190,11 +194,22 @@ export async function runConciergeAgent(options: {
     agentId = "conciergeAgent",
     headers = {},
     timeoutMs = 120_000,
+    signal,
+    onEvent,
   } = options;
 
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
+
+  // Forward an external abort into the controller that owns the fetch. This is
+  // deliberately distinct from the timeout below so the two failures stay
+  // diagnosable: a Stop must not be reported as a stall.
+  const onExternalAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", onExternalAbort, { once: true });
+  }
 
   // A stall is diagnosed from the operator's side, so the message names the
   // endpoint and thread. Cookies are never included.
@@ -208,21 +223,28 @@ export async function runConciergeAgent(options: {
     );
 
     const events$ = transformHttpEventStream(
-      runHttpRequest(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          ...headers,
-        },
-        body: JSON.stringify(envelope),
-        signal: controller.signal,
-      }),
+      // @ag-ui/client 0.0.59 changed runHttpRequest from (url, init) to a single
+      // thunk that performs the fetch. MDE's call is unchanged; only the shape is.
+      runHttpRequest(() =>
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            ...headers,
+          },
+          body: JSON.stringify(envelope),
+          signal: controller.signal,
+        }),
+      ),
     );
     const collected = new Promise<AgUiEvent[]>((resolve, reject) => {
       const events: AgUiEvent[] = [];
       events$.subscribe({
-        next: (event) => events.push(event as AgUiEvent),
+        next: (event) => {
+          events.push(event as AgUiEvent);
+          onEvent?.(event as AgUiEvent);
+        },
         error: (error) =>
           reject(error instanceof Error ? error : new Error(String(error))),
         complete: () => resolve(events),
@@ -255,5 +277,6 @@ export async function runConciergeAgent(options: {
     throw error;
   } finally {
     if (timer) clearTimeout(timer);
+    signal?.removeEventListener("abort", onExternalAbort);
   }
 }
