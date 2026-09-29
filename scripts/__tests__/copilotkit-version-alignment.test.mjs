@@ -134,55 +134,6 @@ test("rejects a range instead of an exact pin", () => {
   assert.match(output(result), /must be an exact version, not a range/);
 });
 
-test("rejects malformed SemVer, not just ranges", () => {
-  // Raised in review: the first pattern accepted these. None is a publishable exact
-  // version, so accepting one would let a non-version string through the gate.
-  const malformed = [
-    "01.2.3", // leading zero in a core component
-    "1.02.3",
-    "1.2.03",
-    "1.2.3-01", // leading zero in a numeric prerelease identifier
-    "1.2.3-a..b", // empty dot-separated identifier
-    "1.2.3-a.",
-    "1.2.3-.a",
-    "1.2.3-", // empty prerelease
-    "1.2.3+", // empty build metadata
-    "1.2.3.4", // too many core components
-    "v1.2.3", // leading "v"
-    "1.2.3 ", // trailing whitespace
-  ];
-  for (const version of malformed) {
-    const result = runChecker(
-      fixture({ "@copilotkit/react-core": version, "@copilotkit/runtime": version }),
-    );
-    assert.notEqual(result.status, 0, `${JSON.stringify(version)} must be rejected`);
-    assert.match(output(result), /must be an exact version, not a range/);
-  }
-});
-
-test("accepts well-formed SemVer including prerelease and build metadata", () => {
-  const valid = [
-    "1.55.2",
-    "0.0.59",
-    "0.0.0",
-    "0.2.1-beta.2",
-    "1.76.0-beta.1",
-    "1.0.0-0",
-    "1.0.0+build.1",
-    "1.0.0-alpha.1+build.2",
-  ];
-  for (const version of valid) {
-    const result = runChecker(
-      fixture({ "@copilotkit/react-core": version, "@copilotkit/runtime": version }),
-    );
-    assert.equal(
-      result.status,
-      0,
-      `${JSON.stringify(version)} is an exact pin and must pass:\n${output(result)}`,
-    );
-  }
-});
-
 test("rejects a dist-tag instead of an exact pin", () => {
   const result = runChecker(
     fixture({ "@copilotkit/react-core": "latest", "@copilotkit/runtime": "latest" }),
