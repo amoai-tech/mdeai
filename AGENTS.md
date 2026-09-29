@@ -163,6 +163,7 @@ Do not duplicate detailed operating rules here when a canonical skill owns them.
 - New Supabase tables require RLS and an explicit authorization policy.
 - Google Places requests must use intentional field masks; Maps markers require the correct map configuration, unless the owning Maps skill or the current task documents a specific supported exception.
 - Prefer the fewest necessary independently reviewable PRs.
+- PR title/body standard (real-world description, diagrams, pre/post-merge evidence, per-URL instructions) → `tasks`.
 - Treat repository skills as trusted executable instructions: review skill changes before relying on them.
 - Run the narrowest relevant proof before calling anything done.
 
@@ -192,7 +193,43 @@ Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase
 
 `floor` is the only required status check on `main`, so it is the only check that gates a merge. It runs on every pull request regardless of base branch, because a stacked PR based on another feature branch is still a PR that needs the same proof.
 
-Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this repository are dominated by heuristics that do not hold here: it reads the 64-character sha256 tree hashes in `upstream.yaml` as hard-coded credentials, rejects `#2-entry-in-rationalization-table`-style fragments that GitHub's own slug rules accept, and reports every `path.join` in a test file as dynamic path construction. Making it required would block merges on those false positives rather than on defects. A `mergeStateStatus` of `UNSTABLE` caused by Codacy is therefore expected and is not a reason to hold a merge; a real Codacy finding is worth reading on its merits.
+Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this repository are dominated by heuristics that do not hold here: it reads the 64-character sha256 tree hashes in `upstream.yaml` as hard-coded credentials, rejects `#2-entry-in-rationalization-table`-style fragments that GitHub's own slug rules accept, reports every `path.join` in a test file as dynamic path construction, and flags deliberate absolutes in this file's own prose as "absolute rule without escape hatch". Making it required would block merges on those false positives rather than on defects. A `mergeStateStatus` of `UNSTABLE` caused by Codacy is therefore expected and is not a reason to hold a merge; a real Codacy finding is worth reading on its merits, and a `fail` from Codacy alone never blocks a merge — only `floor` does.
+
+## Pull requests
+
+A PR body is the durable record of a change, and it is written for a reviewer who has not read the task. State it so the body stands alone after the branch is deleted.
+
+**Title** — real-world and plain. Say what changes for a person, not the internal mechanism.
+
+- ✅ `Stop an unreviewed database migration from reaching production`
+- 🚫 `SAN-1283: add preflight script, refactor helper`
+
+**Body — required sections, in this order.** Keep each one short; a reviewer reads the "Important" box and the diagrams first.
+
+| Section | What belongs in it |
+| -- | -- |
+| **What this changes** | Two or three sentences a non-author understands. Lead with the real-world consequence, not the implementation. |
+| **Why now** | The incident, ticket, measurement, or review finding that motivated it. Link it: `SAN-xxxx`, issue, or PR. |
+| **Workflows / user journey** | Who is affected — end user, operator, CI, or agent — and the journey before → after. Name the journey explicitly; "no user-visible change" is a valid answer when it is true. |
+| **Diagrams** | Mermaid, and it must render. At minimum a `flowchart` of the journey. Add a `sequenceDiagram` when more than one party is involved and a `graph` when the change alters architecture or dependencies. |
+| **Tech stack touched** | Languages, frameworks, services, and versions the change depends on, including anything pinned. |
+| **Important** | The one to three things a reviewer must not miss. Separate "this is the point" from "this is the risk". If everything is important, nothing is. |
+| **Pre-merge checklist** | Each check with its **exact command** and **current result**. Production-ready success criteria stated as observable facts, not adjectives. |
+| **Post-merge actions** | What must happen or be run after merge — migrations, env vars, backfills, dashboards, follow-ups — each with the action that verifies it. Write "none" when there are none. |
+| **Reference URLs** | Every source used, each with an instruction (format below). |
+| **Skills / MCP used** | Which repository skills and MCP servers informed the work, so the reasoning can be reproduced. |
+
+**Reference URLs are instructions, not a reading list.** One row per source, no bare links:
+
+| URL | What to read there | What to do with it |
+| -- | -- | -- |
+| The full URL | The exact file, section, symbol, or example | `COPY` / `ADAPT` / `MODEL` / `REFERENCE ONLY` **plus the instruction** — "mirror this filename rule", "take this field-mask list", "follow this retry shape" |
+
+Same disposition vocabulary as the source receipt above; a PR body is the natural place to keep it.
+
+**Success criteria are observable or they are not criteria.** "Works correctly" and "tested" fail this. "`supabase db push --dry-run` on `main` lists exactly the one approved migration" passes it.
+
+Never write a body that only restates the diff — the diff is already in the PR. The body is the part a machine cannot generate.
 
 ## Merge approval
 
