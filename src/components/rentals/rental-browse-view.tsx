@@ -9,6 +9,8 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
+import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { useMapContext } from "@/platform/maps/map-context";
@@ -55,6 +57,9 @@ function RentalBrowseViewInner({
   maxPrice,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId } = useMapContext();
+  // SAN-478 — the browse card requests a viewing through the same shared modal the detail
+  // page and the chat card use, instead of navigating to a route that does not exist.
+  const { openScheduleViewing } = useRentalUi();
   const retryHref = buildRetryHref({ neighborhood, beds, maxPrice });
 
   const pins = useMemo(
@@ -128,6 +133,13 @@ function RentalBrowseViewInner({
                     testId={`rental-card-${r.id}`}
                     selected={selectedPinId === pinId}
                     onSelect={() => setSelectedPinId(pinId)}
+                    onSchedule={() =>
+                      openScheduleViewing({
+                        listingId: r.id,
+                        title: r.title,
+                        neighborhood: r.neighborhood,
+                      })
+                    }
                   />
                 );
               })}
@@ -143,8 +155,11 @@ function RentalBrowseViewInner({
 
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
-    <BrowseMapContextShell>
-      <RentalBrowseViewInner {...props} />
-    </BrowseMapContextShell>
+    <RentalUiProvider>
+      <BrowseMapContextShell>
+        <RentalBrowseViewInner {...props} />
+      </BrowseMapContextShell>
+      <ScheduleViewingModal />
+    </RentalUiProvider>
   );
 }

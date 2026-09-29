@@ -35,6 +35,13 @@ export const rentalSchema = z.object({
   /**
    * `null` — never `undefined` — when `can_schedule_viewing` is false, so tool and
    * API serialization stays deterministic for consumers and LLM narration.
+   *
+   * SAN-478 — this points at the MDE listing detail page, which is where the viewing
+   * modal actually lives. It deliberately does NOT point at a `/schedule-viewing`
+   * route: no such route has ever existed, so the previous value handed every consumer
+   * of this field — including the rental and concierge agents, which are instructed to
+   * print it to the user — a dead 404 link. The detail page is the real, requestable
+   * destination, and it resolves by id or slug.
    */
   schedule_viewing_url: z.string().nullable(),
   host_name: z.string(),
@@ -283,7 +290,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
-      ? `https://mdeai.co/rentals/${r.slug ?? r.id}/schedule-viewing`
+      ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
     availability: formatAvailability(r.available_from, r.available_to),
