@@ -91,9 +91,14 @@ const deny = (message) => {
  * here, so `MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1` cannot smuggle a change past the invariants
  * above. Both checks shared one bypass-aware `block()` before, which meant authorizing a version
  * change also disabled the forbidden-import and non-exact-range checks.
+ *
+ * An authorized move must RETURN, not exit. The move loop sits above the alignment check, so
+ * `process.exit(0)` here ended the hook before alignment was evaluated — which meant the bypass
+ * also permitted a move that left `react-core` and `runtime` misaligned. Returning lets every
+ * remaining invariant still run; the hook reaches its own `process.exit(0)` when they all pass.
  */
 const denyVersionMove = (message) => {
-  if (upgradeAuthorized) process.exit(0);
+  if (upgradeAuthorized) return;
   deny(`${message}\nTo authorize this version change: MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE=1`);
 };
 

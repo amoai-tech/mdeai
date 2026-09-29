@@ -20,6 +20,7 @@ import { afterEach, test } from "node:test";
 
 const GUARD_REL = "scripts/audit-copilotkit-v2-no-new-v1.mjs";
 const ALLOWLIST_REL = "scripts/copilotkit-v2-allowlist.json";
+const LIB_REL = "scripts/lib/strip-comments.mjs";
 
 const GUARD_SRC = path.resolve(GUARD_REL);
 const ALLOWLIST_SRC = path.resolve(ALLOWLIST_REL);
@@ -53,11 +54,12 @@ function fixture(files = {}, allowlistFiles = []) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mde-ck-v2-guard-"));
   fixtureRoots.push(root);
 
-  for (const rel of [GUARD_REL, ALLOWLIST_REL]) {
+  for (const rel of [GUARD_REL, ALLOWLIST_REL, LIB_REL]) {
     const dest = path.join(root, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
   }
   fs.copyFileSync(GUARD_SRC, path.join(root, GUARD_REL));
+  fs.copyFileSync(path.resolve(LIB_REL), path.join(root, LIB_REL));
   fs.writeFileSync(
     path.join(root, ALLOWLIST_REL),
     `${JSON.stringify({ description: "test fixture", mainSha: "test", files: allowlistFiles }, null, 2)}\n`,
@@ -122,6 +124,104 @@ test("honours the allowlist for an explicitly exempted file", () => {
   const result = runGuard(root);
 
   assert.equal(result.status, 0, `allowlisted file must pass:\n${result.stdout}${result.stderr}`);
+});
+
+// ---------- the allowlist is a ledger, not a permanent exemption ----------
+// Before SAN-1357 Step 7 nothing checked the other direction: an entry whose v1 usage had already
+// been migrated away stayed forever, and an allowlisted path silently pre-approves whatever is
+// written there next. All 29 shipped entries were in exactly that state.
+
+test("fails when an allowlisted file no longer contains a v1 pattern", () => {
+  const rel = "src/legacy/already-migrated.tsx";
+  const root = fixture({ [rel]: CLEAN_SOURCE }, [rel]);
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "a stale exemption must fail the guard");
+  const output = `${result.stdout}${result.stderr}`;
+  assert.match(output, /no longer earn their exemption/i, "the failure must name the problem");
+  assert.match(output, /already-migrated\.tsx/, "the failure must name the stale entry");
+  assert.match(output, /--write-allowlist/, "the failure must give the regeneration command");
+});
+
+test("fails when an allowlisted file no longer exists", () => {
+  const root = fixture({}, ["src/legacy/deleted-long-ago.tsx"]);
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "an entry pointing at a deleted file must fail the guard");
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /deleted-long-ago\.tsx: the file no longer exists/,
+    "the failure must distinguish a missing file from a migrated one",
+  );
+});
+
+test("catches a v1 usage that an unpaired /* in a comment would otherwise hide", () => {
+  // Regression for a real false negative. The previous stripper was
+  // `replace(/\/\*[\s\S]*?\*\//g, "")`, which paired the bare `/*` in `@copilotkit/*` — a LINE
+  // comment, exactly as scripts/check-mastra.mjs writes it — with the next genuine `*/` and deleted
+  // everything between, including a real v1 hook. The guard printed `OK` and exited 0 while the
+  // file used useCoAgent. A false-positive fix must never buy a false negative.
+  const root = fixture({
+    "src/components/hidden.tsx":
+      "// v2-only. Other @copilotkit/* packages are not required to match.\n" +
+      "export function Bad() { return useCoAgent; }\n" +
+      "\n" +
+      "/* a genuine trailing block comment */\n" +
+      "export const ok = 1;\n",
+  });
+  const result = runGuard(root);
+
+  assert.notEqual(
+    result.status,
+    0,
+    `a real v1 usage must never be hidden by comment stripping:\n${result.stdout}${result.stderr}`,
+  );
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /hidden\.tsx: useCoAgent/,
+    "the violation must name the file and the hook",
+  );
+});
+
+test("still flags a v1 module specifier inside a string literal", () => {
+  // The guard exists to find `"@copilotkit/react-ui"`, so string CONTENTS must survive stripping.
+  // Blanking strings would defeat the guard's main purpose.
+  const root = fixture({
+    "src/components/specifier.tsx": 'import "@copilotkit/react-ui";\n',
+  });
+  const result = runGuard(root);
+
+  assert.notEqual(result.status, 0, "a specifier inside a string must still be found");
+  assert.match(`${result.stdout}${result.stderr}`, /specifier\.tsx/);
+});
+
+test("does not treat v1 prose in a comment as a v1 usage", () => {
+  // `src/app/chat/page.tsx` ships exactly this shape: a doc comment naming the retired package,
+  // which used to be the sole reason it stayed on the allowlist.
+  const root = fixture({
+    "src/components/commented.tsx":
+      "/** v2-only after SAN-891 — Retire @copilotkit/react-ui. */\n" +
+      'import { CopilotKitProvider } from "@copilotkit/react-core/v2";\n' +
+      "export const x = CopilotKitProvider;\n",
+  });
+  const result = runGuard(root);
+
+  assert.equal(
+    result.status,
+    0,
+    `comment prose must not create or sustain a violation:\n${result.stdout}${result.stderr}`,
+  );
+});
+
+test("the shipped allowlist has no stale entries and permits nothing", () => {
+  const data = JSON.parse(fs.readFileSync(ALLOWLIST_SRC, "utf8"));
+  assert.ok(Array.isArray(data.files), "the allowlist must expose a files array");
+  assert.equal(
+    data.files.length,
+    0,
+    "every v1 usage is migrated, so the ledger must be empty; a non-empty ledger means the guard " +
+      "is pre-approving that path rather than protecting it",
+  );
 });
 
 test("honours the *-v1.tsx and __tests__ path exemptions", () => {

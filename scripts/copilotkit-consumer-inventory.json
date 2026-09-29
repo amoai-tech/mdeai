@@ -1,0 +1,215 @@
+{
+  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and the compatibility <CopilotKit> boundaries must be exactly the four below.",
+  "classifications": ["migrate", "keep", "test-only", "compatibility-required", "remove"],
+  "consumers": [
+    {
+      "file": "src/lib/copilotkit-client-props.ts",
+      "classification": "migrate",
+      "step": 9,
+      "implicitContract": true,
+      "note": "Not a @copilotkit importer — it declares the shared props shape locally. Holds the v1-shaped `agent:` and `showDevConsole: false`; `agent` is not a v2 prop and will fail typecheck."
+    },
+    {
+      "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
+      "classification": "migrate",
+      "step": 9,
+      "implicitContract": true,
+      "note": "Asserts the shared props shape, including `showDevConsole: false`. Must fail if a legacy prop reappears."
+    },
+    {
+      "file": "src/app/api/copilotkit/[[...path]]/route.ts",
+      "classification": "migrate",
+      "step": 10,
+      "note": "The only file in the repository importing the bare `@copilotkit/runtime`. Uses ExperimentalEmptyAdapter and copilotRuntimeNextJSAppRouterEndpoint."
+    },
+    {
+      "file": "src/__tests__/api/copilotkit-rate-limit-route.test.ts",
+      "classification": "migrate",
+      "step": 11,
+      "note": "Mocks the bare `@copilotkit/runtime` at line 18; must mock and assert the v2 handler instead."
+    },
+    {
+      "file": "src/components/copilot/copilot-kit-provider.tsx",
+      "classification": "migrate",
+      "step": 12,
+      "note": "Compatibility <CopilotKit> boundary. Passes threadId, which is not a CopilotKitProvider prop. Uses the shared client props."
+    },
+    {
+      "file": "src/components/chat/chat-provider.tsx",
+      "classification": "migrate",
+      "step": 13,
+      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+    },
+    {
+      "file": "src/components/host/host-event-provider.tsx",
+      "classification": "migrate",
+      "step": 14,
+      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+    },
+    {
+      "file": "src/components/host/host-os-shell.tsx",
+      "classification": "migrate",
+      "step": 15,
+      "note": "Compatibility <CopilotKit> boundary. Also imports the CopilotErrorEvent type from @copilotkit/shared, which is not in the certified matrix and is the compatibility error type Step 15 replaces."
+    },
+
+    {
+      "file": "src/app/layout.tsx",
+      "classification": "keep",
+      "note": "Imports the v2 stylesheet only."
+    },
+    {
+      "file": "src/app/dev/chat-virtualization/page.tsx",
+      "classification": "keep",
+      "note": "Dev-only virtualization probe from PR #171. Already uses the <CopilotKitProvider> + <CopilotChatConfigurationProvider> pair, so it is the reference model for Steps 12 to 15."
+    },
+    {
+      "file": "src/components/chat/chat-center-panel.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/chat-filter-copilot-instructions.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/concierge-coagent-context.tsx",
+      "classification": "keep",
+      "note": "v2 surface. Step 17 revisits the custom readiness plumbing and may simplify it; verify-only until then."
+    },
+    {
+      "file": "src/components/chat/concierge-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/concierge-copilot-chat-view.tsx",
+      "classification": "keep",
+      "note": "v2 CopilotChatView."
+    },
+    {
+      "file": "src/components/copilot/focus-map-pin-action.tsx",
+      "classification": "keep",
+      "note": "Frontend tool registration; Step 19 verifies render names still match the Mastra tool-map keys."
+    },
+    {
+      "file": "src/components/copilot/search-tool-renders.tsx",
+      "classification": "keep",
+      "note": "Tool renderers; Step 19 territory."
+    },
+    {
+      "file": "src/components/host/host-context-provider.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-event-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-event-shell.tsx",
+      "classification": "keep",
+      "note": "v2 surface; confirms no fifth provider boundary is rendered here."
+    },
+    {
+      "file": "src/components/host/host-ops-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-os-body.tsx",
+      "classification": "keep",
+      "note": "v2 surface."
+    },
+    {
+      "file": "src/lib/hooks/use-concierge-chat.ts",
+      "classification": "keep",
+      "note": "v2 hooks only; Step 19 verifies identity and RequestContext cross the bridge."
+    },
+    {
+      "file": "src/lib/hooks/use-host-ops-chat.ts",
+      "classification": "keep",
+      "note": "v2 hooks only; Step 19 territory."
+    },
+
+    {
+      "file": "scripts/audit-copilotkit-v2-no-new-v1.mjs",
+      "classification": "keep",
+      "note": "The no-new-v1 guard itself, repaired in Step 7. Names v1 tokens as detection patterns by design."
+    },
+    {
+      "file": "scripts/audit-copilotkit-v2-depcruise-proof.mjs",
+      "classification": "keep",
+      "note": "Dependency-cruiser proof fixture; creates temporary v1 code deliberately."
+    },
+    {
+      "file": "scripts/check-mastra.mjs",
+      "classification": "keep",
+      "note": "SAN-1301-owned gate, verify-only per Step 18. Holds the alignment invariant that backstops the version-pin hook."
+    },
+    {
+      "file": "scripts/pr-agent/build-evidence.mjs",
+      "classification": "keep",
+      "note": "Builds PR evidence; names package specifiers as data, not as imports."
+    },
+
+    {
+      "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
+      "classification": "test-only",
+      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
+    },
+    {
+      "file": "src/__tests__/pr-agent-evidence.test.ts",
+      "classification": "test-only",
+      "note": "Reads package.json dependency names as data."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-local-chat-placement.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2. Must export the new provider names once Step 13 renders them."
+    },
+    {
+      "file": "src/components/host/__tests__/host-os-body.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks CopilotChat. Must export the new provider names once Step 15 renders them."
+    },
+    {
+      "file": "e2e/chat-virtualization.spec.ts",
+      "classification": "test-only",
+      "implicitContract": true,
+      "note": "Browser proof from PR #171 and permanent regression 1 of 9. Drives the CopilotKit dev probe and cites installed dist line numbers in a comment, but imports nothing."
+    },
+    {
+      "file": "e2e/prod-candidate-certification.spec.ts",
+      "classification": "test-only",
+      "note": "Reads the deployed package.json dependency value to assert the pinned version. Not an import."
+    },
+    {
+      "file": "e2e/prod-signed-in-route.spec.ts",
+      "classification": "test-only",
+      "note": "Reads the deployed package.json dependency value to assert the pinned version. Not an import."
+    },
+    {
+      "file": "scripts/__tests__/copilotkit-v2-guard.test.mjs",
+      "classification": "test-only",
+      "note": "Negative-proof harness for the no-new-v1 guard; synthetic v1 sources only."
+    },
+    {
+      "file": "scripts/__tests__/copilotkit-version-alignment.test.mjs",
+      "classification": "test-only",
+      "note": "Deliberate alignment fixture using arbitrary sample versions."
+    }
+  ]
+}
