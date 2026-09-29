@@ -87,9 +87,13 @@ function isVercelCandidate(origin: string): boolean {
  */
 // skipcq: JS-0067 - module-local helper
 async function openCandidate(page: Page, origin: string): Promise<void> {
-  if (BYPASS_SECRET && isVercelCandidate(origin)) {
-    await establishVercelAutomationBypass(page, origin, BYPASS_SECRET);
+  if (!isVercelCandidate(origin)) return; // production is not protected
+  if (!BYPASS_SECRET) {
+    // Fail loudly. Silently skipping would surface later as a Vercel login page, which reads
+    // like a product defect rather than a missing secret.
+    throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a Vercel candidate");
   }
+  await establishVercelAutomationBypass(page, origin, BYPASS_SECRET);
 }
 
 type Admin = Awaited<ReturnType<typeof getSupabaseAdmin>>;
@@ -354,7 +358,7 @@ async function fillFixture(
       verification_status: "approved",
     },
   ]);
-  expect(profilesError, "broker profiles insert").toBeNull();
+  if (profilesError) throw new Error(`broker profiles insert failed: ${profilesError.message}`);
 
   const { error: apartmentError } = await admin.from("apartments").insert({
     id: fixture.apartmentId,
@@ -367,7 +371,7 @@ async function fillFixture(
     landlord_id: fixture.ownerProfileId,
     available_to: "2099-12-31",
   });
-  expect(apartmentError, "apartment insert").toBeNull();
+  if (apartmentError) throw new Error(`apartment insert failed: ${apartmentError.message}`);
 
   return { ...fixture, owner, other };
 }
@@ -387,7 +391,7 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
     p_lead_metadata: {},
     p_showing_metadata: {},
   });
-  expect(rpcError, "p1_schedule_tour_atomic").toBeNull();
+  if (rpcError) throw new Error(`p1_schedule_tour_atomic failed: ${rpcError.message}`);
 
   // Retried on purpose: cleanup deletes by these ids, so a transient Supabase failure here would
   // leave leadId/showingId null and strand the rows the RPC just committed.
@@ -395,13 +399,13 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
     admin.from("leads").select("id").eq("idempotency_key", fixture.idempotencyKey),
   );
   fixture.leadId = leadResult.data?.[0]?.id ?? null;
-  expect(fixture.leadId, "the RPC must have committed one lead").toBeTruthy();
+  if (!fixture.leadId) throw new Error("the RPC must have committed one lead");
 
   const showingResult = await retryCall("showing lookup", () =>
     admin.from("showings").select("id").eq("lead_id", fixture.leadId!),
   );
   fixture.showingId = showingResult.data?.[0]?.id ?? null;
-  expect(fixture.showingId, "the RPC must have committed one showing").toBeTruthy();
+  if (!fixture.showingId) throw new Error("the RPC must have committed one showing");
 }
 
 /**
@@ -409,15 +413,28 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
  * transient 502 that silently skipped a delete would strand real production rows.
  */
 // skipcq: JS-0067 - module-local helper
+/** An error retrying cannot fix — a bad UUID, an RLS denial, a constraint violation. */
+class NonRetryableError extends Error {}
+
 async function retryCall<T>(label: string, fn: () => PromiseLike<T>, tries = 6): Promise<T> {
   let last: unknown;
   for (let attempt = 1; attempt <= tries; attempt++) {
     try {
       const result = await fn();
-      const error = (result as { error?: { message: string } | null } | undefined)?.error;
-      if (error) throw new Error(error.message);
+      const error = (result as { error?: { message: string; status?: number } | null } | undefined)
+        ?.error;
+      if (error) {
+        // 4xx (except 429) is a caller bug. Retrying it six times over ~12s only delays the
+        // real failure and buries the cause.
+        const status = error.status;
+        if (typeof status === "number" && status >= 400 && status < 500 && status !== 429) {
+          throw new NonRetryableError(`${label}: ${error.message}`);
+        }
+        throw new Error(error.message);
+      }
       return result;
     } catch (err) {
+      if (err instanceof NonRetryableError) throw err;
       last = err;
       await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
     }
