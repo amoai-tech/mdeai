@@ -45,7 +45,23 @@ test.describe("SAN-478 · browse-card schedule viewing", () => {
     await page.goto(route("/rentals?neighborhood=Laureles"), {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.locator('[data-testid="rentals-browse"]')).toBeVisible({
+    // Settle before asserting — and deliberately NOT filtered to `:visible`.
+    //
+    // OBSERVED: for a short window after load, Playwright resolves this test id to two
+    // matching elements, and strict mode fails the moment that happens instead of retrying.
+    // Two runs failed here on two different lines against a production build that was working.
+    //
+    // NOT ESTABLISHED: why the duplicate exists. The likely explanation is a server-rendered
+    // subtree still present while a client render takes over, but this spec has not proved
+    // that mechanism — it only proves the duplicate is observable and transient. Stating the
+    // cause as fact would be a claim this test does not support.
+    //
+    // Asserting the UNFILTERED count is the fix: it waits until the duplicate is gone, rather
+    // than until one copy happens to be visible — a `:visible` filter reports 1 while a hidden
+    // twin is still in the DOM, which is exactly how an earlier attempt at this fix passed the
+    // shell check and then failed on the `rentals-grid` read. It still fails if the shell never
+    // renders (0) or genuinely renders twice (2).
+    await expect(page.locator('[data-testid="rentals-browse"]')).toHaveCount(1, {
       timeout: 60_000,
     });
 
