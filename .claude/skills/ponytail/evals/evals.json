@@ -1,0 +1,52 @@
+{
+  "skill_name": "ponytail",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Add UUID generation for client-side message ids in an MDE component.",
+      "expected_output": "Uses the native platform primitive instead of writing or installing an id generator, and states the rung it stopped at.",
+      "files": [],
+      "expectations": [
+        "chooses crypto.randomUUID() over a custom or third-party generator",
+        "names the rung it stopped at",
+        "leaves one runnable check only if the logic is non-trivial"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add a safety checker that blocks production database migrations from being applied from the wrong git state.",
+      "expected_output": "Inspects what the Supabase CLI actually does before encoding any rule, rather than inventing a heuristic about git.",
+      "files": [],
+      "expectations": [
+        "reads the official CLI implementation or --help before writing the rule",
+        "records a source receipt with a destination and a verification command",
+        "separates source proof from implementation proof",
+        "does not treat a passing unit test as proof of documented CLI behaviour"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Build a modal dialog for the rentals filters panel.",
+      "expected_output": "Reuses the installed component library or an existing MDE component rather than hand-rolling focus trapping and keyboard navigation.",
+      "files": [],
+      "expectations": [
+        "searches existing MDE components and the installed UI package first",
+        "checks the official component recipe before writing an equivalent",
+        "writes custom code only for MDE-specific behaviour",
+        "verifies with a focused test or a Playwright check"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Copy the current CopilotKit v2 streaming example into an MDE chat route.",
+      "expected_output": "Verifies the CopilotKit version pinned in this repository before adapting a current upstream example.",
+      "files": [],
+      "expectations": [
+        "checks the installed version before copying the example",
+        "prefers versioned docs or repository source at the matching commit",
+        "does not apply a current upstream API to an older pinned version"
+      ]
+    }
+  ]
+}

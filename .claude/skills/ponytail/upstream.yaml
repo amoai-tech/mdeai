@@ -1,0 +1,22 @@
+vendor: Ponytail
+repository: https://github.com/dietrichgebert/ponytail
+source_path: .agents/rules
+reviewed_commit: e3ba2aa6f1e6f0bc4d69eb09c9f0d0a93af56156
+reviewed_at: 2026-09-28
+policy:
+  active_skill: ponytail
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+sources:
+  rule:
+    path: .agents/rules/ponytail.md
+    local: references/official/ponytail/ponytail.md
+    sha256: 571275b654460fbba63d685c69b3fde422a0a82d69b814561f878797ae9adae1
+hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-09-28"
+  trees:
+    references/official/ponytail/ponytail.md: 669134318089e60296bbb0d0ddbddfbc6bba1aa7c8653fec7c581f3960a0fb91

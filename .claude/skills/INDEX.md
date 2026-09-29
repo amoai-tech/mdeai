@@ -40,6 +40,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
 | `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/Vercel domain owner; review/deploy/performance detail uses progressive-disclosure references |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
+| `ponytail` | 93 | KEEP + BENCHMARK | Owner for reuse-before-build, source receipts, and the evidence split; eval pack added — next, measure the diff-size effect with and without the skill |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
 | `research` | 95 | KEEP | Maintain primary-source/evidence discipline |
 | `stripe` | 94 | KEEP | Maintain payment/idempotency safety |

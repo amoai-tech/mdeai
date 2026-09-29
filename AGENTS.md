@@ -35,35 +35,127 @@ Traps worth knowing before you debug them:
 - `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
 - Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
 
+## Instruction ownership
+
+Rules live at exactly one level, and a lower level never silently overrides a higher one:
+
+| Level | Owns |
+| -- | -- |
+| `AGENTS.md` | Repository-wide invariants, routing, and the completion contract |
+| `.claude/skills/<name>/SKILL.md` | The detailed workflow and domain rules for that owner |
+| `.claude/skills/<name>/references/` | Long-form examples, source maps, vendor docs |
+| Tests and CI | What is mechanically enforced |
+
+If a detailed rule already lives in a canonical skill, link to it here rather than restating it. When a shared rule changes, change it at its owning level and delete the copy.
+
 ## Skill routing
 
-Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-skills` to choose exactly one canonical execution owner and then stop routing:
+Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-skills` to choose exactly one canonical execution owner, then stop routing. **Known domain beats generic workflow**: if the request names a canonical domain skill, route there even when it says bug, broken, failing, or debug. Use `systematic-debugging` only when the responsible root cause is genuinely unknown.
 
-Known domain beats generic workflow.
-
-If the request clearly names or belongs to a canonical domain skill, route directly to that domain even when the request contains words such as bug, broken, failing, error, debug, or troubleshoot.
-
-Use `systematic-debugging` only when the responsible domain/root cause is genuinely unknown.
-
-- Simple domain/stack work → relevant specialist skill.
-- Substantial or ambiguous implementation → `tasks`.
+- Simple domain/stack work → the relevant specialist skill.
+- Reuse-before-build and evidence receipts → `ponytail` (runs *before* implementation ownership; never replaces the domain owner).
+- Substantial or ambiguous implementation, PR creation, review handling → `tasks`.
 - Unknown failure/root cause → `systematic-debugging`.
-- Test strategy, test-first implementation, and regression proof → `testing`.
+- Test strategy, test-first work, regression proof → `testing`.
 - Existing diff/PR review → `code-review`.
-- Research/evidence gathering → `research`.
-- Done/merge/production claim → `task-verifier`.
+- Research needing primary sources → `research`.
+- Done, merge, or production claims → `task-verifier`.
 - UI state/interaction design → `wireframe`.
 - Architecture/state/dependency visualization → `mermaid-diagrams`.
 
-`using-mde-skills` is the active lightweight ambiguity router. Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, or `mde-worktree-pr-flow`) or the old PR #45 routing machinery. Lifecycle/execution routes to `tasks`; independent Done/merge/production proof routes to `task-verifier`. S4 safety applies even when ownership is obvious and the router is bypassed. Treat payments/financial side effects, auth/RLS/tenant-boundary changes, secrets/security controls, destructive or irreversible production-data changes, and duplicate/retry-sensitive irreversible external side effects as S4; only those S4 requests require independent `task-verifier` verification before completion. Ordinary domain bugs and implementation work do not automatically become S4.
+**S4 work needs independent verification before Done:** payments or financial side effects; auth, RLS, or tenant boundaries; secrets and security controls; destructive or irreversible production-data changes; duplicate- or retry-sensitive irreversible external side effects. S4 applies even when ownership is obvious and the router was bypassed. Ordinary domain bugs and implementation work are not S4.
 
-## Canonical skills
+Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, `mde-worktree-pr-flow`) or the old PR #45 routing machinery.
 
-`.claude/skills/INDEX.md` is the authoritative list of active skills with its score and keep/consolidate decision. Read it instead of a list maintained here; a parallel catalogue drifts. `npm run check:skills` fails when `.claude/skills/` and the `.agents/skills/` mirror disagree.
+## Shared invariants
 
-Skills group into **stack** (framework and platform owners), **domain** (product-domain owners), and **workflow** (task lifecycle, verification, research, review, and reasoning owners). Ownership routing lives in the section above and in `Shared invariants` below.
+Load the owning skill and follow its current instructions.
 
-## Graphify repo intelligence
+- Git/worktree safety and execution sequencing → `tasks`.
+- PR body standard, reviewer fast path, exact-head rule, post-merge checks → `tasks/references/github-pr.md`.
+- Reuse ladder, evidence receipts, root-cause discipline → `ponytail`.
+- Anti-fake-Done and independent verification → `task-verifier`.
+- Root-cause methodology → `systematic-debugging`.
+- Test selection, TDD, regression proof → `testing`.
+- Supabase auth/RLS/service-role rules → `supabase`.
+- CopilotKit/AG-UI integration → `copilotkit`.
+- Mastra agents, tools, workflows → `mastra`.
+- Maps field masks and marker configuration → `maps`.
+- Gemini model/provider details → `gemini`.
+- Next.js App Router, RSC, caching, Vercel config → `nextjs`.
+- Payments, checkout, webhooks, Connect, refunds → `stripe`.
+- Cloudinary uploads and media lifecycle → `cloudinary`.
+- Event creation, tickets, attendee flows → `events`.
+- Rentals, listings, broker/host flows, viewings → `real-estate`.
+
+## Ponytail — reuse before build
+
+Trace the real user/runtime flow first, then stop at the first rung that safely satisfies the requirement:
+
+1. it does not need to exist;
+2. an existing repository helper, component, or pattern already does it;
+3. the standard library does it;
+4. a native platform capability covers it — including an official dashboard or CLI surface;
+5. an already-installed dependency solves it;
+6. an official template, example, recipe, or CLI command covers it;
+7. only then, the minimum custom implementation.
+
+Choose the earliest rung that satisfies correctness, security, testability, reproducibility, version compatibility, and automation. **A dashboard-only configuration is not sufficient when it must be reproducible from Git** — a setting that has to replay in every environment belongs in a migration or committed config, not a console.
+
+Do not build a custom abstraction merely because it is easy to write. Then fix the shared root cause rather than duplicating a patch per caller, and leave one runnable verification proving the decision.
+
+**Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility, and anything explicitly requested. Never trade these for a smaller diff. Mark a deliberate ceiling with a `ponytail:` comment naming the ceiling and its upgrade path.
+
+The expanded implementation order, examples, and the source map live in `.claude/skills/ponytail/SKILL.md`.
+
+## Evidence rules
+
+### Source priority — verify the current contract first
+
+Determine what this repository actually uses before copying any example. In order:
+
+1. the installed package, pinned version, generated types, or CLI help;
+2. official documentation **for that version**;
+3. the official source repository at the matching version or commit;
+4. official examples, templates, recipes, and starter projects;
+5. existing implementation in this repo;
+6. third-party examples, only when primary sources are insufficient.
+
+A blog, tutorial, or model recall is never authority when the official implementation is available. Our pins lag upstream — a current upstream example applied to an older API is a new bug wearing a citation. This matters most for CopilotKit, Mastra, Next.js, the Supabase CLI, Google Maps, and Gemini.
+
+### Two kinds of proof
+
+Source evidence and implementation evidence prove different things, and neither substitutes for the other.
+
+| | Answers |
+| -- | -- |
+| **Source proof** | Does this API exist? What arguments or configuration does it support? What does the platform officially guarantee? |
+| **Implementation proof** | Did we use it correctly here? Does the integration work? Does the user journey succeed? Are security and data integrity preserved? |
+
+A URL cannot replace a test. A passing test cannot establish an undocumented external contract. Use both whenever the decision depends on both: the Supabase CLI source proves which migration filenames `db push` discovers, and our regression test proves the guard follows the same rule.
+
+### Source receipts
+
+Record a receipt **only** for an external source that materially affects the implementation or the decision. Background reading gets none — an inflated citation table buries the rows that mattered.
+
+| Field | Requirement |
+| -- | -- |
+| **URL** | Exact full URL |
+| **Source** | Exact file, section, symbol, command, example, recipe, or template |
+| **Decision** | The engineering question this source answered |
+| **Disposition** | `COPY` · `ADAPT` · `MODEL` · `REFERENCE ONLY` |
+| **Destination** | Exact repository path changed because of it, or `—` |
+| **Implementation** | The exact change to make |
+| **Verification** | Exact command, test, query, or runtime proof |
+| **Version / commit** | Version, tag, or commit, when behaviour may drift |
+
+A receipt with neither an implementation consequence nor an explicit rejection is incomplete — that is what stops "I read the docs" from counting as engineering proof.
+
+**Dispositions.** *`COPY`* — substantially unchanged, licence permitting, with the upstream version recorded. *`ADAPT`* — an official implementation used as the starting pattern, modified for MDE's architecture, versions, security, or naming. *`MODEL`* — do not reuse the implementation; reproduce the design, structure, or decision pattern in MDE-specific code. *`REFERENCE ONLY`* — informed the decision, nothing implemented from it: state why nothing was adopted, the alternative considered, and why that alternative was rejected.
+
+Never assert a decision-critical claim from memory, and never round an unverified claim up to a fact. State what you checked and what you could not.
+
+## Graphify repository intelligence
 
 Before broad repository searching on substantial code tasks:
 
@@ -73,42 +165,19 @@ Before broad repository searching on substantial code tasks:
 4. Fall back to normal search when the question is conceptual, Graphify has no useful match, runtime behavior needs verification, or direct source evidence is more appropriate.
 5. Treat static graph results as navigation evidence rather than sufficient deletion proof; confirm risky conclusions against source, runtime behavior, and relevant tests.
 
-## Ponytail engineering rule
-
-Before writing custom code, prefer the earliest rung that safely satisfies the task: skip unnecessary work; reuse existing repository code; prefer the standard library or native platform; reuse an installed dependency; use a small direct change; only then add the minimum new implementation required. Preserve required validation, error handling, security, accessibility, data integrity, and tests rather than trading them away merely to reduce code size.
-
-## Shared invariants
-
-Do not duplicate detailed operating rules here when a canonical skill owns them. Load the relevant skill and follow its current instructions.
-
-- Git/worktree safety and execution sequencing → `tasks`.
-- Verification and anti-fake-Done requirements → `task-verifier`.
-- Root-cause methodology → `systematic-debugging`.
-- Test selection, TDD, and regression proof → `testing`.
-- Supabase auth/RLS/service-role rules → `supabase`.
-- CopilotKit/AG-UI integration rules → `copilotkit`.
-- Mastra agent/tool/workflow rules → `mastra`.
-- Google Maps/Places field masks and marker configuration → `maps`.
-- Gemini model/provider details → `gemini`.
-- Next.js App Router, RSC boundaries, caching, and Vercel deploy/config → `nextjs`.
-- Payments, checkout, webhooks, Connect, and refunds → `stripe`.
-- Cloudinary uploads, transformations, and media lifecycle → `cloudinary`.
-- Event creation, publishing, tickets, and attendee flows → `events`.
-- Rental/property discovery, listings, broker and host flows, viewings → `real-estate`.
-
 ## Boundaries
 
 ✅ **Always**
 
 - New Supabase tables require RLS and an explicit authorization policy.
-- Google Places requests must use intentional field masks; Maps markers require the correct map configuration, unless the owning Maps skill or the current task documents a specific supported exception.
+- Google Places requests use intentional field masks; Maps markers use the correct map configuration, unless the owning Maps skill documents a supported exception.
 - Prefer the fewest necessary independently reviewable PRs.
 - Treat repository skills as trusted executable instructions: review skill changes before relying on them.
 - Run the narrowest relevant proof before calling anything done.
 
 ⚠️ **Ask first**
 
-- Production AI model/provider changes. Production uses Gemini; verify the current contract before changing model names.
+- Production AI model/provider changes. Production uses Gemini; verify the current contract first.
 - Destructive or irreversible production-data changes.
 - Editing a release gate, a required check, or `.github/workflows/**`.
 
@@ -128,27 +197,43 @@ Do not duplicate detailed operating rules here when a canonical skill owns them.
 
 Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase-rls-audit`. Review subagents: `mdeai-auto-reviewer`, `pr-scope-reviewer`, `security-reviewer`.
 
-## CI checks
+## Pull requests
 
-`floor` is the only required status check on `main`, so it is the only check that gates a merge. It runs on every pull request regardless of base branch, because a stacked PR based on another feature branch is still a PR that needs the same proof.
+Owned by `tasks`. The required body sections and the PR readiness sequence live in
+`.claude/skills/tasks/references/github-pr.md`; this section is only the repository-wide contract:
 
-Codacy Static Code Analysis is **advisory, deliberately**. Its findings on this repository are dominated by heuristics that do not hold here: it reads the 64-character sha256 tree hashes in `upstream.yaml` as hard-coded credentials, rejects `#2-entry-in-rationalization-table`-style fragments that GitHub's own slug rules accept, and reports every `path.join` in a test file as dynamic path construction. Making it required would block merges on those false positives rather than on defects. A `mergeStateStatus` of `UNSTABLE` caused by Codacy is therefore expected and is not a reason to hold a merge; a real Codacy finding is worth reading on its merits.
+- Explain the change to a reader who has not seen the task: the real-world problem, what changed, verification with exact commands and results, and honest risks and remaining work.
+- **Titles are real-world** — what changes for a person, not the internal mechanism.
+- Add a Mermaid diagram, a user journey, database proof, or post-merge steps **only when they apply**, never to satisfy a format. A docs-only PR needs no architecture diagram.
+- Include source receipts for external material that affected the solution — see § Evidence rules.
+- The body lives on **GitHub**, not in a local scratch file. Create it with `gh pr create --body-file` and re-run `gh pr edit` whenever the change moves: a body describing an earlier revision reads as current.
 
-## Merge approval
+A PR body that only restates the diff has added nothing.
 
-`main` also requires one approving review. Treat that as a real gate rather than a formality: every other condition on the merge path is checked by a machine, so the approval is the only step that asks whether the change should exist at all.
+## CI and merge approval
 
-An administrator merge can bypass it. When that happens, the bypass is part of the change's history and has to be written down, not left to be inferred from `mergeStateStatus`:
+`floor` is the only required status check on `main`. It runs on every PR regardless of base branch, because a stacked PR still needs the same proof.
 
-- **#140** and **#143**, both merged 2026-09-28 with an administrator override.
-- **Why:** they were the upper layers of a stacked sequence, so the layer below blocked review of everything above it; every automated check that could run (`floor`, `deterministic chromium`, `review`, `Vercel`) was already green, and neither PR touched runtime application code — they changed skills, CI checks, and documentation.
-- **What the reviewer would have been asked to check:** whether the skill and gate changes were worth landing at all, and whether the deferred finding in #140 (eval packs with no `expectations`, tracked as **SAN-1365**) should block the merge. The second question is still open, which is why that review thread was left unresolved rather than closed.
+Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 
-That is a recorded reason, not a precedent. A production PR — anything that changes application behavior, a database, or a deploy — should satisfy the approval requirement normally; a bypass is defensible only for a non-runtime change whose reason is written down here.
+`main` requires one approving review. Administrator bypasses are exceptional: if one is used, record the reason in the affected PR, which required checks passed, and why waiting for normal approval was not appropriate. Production, runtime, database, and deploy changes satisfy normal approval. Prior bypasses and their reasoning are recorded in `docs/07-operations/merge-approval-history.md`.
 
-## Verification
+## Completion contract
 
-For skill/bootstrap changes, run the narrow checks first:
+"Done" means every applicable layer has **current** evidence, and no layer substitutes for another:
+
+| Layer | Evidence |
+| -- | -- |
+| Implementation | Focused regression proof |
+| Integration | The affected runtime or integration test |
+| Repository gate | `npm run floor` — exit 0 |
+| CI | Exact PR-head checks green |
+| Review | Unresolved findings = 0 |
+| Approval | The required human approval recorded |
+
+A passing unit test does not prove a migration applies. A passing dry-run does not prove required checks are green.
+
+For skill and bootstrap changes, run the narrow checks first:
 
 ```bash
 git diff --check
@@ -156,9 +241,7 @@ node --check .claude/hooks/session-start.mjs
 node .claude/hooks/__tests__/session-start.test.mjs
 ```
 
-Then validate changed-file links, skill metadata/frontmatter, eval JSON, and stale router dependencies. Run the full application Floor on the final landing stack or whenever runtime/source/config changes require it.
-
-Structural eval definitions are specifications only until they are actually executed. Schema-validation tests may report the JSON/schema validation itself as passing, but do not report the behavioral eval as passing merely because its definition validates.
+Structural eval definitions are specifications only until they are executed. A schema validation passing is not the behavioural eval passing.
 
 ## Application context
 
