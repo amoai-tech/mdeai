@@ -13,6 +13,9 @@ type DbClient = SupabaseClient<Database>;
 const BROKER_DASHBOARD_LOAD_ERROR =
   "Couldn't load broker dashboard data. Try again in a moment.";
 
+/** Requests shown per load. The exact total is carried separately so truncation is never silent. */
+const REQUEST_PAGE_SIZE = 50;
+
 function daysAgoIso(days: number): string { // skipcq: JS-0067 - module-local helper
   const date = new Date();
   date.setDate(date.getDate() - days);
@@ -79,6 +82,9 @@ export async function fetchBrokerDashboard(
   let viewingsBookedCount = 0;
   let unansweredLeads: BrokerLeadRow[] = [];
   let upcomingShowings: BrokerShowingRow[] = [];
+  let requestShowings: BrokerShowingRow[] = [];
+  let requestShowingsTotal = 0;
+  let requestLeads: BrokerLeadRow[] = [];
   let leads30dCount: number | null = null;
 
   if (apartmentIds.length > 0) {
@@ -135,7 +141,7 @@ export async function fetchBrokerDashboard(
 
     const { data: showingsData, error: showingsError } = await supabase
       .from("showings")
-      .select("id, apartment_id, scheduled_at, status, lead_id")
+      .select("id, apartment_id, scheduled_at, status, lead_id, created_at")
       .in("apartment_id", apartmentIds)
       .gte("scheduled_at", nowIso)
       .in("status", ["scheduled", "confirmed"])
@@ -146,6 +152,45 @@ export async function fetchBrokerDashboard(
       return failDashboard("upcoming_showings", showingsError);
     }
     upcomingShowings = (showingsData ?? []) as BrokerShowingRow[];
+
+    // SAN-1204 — the broker's real viewing requests. This is deliberately NOT limited to
+    // upcoming showings: a request whose slot has passed still needs the broker's attention,
+    // and hiding it would silently drop a real enquiry.
+    // Newest request first. Ordering by scheduled_at descending let far-future appointments
+    // crowd out sooner ones, which is the opposite of what a broker needs to act on.
+    //
+    // The page is capped, so the exact total is read in the same round trip and carried to the
+    // UI. A cap without a count would silently hide requests, and a hidden request is a lost
+    // enquiry.
+    const {
+      data: requestShowingsData,
+      count: requestShowingsCount,
+      error: requestShowingsError,
+    } = await supabase
+      .from("showings")
+      .select("id, apartment_id, scheduled_at, status, lead_id, created_at", { count: "exact" })
+      .in("apartment_id", apartmentIds)
+      .order("created_at", { ascending: false })
+      .limit(REQUEST_PAGE_SIZE);
+
+    if (requestShowingsError) {
+      return failDashboard("request_showings", requestShowingsError);
+    }
+    requestShowings = (requestShowingsData ?? []) as BrokerShowingRow[];
+    requestShowingsTotal = requestShowingsCount ?? requestShowings.length;
+
+    const requestLeadIds = [...new Set(requestShowings.map((s) => s.lead_id))];
+    if (requestLeadIds.length > 0) {
+      const { data: requestLeadsData, error: requestLeadsError } = await supabase
+        .from("leads")
+        .select("id, name, email, status, created_at, last_contacted_at, apartment_id")
+        .in("id", requestLeadIds);
+
+      if (requestLeadsError) {
+        return failDashboard("request_leads", requestLeadsError);
+      }
+      requestLeads = (requestLeadsData ?? []) as BrokerLeadRow[];
+    }
   }
 
   const view = buildBrokerDashboardView({
@@ -157,6 +202,9 @@ export async function fetchBrokerDashboard(
     apartmentCount: apartmentIds.length,
     unansweredLeads,
     upcomingShowings,
+    requestShowings,
+    requestShowingsTotal,
+    requestLeads,
     leads30dCount,
     views30dCount: null,
   });

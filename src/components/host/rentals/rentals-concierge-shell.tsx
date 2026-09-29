@@ -9,11 +9,15 @@ import {
   type RentalsWorkspaceMode,
 } from "@/components/host/rentals/rentals-dynamic-workspace";
 import { cn } from "@/lib/utils";
+import type { BrokerDashboardView } from "@/lib/rentals/broker-dashboard-types";
 
 type MobilePane = "feed" | "chat" | "workspace";
 
 export type RentalsConciergeShellProps = {
   workspaceMode?: RentalsWorkspaceMode;
+  /** SAN-1204 · real broker data loaded on the server; never fetched in the browser. */
+  dashboard?: BrokerDashboardView | null;
+  loadError?: string | null;
 };
 
 /**
@@ -23,6 +27,8 @@ export type RentalsConciergeShellProps = {
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function RentalsConciergeShell({
   workspaceMode = "concierge",
+  dashboard = null,
+  loadError = null,
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
 
@@ -67,7 +73,11 @@ export function RentalsConciergeShell({
             "lg:block",
           )}
         >
-          <RentalsDynamicWorkspace mode={workspaceMode} />
+          <RentalsDynamicWorkspace
+            mode={workspaceMode}
+            dashboard={dashboard}
+            loadError={loadError}
+          />
         </div>
       </div>
 

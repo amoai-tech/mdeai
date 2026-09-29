@@ -39,10 +39,23 @@ export async function fetchBrokerListings(
 
   const landlordProfileIds = (profiles ?? []).map((p) => p.id);
 
+  // No landlord profile means no inventory; skip the round trip entirely.
+  if (landlordProfileIds.length === 0) {
+    return { ok: true, listings: [], landlordProfileIds: [] };
+  }
+
   const { data, error } = await supabase
     .from("apartments")
     .select(BROKER_LISTING_SELECT)
+    // Ownership must be filtered IN THE QUERY, before the row limit. Filtering only afterwards
+    // client-side meant this fetched the 200 most recently updated apartments visible under RLS
+    // across the whole marketplace, so a broker whose listing fell outside that window lost
+    // their own listing — and the viewing-request card rendered "Your listing" instead of the
+    // apartment name. `filterOwnedBrokerListings` below stays as defence in depth.
+    .in("landlord_id", landlordProfileIds)
     .order("updated_at", { ascending: false })
+    // ponytail: still caps a single broker at 200 listings. Raise to a paged query if any broker
+    // can exceed that; ownership is already correct, so only volume would be truncated.
     .limit(200);
 
   if (error) {
