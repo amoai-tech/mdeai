@@ -272,6 +272,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
 | Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
 | Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
+| Operations | [`07-operations/merge-approval-history.md`](07-operations/merge-approval-history.md) | Markdown | Current |
 | Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
 | Strategy | [`08-strategy/README.md`](08-strategy/README.md) | Markdown | Current |
