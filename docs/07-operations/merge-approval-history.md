@@ -28,6 +28,35 @@ rather than closed, and SAN-1365 remains open.
 deploy — satisfies the approval requirement normally. A bypass is defensible only for a non-runtime
 change whose reason is written down here.
 
+## 2026-09-29 — PR #150
+
+**Merged with an administrator override.**
+
+**Why:** the repository has exactly one collaborator — `amoai-tech` — which was also the PR author.
+GitHub does not permit self-approval, so the required approval was not obtainable from any account.
+The only alternatives were to leave a docs-only change unmergeable indefinitely, or to lower the
+branch protection — which is worse, because it would remove the control for runtime PRs as well.
+`floor`, `deterministic chromium`, `review`, `mastra-schema-init`, `Vercel`, Codacy and Kilo Code
+Review were all green on the exact merged head `a6603616d`, and conversation resolution was satisfied
+with 0 unresolved threads.
+
+**What the reviewer would have been asked to check:** whether `mvp.md` states the right launch gates
+and the right rental critical path (Build → Prove → Certify), and whether the three review rounds'
+dispositions were correct — specifically the removal of volatile production status and the addition
+of host payout to the Events gates.
+
+**Nothing unreviewed rode along:** `mvp.md` was diffed against the reviewed head before merge and was
+byte-identical, so the merged tree contains exactly what was reviewed. Merge commit `e1e33d4d7`.
+
+**Open question — structural, not procedural:** a protected branch with a one-member review
+requirement can never be satisfied, so every future PR faces the same choice. This should be fixed
+deliberately — invite a second reviewer, or scope the review requirement so it excludes docs-only
+paths — rather than worked around repeatedly.
+
+**Not a precedent.** A production PR — anything changing application behaviour, a database, or a
+deploy — satisfies the approval requirement normally. A bypass is defensible only for a non-runtime
+change whose reason is written down here.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
