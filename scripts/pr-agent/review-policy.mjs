@@ -220,16 +220,30 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
     if (!isBotComment(comment) || new Date(comment.updated_at).getTime() < startedAt) return false;
     const body = comment.body ?? "";
     const canonical = body.includes(expectedMarker);
-    const standalone = isStandaloneReview(body);
     const incrementalSkipped =
       reviewCommand === "/review -i" &&
       priorSameBaseCertification &&
       isIncrementalSkipNotice(body);
-    return canonical || standalone || incrementalSkipped;
+    return canonical || incrementalSkipped;
   });
 
+  if (fresh) return { ok: true, reason: "fresh review result verified" };
+
+  // SAN-1332 step 4 (interim). A standalone fallback is recognised only from prose shape and
+  // carries no head of its own, so accepting it means a review of commit A certifies commit B —
+  // whatever head this run actually reviewed. Refuse it rather than guess, and say what to do.
+  // Replaced by exact base/head/command envelope acceptance once the shared publisher emits one.
+  const standalone = comments.some(
+    (comment) =>
+      isBotComment(comment) &&
+      new Date(comment.updated_at).getTime() >= startedAt &&
+      isStandaloneReview(comment.body ?? ""),
+  );
   return {
-    ok: fresh,
-    reason: fresh ? "fresh review result verified" : "PR-Agent did not publish an acceptable fresh review result",
+    ok: false,
+    reason: standalone
+      ? "STALE_HEAD: PR-Agent published only a standalone fallback review, which proves no head of " +
+        "its own — rerun /review so a review with exact base/head identity is published"
+      : "PR-Agent did not publish an acceptable fresh review result",
   };
 }

@@ -281,10 +281,29 @@ describe("PR-Agent review policy", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("accepts a fresh standalone fallback review", () => {
+  it("refuses a fresh standalone fallback review because it proves no head", () => {
+    // SAN-1332 step 4. A standalone fallback is recognised only from prose shape and carries no
+    // head of its own, so accepting it lets a review of commit A certify commit B. This test
+    // previously asserted the opposite; that expectation was the defect.
     const body = "## Standalone PR Review\nPR-Agent could not safely update the persistent review\n## MDE PR Review";
     const result = verifyReviewResult({
       comments: [comment(body, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review -i",
+      baseSha: BASE_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain("STALE_HEAD");
+    expect(result.reason).toContain("rerun /review");
+  });
+
+  it("still accepts a canonical fresh review alongside a standalone fallback", () => {
+    const standalone = "## Standalone PR Review\nPR-Agent could not safely update the persistent review\n## MDE PR Review";
+    const result = verifyReviewResult({
+      comments: [
+        comment(standalone, "2026-09-20T01:00:02Z"),
+        comment("<!-- pr-agent:review:incremental -->", "2026-09-20T01:00:05Z"),
+      ],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,

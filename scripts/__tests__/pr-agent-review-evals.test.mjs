@@ -61,8 +61,16 @@ const postMergeSource =
 const postMergeCheckOnly = fixture("pr-163-canary-postmerge-source.mjs");
 
 /** Build one finding in the structure MDE's review contract requires. */
-const finding = (evidence, { severity = "HIGH", status = "changes_required" } = {}) =>
-  [`Severity: ${severity}`, "Problem: a defect the reviewer asserts", evidence, `Status: ${status}`].join("\n");
+const finding = (evidence, { severity = "HIGH", status = "changes_required", verification = null } = {}) =>
+  [
+    `Severity: ${severity}`,
+    "Problem: a defect the reviewer asserts",
+    evidence,
+    verification ? `Verification state: ${verification}` : null,
+    `Status: ${status}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
 const review = (...findings) =>
   ["## MDE PR Review", ...findings, "", "Merge recommendation: Changes requested"].join("\n\n");
@@ -486,5 +494,17 @@ describe("SAN-1312 exact-head capture", () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /GitHub CLI \(`gh`\) is not installed or not on PATH/);
     assert.match(result.stderr, /gh auth login/);
+  });
+});
+
+// The end-to-end half of the SAN-1332 verified-blocking contract. The predicate-level and
+// persistent-state cases live in pr-agent-verified-blocking.test.mjs; this one stays here because it
+// depends on this file's corpus evidence.
+describe("SAN-1332 verified findings are still credited", () => {
+  it("credits a VERIFIED finding end to end", () => {
+    const source = readFileSync(join(REPO_ROOT, "scripts/check-mastra.mjs"), "utf8");
+    const body = review(finding(CATCHING_EVIDENCE["semver-boundary"], { verification: "VERIFIED" }));
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], body, { sourceText: source });
+    assert.equal(result.detected, true, "VERIFIED + changes_required + HIGH must still be credited");
   });
 });
