@@ -66,6 +66,31 @@ Production promotion should follow the current release task/runbook and provider
 
 Representative production check: `npm run test:e2e:prod-synthetic`.
 
+### Production health signals
+
+Three signals, and each states only what it actually tested:
+
+| Signal | When it runs | What it proves | Blocking |
+| -- | -- | -- | -- |
+| **Candidate Runtime Certification** | pre-promotion, against the staged candidate | the candidate's *runtime*: it boots, auth works, and one concierge turn completes and persists | yes — Vercel blocks alias assignment until it passes |
+| **Production Runtime Smoke** | post-promotion, nightly, manual | each vertical's chat results reach a valid **rendered terminal state**: result cards, or that vertical's explicit empty state | yes for runtime; it never asserts inventory |
+| **Marketplace Health** | alongside Production Runtime Smoke | live inventory counts (total / consumer-visible / requestable-eligible) | no — observation only |
+
+**The rule: a green check must never claim more than it tested.** Certification publishes
+"Candidate runtime certified — promotion checks passed. Marketplace inventory not evaluated."
+That wording is deliberate: it must not be readable as "everything is healthy" while a separate
+live-data signal says otherwise. Signatures: `vercel-production-certification.yml` and
+`prod-synthetic-smoke.yml`.
+
+**An empty marketplace is a valid product state.** Zero published listings reports as
+**Marketplace Health: empty** and must never turn **Production Runtime Smoke** red. A vertical may
+only pass as empty when its own explicit empty-state element rendered — "no cards and no error" is
+a failure, not an empty state. Never seed fake inventory to make a health signal green. The
+terminal-state contract lives in `e2e/helpers/vertical-terminal-state.ts`.
+
+These three names are canonical. Do not introduce `prod smoke`, `live-data health`,
+`inventory certification`, or a generic `production health`.
+
 ## Supabase and security operations
 
 - Current migrations/functions/policies in the repository own intended database behavior.
