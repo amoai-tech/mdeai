@@ -102,7 +102,7 @@ and refuses to guess:
 
 ```bash
 node scripts/pr-agent/evals/capture-review.mjs --pr <number> --out /tmp/review.md
-node scripts/pr-agent/evals/score-review.mjs semver-boundary /tmp/review.md
+node scripts/pr-agent/evals/score-review.mjs <case-id> /tmp/review.md <changed-file> [changed-file ...]
 ```
 
 The capture step refuses to score a review it cannot tie to the requested head, because the
@@ -113,14 +113,24 @@ scores the wrong review and reports success. So:
 
 - a marker must match the whole `<!-- mde-pr-agent-cert base=<sha> head=<sha> -->` shape — a bare
   `head=<sha>` substring inside prose does not certify anything;
-- a comment carrying a review marker (`<!-- pr-agent:review:full -->`) is a review, never a
-  certification record, even when it quotes a marker;
-- the selected review must **record the head it reviewed** (the persistent review state names it).
-  If none of the candidates names the requested head, the command exits non-zero rather than guess.
+- a comment carrying a review marker (`<!-- pr-agent:review:full -->`) or the standalone fallback
+  shape is a review, never a certification record, even when it quotes a marker;
+- identity is established from the strongest available evidence, and the capture prints which:
 
-`--head <sha>` scores a head that is no longer the PR tip. `--allow-unconfirmed-head` opts back into
-the boundary-only guess for a head no review records (incremental reviews carry no state of their
-own); it prints that the head was unconfirmed, and it is never the default.
+| `headEvidence` | Meaning |
+| -- | -- |
+| `review-recorded` | the review's own persistent state names this head |
+| `newest-certified-head` | nothing names the head, but it is the **last** marker in the newest certification comment, so no later certification exists to confuse the boundary with |
+| `unconfirmed` | neither holds — the command exits non-zero rather than guess |
+
+`--head <sha>` scores a head that is no longer the PR tip. `--allow-unconfirmed-head` trusts the
+boundary for a head that is *not* the newest certification; only use it when you hold separate proof,
+and the capture prints that the head was **UNCONFIRMED**.
+
+Pass **every file the review actually read** to the scorer. Grounding checks whether a finding's
+quoted code exists in the source, so a review of a two-file PR scored against one file reports a
+false `UNGROUNDED` for the quotes that live in the other. The post-merge canary is exactly that case,
+and the regression test records it.
 
 Verified against the real canary PR — replaying the recorded head returns the exact certified comment:
 
@@ -128,6 +138,25 @@ Verified against the real canary PR — replaying the recorded head returns the 
 node scripts/pr-agent/evals/capture-review.mjs --pr 163 \
   --head 283412878f08ed370fb91e8cab58b463962c2059 --out /tmp/canary-replay.md
 cmp /tmp/canary-replay.md scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md
+```
+
+### The two live controls (SAN-1312 behavioural proof)
+
+Run both after any change to the rule or the scorer. The bad canary must be *credited*; the clean
+control must stay *uncredited*.
+
+```bash
+# bad canary: PR #163 head 7d86a2a58 — the real malformed-SemVer defect
+node scripts/pr-agent/evals/capture-review.mjs --pr 163 \
+  --head 7d86a2a58d59b00eed251f1e26a5b75102e6c2a5 --out /tmp/bad.md
+node scripts/pr-agent/evals/score-review.mjs semver-boundary /tmp/bad.md \
+  scripts/pr-agent/evals/fixtures/pr-163-canary-postmerge-source.mjs \
+  scripts/pr-agent/evals/fixtures/pr-163-canary-postmerge-test.mjs
+
+# clean control: PR #158 — a docs-only change with no defect to find
+node scripts/pr-agent/evals/capture-review.mjs --pr 158 \
+  --head e6644cd4313ed72a0b874a19c52974bc40918b31 --out /tmp/clean.md
+node scripts/pr-agent/evals/score-review.mjs docs-only-control /tmp/clean.md
 ```
 
 Exit `0` means the case expectation was met; exit `1` prints which part of the contract failed. For a
@@ -139,3 +168,42 @@ Passing the deterministic tests proves the **scorer, the corpus, and the wiring*
 It does not prove the model now catches PR #157-class defects. That requires a live canary PR
 reviewed by the real workflow; this harness only makes the resulting verdict objective and
 repeatable.
+
+The live run has now happened, and both controls passed:
+
+| Control | Head | Result |
+| -- | -- | -- |
+| **bad canary** (PR #163, seeded malformed-SemVer boundary) | `7d86a2a58` | real defect found, `01.2.3` / `1.2.3-alpha..1` / `1.2.3+build.` named, grounded (`ungrounded=0`, checked against both changed files), **Changes required** |
+| **clean control** (PR #158, docs-only) | `e6644cd4` | 0 findings, `blocking=false`, nothing invented |
+
+Both runs are recorded as fixtures and gated by `scripts/__tests__/pr-agent-review-evals.test.mjs`, so a
+later change that loses the detection — or invents one on the clean side — fails the suite rather than
+quietly passing. The earlier canary run on head `283412878` is kept as the counter-example: it scored
+as a miss because it quoted a regex the file does not contain.
+
+One honest limit remains: neither control exercised the rule on a PR that is **based on the new
+`main` and clean**. The clean control predates the rule reaching `main`, so it proves the scorer does
+not credit an invented defect but does not yet prove the new rule refrains from over-reporting on a
+clean post-merge PR. The next clean PR reviewed on the new `main` closes that.
+
+### The post-merge clean control
+
+That next PR was the harness change itself — PR #168, based on `main` after the rule landed. The
+hardened reviewer had to review the very code that pins reviews to heads, and it stayed quiet:
+
+```
+$ node scripts/pr-agent/evals/capture-review.mjs --pr 168 \
+    --head f79894cf502674f4480566ecc8f0172e4fea6f99 --out /tmp/clean-postmerge.md
+review comment 5888962639; head f79894cf5… confirmed via newest-certified-head
+```
+
+| Field | Value |
+| -- | -- |
+| Risk level | Low |
+| Merge recommendation | **Safe to merge** |
+| Score | 92 |
+| Findings | 0 — "No major issues detected" |
+| Base | `41cec28f` (contains the hardened rule) |
+
+So all three live runs are recorded: the bad canary detects and blocks, the historical docs-only
+control stays quiet, and a real post-merge code PR stays quiet instead of inventing a blocker.
