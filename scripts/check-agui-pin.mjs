@@ -18,7 +18,12 @@ const REQUIRED_PACKAGES = ["@ag-ui/client", "@ag-ui/mastra"];
 // Exact version only. Rejects range operators ("^", "~", ">="), wildcards ("1.x", "*"),
 // dist-tags ("latest", "next"), and partial versions ("1", "1.2"). A prerelease or build
 // suffix is still an exact pin, so an exact prerelease is accepted.
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+export const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+/** True when a dependency spec is an exact version rather than a range, tag, or wildcard. */
+export function isExactAguiVersion(spec) {
+  return EXACT_VERSION.test(spec);
+}
 
 function main() {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -31,7 +36,7 @@ function main() {
       failures.push(`${name} is not declared in package.json`);
       continue;
     }
-    if (!EXACT_VERSION.test(spec)) {
+    if (!isExactAguiVersion(spec)) {
       failures.push(`${name} must be pinned to an exact version, found "${spec}"`);
     }
   }

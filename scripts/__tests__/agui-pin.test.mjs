@@ -6,11 +6,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
+import { EXACT_VERSION, isExactAguiVersion } from "../check-agui-pin.mjs";
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPT = join(REPO_ROOT, "scripts", "check-agui-pin.mjs");
 
-// Kept in sync with the checker. Rejects ranges, wildcards, dist-tags, and partial versions.
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 /** Run the checker against a synthetic package.json and return its combined output. */
 function runCheck(dependencies) {
@@ -70,12 +70,14 @@ describe("AGUI-001 exact AG-UI pins", () => {
     assert.match(result.output, /@ag-ui\/mastra is not declared/);
   });
 
-  it("matches the shared pattern used by the checker", () => {
+  it("exposes the predicate the checker itself uses", () => {
     for (const spec of Object.values(VALID)) {
-      assert.equal(EXACT_VERSION.test(spec), true, `${spec} should be accepted`);
+      assert.equal(isExactAguiVersion(spec), true, `${spec} should be accepted`);
     }
     for (const spec of ["^0.0.52", "0.0.x", "*", "latest", "0.0"]) {
-      assert.equal(EXACT_VERSION.test(spec), false, `${spec} should be rejected`);
+      assert.equal(isExactAguiVersion(spec), false, `${spec} should be rejected`);
     }
+    // Same object, so it cannot drift from the production pattern.
+    assert.equal(EXACT_VERSION.source, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.source);
   });
 });
