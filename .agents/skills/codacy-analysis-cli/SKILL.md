@@ -1,0 +1,1 @@
+../../../.claude/skills/codacy-analysis-cli/SKILL.md
