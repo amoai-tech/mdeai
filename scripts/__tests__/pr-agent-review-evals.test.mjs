@@ -20,6 +20,7 @@ import { describe, it } from "node:test";
 
 import { CASES, CASES_BY_ID, REQUIRED_PROBE_ANCHORS } from "../pr-agent/evals/cases.mjs";
 import {
+  checkGrounding,
   isMaterialFinding,
   matchCase,
   parseFindings,
@@ -280,6 +281,35 @@ describe("SAN-1312 scoring invariants", () => {
     assert.equal(result.detected, false, "a safe-to-merge verdict can never count as detection");
   });
 
+  it("does not let one finding borrow another finding's blocking verdict", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    const borrowed = [
+      "## MDE PR Review",
+      finding("An unrelated authentication finding.", { severity: "HIGH", status: "changes_required" }),
+      // Carries the whole case contract, but labels itself nothing and the review does not block.
+      "<details><summary><strong>Version boundary</strong></summary>\nThe EXACT_VERSION pattern accepts 01.2.3 because of a leading zero, and 1.2.3-alpha..1 because the prerelease class allows empty identifiers.\n</details>",
+      "Merge recommendation: Safe to merge",
+    ].join("\n\n");
+
+    const result = scoreReview(named, borrowed);
+    assert.equal(result.findingCount, 2);
+    assert.equal(result.blockingVerdict, true, "another finding did assert changes_required");
+    assert.equal(
+      result.detected,
+      false,
+      "the credited finding must block on its own verdict, not borrow an unrelated finding's",
+    );
+  });
+
+  it("never credits detection when the review recommends an unqualified merge", () => {
+    const named = CASES_BY_ID["semver-boundary"];
+    const contradictory = review(finding(CATCHING_EVIDENCE["semver-boundary"])).replace(
+      "Merge recommendation: Changes requested",
+      "Merge recommendation: Safe to merge",
+    );
+    assert.equal(scoreReview(named, contradictory).detected, false);
+  });
+
   it("matches one finding against each case contract", () => {
     for (const entry of defectCases) {
       const parsed = parseFindings(review(finding(CATCHING_EVIDENCE[entry.id])));
@@ -302,6 +332,59 @@ describe("SAN-1312 scoring invariants", () => {
         `${entry.id} was not recognised as detected (${result.reasons.join("; ")})`,
       );
     }
+  });
+});
+
+describe("SAN-1312 finding grounding (golden requirement)", () => {
+  const canarySource = fixture("pr-163-canary-source.mjs");
+
+  it("shows the canary review quoted code the reviewed file does not contain", () => {
+    const parsed = parseFindings(canaryRecorded);
+    const regexFinding = parsed.findings.find((entry) => entry.body.includes("\\d+\\.\\d+\\d+"));
+    assert.ok(regexFinding, "the canary review must contain the misquoted regex finding");
+
+    const grounding = checkGrounding(regexFinding, canarySource);
+    assert.equal(grounding.grounded, false, "the quoted regex is not in the reviewed source");
+    assert.ok(
+      grounding.ungrounded.some((fragment) => fragment.includes("\\d+\\.\\d+\\d+")),
+      `expected the misquoted pattern among ${JSON.stringify(grounding.ungrounded)}`,
+    );
+
+    // The real pattern in the file IS present, so the check is not a blanket failure.
+    const real = "/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/";
+    assert.equal(canarySource.includes(real), true, "the real regex must appear in the fixture source");
+    assert.equal(
+      checkGrounding({ body: `The pattern is \`${real}\` today.` }, canarySource).grounded,
+      true,
+    );
+  });
+
+  it("reports a proposed fix as ungrounded without auto-failing it", () => {
+    const proposed = checkGrounding(
+      { body: "Replace it with `/^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)$/` instead." },
+      canarySource,
+    );
+    // A suggested replacement is correctly absent from the source; this is a diagnostic signal
+    // asking a human to verify which quote is the claim and which is the fix.
+    assert.equal(proposed.grounded, false);
+    assert.match(proposed.reason, /verify before crediting/);
+  });
+
+  it("reports grounding for every finding, including when nothing is credited", () => {
+    const sourceText = readFileSync(join(REPO_ROOT, "scripts/check-mastra.mjs"), "utf8");
+
+    const caught = scoreReview(CASES_BY_ID["semver-boundary"], review(finding(CATCHING_EVIDENCE["semver-boundary"])), {
+      sourceText,
+    });
+    assert.equal(caught.detected, true);
+    assert.deepEqual(caught.grounding, [], "no code quotes, so nothing to report");
+
+    // The canary case: nothing is credited, yet the hallucinated quote must still be surfaced.
+    const canary = scoreReview(CASES_BY_ID["semver-boundary"], canaryRecorded, { sourceText: canarySource });
+    assert.equal(canary.detected, false);
+    const ungrounded = canary.grounding.filter((entry) => entry.grounded === false);
+    assert.equal(ungrounded.length, 1, "the misquoted regex must be reported as ungrounded");
+    assert.ok(ungrounded[0].finding.length > 0, "the ungrounded report names the finding");
   });
 });
 

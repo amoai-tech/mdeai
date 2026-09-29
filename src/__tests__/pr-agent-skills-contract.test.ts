@@ -139,6 +139,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
       "scripts/pr-agent/evals/fixtures/pr-157-v045-recorded.md",
       "scripts/pr-agent/evals/fixtures/pr-158-v045-recorded.md",
       "scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md",
+      "scripts/pr-agent/evals/fixtures/pr-163-canary-source.mjs",
     ]) {
       expect(existsSync(path)).toBe(true);
     }
@@ -149,6 +150,24 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read("scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md")).toContain(
       "pr-agent-review-state:v1",
     );
+  });
+
+  it("requires a finding to be grounded in the exact changed source", () => {
+    const scorer = read("scripts/pr-agent/evals/score-review.mjs");
+    expect(scorer).toContain("export function checkGrounding");
+    expect(scorer).toContain("export function quotedCodeFragments");
+    expect(read("scripts/pr-agent/evals/cases.mjs")).toContain("sourceFile");
+    // The captured canary source must not contain the pattern its review claimed was there.
+    const canarySource = read("scripts/pr-agent/evals/fixtures/pr-163-canary-source.mjs");
+    expect(canarySource).toContain("/^\\d+\\.\\d+\\.\\d+");
+    expect(canarySource).not.toContain("\\d+\\.\\d+\\d+(");
+  });
+
+  it("never lets one finding supply another finding's verdict", () => {
+    const scorer = read("scripts/pr-agent/evals/score-review.mjs");
+    expect(scorer).toContain("export function findingVerdict");
+    expect(scorer).toContain("blockingCredited");
+    expect(scorer).toContain("!signals.safeToMerge");
   });
 
   it("scores one finding, never the whole review body", () => {

@@ -15,6 +15,10 @@ const semverBoundary = {
   provenance: "Real MDE false negative. Recorded v0.45 review scored 95/100 and said Safe to merge with 0 findings.",
   changedFiles: ["scripts/check-mastra.mjs"],
   expectedOwnerSkills: ["code-review"],
+  // Golden requirement: a finding's quoted code must exist in the exact changed source. Scoring
+  // reports `grounding` against this file so a finding that misquotes the code it reviewed is
+  // visible instead of being credited.
+  sourceFile: "scripts/check-mastra.mjs",
   // Contract, all inside ONE finding:
   //   MUST  identify the validator
   //   MUST  cite at least one literal malformed input

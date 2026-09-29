@@ -40,6 +40,26 @@ Findings are extracted in this order:
 2. rendered `<details>` finding blocks (excluding the agent-run-details block);
 3. labelled blocks split on the `Severity:` label MDE's review contract requires per finding.
 
+### Golden requirement: a finding must be grounded in the changed source
+
+A finding that names a defect the changed code does not contain is not a weak finding — it is a
+false blocker, and it teaches people to override the reviewer. So a case may declare `sourceFile`,
+and scoring reports `grounding` for **every** finding that quotes code:
+
+```text
+grounding=checked 1 finding(s) quoting code; ungrounded=1
+  UNGROUNDED ["^\\d+\\.\\d+\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$","\\d+\\.\\d+\\d+"]
+```
+
+That output is the real PR #163 canary review, whose headline finding quoted a regex the reviewed
+file does not contain and presented it as the current implementation. The fixture pair
+`pr-163-canary-v045-recorded.md` (the review) and `pr-163-canary-source.mjs` (the exact source at that
+head) pin that behaviour so it cannot silently return.
+
+`grounded === false` is a **diagnostic, not a verdict**: a finding may legitimately quote a *proposed
+fix*, which is correctly absent from the source. Read it as "verify which quote is the claim and
+which is the fix" before crediting the finding.
+
 ### `detectionQuality` — read this before trusting a PASS
 
 Severity and status are only readable when the model emits the structure `.pr_agent.toml` asks for.

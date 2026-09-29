@@ -120,18 +120,24 @@ export function parseFindings(text) {
     };
   }
 
+  // A review can contain both shapes: rendered `<details>` findings, and labelled blocks when the
+  // model emitted the structured sections. Merge them, de-duplicating a labelled block that is
+  // already inside a rendered finding, so neither shape is silently dropped.
   const rendered = renderedFindings(body);
-  if (rendered.length > 0) {
-    return { source: "rendered", stateParsed: false, runComplete: null, runKind: null, runHeadSha: null, findings: rendered };
-  }
   const labelled = labelledFindings(body);
+  const merged = [...rendered];
+  for (const entry of labelled) {
+    const key = entry.body.slice(0, 60);
+    if (merged.some((existing) => existing.body.includes(key))) continue;
+    merged.push(entry);
+  }
   return {
-    source: labelled.length > 0 ? "labelled" : "none",
+    source: merged.length === 0 ? "none" : rendered.length > 0 ? "rendered" : "labelled",
     stateParsed: false,
     runComplete: null,
     runKind: null,
     runHeadSha: null,
-    findings: labelled,
+    findings: merged,
   };
 }
 
@@ -200,6 +206,61 @@ function blockingVerdict(signals, findings) {
 }
 
 /**
+ * Did THIS finding carry a blocking verdict?
+ *
+ * A credited finding may only be scored as detected when its own verdict blocks. An unrelated
+ * finding's HIGH severity must not supply the verdict for a different finding: otherwise one
+ * strong finding anywhere in the review would launder a weak, unlabelled match into a PASS.
+ *
+ * When the finding labels itself non-material, that is the end of it. When it carries no labels at
+ * all — which is what the one captured model output does — the review's own recommendation may
+ * stand in, and `detectionQuality` marks the result `unlabelled`.
+ */
+export function findingVerdict(finding, signals) {
+  if (isMaterialFinding(finding)) return true;
+  if (finding.severity || finding.status) return false;
+  return signals.recommendation !== "" && !signals.safeToMerge;
+}
+
+/** Extract backticked fragments that look like code rather than prose or a literal value. */
+export function quotedCodeFragments(finding) {
+  const body = String(finding?.body ?? "");
+  return [
+    ...new Set(
+      [...body.matchAll(/`([^`\n]{6,})`/g)]
+        .map((match) => match[1].trim())
+        .filter((fragment) => /[\\^$]|\(\?:|=>|\{\s*\d/.test(fragment)),
+    ),
+  ];
+}
+
+/**
+ * Golden requirement: a finding's quoted code must exist in the exact changed source.
+ *
+ * Returns a diagnostic, not a verdict. A finding may legitimately quote a PROPOSED fix, which is
+ * correctly absent from the source, so callers must treat `grounded === false` as "verify this
+ * quote" rather than as a defect. It exists because the canary review quoted a regex the reviewed
+ * file does not contain and reported it as the current implementation.
+ */
+export function checkGrounding(finding, sourceText) {
+  const fragments = quotedCodeFragments(finding);
+  const source = String(sourceText ?? "");
+  const ungrounded = fragments.filter((fragment) => !source.includes(fragment));
+  return {
+    checked: fragments.length,
+    fragments,
+    ungrounded,
+    grounded: fragments.length === 0 ? null : ungrounded.length === 0,
+    reason:
+      fragments.length === 0
+        ? "finding quotes no code"
+        : ungrounded.length === 0
+          ? "every quoted code fragment appears in the reviewed source"
+          : `${ungrounded.length} quoted fragment(s) do not appear in the reviewed source — verify before crediting`,
+  };
+}
+
+/**
  * Score one review body against one corpus case.
  *
  * Defect case: credited only when a SINGLE finding carries the case's mandatory signals, the
@@ -209,7 +270,7 @@ function blockingVerdict(signals, findings) {
  * A conservative merge recommendation with no material finding is reported separately and is not
  * an invented defect.
  */
-export function scoreReview(caseDef, reviewText) {
+export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
   const signals = parseReviewSignals(reviewText);
   const parsed = parseFindings(reviewText);
   const { findings } = parsed;
@@ -250,7 +311,10 @@ export function scoreReview(caseDef, reviewText) {
 
   const scored = activeFindings.map((finding) => ({ finding, match: matchCase(caseDef, finding) }));
   const credited = scored.filter((entry) => entry.match.credits);
-  const detected = credited.length > 0 && blocking;
+  // The verdict must belong to the credited finding, not to some other finding in the review, and
+  // an explicit safe-to-merge recommendation can never be overridden by a finding.
+  const blockingCredited = credited.filter((entry) => findingVerdict(entry.finding, signals));
+  const detected = blockingCredited.length > 0 && !signals.safeToMerge;
 
   const reasons = [];
   if (credited.length === 0) {
@@ -272,6 +336,8 @@ export function scoreReview(caseDef, reviewText) {
         );
       }
     }
+  } else {
+    reasons.push("the finding that carried the case contract did not block on its own verdict");
   }
   if (!blocking) reasons.push("review did not block the merge");
 
@@ -283,6 +349,14 @@ export function scoreReview(caseDef, reviewText) {
     citedExamples: credited.flatMap((entry) => entry.match.citedExamples),
     creditedFinding: credited[0]?.finding.title ?? null,
     detectionQuality: credited.some((entry) => isMaterialFinding(entry.finding)) ? "labelled" : "unlabelled",
+    // Grounding is checked for EVERY finding, not only the credited one: the case this exists for
+    // is a review whose findings quote code the reviewed file does not contain, which is also a
+    // review where nothing gets credited.
+    grounding: sourceText
+      ? activeFindings
+          .map((entry) => ({ finding: entry.title, ...checkGrounding(entry, sourceText) }))
+          .filter((entry) => entry.checked > 0)
+      : null,
     reasons: detected
       ? [
           `material defect reported by one finding${credited.some((entry) => isMaterialFinding(entry.finding)) ? "" : " (no per-finding Severity/Status label)"}`,
@@ -308,7 +382,11 @@ async function runCli() {
   }
 
   const { readFileSync } = await import("node:fs");
-  const result = scoreReview(caseDef, readFileSync(reviewPath, "utf8"));
+  const { join } = await import("node:path");
+  const sourceText = caseDef.sourceFile
+    ? readFileSync(join(process.cwd(), caseDef.sourceFile), "utf8")
+    : null;
+  const result = scoreReview(caseDef, readFileSync(reviewPath, "utf8"), { sourceText });
   const verdict = caseDef.kind === "clean" ? !result.falsePositive : result.detected;
   process.stdout.write(`case=${result.id} kind=${result.kind} verdict=${verdict ? "PASS" : "FAIL"}\n`);
   process.stdout.write(
@@ -317,6 +395,15 @@ async function runCli() {
   process.stdout.write(`matched_signals=${JSON.stringify(result.matchedSignals)}\n`);
   if (result.citedExamples?.length) {
     process.stdout.write(`cited_examples=${JSON.stringify(result.citedExamples)}\n`);
+  }
+  if (result.grounding) {
+    const ungrounded = result.grounding.filter((entry) => entry.grounded === false);
+    process.stdout.write(
+      `grounding=checked ${result.grounding.length} finding(s) quoting code; ungrounded=${ungrounded.length}\n`,
+    );
+    for (const entry of ungrounded) {
+      process.stdout.write(`  UNGROUNDED ${JSON.stringify(entry.ungrounded)}\n`);
+    }
   }
   process.stdout.write(`reasons=${JSON.stringify(result.reasons)}\n`);
   process.exit(verdict ? 0 : 1);
