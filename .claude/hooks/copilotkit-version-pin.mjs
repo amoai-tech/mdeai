@@ -5,11 +5,16 @@
 //   1. introducing the @copilotkit/react|core|agent|sdk-js FULL-REWRITE package line;
 //   2. making @copilotkit/react-core or @copilotkit/runtime a non-exact version
 //      (a range, caret, tilde, `latest`, `*`), which makes the certified matrix unreproducible;
-//   3. letting @copilotkit/react-core and @copilotkit/runtime drift apart.
+//   3. letting @copilotkit/react-core and @copilotkit/runtime drift apart;
+//   4. moving either certified pin away from the value already committed in the repository.
 //
-// This hook deliberately does NOT hard-code a release number. The certified matrix is owned by
-// SAN-1301 and recorded in Linear; baking a literal version into a guard means every future
-// intentional upgrade is blocked by a stale string, which is the failure this hook previously had.
+// Point 4 is what makes the bypass meaningful. Without it the guard enforced only the *shape* of
+// the pair (exact and aligned), so a full-file write changing both packages together left the
+// SAN-1301 certified matrix without ever needing the bypass the variable name promises.
+//
+// This hook deliberately does NOT hard-code a release number. It reads the committed values, so
+// an authorized upgrade needs no edit to the guard and a stale literal can never block one.
+// The certified matrix itself is owned by SAN-1301 and recorded in Linear.
 //
 // MDE stays on the v2 API through the `/v2` subpath of the pinned packages
 // (@copilotkit/react-core/v2). That is allowed; the full-rewrite package line is not.
@@ -110,22 +115,43 @@ if (isPackageJson) {
       }
     }
   }
-  // A single-package edit carries only one side of the aligned pair, so fall back to the value
-  // already committed at the target path. Without this, editing only `runtime` (or only
-  // `react-core`) silently introduced exactly the drift this guard exists to prevent. Only exact
-  // on-disk values are used, so a pre-existing range cannot manufacture a false alignment error.
+  // Values already committed at the target path, kept raw so a version *move* can be told apart
+  // from an alignment problem.
+  const committed = new Map();
   if (isAbsolute(filePath) && existsSync(filePath)) {
     try {
       const onDisk = JSON.parse(readFileSync(filePath, "utf8"));
       const deps = { ...(onDisk.dependencies ?? {}), ...(onDisk.devDependencies ?? {}) };
       for (const pkg of ALIGNED_PACKAGES) {
-        const committed = deps[`@copilotkit/${pkg}`];
-        if (!declared.has(pkg) && isExactVersion(committed)) declared.set(pkg, committed);
+        const value = deps[`@copilotkit/${pkg}`];
+        if (typeof value !== "string") continue;
+        committed.set(pkg, value);
+        // Fill the missing side of the pair so an edit that touches only one package is still
+        // checked for alignment. Only exact committed values are reused, so a pre-existing range
+        // cannot manufacture a false alignment error.
+        if (!declared.has(pkg) && isExactVersion(value)) declared.set(pkg, value);
       }
     } catch {
-      // Unparseable target: fall back to enforcing only what this edit declares.
+      // Unparseable target: enforce only what this edit declares.
     }
   }
+
+  // Moving a certified pin is a deliberate, authorized act. Without this check, a full-file write
+  // that changed both packages together left the certified SAN-1301 matrix without ever needing
+  // the documented bypass: the guard protected the shape of the pair but not the certified value.
+  for (const pkg of ALIGNED_PACKAGES) {
+    const before = committed.get(pkg);
+    const after = declared.get(pkg);
+    if (before === undefined || after === undefined) continue;
+    // A non-exact committed value is already a violation; allow the write so it can be repaired.
+    if (!isExactVersion(before) || before === after) continue;
+    block(
+      `BLOCKED: @copilotkit/${pkg} would move from "${before}" to "${after}".\n` +
+        `The CopilotKit matrix is certified by SAN-1301, and changing a certified pin is a ` +
+        `deliberate, authorized act — it must not pass silently.`,
+    );
+  }
+
   if (declared.has("react-core") && declared.has("runtime")) {
     const core = declared.get("react-core");
     const runtime = declared.get("runtime");

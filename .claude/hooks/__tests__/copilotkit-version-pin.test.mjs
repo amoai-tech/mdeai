@@ -11,21 +11,39 @@ import { after, test } from "node:test";
  *
  * The previous hook hard-coded a parent directory and a literal release, so in a
  * `.worktrees/<name>` checkout it matched nothing and allowed every write. These cases pin the
- * two properties that matter: the guard resolves the repository root dynamically, and its policy
- * is release-agnostic (exact + aligned), so an intentional certified upgrade is not blocked by a
- * stale string while accidental drift still is.
+ * properties that matter:
+ *
+ * 1. the guard resolves the repository root dynamically;
+ * 2. the policy is release-agnostic — no version literal is baked in, so an authorized upgrade
+ *    never becomes a false failure;
+ * 3. the *committed* certified pins cannot be moved without the documented bypass, so a
+ *    full-file write that changes both packages together is not a way around the matrix.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOOK = resolve(here, "../copilotkit-version-pin.mjs");
 
-const root = mkdtempSync(resolve(tmpdir(), "mde-ck-pin-"));
-after(() => rmSync(root, { recursive: true, force: true }));
+const created = [];
+after(() => {
+  for (const dir of created) rmSync(dir, { recursive: true, force: true });
+});
 
-for (const dir of [".claude", ".worktrees/wt-feature/.claude", ".claude/worktrees/wt-old/.claude"]) {
+function makeRoot(pins) {
+  const dir = mkdtempSync(resolve(tmpdir(), "mde-ck-pin-"));
+  created.push(dir);
+  mkdirSync(resolve(dir, ".claude"), { recursive: true });
+  writeFileSync(
+    resolve(dir, "package.json"),
+    JSON.stringify(pins ? { dependencies: pins } : {}, null, 2),
+  );
+  return dir;
+}
+
+/** The main fixture: a repository root with no CopilotKit pins committed yet. */
+const root = makeRoot(null);
+for (const dir of [".worktrees/wt-feature/.claude", ".claude/worktrees/wt-old/.claude"]) {
   mkdirSync(resolve(root, dir), { recursive: true });
 }
-writeFileSync(resolve(root, "package.json"), "{}\n");
 
 function run(filePath, edit, env = {}) {
   return spawnSync(process.execPath, [HOOK], {
@@ -35,8 +53,8 @@ function run(filePath, edit, env = {}) {
   });
 }
 
-const pkg = (deps) =>
-  JSON.stringify({ dependencies: deps }, null, 2);
+const pkg = (deps) => JSON.stringify({ dependencies: deps }, null, 2);
+const CERTIFIED = { "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.75.0" };
 
 // ---------- package.json: repository-root resolution ----------
 // Every case below fails the policy, so a non-block proves the guard never reached the policy.
@@ -61,24 +79,69 @@ test("blocks a misaligned pair from a .claude/worktrees checkout", () => {
   assert.equal(r.status, 2, `guard must resolve a .claude/worktrees root, got ${r.status}\n${r.stderr}`);
 });
 
-// ---------- package.json: policy ----------
+// ---------- package.json: pinned-value policy ----------
 
-test("allows any exact, aligned matrix (no release is special-cased)", () => {
-  const r = run(resolve(root, "package.json"), {
-    content: pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.75.0" }),
-  });
-  assert.equal(r.status, 0, `certified pins must pass:\n${r.stderr}`);
+test("accepts the certified pair unchanged", () => {
+  const dir = makeRoot(CERTIFIED);
+  const r = run(resolve(dir, "package.json"), { content: pkg(CERTIFIED) });
+  assert.equal(r.status, 0, `the certified matrix must pass:\n${r.stderr}`);
 });
 
-test("allows a future exact, aligned matrix too", () => {
-  // Deliberate ceiling: this hook owns exactness + alignment, NOT the certified release number.
-  // Baking a literal here is what previously made every intentional upgrade a false failure.
-  // The recorded matrix is owned by SAN-1301 (Linear) and `scripts/check-mastra.mjs` mirrors the
-  // same generic invariant, so a specific version is never duplicated into a guard.
-  const r = run(resolve(root, "package.json"), {
+test("bakes no release literal: an arbitrary committed pair is accepted as-is", () => {
+  // If a release number were hard-coded, this future/exotic pair would be a false failure.
+  const dir = makeRoot({ "@copilotkit/react-core": "2.4.1", "@copilotkit/runtime": "2.4.1" });
+  const r = run(resolve(dir, "package.json"), {
     content: pkg({ "@copilotkit/react-core": "2.4.1", "@copilotkit/runtime": "2.4.1" }),
   });
-  assert.equal(r.status, 0, `a newer aligned pin must not be blocked by a stale literal:\n${r.stderr}`);
+  assert.equal(r.status, 0, `no release may be special-cased:\n${r.stderr}`);
+});
+
+test("blocks moving both certified pins together without the bypass", () => {
+  // The gap this closes: a full-file write used to leave the certified matrix silently,
+  // because only the shape of the pair was checked.
+  const dir = makeRoot(CERTIFIED);
+  const r = run(resolve(dir, "package.json"), {
+    content: pkg({ "@copilotkit/react-core": "2.4.1", "@copilotkit/runtime": "2.4.1" }),
+  });
+  assert.equal(r.status, 2, `an uncertified matrix move must be blocked:\n${r.stderr}`);
+});
+
+test("allows moving both certified pins with the bypass", () => {
+  const dir = makeRoot(CERTIFIED);
+  const r = run(
+    resolve(dir, "package.json"),
+    { content: pkg({ "@copilotkit/react-core": "2.4.1", "@copilotkit/runtime": "2.4.1" }) },
+    { MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE: "1" },
+  );
+  assert.equal(r.status, 0, `the documented bypass must permit a deliberate upgrade:\n${r.stderr}`);
+});
+
+test("blocks a single-package edit that creates drift", () => {
+  // A realistic Edit touches only one declaration. The guard must compare against the
+  // counterpart already committed at the target path, or the drift slips through.
+  const dir = makeRoot(CERTIFIED);
+  const r = run(resolve(dir, "package.json"), { new_string: '"@copilotkit/runtime": "1.74.0"' });
+  assert.equal(r.status, 2, `single-package drift must be blocked:\n${r.stderr}`);
+});
+
+test("allows a single-package edit that does not change the version", () => {
+  const dir = makeRoot(CERTIFIED);
+  const r = run(resolve(dir, "package.json"), { new_string: '"@copilotkit/runtime": "1.75.0"' });
+  assert.equal(r.status, 0, `a no-op pin edit must pass:\n${r.stderr}`);
+});
+
+test("allows an unrelated dependency edit that leaves the pins untouched", () => {
+  // The guard must not obstruct normal dependency work.
+  const dir = makeRoot({ ...CERTIFIED, react: "19.2.6" });
+  const r = run(resolve(dir, "package.json"), { new_string: '"react": "19.3.0"' });
+  assert.equal(r.status, 0, `unrelated dependency edits must pass:\n${r.stderr}`);
+});
+
+test("allows repairing a non-exact committed pin without the bypass", () => {
+  // A pre-existing range is already a violation; the write must be able to fix it.
+  const dir = makeRoot({ "@copilotkit/react-core": "^1.75.0", "@copilotkit/runtime": "^1.75.0" });
+  const r = run(resolve(dir, "package.json"), { content: pkg(CERTIFIED) });
+  assert.equal(r.status, 0, `remediation must pass:\n${r.stderr}`);
 });
 
 test("blocks a caret range", () => {
@@ -91,7 +154,7 @@ test('blocks "latest"', () => {
   assert.equal(r.status, 2, `latest must be rejected:\n${r.stderr}`);
 });
 
-test("blocks misaligned react-core and runtime", () => {
+test("blocks a misaligned pair on a fresh file", () => {
   const r = run(resolve(root, "package.json"), {
     content: pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.74.0" }),
   });
@@ -103,30 +166,15 @@ test("blocks the v2 full-rewrite package line", () => {
   assert.equal(r.status, 2, `full-rewrite line must be rejected:\n${r.stderr}`);
 });
 
-test("blocks a single-package edit that creates drift", () => {
-  // A realistic Edit touches only one declaration. The guard must compare against the
-  // counterpart already committed at the target path, or the drift slips through.
-  const target = resolve(root, "package.json");
-  writeFileSync(target, pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.75.0" }));
-  const r = run(target, { new_string: '"@copilotkit/runtime": "1.74.0"' });
-  assert.equal(r.status, 2, `single-package drift must be blocked:\n${r.stderr}`);
-});
-
-test("allows a single-package edit that keeps the pair aligned", () => {
-  const target = resolve(root, "package.json");
-  writeFileSync(target, pkg({ "@copilotkit/react-core": "1.75.0", "@copilotkit/runtime": "1.76.0" }));
-  const r = run(target, { new_string: '"@copilotkit/runtime": "1.75.0"' });
-  assert.equal(r.status, 0, `re-aligning one package must pass:\n${r.stderr}`);
-  writeFileSync(target, "{}\n");
-});
-
 test("honours the explicit upgrade bypass", () => {
-  const r = run(
-    resolve(root, "package.json"),
-    { content: pkg({ "@copilotkit/react-core": "9.9.9" }) },
-    { MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE: "1" },
+  const dir = makeRoot(CERTIFIED);
+  const edit = { content: pkg({ "@copilotkit/react-core": "9.9.9", "@copilotkit/runtime": "9.9.9" }) };
+  assert.equal(run(resolve(dir, "package.json"), edit).status, 2, "without bypass it must block");
+  assert.equal(
+    run(resolve(dir, "package.json"), edit, { MDEAI_ALLOW_COPILOTKIT_VERSION_CHANGE: "1" }).status,
+    0,
+    "with bypass it must pass",
   );
-  assert.equal(r.status, 0, `bypass must allow a deliberate upgrade:\n${r.stderr}`);
 });
 
 // ---------- source files ----------
