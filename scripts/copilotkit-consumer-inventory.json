@@ -210,6 +210,16 @@
       "file": "scripts/__tests__/copilotkit-version-alignment.test.mjs",
       "classification": "test-only",
       "note": "Deliberate alignment fixture using arbitrary sample versions."
+    },
+    {
+      "file": "src/__tests__/api/copilotkit-v2-contract.test.ts",
+      "classification": "test-only",
+      "note": "Step 11 combined contract for Steps 9 and 10: asserts the route uses @copilotkit/runtime/v2 with an explicit basePath and mode, that the client and server transport halves agree, that the security gates stay ordered before the handler, and that the v1 agent carrier is present while a compatibility boundary still consumes it. Names the v2 specifier in import-statement assertions rather than in regexes, so comment prose can neither satisfy nor defeat them. Assembles the v1 provider tag from parts so this file is not itself detected as a compatibility boundary."
+    },
+    {
+      "file": "src/__tests__/api/copilotkit-stop-body.test.ts",
+      "classification": "test-only",
+      "note": "Step 11 STOP-4: proves the stop request body survives the MDE route intact and reaches the runtime as exactly { runId }, with a built-in negative control showing a non-cloning reader destroys the run scope. Mocks @copilotkit/runtime/v2, so no real runtime is constructed."
     }
   ]
 }
