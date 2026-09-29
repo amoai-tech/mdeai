@@ -30,6 +30,6 @@ Codacy Static Code Analysis does not gate a merge on this repository (`floor` is
 | "Hard-coded credential" in `upstream.yaml` | It is a 64-character sha256 tree hash, not a secret. The value is a content digest pinned by `check-skill-upstream.py`. |
 | Rejects `#2-entry-in-rationalization-table`-style heading fragments | GitHub's own slug rules accept these. Rewriting them to satisfy the heuristic would break existing anchors. |
 | "Dynamic path construction" on every `path.join` in a test file | Building a fixture path from `import.meta.url` is the correct, portable pattern and is not attacker-controlled. |
-| "Absolute rule without escape hatch" on `AGENTS.md` prose | Deliberate. Safety and process rules are stated as absolutes on purpose; the escape hatch is that a rule changes at its owning level (see `AGENTS.md` § Instruction ownership). |
+| "Absolute rule without escape hatch" on `AGENTS.md` prose | Deliberate. Safety and process rules are stated as absolutes on purpose; the escape hatch is that a rule changes at its owning level (see `AGENTS.md` § Instruction ownership). The heuristic fires on any sentence containing *never*, *only*, or *must*: it reported **8 findings on `AGENTS.md`** at PR #148 head `ab7fa30b6`, every one of them this class, including the paragraph that documents the false positive. The count tracks prose volume, not risk. |
 
 Never weaken production behaviour — or a gate's teeth — merely to silence an advisory heuristic. When a class turns out to be real, fix it and delete its row.

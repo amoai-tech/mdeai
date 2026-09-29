@@ -18,20 +18,30 @@ Before commit/opening a PR:
 
 ## PR body
 
-A reviewer should understand the change quickly. Include:
+A reviewer should understand the change without having read the task. **Titles are real-world**: what changes for a person, not the internal mechanism.
+
+Always include:
 
 - user/business outcome
 - faster/better implementation choice
-- real user journey
-- architecture/data-flow Mermaid when useful
+- real user journey (or an explicit "no user-visible change")
 - files changed and purpose
-- source/reuse decisions
-- auth/tenant/RLS/HITL impact when relevant
-- external contracts/versions verified
+- source/reuse decisions, with a receipt for every external source that materially affected the solution — field list in `AGENTS.md` § Evidence rules
 - exact tests and results
 - reviewer fast path: 3–5 files to inspect first
 - explicit non-goals
 - post-merge checks
+
+Add only when they apply — **never to satisfy a format**, because a docs-only PR needs no architecture diagram:
+
+- architecture/data-flow Mermaid
+- database proof: schema, RLS, or migration changes
+- auth/tenant/RLS/HITL impact
+- external contracts/versions verified
+
+The body lives on **GitHub**, not in a local scratch file. Create it with `gh pr create --body-file` and re-run `gh pr edit` whenever the change moves — after review fixes, a scope change, or a flipped check. A body describing an earlier revision is worse than no body, because it reads as current.
+
+A body that only restates the diff has added nothing.
 
 ## PR shape and exact-head rule
 

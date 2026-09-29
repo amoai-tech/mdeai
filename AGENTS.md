@@ -72,6 +72,7 @@ Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, 
 Load the owning skill and follow its current instructions.
 
 - Git/worktree safety and execution sequencing → `tasks`.
+- PR body standard, reviewer fast path, exact-head rule, post-merge checks → `tasks/references/github-pr.md`.
 - Reuse ladder, evidence receipts, root-cause discipline → `ponytail`.
 - Anti-fake-Done and independent verification → `task-verifier`.
 - Root-cause methodology → `systematic-debugging`.
@@ -198,29 +199,22 @@ Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase
 
 ## Pull requests
 
-Every substantial PR explains, in plain English, to a reader who has not seen the task:
+Owned by `tasks`. The required body sections and the PR readiness sequence live in
+`.claude/skills/tasks/references/github-pr.md`; this section is only the repository-wide contract:
 
-1. Task name and outcome.
-2. The real-world problem it solves.
-3. What changed.
-4. Verification performed, with exact commands and their results.
-5. Important risks and remaining work.
-6. Source receipts for external material that affected the solution.
+- Explain the change to a reader who has not seen the task: the real-world problem, what changed, verification with exact commands and results, and honest risks and remaining work.
+- **Titles are real-world** — what changes for a person, not the internal mechanism.
+- Add a Mermaid diagram, a user journey, database proof, or post-merge steps **only when they apply**, never to satisfy a format. A docs-only PR needs no architecture diagram.
+- Include source receipts for external material that affected the solution — see § Evidence rules.
+- The body lives on **GitHub**, not in a local scratch file. Create it with `gh pr create --body-file` and re-run `gh pr edit` whenever the change moves: a body describing an earlier revision reads as current.
 
-Add these only when they apply — never to satisfy a format:
-
-- **Mermaid diagram** — architecture, workflow, state, or dependency changes.
-- **User journey** — user-visible behaviour changes.
-- **Database proof** — schema, RLS, or migration changes.
-- **Post-merge steps** — deploy, migration, configuration, or operational work.
-
-Titles are real-world: what changes for a person, not the internal mechanism. The body lives on **GitHub**, not in a local scratch file — create it with `gh pr create --body-file` and re-run `gh pr edit` whenever the change moves, because a body describing an earlier revision reads as current. A PR body that only restates the diff has added nothing.
+A PR body that only restates the diff has added nothing.
 
 ## CI and merge approval
 
 `floor` is the only required status check on `main`. It runs on every PR regardless of base branch, because a stacked PR still needs the same proof.
 
-Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md`.
+Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 
 `main` requires one approving review. Administrator bypasses are exceptional: if one is used, record the reason in the affected PR, which required checks passed, and why waiting for normal approval was not appropriate. Production, runtime, database, and deploy changes satisfy normal approval. Prior bypasses and their reasoning are recorded in `docs/07-operations/merge-approval-history.md`.
 
