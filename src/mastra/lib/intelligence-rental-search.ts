@@ -9,6 +9,7 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  nightlyPriceFrom,
   rentalAvailabilityDate,
   rowToRental,
   sortForMonthlyStay,
@@ -199,14 +200,19 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
-      .not("price_daily", "is", null)
-      .order("price_daily", { ascending: true })
+      // Same predicate as `search-rentals.ts`: a listing is priced if it has EITHER price.
+      // Owner onboarding writes `price_monthly`, so requiring `price_daily` hid every
+      // listing the product can create. A nightly budget is compared against the same
+      // `Math.round(monthly / 30)` figure this module already uses for display below.
+      .or(
+        typeof query.maxPricePerNight !== "number"
+          ? "price_daily.not.is.null,price_monthly.not.is.null"
+          : `and(price_daily.not.is.null,price_daily.lte.${query.maxPricePerNight}),and(price_monthly.not.is.null,price_monthly.lte.${Math.round(query.maxPricePerNight * 30)})`,
+      )
+      .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
-    if (typeof query.maxPricePerNight === "number") {
-      q = q.lte("price_daily", query.maxPricePerNight);
-    }
     // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
     // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
     const today = rentalAvailabilityDate();
@@ -391,7 +397,7 @@ export async function searchRentalsIntelligent(
       id: row.id,
       title: row.title,
       neighborhood: row.neighborhood ?? neighborhood ?? "Medellín",
-      nightly_price: num(row.price_monthly) ? Math.round(num(row.price_monthly)! / 30) : 0,
+      nightly_price: nightlyPriceFrom({ price_monthly: row.price_monthly }),
       currency: "USD" as const,
       bedrooms: row.bedrooms ?? 0,
       wifi: true,

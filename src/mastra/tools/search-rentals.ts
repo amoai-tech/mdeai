@@ -82,7 +82,12 @@ export interface ApartmentRow {
   title: string;
   neighborhood: string;
   bedrooms: number | null;
-  price_daily: number;
+  /**
+   * Genuinely nullable in the database. It was declared non-null here, which is what let
+   * `Number(null) === 0` pass unnoticed and turn a monthly-only listing into "$0/night".
+   * `price_monthly` is the column the owner onboarding flow actually writes.
+   */
+  price_daily: number | null;
   price_monthly: number | null;
   wifi_speed: number | null;
   amenities: string[] | null;
@@ -181,13 +186,37 @@ export function isRentalRequestable(
   return true;
 }
 
+/**
+ * The nightly price used for display, sorting and budget comparison.
+ *
+ * Listings created through the product's own owner onboarding carry **only**
+ * `price_monthly` (`src/lib/rentals/submit-broker-onboarding.ts`). Requiring `price_daily`
+ * therefore excluded every listing the product could actually create.
+ *
+ * This derives the same indicative nightly the intelligent search path already uses
+ * (`intelligence-rental-search.ts`), so both paths agree on what a monthly listing costs
+ * per night. It never invents a price: it is fully determined by the owner's own monthly
+ * figure, and a row with neither price yields `0`.
+ */
+export function nightlyPriceFrom(row: {
+  price_daily?: number | string | null;
+  price_monthly?: number | string | null;
+}): number {
+  const daily = row.price_daily == null ? null : Number(row.price_daily);
+  if (daily != null && Number.isFinite(daily)) return daily;
+  const monthly = row.price_monthly == null ? null : Number(row.price_monthly);
+  if (monthly != null && Number.isFinite(monthly)) return Math.round(monthly / 30);
+  return 0;
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
+  const nightlyPrice = nightlyPriceFrom(r);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
     neighborhood: r.neighborhood,
-    nightly_price: Number(r.price_daily),
+    nightly_price: nightlyPrice,
     currency: 'USD' as const,
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
@@ -206,7 +235,7 @@ export function rowToRental(r: ApartmentRow): Rental {
       parking_included: r.parking_included,
       minimum_stay_days: r.minimum_stay_days,
       wifi_speed: r.wifi_speed,
-      price_daily: Number(r.price_daily),
+      price_daily: nightlyPrice,
     }),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
@@ -274,6 +303,10 @@ async function searchRentalsFromSupabase(
   }
 
   const limit = query.limit ?? 8;
+  // A nightly budget is compared against the effective nightly price, so a monthly-only
+  // listing is judged by the same `Math.round(monthly / 30)` figure used for display.
+  const maxNightly =
+    typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
   let q = client
@@ -283,8 +316,14 @@ async function searchRentalsFromSupabase(
       { count: 'exact' },
     )
     .eq('status', 'active')
-    .not('price_daily', 'is', null)
-    .order('price_daily', { ascending: true })
+    // A listing is priced if it has EITHER price. Requiring `price_daily` excluded every
+    // listing the owner onboarding flow can create, because that flow writes `price_monthly`.
+    .or(
+      maxNightly == null
+        ? 'price_daily.not.is.null,price_monthly.not.is.null'
+        : `and(price_daily.not.is.null,price_daily.lte.${maxNightly}),and(price_monthly.not.is.null,price_monthly.lte.${Math.round(maxNightly * 30)})`,
+    )
+    .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
 
   if (query.neighborhood) {
@@ -292,9 +331,6 @@ async function searchRentalsFromSupabase(
   }
   if (typeof query.minBedrooms === 'number') {
     q = q.gte('bedrooms', query.minBedrooms);
-  }
-  if (typeof query.maxPricePerNight === 'number') {
-    q = q.lte('price_daily', query.maxPricePerNight);
   }
 
   // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
