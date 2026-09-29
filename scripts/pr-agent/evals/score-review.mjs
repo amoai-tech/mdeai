@@ -19,8 +19,9 @@ import { pathToFileURL } from "node:url";
 export const MATERIAL_SEVERITIES = ["BLOCKER", "HIGH"];
 
 /** PR-Agent's persistent finding state marker: machine-readable, per-finding, and stable. */
-const FINDING_STATE_RE = /<!--\s*pr-agent-review-state:v1\s*([\s\S]*?)-->/;
-const FINDING_STATE_RE_GLOBAL = new RegExp(FINDING_STATE_RE.source, "g");
+// Global so every marker in the body can be counted, not just the first. A literal, not a
+// constructed pattern: the source is fixed at module load and never comes from input.
+const FINDING_STATE_RE = /<!--\s*pr-agent-review-state:v1\s*([\s\S]*?)-->/g;
 
 /**
  * Drop fenced code blocks. Review bodies quote the code they reviewed, and that code is
@@ -118,7 +119,7 @@ export function parseFindings(text) {
   // could otherwise smuggle a marker-shaped string into a fenced block and have it read as the
   // bot's own authoritative state — a false "zero findings". Strip quoted code first, then refuse
   // to choose between several markers instead of silently taking the first.
-  const markers = [...withoutFencedCode(body).matchAll(FINDING_STATE_RE_GLOBAL)];
+  const markers = [...withoutFencedCode(body).matchAll(FINDING_STATE_RE)];
   if (markers.length > 1) {
     return invalidState(
       `INVALID_FINDING_STATE: ${markers.length} state markers found where exactly one is expected`,
