@@ -8,14 +8,30 @@
  * merely looks connected.
  *
  * Both halves import these values instead of repeating the literals, so the
- * pairing cannot drift and `CopilotKitTransportAgreement` below makes the
- * matching a compile-time fact rather than a convention.
+ * pairing cannot drift and the assertion at the bottom makes the matching a
+ * compile-time fact rather than a convention.
  *
  * MDE pins the single-route pair deliberately. On 1.75.0 an omitted
  * `useSingleEndpoint` is `auto` (probed from `/info`, available since 1.70.2) and
  * that is the more robust choice if the handler mode ever changes — recorded here
  * as the considered alternative, not taken, because an explicit matched pair is
  * what this stage asserts.
+ *
+ * Capability note, read from the handler's own `info` payload at 1.75.0 rather
+ * than from the docs. In single-route mode the top-level `threadEndpoints`
+ * reports `list: false, inspect: false`, which looks like a lost capability but
+ * is not — the same payload advertises it separately:
+ *
+ *     "threadEndpoints": { "list": false, "inspect": false, ... },
+ *     "singleRoute": {
+ *       "resourceOperations": true,
+ *       "threadEndpoints": { "list": true, "inspect": true, ... }
+ *     }
+ *
+ * So single-route carries thread list and inspect through resource operations.
+ * Rich Threads are NOT lost by pinning this mode. A previous revision of this
+ * file claimed the opposite from the truncated top-level flag alone; do not
+ * reintroduce that claim without re-reading `singleRoute.threadEndpoints`.
  */
 
 export const COPILOTKIT_BASE_PATH = "/api/copilotkit" as const;
@@ -50,31 +66,13 @@ export type CopilotKitTransportAgreement = [
   : never;
 
 /**
- * Compile-time assertion of the pair above.
+ * Fails to compile if the two halves above stop agreeing.
  *
- * Type-only on purpose: it emits no runtime value, because nothing reads it at
- * runtime — its entire job is to make a mismatched pair fail the build. `tsc`
- * evaluates it because it is exported into the declaration emit.
+ * This is a value, not a bare type alias, and that is deliberate. A type alias
+ * may legally resolve to `never` — `type X = Cond extends true ? true : never`
+ * is accepted with no error, so an alias enforces nothing. `never` is also
+ * assignable to every type, so a `T extends true` constraint does not catch it
+ * either. Only a *value* of this type errors when the agreement collapses,
+ * because `true` is not assignable to `never`.
  */
-export type AssertTransportAgreement = CopilotKitTransportAgreement extends true
-  ? true
-  : never;
-
-/**
- * ponytail: ceiling — single-route mode does not expose CopilotKit Rich Threads.
- *
- * Read from the handler's own `info` payload at 1.75.0, not inferred:
- *
- *     single-route -> threadEndpoints { list: false, inspect: false }
- *     multi-route  -> threadEndpoints { list: true,  inspect: true  }
- *
- * So CopilotKit's own thread list and inspect endpoints are unavailable here.
- * MDE does not need them: thread navigation is owned by `ThreadNavProvider` on
- * top of Supabase ownership and the `ai_runs` ledger, not by CopilotKit's thread
- * store. This is a recorded ceiling, not a defect.
- *
- * Upgrade path: switch `COPILOTKIT_HANDLER_MODE` to `"multi-route"` **and** drop
- * the client's pinned `useSingleEndpoint` in the same change, because single
- * route is only half of the pair — a partial move is the "looks connected"
- * failure the assertion above refuses to compile.
- */
+export const COPILOTKIT_TRANSPORT_AGREES: CopilotKitTransportAgreement = true;

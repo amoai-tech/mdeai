@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -8,8 +8,8 @@ import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import {
   COPILOTKIT_BASE_PATH,
   COPILOTKIT_HANDLER_MODE,
+  COPILOTKIT_TRANSPORT_AGREES,
   COPILOTKIT_USE_SINGLE_ENDPOINT,
-  type AssertTransportAgreement,
 } from "@/lib/copilotkit-transport";
 
 /**
@@ -55,16 +55,55 @@ const V1_PROVIDER_OPEN = new RegExp(`${V1_PROVIDER_TAG}[\\s>]`);
 const importLines = (src: string) =>
   src.split("\n").filter((line) => /^\s*import\b/.test(line));
 
+const SRC_REL = "src";
+const PROD_EXT = /\.(ts|tsx|js|jsx)$/;
+
+/**
+ * Every production source file under `src/`, so the bare-runtime assertion below
+ * covers the whole tree rather than one file.
+ *
+ * A previous revision built its `imports` list from the route source alone while
+ * claiming repository-wide coverage — a false-wide assertion, which is worse than
+ * a narrow one because it reads as proven.
+ */
+function walkProductionSources(dir: string, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules") continue;
+      walkProductionSources(full, acc);
+    } else if (PROD_EXT.test(entry.name)) {
+      acc.push(full.replace(/\\/g, "/"));
+    }
+  }
+  return acc;
+}
+
 describe("Step 10 · route contract — v2 fetch handler", () => {
   const route = read(ROUTE_REL);
   const imports = importLines(route);
 
   it("has zero bare @copilotkit/runtime imports anywhere in src", () => {
-    const offenders = imports.filter((line) =>
-      /from\s+"@copilotkit\/runtime"/.test(line),
+    const files = walkProductionSources(SRC_REL);
+
+    // Sanity: prove the walk actually traversed the tree, so an empty or broken
+    // scan cannot pass this assertion vacuously.
+    expect(files.length).toBeGreaterThan(100);
+
+    const offenders = files.flatMap((rel) =>
+      importLines(read(rel))
+        .filter((line) => /from\s+"@copilotkit\/runtime"/.test(line))
+        .map((line) => `${rel}: ${line.trim()}`),
     );
 
     expect(offenders).toEqual([]);
+
+    // And prove the same walk finds the v2 import, so "no offenders" cannot be
+    // explained by the scanner matching nothing at all.
+    const v2Imports = files.flatMap((rel) =>
+      importLines(read(rel)).filter((line) => line.includes('"@copilotkit/runtime/v2"')),
+    );
+    expect(v2Imports.length).toBeGreaterThan(0);
   });
 
   it("imports the runtime from @copilotkit/runtime/v2", () => {
@@ -137,12 +176,10 @@ describe("Step 9 + 10 · transport agreement", () => {
     expect(COPILOTKIT_BASE_PATH).toBe("/api/copilotkit");
     expect(COPILOTKIT_HANDLER_MODE).toBe("single-route");
     expect(COPILOTKIT_USE_SINGLE_ENDPOINT).toBe(true);
-    // Compile-time guard: the two halves agree, or this does not typecheck.
-    // `AssertTransportAgreement` resolves to `never` when they disagree, so this
-    // assignment fails to compile. `tsc --noEmit` is the check that runs it; the
-    // runtime assertion below keeps the intent visible in this suite.
-    const agreement: AssertTransportAgreement = true;
-    expect(agreement).toBe(true);
+    // Compile-time guard: `COPILOTKIT_TRANSPORT_AGREES` is declared as the
+    // agreement type, so if the two halves disagree it resolves to `never` and the
+    // transport module itself fails to compile. `tsc --noEmit` runs that check.
+    expect(COPILOTKIT_TRANSPORT_AGREES).toBe(true);
   });
 
   it("client props consume the shared constants rather than literals", () => {
