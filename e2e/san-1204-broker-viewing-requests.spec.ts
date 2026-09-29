@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "./fixtures/vercel-bypass";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -67,9 +68,29 @@ function resolveBypassSecret(): string | undefined {
 }
 
 const BYPASS_SECRET = resolveBypassSecret();
-const PROTECTION_HEADERS: Record<string, string> = BYPASS_SECRET
-  ? { "x-vercel-protection-bypass": BYPASS_SECRET, "x-vercel-set-bypass-cookie": "true" }
-  : {};
+
+/** Only a real MDE Vercel candidate needs the automation bypass; production does not. */
+// skipcq: JS-0067 - module-local helper
+function isVercelCandidate(origin: string): boolean {
+  try {
+    validateVercelCandidateOrigin(origin);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hand the bypass secret to the candidate handshake only, then let the `_vercel_jwt` cookie set by
+ * that response carry the session. Attaching the secret as context-wide `extraHTTPHeaders` would
+ * send it on every request the page makes, which is not what the secret is for.
+ */
+// skipcq: JS-0067 - module-local helper
+async function openCandidate(page: Page, origin: string): Promise<void> {
+  if (BYPASS_SECRET && isVercelCandidate(origin)) {
+    await establishVercelAutomationBypass(page, origin, BYPASS_SECRET);
+  }
+}
 
 type Admin = Awaited<ReturnType<typeof getSupabaseAdmin>>;
 
@@ -159,14 +180,13 @@ async function openWorkspace(
   email: string,
   viewport?: { width: number; height: number },
 ): Promise<{ context: BrowserContext; page: Page; problems: Problems }> {
-  const context = await browser.newContext({
-    ...(viewport ? { viewport } : {}),
-    extraHTTPHeaders: PROTECTION_HEADERS,
-  });
+  const context = await browser.newContext(viewport ? { viewport } : {});
   const page = await context.newPage();
   const problems = watchProblems(page);
 
+  // Sign-in clears the cookie jar, so the bypass handshake has to happen after it.
   await signInAsOnOrigin(page, ORIGIN, email);
+  await openCandidate(page, ORIGIN);
   await page.goto(`${ORIGIN}/host/rentals`, { waitUntil: "domcontentloaded" });
 
   return { context, page, problems };
@@ -243,9 +263,10 @@ async function assertOtherDenied(browser: Browser, fixture: Fixture): Promise<Pr
 
 /** With no session at all, the broker workspace must not render. */
 async function assertAnonymousDenied(browser: Browser): Promise<void> {
-  const context = await browser.newContext({ extraHTTPHeaders: PROTECTION_HEADERS });
+  const context = await browser.newContext();
   const page = await context.newPage();
 
+  await openCandidate(page, ORIGIN);
   await page.goto(`${ORIGIN}/host/rentals`, { waitUntil: "domcontentloaded" });
 
   await expect(
@@ -485,12 +506,28 @@ async function assertNoResidue(admin: Admin, fixture: Fixture): Promise<string[]
       .select("id", { count: "exact", head: true })
       .in("id", [fixture.ownerProfileId, fixture.otherProfileId]),
   );
-  await count("auth profiles", () =>
-    admin
-      .from("landlord_profiles")
-      .select("id", { count: "exact", head: true })
-      .in("user_id", [fixture.owner.userId, fixture.other.userId]),
-  );
+  // Ask Supabase Auth directly. The previous version re-queried landlord_profiles and labelled
+  // the result "auth users", so it could never have caught the stranded auth.users rows that
+  // actually happened — the exact failure this postcondition exists to prevent.
+  for (const [who, userId] of [
+    ["owner", fixture.owner.userId],
+    ["other", fixture.other.userId],
+  ] as const) {
+    try {
+      const { data, error } = await admin.auth.admin.getUserById(userId);
+      if (error) {
+        // 404 is the expected outcome once the identity is gone. Anything else is unverified,
+        // and an unverified check must never be reported as clean.
+        if ((error as { status?: number }).status !== 404) {
+          leftovers.push(`auth users/${who}: could not verify (${error.message})`);
+        }
+      } else if (data?.user) {
+        leftovers.push(`auth users/${who}: still present`);
+      }
+    } catch (err) {
+      leftovers.push(`auth users/${who}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   return leftovers;
 }
