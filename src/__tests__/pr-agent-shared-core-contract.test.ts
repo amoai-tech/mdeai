@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
 const evidenceBuilder = readFileSync("scripts/pr-agent/build-evidence.mjs", "utf8");
-const sharedSha = "a3c9600de7a31184266fade8387359ccbb8e6d68";
+const sharedSha = "b97ecd0c2292e2850592c0416a4317802fa4cde0";
 
 describe("IPI-1246 shared PR-Agent caller contract", () => {
   it("pins MDE to the immutable shared workflow", () => {
