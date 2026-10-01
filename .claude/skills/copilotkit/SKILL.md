@@ -3,8 +3,8 @@ name: copilotkit
 description: >-
   Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
-  mde-version: "2.0.0"
-  upstream-commit: "8a7446186cd3e0d368ec885e61c5913f0918ef5d"
+  mde-version: "2.1.0"
+  upstream-commit: "632b050da4a3ee5a8eb3e263316b9acd2fdfe6ff"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
 
@@ -14,9 +14,10 @@ metadata:
 
 1. Inspect the installed MDE CopilotKit packages and current runtime/provider code.
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
-3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md` and run `npx copilotkit@4.10.0 verify --json` when safe and applicable.
-4. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
-5. Apply the MDE-specific invariants below.
+3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS, so prefer `verify --expect-runtime oss --round-trip --agent <id>` rather than hosted-Intelligence checks.
+4. For Channels or Intelligence work, load only the matching vendored official reference named under **Official feature routing** below.
+5. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
+6. Apply the MDE-specific invariants below.
 
 Do not answer volatile CopilotKit API questions from memory. Do not silently replace installed-version behavior with latest-main examples.
 
@@ -35,13 +36,56 @@ Own the browser-facing agent bridge: provider/hooks, same-origin runtime, AG-UI 
 ## v1 vs v2 imports — the mistake this skill exists to prevent
 
 Both surfaces ship in one install, so a v1 import will compile, run, and still be
-wrong. MDE is v2-only.
+wrong. MDE targets the v2 API surface. Temporary compatibility `<CopilotKit>` boundaries
+may remain only while the tracked SAN-1378 Stage D migration is incomplete; do not add
+new v1 consumers.
 
 | Need | v2 (use this) | v1 (do not use) |
 |---|---|---|
 | React hooks | `@copilotkit/react-core/v2` | `@copilotkit/react-core` |
 | Runtime | `@copilotkit/runtime/v2` | `@copilotkit/runtime` |
 | Route handler | `createCopilotRuntimeHandler` | `copilotRuntimeNextJSAppRouterEndpoint` |
+
+## OSS verification
+
+MDE runs a self-hosted, same-origin runtime rather than hosted CopilotKit Intelligence. For
+manual discovery, use the current CLI so its wiring knowledge is fresh:
+
+```bash
+npx copilotkit@latest verify \
+  --expect-runtime oss \
+  --round-trip \
+  --agent conciergeAgent \
+  --json
+```
+
+For a preview/production URL, also pass `--runtime-url <origin>/api/copilotkit` and the
+required authenticated `--header '<name>: <value>'`. Never print session secrets.
+
+Use `@latest` for manual upstream discovery. For CI or repeatable certification, keep the
+reviewed CLI version pinned (currently `4.10.0`) until a separate review deliberately moves
+that pin. A passing CLI check proves wiring and a basic round trip; it does not replace MDE's
+exact-SHA browser, tool, streaming, auth/isolation, or production certification.
+
+## Official feature routing
+
+Keep one MDE domain owner (`copilotkit`). The vendored upstream feature skills are references,
+not independent MDE routing owners:
+
+| Need | Read |
+|---|---|
+| Core runtime/UI/debugging | `references/official/copilotkit/SKILL.md` |
+| CLI verification/onboarding | `references/official/copilotkit-cli/SKILL.md` |
+| First managed Channel setup | `references/official/channels-setup/SKILL.md` |
+| Managed Channels implementation | `references/official/copilotkit-channels/SKILL.md` |
+| Slack provider setup | `references/official/setup-slack-channel/SKILL.md` |
+| Intelligence docs structure | `references/official/intelligence-docs/SKILL.md` |
+| Intelligence customer-facing terminology | `references/official/intelligence-vocabulary/SKILL.md` |
+
+Vendoring Channels/Intelligence guidance does **not** enable those products in MDE. Managed
+Channels require their own supported deployment shape (including a long-running host); never
+move that lifecycle into the existing serverless Next.js request route just because the
+reference is available.
 
 ## Two kinds of human-in-the-loop
 
@@ -92,8 +136,13 @@ At minimum verify the affected runtime URL, agent identity, version surface, too
 ## References
 
 - `upstream.yaml` — immutable source provenance and update policy
-- `references/official/copilotkit/SKILL.md` — official vendor skill, pinned and read-only
+- `references/official/copilotkit/SKILL.md` — official vendor core skill, pinned and read-only
 - `references/official/copilotkit-cli/SKILL.md` — official CLI skill, pinned and read-only
+- `references/official/channels-setup/` — official first-Channel setup skill
+- `references/official/copilotkit-channels/` — official managed Channels implementation skill
+- `references/official/setup-slack-channel/` — official Slack provider setup skill
+- `references/official/intelligence-docs/` — official Intelligence docs skill
+- `references/official/intelligence-vocabulary/` — official Intelligence terminology skill
 - `references/runtime-and-react.md`
 - `references/ag-ui-and-tools.md`
 - `references/mastra-bridge.md`
