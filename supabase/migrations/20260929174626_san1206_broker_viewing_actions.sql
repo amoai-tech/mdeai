@@ -225,6 +225,15 @@ BEGIN
         USING ERRCODE = 'PT409', HINT = 'Refresh and try again.';
     END IF;
 
+    -- cancel is the one outcome reachable from both open states, and it is itself terminal:
+    -- a row already cancelled is handled as replay above and never reaches this block.
+    -- Once the visit is completed or no_show the broker decision is historical, so a
+    -- late cancel must not rewrite it -- the database enforces this, not the UI.
+    IF p_action = 'cancel' AND v_row.status NOT IN ('scheduled', 'confirmed') THEN
+      RAISE EXCEPTION 'a % viewing cannot be cancelled', v_row.status
+        USING ERRCODE = 'PT409', HINT = 'Refresh and try again.';
+    END IF;
+
     IF p_action = 'reschedule' THEN
       IF p_new_scheduled_at IS NULL THEN
         RAISE EXCEPTION 'reschedule requires a new viewing time' USING ERRCODE = '22023';
@@ -283,7 +292,7 @@ GRANT EXECUTE ON FUNCTION public.p1_broker_update_showing(
 COMMENT ON FUNCTION public.p1_broker_update_showing(
   uuid, text, text, timestamptz, timestamptz
 ) IS
-  'SAN-1206 broker viewing transition: confirm/cancel/reschedule the same showing row under row lock, expected-state guard and broker-or-admin authorization. Exact replay is a no-op success; stale state raises P1206.';
+  'SAN-1206 broker viewing transition: confirm/cancel/reschedule the same showing row under row lock, expected-state guard and broker-or-admin authorization. Exact replay is a no-op success; stale or illegal state raises PT409.';
 
 COMMENT ON POLICY showings_update_broker_or_admin ON public.showings IS
-  'SAN-1206: authoritative viewing mutation is the owning broker or an admin. The renter/assigned-agent branch was removed from UPDATE; it remains on SELECT and DELETE.';
+  'SAN-1206: authoritative viewing mutation is the owning broker or an admin. The renter/assigned-agent branch was removed from UPDATE. Renter/assigned-agent access may remain represented by separate defensive policies, but authenticated DELETE privilege has been revoked, so signed-in callers cannot use those policies to delete showings.';

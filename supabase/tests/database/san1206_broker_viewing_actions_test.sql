@@ -40,7 +40,7 @@
 
 begin;
 
-select plan(70);
+select plan(83);
 
 -- Values live in session settings rather than psql client variables so this file stays plain
 -- SQL: every restricted-session probe reads a value captured in the trusted session.
@@ -52,7 +52,11 @@ select set_config('san1206.t1', '2099-11-20 19:00:00+00', false),
        set_config('san1206.t2', '2099-11-21 19:00:00+00', false),
        set_config('san1206.t3', '2099-11-21 20:00:00+00', false),
        set_config('san1206.t4', '2099-11-21 21:00:00+00', false),
-       set_config('san1206.t5', '2099-11-22 19:00:00+00', false);
+       set_config('san1206.t5', '2099-11-22 19:00:00+00', false),
+       set_config('san1206.t6', '2099-11-23 19:00:00+00', false),
+       set_config('san1206.t7', '2099-11-24 19:00:00+00', false),
+       set_config('san1206.t8', '2099-11-25 19:00:00+00', false),
+       set_config('san1206.t9', '2099-11-26 19:00:00+00', false);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — deterministic, transaction-owned, rolled back at the end.
@@ -545,8 +549,9 @@ select ok(not has_table_privilege('anon', 'public.showings', 'UPDATE'),
           'M7: anon holds no UPDATE on showings');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- N · INTEGRITY — nothing in this file created a showing, and a legal-looking
--- reschedule into an already-occupied day conflicts instead of raising a raw 23505.
+-- N · INTEGRITY — nothing here created a showing by accident, and a reschedule onto
+-- a day the same renter already occupies reaches the real (lead, apartment,
+-- Medellín day) uniqueness constraint and reads as a conflict.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select is(
@@ -559,33 +564,156 @@ select is(
     where apartment_id = 'b1206000-0000-4000-8000-000000000001'),
   2, 'N2: and they are two distinct rows');
 
--- A second showing for the SAME lead on a different day is a legal state the create RPC
--- permits, so rescheduling onto that occupied day is reachable in production. The unique index
--- idx_showings_lead_apt_day makes it a unique_violation; the RPC must surface that as the same
--- deterministic conflict rather than an opaque 23505.
-insert into public.showings (lead_id, apartment_id, scheduled_at, status)
-values (current_setting('san1206.lead2')::uuid, 'b1206000-0000-4000-8000-000000000001',
-        current_setting('san1206.t5')::timestamptz, 'scheduled');
+-- Genuine collision fixture: two SCHEDULED showings for the SAME lead on the SAME apartment,
+-- on two distinct days (day A = t5, day B = t6). This is a legal state the create RPC itself
+-- permits, so the broker reschedule below is reachable in production — unlike the earlier
+-- cancelled row, whose PT409 came from the transition guard and never touched the index.
+-- Inserted directly because the canonical create RPC is idempotent per identity.
+insert into public.showings (id, lead_id, apartment_id, scheduled_at, status)
+values
+  ('c1206000-0000-4000-8000-000000000001', current_setting('san1206.lead2')::uuid,
+   'b1206000-0000-4000-8000-000000000001', current_setting('san1206.t5')::timestamptz,
+   'scheduled'),
+  ('c1206000-0000-4000-8000-000000000002', current_setting('san1206.lead2')::uuid,
+   'b1206000-0000-4000-8000-000000000001', current_setting('san1206.t6')::timestamptz,
+   'scheduled');
+
+-- Capture the row count BEFORE the refused action so N7 proves the failure added nothing,
+-- rather than trusting that the table happens to look right afterwards.
+select set_config(
+  'san1206.lead2_before',
+  (select count(*)::text from public.showings
+    where lead_id = current_setting('san1206.lead2')::uuid),
+  false);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1206000-0000-4000-8000-000000000001', true);
 
 select throws_ok(format($q$
   select public.p1_broker_update_showing(
-    %L::uuid, 'reschedule', 'cancelled', %L::timestamptz, %L::timestamptz)
-$q$, current_setting('san1206.showing2'), current_setting('san1206.t3'),
-     current_setting('san1206.t5')),
-  'PT409', NULL, 'N3: rescheduling onto a day the same lead already occupies conflicts deterministically');
+    %L::uuid, 'reschedule', 'scheduled', %L::timestamptz, %L::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000002',
+     current_setting('san1206.t6'), current_setting('san1206.t5')),
+  'PT409', 'another viewing already occupies that day for this renter and listing',
+  'N3: moving B onto the day A occupies hits the uniqueness rule and conflicts deterministically');
 reset role;
 
 select is(
-  (select scheduled_at from public.showings where id = current_setting('san1206.showing2')::uuid),
-  current_setting('san1206.t3')::timestamptz,
-  'N4: the refused collision left the appointment where it was');
+  (select scheduled_at from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000002'),
+  current_setting('san1206.t6')::timestamptz,
+  'N4: the refused collision left B on its original day');
 
 select is(
-  (select count(*)::int from public.showings where lead_id = current_setting('san1206.lead2')::uuid),
-  2, 'N5: the refused collision created no additional showing');
+  (select status from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000002'),
+  'scheduled', 'N5: B is still the unanswered scheduled request');
+
+select is(
+  (select id from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000002'),
+  'c1206000-0000-4000-8000-000000000002'::uuid,
+  'N6: B kept the same UUID — the refused move rewrote no row');
+
+select is(
+  (select count(*)::int from public.showings
+    where lead_id = current_setting('san1206.lead2')::uuid),
+  current_setting('san1206.lead2_before')::int,
+  'N7: the refused collision created no additional showing');
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- O · CLOSED STATES — a terminal or already-answered visit cannot be re-decided by the
+-- broker through the RPC. Each attempt asserts the failure AND the persisted row.
+--
+-- Three dedicated showings on three further days: one confirmed, one completed, one no_show.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+insert into public.showings (id, lead_id, apartment_id, scheduled_at, status)
+values
+  ('c1206000-0000-4000-8000-000000000003', current_setting('san1206.lead2')::uuid,
+   'b1206000-0000-4000-8000-000000000001', current_setting('san1206.t7')::timestamptz,
+   'confirmed'),
+  ('c1206000-0000-4000-8000-000000000004', current_setting('san1206.lead2')::uuid,
+   'b1206000-0000-4000-8000-000000000001', current_setting('san1206.t8')::timestamptz,
+   'completed'),
+  ('c1206000-0000-4000-8000-000000000005', current_setting('san1206.lead2')::uuid,
+   'b1206000-0000-4000-8000-000000000001', current_setting('san1206.t9')::timestamptz,
+   'no_show');
+
+select set_config(
+  'san1206.closed_before',
+  (select count(*)::text from public.showings
+    where lead_id = current_setting('san1206.lead2')::uuid),
+  false);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1206000-0000-4000-8000-000000000001', true);
+
+select throws_ok(format($q$
+  select public.p1_broker_update_showing(
+    %L::uuid, 'cancel', 'completed', %L::timestamptz, null::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000004', current_setting('san1206.t8')),
+  'PT409', 'a completed viewing cannot be cancelled',
+  'O1: a completed viewing cannot be cancelled');
+
+select throws_ok(format($q$
+  select public.p1_broker_update_showing(
+    %L::uuid, 'cancel', 'no_show', %L::timestamptz, null::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000005', current_setting('san1206.t9')),
+  'PT409', 'a no_show viewing cannot be cancelled',
+  'O2: a no_show viewing cannot be cancelled');
+
+select throws_ok(format($q$
+  select public.p1_broker_update_showing(
+    %L::uuid, 'reschedule', 'confirmed', %L::timestamptz, %L::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000003', current_setting('san1206.t7'),
+     current_setting('san1206.t5')),
+  'PT409', 'a confirmed viewing cannot be reschedule',
+  'O3: a confirmed viewing cannot be moved to a new time here');
+
+select throws_ok(format($q$
+  select public.p1_broker_update_showing(
+    %L::uuid, 'confirm', 'completed', %L::timestamptz, null::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000004', current_setting('san1206.t8')),
+  'PT409', 'a completed viewing cannot be confirm',
+  'O4: a completed viewing cannot be re-confirmed');
+reset role;
+
+select is(
+  (select status from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000004'),
+  'completed', 'O5: the completed viewing is still completed');
+select is(
+  (select scheduled_at from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000004'),
+  current_setting('san1206.t8')::timestamptz,
+  'O6: and its appointment time is untouched');
+
+select is(
+  (select status from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000005'),
+  'no_show', 'O7: the no_show viewing is still no_show');
+select is(
+  (select scheduled_at from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000005'),
+  current_setting('san1206.t9')::timestamptz,
+  'O8: and its appointment time is untouched');
+
+select is(
+  (select status from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000003'),
+  'confirmed', 'O9: the confirmed viewing is still confirmed');
+select is(
+  (select scheduled_at from public.showings
+    where id = 'c1206000-0000-4000-8000-000000000003'),
+  current_setting('san1206.t7')::timestamptz,
+  'O10: and its appointment time is untouched');
+
+select is(
+  (select count(*)::int from public.showings
+    where lead_id = current_setting('san1206.lead2')::uuid),
+  current_setting('san1206.closed_before')::int,
+  'O11: the four refused closed-state actions created nothing');
 
 select * from finish();
 
