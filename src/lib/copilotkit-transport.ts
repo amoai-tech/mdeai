@@ -42,37 +42,30 @@ export const COPILOTKIT_HANDLER_MODE = "single-route" as const;
 /** Client half: `<CopilotKit useSingleEndpoint />` / `CopilotKitProvider`. */
 export const COPILOTKIT_USE_SINGLE_ENDPOINT = true as const;
 
-/**
- * `true` in both directions: single-route requires the pinned client, and the
- * pinned client requires a single-route handler.
- *
- * This exists so a future change to either constant fails to compile rather than
- * failing at runtime in production, where the symptom is a 404 on the run route
- * hidden behind a healthy `/info`.
- */
-export type CopilotKitTransportAgreement = [
-  (typeof COPILOTKIT_HANDLER_MODE) extends "single-route"
-    ? (typeof COPILOTKIT_USE_SINGLE_ENDPOINT) extends true
-      ? true
-      : never
-    : never,
-  (typeof COPILOTKIT_USE_SINGLE_ENDPOINT) extends true
-    ? (typeof COPILOTKIT_HANDLER_MODE) extends "single-route"
-      ? true
-      : never
-    : never,
-] extends [true, true]
-  ? true
-  : never;
+/** Symmetric type equality that yields a real `false`, never `never`, on mismatch. */
+type Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+type ModeIsSingleRoute = (typeof COPILOTKIT_HANDLER_MODE) extends "single-route" ? true : false;
+type ClientIsPinned = (typeof COPILOTKIT_USE_SINGLE_ENDPOINT) extends true ? true : false;
 
 /**
- * Fails to compile if the two halves above stop agreeing.
+ * `true` only when both halves agree: single-route requires the pinned client,
+ * and the pinned client requires a single-route handler.
  *
- * This is a value, not a bare type alias, and that is deliberate. A type alias
- * may legally resolve to `never` — `type X = Cond extends true ? true : never`
- * is accepted with no error, so an alias enforces nothing. `never` is also
- * assignable to every type, so a `T extends true` constraint does not catch it
- * either. Only a *value* of this type errors when the agreement collapses,
- * because `true` is not assignable to `never`.
+ * Every branch resolves to `true` or `false`, never `never`. That matters: a
+ * previous revision built this from tuple elements that collapsed to `never` on
+ * mismatch, and because `never` is assignable to `true`,
+ * `[never, never] extends [true, true]` still resolved to `true` — the guard
+ * compiled with the halves disagreeing and enforced nothing.
+ */
+export type CopilotKitTransportAgreement = Equals<ModeIsSingleRoute, ClientIsPinned>;
+
+/**
+ * Fails to compile if the two halves above stop agreeing, because `true` is not
+ * assignable to `false`. A bare type alias would enforce nothing; only a value of
+ * this type errors.
+ *
+ * Proven by mutation, not by the runtime test: setting `COPILOTKIT_HANDLER_MODE`
+ * to `"multi-route"` makes `tsc --noEmit` fail on this line.
  */
 export const COPILOTKIT_TRANSPORT_AGREES: CopilotKitTransportAgreement = true;

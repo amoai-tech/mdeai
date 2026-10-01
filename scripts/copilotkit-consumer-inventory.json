@@ -220,6 +220,11 @@
       "file": "src/__tests__/api/copilotkit-stop-body.test.ts",
       "classification": "test-only",
       "note": "Step 11 STOP-4: proves the stop request body survives the MDE route intact and reaches the runtime as exactly { runId }, with a built-in negative control showing a non-cloning reader destroys the run scope. Mocks @copilotkit/runtime/v2, so no real runtime is constructed."
+    },
+    {
+      "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
+      "classification": "test-only",
+      "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
     }
   ]
 }

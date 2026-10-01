@@ -182,10 +182,46 @@ describe("Step 9 + 10 · transport agreement", () => {
     expect(COPILOTKIT_BASE_PATH).toBe("/api/copilotkit");
     expect(COPILOTKIT_HANDLER_MODE).toBe("single-route");
     expect(COPILOTKIT_USE_SINGLE_ENDPOINT).toBe(true);
-    // Compile-time guard: `COPILOTKIT_TRANSPORT_AGREES` is declared as the
-    // agreement type, so if the two halves disagree it resolves to `never` and the
-    // transport module itself fails to compile. `tsc --noEmit` runs that check.
+    // A runtime read of this constant can never fail, so it proves nothing about
+    // the type guard. It only keeps the export referenced. The real enforcement
+    // is `tsc --noEmit`, proven by the mutation test below.
     expect(COPILOTKIT_TRANSPORT_AGREES).toBe(true);
+  });
+
+  it("the compile-time guard rejects a mismatched pair (mutation proof)", async () => {
+    // Compile the REAL transport module twice through the TypeScript compiler
+    // API: once as written, once with the server half flipped to multi-route.
+    // The mutant must produce a diagnostic, or the guard is inert.
+    const ts = await import("typescript");
+    const source = read(TRANSPORT_REL);
+    const MODE_LINE = 'COPILOTKIT_HANDLER_MODE = "single-route" as const';
+    expect(source).toContain(MODE_LINE);
+
+    const diagnosticsFor = (text: string) => {
+      const fileName = "/virtual/copilotkit-transport.ts";
+      const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
+      const host = ts.createCompilerHost(options);
+      const original = host.getSourceFile.bind(host);
+      host.getSourceFile = (name, languageVersion, ...rest) =>
+        name === fileName
+          ? ts.createSourceFile(name, text, languageVersion)
+          : original(name, languageVersion, ...rest);
+      const program = ts.createProgram([fileName], options, host);
+      return ts.getPreEmitDiagnostics(program).filter((d) => d.file?.fileName === fileName);
+    };
+
+    expect(diagnosticsFor(source)).toHaveLength(0);
+    const mutant = source.replace(MODE_LINE, 'COPILOTKIT_HANDLER_MODE = "multi-route" as const');
+    const mutantErrors = diagnosticsFor(mutant);
+    expect(mutantErrors.length).toBeGreaterThan(0);
+    const errorLines = mutantErrors.map((d) => {
+      const { line } = d.file!.getLineAndCharacterOfPosition(d.start ?? 0);
+      return mutant.split("\n")[line];
+    });
+    expect(
+      errorLines.some((line) => line?.includes("COPILOTKIT_TRANSPORT_AGREES")),
+      "the mismatch must be reported on the agreement constant",
+    ).toBe(true);
   });
 
   it("client props consume the shared constants rather than literals", () => {
