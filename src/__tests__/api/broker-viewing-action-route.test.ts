@@ -171,6 +171,17 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
       expect(state.calls).toHaveLength(0);
     });
 
+    it("400s a wall clock that is not the datetime-local shape", async () => {
+      const response = await patch({
+        action: "reschedule",
+        ...expectation(),
+        newWallClock: "2099/11/21 15:00",
+      });
+
+      expect(response.status).toBe(400);
+      expect(state.calls).toHaveLength(0);
+    });
+
     it("400s a reschedule into the past", async () => {
       const response = await patch({
         action: "reschedule",

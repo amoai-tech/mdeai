@@ -39,7 +39,14 @@ export const brokerViewingActionRequestSchema = z.object({
         !Number.isNaN(Date.parse(value)),
       { message: "expectedScheduledAt must be an ISO 8601 timestamp with an offset" },
     ),
-  newWallClock: z.string().trim().min(1).max(32).optional(),
+  // The component datetime-local control emits exactly YYYY-MM-DDTHH:mm (no offset, no
+  // seconds). Matching that shape here turns a manipulated or malformed value into the same
+  // clean 400 as any other schema failure, before the Medellin resolver runs.
+  newWallClock: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "newWallClock must be a datetime-local value")
+    .optional(),
 });
 
 export type BrokerViewingActionRequest = z.infer<typeof brokerViewingActionRequestSchema>;
