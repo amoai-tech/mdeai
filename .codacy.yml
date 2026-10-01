@@ -13,6 +13,10 @@
 # A tool cannot be enabled/disabled from this file (that is the Code patterns page), so the
 # correct lever is a per-tool path exclusion. SQLint — the PostgreSQL linter — is deliberately
 # left enabled so Postgres SQL is still analysed; only the SQL Server linter is scoped out.
+exclude_paths:
+  - "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs"
+  - "scripts/pr-agent/evals/fixtures/semver-boundary-canary-test.mjs"
+
 engines:
   tsqllint:
     exclude_paths:

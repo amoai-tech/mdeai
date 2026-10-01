@@ -225,6 +225,16 @@
       "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
       "classification": "test-only",
       "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
+    },
+    {
+      "file": "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs",
+      "classification": "test-only",
+      "note": "SAN-1332 recorded evidence: a byte-exact copy of scripts/check-mastra.mjs before fb2052f2b, so it names the aligned packages as data. Read as text by pr-agent-canary-fixture.test.mjs and never imported or executed."
+    },
+    {
+      "file": "scripts/pr-agent/evals/fixtures/semver-boundary-canary-test.mjs",
+      "classification": "test-only",
+      "note": "SAN-1332 recorded evidence: the suite at that same head, which builds synthetic package.json fixtures naming the aligned packages. Read as text, never executed."
     }
   ]
 }
