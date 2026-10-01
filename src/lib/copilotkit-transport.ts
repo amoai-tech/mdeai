@@ -49,8 +49,12 @@ type ModeIsSingleRoute = (typeof COPILOTKIT_HANDLER_MODE) extends "single-route"
 type ClientIsPinned = (typeof COPILOTKIT_USE_SINGLE_ENDPOINT) extends true ? true : false;
 
 /**
- * `true` only when both halves agree: single-route requires the pinned client,
- * and the pinned client requires a single-route handler.
+ * `true` only when both halves MATCH — the server is single-route exactly when
+ * the client is pinned to the single endpoint. That is "both single-route +
+ * pinned" (today) or "both multi-route + unpinned" (a deliberate move to the
+ * other transport, which must change both constants). A change to one half
+ * alone is the mismatch this rejects; it does not assert which pair MDE uses —
+ * the contract test pins that separately.
  *
  * Every branch resolves to `true` or `false`, never `never`. That matters: a
  * previous revision built this from tuple elements that collapsed to `never` on
