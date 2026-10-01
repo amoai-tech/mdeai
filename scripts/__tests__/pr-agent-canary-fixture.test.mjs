@@ -135,6 +135,5 @@ describe("SAN-1332 frozen canary fixture", () => {
       "node --test scripts/__tests__/*.test.mjs",
       "the canary's suite must be inside the release-gate glob",
     );
-    assert.match("scripts/__tests__/copilotkit-version-alignment.test.mjs", /^scripts\/__tests__\/.*\.test\.mjs$/);
   });
 });
