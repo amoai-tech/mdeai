@@ -2,7 +2,10 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { CopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotChatConfigurationProvider,
+  CopilotKitProvider,
+} from "@copilotkit/react-core/v2";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
@@ -39,17 +42,24 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
   }
 
   return (
-    <CopilotKit
+    <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
-      threadId={activeThreadId}
       onError={reportConciergeError}
     >
-      <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
-    </CopilotKit>
+      {/*
+        Non-chat pages (maps, cafés, events). Same thread rule as before the v2
+        move: a saved thread picked in the nav rail is explicit; with none
+        picked, the configuration provider mints one fresh thread per mount.
+        The /chat surface decides its own thread in ChatProvider.
+      */}
+      <CopilotChatConfigurationProvider agentId="conciergeAgent" threadId={activeThreadId}>
+        <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
+      </CopilotChatConfigurationProvider>
+    </CopilotKitProvider>
   );
 }
 
-/** Client wrapper so `onError` can be passed to <CopilotKit> without Server Component restrictions. */
+/** Client wrapper so `onError` can be passed to the provider without Server Component restrictions. */
 export function MdeCopilotKitProvider({ children }: { children: ReactNode }) {
   return (
     <ThreadNavProvider>

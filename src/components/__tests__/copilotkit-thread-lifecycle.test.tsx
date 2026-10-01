@@ -8,6 +8,7 @@ import { HostEventProvider } from "@/components/host/host-event-provider";
 import { HostOsShell } from "@/components/host/host-os-shell";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
+import { MdeCopilotKitProvider } from "@/components/copilot/copilot-kit-provider";
 
 // The shell's own chrome is not under test; its provider boundary is. The
 // header renders a probe so the test proves a component OUTSIDE the routed
@@ -23,6 +24,9 @@ vi.mock("@/components/host/host-context-provider", () => ({
 }));
 vi.mock("@/components/host/host-os-header", () => ({
   HostOsHeader: () => <Probe name="header" />,
+}));
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  ConciergeCoAgentProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/host/host-os-body", () => ({
   CHAT_REGION_ID: "host-chat",
@@ -205,5 +209,44 @@ describe("ChatProvider — /chat saved chats and New Chat", () => {
     const first = seen.chat.threadId;
     await render(chatPage("second"));
     expect(seen.chat.threadId).not.toBe(first);
+  });
+});
+
+describe("MdeCopilotKitProvider — root provider on non-chat pages", () => {
+  let nav: ReturnType<typeof useThreadNav> | undefined;
+  function NavHandle() {
+    const value = useThreadNav();
+    useEffect(() => {
+      nav = value;
+    }, [value]);
+    return null;
+  }
+
+  it("uses a picked saved thread explicitly, otherwise one fresh thread", async () => {
+    navigation.pathname = "/cafes";
+    await render(
+      <MdeCopilotKitProvider>
+        <NavHandle />
+        <Probe name="mapSync" />
+      </MdeCopilotKitProvider>,
+    );
+    const fresh = seen.mapSync.threadId;
+    expect(fresh).toMatch(/^[0-9a-f-]{36}$/);
+    expect(seen.mapSync.explicit).toBe(false);
+
+    const threadA = "22222222-2222-4222-8222-222222222222";
+    await act(async () => nav!.setActiveThreadId(threadA));
+    expect(seen.mapSync.threadId).toBe(threadA);
+    expect(seen.mapSync.explicit).toBe(true);
+  });
+
+  it("leaves /chat to ChatProvider: no root thread configuration there", async () => {
+    navigation.pathname = "/chat";
+    await render(
+      <MdeCopilotKitProvider>
+        <Probe name="chatRoute" />
+      </MdeCopilotKitProvider>,
+    );
+    expect(seen.chatRoute.threadId).toBeUndefined();
   });
 });
