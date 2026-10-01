@@ -1,4 +1,4 @@
-import { CopilotRuntime, createCopilotRuntimeHandler } from "@copilotkit/runtime/v2";
+import { CopilotRuntime, createCopilotRuntimeHandler, type RouteInfo } from "@copilotkit/runtime/v2";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import { NextRequest, after } from "next/server";
 import { authorizeCopilotKitRequest } from "@/lib/copilotkit-auth";
@@ -42,6 +42,44 @@ const persistTurnLog: PersistTurnLog = (opts) => {
   });
 };
 
+/**
+ * The runtime operations MDE's own client uses. Everything else is refused
+ * with 403 after CopilotKit has routed the request (`onBeforeHandler`), before
+ * any handler or runner sees it. An allowlist, so a route added by a future
+ * CopilotKit version is closed until someone opens it deliberately.
+ *
+ * Why `threads/*` is NOT here (SAN-1358 · D20): the default in-memory runner
+ * keeps every thread of the process in one owner-less map, and its thread
+ * routes answer for any id: list every thread, read any thread's messages,
+ * events or state, rename or delete it, or clear them all. In single-route
+ * mode those arrive as `resource/request` with the thread id inside
+ * `params.path`, which the body-based ownership gate above never sees, so a
+ * signed-in user could read and wipe another user's live conversation. MDE
+ * lists threads through its own owner-scoped `/api/threads` instead.
+ *
+ * ponytail: deny-all for thread routes is the ceiling while nothing in MDE
+ * needs them. Upgrade path: when visible chat history lands, allow
+ * `threads/messages` only after checking `route.threadId` against
+ * `mastra_threads.resourceId` for this request's resource.
+ *
+ * `agent/stop` carries its thread in `params.threadId`, which the ownership
+ * gate does read (see `extractThreadId`), so it stays allowed.
+ */
+const ALLOWED_RUNTIME_ROUTES = new Set<RouteInfo["method"]>([
+  "info",
+  "agent/run",
+  "agent/connect",
+  "agent/stop",
+  "agent/suggest",
+  "transcribe",
+]);
+
+function refuseUnlistedRuntimeRoutes({ route }: { route: RouteInfo }): void {
+  if (!ALLOWED_RUNTIME_ROUTES.has(route.method)) {
+    throw Response.json({ error: "forbidden" }, { status: 403 });
+  }
+}
+
 /** Build per-request CopilotKit handler with Mastra agents and audit logging. */
 function buildHandler(options: {
   /** Server-derived durable owner. Required: there is no shared fallback (D17). */
@@ -74,6 +112,7 @@ function buildHandler(options: {
     runtime,
     basePath: COPILOTKIT_BASE_PATH,
     mode: COPILOTKIT_HANDLER_MODE,
+    hooks: { onBeforeHandler: refuseUnlistedRuntimeRoutes },
   });
 }
 
