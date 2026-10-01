@@ -87,6 +87,23 @@ Channels require their own supported deployment shape (including a long-running 
 move that lifecycle into the existing serverless Next.js request route just because the
 reference is available.
 
+## Reading vendored references against MDE
+
+The files under `references/official/` are upstream verbatim (read-only, hash-pinned in
+`upstream.yaml`); do not edit them to fit MDE. Their version and tooling statements describe
+upstream's own test bed, so translate before acting:
+
+| A vendored reference says | MDE reality | Do this |
+|---|---|---|
+| "Verified against `@copilotkit/runtime@1.65.0`" and `@copilotkit/channels@0.6.0` (`setup-slack-channel` and its `troubleshooting.md`) | MDE pins `@copilotkit/runtime` and `@copilotkit/react-core` at `1.75.0`; `@copilotkit/channels` is **not installed** | Treat every API name, log line, status enum and error category as unverified until you confirm it in the installed `node_modules/@copilotkit/*` or the pinned `v1.75.0` source tag |
+| `pnpm …` commands (the OpenTag starter's convention) | MDE uses npm: `npm run …`, `npx …` | Translate the command; never add pnpm or its lockfile to MDE |
+| Channels / Intelligence setup steps | Neither product is enabled in MDE | Planning reference only, see above |
+
+**Negative proof is mandatory for Channel work.** "The Channel is Online" or "the runtime
+started" is not success. Use the Slack skill's *Done means three things* rule (app installed and
+in the channel, Channel reports `online`, and a real human mention got a real reply); any one alone
+is a false positive.
+
 ## Two kinds of human-in-the-loop
 
 Pick by where the tool actually executes, not by which hook you saw first:
