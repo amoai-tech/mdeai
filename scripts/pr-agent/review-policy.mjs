@@ -19,6 +19,70 @@ function assertSha(value, label) {
   if (!SHA_RE.test(value ?? "")) throw new Error(`${label} must be a 40-character git SHA`);
 }
 
+export const REVIEW_ENVELOPE_VERSION = 1;
+export const REVIEW_ENVELOPE_NAMESPACE = "<!-- mde-agent-review:";
+const REVIEW_COMMANDS = new Set(["/review", "/review -i"]);
+const REVIEW_TYPES = new Set(["canonical", "standalone"]);
+
+export function reviewEnvelope({ baseSha, headSha, command, type }) {
+  assertSha(baseSha, "baseSha");
+  assertSha(headSha, "headSha");
+  if (!REVIEW_COMMANDS.has(command)) throw new Error(`unsupported review command: ${command}`);
+  if (!REVIEW_TYPES.has(type)) throw new Error(`unsupported review type: ${type}`);
+  return `<!-- mde-agent-review:v${REVIEW_ENVELOPE_VERSION} base=${baseSha.toLowerCase()} head=${headSha.toLowerCase()} command="${command}" type=${type} -->`;
+}
+
+export function parseReviewEnvelope(body) {
+  const text = body ?? "";
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith(REVIEW_ENVELOPE_NAMESPACE)) {
+    return { valid: false, code: "INVALID_ENVELOPE", reason: "review result is missing the trusted ReviewEnvelope prefix" };
+  }
+
+  const lineEnd = trimmed.indexOf("\n");
+  const firstLine = (lineEnd === -1 ? trimmed : trimmed.slice(0, lineEnd)).trim();
+  if (!firstLine.endsWith("-->")) {
+    return { valid: false, code: "INVALID_ENVELOPE", reason: "ReviewEnvelope marker is malformed" };
+  }
+  if (!/\shead=/.test(firstLine)) {
+    return { valid: false, code: "MISSING_HEAD", reason: "ReviewEnvelope is missing head SHA" };
+  }
+
+  const match = firstLine.match(/^<!--\s*mde-agent-review:v(\d+)\s+base=([^\s]+)\s+head=([^\s]+)\s+command="([^"]+)"\s+type=([^\s]+)\s*-->$/i);
+  if (!match) {
+    return { valid: false, code: "INVALID_ENVELOPE", reason: "ReviewEnvelope does not match schema v1" };
+  }
+  const [, versionText, baseSha, headSha, command, type] = match;
+  const version = Number(versionText);
+  if (version !== REVIEW_ENVELOPE_VERSION || !SHA_RE.test(baseSha) || !SHA_RE.test(headSha) || !REVIEW_TYPES.has(type)) {
+    return { valid: false, code: "INVALID_ENVELOPE", reason: "ReviewEnvelope contains an unsupported version, SHA, or review type" };
+  }
+
+  const remainder = lineEnd === -1 ? "" : trimmed.slice(lineEnd + 1);
+  if (remainder.trimStart().startsWith(REVIEW_ENVELOPE_NAMESPACE)) {
+    return { valid: false, code: "INVALID_ENVELOPE", reason: "review result contains duplicate leading ReviewEnvelope markers" };
+  }
+
+  return {
+    valid: true,
+    code: "OK",
+    version,
+    baseSha: baseSha.toLowerCase(),
+    headSha: headSha.toLowerCase(),
+    command,
+    type,
+    body: remainder,
+  };
+}
+
+export function stampReviewEnvelope(body, envelope) {
+  const text = body ?? "";
+  if (!text.trim()) throw new Error("cannot stamp an empty PR-Agent review");
+  const parsed = parseReviewEnvelope(text);
+  const unwrapped = parsed.valid ? parsed.body : text;
+  return `${reviewEnvelope(envelope)}\n${unwrapped.trimStart()}`;
+}
+
 /** Every certification marker in a body, normalized to lowercase `{ baseSha, headSha }` pairs. */
 export function certificationMarkers(body) {
   return [...(body ?? "").matchAll(CERT_MARKER_RE)].map((match) => ({
@@ -51,8 +115,8 @@ export function hasCertificationForHead(body, headSha) {
 
 /**
  * The standalone fallback review PR-Agent publishes when it cannot update the persistent comment.
- * It is a real review result — `verifyReviewResult` accepts it as fresh — but it carries no review
- * token and no persistent state, so it records no head of its own.
+ * It is a real review result, but it is certifiable only after the trusted shared workflow stamps
+ * the exact ReviewEnvelope. Prose shape alone is never identity proof.
  */
 export function isStandaloneReview(body) {
   return (
@@ -206,44 +270,97 @@ function isIncrementalSkipNotice(body) {
   );
 }
 
-export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha }) {
-  const expectedMarker = reviewCommand === "/review -i"
-    ? "<!-- pr-agent:review:incremental -->"
-    : "<!-- pr-agent:review:full -->";
-  const priorSameBaseCertification = comments.some((comment) =>
+export function findFreshReviewCandidates({ comments, startedAt }) {
+  return (comments ?? [])
+    .filter((comment) => isBotComment(comment) && new Date(comment.updated_at).getTime() >= startedAt)
+    .map((comment) => {
+      const rawBody = comment.body ?? "";
+      const envelope = parseReviewEnvelope(rawBody);
+      const body = envelope.valid ? envelope.body : rawBody;
+      if (body.includes("<!-- pr-agent:review:full -->")) {
+        return { comment, kind: "canonical", publishedCommand: "/review", envelope };
+      }
+      if (body.includes("<!-- pr-agent:review:incremental -->")) {
+        return { comment, kind: "canonical", publishedCommand: "/review -i", envelope };
+      }
+      if (isIncrementalSkipNotice(body)) {
+        return { comment, kind: "canonical", publishedCommand: "/review -i", envelope, incrementalSkipped: true };
+      }
+      if (isStandaloneReview(body)) return { comment, kind: "standalone", publishedCommand: envelope.valid ? envelope.command : null, envelope };
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publishedCommand }) {
+  if (!envelope.valid) return { ok: false, code: envelope.code, reason: envelope.reason };
+  if (envelope.baseSha !== baseSha.toLowerCase()) {
+    return { ok: false, code: "WRONG_BASE", reason: `ReviewEnvelope base ${envelope.baseSha} does not match expected ${baseSha.toLowerCase()}` };
+  }
+  if (envelope.headSha !== headSha.toLowerCase()) {
+    return { ok: false, code: "STALE_HEAD", reason: `ReviewEnvelope head ${envelope.headSha} does not match current PR head ${headSha.toLowerCase()}` };
+  }
+  if (!REVIEW_COMMANDS.has(envelope.command) || envelope.command !== reviewCommand || (publishedCommand && publishedCommand !== reviewCommand)) {
+    return { ok: false, code: "WRONG_COMMAND", reason: `ReviewEnvelope/published command ${envelope.command}/${publishedCommand ?? "unknown"} does not match expected ${reviewCommand}` };
+  }
+  if (envelope.type !== kind) {
+    return { ok: false, code: "INVALID_ENVELOPE", reason: `ReviewEnvelope type ${envelope.type} does not match published ${kind} review` };
+  }
+  if (!envelope.body.trim()) {
+    return { ok: false, code: "EMPTY_REVIEW", reason: "ReviewEnvelope contains no review body" };
+  }
+  return null;
+}
+
+export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha, headSha }) {
+  assertSha(baseSha, "baseSha");
+  assertSha(headSha, "headSha");
+  if (!REVIEW_COMMANDS.has(reviewCommand)) {
+    return { ok: false, code: "WRONG_COMMAND", reason: `unsupported expected review command: ${reviewCommand}` };
+  }
+
+  const priorSameBaseCertification = (comments ?? []).some((comment) =>
     isBotComment(comment) &&
     new Date(comment.updated_at).getTime() < startedAt &&
     hasCertificationForBase(comment.body ?? "", baseSha),
   );
+  const candidates = findFreshReviewCandidates({ comments, startedAt });
+  if (candidates.length === 0) {
+    return { ok: false, code: "NO_REVIEW", reason: "PR-Agent has not published a fresh review result yet" };
+  }
 
-  const fresh = comments.some((comment) => {
-    if (!isBotComment(comment) || new Date(comment.updated_at).getTime() < startedAt) return false;
-    const body = comment.body ?? "";
-    const canonical = body.includes(expectedMarker);
-    const incrementalSkipped =
-      reviewCommand === "/review -i" &&
-      priorSameBaseCertification &&
-      isIncrementalSkipNotice(body);
-    return canonical || incrementalSkipped;
-  });
-
-  if (fresh) return { ok: true, reason: "fresh review result verified" };
-
-  // SAN-1332 step 4 (interim). A standalone fallback is recognised only from prose shape and
-  // carries no head of its own, so accepting it means a review of commit A certifies commit B —
-  // whatever head this run actually reviewed. Refuse it rather than guess, and say what to do.
-  // Replaced by exact base/head/command envelope acceptance once the shared publisher emits one.
-  const standalone = comments.some(
-    (comment) =>
-      isBotComment(comment) &&
-      new Date(comment.updated_at).getTime() >= startedAt &&
-      isStandaloneReview(comment.body ?? ""),
+  const newestFirst = [...candidates].sort(
+    (a, b) => new Date(b.comment.updated_at).getTime() - new Date(a.comment.updated_at).getTime(),
   );
-  return {
-    ok: false,
-    reason: standalone
-      ? "STALE_HEAD: PR-Agent published only a standalone fallback review, which proves no head of " +
-        "its own — rerun /review so a review with exact base/head identity is published"
-      : "PR-Agent did not publish an acceptable fresh review result",
-  };
+  for (const candidate of newestFirst) {
+    if (candidate.incrementalSkipped && !priorSameBaseCertification) continue;
+    const failure = envelopeFailure(candidate.envelope, {
+      baseSha,
+      headSha,
+      reviewCommand,
+      kind: candidate.kind,
+      publishedCommand: candidate.publishedCommand,
+    });
+    if (!failure) {
+      return {
+        ok: true,
+        code: "OK",
+        reason: `fresh ${candidate.kind} review verified for exact base/head`,
+        comment: candidate.comment,
+        type: candidate.kind,
+      };
+    }
+  }
+
+  const candidate = newestFirst[0];
+  if (candidate.incrementalSkipped && !priorSameBaseCertification) {
+    return { ok: false, code: "WRONG_BASE", reason: "incremental skip has no previous certification for this base" };
+  }
+  return envelopeFailure(candidate.envelope, {
+    baseSha,
+    headSha,
+    reviewCommand,
+    kind: candidate.kind,
+    publishedCommand: candidate.publishedCommand,
+  }) ?? { ok: false, code: "INVALID_ENVELOPE", reason: "review result is ambiguous" };
 }

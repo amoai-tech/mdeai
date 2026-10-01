@@ -3,14 +3,18 @@ import {
   appendCertification,
   hasCertificationForBase,
   hasCertificationForHead,
+  parseReviewEnvelope,
+  reviewEnvelope,
   selectCertifiedReviewForHead,
   selectReviewCommand,
+  stampReviewEnvelope,
   verifyReviewResult,
 } from "../../scripts/pr-agent/review-policy.mjs";
 
 const BASE_A = "a".repeat(40);
 const BASE_B = "b".repeat(40);
 const HEAD_A = "c".repeat(40);
+const HEAD_B = "d".repeat(40);
 const RUN_STARTED = Date.parse("2026-09-20T01:00:00Z");
 
 const REVIEW_MARKERS = ["<!-- pr-agent:review:full -->", "<!-- pr-agent:review:incremental -->"];
@@ -28,6 +32,37 @@ function standaloneReview(body: string) {
     "",
     body,
   ].join("\n");
+}
+
+type ReviewEnvelopeOptions = {
+  baseSha?: string;
+  headSha?: string;
+  command?: "/review" | "/review -i";
+};
+
+function envelopedCanonical(options: ReviewEnvelopeOptions = {}) {
+  const command = options.command ?? "/review";
+  const envelope = reviewEnvelope({
+    baseSha: options.baseSha ?? BASE_A,
+    headSha: options.headSha ?? HEAD_A,
+    command,
+    type: "canonical",
+  });
+  const marker = command === "/review -i" ? "<!-- pr-agent:review:incremental -->" : "<!-- pr-agent:review:full -->";
+  return `${envelope}
+## MDE PR Review 🔍
+${marker}
+review body`;
+}
+
+function envelopedStandalone(options: ReviewEnvelopeOptions = {}) {
+  return `${reviewEnvelope({
+    baseSha: options.baseSha ?? BASE_A,
+    headSha: options.headSha ?? HEAD_A,
+    command: options.command ?? "/review",
+    type: "standalone",
+  })}
+${standaloneReview("review body")}`;
 }
 
 function comment(body: string, updatedAt: string, login = "github-actions[bot]") {
@@ -273,10 +308,11 @@ describe("PR-Agent review policy", () => {
 
   it("accepts a fresh canonical review", () => {
     const result = verifyReviewResult({
-      comments: [comment("<!-- pr-agent:review:incremental -->", "2026-09-20T01:00:05Z")],
+      comments: [comment(envelopedCanonical({ command: "/review -i" }), "2026-09-20T01:00:05Z")],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(true);
   });
@@ -291,10 +327,10 @@ describe("PR-Agent review policy", () => {
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(false);
-    expect(result.reason).toContain("STALE_HEAD");
-    expect(result.reason).toContain("rerun /review");
+    expect(result.code).toBe("INVALID_ENVELOPE");
   });
 
   it("still accepts a canonical fresh review alongside a standalone fallback", () => {
@@ -302,59 +338,64 @@ describe("PR-Agent review policy", () => {
     const result = verifyReviewResult({
       comments: [
         comment(standalone, "2026-09-20T01:00:02Z"),
-        comment("<!-- pr-agent:review:incremental -->", "2026-09-20T01:00:05Z"),
+        comment(envelopedCanonical({ command: "/review -i" }), "2026-09-20T01:00:05Z"),
       ],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(true);
   });
 
   it("accepts a fresh skipped incremental review only for a previously certified identical base", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const skip = "Incremental Review Skipped\nNo files were changed since the previous PR Review";
+    const skip = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review -i", type: "canonical" })}\nIncremental Review Skipped\nNo files were changed since the previous PR Review`;
     const result = verifyReviewResult({
       comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(true);
   });
 
   it("rejects a skipped incremental review after the base changes", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const skip = "Incremental Review Skipped\nNo files were changed since the previous PR Review";
+    const skip = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review -i", type: "canonical" })}\nIncremental Review Skipped\nNo files were changed since the previous PR Review`;
     const result = verifyReviewResult({
       comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_B,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(false);
   });
 
   it("accepts the Markdown-linked incremental skip message for a certified base", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const skip = "Incremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)";
+    const skip = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review -i", type: "canonical" })}\nIncremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)`;
     const result = verifyReviewResult({
       comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_A,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(true);
   });
 
   it("rejects the Markdown-linked incremental skip message after the base changes", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const skip = "Incremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)";
+    const skip = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review -i", type: "canonical" })}\nIncremental Review Skipped\nNo files were changed since the [previous PR Review](https://github.com/amoai-tech/mdeai/pull/84#issuecomment-1)`;
     const result = verifyReviewResult({
       comments: [comment(history, "2026-09-20T00:50:00Z"), comment(skip, "2026-09-20T01:00:05Z")],
       startedAt: RUN_STARTED,
       reviewCommand: "/review -i",
       baseSha: BASE_B,
+      headSha: HEAD_A,
     });
     expect(result.ok).toBe(false);
   });
@@ -363,8 +404,138 @@ describe("PR-Agent review policy", () => {
     const stale = comment("<!-- pr-agent:review:incremental -->", "2026-09-20T00:59:59Z");
     const spoofed = comment("<!-- pr-agent:review:incremental -->", "2026-09-20T01:00:05Z", "someone-else");
     for (const comments of [[stale], [spoofed], []]) {
-      expect(verifyReviewResult({ comments, startedAt: RUN_STARTED, reviewCommand: "/review -i", baseSha: BASE_A }).ok).toBe(false);
+      expect(verifyReviewResult({ comments, startedAt: RUN_STARTED, reviewCommand: "/review -i", baseSha: BASE_A, headSha: HEAD_A }).ok).toBe(false);
     }
+  });
+
+  it("accepts a canonical review only when its envelope matches the exact current head", () => {
+    const result = verifyReviewResult({
+      comments: [comment(envelopedCanonical(), "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.code).toBe("OK");
+  });
+
+  it("accepts an exact-head standalone fallback with a trusted envelope", () => {
+    const result = verifyReviewResult({
+      comments: [comment(envelopedStandalone(), "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.code).toBe("OK");
+  });
+
+  it("rejects a review envelope for an older head immediately", () => {
+    const result = verifyReviewResult({
+      comments: [comment(envelopedCanonical({ headSha: HEAD_A }), "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_B,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("STALE_HEAD");
+  });
+
+  it("rejects a review envelope for the wrong base", () => {
+    const result = verifyReviewResult({
+      comments: [comment(envelopedCanonical({ baseSha: BASE_B }), "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("WRONG_BASE");
+  });
+
+  it("rejects a review envelope for the wrong review command", () => {
+    const result = verifyReviewResult({
+      comments: [comment(envelopedCanonical({ command: "/review -i" }), "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("WRONG_COMMAND");
+  });
+
+  it("rejects canonical output with no review envelope", () => {
+    const result = verifyReviewResult({
+      comments: [comment(REVIEW_FULL, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INVALID_ENVELOPE");
+  });
+
+  it("rejects duplicate review envelopes", () => {
+    const body = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review", type: "canonical" })}\n${envelopedCanonical()}`;
+    const result = verifyReviewResult({
+      comments: [comment(body, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INVALID_ENVELOPE");
+  });
+
+  it("rejects a malformed review envelope instead of treating it as absent", () => {
+    const malformed = `<!-- mde-agent-review:v1 base=${BASE_A} head=not-a-sha command="/review" type=canonical -->\n${REVIEW_FULL}`;
+    const result = verifyReviewResult({
+      comments: [comment(malformed, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INVALID_ENVELOPE");
+  });
+
+  it("returns MISSING_HEAD when the trusted envelope omits head identity", () => {
+    const malformed = `<!-- mde-agent-review:v1 base=${BASE_A} command="/review" type=canonical -->\n${REVIEW_FULL}`;
+    const result = verifyReviewResult({
+      comments: [comment(malformed, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("MISSING_HEAD");
+  });
+
+  it("ignores marker-shaped text later in the review body as non-authoritative", () => {
+    const quoted = `${reviewEnvelope({ baseSha: BASE_A, headSha: HEAD_A, command: "/review", type: "canonical" })}\n${REVIEW_FULL}\nquoted: <!-- mde-agent-review:v1 base=${BASE_B} head=${HEAD_B} command="/review" type=standalone -->`;
+    const parsed = parseReviewEnvelope(quoted);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.headSha).toBe(HEAD_A);
+  });
+
+  it("re-stamps an existing leading envelope without duplicating it", () => {
+    const original = envelopedCanonical({ headSha: HEAD_A });
+    const stamped = stampReviewEnvelope(original, {
+      baseSha: BASE_A,
+      headSha: HEAD_B,
+      command: "/review",
+      type: "canonical",
+    });
+    expect(stamped.match(/<!-- mde-agent-review:/g)).toHaveLength(1);
+    expect(parseReviewEnvelope(stamped).headSha).toBe(HEAD_B);
   });
 
   it("keeps certification history for more than one base", () => {
