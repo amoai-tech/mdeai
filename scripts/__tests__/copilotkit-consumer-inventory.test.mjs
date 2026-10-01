@@ -34,7 +34,6 @@ const SCAN_EXT = /\.(ts|tsx|js|jsx|mjs)$/;
 const COMPAT_BOUNDARIES = [
   "src/components/chat/chat-provider.tsx",
   "src/components/copilot/copilot-kit-provider.tsx",
-  "src/components/host/host-event-provider.tsx",
   "src/components/host/host-os-shell.tsx",
 ];
 

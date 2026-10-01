@@ -42,9 +42,8 @@
     },
     {
       "file": "src/components/host/host-event-provider.tsx",
-      "classification": "migrate",
-      "step": 14,
-      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 1: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the wizard gets one shared, non-explicit thread per mount."
     },
     {
       "file": "src/components/host/host-os-shell.tsx",
