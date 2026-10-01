@@ -103,15 +103,18 @@ export function ChatNavRail({
   const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
 
+  // Both stay on /chat, where the concierge lives (D-13). These used to push
+  // "/" from before the concierge moved, which dropped Sofia on the marketing
+  // home and never reopened the chat she picked (SAN-1378).
   function onNewChat() {
     clearActiveThread();
     startNewChat();
-    router.push("/");
+    router.push("/chat");
   }
 
   function onSelectThread(id: string) {
     setActiveThreadId(id);
-    router.push("/");
+    router.push("/chat");
   }
 
   return (

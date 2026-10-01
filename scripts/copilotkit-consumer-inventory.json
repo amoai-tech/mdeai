@@ -36,9 +36,8 @@
     },
     {
       "file": "src/components/chat/chat-provider.tsx",
-      "classification": "migrate",
-      "step": 13,
-      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 3: v2 CopilotKitProvider + one CopilotChatConfigurationProvider. A saved thread picked in the nav rail is bound explicitly; otherwise a fresh non-explicit thread, new per /chat visit and per New Chat (ThreadNav newChatCount)."
     },
     {
       "file": "src/components/host/host-event-provider.tsx",

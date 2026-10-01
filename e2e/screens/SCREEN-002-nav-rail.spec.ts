@@ -70,8 +70,9 @@ test.describe(`${SCREEN_ID} chat nav rail`, () => {
 
       await page.locator('[data-testid="nav-new-chat"]').click();
 
-      // URL stays on home
-      await expect(page).toHaveURL("/");
+      // Stays on the concierge (/chat since D-13); it used to assert "/", which
+      // was the SAN-1378 defect of dropping Sofia on the marketing home.
+      await expect(page).toHaveURL(/\/chat$/);
       // Active thread is cleared — attribute present but empty
       await expect(rail).toHaveAttribute("data-active-thread-id", "");
       // Chat region is still usable

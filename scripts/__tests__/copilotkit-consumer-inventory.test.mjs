@@ -32,7 +32,6 @@ const SCAN_EXT = /\.(ts|tsx|js|jsx|mjs)$/;
 
 /** The four compatibility boundaries, each owned by a migration step. */
 const COMPAT_BOUNDARIES = [
-  "src/components/chat/chat-provider.tsx",
   "src/components/copilot/copilot-kit-provider.tsx",
 ];
 

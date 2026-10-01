@@ -6,6 +6,8 @@ import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
 
 import { HostEventProvider } from "@/components/host/host-event-provider";
 import { HostOsShell } from "@/components/host/host-os-shell";
+import { ChatProvider } from "@/components/chat/chat-provider";
+import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 
 // The shell's own chrome is not under test; its provider boundary is. The
 // header renders a probe so the test proves a component OUTSIDE the routed
@@ -139,5 +141,69 @@ describe("HostOsShell — one persistent host workspace thread", () => {
     expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(new Set(ids).size).toBe(1);
     expect(seen.page.explicit).toBe(false);
+  });
+});
+
+describe("ChatProvider — /chat saved chats and New Chat", () => {
+  let nav: ReturnType<typeof useThreadNav> | undefined;
+  function NavHandle() {
+    const value = useThreadNav();
+    useEffect(() => {
+      nav = value;
+    }, [value]);
+    return null;
+  }
+
+  const chatPage = (key = "mount") => (
+    <ThreadNavProvider key={key}>
+      <NavHandle />
+      <ChatProvider>
+        <Probe name="chat" />
+        <Probe name="mapSync" />
+      </ChatProvider>
+    </ThreadNavProvider>
+  );
+
+  const act$ = (fn: () => void) => act(async () => fn());
+
+  it("restores a saved thread, then New Chat starts a different one", async () => {
+    await render(chatPage());
+    const fresh1 = seen.chat.threadId;
+    expect(fresh1).toMatch(/^[0-9a-f-]{36}$/);
+    expect(seen.mapSync.threadId).toBe(fresh1);
+    expect(seen.chat.explicit).toBe(false);
+
+    // Sofia opens saved thread A from the rail: that exact thread, explicit.
+    const threadA = "11111111-1111-4111-8111-111111111111";
+    await act$(() => nav!.setActiveThreadId(threadA));
+    expect(seen.chat.threadId).toBe(threadA);
+    expect(seen.mapSync.threadId).toBe(threadA);
+    expect(seen.chat.explicit).toBe(true);
+
+    // New Chat: a NEW thread B, not A and not the earlier fresh one.
+    await act$(() => nav!.clearActiveThread());
+    const threadB = seen.chat.threadId;
+    expect(threadB).toMatch(/^[0-9a-f-]{36}$/);
+    expect(threadB).not.toBe(threadA);
+    expect(threadB).not.toBe(fresh1);
+    expect(seen.chat.explicit).toBe(false);
+    expect(seen.mapSync.threadId).toBe(threadB);
+  });
+
+  it("New Chat from an already-fresh chat still starts a new thread", async () => {
+    // The production defect: clearing an empty selection changed nothing, so
+    // the next message kept writing into the same thread.
+    await render(chatPage());
+    const before = seen.chat.threadId;
+    await act$(() => nav!.clearActiveThread());
+    expect(seen.chat.threadId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(seen.chat.threadId).not.toBe(before);
+  });
+
+  it("a fresh visit to /chat gets a fresh thread", async () => {
+    await render(chatPage("first"));
+    const first = seen.chat.threadId;
+    await render(chatPage("second"));
+    expect(seen.chat.threadId).not.toBe(first);
   });
 });
