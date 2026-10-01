@@ -258,6 +258,42 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
       });
     });
 
+    // An unmapped SQLSTATE is still not guessed at from prose, but it must be observable: a
+    // newly added refusal code should reach server logs instead of only a broker's generic toast.
+    it("logs an unrecognised SQLSTATE instead of guessing a status", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        state.rpcResponse = {
+          data: null,
+          error: { message: "database said XX000", code: "XX000" },
+        };
+
+        const response = await patch({ action: "confirm", ...expectation() });
+
+        expect(response.status).toBe(500);
+        expect(spy).toHaveBeenCalledWith(expect.stringContaining("XX000"));
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("does not log a refusal that maps to a documented status", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        state.rpcResponse = {
+          data: null,
+          error: { message: "showing changed since it was loaded", code: "PT409" },
+        };
+
+        const response = await patch({ action: "confirm", ...expectation() });
+
+        expect(response.status).toBe(409);
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     // The database is the authority on why a transition was refused, so a SQLSTATE that is
     // present must decide the status by itself. An earlier revision OR'd the code and message
     // checks with a bare `/cannot be/` pattern and listed the 409 branch first, so a genuine

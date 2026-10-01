@@ -66,9 +66,15 @@ function viewingActionFailure(
   code?: string,
 ): Extract<RunBrokerViewingActionResult, { ok: false }> {
   if (code) {
-    // Recognised codes map to their contract status. An UNRECOGNISED code is not guessed at
-    // from the message — we cannot classify it, and 500 is the honest answer.
-    return { ok: false, message, status: RPC_CODE_STATUS[code] ?? 500 };
+    const status = RPC_CODE_STATUS[code];
+    if (status !== undefined) {
+      return { ok: false, message, status };
+    }
+    // An UNRECOGNISED code is not guessed at from the message — we cannot classify it, and 500
+    // is the honest status. Log it so a newly introduced refusal code is observable in
+    // production instead of surfacing only as a generic broker error.
+    console.error(`[broker-viewing-action] unmapped SQLSTATE ${code}: ${message}`);
+    return { ok: false, message, status: 500 };
   }
 
   for (const [pattern, status] of MESSAGE_STATUS) {
@@ -77,6 +83,7 @@ function viewingActionFailure(
     }
   }
 
+  console.error(`[broker-viewing-action] unclassified failure without SQLSTATE: ${message}`);
   return { ok: false, message, status: 500 };
 }
 

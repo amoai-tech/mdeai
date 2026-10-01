@@ -40,7 +40,7 @@
 
 begin;
 
-select plan(83);
+select plan(88);
 
 -- Values live in session settings rather than psql client variables so this file stays plain
 -- SQL: every restricted-session probe reads a value captured in the trusted session.
@@ -714,6 +714,38 @@ select is(
     where lead_id = current_setting('san1206.lead2')::uuid),
   current_setting('san1206.closed_before')::int,
   'O11: the four refused closed-state actions created nothing');
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- P · RESCHEDULE REPLAY ACROSS A LATER ACTION — the effect the caller asked for
+-- already holds, so the retry is a no-op even though the status moved on.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1206000-0000-4000-8000-000000000001', true);
+
+select lives_ok(format($q$
+  select public.p1_broker_update_showing(
+    %L::uuid, 'reschedule', 'scheduled', %L::timestamptz, %L::timestamptz)
+$q$, 'c1206000-0000-4000-8000-000000000003',
+     current_setting('san1206.t7'), current_setting('san1206.t7')),
+  'P1: a reschedule retry whose requested time already holds is a no-op success');
+reset role;
+
+select is(
+  (select status from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
+  'confirmed', 'P2: the no-op replay did not rewrite the status');
+select is(
+  (select scheduled_at from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
+  current_setting('san1206.t7')::timestamptz,
+  'P3: the no-op replay kept the persisted time');
+select is(
+  (select id from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
+  'c1206000-0000-4000-8000-000000000003'::uuid,
+  'P4: the no-op replay kept the same UUID');
+select is(
+  (select count(*)::int from public.showings where lead_id = current_setting('san1206.lead2')::uuid),
+  current_setting('san1206.closed_before')::int,
+  'P5: the no-op replay created no additional showing');
 
 select * from finish();
 

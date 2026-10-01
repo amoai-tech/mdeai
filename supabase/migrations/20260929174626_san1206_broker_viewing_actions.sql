@@ -203,8 +203,11 @@ BEGIN
 
   IF (p_action = 'confirm' AND v_row.status = 'confirmed')
      OR (p_action = 'cancel' AND v_row.status = 'cancelled')
+     -- Reschedule does not change the status, so its outcome is the TIME, not a status. Match on
+     -- that outcome alone: a network retry whose requested time already holds is a no-op even if
+     -- a later action (a confirm) moved the status on. A reschedule to a DIFFERENT time is still
+     -- refused below by the confirm/reschedule state guard, so a confirmed viewing is never moved.
      OR (p_action = 'reschedule'
-         AND v_row.status = 'scheduled'
          AND v_row.scheduled_at IS NOT DISTINCT FROM p_new_scheduled_at) THEN
     v_replay := true;
   END IF;
