@@ -16,7 +16,7 @@ import { AbstractAgent, EventType, type BaseEvent, type RunAgentInput } from "@a
  *
  * This drives the REAL route and the REAL v2 runtime (in-memory runner). Only
  * the Supabase session, the rate limiter and the database ownership lookup
- * are faked, and a stub agent replies with a known secret so a leak is
+ * are faked, and a stub agent replies with a unique private marker so a leak is
  * unambiguous.
  */
 
@@ -42,27 +42,27 @@ vi.mock("@/lib/copilotkit-thread-ownership", async (importOriginal) => {
   };
 });
 
-const SECRET = "SECRET-OF-USER-A";
+const PRIVATE_MARKER = `user-a-private-${crypto.randomUUID()}`;
 
-class SecretAgent extends AbstractAgent {
+class MarkerAgent extends AbstractAgent {
   run(input: RunAgentInput): Observable<BaseEvent> {
     return new Observable((subscriber) => {
       const messageId = `m-${input.runId}`;
       const emit = (event: Record<string, unknown>) => subscriber.next(event as unknown as BaseEvent);
       emit({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
       emit({ type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" });
-      emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: SECRET });
+      emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: PRIVATE_MARKER });
       emit({ type: EventType.TEXT_MESSAGE_END, messageId });
       emit({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId });
       subscriber.complete();
     });
   }
   clone() {
-    return new SecretAgent({ agentId: this.agentId });
+    return new MarkerAgent({ agentId: this.agentId });
   }
 }
 vi.mock("@/mastra/copilotkit/logging-mastra-agent", () => ({
-  getLocalAgentsWithLogging: () => ({ conciergeAgent: new SecretAgent({ agentId: "conciergeAgent" }) }),
+  getLocalAgentsWithLogging: () => ({ conciergeAgent: new MarkerAgent({ agentId: "conciergeAgent" }) }),
 }));
 
 import { POST } from "@/app/api/copilotkit/[[...path]]/route";
@@ -99,7 +99,7 @@ async function userARunsAConversation() {
     },
   });
   expect(res.status).toBe(200);
-  expect(await res.text()).toContain(SECRET);
+  expect(await res.text()).toContain(PRIVATE_MARKER);
 }
 
 beforeEach(async () => {
@@ -125,7 +125,7 @@ describe("thread resource routes cannot be used across users", () => {
       const res = await resource(`/api/copilotkit/threads/${threadA}/${suffix}`);
       const text = await res.text();
       expect(res.status).toBe(403);
-      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain(PRIVATE_MARKER);
     });
   }
 
@@ -144,7 +144,7 @@ describe("thread resource routes cannot be used across users", () => {
     const res = await resource("/api/copilotkit/threads/clear", "POST");
     expect(res.status).toBe(403);
 
-    // A's conversation is still there: A reconnecting replays the secret.
+    // A's conversation is still there: A reconnecting replays the marker.
     signInAs("user-a");
     const replay = await post({
       method: "agent/connect",
@@ -152,7 +152,7 @@ describe("thread resource routes cannot be used across users", () => {
       body: { threadId: threadA, runId: crypto.randomUUID(), messages: [], tools: [], context: [], state: {}, forwardedProps: {} },
     });
     expect(replay.status).toBe(200);
-    expect(await replay.text()).toContain(SECRET);
+    expect(await replay.text()).toContain(PRIVATE_MARKER);
   });
 
   it("the owner cannot use them either: MDE serves its own thread list", async () => {
@@ -161,6 +161,15 @@ describe("thread resource routes cannot be used across users", () => {
     signInAs("user-a");
     const res = await resource(`/api/copilotkit/threads/${threadA}/messages`);
     expect(res.status).toBe(403);
+  });
+
+  it("routes MDE never sends are closed: suggestions and transcription", async () => {
+    // Single-route clients never call /suggest, and MDE configures no
+    // transcription service, so both stay shut until a real use case opens them.
+    const suggest = await post({ method: "agent/suggest", params: { agentId: "conciergeAgent" }, body: {} });
+    expect(suggest.status).toBe(403);
+    const transcribe = await post({ method: "transcribe", body: {} });
+    expect(transcribe.status).toBe(403);
   });
 
   it("the routes MDE does use still work for a signed-in user", async () => {

@@ -64,14 +64,17 @@ const persistTurnLog: PersistTurnLog = (opts) => {
  *
  * `agent/stop` carries its thread in `params.threadId`, which the ownership
  * gate does read (see `extractThreadId`), so it stays allowed.
+ *
+ * `agent/suggest` and `transcribe` are closed too: in 1.75.0 the client sends
+ * `/suggest` only in multi-route mode (`core/src/core/suggestion-engine.ts`),
+ * and the chat shows its microphone only when the runtime has a transcription
+ * service, which MDE does not configure.
  */
 const ALLOWED_RUNTIME_ROUTES = new Set<RouteInfo["method"]>([
   "info",
   "agent/run",
   "agent/connect",
   "agent/stop",
-  "agent/suggest",
-  "transcribe",
 ]);
 
 function refuseUnlistedRuntimeRoutes({ route }: { route: RouteInfo }): void {
