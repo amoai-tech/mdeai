@@ -41,6 +41,7 @@ const OPT_IN = process.env.SAN1206_BROKER_E2E === "1";
 const T_CONFIRM = "2099-11-20T19:00:00.000Z";
 const T_RESCHEDULE_FROM = "2099-11-21T19:00:00.000Z";
 const T_RESCHEDULE_TO = "2099-11-21T20:00:00.000Z";
+const T_DECLINE_REQUEST = "2099-11-22T19:00:00.000Z";
 /** The offset-free value a `datetime-local` control sends for 3:00 PM Medellín. */
 const RESCHEDULE_WALL_CLOCK = "2099-11-21T15:00";
 const EXPECTED_TIME_LABEL = /3:00\s*PM/;
@@ -56,8 +57,10 @@ type Fixture = {
   apartmentId: string;
   leadIdA: string;
   leadIdB: string;
+  leadIdC: string;
   showingIdA: string;
   showingIdB: string;
+  showingIdC: string;
 };
 
 /**
@@ -90,8 +93,10 @@ async function provisionFixture(): Promise<Fixture> {
   const apartmentId = randomUUID();
   const leadIdA = randomUUID();
   const leadIdB = randomUUID();
+  const leadIdC = randomUUID();
   const showingIdA = randomUUID();
   const showingIdB = randomUUID();
+  const showingIdC = randomUUID();
 
   const { error: profileError } = await admin.from("landlord_profiles").insert({
     id: landlordProfileId,
@@ -142,16 +147,30 @@ async function provisionFixture(): Promise<Fixture> {
       metadata: {},
       idempotency_key: `${run}-lead-b`,
     },
+    {
+      id: leadIdC,
+      source: "form",
+      email: `${run}-renter-c@qa-isolation.mdeai.co`,
+      name: `SAN1206 Renter C ${run}`,
+      apartment_id: apartmentId,
+      preferred_showing_at: T_DECLINE_REQUEST,
+      intent: "rental",
+      status: "new",
+      pipeline_stage: "showing_scheduled",
+      metadata: {},
+      idempotency_key: `${run}-lead-c`,
+    },
   ]);
   if (leadsError) throw new Error(`leads: ${leadsError.message}`);
 
   const { error: showingsError } = await admin.from("showings").insert([
     { id: showingIdA, lead_id: leadIdA, apartment_id: apartmentId, scheduled_at: T_CONFIRM, status: "scheduled" },
     { id: showingIdB, lead_id: leadIdB, apartment_id: apartmentId, scheduled_at: T_RESCHEDULE_FROM, status: "scheduled" },
+    { id: showingIdC, lead_id: leadIdC, apartment_id: apartmentId, scheduled_at: T_DECLINE_REQUEST, status: "scheduled" },
   ]);
   if (showingsError) throw new Error(`showings: ${showingsError.message}`);
 
-  return { run, owner, other, renter, landlordProfileId, apartmentId, leadIdA, leadIdB, showingIdA, showingIdB };
+  return { run, owner, other, renter, landlordProfileId, apartmentId, leadIdA, leadIdB, leadIdC, showingIdA, showingIdB, showingIdC };
 }
 
 /** Best-effort, order-correct teardown. Reports what it could not remove instead of hiding it. */
@@ -468,7 +487,7 @@ test.describe("SAN-1206 · broker viewing actions", () => {
         },
       });
       expect(replay.status()).toBe(200);
-      expect(await countShowings(fixture.apartmentId!)).toBe(2);
+      expect(await countShowings(fixture.apartmentId!)).toBe(3);
 
       // ── Reschedule 2:00 PM → 3:00 PM on the same row ──────────────────────────
       await rescheduleViaUi(
@@ -480,7 +499,7 @@ test.describe("SAN-1206 · broker viewing actions", () => {
 
       const rescheduled = await readShowing(fixture.showingIdB!);
       expect(instantOf(rescheduled.scheduled_at)).toBe(T_RESCHEDULE_TO);
-      expect(await countShowings(fixture.apartmentId!)).toBe(2);
+      expect(await countShowings(fixture.apartmentId!)).toBe(3);
 
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByTestId(`viewing-request-time-${fixture.showingIdB}`)).toHaveText(
@@ -500,6 +519,23 @@ test.describe("SAN-1206 · broker viewing actions", () => {
         EXPECTED_TIME_LABEL,
       );
 
+      // ── Decline a still-Requested request directly (Requested -> Cancelled) ──
+      const requestedC = await readShowing(fixture.showingIdC!);
+      expect(requestedC.status).toBe("scheduled");
+      await clickAndAwaitPersisted(
+        page,
+        `viewing-request-decline-${fixture.showingIdC}`,
+        async () => (await readShowing(fixture.showingIdC!)).status === "cancelled",
+        "decline of a still-Requested viewing",
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId(`viewing-request-status-${fixture.showingIdC}`)).toHaveText(
+        "Cancelled",
+      );
+      // The same row persists: decline cancelled it, it did not delete or replace it.
+      expect(await readShowing(fixture.showingIdC!)).toMatchObject({ status: "cancelled" });
+      expect(await countShowings(fixture.apartmentId!)).toBe(3);
+
       // ── Decline: the confirmed request's remaining action persists cancellation ─
       await clickAndAwaitPersisted(
         page,
@@ -511,30 +547,42 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       await expect(page.getByTestId(`viewing-request-status-${fixture.showingIdA}`)).toHaveText(
         "Cancelled",
       );
-      expect(await countShowings(fixture.apartmentId!)).toBe(2);
+      expect(await countShowings(fixture.apartmentId!)).toBe(3);
 
-      // ── Mobile: the same request and its controls reach a 390px viewport ──────
+      // ── Mobile: the controls are actually usable at a 390px viewport ─────────
       //
-      // Presence, not visibility: `/host/rentals` renders the workspace in responsive
-      // containers, so at phone width the card exists in the DOM inside a pane that is hidden
-      // until the "Workspace" tab is selected. This matches the mobile assertion SAN-1204
-      // established for the same surface rather than inventing a second, stricter contract for
-      // a layout this task does not own. What SAN-1206 must guarantee at 390px is that the
-      // action controls exist and do not push the page sideways.
+      // The workspace is a responsive pane, so the tab switch is retried until the card is
+      // genuinely visible — not merely present in the DOM. Then the reschedule control is opened
+      // and its input and submit are asserted visible, and the controls must not push the page
+      // sideways. (SAN-1204's presence-only check could not tell whether the pane ever opened.)
       const mobileContext = await browser.newContext({ viewport: MOBILE_VIEWPORT });
       await hideDevOverlay(mobileContext);
       try {
         await signInBroker(mobileContext, fixture.owner!.email);
         const mobilePage = await mobileContext.newPage();
         await mobilePage.goto("/host/rentals", { waitUntil: "domcontentloaded" });
-        await mobilePage.getByRole("button", { name: "Workspace" }).click();
+        const mobileCard = mobilePage.getByTestId(`viewing-request-${fixture.showingIdB}`);
+        // The pane switch is a client handler on a server-rendered button, so it can be clicked
+        // before React binds. The old toHaveCount assertion could not see that the pane never
+        // switched; this retries the tab until the workspace pane actually renders its card.
+        await expect(async () => {
+          if (!(await mobileCard.isVisible())) {
+            await mobilePage.getByRole("button", { name: "Workspace" }).click({ timeout: 5_000 });
+          }
+          await expect(mobileCard).toBeVisible();
+        }).toPass({ timeout: 30_000 });
 
+        const mobileReschedule = mobilePage.getByTestId(
+          `viewing-request-reschedule-${fixture.showingIdB}`,
+        );
+        await expect(mobileReschedule).toBeVisible();
+        await mobileReschedule.click();
         await expect(
-          mobilePage.getByTestId(`viewing-request-${fixture.showingIdB}`),
-        ).toHaveCount(1);
+          mobilePage.getByTestId(`viewing-request-reschedule-input-${fixture.showingIdB}`),
+        ).toBeVisible();
         await expect(
-          mobilePage.getByTestId(`viewing-request-reschedule-${fixture.showingIdB}`),
-        ).toHaveCount(1);
+          mobilePage.getByTestId(`viewing-request-reschedule-submit-${fixture.showingIdB}`),
+        ).toBeVisible();
         await expect(
           mobilePage.getByTestId(`viewing-request-status-${fixture.showingIdB}`),
         ).toHaveText("Requested");

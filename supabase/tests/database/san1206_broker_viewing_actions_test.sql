@@ -716,36 +716,38 @@ select is(
   'O11: the four refused closed-state actions created nothing');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- P · RESCHEDULE REPLAY ACROSS A LATER ACTION — the effect the caller asked for
--- already holds, so the retry is a no-op even though the status moved on.
+-- P · RESCHEDULE AFTER A LATER ACTION — a reschedule retry is only a no-op while the
+-- request is STILL Requested. Once a later action moved the status on (here a confirm),
+-- the retry is stale and the state guard refuses it; it is not a silent success.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1206000-0000-4000-8000-000000000001', true);
 
-select lives_ok(format($q$
+select throws_ok(format($q$
   select public.p1_broker_update_showing(
-    %L::uuid, 'reschedule', 'scheduled', %L::timestamptz, %L::timestamptz)
+    %L::uuid, 'reschedule', 'confirmed', %L::timestamptz, %L::timestamptz)
 $q$, 'c1206000-0000-4000-8000-000000000003',
      current_setting('san1206.t7'), current_setting('san1206.t7')),
-  'P1: a reschedule retry whose requested time already holds is a no-op success');
+  'PT409', 'a confirmed viewing cannot be reschedule',
+  'P1: a reschedule on a confirmed viewing is refused even when the time already holds');
 reset role;
 
 select is(
   (select status from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
-  'confirmed', 'P2: the no-op replay did not rewrite the status');
+  'confirmed', 'P2: the refused reschedule left the status confirmed');
 select is(
   (select scheduled_at from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
   current_setting('san1206.t7')::timestamptz,
-  'P3: the no-op replay kept the persisted time');
+  'P3: the refused reschedule left the persisted time');
 select is(
   (select id from public.showings where id = 'c1206000-0000-4000-8000-000000000003'),
   'c1206000-0000-4000-8000-000000000003'::uuid,
-  'P4: the no-op replay kept the same UUID');
+  'P4: the refused reschedule left the same UUID');
 select is(
   (select count(*)::int from public.showings where lead_id = current_setting('san1206.lead2')::uuid),
   current_setting('san1206.closed_before')::int,
-  'P5: the no-op replay created no additional showing');
+  'P5: the refused reschedule created no additional showing');
 
 select * from finish();
 
