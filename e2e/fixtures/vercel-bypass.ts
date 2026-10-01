@@ -30,7 +30,25 @@ export async function establishVercelAutomationBypass(
     },
   });
   const status = response.status();
-  if (status < 200 || status >= 400) {
-    throw new Error(`Vercel automation bypass setup returned ${status}`);
+  if (status >= 500) {
+    throw new Error(`CERTIFICATION_TARGET_INVALID: bypass setup returned ${status}`);
+  }
+
+  // The contract is NOT "the setup request returned < 400". A 302 to Vercel's
+  // deployment-authentication page satisfies that while establishing nothing, and
+  // every later request then 302s, follows, and is measured as a 200 application
+  // response. The contract is that this browser context now owns the bypass cookie
+  // for this exact origin.
+  const cookies = await page.context().cookies(candidate.origin);
+  const bypass = cookies.find((cookie) => cookie.name === "_vercel_jwt");
+
+  if (!bypass) {
+    throw new Error(
+      `CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established for ` +
+        `${candidate.origin}. Setup returned ${status}; cookies present: ` +
+        `${cookies.map((cookie) => cookie.name).join(", ") || "none"}. ` +
+        `Without it, requests hit the deployment protection page and certification ` +
+        `measures that instead of MDE.`,
+    );
   }
 }

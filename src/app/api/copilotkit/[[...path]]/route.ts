@@ -1,8 +1,4 @@
-import {
-  CopilotRuntime,
-  ExperimentalEmptyAdapter,
-  copilotRuntimeNextJSAppRouterEndpoint,
-} from "@copilotkit/runtime";
+import { CopilotRuntime, createCopilotRuntimeHandler } from "@copilotkit/runtime/v2";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import { NextRequest, after } from "next/server";
 import { authorizeCopilotKitRequest } from "@/lib/copilotkit-auth";
@@ -11,6 +7,7 @@ import {
   checkCopilotKitDistributedIpHardCeiling,
   checkCopilotKitDistributedRateLimit,
 } from "@/lib/copilotkit-distributed-rate-limit";
+import { COPILOTKIT_BASE_PATH, COPILOTKIT_HANDLER_MODE } from "@/lib/copilotkit-transport";
 import { createClient } from "@/lib/supabase/server";
 import { mastra } from "@/mastra";
 import { getLocalAgentsWithLogging } from "@/mastra/copilotkit/logging-mastra-agent";
@@ -22,8 +19,6 @@ import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-
-const serviceAdapter = new ExperimentalEmptyAdapter();
 
 /** Keep ai_runs writes alive after the CopilotKit SSE response (Vercel serverless). */
 const persistTurnLog: PersistTurnLog = (opts) => {
@@ -65,11 +60,21 @@ function buildHandler(options: {
     }),
   });
 
-  return copilotRuntimeNextJSAppRouterEndpoint({
+  // v2 fetch handler. `basePath` and `mode` are written explicitly rather than
+  // left to defaults: `mode` defaults to "multi-route", which would silently
+  // disagree with the client's pinned `useSingleEndpoint: true`. The failure is
+  // nasty — the run route 404s while `GET /info` still returns 200, so the app
+  // looks connected. Both halves come from `@/lib/copilotkit-transport`, where a
+  // change to either fails typecheck instead of production.
+  //
+  // No custom runner is set, so the runtime's default (in-memory, `runId`-aware)
+  // runner is used. `@copilotkit/sqlite-runner` ignores `runId`, which would
+  // silently widen a run-scoped Stop to the whole thread.
+  return createCopilotRuntimeHandler({
     runtime,
-    serviceAdapter,
-    endpoint: "/api/copilotkit",
-  }).handleRequest;
+    basePath: COPILOTKIT_BASE_PATH,
+    mode: COPILOTKIT_HANDLER_MODE,
+  });
 }
 
 function isDeterministicE2ERuntimeInfoRequest(req: NextRequest) {
@@ -106,6 +111,11 @@ async function handleCopilotKit(req: NextRequest) {
     //    validation, so a foreign thread must be rejected here, not later.
     //    The gate also returns the *only* resource id this turn may persist
     //    under, so identity is derived once and never re-guessed downstream.
+    //
+    //    The gate reads the request body, so it MUST clone before inspecting —
+    //    a consumed body reaches the runtime empty, and an empty stop body is a
+    //    thread-wide stop, which is exactly the escalation this ordering exists
+    //    to prevent. See Step 11's STOP-4 assertions.
     const thread = await resolveRequestedThread(req);
     const auth = authorizeCopilotKitRequest(req, { userId, thread });
     if (!auth.allowed) return auth.response;
@@ -137,6 +147,6 @@ async function handleCopilotKit(req: NextRequest) {
   }
 }
 
-/** Catch-all so GET /api/copilotkit/info and POST /api/copilotkit both reach the Hono handler. */
+/** Catch-all so GET /api/copilotkit/info and POST /api/copilotkit both reach the handler. */
 export const GET = handleCopilotKit;
 export const POST = handleCopilotKit;

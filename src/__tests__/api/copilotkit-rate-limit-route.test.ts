@@ -15,16 +15,13 @@ const resolveRequestedThreadMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ kind: "none" })),
 );
 
-vi.mock("@copilotkit/runtime", () => ({
+vi.mock("@copilotkit/runtime/v2", () => ({
   CopilotRuntime: vi.fn(function CopilotRuntime() {
     return {};
   }),
-  ExperimentalEmptyAdapter: vi.fn(function ExperimentalEmptyAdapter() {
-    return {};
-  }),
-  copilotRuntimeNextJSAppRouterEndpoint: vi.fn(() => ({
-    handleRequest: handleRequestMock,
-  })),
+  // The v2 fetch handler is invoked directly, so the factory returns the mock
+  // callable itself rather than an object wrapping `.handleRequest`.
+  createCopilotRuntimeHandler: vi.fn(() => handleRequestMock),
 }));
 
 vi.mock("@/mastra", () => ({ mastra: {} }));
