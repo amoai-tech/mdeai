@@ -65,6 +65,14 @@ export const BROKER_VIEWING_ACTION_LABELS: Record<BrokerViewingAction, string> =
   reschedule: "Reschedule",
 };
 
+/** Human-facing label for an action in the current persisted state. */
+export function brokerViewingActionLabel(action: BrokerViewingAction, status: string): string {
+  if (action === "cancel" && status === "confirmed") {
+    return "Cancel";
+  }
+  return BROKER_VIEWING_ACTION_LABELS[action];
+}
+
 /**
  * The two authoritative values the caller believed it was acting on.
  *

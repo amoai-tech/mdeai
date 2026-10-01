@@ -58,6 +58,13 @@ describe("SAN-1206 broker viewing-action surface contract", () => {
     expect(actions).toContain("viewing-request-error-${showingId}");
   });
 
+  it("labels cancellation from persisted state instead of one ambiguous button word", () => {
+    expect(actions).toContain('brokerViewingActionLabel("cancel", status)');
+    expect(actions).toContain('status === "confirmed"');
+    expect(actions).toContain('"Cancelling…"');
+    expect(actions).toContain('"Declining…"');
+  });
+
   it("states the documented conflict copy verbatim", () => {
     expect(actions).toContain("This request changed. Refresh and try again.");
     // A 409 is its own outcome: it must not fall through to the generic failure branch.

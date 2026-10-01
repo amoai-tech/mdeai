@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availableBrokerViewingActions,
+  brokerViewingActionLabel,
   brokerViewingStatusLabel,
   isBrokerViewingAction,
   isBrokerViewingStatusReadOnly,
@@ -24,6 +25,16 @@ describe("SAN-1206 broker viewing action decisions", () => {
 
     it("degrades to Unknown rather than rendering an empty badge", () => {
       expect(brokerViewingStatusLabel("")).toBe("Unknown");
+    });
+  });
+
+  describe("brokerViewingActionLabel", () => {
+    it("labels cancel as Decline while the request is still unanswered", () => {
+      expect(brokerViewingActionLabel("cancel", "scheduled")).toBe("Decline");
+    });
+
+    it("labels cancel as Cancel once the viewing is confirmed", () => {
+      expect(brokerViewingActionLabel("cancel", "confirmed")).toBe("Cancel");
     });
   });
 

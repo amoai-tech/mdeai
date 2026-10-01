@@ -454,7 +454,9 @@ test.describe("SAN-1206 · broker viewing actions", () => {
         "Requested",
       );
       await expect(page.getByTestId(`viewing-request-confirm-${fixture.showingIdA}`)).toBeVisible();
-      await expect(page.getByTestId(`viewing-request-decline-${fixture.showingIdA}`)).toBeVisible();
+      await expect(page.getByTestId(`viewing-request-decline-${fixture.showingIdA}`)).toHaveText(
+        "Decline",
+      );
       await expect(page.getByTestId(`viewing-request-reschedule-${fixture.showingIdA}`)).toBeVisible();
 
       // ── Confirm ──────────────────────────────────────────────────────────────
@@ -473,6 +475,9 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       // A confirmed viewing can still be declined, but is never moved to a new time here.
       await expect(page.getByTestId(`viewing-request-confirm-${fixture.showingIdA}`)).toHaveCount(0);
       await expect(page.getByTestId(`viewing-request-reschedule-${fixture.showingIdA}`)).toHaveCount(0);
+      await expect(page.getByTestId(`viewing-request-decline-${fixture.showingIdA}`)).toHaveText(
+        "Cancel",
+      );
 
       expect((await readShowing(fixture.showingIdA!)).status).toBe("confirmed");
 

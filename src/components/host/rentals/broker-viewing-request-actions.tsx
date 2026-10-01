@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   BROKER_VIEWING_ACTION_LABELS,
+  brokerViewingActionLabel,
   availableBrokerViewingActions,
   type BrokerViewingAction,
 } from "@/lib/rentals/broker-viewing-action";
@@ -116,7 +117,11 @@ export function BrokerViewingRequestActions({
             data-testid={`viewing-request-decline-${showingId}`}
             onClick={() => void submit("cancel")}
           >
-            {pending === "cancel" ? "Declining…" : BROKER_VIEWING_ACTION_LABELS.cancel}
+            {pending === "cancel"
+              ? status === "confirmed"
+                ? "Cancelling…"
+                : "Declining…"
+              : brokerViewingActionLabel("cancel", status)}
           </Button>
         ) : null}
 
