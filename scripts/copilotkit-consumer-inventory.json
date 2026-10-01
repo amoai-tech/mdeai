@@ -47,9 +47,8 @@
     },
     {
       "file": "src/components/host/host-os-shell.tsx",
-      "classification": "migrate",
-      "step": 15,
-      "note": "Compatibility <CopilotKit> boundary. Also imports the CopilotErrorEvent type from @copilotkit/shared, which is not in the certified matrix and is the compatibility error type Step 15 replaces."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 2: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the host workspace keeps one shared, non-explicit thread across Overview, Events and Analytics. The CopilotErrorEvent import from @copilotkit/shared is replaced by the v2 provider's own onError type."
     },
 
     {
@@ -224,6 +223,11 @@
       "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
       "classification": "test-only",
       "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
+    },
+    {
+      "file": "src/components/__tests__/copilotkit-thread-lifecycle.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1378 Stage D thread-identity proof. Renders the REAL v2 providers (CopilotKit not mocked) and reads useCopilotChatConfiguration from several consumers: one shared thread per boundary, non-explicit when auto-minted, fresh per mount, persistent across host navigation, and the /chat saved-thread/New Chat rules."
     }
   ]
 }

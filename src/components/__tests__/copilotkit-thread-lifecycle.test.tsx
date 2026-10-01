@@ -5,6 +5,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
 
 import { HostEventProvider } from "@/components/host/host-event-provider";
+import { HostOsShell } from "@/components/host/host-os-shell";
+
+// The shell's own chrome is not under test; its provider boundary is. The
+// header renders a probe so the test proves a component OUTSIDE the routed
+// page shares the page's thread.
+const navigation = vi.hoisted(() => ({ pathname: "/host/dashboard" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("@/components/host/host-context-provider", () => ({
+  HostContextProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+vi.mock("@/components/host/host-os-header", () => ({
+  HostOsHeader: () => <Probe name="header" />,
+}));
+vi.mock("@/components/host/host-os-body", () => ({
+  CHAT_REGION_ID: "host-chat",
+  HostOsBody: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 /**
  * SAN-1378 · Stage D — thread identity per CopilotKit provider boundary.
@@ -96,5 +117,27 @@ describe("HostEventProvider — fresh wizard session", () => {
 
     expect(seen.chat.threadId).toMatch(/^[0-9a-f-]{36}$/);
     expect(seen.chat.threadId).not.toBe(first);
+  });
+});
+
+describe("HostOsShell — one persistent host workspace thread", () => {
+  it("keeps one thread across Overview, Events and Analytics, shared with the header", async () => {
+    const ids: (string | undefined)[] = [];
+    for (const pathname of ["/host/dashboard", "/host/events", "/host/analytics"]) {
+      navigation.pathname = pathname;
+      // Same element type at the same position: React keeps the shell
+      // mounted, exactly as the host layout does on client-side navigation.
+      await render(
+        <HostOsShell>
+          <Probe name="page" />
+        </HostOsShell>,
+      );
+      expect(seen.header.threadId).toBe(seen.page.threadId);
+      ids.push(seen.page.threadId);
+    }
+
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(new Set(ids).size).toBe(1);
+    expect(seen.page.explicit).toBe(false);
   });
 });

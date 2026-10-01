@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { CopilotKit } from "@copilotkit/react-core/v2";
-import type { CopilotErrorEvent } from "@copilotkit/shared";
+import {
+  CopilotChatConfigurationProvider,
+  CopilotKitProvider,
+  type CopilotKitProviderProps,
+} from "@copilotkit/react-core/v2";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { HostContextProvider } from "@/components/host/host-context-provider";
 import { HostOsHeader } from "@/components/host/host-os-header";
@@ -27,8 +30,11 @@ import { deriveHostOsRouteLabel } from "@/lib/host/host-os-nav";
  */
 
 
+/** The v2 provider's error event, `{ error, code, context }`, replacing the v1 shape. */
+type CopilotErrorEvent = Parameters<NonNullable<CopilotKitProviderProps["onError"]>>[0];
+
 /**
- * Module-level (stable reference) so passing it to <CopilotKit> doesn't create a
+ * Module-level (stable reference) so passing it to the provider doesn't create a
  * new prop identity each render — a fresh `onError` ref can retrigger the agent
  * connect loop. In CopilotKit v2 agent-discovery / runtime errors surface here
  * (the provider does NOT throw), so without this handler a failed hostOpsAgent
@@ -42,7 +48,6 @@ function handleHostCopilotError(errorEvent: CopilotErrorEvent): void {
 
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function HostOsShell({ children }: { children: ReactNode }) {
-  const [threadId] = useState(() => crypto.randomUUID());
   const pathname = usePathname();
   const routeLabel = deriveHostOsRouteLabel(pathname);
 
@@ -54,21 +59,29 @@ export function HostOsShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <CopilotKit
+    <CopilotKitProvider
       {...getCopilotKitClientProps("hostOpsAgent")}
-      threadId={threadId}
       enableInspector={false}
       onError={handleHostCopilotError}
     >
-      <HostContextProvider>
-        <div
-          data-testid="host-os-shell"
-          className="flex min-h-screen flex-col bg-background text-foreground"
-        >
-          <HostOsHeader routeLabel={routeLabel} onAskAi={focusChat} />
-          <HostOsBody routeLabel={routeLabel}>{children}</HostOsBody>
-        </div>
-      </HostContextProvider>
-    </CopilotKit>
+      {/*
+        One thread for the whole host workspace. With no threadId the
+        configuration provider mints it once per mount, so it survives
+        client-side navigation between Overview, Events and Analytics (this
+        shell is rendered by the host layout and does not remount between
+        them) and is shared by the chat and every host tool and hook.
+      */}
+      <CopilotChatConfigurationProvider agentId="hostOpsAgent">
+        <HostContextProvider>
+          <div
+            data-testid="host-os-shell"
+            className="flex min-h-screen flex-col bg-background text-foreground"
+          >
+            <HostOsHeader routeLabel={routeLabel} onAskAi={focusChat} />
+            <HostOsBody routeLabel={routeLabel}>{children}</HostOsBody>
+          </div>
+        </HostContextProvider>
+      </CopilotChatConfigurationProvider>
+    </CopilotKitProvider>
   );
 }
