@@ -13,6 +13,7 @@ const PROD_SPECS = [
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
+  "**/prod-concierge-thread-lifecycle.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
