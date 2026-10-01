@@ -102,6 +102,37 @@ describe("POST /api/copilotkit — distributed rate limit gate", () => {
     expect(handleRequestMock).not.toHaveBeenCalled();
   });
 
+  it("answers the single-route POST info envelope locally in deterministic E2E", async () => {
+    // The v2 client pins useSingleEndpoint, so its discovery request is
+    // POST /api/copilotkit {"method":"info"}, not GET /info. Without this the
+    // deterministic run hit the real auth gate and logged 401s.
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT = "1";
+
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({ method: "info" })) as never);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ agents: {} });
+    expect(getUserMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("never short-circuits the POST info envelope outside deterministic E2E", async () => {
+    const res = await POST(postRequest("203.0.113.62", JSON.stringify({ method: "info" })) as never);
+
+    // Reaches the normal pipeline: identity is resolved and the runtime runs.
+    expect(getUserMock).toHaveBeenCalled();
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toBe(200);
+  });
+
+  it("does not short-circuit a deterministic POST that is not the info envelope", async () => {
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT = "1";
+
+    await POST(postRequest("203.0.113.63", JSON.stringify({ method: "agent/run" })) as never);
+
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not call Mastra runtime when distributed rate limit blocks", async () => {
     distributedRateLimitMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "rate_limited", retryAfter: 120 }), {
