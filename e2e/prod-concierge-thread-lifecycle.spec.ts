@@ -9,6 +9,7 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
+import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
  * SAN-1378 · Stage D — concierge thread lifecycle on the real /chat surface.
@@ -33,6 +34,9 @@ import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpe
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const enabled = Boolean(baseUrl);
 const marker = `san1378-${Date.now().toString(36)}`;
+/** Protected Vercel previews need the automation bypass; production does not. */
+const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
 
 /** Thread ids of every `agent/run` envelope the browser sends, in order. */
 function recordRunThreadIds(page: Page): string[] {
@@ -102,7 +106,11 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
   test("New Chat starts a new persisted thread and a saved chat reopens", async ({ page }) => {
     test.setTimeout(360_000);
     identity = await createThrowawayIdentity("qa-san1378");
+    if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
     await signInAsOnOrigin(page, baseUrl, identity.email);
+    // Session injection clears cookies, so re-establish the same-origin bypass
+    // (same order as the candidate certification spec).
+    if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
     const runThreads = recordRunThreadIds(page);
 
     // ── Thread A ─────────────────────────────────────────────────────────────
