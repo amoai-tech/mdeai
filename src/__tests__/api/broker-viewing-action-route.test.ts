@@ -129,6 +129,27 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
       expect(response.status).toBe(400);
       expect(state.calls).toHaveLength(0);
     });
+
+    it("400s an instant Date.parse accepts but Postgres would not read as ISO", async () => {
+      // Parseable in JS but ambiguous to Postgres, which would resolve it in the session
+      // timezone and answer 409 instead of this clean 400.
+      const response = await patch({
+        action: "confirm",
+        ...expectation({ expectedScheduledAt: "November 20, 2099 19:00:00" }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(state.calls).toHaveLength(0);
+    });
+
+    it("accepts the ISO 8601 instant PostgREST actually returns", async () => {
+      const response = await patch({
+        action: "confirm",
+        ...expectation({ expectedScheduledAt: "2099-11-20T19:00:00+00:00" }),
+      });
+
+      expect(response.status).toBe(200);
+    });
   });
 
   describe("reschedule input", () => {

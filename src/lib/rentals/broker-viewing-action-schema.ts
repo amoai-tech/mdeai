@@ -25,15 +25,20 @@ export const BROKER_VIEWING_STATUSES = [
 export const brokerViewingActionRequestSchema = z.object({
   action: z.enum(BROKER_VIEWING_ACTIONS),
   expectedStatus: z.enum(BROKER_VIEWING_STATUSES),
-  // Must already be a parseable instant; otherwise Postgres raises a cast error and the caller
-  // gets a 500 for what is plainly their own malformed input.
+  // Must be an ISO 8601 instant WITH an offset. PostgREST renders timestamptz as `+00:00`, so
+  // the echoed value always qualifies. A looser Date.parse guard also accepted prose and
+  // offset-free strings, which Postgres would then read in the session timezone — turning the
+  // caller's malformed input into a confusing 409 instead of a clean 400.
   expectedScheduledAt: z
     .string()
     .trim()
     .min(1)
-    .refine((value) => !Number.isNaN(Date.parse(value)), {
-      message: "expectedScheduledAt must be a parseable timestamp",
-    }),
+    .refine(
+      (value) =>
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}(:?\d{2})?)$/.test(value) &&
+        !Number.isNaN(Date.parse(value)),
+      { message: "expectedScheduledAt must be an ISO 8601 timestamp with an offset" },
+    ),
   newWallClock: z.string().trim().min(1).max(32).optional(),
 });
 

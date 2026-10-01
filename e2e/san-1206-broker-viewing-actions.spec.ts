@@ -51,6 +51,7 @@ type Fixture = {
   run: string;
   owner: ThrowawayIdentity;
   other: ThrowawayIdentity;
+  renter: ThrowawayIdentity;
   landlordProfileId: string;
   apartmentId: string;
   leadIdA: string;
@@ -83,6 +84,7 @@ async function provisionFixture(): Promise<Fixture> {
 
   const owner = await createThrowawayIdentity(`${run}-owner`);
   const other = await createThrowawayIdentity(`${run}-other`);
+  const renter = await createThrowawayIdentity(`${run}-renter`);
 
   const landlordProfileId = randomUUID();
   const apartmentId = randomUUID();
@@ -116,6 +118,7 @@ async function provisionFixture(): Promise<Fixture> {
     {
       id: leadIdA,
       source: "form",
+      user_id: renter.userId,
       email: `${run}-renter-a@qa-isolation.mdeai.co`,
       name: `SAN1206 Renter A ${run}`,
       apartment_id: apartmentId,
@@ -148,7 +151,7 @@ async function provisionFixture(): Promise<Fixture> {
   ]);
   if (showingsError) throw new Error(`showings: ${showingsError.message}`);
 
-  return { run, owner, other, landlordProfileId, apartmentId, leadIdA, leadIdB, showingIdA, showingIdB };
+  return { run, owner, other, renter, landlordProfileId, apartmentId, leadIdA, leadIdB, showingIdA, showingIdB };
 }
 
 /** Best-effort, order-correct teardown. Reports what it could not remove instead of hiding it. */
@@ -185,6 +188,10 @@ async function cleanupFixture(fixture: Partial<Fixture>): Promise<string[]> {
   if (fixture.other) {
     const problem = await deleteIdentityVerified(fixture.other);
     if (problem) failures.push(`other identity: ${problem}`);
+  }
+  if (fixture.renter) {
+    const problem = await deleteIdentityVerified(fixture.renter);
+    if (problem) failures.push(`renter identity: ${problem}`);
   }
 
   return failures;
@@ -493,6 +500,19 @@ test.describe("SAN-1206 · broker viewing actions", () => {
         EXPECTED_TIME_LABEL,
       );
 
+      // ── Decline: the confirmed request's remaining action persists cancellation ─
+      await clickAndAwaitPersisted(
+        page,
+        `viewing-request-decline-${fixture.showingIdA}`,
+        async () => (await readShowing(fixture.showingIdA!)).status === "cancelled",
+        "decline",
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId(`viewing-request-status-${fixture.showingIdA}`)).toHaveText(
+        "Cancelled",
+      );
+      expect(await countShowings(fixture.apartmentId!)).toBe(2);
+
       // ── Mobile: the same request and its controls reach a 390px viewport ──────
       //
       // Presence, not visibility: `/host/rentals` renders the workspace in responsive
@@ -570,6 +590,30 @@ test.describe("SAN-1206 · broker viewing actions", () => {
         expect(anonymous.status()).toBe(401);
       } finally {
         await anonContext.close();
+      }
+
+      // ── The renter who owns the lead cannot use the broker action ────────────
+      // `leadIdA` belongs to this identity, so this is the real party the old RLS policy
+      // trusted — not an unrelated signed-in user. The RPC still refuses: they do not own the
+      // apartment. (The matching direct-table denial is proven in pgTAP I2/I3.)
+      const renterContext = await browser.newContext();
+      await hideDevOverlay(renterContext);
+      try {
+        await signInBroker(renterContext, fixture.renter!.email);
+        const renterPage = await renterContext.newPage();
+        const renterDenied = await renterPage.request.patch(
+          `/api/host/rentals/viewings/${fixture.showingIdA}`,
+          {
+            data: {
+              action: "confirm",
+              expectedStatus: "scheduled",
+              expectedScheduledAt: T_CONFIRM,
+            },
+          },
+        );
+        expect(renterDenied.status()).toBe(403);
+      } finally {
+        await renterContext.close();
       }
 
       // Nothing above was allowed to touch the rescheduled row.
