@@ -12,6 +12,9 @@ const agent = {
   setMessages: vi.fn(() => calls.push("setMessages")),
   setState: vi.fn(() => calls.push("setState")),
   abortRun: vi.fn(() => calls.push("abortRun")),
+  detachActiveRun: vi.fn(async () => {
+    calls.push("detachActiveRun");
+  }),
 };
 const copilotkit = {
   stopAgent: vi.fn(() => calls.push("stopAgent")),
@@ -41,13 +44,16 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
     const chat = useConciergeChat();
     chat.reset();
     expect(copilotkit.stopAgent).toHaveBeenCalledWith({ agent });
+    expect(agent.detachActiveRun).toHaveBeenCalledTimes(1);
     expect(calls.indexOf("stopAgent")).toBeLessThan(calls.indexOf("setMessages"));
+    expect(calls.indexOf("detachActiveRun")).toBeLessThan(calls.indexOf("setMessages"));
   });
 
   it("stopActiveRun stops only when a reply is running", () => {
     const chat = useConciergeChat();
     chat.stopActiveRun();
     expect(copilotkit.stopAgent).not.toHaveBeenCalled();
+    expect(agent.detachActiveRun).not.toHaveBeenCalled();
     agent.isRunning = true;
     chat.stopActiveRun();
     expect(copilotkit.stopAgent).toHaveBeenCalledTimes(1);
