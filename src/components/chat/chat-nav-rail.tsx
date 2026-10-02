@@ -99,7 +99,7 @@ export function ChatNavRail({
   testId?: string;
 }) {
   const router = useRouter();
-  const { startNewChat } = useConciergeSession();
+  const { startNewChat, stopActiveRun } = useConciergeSession();
   const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
 
@@ -113,6 +113,9 @@ export function ChatNavRail({
   }
 
   function onSelectThread(id: string) {
+    // New Chat stops a streaming reply inside startNewChat(); opening a saved
+    // chat must too, or the old answer streams into the chat being opened.
+    stopActiveRun();
     setActiveThreadId(id);
     router.push("/chat");
   }

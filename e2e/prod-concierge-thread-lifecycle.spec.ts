@@ -8,7 +8,13 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
-import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
+import {
+  countConciergeReplies,
+  gotoConcierge,
+  sendConciergeMessage,
+  waitForConciergeReply,
+  waitForCopilotIdle,
+} from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
@@ -174,6 +180,56 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
 
     // Reopening never moves the new chat's message into A.
     expect(await persistedMessagesContaining(threadA!, markerB)).toBe(0);
+  });
+
+  test("New Chat while a reply is still streaming leaves the new chat clean", async ({ page }) => {
+    test.setTimeout(300_000);
+    // CopilotKit clears the view on a thread switch but does not stop an
+    // in-flight run. Before the fix, the old answer kept streaming into the
+    // new chat and was then saved into the new thread (SAN-1378 preview).
+    const raceIdentity = await createThrowawayIdentity("qa-san1378-race");
+    try {
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      await signInAsOnOrigin(page, baseUrl, raceIdentity.email);
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      const runThreads = recordRunThreadIds(page);
+      await gotoConcierge(page);
+
+      const markerA = `${marker}-STREAM-${randomUUID().slice(0, 6)}`;
+      const streaming = page.waitForResponse(
+        (r) => (r.request().postData() ?? "").includes('"agent/run"'),
+        { timeout: 60_000 },
+      );
+      await sendConciergeMessage(
+        page,
+        `Write a detailed 400-word guide to Medellín neighborhoods for a remote worker. Start your answer with the word ${markerA}.`,
+      );
+      await streaming; // response headers are in: the reply is streaming now
+      await page.getByTestId("nav-new-chat").first().click();
+      const threadA = runThreads.at(-1)!;
+
+      // Let the old run finish (or be stopped) server-side before asserting.
+      await expect
+        .poll(() => persistedMessagesContaining(threadA, markerA), { timeout: 60_000 })
+        .toBeGreaterThan(0);
+      await expect(page.getByTestId("copilot-chat-region")).not.toContainText(markerA);
+
+      const before = await countConciergeReplies(page);
+      const markerB = `${marker}-AFTER-${randomUUID().slice(0, 6)}`;
+      await sendConciergeMessage(page, `Say only: ${markerB}`);
+      await waitForConciergeReply(page, before);
+      const threadB = runThreads.at(-1)!;
+      expect(threadB, "New Chat runs on a different thread").not.toBe(threadA);
+      await expect
+        .poll(() => persistedMessagesContaining(threadB, markerB), { timeout: 60_000 })
+        .toBeGreaterThan(0);
+      expect(
+        await persistedMessagesContaining(threadB, markerA),
+        "the old streaming answer is never saved into the new chat",
+      ).toBe(0);
+    } finally {
+      await deleteThrowawayIdentity(raceIdentity);
+    }
   });
 
   // Showing A's earlier messages on reopen needs replayable AG-UI event

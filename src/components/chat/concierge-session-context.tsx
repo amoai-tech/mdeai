@@ -25,6 +25,8 @@ type ConciergeSessionContextValue = {
   /** Bump to remount chip bar + fast-path panels with clean local React state. */
   sessionKey: number;
   startNewChat: () => void;
+  /** Stop a still-streaming reply before switching to another conversation. */
+  stopActiveRun: () => void;
 };
 
 const ConciergeSessionContext =
@@ -32,7 +34,7 @@ const ConciergeSessionContext =
 
 export function ConciergeSessionProvider({ children }: { children: ReactNode }) {
   const [sessionKey, setSessionKey] = useState(0);
-  const { reset } = useConciergeChat();
+  const { reset, stopActiveRun } = useConciergeChat();
   const { setState } = useConciergeCoAgent();
   const { clearPins, setSelectedPinId, clearFocusPinRequest } = useMapContext();
   const { setToolResult: setRentalFp } = useRentalFastPath();
@@ -99,8 +101,8 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
   ]);
 
   const value = useMemo(
-    () => ({ sessionKey, startNewChat }),
-    [sessionKey, startNewChat],
+    () => ({ sessionKey, startNewChat, stopActiveRun }),
+    [sessionKey, startNewChat, stopActiveRun],
   );
 
   return (
