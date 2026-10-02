@@ -479,3 +479,25 @@ export async function assertNoDuplicateGroundingLists(page: Page) {
     ),
   ).toHaveCount(0);
 }
+
+/**
+ * Wait for a NEW concierge assistant message, not just an idle runtime. Some
+ * concierge queries (cafés, rentals) answer through MDE fast paths without an
+ * `agent/run`, so `waitForCopilotIdle` can return before anything renders.
+ * Count CopilotKit's own `copilot-assistant-message` before sending, then call
+ * this with that count.
+ */
+export async function waitForConciergeReply(page: Page, before: number, timeout = 120_000) {
+  // Own the send's in-flight completion first: leaving it unawaited lets
+  // `response.finished()` run after the test ends ("Test ended").
+  await waitForCopilotIdle(page, timeout);
+  const replies = page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message");
+  await expect
+    .poll(() => replies.count(), { timeout, message: "a new concierge assistant reply" })
+    .toBeGreaterThan(before);
+  return replies.last().innerText();
+}
+
+export function countConciergeReplies(page: Page) {
+  return page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message").count();
+}

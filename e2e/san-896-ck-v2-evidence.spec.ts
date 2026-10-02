@@ -7,6 +7,7 @@
  *     PW_SKIP_WEBSERVER=1 npx playwright test e2e/san-896-ck-v2-evidence.spec.ts --project=chromium
  */
 import { test, expect } from "@playwright/test";
+import { sendHostChatMessage } from "./helpers/host-chat";
 import path from "node:path";
 import {
   activateEventsChip,
@@ -33,20 +34,7 @@ const ANALYTICS_PROMPT = "how are my sales?";
 
 // skipcq: JS-0067 - module-local test helper; not browser global scope
 async function sendHostChat(page: import("@playwright/test").Page, text: string) {
-  const region = page
-    .locator(
-      '[data-testid="host-copilot-chat-region"], [data-testid="host-ops-chat-region"], [data-testid="host-os-chat-region"]',
-    )
-    .first();
-  const input = region.getByTestId("copilot-chat-textarea");
-  await input.waitFor({ state: "visible", timeout: 90_000 });
-  await input.click();
-  await input.fill(text);
-  await input.dispatchEvent("input");
-
-  const sendBtn = region.getByTestId("copilot-send-button");
-  await expect(sendBtn).toBeEnabled({ timeout: 10_000 });
-  await sendBtn.click();
+  await sendHostChatMessage(page, text);
 }
 
 test.describe.configure({ mode: "serial" });

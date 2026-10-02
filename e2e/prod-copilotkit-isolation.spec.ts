@@ -46,6 +46,8 @@ const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
 
 const ANONYMOUS_RESOURCE_ID = "anonymous";
 const runMarker = `san547-${Date.now().toString(36)}`;
+/** Only User A's conversation contains this; no refused response may echo it. */
+const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
 
 /**
  * The exact request shape a real browser sends to `/api/copilotkit`, captured
@@ -76,6 +78,42 @@ async function threadsOwnedBy(resourceId: string): Promise<{ id: string; resourc
     .eq("resourceId", resourceId);
   if (error) throw new Error(`mastra_threads read failed: ${error.message}`);
   return (data ?? []) as { id: string; resourceId: string }[];
+}
+
+/** Messages persisted for these threads (service-role only). */
+async function messageCount(threadIds: string[]): Promise<number> {
+  if (threadIds.length === 0) return 0;
+  const admin = await getSupabaseAdmin();
+  const { count, error } = await admin
+    .from("mastra_messages")
+    .select("id", { count: "exact", head: true })
+    .in("thread_id", threadIds);
+  if (error) throw new Error(`mastra_messages count failed: ${error.message}`);
+  return count ?? 0;
+}
+
+/**
+ * Wait until a turn's persistence has landed and stopped moving. Mastra writes
+ * the turn's messages after the stream ends, so "the UI is idle" is not "the
+ * database is done": cleaning up in that gap deletes the thread and then the
+ * late write leaves orphan messages behind (seen on production 2026-10-02).
+ * Two identical consecutive reads at or above `min` count as settled.
+ */
+async function waitForSettledMessages(threadIds: string[], min: number): Promise<number> {
+  let previous = -1;
+  let settled = -1;
+  await expect
+    .poll(
+      async () => {
+        const current = await messageCount(threadIds);
+        settled = current >= min && current === previous ? current : -1;
+        previous = current;
+        return settled;
+      },
+      { timeout: 90_000, intervals: [1_000, 2_000, 2_000, 3_000] },
+    )
+    .toBeGreaterThanOrEqual(min);
+  return settled;
 }
 
 test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
@@ -153,7 +191,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     test.setTimeout(240_000);
     await signInAsOnOrigin(page, baseUrl, userA.email);
     await gotoConcierge(page);
-    await sendConciergeMessage(page, "ping");
+    await sendConciergeMessage(page, `ping ${privateMarker}`);
     await waitForCopilotIdle(page, 120_000);
 
     // The turn is asynchronous in the app, but the memory write is what we assert.
@@ -171,6 +209,9 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     const owned = await threadsOwnedBy(userA.userId);
     touchedThreadIds = owned.map((row) => row.id);
     threadId = owned[0].id;
+    // The user message and the reply, fully persisted, before anything probes
+    // or cleans up this thread.
+    await waitForSettledMessages(touchedThreadIds, 2);
 
     // The stored owner is the server-derived user id — never the shared bucket,
     // never the client's own threadId.
@@ -218,6 +259,48 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     ).toBe(403);
   });
 
+  test("User B is refused every CopilotKit thread route on User A's thread", async ({ page }) => {
+    await signInAsOnOrigin(page, baseUrl, userB.email);
+
+    // SAN-1358 · D20: these arrive as `resource/request` with the thread id in
+    // `params.path`, so the body-based gate never sees them; the runtime's
+    // fail-closed route allowlist must refuse them. Read-only and per-thread
+    // only. NEVER send `threads/clear` here: it would wipe every live
+    // conversation on the instance if the allowlist ever regressed. It stays
+    // covered by src/__tests__/api/copilotkit-thread-routes-authz.test.ts.
+    const probes: Array<{ path: string; httpMethod: string; body?: unknown }> = [
+      { path: "/api/copilotkit/threads", httpMethod: "GET" },
+      { path: `/api/copilotkit/threads/${threadId}/messages`, httpMethod: "GET" },
+      { path: `/api/copilotkit/threads/${threadId}/events`, httpMethod: "GET" },
+      { path: `/api/copilotkit/threads/${threadId}/state`, httpMethod: "GET" },
+      { path: `/api/copilotkit/threads/${threadId}`, httpMethod: "PATCH", body: { name: runMarker } },
+      { path: `/api/copilotkit/threads/${threadId}/archive`, httpMethod: "POST" },
+      { path: `/api/copilotkit/threads/${threadId}`, httpMethod: "DELETE" },
+    ];
+    for (const { path, httpMethod, body } of probes) {
+      const res = await page.request.post(route("/api/copilotkit"), {
+        maxRedirects: 0,
+        data: { method: "resource/request", params: { path, httpMethod }, ...(body ? { body } : {}) },
+      });
+      const text = await res.text();
+      expect(res.status(), `User B ${httpMethod} ${path}`).toBe(403);
+      expect(text, `User B ${httpMethod} ${path} leaks no content`).not.toContain(privateMarker);
+      expect(text).not.toContain(threadId);
+    }
+
+    // The mutations changed nothing: A's thread is still there, still A's.
+    const admin = await getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("mastra_threads")
+      .select("resourceId, title")
+      .eq("id", threadId)
+      .single();
+    if (error) throw new Error(`thread re-read failed: ${error.message}`);
+    expect(data.resourceId).toBe(userA.userId);
+    expect(data.title ?? "").not.toContain(runMarker);
+    expect(await messageCount([threadId])).toBeGreaterThanOrEqual(2);
+  });
+
   test("User A is not refused by the gate for their own thread", async ({ page }) => {
     await signInAsOnOrigin(page, baseUrl, userA.email);
 
@@ -252,14 +335,18 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("cleanup removes every row this run created, proven by re-query", async () => {
-    const messagesForRun = touchedThreadIds.length
-      ? (
-          await (await getSupabaseAdmin())
-            .from("mastra_messages")
-            .select("id")
-            .in("thread_id", touchedThreadIds)
-        ).data ?? []
-      : [];
+    test.setTimeout(180_000);
+    // Re-read the run's threads (a probe must not have added any, but cleanup
+    // covers whatever exists), then let persistence settle BEFORE deleting, so
+    // no late write can land after the rows are gone.
+    touchedThreadIds = [
+      ...new Set([
+        ...touchedThreadIds,
+        ...(await threadsOwnedBy(userA.userId)).map((row) => row.id),
+        ...(await threadsOwnedBy(userB.userId)).map((row) => row.id),
+      ]),
+    ];
+    const messagesForRun = await waitForSettledMessages(touchedThreadIds, 2);
 
     // Attempt BOTH identities even if the first one fails. Sequential awaits in a
     // try/finally meant a failure on userA skipped userB entirely *and* still set
@@ -285,17 +372,20 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       );
     }
 
-    expect(await threadsOwnedBy(userA.userId), "User A threads after cleanup").toEqual([]);
-    expect(await threadsOwnedBy(userB.userId), "User B threads after cleanup").toEqual([]);
+    // Poll to zero rather than reading once: a green result must prove the
+    // rows are gone and stay gone, and a write that still lands fails loudly.
+    const converge = { timeout: 30_000, intervals: [500, 1_000, 2_000] };
+    await expect
+      .poll(async () => (await threadsOwnedBy(userA.userId)).length, { ...converge, message: "User A threads after cleanup" })
+      .toBe(0);
+    await expect
+      .poll(async () => (await threadsOwnedBy(userB.userId)).length, { ...converge, message: "User B threads after cleanup" })
+      .toBe(0);
+    await expect
+      .poll(() => messageCount(touchedThreadIds), { ...converge, message: "messages for this run's threads after cleanup" })
+      .toBe(0);
 
     const admin = await getSupabaseAdmin();
-    if (touchedThreadIds.length > 0) {
-      const { data: leftover } = await admin
-        .from("mastra_messages")
-        .select("id")
-        .in("thread_id", touchedThreadIds);
-      expect(leftover ?? [], "messages for this run's threads after cleanup").toEqual([]);
-    }
 
     // The identities themselves are gone, so the throwaway resources cannot be
     // reused by a later request.
@@ -306,6 +396,6 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
 
     // Sanity: the run genuinely had messages to clean, so the assertion above is
     // not vacuously true.
-    expect(messagesForRun.length, "records the run created before cleanup").toBeGreaterThan(0);
+    expect(messagesForRun, "records the run created before cleanup").toBeGreaterThan(0);
   });
 });
