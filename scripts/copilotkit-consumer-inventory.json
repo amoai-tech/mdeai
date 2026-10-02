@@ -233,6 +233,11 @@
       "note": "SAN-1378: mocks useCopilotKit to prove that switching conversation stops a still-streaming reply (stopAgent, with abortRun fallback) before the conversation is cleared."
     },
     {
+      "file": "src/components/__tests__/saved-thread-history-hydration.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1389: renders the real ChatProvider with a faked shared agent (useAgent) to prove a reopened saved chat replays its history once: waits for CopilotKit's reconnect, drops a late response for a chat that was left, never duplicates a warm replay, and a fresh New Chat never fetches."
+    },
+    {
       "file": "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs",
       "classification": "test-only",
       "note": "SAN-1332 recorded evidence: a byte-exact copy of scripts/check-mastra.mjs before fb2052f2b, so it names the aligned packages as data. Read as text by pr-agent-canary-fixture.test.mjs and never imported or executed."
