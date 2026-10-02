@@ -68,6 +68,19 @@ function recordRunThreadIds(page: Page): string[] {
   return ids;
 }
 
+/** All persisted messages of a thread, optionally of one role. */
+async function persistedCount(threadId: string, role?: "user" | "assistant"): Promise<number> {
+  const admin = await getSupabaseAdmin();
+  let query = admin
+    .from("mastra_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("thread_id", threadId);
+  if (role) query = query.eq("role", role);
+  const { count, error } = await query;
+  if (error) throw new Error(`mastra_messages read failed: ${error.message}`);
+  return count ?? 0;
+}
+
 /** Persisted user-message count containing `text` in `threadId` (service-role, test process only). */
 async function persistedMessagesContaining(
   threadId: string,
@@ -261,6 +274,124 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
     } finally {
       await otherContext.close();
       await deleteThrowawayIdentity(roberto);
+    }
+  });
+
+  test("a normal two-message chat is saved once and the AI keeps its context", async ({ page }) => {
+    test.setTimeout(300_000);
+    // SAN-1389: each message used to re-save the whole earlier conversation, which
+    // a reopened chat would then show as repeats. Only the newest turn is sent now;
+    // the AI still has the earlier turn through Mastra's thread memory.
+    const twoTurn = await createThrowawayIdentity("qa-san1389-two");
+    try {
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      await signInAsOnOrigin(page, baseUrl, twoTurn.email);
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      const runThreads = recordRunThreadIds(page);
+      await gotoConcierge(page);
+
+      const word = `zebra${randomUUID().slice(0, 6)}`;
+      await sendAndWait(page, `Remember the secret word ${word}. Reply with one short sentence.`);
+      const thread = runThreads.at(-1)!;
+      await expect.poll(() => persistedCount(thread), { timeout: 30_000 }).toBeGreaterThan(1);
+      const afterFirst = await persistedCount(thread);
+
+      const before = await countConciergeReplies(page);
+      await sendConciergeMessage(page, "What was the secret word I asked you to remember? Answer with just the word.");
+      await waitForConciergeReply(page, before);
+      await expect(
+        page.getByTestId("copilot-assistant-message").last(),
+        "the AI still knows the earlier message after only the newest turn is sent",
+      ).toContainText(word, { timeout: 60_000 });
+
+      await expect
+        .poll(() => persistedMessagesContaining(thread, "What was the secret word", "user"), { timeout: 30_000 })
+        .toBe(1);
+      expect(
+        await persistedMessagesContaining(thread, word, "user"),
+        "the first message is saved once, not again with the second",
+      ).toBe(1);
+      expect(await persistedCount(thread, "user"), "two user messages, saved once each").toBe(2);
+      expect
+        .soft(await persistedCount(thread), "the second turn added only its own two messages")
+        .toBe(afterFirst + 2);
+    } finally {
+      await deleteThrowawayIdentity(twoTurn);
+    }
+  });
+
+  test("an old chat saved with repeated messages shows each once and still continues", async ({ page }) => {
+    test.setTimeout(300_000);
+    // Rows written before SAN-1389 repeat earlier turns (q1 a1 q1 a1 q2 a2). They
+    // are not deleted; the replay hides the repeats.
+    const legacy = await createThrowawayIdentity("qa-san1389-legacy");
+    try {
+      const admin = await getSupabaseAdmin();
+      const threadId = randomUUID();
+      const word = `legacy${randomUUID().slice(0, 6)}`;
+      const turn = (n: number, role: "user" | "assistant", text: string) => ({
+        id: randomUUID(),
+        thread_id: threadId,
+        resourceId: legacy.userId,
+        role,
+        type: "v2",
+        createdAt: new Date(Date.now() - 600_000 + n * 1_000).toISOString().replace("Z", ""),
+        content: JSON.stringify({ format: 2, parts: [{ type: "text", text }] }),
+      });
+      const q1 = `Remember the word ${word}`;
+      const a1 = `Got it, I will remember ${word}.`;
+      const q2 = "Thanks, you are helpful";
+      const a2 = "Happy to help.";
+      const now = new Date().toISOString().replace("Z", "");
+      const inserted = await admin.from("mastra_threads").insert({
+        id: threadId,
+        resourceId: legacy.userId,
+        title: `SAN-1389 legacy ${word}`,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (inserted.error) throw new Error(`seed thread: ${inserted.error.message}`);
+      const rows = [
+        turn(1, "user", q1), turn(2, "assistant", a1),
+        turn(3, "user", q1), turn(4, "assistant", a1), turn(5, "user", q2), turn(6, "assistant", a2),
+      ];
+      const seeded = await admin.from("mastra_messages").insert(rows);
+      if (seeded.error) throw new Error(`seed messages: ${seeded.error.message}`);
+
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      await signInAsOnOrigin(page, baseUrl, legacy.email);
+      if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      const runThreads = recordRunThreadIds(page);
+      await gotoConcierge(page);
+
+      const item = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadId}"]`).first();
+      await expect(item, "the old chat is listed").toBeVisible({ timeout: 30_000 });
+      await item.click();
+
+      const region = page.getByTestId("copilot-chat-region");
+      await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.getByTestId("saved-history-error")).toHaveCount(0);
+      const users = region.getByTestId("copilot-user-message");
+      await expect(users.filter({ hasText: word }), "question 1 is shown once").toHaveCount(1, { timeout: 30_000 });
+      await expect(users.filter({ hasText: q2 }), "question 2 is shown once").toHaveCount(1);
+      await expect(users, "two user messages in total").toHaveCount(2);
+      const answers = region.getByTestId("copilot-assistant-message");
+      await expect(answers.filter({ hasText: a1 }), "answer 1 is shown once").toHaveCount(1);
+      await expect(answers, "two answers in total").toHaveCount(2);
+
+      // The old chat still continues, and the AI still has its context.
+      const before = await countConciergeReplies(page);
+      await sendConciergeMessage(page, "What was the word I asked you to remember? Answer with just the word.");
+      await waitForConciergeReply(page, before);
+      expect(runThreads.at(-1), "the follow-up continues the old chat").toBe(threadId);
+      await expect(answers.last()).toContainText(word, { timeout: 60_000 });
+      expect(
+        await persistedMessagesContaining(threadId, "What was the word I asked", "user"),
+        "the follow-up is saved once",
+      ).toBe(1);
+      expect(await persistedCount(threadId, "user"), "no earlier message was saved again").toBe(4);
+    } finally {
+      await deleteThrowawayIdentity(legacy);
     }
   });
 
