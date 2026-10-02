@@ -48,6 +48,9 @@ export async function sendHostChatMessage(page: Page, text: string): Promise<() 
       (r.request().postData() ?? "").includes('"agent/run"'),
     { timeout: 60_000 },
   );
+  // A caller that never awaits the returned waiter must not leave an
+  // unhandled rejection behind (e.g. the 60s timeout firing after the test).
+  run.catch(() => undefined);
   await sendBtn.click();
 
   return async () => {
