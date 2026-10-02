@@ -240,6 +240,16 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect((saved?.mapUi as Record<string, unknown>).activeCategories).toEqual(["event"]);
   });
 
+  it("a blank mapUi.selectedPinId does not clear the saved pin, but null still means no selection", async () => {
+    const blank = await update({ mapUi: { selectedPinId: "", viewport: { lat: 6.2, lng: -75.5, zoom: 13 } } });
+    expect(blank.out.error).toBeUndefined();
+    expect((blank.saved?.mapUi as Record<string, unknown>).selectedPinId).toBe("rental-123");
+
+    const cleared = await update({ mapUi: { selectedPinId: null } });
+    expect(cleared.out.error).toBeUndefined();
+    expect(cleared.saved?.mapUi).not.toHaveProperty("selectedPinId");
+  });
+
   it("real values survive: minBedrooms 0 (studio), false booleans, valid enums", async () => {
     const { out, saved } = await update({
       lastRentalQuery: { minBedrooms: 0, genericAskPending: false, budgetType: "nightly" },

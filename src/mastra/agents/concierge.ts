@@ -143,6 +143,14 @@ export function omitPaddedMemoryFields(raw: unknown): unknown {
   for (const query of ['lastRentalQuery', 'lastEventQuery', 'lastRestaurantQuery'] as const) {
     if (query in out) out[query] = withoutNoValue(out[query], PADDED_FIELDS[query]);
   }
+  // mapUi.selectedPinId: a blank string is padding, but null is the deliberate
+  // "no pin selected", so only blanks go.
+  const mapUi = out.mapUi;
+  if (isPlainObject(mapUi) && typeof mapUi.selectedPinId === 'string' && mapUi.selectedPinId.trim() === '') {
+    const rest = { ...mapUi };
+    delete rest.selectedPinId;
+    out.mapUi = rest;
+  }
   return out;
 }
 
