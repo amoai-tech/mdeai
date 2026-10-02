@@ -381,6 +381,15 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
       const answers = region.getByTestId("copilot-assistant-message");
       await expect(answers.filter({ hasText: a1 }), "answer 1 is shown once").toHaveCount(1);
       await expect(answers, "two answers in total").toHaveCount(2);
+      // Oldest first: question 1, answer 1, question 2, answer 2.
+      await expect
+        .poll(async () => {
+          const texts = await region
+            .locator('[data-testid="copilot-user-message"], [data-testid="copilot-assistant-message"]')
+            .allInnerTexts();
+          return [word, a1, q2, a2].map((needle) => texts.findIndex((t) => t.includes(needle)));
+        }, { message: "messages are shown oldest first" })
+        .toEqual([0, 1, 2, 3]);
 
       // The old chat still continues, and the AI still has its context.
       const before = await countConciergeReplies(page);
