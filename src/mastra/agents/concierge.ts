@@ -100,10 +100,57 @@ export const conciergeWorkingMemorySchema = z.object({
     })
     .optional()
     .describe('Last restaurant query — refine from here on restaurant follow-ups'),
-  mapUi: MapUiStateSchema.optional().describe(
-    'Map summary mirror — pin ids/counts/viewport only, never full MapPin[]',
-  ),
+  // A patch, not a snapshot: Mastra deep-merges working memory, so Gemini may send
+  // only the part it changes (e.g. just the viewport) and the rest survives. The
+  // shared MapUiStateSchema stays strict; only this memory mirror is partial.
+  mapUi: MapUiStateSchema.partial()
+    .optional()
+    .describe('Map summary mirror — pin ids/counts/viewport only, never full MapPin[]. Send only what changed.'),
 });
+
+/**
+ * SAN-1387 — optional fields Gemini pads with "" (or null) when it has no value.
+ * Seen in production `update-working-memory` failures. Only these fields are
+ * treated as "no value"; a real value, `0`, `false` and `[]` are never touched.
+ */
+const PADDED_FIELDS = {
+  root: ['selectedListingId', 'selectedEventId'],
+  lastRentalQuery: ['neighborhood', 'budgetType', 'checkIn', 'checkOut'],
+  lastEventQuery: ['category', 'neighborhood', 'dateWindow'],
+  lastRestaurantQuery: ['neighborhood', 'cuisine', 'vibe', 'priceTier'],
+} as const;
+
+type PlainObject = Record<string, unknown>;
+const isPlainObject = (v: unknown): v is PlainObject =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNoValue = (v: unknown) => v === null || (typeof v === 'string' && v.trim() === '');
+
+function withoutNoValue(obj: unknown, keys: readonly string[]): unknown {
+  if (!isPlainObject(obj)) return obj;
+  const out = { ...obj };
+  for (const key of keys) if (isNoValue(out[key])) delete out[key];
+  return out;
+}
+
+/**
+ * Remove the padded fields so the KEY IS ABSENT. Turning a blank into `undefined`
+ * is not enough: Mastra's merge copies an own `undefined` over the saved value and
+ * would erase it. Absent keys are left alone by the merge.
+ */
+export function omitPaddedMemoryFields(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const out = withoutNoValue(raw, PADDED_FIELDS.root) as PlainObject;
+  for (const query of ['lastRentalQuery', 'lastEventQuery', 'lastRestaurantQuery'] as const) {
+    if (query in out) out[query] = withoutNoValue(out[query], PADDED_FIELDS[query]);
+  }
+  return out;
+}
+
+/**
+ * What the `updateWorkingMemory` tool accepts from the model: the strict schema,
+ * after the padded fields are dropped. The model-facing JSON schema is unchanged.
+ */
+export const conciergeMemoryInput = z.preprocess(omitPaddedMemoryFields, conciergeWorkingMemorySchema);
 
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
@@ -321,5 +368,8 @@ ${formatEventSourcePromptHint()}`,
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input
   // tokens — and latency — on busy threads without changing follow-up behavior.
   // @ts-expect-error beta drift: Memory.recall() shape vs MastraMemory (same as pingAgent)
-  memory: createThreadMemory(conciergeWorkingMemorySchema, { lastMessages: 10 }),
+  memory: createThreadMemory(conciergeWorkingMemorySchema, {
+    lastMessages: 10,
+    memoryInput: conciergeMemoryInput,
+  }),
 });
