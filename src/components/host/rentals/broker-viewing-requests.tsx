@@ -3,6 +3,8 @@
 import { CalendarClock } from "lucide-react";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { BrokerViewingRequestActions } from "@/components/host/rentals/broker-viewing-request-actions";
+import { brokerViewingStatusLabel } from "@/lib/rentals/broker-viewing-action";
 import type { BrokerViewingRequest } from "@/lib/rentals/broker-dashboard-types";
 
 type BrokerViewingRequestsProps = {
@@ -12,20 +14,16 @@ type BrokerViewingRequestsProps = {
   loadError: string | null;
 };
 
-/** "scheduled" reads like a database value; the broker should read a normal word. */
-function statusLabel(status: string): string { // skipcq: JS-0067 - module-local helper
-  if (!status) {
-    return "Unknown";
-  }
-  return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ");
-}
-
 /**
  * SAN-1204 · the real viewing requests the signed-in broker owns.
  *
  * One card per persisted showing, so a single request can never appear twice. Every card
  * carries its exact lead/showing/apartment IDs so a test can correlate what the broker sees
  * with the row that actually exists.
+ *
+ * SAN-1206 adds the operator controls to each card. The label mapping lives in
+ * `brokerViewingStatusLabel` rather than here, so the word the broker reads and the actions
+ * offered are decided in one tested place.
  */
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function BrokerViewingRequests({ requests, total, loadError }: BrokerViewingRequestsProps) {
@@ -70,6 +68,7 @@ export function BrokerViewingRequests({ requests, total, loadError }: BrokerView
           data-lead-id={request.leadId}
           data-showing-id={request.showingId}
           data-apartment-id={request.apartmentId}
+          data-status={request.status}
           className="rounded-lg border border-border bg-card p-3"
         >
           <div className="flex items-start justify-between gap-2">
@@ -89,7 +88,7 @@ export function BrokerViewingRequests({ requests, total, loadError }: BrokerView
               variant="secondary"
               className="shrink-0 text-xs"
             >
-              {statusLabel(request.status)}
+              {brokerViewingStatusLabel(request.status)}
             </Badge>
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -98,6 +97,11 @@ export function BrokerViewingRequests({ requests, total, loadError }: BrokerView
               {request.scheduledLabel}
             </span>
           </p>
+          <BrokerViewingRequestActions
+            showingId={request.showingId}
+            status={request.status}
+            scheduledAt={request.scheduledAt}
+          />
         </li>
         ))}
       </ul>
