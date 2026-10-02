@@ -119,18 +119,37 @@ function buildHandler(options: {
   });
 }
 
-function isDeterministicE2ERuntimeInfoRequest(req: NextRequest) {
-  return (
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1" &&
-    req.method === "GET" &&
-    new URL(req.url).pathname.endsWith("/api/copilotkit/info")
-  );
+/**
+ * Deterministic browser tests mock the domain, so runtime discovery is answered
+ * locally instead of reaching auth. Never in production, never without the flag.
+ *
+ * Both discovery shapes count: the legacy `GET …/info`, and the single-route
+ * envelope `POST /api/copilotkit {"method":"info"}` that the v2 client actually
+ * sends. Only the GET shape used to match, so deterministic runs hit the real
+ * auth gate and logged 401s (SAN-1378). The body is read from a clone, so a
+ * non-info request still reaches the handler intact.
+ */
+async function isDeterministicE2ERuntimeInfoRequest(req: NextRequest): Promise<boolean> {
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT !== "1"
+  ) {
+    return false;
+  }
+  const { pathname } = new URL(req.url);
+  if (req.method === "GET") return pathname.endsWith("/api/copilotkit/info");
+  if (req.method !== "POST") return false;
+  try {
+    const envelope = (await req.clone().json()) as { method?: unknown } | null;
+    return envelope?.method === "info";
+  } catch {
+    return false;
+  }
 }
 
 /** Auth, distributed rate limits, then CopilotKit/Mastra runtime. */
 async function handleCopilotKit(req: NextRequest) {
-  if (isDeterministicE2ERuntimeInfoRequest(req)) {
+  if (await isDeterministicE2ERuntimeInfoRequest(req)) {
     return Response.json({ agents: {} });
   }
 

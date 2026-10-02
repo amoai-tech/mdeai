@@ -292,19 +292,26 @@ describe("Step 9 · agent identity carrier coupling", () => {
     return V1_PROVIDER_OPEN.test(src);
   });
 
-  it("every boundary that renders the v1 compatibility provider must receive the v1 agent carrier", () => {
-    expect(v1Consumers.length).toBeGreaterThan(0);
-
+  it("the v1 agent carrier exists exactly while a v1 compatibility boundary exists", () => {
+    // Bidirectional on purpose. The compatibility provider reads only `agent`
+    // and defaults to "default", so dropping the carrier while a boundary
+    // remains breaks agent identity while still typechecking; keeping it after
+    // the last boundary is gone is dead v1 surface. Either way this fails.
     const props = getCopilotKitClientProps("conciergeAgent") as {
       agentId?: string;
       agent?: string;
     };
 
-    // Both names, same value. The v1 compatibility provider reads only `agent` and defaults to
-    // "default", so dropping it would break every one of these boundaries while
-    // still typechecking — see the client-props coupling note.
-    expect(props.agent).toBe("conciergeAgent");
     expect(props.agentId).toBe("conciergeAgent");
+    if (v1Consumers.length > 0) {
+      expect(props.agent).toBe("conciergeAgent");
+    } else {
+      expect("agent" in props).toBe(false);
+    }
+  });
+
+  it("no v1 compatibility boundary remains (SAN-1378 Stage D)", () => {
+    expect(v1Consumers).toEqual([]);
   });
 
   it("the v1 helper the boundaries rely on is the one the bridge actually reads", () => {

@@ -10,8 +10,8 @@ import { stripComments } from "../lib/strip-comments.mjs";
  * The inventory exists so that "verify-only" is falsifiable rather than assumed. A JSON list that
  * nobody checks rots the same way the v1 allowlist did, so these cases make it mechanical:
  * every consumer detected in the tree must be classified, no classified file may vanish, and the
- * compatibility `<CopilotKit>` boundary must be exactly the four that Steps 12 to 15 migrate. A
- * fifth boundary appearing anywhere fails here instead of surfacing during a migration.
+ * tree must contain no compatibility `<CopilotKit>` boundary: SAN-1378 Stage D migrated the last
+ * four, so any boundary appearing anywhere (comments excluded) fails here.
  */
 
 const INVENTORY_REL = "scripts/copilotkit-consumer-inventory.json";
@@ -30,13 +30,11 @@ const VALID_CLASSIFICATIONS = new Set(INVENTORY.classifications);
 const SCAN_ROOTS = ["src", "supabase/functions", "e2e", "scripts"];
 const SCAN_EXT = /\.(ts|tsx|js|jsx|mjs)$/;
 
-/** The four compatibility boundaries, each owned by a migration step. */
-const COMPAT_BOUNDARIES = [
-  "src/components/chat/chat-provider.tsx",
-  "src/components/copilot/copilot-kit-provider.tsx",
-  "src/components/host/host-event-provider.tsx",
-  "src/components/host/host-os-shell.tsx",
-];
+/**
+ * Compatibility `<CopilotKit>` boundaries still allowed. Empty since SAN-1378 Stage D migrated the
+ * last four; any new one is a regression, not an addition to this list.
+ */
+const COMPAT_BOUNDARIES = [];
 
 function walk(dir, acc = []) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -171,7 +169,7 @@ test("no classification is left unused except the empty ones", () => {
   );
 });
 
-test("the compatibility <CopilotKit> boundaries are exactly the four migrated ones", () => {
+test("no compatibility <CopilotKit> boundary remains in the tree", () => {
   const renderSites = ALL_FILES.filter((f) => /<CopilotKit(?![A-Za-z])/.test(strip(f)));
   assert.deepEqual(
     renderSites.sort(),

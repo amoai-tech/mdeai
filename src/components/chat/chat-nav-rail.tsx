@@ -99,19 +99,25 @@ export function ChatNavRail({
   testId?: string;
 }) {
   const router = useRouter();
-  const { startNewChat } = useConciergeSession();
+  const { startNewChat, stopActiveRun } = useConciergeSession();
   const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
 
+  // Both stay on /chat, where the concierge lives (D-13). These used to push
+  // "/" from before the concierge moved, which dropped Sofia on the marketing
+  // home and never reopened the chat she picked (SAN-1378).
   function onNewChat() {
     clearActiveThread();
     startNewChat();
-    router.push("/");
+    router.push("/chat");
   }
 
   function onSelectThread(id: string) {
+    // New Chat stops a streaming reply inside startNewChat(); opening a saved
+    // chat must too, or the old answer streams into the chat being opened.
+    stopActiveRun();
     setActiveThreadId(id);
-    router.push("/");
+    router.push("/chat");
   }
 
   return (

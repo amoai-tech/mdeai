@@ -22,7 +22,6 @@ describe("getCopilotKitClientProps", () => {
 
     expect(props).toMatchObject({
       agentId: "conciergeAgent",
-      agent: "conciergeAgent",
       runtimeUrl: "/api/copilotkit",
       useSingleEndpoint: true,
       showDevConsole: false,
@@ -45,7 +44,6 @@ describe("getCopilotKitClientProps", () => {
 
     expect(props).toMatchObject({
       agentId: "hostEventAgent",
-      agent: "hostEventAgent",
       runtimeUrl: "/api/copilotkit",
       useSingleEndpoint: true,
       showDevConsole: false,
@@ -62,56 +60,28 @@ describe("getCopilotKitClientProps", () => {
     for (const agent of ["conciergeAgent", "hostEventAgent"] as const) {
       const props = getCopilotKitClientProps(agent);
       expect("publicApiKey" in props).toBe(false);
-      expect((props as { runtimeUrl?: string }).runtimeUrl).toBe("/api/copilotkit");
+      expect(props.runtimeUrl).toBe("/api/copilotkit");
     }
   });
 
   /**
-   * The v2 contract name and the v1 compatibility carrier must always agree.
-   *
-   * `<CopilotKit>` (v1 bridge, 1.75.0) derives agent identity ONLY from `agent`:
-   * `copilotkit.tsx:816` renders `agentId={props.agent ?? "default"}`. Passing
-   * `agentId` alone typechecks but resolves every surface to the agent named
-   * "default". Both names carrying one value is what keeps the boundary untouched
-   * and the agent correct at the same time.
+   * One agent identity, `agentId`, now that no compatibility `<CopilotKit>`
+   * wrapper is left to need the v1 `agent` duplicate. The cross-file guard that
+   * ties this to the wrappers lives in the v2 contract test.
    */
-  describe("agent identity — v2 name and v1 carrier agree", () => {
+  describe("agent identity — agentId only", () => {
     for (const agent of ["conciergeAgent", "hostEventAgent", "hostOpsAgent"] as const) {
-      it(`carries both agentId and agent as "${agent}"`, () => {
+      it(`carries agentId "${agent}" and no v1 agent carrier`, () => {
         const props = getCopilotKitClientProps(agent);
 
         expect(props.agentId).toBe(agent);
-        expect(props.agent).toBe(agent);
-        // Not merely both present — equal, so the two names can never diverge.
-        expect(props.agent).toBe(props.agentId);
+        expect("agent" in props).toBe(false);
       });
     }
-
-    it("would resolve to the wrong agent if the v1 carrier were dropped", () => {
-      const props = getCopilotKitClientProps("hostOpsAgent");
-
-      // Mirrors the bridge's own expression, `props.agent ?? "default"`, over
-      // real inputs rather than a constant. With no `agent`, the bridge renders
-      // agentId="default" whatever `agentId` says — the exact defect that
-      // dropping the carrier would introduce.
-      const resolveBridgeAgentId = (p: { agent?: string }): string => p.agent ?? "default";
-
-      const withoutCarrier = resolveBridgeAgentId({});
-      const withCarrier = resolveBridgeAgentId({ agent: props.agent });
-
-      expect(withoutCarrier).toBe("default");
-      expect(withCarrier).toBe("hostOpsAgent");
-      expect(withCarrier).not.toBe(withoutCarrier);
-    });
   });
 
   it("pins the single-route transport pair on the client half", () => {
-    // Same narrowing cast the Cloud-path assertion above uses: the returned
-    // value is always the runtimeUrl member, but the declared union still needs it.
-    const props = getCopilotKitClientProps("conciergeAgent") as {
-      runtimeUrl?: string;
-      useSingleEndpoint?: boolean;
-    };
+    const props = getCopilotKitClientProps("conciergeAgent");
 
     // Client half of the pair owned by copilotkit-transport.ts.
     expect(props.runtimeUrl).toBe(COPILOTKIT_BASE_PATH);

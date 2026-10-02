@@ -7,6 +7,7 @@
  *     PW_SKIP_WEBSERVER=1 npx playwright test e2e/san-896-ck-v2-evidence.spec.ts --project=chromium
  */
 import { test, expect } from "@playwright/test";
+import { sendHostChatMessage } from "./helpers/host-chat";
 import path from "node:path";
 import {
   activateEventsChip,
@@ -32,21 +33,9 @@ const HOST_EVENT_PROMPT =
 const ANALYTICS_PROMPT = "how are my sales?";
 
 // skipcq: JS-0067 - module-local test helper; not browser global scope
+/** Sends and returns the waiter for the reply; every caller must await it. */
 async function sendHostChat(page: import("@playwright/test").Page, text: string) {
-  const region = page
-    .locator(
-      '[data-testid="host-copilot-chat-region"], [data-testid="host-ops-chat-region"], [data-testid="host-os-chat-region"]',
-    )
-    .first();
-  const input = region.getByTestId("copilot-chat-textarea");
-  await input.waitFor({ state: "visible", timeout: 90_000 });
-  await input.click();
-  await input.fill(text);
-  await input.dispatchEvent("input");
-
-  const sendBtn = region.getByTestId("copilot-send-button");
-  await expect(sendBtn).toBeEnabled({ timeout: 10_000 });
-  await sendBtn.click();
+  return sendHostChatMessage(page, text);
 }
 
 test.describe.configure({ mode: "serial" });
@@ -114,15 +103,11 @@ test.describe("SAN-896 · CK-V2-008 evidence", () => {
       );
       const baselineAssistants = await assistantMessages.count();
 
-      await sendHostChat(page, HOST_EVENT_PROMPT);
-      await page
-        .waitForResponse(
-          (r) =>
-            r.url().includes("/api/copilotkit") &&
-            r.request().method() === "POST",
-          { timeout: 180_000 },
-        )
-        .catch(() => undefined);
+      const hostEventReply = await sendHostChat(page, HOST_EVENT_PROMPT);
+      // Best-effort: the agent may answer with a form fill or HITL panel rather
+      // than a chat message, which the poll below accepts. Await (bounded) so
+      // nothing from the send outlives the test.
+      await hostEventReply().catch(() => undefined);
 
       const titleField = page.getByTestId("host-event-field-title");
       const neighborhoodField = page.getByTestId("host-event-field-neighborhood");
@@ -195,16 +180,9 @@ test.describe("SAN-896 · CK-V2-008 evidence", () => {
         await expect(page.getByTestId("host-analytics-prompt-chips")).toBeVisible();
       }
 
-      await Promise.all([
-        page.waitForResponse(
-          (r) =>
-            r.url().includes("/api/copilotkit") &&
-            r.request().method() === "POST" &&
-            r.status() === 200,
-          { timeout: 180_000 },
-        ),
-        sendHostChat(page, ANALYTICS_PROMPT),
-      ]);
+      // Requires agent/run 200, a finished stream and a new assistant reply.
+      const analyticsReply = await sendHostChat(page, ANALYTICS_PROMPT);
+      await analyticsReply();
 
       const salesLoaded = page.getByText("Sales loaded ✓");
       await expect

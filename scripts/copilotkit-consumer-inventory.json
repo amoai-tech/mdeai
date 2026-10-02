@@ -1,5 +1,5 @@
 {
-  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and the compatibility <CopilotKit> boundaries must be exactly the four below.",
+  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
   "classifications": ["migrate", "keep", "test-only", "compatibility-required", "remove"],
   "consumers": [
     {
@@ -7,14 +7,14 @@
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Not a @copilotkit importer — it declares the shared props shape locally. Holds the v1-shaped `agent:` and `showDevConsole: false`; `agent` is not a v2 prop and will fail typecheck."
+      "note": "Not a @copilotkit importer — it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
     },
     {
       "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Asserts the shared props shape, including `showDevConsole: false`. Must fail if a legacy prop reappears."
+      "note": "Asserts the shared props shape, including `showDevConsole: false` and the absence of the v1 `agent` carrier. Must fail if a legacy prop reappears."
     },
     {
       "file": "src/app/api/copilotkit/[[...path]]/route.ts",
@@ -30,27 +30,23 @@
     },
     {
       "file": "src/components/copilot/copilot-kit-provider.tsx",
-      "classification": "migrate",
-      "step": 12,
-      "note": "Compatibility <CopilotKit> boundary. Passes threadId, which is not a CopilotKitProvider prop. Uses the shared client props."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 4: v2 CopilotKitProvider + one CopilotChatConfigurationProvider for non-chat pages; a saved thread is explicit, otherwise one fresh thread per mount. This was the last compatibility boundary."
     },
     {
       "file": "src/components/chat/chat-provider.tsx",
-      "classification": "migrate",
-      "step": 13,
-      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 3: v2 CopilotKitProvider + one CopilotChatConfigurationProvider. A saved thread picked in the nav rail is bound explicitly; otherwise a fresh non-explicit thread, new per /chat visit and per New Chat (ThreadNav newChatCount)."
     },
     {
       "file": "src/components/host/host-event-provider.tsx",
-      "classification": "migrate",
-      "step": 14,
-      "note": "Compatibility <CopilotKit> boundary. Uses the shared client props plus a redundant explicit enableInspector={false}."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 1: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the wizard gets one shared, non-explicit thread per mount."
     },
     {
       "file": "src/components/host/host-os-shell.tsx",
-      "classification": "migrate",
-      "step": 15,
-      "note": "Compatibility <CopilotKit> boundary. Also imports the CopilotErrorEvent type from @copilotkit/shared, which is not in the certified matrix and is the compatibility error type Step 15 replaces."
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 2: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the host workspace keeps one shared, non-explicit thread across Overview, Events and Analytics. The CopilotErrorEvent import from @copilotkit/shared is replaced by the v2 provider's own onError type."
     },
 
     {
@@ -225,6 +221,16 @@
       "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
       "classification": "test-only",
       "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
+    },
+    {
+      "file": "src/components/__tests__/copilotkit-thread-lifecycle.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1378 Stage D thread-identity proof. Renders the REAL v2 providers (CopilotKit not mocked) and reads useCopilotChatConfiguration from several consumers: one shared thread per boundary, non-explicit when auto-minted, fresh per mount, persistent across host navigation, and the /chat saved-thread/New Chat rules."
+    },
+    {
+      "file": "src/lib/hooks/__tests__/use-concierge-chat.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1378: mocks useCopilotKit to prove that switching conversation stops a still-streaming reply (stopAgent, with abortRun fallback) before the conversation is cleared."
     },
     {
       "file": "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs",
