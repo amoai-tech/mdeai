@@ -25,15 +25,40 @@
  *   Everywhere else it reports and warns, so local/CI builds keep working.
  * - `--mode=runtime` always fails when a runtime-required variable is missing.
  *
+ * Env files (SAN-1388)
+ * --------------------
+ * The checker loads `.env.local` / `.env` through Next.js's own `loadEnvConfig`
+ * (same files, same order, same precedence), so a direct run sees what
+ * `next build` / `next start` see. An explicit process / CI / Vercel variable
+ * always wins over a file. Only the NAMES of the files read are printed.
+ *
+ * Gemini (SAN-1388)
+ * -----------------
+ * `GOOGLE_GENERATIVE_AI_API_KEY` is required by `--mode=runtime`: every Mastra
+ * agent calls Gemini through `src/mastra/lib/models.ts`, so a runtime without
+ * the key is not healthy. Build modes (including `--strict`, used by the floor)
+ * stay secret-free: building does not call Gemini.
+ *
  * Only variables required by the production feature contract are enforced.
  * Optional integrations are listed as optional and never block a deploy.
  * Variable VALUES are never printed.
  */
 import process from "node:process";
+import nextEnv from "@next/env";
+
+const { loadEnvConfig } = nextEnv;
 
 const args = new Set(process.argv.slice(2));
 const mode = [...args].find((a) => a.startsWith("--mode="))?.slice("--mode=".length) ?? "build";
 const forceStrict = args.has("--strict");
+
+// Same loader Next uses. `false` = not the dev server, i.e. the `next build` /
+// `next start` file set. Silent logger: its "Loaded env from …" lines are
+// replaced by one line below that names the files and nothing else.
+const { loadedEnvFiles } = loadEnvConfig(process.cwd(), false, {
+  info: () => {},
+  error: (...message) => console.error(...message),
+});
 
 /** Build-time client configuration: compiled into the browser bundle. */
 const BUILD_CLIENT = [
@@ -68,11 +93,16 @@ const RUNTIME = [
     oneOf: ["NEXT_PUBLIC_SUPABASE_ANON_KEY"],
     why: "public Supabase key",
   },
+  {
+    // SAN-1388 — every Mastra agent calls Gemini through src/mastra/lib/models.ts.
+    // No alternative key name: the app reads exactly this one (@ai-sdk/google).
+    name: "GOOGLE_GENERATIVE_AI_API_KEY",
+    why: "Gemini API key — Mastra agents call Gemini (src/mastra/lib/models.ts)",
+  },
 ];
 
 /** Optional feature configuration: degrade gracefully, never block. */
 const OPTIONAL = [
-  "GOOGLE_GENERATIVE_AI_API_KEY",
   "GOOGLE_API_KEY",
   "GOOGLE_PLACES_API_KEY",
   "GOOGLE_MAPS_API_KEY",
@@ -106,6 +136,9 @@ const failures = [];
 const warnings = [];
 
 console.log(`env-contract: mode=${mode} strict=${strict}${vcelEnv ? ` VERCEL_ENV=${vcelEnv}` : ""}`);
+console.log(
+  `env files: ${loadedEnvFiles.length ? loadedEnvFiles.map((file) => file.path).join(", ") : "none found"}`,
+);
 console.log("");
 
 console.log(`required (${mode === "build" ? "build-time client" : "runtime server"}):`);

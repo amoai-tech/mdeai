@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 /**
@@ -20,12 +22,19 @@ const CI_CLIENT = {
 };
 
 function run(args: string[], env: Record<string, string>) {
+  // SAN-1388: the script now reads `.env.local` / `.env` from its cwd like Next
+  // does, so run from an empty directory — a developer's real env files must
+  // never leak into these cases. (The env-file behaviour itself is covered in
+  // scripts/__tests__/check-env-contract.test.mjs.)
+  const cwd = mkdtempSync(path.join(tmpdir(), "env-contract-unit-"));
   const result = spawnSync(process.execPath, [SCRIPT, ...args], {
+    cwd,
     encoding: "utf8",
     // Scrubbed environment: only what the test provides (NODE_ENV is required by
     // the repo's augmented ProcessEnv type and is irrelevant to the script).
     env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", ...env } as NodeJS.ProcessEnv,
   });
+  rmSync(cwd, { recursive: true, force: true });
   return { status: result.status, out: `${result.stdout}${result.stderr}` };
 }
 
@@ -84,6 +93,8 @@ describe("check-env-contract — runtime mode", () => {
     DATABASE_URL: "postgresql://unit-test-host/unit-test-db",
     SUPABASE_SERVICE_ROLE_KEY: "unit-test-service-role",
     COPILOTKIT_API_KEY: "unit-test-copilotkit-runtime-secret",
+    // SAN-1388: a real runtime cannot be healthy without the Gemini key.
+    GOOGLE_GENERATIVE_AI_API_KEY: "unit-test-gemini-key",
     NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   };
@@ -96,6 +107,7 @@ describe("check-env-contract — runtime mode", () => {
     expect(out).toContain("MISSING DATABASE_URL");
     expect(out).toContain("MISSING SUPABASE_SERVICE_ROLE_KEY");
     expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(out).toContain("MISSING GOOGLE_GENERATIVE_AI_API_KEY");
     expect(status).toBe(1);
   });
 
@@ -149,6 +161,7 @@ describe("check-env-contract — output safety", () => {
       DATABASE_URL: `postgresql://user:${secret}@host/db`,
       SUPABASE_SERVICE_ROLE_KEY: secret,
       COPILOTKIT_API_KEY: secret,
+      GOOGLE_GENERATIVE_AI_API_KEY: secret,
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     });
