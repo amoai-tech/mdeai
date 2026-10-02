@@ -24,7 +24,7 @@ export const pingAgent = new Agent({
   model: FLASH_MODEL,
   instructions:
     "You are mdeai's day-1 ping agent. Respond briefly in the same language the user wrote in. Confirm the wiring is alive. Do not call any tools.",
-  // @ts-expect-error beta drift: @mastra/memory@beta Memory.recall() return shape differs from @mastra/core@beta MastraMemory expectation. Runtime verified in F02/F05. Remove when both packages align.
+  // @ts-expect-error package-line drift: @mastra/memory@1.0.1-alpha.1 Memory.recall() return shape differs from stable @mastra/core@1.35.0 MastraMemory expectation. Runtime verified in F02/F05. Remove when both packages align.
   memory: new Memory({
     storage: getMastraStorage(),
     options: {
