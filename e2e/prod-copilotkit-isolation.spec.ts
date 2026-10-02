@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -9,6 +9,7 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
+import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
  * SAN-547 · D17 — live User A / User B isolation proof against a deployed environment.
@@ -40,6 +41,9 @@ import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpe
  */
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const enabled = Boolean(baseUrl);
+/** Protected Vercel previews need the automation bypass; production does not. */
+const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
 
 /** Build an absolute URL without doubling slashes on a trailing-slash base. */
 const route = (path: string) => new URL(path, `${baseUrl}/`).toString();
@@ -67,6 +71,34 @@ function realRunBody(threadId: string) {
     params: { agentId: "conciergeAgent" },
     body: { threadId, runId: randomUUID(), messages: [], tools: [] },
   };
+}
+
+async function expectSignedInRuntimeReached(page: Page): Promise<void> {
+  if (!isVercelPreview) return;
+  const response = await page.request.post(route("/api/copilotkit/info"), {
+    maxRedirects: 0,
+    data: { method: "info" },
+  });
+  const body = await response.text();
+  expect(
+    response.status(),
+    `authenticated runtime info returned ${response.status()}; expected 200. ` +
+      `A redirect or HTML response means Vercel protection was measured instead of MDE. ` +
+      `Body starts: ${body.slice(0, 80)}`,
+  ).toBe(200);
+  expect(body, "runtime info must identify MDE/CopilotKit, not Vercel protection").toContain(
+    '"agents"',
+  );
+}
+
+async function signInWithDeploymentAccess(page: Page, email: string): Promise<void> {
+  if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+  await signInAsOnOrigin(page, baseUrl, email);
+  // Session injection clears cookies, so restore the same-origin bypass cookie.
+  if (isVercelPreview) {
+    await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+    await expectSignedInRuntimeReached(page);
+  }
 }
 
 /** Read the durable owner of threads from the real Mastra table (service-role only). */
@@ -133,6 +165,12 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   test.beforeAll(async () => {
     // Never touch production identities outside a real prod run.
     if (!enabled) return;
+    if (isVercelPreview && !bypassSecret) {
+      throw new Error(
+        "VERCEL_AUTOMATION_BYPASS_SECRET is required for a protected Vercel preview; " +
+          "without it SAN-547 would measure Vercel deployment protection instead of MDE auth.",
+      );
+    }
     if (!hasE2eEnv()) {
       throw new Error(
         "PROD_SMOKE_BASE_URL is set but NEXT_PUBLIC_SUPABASE_URL / public key / " +
@@ -177,19 +215,36 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     }
   });
 
-  test("anonymous callers reach neither the runtime nor a named thread", async ({ request }) => {
-    const info = await request.get(route("/api/copilotkit/info"));
-    expect(info.status(), "unauthenticated info").toBe(401);
+  test("anonymous callers reach neither the runtime nor a named thread", async ({ page }) => {
+    if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
 
-    const named = await request.post(route("/api/copilotkit"), {
+    const info = await page.request.get(route("/api/copilotkit/info"), {
+      maxRedirects: 0,
+    });
+    const infoBody = await info.text();
+    expect(
+      info.status(),
+      `unauthenticated info returned ${info.status()}; expected MDE 401. ` +
+        `A redirect or HTML response means Vercel protection was measured instead of MDE auth. ` +
+        `Body starts: ${infoBody.slice(0, 80)}`,
+    ).toBe(401);
+    expect(infoBody, "401 body must identify MDE auth, not Vercel protection").toContain(
+      "unauthorized",
+    );
+
+    const named = await page.request.post(route("/api/copilotkit"), {
+      maxRedirects: 0,
       data: realRunBody(`${runMarker}-anonymous`),
     });
     expect(named.status(), "unauthenticated run naming a thread").toBe(401);
   });
 
   test("User A's real signed-in turn persists a thread owned by User A", async ({ page }) => {
+    // Ceiling, not latency budget: the flow can legitimately spend up to 120s waiting
+    // for CopilotKit to go idle + 90s waiting for durable Mastra persistence, plus
+    // auth/navigation overhead. Lowering this below 210s would make valid slow writes flaky.
     test.setTimeout(240_000);
-    await signInAsOnOrigin(page, baseUrl, userA.email);
+    await signInWithDeploymentAccess(page, userA.email);
     await gotoConcierge(page);
     await sendConciergeMessage(page, `ping ${privateMarker}`);
     await waitForCopilotIdle(page, 120_000);
@@ -223,9 +278,10 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("User B is refused User A's thread before the runtime executes", async ({ page }) => {
-    await signInAsOnOrigin(page, baseUrl, userB.email);
+    await signInWithDeploymentAccess(page, userB.email);
 
     const res = await page.request.post(route("/api/copilotkit"), {
+      maxRedirects: 0,
       data: realRunBody(threadId),
     });
     // 403 (not 401, not 200) is also the proof that the gate actually *read* the
@@ -239,7 +295,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("User B cannot stop User A's thread through the params-only stop shape", async ({ page }) => {
-    await signInAsOnOrigin(page, baseUrl, userB.email);
+    await signInWithDeploymentAccess(page, userB.email);
 
     // `agent/stop` is the odd one out: the router reads `threadId` from
     // `params`, not from the `body` run input. A gate that only read
@@ -247,6 +303,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
     // thread in `params` and halt it. Both fields are supplied here so the test
     // fails if extraction ever prefers the body again.
     const res = await page.request.post(route("/api/copilotkit"), {
+      maxRedirects: 0,
       data: {
         method: "agent/stop",
         params: { agentId: "conciergeAgent", threadId },
@@ -260,7 +317,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("User B is refused every CopilotKit thread route on User A's thread", async ({ page }) => {
-    await signInAsOnOrigin(page, baseUrl, userB.email);
+    await signInWithDeploymentAccess(page, userB.email);
 
     // SAN-1358 · D20: these arrive as `resource/request` with the thread id in
     // `params.path`, so the body-based gate never sees them; the runtime's
@@ -302,9 +359,10 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("User A is not refused by the gate for their own thread", async ({ page }) => {
-    await signInAsOnOrigin(page, baseUrl, userA.email);
+    await signInWithDeploymentAccess(page, userA.email);
 
     const res = await page.request.post(route("/api/copilotkit"), {
+      maxRedirects: 0,
       data: realRunBody(threadId),
     });
     // CopilotKit itself may reject the minimal body — that is fine and expected.
