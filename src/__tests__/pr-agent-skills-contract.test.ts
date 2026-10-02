@@ -96,7 +96,11 @@ describe("SAN-1312 PR-Agent review contract", () => {
   it("protects high-risk domain invariants from silent removal", () => {
     expect(read(skills[1])).toContain("Browser-supplied user, tenant, thread, run, page, or resource IDs are not authorization");
     expect(read(skills[1])).toContain("npm run typecheck");
-    expect(read(skills[2])).toContain("RequestContext carries request metadata; it is not authorization by itself");
+    const mastraReview = read(skills[2]);
+    expect(mastraReview).toContain("RequestContext carries request metadata; it is not authorization by itself");
+    expect(mastraReview).toContain("preserve trace correlation across agent, tool, and workflow boundaries");
+    expect(mastraReview).toContain("must not log credentials, secrets, tokens, or sensitive request context");
+    expect(mastraReview).toContain("Failed and retried executions must remain distinguishable");
     expect(read(skills[3])).toContain("User A must not read, update, delete or create data as User B");
     expect(read(skills[4])).toContain("Do not invent or transform ungrounded");
     expect(read(skills[4])).toContain("field mask");
@@ -107,6 +111,17 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read(skills[6])).toContain("Next.js 16");
     expect(read(skills[6])).toContain("await cookies()");
     expect(read(skills[6])).toContain("Async Request APIs");
+  });
+
+  it("keeps Mastra upstream provenance synchronized across the active wrapper and manifest", () => {
+    const mastraSkill = read(".claude/skills/mastra/SKILL.md");
+    const mastraUpstream = read(".claude/skills/mastra/upstream.yaml");
+    const skillCommit = mastraSkill.match(/upstream-commit:\s*"([0-9a-f]{40})"/)?.[1];
+    const manifestCommit = mastraUpstream.match(/reviewed_commit:\s*([0-9a-f]{40})/)?.[1];
+
+    expect(skillCommit).toBeTruthy();
+    expect(manifestCommit).toBeTruthy();
+    expect(skillCommit).toBe(manifestCommit);
   });
 
   it("keeps the repo-local base-aware review-policy contract", () => {

@@ -38,6 +38,10 @@ Use this file to jump from a **task or question** to the right **official URL ta
 | Mastra docs MCP (`mastraDocs`, embedded search) | [`references/mcp-docs-lookup.md`](mcp-docs-lookup.md) | Always `projectPath` → `mdeapp` |
 | SSE / streams, tool-call events, AG-UI | [Streaming](../links.md#streaming) · [Reference — streaming](../links.md#reference--streaming) | [`references/streaming.md`](streaming.md) |
 | Logs, traces, evals, datasets, CI | [Observability & evals](../links.md#observability-evals) | — |
+| Inspect/call Mastra server resources from CLI | [Server & client](../links.md#server-client) | [`official/mastra/references/mastra-api.md`](official/mastra/references/mastra-api.md) |
+| Find exact traces using field/span/score/feedback predicates | [Observability & evals](../links.md#observability-evals) | [`official/mastra/references/trace-query.md`](official/mastra/references/trace-query.md) |
+| Investigate recurring agent-health/failure themes | [Observability & evals](../links.md#observability-evals) | [`official/mastra/references/trace-intelligence.md`](official/mastra/references/trace-intelligence.md) |
+| Choose Agent vs Workflow vs Tool vs Memory/Storage | [Guides — concepts](../links.md#guides-concepts) | [`official/mastra/references/core-concepts.md`](official/mastra/references/core-concepts.md) |
 | Production / cloud | [Deployment](../links.md#deployment) | [`remote-docs.md`](remote-docs.md) |
 | Model strings, providers, embeddings | [Models](../links.md#models) | [`model-providers.md`](model-providers.md), [`openai.md`](openai.md), [`gemini.md`](gemini.md); run [`../scripts/provider-registry.mjs`](../scripts/provider-registry.mjs) |
 | Vite, Next, Express starter | [Guides — app stacks](../links.md#guides-app-stacks) | [`react.md`](react.md) for React-oriented stacks |
@@ -80,7 +84,9 @@ Use this file to jump from a **task or question** to the right **official URL ta
 
 | Artifact | Location |
 | --- | --- |
-| Runtime app | `my-mastra-app/` (from repo root) |
+| Current Mastra runtime | `src/mastra/` |
+| CopilotKit ↔ Mastra bridge | `src/app/api/copilotkit/` |
+| Legacy standalone Mastra app | `my-mastra-app/` — historical/reference only |
 | Mastra PRD / tasks | `tasks/prompts/mastra/` |
 
 (See [`links.md` § mdeai repository](../links.md#mdeai-repository).)
