@@ -19,5 +19,8 @@
 - Required durable workflows must not silently fall back to ephemeral state.
 - Stop/abort must prevent later protected side effects where cancellation is promised.
 - Package-family/API claims must be proven against installed source/types or current official migration guidance.
+- Trace/eval/observability changes must preserve trace correlation across agent, tool, and workflow boundaries.
+- Trace/eval/observability changes must not log credentials, secrets, tokens, or sensitive request context.
+- Failed and retried executions must remain distinguishable in traces/evals so retries cannot hide the original failure or look like a single clean run.
 
 For authority defects, include the smallest tenant A → tenant B failure, the safe boundary, and deterministic denial/replay proof.
