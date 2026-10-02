@@ -60,7 +60,10 @@ function sanitizeHostEventAgUiInput(input: RunAgentInput): RunAgentInput {
  * Only a run that ENDS on a user message is trimmed. A run that ends on a tool
  * result (a browser tool such as focusMapPin, or an approval answer) is
  * continuing a turn and still needs the assistant tool call and its result, so
- * it passes through untouched.
+ * it passes through untouched. Any other shape (CopilotKit does not send runs
+ * that end on an assistant message; regenerate drops that message first) also
+ * passes through: leaving the input as it was keeps today's context, and at
+ * worst it re-saves history as before, which the replay already hides.
  */
 export function trimToNewestTurn(input: RunAgentInput): RunAgentInput {
   const messages = input.messages ?? [];

@@ -164,6 +164,31 @@ describe("reconcileSavedHistory", () => {
     expect(reconcileSavedHistory(persisted, [p("x", "user", "a"), extra])).toEqual([persisted[0], extra]);
   });
 
+  it("does not show a tool result twice when the live side uses another id for it", () => {
+    const persisted = [
+      p("1", "user", "laureles"),
+      {
+        id: "2",
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "tc1", type: "function" as const, function: { name: "searchRentalsTool", arguments: "{}" } }],
+      },
+      { id: "2:tc1", role: "tool" as const, toolCallId: "tc1", content: "{}" },
+    ];
+    const live = [
+      { id: "x1", role: "user", content: "laureles" },
+      { id: "x2", role: "assistant", content: "", toolCalls: [{ id: "tc1", type: "function", function: { name: "searchRentalsTool", arguments: "{}" } }] },
+      { id: "x3", role: "tool", toolCallId: "tc1", content: "{}" },
+    ];
+    expect(reconcileSavedHistory(persisted, live)).toEqual(persisted);
+  });
+
+  it("keeps a live tool result the durable history does not have", () => {
+    const persisted = [p("1", "user", "a")];
+    const extra = { id: "t9", role: "tool", toolCallId: "new-call", content: "{}" };
+    expect(reconcileSavedHistory(persisted, [extra])).toEqual([persisted[0], extra]);
+  });
+
   it("an empty live view returns exactly the durable history", () => {
     const persisted = [p("1", "user", "a")];
     expect(reconcileSavedHistory(persisted, [])).toEqual(persisted);
@@ -171,20 +196,24 @@ describe("reconcileSavedHistory", () => {
 });
 
 describe("mapSavedThreadHistory — repeats already saved before the fix", () => {
-  const at = (n: number) => new Date(Date.UTC(2026, 9, 1, 0, 0, n)).toISOString();
-  const r = (id: string, role: string, t: string, n: number) => row(id, role, text(t), at(n));
+  // Measured on a pre-fix preview: re-saved copies were written 1-3 ms apart; a
+  // genuine question and its answer were 1.6-1.9 s apart.
+  const t0 = Date.UTC(2026, 9, 1, 12, 0, 0);
+  const r = (id: string, role: string, t: string, ms: number) =>
+    row(id, role, text(t), new Date(t0 + ms).toISOString());
   const shown = (rows: SavedThreadMessageRow[]) =>
     mapSavedThreadHistory(rows).map((m) => `${m.role}:${"content" in m ? m.content : ""}`);
 
   it("2-message chat saved as q1 a1 q1 a1 q2 a2 shows each message once", () => {
     expect(
       shown([
-        r("1", "user", "q1", 1),
-        r("2", "assistant", "a1", 2),
-        r("3", "user", "q1", 3),
-        r("4", "assistant", "a1", 4),
-        r("5", "user", "q2", 5),
-        r("6", "assistant", "a2", 6),
+        r("1", "user", "q1", 0),
+        r("2", "assistant", "a1", 1_900),
+        // turn 2: the earlier turn is re-saved in one batch, then the new question
+        r("3", "user", "q1", 5_000),
+        r("4", "assistant", "a1", 5_001),
+        r("5", "user", "q2", 5_002),
+        r("6", "assistant", "a2", 7_000),
       ]),
     ).toEqual(["user:q1", "assistant:a1", "user:q2", "assistant:a2"]);
   });
@@ -192,10 +221,10 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
   it("3-message chat with the whole history re-saved at every turn shows each message once", () => {
     expect(
       shown([
-        r("1", "user", "q1", 1), r("2", "assistant", "a1", 2),
-        r("3", "user", "q1", 3), r("4", "assistant", "a1", 4), r("5", "user", "q2", 5), r("6", "assistant", "a2", 6),
-        r("7", "user", "q1", 7), r("8", "assistant", "a1", 8), r("9", "user", "q2", 9), r("10", "assistant", "a2", 10),
-        r("11", "user", "q3", 11), r("12", "assistant", "a3", 12),
+        r("1", "user", "q1", 0), r("2", "assistant", "a1", 1_900),
+        r("3", "user", "q1", 5_000), r("4", "assistant", "a1", 5_001), r("5", "user", "q2", 5_002), r("6", "assistant", "a2", 7_000),
+        r("7", "user", "q1", 12_000), r("8", "assistant", "a1", 12_001), r("9", "user", "q2", 12_002), r("10", "assistant", "a2", 12_003),
+        r("11", "user", "q3", 12_004), r("12", "assistant", "a3", 14_000),
       ]),
     ).toEqual(["user:q1", "assistant:a1", "user:q2", "assistant:a2", "user:q3", "assistant:a3"]);
   });
@@ -203,27 +232,48 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
   it("a person who genuinely repeats themselves is not collapsed", () => {
     expect(
       shown([
-        r("1", "user", "ok", 1),
-        r("2", "assistant", "first answer", 2),
-        r("3", "user", "ok", 3),
-        r("4", "assistant", "second answer", 4),
+        r("1", "user", "ok", 0),
+        r("2", "assistant", "first answer", 1_800),
+        r("3", "user", "ok", 9_000),
+        r("4", "assistant", "second answer", 10_800),
       ]),
     ).toEqual(["user:ok", "assistant:first answer", "user:ok", "assistant:second answer"]);
   });
 
+  it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
+    expect(
+      shown([
+        r("1", "user", "What time is it?", 0),
+        r("2", "assistant", "3pm", 1_700),
+        r("3", "user", "What time is it?", 30_000),
+        r("4", "assistant", "3pm", 31_600),
+      ]),
+    ).toEqual(["user:What time is it?", "assistant:3pm", "user:What time is it?", "assistant:3pm"]);
+  });
+
+  it("an unreadable write time keeps the message rather than hiding it", () => {
+    const out = mapSavedThreadHistory([
+      { id: "1", role: "user", content: JSON.stringify(text("q")), createdAt: "not a date" },
+      { id: "2", role: "assistant", content: JSON.stringify(text("a")), createdAt: "not a date" },
+      { id: "3", role: "user", content: JSON.stringify(text("q")), createdAt: "not a date" },
+      { id: "4", role: "assistant", content: JSON.stringify(text("a")), createdAt: "not a date" },
+    ]);
+    expect(out).toHaveLength(4);
+  });
+
   it("a repeated tool turn drops its tool result with it, leaving none orphaned", () => {
-    const call = (id: string, tc: string, n: number) =>
+    const call = (id: string, tc: string, ms: number) =>
       row(id, "assistant", {
         format: 2,
         parts: [
           { type: "tool-invocation", toolInvocation: { state: "result", toolCallId: tc, toolName: "searchRentalsTool", args: { q: "x" }, result: { items: [1] } } },
           { type: "text", text: "Found one." },
         ],
-      }, at(n));
+      }, new Date(t0 + ms).toISOString());
     const out = mapSavedThreadHistory([
-      r("1", "user", "laureles", 1), call("2", "tc1", 2),
-      r("3", "user", "laureles", 3), call("4", "tc1", 4),
-      r("5", "user", "parking?", 5), r("6", "assistant", "yes", 6),
+      r("1", "user", "laureles", 0), call("2", "tc1", 1_900),
+      r("3", "user", "laureles", 5_000), call("4", "tc1", 5_001),
+      r("5", "user", "parking?", 5_002), r("6", "assistant", "yes", 7_000),
     ]);
     expect(out.filter((m) => m.role === "tool")).toHaveLength(1);
     expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool", "user", "assistant"]);

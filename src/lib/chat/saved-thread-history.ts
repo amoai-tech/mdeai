@@ -144,15 +144,25 @@ export function mapSavedThreadHistory(
 
   const seen = new Set<string>();
   const mapped: SavedThreadMessage[] = [];
+  const writtenAt: number[] = [];
   for (const row of newest) {
+    const at = Date.parse(String(row.createdAt ?? ""));
     for (const message of mapSavedThreadRow(row) ?? []) {
       if (seen.has(message.id)) continue;
       seen.add(message.id);
       mapped.push(message);
+      writtenAt.push(at);
     }
   }
-  return dropRepeatedTurns(mapped);
+  return dropRepeatedTurns(mapped, writtenAt);
 }
+
+/**
+ * Two messages written within this window were saved in one batch. Measured on a
+ * pre-fix preview: re-saved copies were written 1-3 ms apart, while a genuine
+ * question and its answer were 1.6-1.9 s apart (the model's latency).
+ */
+const SAME_BATCH_MS = 500;
 
 /** What makes two stored messages "the same message", ignoring their ids. */
 function messageKey(m: SavedThreadMessage): string {
@@ -169,22 +179,29 @@ function messageKey(m: SavedThreadMessage): string {
  *
  * Before SAN-1389 each message re-saved the whole earlier conversation under new
  * ids, so a chat reads q1 a1 q1 a1 q2 a2. A message is a repeat when an earlier
- * one has the same role and text AND the same neighbour on at least one side.
- * Re-saved turns arrive as whole blocks, so their neighbours match; someone who
- * genuinely says "ok" twice has different answers around each, so both stay.
- * A tool result whose assistant message was dropped goes with it.
+ * one has the same role and text, AND its neighbour on one side matches the
+ * earlier one's neighbour, AND the two neighbours were written in the same batch
+ * (within `SAME_BATCH_MS`). The batch test is what separates a re-saved copy from
+ * a person who really asks the same thing twice and gets the same answer: those
+ * are seconds apart. A write time that cannot be read counts as "not the same
+ * batch", so the message is kept. A tool result whose assistant message was
+ * dropped goes with it.
  */
-function dropRepeatedTurns(messages: SavedThreadMessage[]): SavedThreadMessage[] {
+function dropRepeatedTurns(
+  messages: SavedThreadMessage[],
+  writtenAt: readonly number[],
+): SavedThreadMessage[] {
   const keys = messages.map(messageKey);
-  const firstAt = new Map<string, number[]>();
+  const sameBatch = (a: number, b: number) => Math.abs(writtenAt[a] - writtenAt[b]) <= SAME_BATCH_MS;
+  const seenAt = new Map<string, number[]>();
   const keep = messages.map((_, i) => {
-    const earlier = firstAt.get(keys[i]) ?? [];
+    const earlier = seenAt.get(keys[i]) ?? [];
     const repeat = earlier.some(
       (j) =>
-        (i > 0 && j > 0 && keys[i - 1] === keys[j - 1]) ||
-        (i < keys.length - 1 && j < keys.length - 1 && keys[i + 1] === keys[j + 1]),
+        (i > 0 && j > 0 && keys[i - 1] === keys[j - 1] && sameBatch(i, i - 1)) ||
+        (i < keys.length - 1 && j < keys.length - 1 && keys[i + 1] === keys[j + 1] && sameBatch(i, i + 1)),
     );
-    firstAt.set(keys[i], [...earlier, i]);
+    seenAt.set(keys[i], [...earlier, i]);
     return !repeat;
   });
 
@@ -195,7 +212,15 @@ function dropRepeatedTurns(messages: SavedThreadMessage[]): SavedThreadMessage[]
   return kept.filter((m) => m.role !== "tool" || liveCalls.has(m.toolCallId));
 }
 
-type LiveMessage = { id: string; role: string; content?: unknown };
+type LiveMessage = { id: string; role: string; content?: unknown; toolCalls?: unknown; toolCallId?: unknown };
+
+/** Tool call ids a live assistant message makes, if any. */
+function liveToolCallIds(m: LiveMessage): string[] {
+  if (!Array.isArray(m.toolCalls)) return [];
+  return m.toolCalls.flatMap((c) =>
+    c && typeof c === "object" && typeof (c as { id?: unknown }).id === "string" ? [(c as { id: string }).id] : [],
+  );
+}
 
 /**
  * Merge what CopilotKit already holds for this thread into the durable history.
@@ -203,9 +228,12 @@ type LiveMessage = { id: string; role: string; content?: unknown };
  * The database history is the authoritative base. A warm CopilotKit replay can
  * be PARTIAL (only the last turns), so it must never decide that history is
  * complete. A live message is kept only if it adds something the durable
- * history does not have: its id is unknown AND no durable message of the same
- * role carries the same text (the same turn can reach us under a different id
- * from each side). Kept extras come after the durable messages, in live order.
+ * history does not have. The same turn can reach us under a different id from
+ * each side, so a live message is a duplicate when its id is known, or:
+ *  - user/assistant text: a durable message of the same role has the same text;
+ *  - a tool call or tool result: its tool call id is one the durable history
+ *    already has (tool call ids come from the model and are the same on both sides).
+ * Kept extras come after the durable messages, in live order.
  *
  * Called once, at install time, when every live message is a replay of the
  * past, so a repeated "yes" is never dropped for being new.
@@ -215,6 +243,9 @@ export function reconcileSavedHistory<T extends LiveMessage>(
   live: readonly T[],
 ): Array<SavedThreadMessage | T> {
   const ids = new Set(persisted.map((m) => m.id));
+  const callIds = new Set(
+    persisted.flatMap((m) => (m.role === "assistant" && m.toolCalls ? m.toolCalls.map((c) => c.id) : [])),
+  );
   const turns = new Set(
     persisted.flatMap((m) =>
       (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content
@@ -224,7 +255,10 @@ export function reconcileSavedHistory<T extends LiveMessage>(
   );
   const extras = live.filter((m) => {
     if (ids.has(m.id)) return false;
-    if (typeof m.content === "string" && turns.has(`${m.role}\u0000${m.content}`)) return false;
+    if (m.role === "tool") return !(typeof m.toolCallId === "string" && callIds.has(m.toolCallId));
+    const calls = liveToolCallIds(m);
+    if (calls.length > 0 && calls.some((id) => callIds.has(id))) return false;
+    if (typeof m.content === "string" && m.content && turns.has(`${m.role}\u0000${m.content}`)) return false;
     return true;
   });
   return [...persisted, ...extras];

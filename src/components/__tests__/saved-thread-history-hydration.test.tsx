@@ -259,7 +259,7 @@ describe("saved chat history", () => {
       agent.isRunning = true; // agent/connect stays in flight
       await act(async () => requests[A].resolve(msgs("A")));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(9_000);
+        await vi.advanceTimersByTimeAsync(29_000);
       });
       expect(agent.setMessages).not.toHaveBeenCalled();
       expect(seen.history.status).toBe("loading");
@@ -286,6 +286,30 @@ describe("saved chat history", () => {
     await act(async () => agent.finishRun());
     await tick();
     expect(agent.messages).toEqual(msgs("A"));
+  });
+
+  it("Retry after a timeout waits for the still-running reconnect, then installs", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await select(A);
+      await act(async () => requests[A].resolve(msgs("A")));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(31_000);
+      });
+      expect(seen.history.status).toBe("error");
+      expect(agent.isRunning).toBe(true); // still reconnecting
+
+      await act(async () => seen.history.retry());
+      expect(seen.history.status).toBe("loading");
+      await act(async () => requests[A].resolve(msgs("A")));
+      expect(agent.setMessages).not.toHaveBeenCalled(); // waits again, does not fail at once
+
+      await act(async () => agent.finishRun());
+      expect(agent.messages).toEqual(msgs("A"));
+      expect(seen.history.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("failure shows an error (not an empty chat) and Retry loads it", async () => {

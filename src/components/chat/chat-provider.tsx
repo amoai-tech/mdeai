@@ -22,8 +22,12 @@ import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
-/** Longest we wait for CopilotKit's own reconnect before replaying history. */
-const RECONNECT_SETTLE_TIMEOUT_MS = 10_000;
+/**
+ * Longest we wait for CopilotKit's own reconnect before showing the retryable
+ * error. Generous on purpose: a cold serverless start plus Mastra setup can take
+ * several seconds, and a spurious error is worse than a longer "Loading…".
+ */
+const RECONNECT_SETTLE_TIMEOUT_MS = 30_000;
 
 type SavedHistoryValue = {
   /** `idle` = nothing to wait for (fresh chat, or history is in place). */
@@ -126,7 +130,15 @@ function SavedThreadHistory({
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
         const body = (await res.json()) as { messages?: SavedThreadMessage[] };
-        const settled = await connect.current;
+        // First attempt: the watch started when the chat opened. A Retry cannot
+        // reuse a finished (timed-out) watch, so it waits again if the reconnect
+        // is still running, and carries on if it has ended.
+        const settled =
+          attempt === 0
+            ? await connect.current
+            : agent.isRunning
+              ? await watchConnectCycle(agent, signal)
+              : "done";
         if (settled === "aborted" || signal.aborted || agent.threadId !== threadId) return;
         // Timed out and still reconnecting: do not install into a moving agent.
         if (settled === "timeout" && agent.isRunning) throw new Error("reconnect did not finish");

@@ -127,8 +127,9 @@ async function openConcierge(page: Page) {
       await gotoConcierge(page);
       return;
     } catch (error) {
+      // Only ever on a preview: on production a crash page must fail the test.
       const crashed = await page.getByText("This page couldn\u2019t load").isVisible().catch(() => false);
-      if (!crashed || attempt >= 4) throw error;
+      if (!isVercelPreview || !crashed || attempt >= 4) throw error;
     }
   }
 }
@@ -348,13 +349,16 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
       const admin = await getSupabaseAdmin();
       const threadId = randomUUID();
       const word = `legacy${randomUUID().slice(0, 6)}`;
-      const turn = (n: number, role: "user" | "assistant", text: string) => ({
+      // Timing measured on a pre-fix preview: a re-saved earlier turn is written in
+      // one batch (1-3 ms apart); a genuine question and answer are ~1.8 s apart.
+      const base = Date.now() - 600_000;
+      const turn = (ms: number, role: "user" | "assistant", text: string) => ({
         id: randomUUID(),
         thread_id: threadId,
         resourceId: legacy.userId,
         role,
         type: "v2",
-        createdAt: new Date(Date.now() - 600_000 + n * 1_000).toISOString().replace("Z", ""),
+        createdAt: new Date(base + ms).toISOString().replace("Z", ""),
         content: JSON.stringify({ format: 2, parts: [{ type: "text", text }] }),
       });
       const q1 = `Remember the word ${word}`;
@@ -371,8 +375,8 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
       });
       if (inserted.error) throw new Error(`seed thread: ${inserted.error.message}`);
       const rows = [
-        turn(1, "user", q1), turn(2, "assistant", a1),
-        turn(3, "user", q1), turn(4, "assistant", a1), turn(5, "user", q2), turn(6, "assistant", a2),
+        turn(0, "user", q1), turn(1_900, "assistant", a1),
+        turn(5_000, "user", q1), turn(5_001, "assistant", a1), turn(5_002, "user", q2), turn(7_000, "assistant", a2),
       ];
       const seeded = await admin.from("mastra_messages").insert(rows);
       if (seeded.error) throw new Error(`seed messages: ${seeded.error.message}`);

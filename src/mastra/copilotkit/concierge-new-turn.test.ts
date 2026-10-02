@@ -52,6 +52,11 @@ describe("trimToNewestTurn", () => {
     expect(trimToNewestTurn(resume)).toBe(resume);
   });
 
+  it("leaves any run that does not end on a user message untouched, so context is never lost", () => {
+    const endsOnAssistant = input([u("1", "q1"), a("2", "a1")]);
+    expect(trimToNewestTurn(endsOnAssistant)).toBe(endsOnAssistant);
+  });
+
   it("keeps the rest of the run input", () => {
     const out = trimToNewestTurn({ ...input([u("1", "q1"), a("2", "a1"), u("3", "q2")]), state: { k: 1 } });
     expect(out.state).toEqual({ k: 1 });
