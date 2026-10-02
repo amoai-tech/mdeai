@@ -235,7 +235,11 @@ describe("PATCH /api/host/rentals/viewings/[id] — SAN-1206", () => {
         expect(response.status).toBe(200);
         expect(state.calls[0].args.p_new_scheduled_at).toBe("2099-11-21T20:00:00.000Z");
       } finally {
-        process.env.TZ = original;
+        if (original === undefined) {
+          delete process.env.TZ;
+        } else {
+          process.env.TZ = original;
+        }
       }
     });
   });
