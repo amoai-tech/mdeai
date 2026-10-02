@@ -30,6 +30,11 @@ class FakeAgent {
     this.finalizers.add(fn);
     return { unsubscribe: () => this.finalizers.delete(fn) };
   }
+  /** CopilotKit core connectAgent: a fresh restore clears the view, then the agent runs. */
+  beginConnect() {
+    this.messages = [];
+    this.isRunning = true;
+  }
   finishRun() {
     this.isRunning = false;
     [...this.finalizers].forEach((f) => f());
@@ -70,14 +75,16 @@ let container: HTMLDivElement;
 let root: Root;
 
 const tick = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-const select = async (id: string | undefined) => {
+/** CopilotChat pins the thread on the shared agent and (async) starts agent/connect. */
+const select = async (id: string | undefined, opts: { connect?: boolean } = {}) => {
   await act(async () => {
     if (id === undefined) seen.nav.clearActiveThread();
     else {
-      agent.threadId = id; // CopilotChat pins the thread on the shared agent
+      agent.threadId = id;
       seen.nav.setActiveThreadId(id);
     }
   });
+  if (id !== undefined && opts.connect !== false) agent.beginConnect();
 };
 
 beforeEach(async () => {
@@ -131,6 +138,27 @@ describe("saved chat history", () => {
 
     await act(async () => requests[A].resolve(msgs("A")));
     await tick();
+    expect(agent.setMessages).not.toHaveBeenCalled(); // CopilotKit is still connecting
+    expect(seen.history.status).toBe("loading");
+
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("history that arrives BEFORE CopilotKit starts connecting is not wiped by it", async () => {
+    // The real cold reopen: the fetch can win the race, and connectAgent then
+    // clears the view as it starts. Watching "is it running right now" would have
+    // installed at once and lost the messages.
+    await select(A, { connect: false });
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    expect(agent.setMessages).not.toHaveBeenCalled();
+
+    agent.beginConnect(); // wipes the view, as CopilotKit's core does
+    await act(async () => agent.finishRun());
+    await tick();
     expect(agent.messages).toEqual(msgs("A"));
     expect(seen.history.status).toBe("idle");
   });
@@ -149,6 +177,7 @@ describe("saved chat history", () => {
     expect(lateA.signal.aborted).toBe(true);
 
     await act(async () => requests[B].resolve(msgs("B")));
+    await act(async () => agent.finishRun());
     await tick();
     expect(agent.messages).toEqual(msgs("B"));
 
@@ -266,6 +295,7 @@ describe("saved chat history", () => {
     expect(seen.history.status).toBe("error");
     expect(agent.setMessages).not.toHaveBeenCalled();
 
+    await act(async () => agent.finishRun()); // the reconnect itself did finish
     await act(async () => seen.history.retry());
     expect(seen.history.status).toBe("loading");
     await act(async () => requests[A].resolve(msgs("A")));

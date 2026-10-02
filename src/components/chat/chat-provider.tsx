@@ -12,6 +12,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -40,19 +41,19 @@ export function useSavedThreadHistory(): SavedHistoryValue {
   return useContext(SavedHistoryContext);
 }
 
+type ConnectOutcome = "done" | "timeout" | "aborted";
+
 /**
- * Waits until CopilotKit's own reconnect has finished (the agent is not
- * running). A timeout is a separate outcome, NOT "finished": installing into an
- * agent that is still reconnecting could be overwritten or duplicated later.
+ * Watches CopilotKit's own `agent/connect` for this thread, from the moment the
+ * chat opens. Not "is the agent running right now": `connectAgent` starts
+ * asynchronously and clears the view when it begins, so a check made before it
+ * starts would pass too early and the install would be wiped. A timeout is a
+ * separate outcome, never "done".
  */
-function waitForAgentIdle(
-  agent: AbstractAgent,
-  signal: AbortSignal,
-): Promise<"idle" | "timeout" | "aborted"> {
+function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<ConnectOutcome> {
   return new Promise((resolve) => {
     if (signal.aborted) return resolve("aborted");
-    if (!agent.isRunning) return resolve("idle");
-    const finish = (outcome: "idle" | "timeout" | "aborted") => {
+    const finish = (outcome: ConnectOutcome) => {
       clearTimeout(timer);
       subscription.unsubscribe();
       signal.removeEventListener("abort", onAbort);
@@ -60,8 +61,8 @@ function waitForAgentIdle(
     };
     const onAbort = () => finish("aborted");
     const subscription = agent.subscribe({
-      onRunFinalized: () => finish("idle"),
-      onRunFailed: () => finish("idle"),
+      onRunFinalized: () => finish("done"),
+      onRunFailed: () => finish("done"),
     });
     const timer = setTimeout(() => finish("timeout"), RECONNECT_SETTLE_TIMEOUT_MS);
     signal.addEventListener("abort", onAbort);
@@ -73,9 +74,10 @@ function waitForAgentIdle(
  *
  * Ordering is the whole point:
  * 1. fetch the owner-checked history (`/api/threads/[id]/messages`);
- * 2. wait for CopilotKit's own `agent/connect` for this thread to finish — on a
- *    warm server it already replays this thread, and installing first would
- *    show every message twice;
+ * 2. wait for CopilotKit's own `agent/connect` for this thread to finish. It
+ *    clears the view when it starts, and on a warm server it replays this
+ *    thread, so installing earlier would be wiped or shown twice. The wait is
+ *    started when the chat opens, not when the fetch returns;
  * 3. only then install, and only if the thread is still the selected one. The
  *    durable history is the base and anything CopilotKit already holds is
  *    reconciled into it (a warm replay may be partial), so every message shows
@@ -98,6 +100,18 @@ function SavedThreadHistory({
     failed: boolean;
   } | null>(null);
 
+  // Watch the reconnect from the moment this thread (and agent) is selected.
+  // Declared before the fetch effect so the subscription exists before CopilotKit
+  // starts connecting; a Retry reuses it rather than waiting for a connect that
+  // will not happen again.
+  const connect = useRef<Promise<ConnectOutcome>>(Promise.resolve("done"));
+  useEffect(() => {
+    if (!agent) return;
+    const controller = new AbortController();
+    connect.current = watchConnectCycle(agent, controller.signal);
+    return () => controller.abort();
+  }, [agent, threadId]);
+
   useEffect(() => {
     if (!agent) return;
     const controller = new AbortController();
@@ -112,9 +126,10 @@ function SavedThreadHistory({
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
         const body = (await res.json()) as { messages?: SavedThreadMessage[] };
-        const settled = await waitForAgentIdle(agent, signal);
+        const settled = await connect.current;
         if (settled === "aborted" || signal.aborted || agent.threadId !== threadId) return;
-        if (settled === "timeout") throw new Error("reconnect did not finish");
+        // Timed out and still reconnecting: do not install into a moving agent.
+        if (settled === "timeout" && agent.isRunning) throw new Error("reconnect did not finish");
         if (body.messages?.length) {
           const merged = reconcileSavedHistory(body.messages, agent.messages);
           // A warm replay that already matches is left as CopilotKit's own.
