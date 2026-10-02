@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
   mapSavedThreadHistory,
+  reconcileSavedHistory,
   type SavedThreadMessageRow,
 } from "@/lib/chat/saved-thread-history";
 
@@ -67,6 +68,29 @@ describe("mapSavedThreadHistory", () => {
     ]);
   });
 
+  it("a real stored assistant row: keeps text and the tool result, ignores MDE data-* parts", () => {
+    const out = mapSavedThreadHistory([
+      row("a1", "assistant", {
+        format: 2,
+        parts: [
+          { type: "step-start" },
+          {
+            type: "tool-invocation",
+            toolInvocation: { state: "result", toolCallId: "tc9", toolName: "searchEventsTool", args: {}, result: { events: [] } },
+          },
+          { type: "data-mdeai-actions", data: { kind: "event_results", cards: [{ id: "e1" }] } },
+          { type: "data-workspace-metadata", data: { sessionId: "s1" } },
+          { type: "text", text: "Two salsa nights this weekend." },
+        ],
+      }),
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ role: "assistant", content: "Two salsa nights this weekend." });
+    expect(JSON.stringify(out)).not.toContain("event_results");
+    expect(JSON.stringify(out)).not.toContain("sessionId");
+    expect(out[1]).toMatchObject({ role: "tool", toolCallId: "tc9" });
+  });
+
   it("drops an unfinished tool call (no result to pair with)", () => {
     const out = mapSavedThreadHistory([
       row("a1", "assistant", {
@@ -117,5 +141,31 @@ describe("mapSavedThreadHistory", () => {
   it("never emits the same id twice", () => {
     const out = mapSavedThreadHistory([row("x", "user", text("a")), row("x", "user", text("a"))]);
     expect(out).toHaveLength(1);
+  });
+});
+
+describe("reconcileSavedHistory", () => {
+  const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
+
+  it("durable history is the base; a partial live replay adds nothing", () => {
+    const persisted = [p("1", "user", "a"), p("2", "assistant", "b"), p("3", "user", "c")];
+    expect(reconcileSavedHistory(persisted, [persisted[2]])).toEqual(persisted);
+  });
+
+  it("drops a live copy of the same turn that arrived under another id", () => {
+    const persisted = [p("1", "user", "a"), p("2", "assistant", "b")];
+    const live = [p("x", "user", "a"), p("y", "assistant", "b")];
+    expect(reconcileSavedHistory(persisted, live)).toEqual(persisted);
+  });
+
+  it("keeps a live message the durable history does not have, after it", () => {
+    const persisted = [p("1", "user", "a")];
+    const extra = p("n", "assistant", "late reply");
+    expect(reconcileSavedHistory(persisted, [p("x", "user", "a"), extra])).toEqual([persisted[0], extra]);
+  });
+
+  it("an empty live view returns exactly the durable history", () => {
+    const persisted = [p("1", "user", "a")];
+    expect(reconcileSavedHistory(persisted, [])).toEqual(persisted);
   });
 });

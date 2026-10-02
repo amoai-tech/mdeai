@@ -187,6 +187,68 @@ describe("saved chat history", () => {
     expect(seen.history.status).toBe("idle");
   });
 
+  it("Guard 2 · a PARTIAL warm replay is completed from the durable history, each message once", async () => {
+    const full: Msg[] = [
+      { id: "A1", role: "user", content: "Laureles" },
+      { id: "A2", role: "assistant", content: "rentals" },
+      { id: "A3", role: "user", content: "which has parking?" },
+      { id: "A4", role: "assistant", content: "the second" },
+    ];
+    await select(A);
+    agent.isRunning = true;
+    await act(async () => requests[A].resolve(full));
+    await tick();
+
+    agent.messages = full.slice(2); // the warm runner only remembers turns 3-4
+    await act(async () => agent.finishRun());
+    await tick();
+
+    expect(agent.messages.map((m) => m.id)).toEqual(["A1", "A2", "A3", "A4"]);
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("Guard 2 · a warm replay under DIFFERENT ids is not shown twice", async () => {
+    await select(A);
+    agent.isRunning = true;
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+
+    agent.messages = [
+      { id: "agui-1", role: "user", content: "A question" },
+      { id: "agui-2", role: "assistant", content: "A answer" },
+    ];
+    await act(async () => agent.finishRun());
+    await tick();
+
+    expect(agent.messages).toEqual(msgs("A"));
+  });
+
+  it("a reconnect that never finishes is NOT treated as finished: nothing is installed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await select(A);
+      agent.isRunning = true; // agent/connect stays in flight
+      await act(async () => requests[A].resolve(msgs("A")));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9_000);
+      });
+      expect(agent.setMessages).not.toHaveBeenCalled();
+      expect(seen.history.status).toBe("loading");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(agent.setMessages).not.toHaveBeenCalled(); // timeout is not "done"
+      expect(seen.history.status).toBe("error");
+
+      // The reconnect finishing later does not make the failed load install.
+      await act(async () => agent.finishRun());
+      expect(agent.setMessages).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("installs after a cold reconnect that replayed nothing", async () => {
     await select(A);
     agent.isRunning = true;

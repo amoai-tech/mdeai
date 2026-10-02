@@ -7,6 +7,13 @@
  * crosses this boundary: id, role, text, and completed tool calls (so
  * tool-rendered cards still show). Raw rows, metadata and provider data never do.
  *
+ * Deliberately NOT replayed: the custom `data-*` parts Mastra also stores
+ * (`data-mdeai-actions`, `data-workspace-metadata`), reasoning, sources and
+ * step markers. Nothing in the current client reads `data-mdeai-actions`; result
+ * cards are drawn from tool calls (`useRenderTool`, keyed by tool name), which
+ * ARE replayed. A reopened chat therefore restores the conversation and its
+ * tool-result cards, not transient workspace metadata.
+ *
  * Pure on purpose: it is shared by the API route and unit tests, and a row it
  * cannot read is skipped rather than failing the whole conversation.
  */
@@ -145,4 +152,39 @@ export function mapSavedThreadHistory(
     }
   }
   return out;
+}
+
+type LiveMessage = { id: string; role: string; content?: unknown };
+
+/**
+ * Merge what CopilotKit already holds for this thread into the durable history.
+ *
+ * The database history is the authoritative base. A warm CopilotKit replay can
+ * be PARTIAL (only the last turns), so it must never decide that history is
+ * complete. A live message is kept only if it adds something the durable
+ * history does not have: its id is unknown AND no durable message of the same
+ * role carries the same text (the same turn can reach us under a different id
+ * from each side). Kept extras come after the durable messages, in live order.
+ *
+ * Called once, at install time, when every live message is a replay of the
+ * past, so a repeated "yes" is never dropped for being new.
+ */
+export function reconcileSavedHistory<T extends LiveMessage>(
+  persisted: readonly SavedThreadMessage[],
+  live: readonly T[],
+): Array<SavedThreadMessage | T> {
+  const ids = new Set(persisted.map((m) => m.id));
+  const turns = new Set(
+    persisted.flatMap((m) =>
+      (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content
+        ? [`${m.role}\u0000${m.content}`]
+        : [],
+    ),
+  );
+  const extras = live.filter((m) => {
+    if (ids.has(m.id)) return false;
+    if (typeof m.content === "string" && turns.has(`${m.role}\u0000${m.content}`)) return false;
+    return true;
+  });
+  return [...persisted, ...extras];
 }

@@ -15,7 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { SavedThreadMessage } from "@/lib/chat/saved-thread-history";
+import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
@@ -40,22 +40,31 @@ export function useSavedThreadHistory(): SavedHistoryValue {
   return useContext(SavedHistoryContext);
 }
 
-/** Resolves once the agent is not running (CopilotKit's /connect has settled). */
-function waitForAgentIdle(agent: AbstractAgent, signal: AbortSignal): Promise<void> {
+/**
+ * Waits until CopilotKit's own reconnect has finished (the agent is not
+ * running). A timeout is a separate outcome, NOT "finished": installing into an
+ * agent that is still reconnecting could be overwritten or duplicated later.
+ */
+function waitForAgentIdle(
+  agent: AbstractAgent,
+  signal: AbortSignal,
+): Promise<"idle" | "timeout" | "aborted"> {
   return new Promise((resolve) => {
-    if (!agent.isRunning) return resolve();
-    const done = () => {
+    if (signal.aborted) return resolve("aborted");
+    if (!agent.isRunning) return resolve("idle");
+    const finish = (outcome: "idle" | "timeout" | "aborted") => {
       clearTimeout(timer);
       subscription.unsubscribe();
-      signal.removeEventListener("abort", done);
-      resolve();
+      signal.removeEventListener("abort", onAbort);
+      resolve(outcome);
     };
+    const onAbort = () => finish("aborted");
     const subscription = agent.subscribe({
-      onRunFinalized: done,
-      onRunFailed: done,
+      onRunFinalized: () => finish("idle"),
+      onRunFailed: () => finish("idle"),
     });
-    const timer = setTimeout(done, RECONNECT_SETTLE_TIMEOUT_MS);
-    signal.addEventListener("abort", done);
+    const timer = setTimeout(() => finish("timeout"), RECONNECT_SETTLE_TIMEOUT_MS);
+    signal.addEventListener("abort", onAbort);
   });
 }
 
@@ -67,9 +76,12 @@ function waitForAgentIdle(agent: AbstractAgent, signal: AbortSignal): Promise<vo
  * 2. wait for CopilotKit's own `agent/connect` for this thread to finish — on a
  *    warm server it already replays this thread, and installing first would
  *    show every message twice;
- * 3. only then install, and only if the thread is still the selected one and
- *    the view is empty. A late response for a chat Sofia has since left is
- *    dropped (abort + the `agent.threadId` check).
+ * 3. only then install, and only if the thread is still the selected one. The
+ *    durable history is the base and anything CopilotKit already holds is
+ *    reconciled into it (a warm replay may be partial), so every message shows
+ *    once. A late response for a chat Sofia has since left is dropped (abort +
+ *    the `agent.threadId` check). If the reconnect never finishes, history is
+ *    NOT installed: the chat shows the retryable error instead.
  */
 function SavedThreadHistory({
   threadId,
@@ -100,10 +112,15 @@ function SavedThreadHistory({
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
         const body = (await res.json()) as { messages?: SavedThreadMessage[] };
-        await waitForAgentIdle(agent, signal);
-        if (signal.aborted || agent.threadId !== threadId) return;
-        if (agent.messages.length === 0 && body.messages?.length) {
-          agent.setMessages(body.messages);
+        const settled = await waitForAgentIdle(agent, signal);
+        if (settled === "aborted" || signal.aborted || agent.threadId !== threadId) return;
+        if (settled === "timeout") throw new Error("reconnect did not finish");
+        if (body.messages?.length) {
+          const merged = reconcileSavedHistory(body.messages, agent.messages);
+          // A warm replay that already matches is left as CopilotKit's own.
+          const live = agent.messages;
+          const same = merged.length === live.length && merged.every((m, i) => m.id === live[i].id);
+          if (!same) agent.setMessages(merged as typeof live);
         }
       } catch {
         if (signal.aborted) return;
