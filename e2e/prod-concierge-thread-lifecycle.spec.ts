@@ -114,26 +114,6 @@ async function pathAfterClick(page: Page, click: () => Promise<void>): Promise<s
   return new URL(page.url()).pathname;
 }
 
-/**
- * Open /chat, reloading when the page shows its error screen.
- *
- * Preview-only: Google Maps rejects `*.vercel.app` hosts (RefererNotAllowedMapError)
- * and the map marker then crashes the page. Production is not affected. Remove
- * this once the Maps key's allowed websites include the preview hosts.
- */
-async function openConcierge(page: Page) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await gotoConcierge(page);
-      return;
-    } catch (error) {
-      // Only ever on a preview: on production a crash page must fail the test.
-      const crashed = await page.getByText("This page couldn\u2019t load").isVisible().catch(() => false);
-      if (!isVercelPreview || !crashed || attempt >= 4) throw error;
-    }
-  }
-}
-
 async function sendAndWait(page: Page, text: string) {
   await sendConciergeMessage(page, text);
   await waitForCopilotIdle(page, 120_000);
@@ -205,7 +185,7 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
     }
 
     // ── Reopen saved thread A ────────────────────────────────────────────────
-    await openConcierge(page);
+    await gotoConcierge(page);
     const savedA = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
     await expect(savedA, "thread A is listed in the rail").toBeVisible({ timeout: 30_000 });
     const afterOpen = await pathAfterClick(page, () => savedA.click());
