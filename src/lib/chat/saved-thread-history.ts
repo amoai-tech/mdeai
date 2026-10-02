@@ -143,15 +143,56 @@ export function mapSavedThreadHistory(
   const newest = ordered.slice(-limit);
 
   const seen = new Set<string>();
-  const out: SavedThreadMessage[] = [];
+  const mapped: SavedThreadMessage[] = [];
   for (const row of newest) {
     for (const message of mapSavedThreadRow(row) ?? []) {
       if (seen.has(message.id)) continue;
       seen.add(message.id);
-      out.push(message);
+      mapped.push(message);
     }
   }
-  return out;
+  return dropRepeatedTurns(mapped);
+}
+
+/** What makes two stored messages "the same message", ignoring their ids. */
+function messageKey(m: SavedThreadMessage): string {
+  if (m.role === "tool") return `tool\u0000${m.content}`;
+  const calls =
+    m.role === "assistant" && m.toolCalls
+      ? m.toolCalls.map((c) => `${c.function.name}(${c.function.arguments})`).join("|")
+      : "";
+  return `${m.role}\u0000${m.content}\u0000${calls}`;
+}
+
+/**
+ * Hide turns that were saved more than once (legacy rows; nothing is deleted).
+ *
+ * Before SAN-1389 each message re-saved the whole earlier conversation under new
+ * ids, so a chat reads q1 a1 q1 a1 q2 a2. A message is a repeat when an earlier
+ * one has the same role and text AND the same neighbour on at least one side.
+ * Re-saved turns arrive as whole blocks, so their neighbours match; someone who
+ * genuinely says "ok" twice has different answers around each, so both stay.
+ * A tool result whose assistant message was dropped goes with it.
+ */
+function dropRepeatedTurns(messages: SavedThreadMessage[]): SavedThreadMessage[] {
+  const keys = messages.map(messageKey);
+  const firstAt = new Map<string, number[]>();
+  const keep = messages.map((_, i) => {
+    const earlier = firstAt.get(keys[i]) ?? [];
+    const repeat = earlier.some(
+      (j) =>
+        (i > 0 && j > 0 && keys[i - 1] === keys[j - 1]) ||
+        (i < keys.length - 1 && j < keys.length - 1 && keys[i + 1] === keys[j + 1]),
+    );
+    firstAt.set(keys[i], [...earlier, i]);
+    return !repeat;
+  });
+
+  const kept = messages.filter((_, i) => keep[i]);
+  const liveCalls = new Set(
+    kept.flatMap((m) => (m.role === "assistant" && m.toolCalls ? m.toolCalls.map((c) => c.id) : [])),
+  );
+  return kept.filter((m) => m.role !== "tool" || liveCalls.has(m.toolCallId));
 }
 
 type LiveMessage = { id: string; role: string; content?: unknown };

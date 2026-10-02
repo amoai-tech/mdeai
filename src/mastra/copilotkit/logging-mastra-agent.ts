@@ -47,6 +47,28 @@ function sanitizeHostEventAgUiInput(input: RunAgentInput): RunAgentInput {
 }
 
 
+/**
+ * SAN-1389 — send the concierge only its newest turn.
+ *
+ * CopilotKit resends every on-screen message on each run, `@ag-ui/mastra`
+ * converts them to id-less Mastra messages, and Mastra stores them as new rows,
+ * so each message re-saved the whole earlier conversation (measured: after a
+ * 2nd message the 1st question and answer were stored again). The concierge's
+ * context lives in Mastra thread memory (`createThreadMemory`: last 20 messages
+ * plus working memory), so the newest user message is all it needs.
+ *
+ * Only a run that ENDS on a user message is trimmed. A run that ends on a tool
+ * result (a browser tool such as focusMapPin, or an approval answer) is
+ * continuing a turn and still needs the assistant tool call and its result, so
+ * it passes through untouched.
+ */
+export function trimToNewestTurn(input: RunAgentInput): RunAgentInput {
+  const messages = input.messages ?? [];
+  const last = messages[messages.length - 1];
+  if (messages.length <= 1 || last?.role !== "user") return input;
+  return { ...input, messages: [last] };
+}
+
 /** Route may wrap with next/server after(); scripts default to fire-and-forget. */
 export type PersistTurnLog = (opts: TurnLogInput) => void;
 
@@ -104,7 +126,9 @@ export class LoggingMastraAgent extends MastraAgent {
     const runInput =
       this.agentMapKey === "hostEventAgent"
         ? sanitizeHostEventAgUiInput(input)
-        : input;
+        : this.agentMapKey === "conciergeAgent"
+          ? trimToNewestTurn(input)
+          : input;
 
     // COST-001 — open a per-turn token sink. The wrapped Gemini model
     // (token-usage-middleware) writes usage here while the model runs inside
