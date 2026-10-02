@@ -126,6 +126,19 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       const expectedAgents = ["pingAgent", "conciergeAgent", "hostEventAgent", "hostOpsAgent"];
       expect(expectedAgents.filter((name) => !info.agents?.[name])).toEqual([]);
 
+      // SAN-1358 · D20: the runtime's own thread routes are closed even to a
+      // signed-in user. Read-only probe: the destructive `threads/clear` is
+      // covered by the route regression, never fired at a deployment.
+      const threadList = await page.request.post(route("/api/copilotkit"), {
+        maxRedirects: 0,
+        data: {
+          method: "resource/request",
+          params: { path: "/api/copilotkit/threads", httpMethod: "GET" },
+        },
+      });
+      expect(threadList.status(), "signed-in runtime thread list must be refused").toBe(403);
+      expect(await threadList.text()).not.toContain('"threads"');
+
       // The unique Vercel deployment hostname is intentionally not authorized for the
       // production Maps browser key. Certify the AI path directly here; the deeper
       // post-promotion smoke validates Maps and the full /chat UI on mdeai.co.
