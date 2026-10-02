@@ -11,6 +11,8 @@ function run(overrides = {}) {
     encoding: "utf8",
     env: {
       ...process.env,
+      VERCEL_DEPLOYMENT_ID: "dpl_AhQPocB7UYbzTgRHioYxN6sZH7p3",
+      VERCEL_DEPLOYMENT_REF: "main",
       VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app",
       VERCEL_DEPLOYMENT_SHA: head,
       VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB",
@@ -38,6 +40,17 @@ for (const [name, overrides] of [
   ["rejects wrong project id", { VERCEL_PROJECT_ID: "prj_attacker" }],
   ["rejects wrong project name", { VERCEL_PROJECT_NAME: "other" }],
   ["rejects preview environment", { VERCEL_ENVIRONMENT: "preview" }],
+  // SAN-1330: a production-target deployment from any other branch must never be certified or promoted.
+  ["rejects a non-main ref", { VERCEL_DEPLOYMENT_REF: "feature/not-main" }],
+  ["rejects a full-ref spelling of main (the payload sends the plain branch name)", { VERCEL_DEPLOYMENT_REF: "refs/heads/main" }],
+  ["rejects a main-lookalike branch", { VERCEL_DEPLOYMENT_REF: "main-evil" }],
+  ["rejects a missing ref", { VERCEL_DEPLOYMENT_REF: "" }],
+  // SAN-1330: the deployment ID is what gets promoted, so it must be a real Vercel ID.
+  ["rejects a missing deployment id", { VERCEL_DEPLOYMENT_ID: "" }],
+  ["rejects a malformed deployment id", { VERCEL_DEPLOYMENT_ID: "not-a-deployment" }],
+  ["rejects a deployment id with shell metacharacters", { VERCEL_DEPLOYMENT_ID: "dpl_abc; touch /tmp/pwned" }],
+  ["rejects a too-short deployment id", { VERCEL_DEPLOYMENT_ID: "dpl_123" }],
+  ["rejects a project id that only looks similar", { VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB-x" }],
 ]) {
   test(name, () => {
     const result = run(overrides);
@@ -51,4 +64,17 @@ test("rejects a valid-looking SHA that is not the checked-out candidate", () => 
   const result = run({ VERCEL_DEPLOYMENT_SHA: other });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /checked-out HEAD/i);
+});
+
+test("a missing deployment id is reported by name, never by silently passing", () => {
+  const env = { ...process.env, VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app", VERCEL_DEPLOYMENT_SHA: head, VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB", VERCEL_PROJECT_NAME: "mdeai", VERCEL_ENVIRONMENT: "production", VERCEL_DEPLOYMENT_REF: "main" };
+  delete env.VERCEL_DEPLOYMENT_ID;
+  const result = spawnSync(process.execPath, [validator], { encoding: "utf8", env });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /VERCEL_DEPLOYMENT_ID is required/);
+});
+
+test("accepts the real Vercel payload shape: plain 'main' and a dpl_ id", () => {
+  const result = run({ VERCEL_DEPLOYMENT_ID: "dpl_1234567890abcdefghijklmnopqrstuvwxyz", VERCEL_DEPLOYMENT_REF: "main" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
