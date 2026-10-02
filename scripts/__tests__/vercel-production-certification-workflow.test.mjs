@@ -30,14 +30,28 @@ function multilineRunBlocks(text) {
   return blocks;
 }
 
-/** Index of a step name, failing loudly when the step is missing. */
-function stepIndex(text, name) {
-  const index = text.indexOf(`- name: ${name}`);
-  assert.notEqual(index, -1, `workflow must still have a step named "${name}"`);
+/** The `certify` job only (the read-only credential-check job is separate). */
+function certifyJob(text) {
+  const start = text.indexOf("\n  certify:");
+  assert.notEqual(start, -1, "workflow must have a `certify` job");
+  return text.slice(start);
+}
+
+/** Index of a step name inside `scope`, failing loudly when the step is missing. */
+function stepIndex(scope, name) {
+  const index = scope.indexOf(`- name: ${name}`);
+  assert.notEqual(index, -1, `workflow must have a step named "${name}"`);
   return index;
 }
 
-test("uses the Vercel ready event and one blocking status context", () => {
+/** Text of one step: from its `- name:` to the next step. */
+function stepBody(scope, name) {
+  const from = stepIndex(scope, name);
+  const next = scope.indexOf("\n      - ", from + 1);
+  return scope.slice(from, next === -1 ? undefined : next);
+}
+
+test("uses the Vercel ready event and one diagnostic status context", () => {
   const text = workflow();
   assert.match(text, /vercel\.deployment\.ready/);
   assert.doesNotMatch(text, /vercel\.deployment\.success/);
@@ -47,73 +61,121 @@ test("uses the Vercel ready event and one blocking status context", () => {
   assert.match(text, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
   assert.match(text, /name:\s*production-certification/);
 
-  // SAN-1362: the block must be published explicitly, not delegated to the
-  // `actions/status` helper. That helper published a non-terminal `pending`,
-  // which did not hold: a35c60611 took the production alias at 23:51:42 while
-  // this context was still pending, and only reported success at 23:53:00.
   assert.doesNotMatch(
     text,
     new RegExp(`vercel/repository-dispatch/actions/status@${PIN}`),
     "the pending-publishing status helper must not come back",
   );
-  assert.match(text, /gh api "repos\/\$\{GITHUB_REPOSITORY\}\/statuses\/\$\{SHA\}"/);
+  // Exactly one status publication: the result, for the one gate context.
+  assert.equal(text.match(/-f context=/g)?.length, 1, "expected exactly one status publication");
   assert.match(text, /-f context=production-certification/);
-  // Exactly one status context, so nothing else can be mistaken for the gate.
-  assert.equal(
-    text.match(/-f context=/g)?.length,
-    2,
-    "expected exactly two status publications, both for the one gate context",
+});
+
+test("the old publish-failure-first race workaround is gone", () => {
+  // SAN-1330: protection is step ORDER, not status timing. A failure status published at the start
+  // of the run still lost a ~3.5 s race against alias assignment, so it must not be mistaken for the
+  // safety mechanism again.
+  const text = workflow();
+  assert.doesNotMatch(text, /Block promotion while certification is in flight/);
+  assert.doesNotMatch(text, /certification in flight — promotion blocked/);
+});
+
+test("promotion is explicit, uses the exact deployment id, and is a pinned CLI call", () => {
+  const job = certifyJob(workflow());
+  const promote = stepBody(job, "Promote the exact certified deployment");
+
+  assert.match(promote, /vercel@\$\{VERCEL_CLI_VERSION\}\" promote \"\$\{VERCEL_DEPLOYMENT_ID\}\"/);
+  assert.match(promote, /--scope "\$\{VERCEL_SCOPE\}"/);
+  assert.match(promote, /--token "\$\{VERCEL_TOKEN\}"/);
+  assert.match(workflow(), /VERCEL_CLI_VERSION:\s*"\d+\.\d+\.\d+"/, "the Vercel CLI must be pinned to an exact version");
+  assert.match(workflow(), /VERCEL_DEPLOYMENT_ID:\s*\$\{\{\s*github\.event\.client_payload\.id\s*\}\}/);
+
+  // Exactly one promotion command in the whole workflow, and never a domain or alias shortcut.
+  assert.equal(workflow().match(/\bpromote\b\s+"\$\{VERCEL_DEPLOYMENT_ID\}"/g)?.length, 1);
+  assert.doesNotMatch(workflow(), /vercel[^\n]*\balias\b/i, "no manual alias assignment path");
+  assert.doesNotMatch(workflow(), /--prod\b|--skip-domain/, "no second deployment path");
+});
+
+test("promotion cannot run after any failed step", () => {
+  const job = certifyJob(workflow());
+  const promote = stepBody(job, "Promote the exact certified deployment");
+
+  // GitHub's `success()` is false once any earlier step failed or was cancelled.
+  assert.match(promote, /if:\s*\$\{\{\s*success\(\)\s*&&\s*steps\.certify\.outcome == 'success'\s*\}\}/);
+  assert.doesNotMatch(promote, /always\(\)|failure\(\)|cancelled\(\)|continue-on-error/);
+
+  // No step before promotion may be allowed to fail silently.
+  const before = job.slice(0, stepIndex(job, "Promote the exact certified deployment"));
+  assert.doesNotMatch(before, /continue-on-error:\s*true/, "a step that may fail must not precede promotion");
+});
+
+test("order: validate, credential, names, staged, certify, publish, promote, verify", () => {
+  const job = certifyJob(workflow());
+  const order = [
+    "Checkout exact deployed commit",
+    "Validate Vercel candidate trust boundary",
+    "Verify the Vercel credential reaches the current team and project",
+    "Verify Production defines the required variable names",
+    "Confirm the candidate is staged",
+    "Certify exact staged candidate",
+    "Publish certification result",
+    "Promote the exact certified deployment",
+    "Verify www.mdeai.co serves the exact certified deployment",
+  ].map((name) => stepIndex(job, name));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
+});
+
+test("certification runs on the exact candidate URL, before and never after promotion", () => {
+  const job = certifyJob(workflow());
+  const certify = stepBody(job, "Certify exact staged candidate");
+  assert.match(certify, /PROD_SMOKE_BASE_URL: \$\{\{ env\.VERCEL_DEPLOYMENT_URL \}\}/);
+  assert.match(certify, /npm run test:e2e:prod-candidate-certification/);
+  assert.ok(
+    stepIndex(job, "Certify exact staged candidate") < stepIndex(job, "Promote the exact certified deployment"),
+    "certification must finish before promotion starts",
   );
 });
 
-test("fails closed before any fallible step", () => {
-  const text = workflow();
-
-  // The block must precede everything that can fail, or a failure in setup
-  // leaves the candidate promotable with no certification result.
-  const block = stepIndex(text, "Block promotion while certification is in flight");
-  const checkout = stepIndex(text, "Checkout exact deployed commit");
-  const validate = stepIndex(text, "Validate Vercel candidate trust boundary");
-  const certify = stepIndex(text, "Certify exact staged candidate");
-
-  assert.ok(block < checkout, "the block must be published before checkout can fail");
-  assert.ok(block < validate, "the block must be published before validation can fail");
-  assert.ok(block < certify, "the block must be published before certification runs");
-
-  const blockBody = text.slice(block, checkout);
-  assert.match(blockBody, /-f state=failure/, "the in-flight status must be a terminal failure");
-  assert.doesNotMatch(blockBody, /-f state=pending/, "a pending status is what failed to hold");
+test("publishes success only from the certification step's own outcome", () => {
+  const job = certifyJob(workflow());
+  const result = stepBody(job, "Publish certification result");
+  assert.match(result, /if: always\(\)/);
+  assert.match(result, /CERTIFY_OUTCOME: \$\{\{ steps\.certify\.outcome \}\}/);
+  assert.match(result, /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \]; then[\s\S]*?state=success/);
+  assert.match(result, /state=failure/, "any other outcome must publish failure");
+  assert.match(result, /-f target_url="\$\{RUN_URL\}"/, "the status must stay diagnosable");
 });
 
-test("publishes success only after the candidate identity is validated and certified", () => {
-  const text = workflow();
-
-  // `validate-vercel-deployment-event.mjs` is what proves the dispatch is a real
-  // MDE production event and that the SHA matches the checked-out HEAD. A forged
-  // dispatch must never be able to publish `success`, because `success` is what
-  // releases the production alias - so success may only come from the final step,
-  // which runs after both validation and the certification itself.
-  const validate = stepIndex(text, "Validate Vercel candidate trust boundary");
-  const certify = stepIndex(text, "Certify exact staged candidate");
-  const result = stepIndex(text, "Publish certification result");
-
-  assert.ok(validate < certify, "candidate identity must be validated before certifying");
-  assert.ok(certify < result, "the certification result must be published after certifying");
-
-  const resultBody = text.slice(result);
-  assert.match(resultBody, /if: always\(\)/);
-  assert.match(resultBody, /CERTIFY_OUTCOME: \$\{\{ steps\.certify\.outcome \}\}/);
-  assert.match(
-    resultBody,
-    /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \]; then[\s\S]*?state=success/,
-    "success must be gated on the certification step's own outcome",
-  );
-  assert.match(resultBody, /state=failure/, "any other outcome must republish failure");
+test("production is verified after promotion, and only if promotion succeeded", () => {
+  const job = certifyJob(workflow());
+  const verify = stepBody(job, "Verify www.mdeai.co serves the exact certified deployment");
+  assert.match(verify, /node scripts\/vercel-release-control\.mjs assert-promoted/);
+  assert.match(verify, /if:\s*\$\{\{\s*success\(\)\s*\}\}/);
 });
 
-test("passes dispatch data through environment variables and validates before tests", () => {
+test("the candidate is validated, credential-checked and confirmed staged before any test runs", () => {
+  const job = certifyJob(workflow());
+  const validate = stepBody(job, "Validate Vercel candidate trust boundary");
+  assert.match(validate, /node scripts\/validate-vercel-deployment-event\.mjs/);
+  assert.match(job, /node scripts\/vercel-release-control\.mjs credential/);
+  assert.match(job, /node scripts\/vercel-release-control\.mjs env-names/);
+  assert.match(job, /node scripts\/vercel-release-control\.mjs assert-staged/);
+  const certify = stepIndex(job, "Certify exact staged candidate");
+  for (const name of [
+    "Validate Vercel candidate trust boundary",
+    "Verify the Vercel credential reaches the current team and project",
+    "Verify Production defines the required variable names",
+    "Confirm the candidate is staged",
+  ]) {
+    assert.ok(stepIndex(job, name) < certify, `"${name}" must come before certification`);
+  }
+});
+
+test("passes dispatch data through environment variables, never interpolated into shell", () => {
   const text = workflow();
   for (const name of [
+    "VERCEL_DEPLOYMENT_ID",
+    "VERCEL_DEPLOYMENT_REF",
     "VERCEL_DEPLOYMENT_URL",
     "VERCEL_DEPLOYMENT_SHA",
     "VERCEL_PROJECT_ID",
@@ -122,25 +184,41 @@ test("passes dispatch data through environment variables and validates before te
   ]) {
     assert.match(text, new RegExp(`${name}:`));
   }
-  assert.match(text, /node scripts\/validate-vercel-deployment-event\.mjs/);
-  assert.match(text, /npm run test:e2e:prod-candidate-certification/);
-
-  // No dispatch payload interpolation inside shell blocks - that is the script
-  // injection seam this workflow deliberately avoids by passing the payload
-  // through `env:` instead.
+  assert.match(text, /VERCEL_DEPLOYMENT_REF:\s*\$\{\{\s*github\.event\.client_payload\.git\.ref\s*\}\}/);
   for (const block of multilineRunBlocks(text)) {
     assert.doesNotMatch(block, /github\.event\.client_payload/);
+    assert.doesNotMatch(block, /\$\{\{\s*secrets\./, "secrets go through env:, not shell interpolation");
   }
 });
 
-test("keeps every status publication diagnosable", () => {
+test("only the certify job can promote; the manual credential check is read-only", () => {
   const text = workflow();
-  const bodies = multilineRunBlocks(text).filter((block) => block.includes("/statuses/${SHA}"));
-  assert.equal(bodies.length, 2, "expected both status publications");
-  for (const block of bodies) {
-    // The candidate is a throwaway deployment URL; without target_url a failed
-    // status leads nowhere once the deployment is gone.
-    assert.match(block, /-f target_url="\$\{RUN_URL\}"/);
+  const start = text.indexOf("\n  credential-check:");
+  const end = text.indexOf("\n  certify:");
+  assert.ok(start !== -1 && end > start, "credential-check job must precede certify");
+  const credentialJob = text.slice(start, end);
+  assert.match(credentialJob, /if: github\.event_name == 'workflow_dispatch'/);
+  assert.doesNotMatch(credentialJob, /promote|statuses|gh api/, "the manual check must not promote or publish");
+  assert.match(certifyJob(text), /github\.event_name == 'repository_dispatch'/);
+});
+
+test("candidates are certified one at a time", () => {
+  const job = certifyJob(workflow());
+  assert.match(job, /concurrency:\s*\n\s*group: vercel-production-certification\s*\n\s*cancel-in-progress: false/);
+});
+
+test("no workflow still points at the stale Vercel team or project from PR #85", () => {
+  for (const file of fs.readdirSync(".github/workflows")) {
+    const body = fs.readFileSync(path.join(".github/workflows", file), "utf8");
+    assert.doesNotMatch(body, /team_ZDZyovkHiBVULVkZLSQ7rEUU|prj_FRWMRzXWMSzyB0NPR9nbyoz15UUz/, `${file} must not use the old Vercel identity`);
   }
-  assert.match(text, /RUN_URL: \$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/);
+});
+
+test("secrets are only passed to the steps that need them", () => {
+  const job = certifyJob(workflow());
+  // The Vercel token reaches only the release-control calls and the promote step - never the browser test.
+  const certify = stepBody(job, "Certify exact staged candidate");
+  assert.doesNotMatch(certify, /VERCEL_TOKEN/);
+  const install = stepBody(job, "Install dependencies");
+  assert.doesNotMatch(install, /secrets\./);
 });

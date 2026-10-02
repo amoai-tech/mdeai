@@ -1,4 +1,17 @@
-# SAN-1330 — certify the exact staged Vercel production candidate before alias assignment.
+# SAN-1330 — certify the exact staged Vercel production candidate, then promote exactly that deployment.
+#
+# Release control is ORDER, not timing. Production domains are not assigned automatically: a merge to
+# `main` builds a candidate that stays STAGED, and the only command that can put it on www.mdeai.co is
+# the `vercel promote <exact deployment id>` step at the end of this job. That step runs only when every
+# earlier step succeeded, so a failed validation, credential check, staged check or certification makes
+# promotion impossible — no status race to win. (The old "publish failure first" workaround raced the
+# alias by ~3.5 s and is gone.)
+#
+#   validate event -> verify credential + Production variable names -> confirm candidate is staged
+#   -> certify the exact candidate (real concierge turn) -> promote the exact id -> verify www.mdeai.co
+#
+# Names-only configuration check is an EARLY signal; the real proof that Gemini / CopilotKit / the
+# database work is the certification step's real concierge turn on the exact candidate.
 #
 # SAN-1367 canonical signal name: **Candidate Runtime Certification**.
 # It proves the candidate's *runtime* only — the app boots, auth works, and one concierge turn
@@ -11,6 +24,9 @@ on:
   repository_dispatch:
     types:
       - vercel.deployment.ready
+  # Read-only: proves the Vercel credential reaches the CURRENT team/project and that Production
+  # defines the required variable names. It never promotes. Run it before changing the Vercel setting.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,6 +34,11 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Pinned: the version the promote/inspect flags were verified against (SAN-1330).
+  VERCEL_CLI_VERSION: "59.25.4"
+  VERCEL_SCOPE: amoco
+  VERCEL_DEPLOYMENT_ID: ${{ github.event.client_payload.id }}
+  VERCEL_DEPLOYMENT_REF: ${{ github.event.client_payload.git.ref }}
   VERCEL_DEPLOYMENT_URL: ${{ github.event.client_payload.url }}
   VERCEL_DEPLOYMENT_SHA: ${{ github.event.client_payload.git.sha }}
   VERCEL_PROJECT_ID: ${{ github.event.client_payload.project.id }}
@@ -25,62 +46,42 @@ env:
   VERCEL_ENVIRONMENT: ${{ github.event.client_payload.environment }}
 
 jobs:
+  credential-check:
+    name: vercel-credential-check
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify the Vercel credential reaches the current team and project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs credential
+      - name: Verify Production defines the required variable names (names only)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs env-names
+
   certify:
     # SAN-1367: this job name is deliberately identical to the commit-status context
-    # (`production-certification`) published below, because the Vercel project's deployment check
-    # blocks alias assignment on that exact context. It is a wire identifier, not operator copy —
-    # renaming it would diverge the Actions check from the blocking status and silently detach the
-    # promotion block. The canonical, operator-facing signal name is the workflow `name:` above and
-    # the scoped `description` on each status publication.
+    # (`production-certification`) published below. It is a wire identifier, not operator copy;
+    # the canonical, operator-facing signal name is the workflow `name:` above and the scoped
+    # `description` on the status publication. The status is diagnostic only: protection comes from
+    # step ORDER (promotion is the last step and runs only after everything else succeeded).
     name: production-certification
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    # One candidate at a time, so two builds can never race each other onto the production domain.
+    concurrency:
+      group: vercel-production-certification
+      cancel-in-progress: false
     if: >-
+      github.event_name == 'repository_dispatch' &&
       github.event.client_payload.environment == 'production' &&
       github.event.client_payload.project.id == 'prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB' &&
       github.event.client_payload.project.name == 'mdeai'
 
     steps:
-      # SAN-1362 — fail closed BEFORE anything fallible, so no failure path can
-      # leave the candidate promotable with no certification result.
-      #
-      # The candidate must not be promotable until certification has actually
-      # passed. Nothing here needs the repository: the SHA arrives in the dispatch
-      # payload and `gh` is preinstalled, so this runs first — ahead of checkout
-      # and ahead of trust-boundary validation. If either of those fails, the
-      # block is already published.
-      #
-      # Root cause, from the candidate's own commit-status timeline — Vercel
-      # released the alias while this context was still `pending`:
-      #
-      #   23:47:32  Vercel = pending                     (deploying)
-      #   23:49:28  Vercel = pending    "Waiting for checks to complete"
-      #   23:49:39  production-certification = pending
-      #   23:51:42  Vercel = success                     <- alias assigned HERE
-      #   23:53:00  production-certification = success   <- 78s LATER
-      #
-      # The project's deployment check is correctly configured
-      # (`blocks: deployment-alias`, `requires: deployment-url`, timeout 900), so
-      # the gap is not misconfiguration — a non-terminal `pending` simply did not
-      # hold. Publishing a terminal `failure` removes the pending state entirely.
-      - name: Block promotion while certification is in flight
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          # SAN-1367: the commit-status `context` string is an identifier, not operator-facing copy.
-          # It stays `production-certification` because the Vercel project's deployment check is
-          # configured to block alias assignment on exactly that context; renaming it would silently
-          # detach the promotion block. The *description* is where the claim is scoped.
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
-            -f state=failure \
-            -f context=production-certification \
-            -f description="Candidate runtime certification in flight — promotion blocked" \
-            -f target_url="${RUN_URL}" >/dev/null
-          echo "published production-certification=failure for ${SHA}"
-
       - name: Checkout exact deployed commit
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
 
@@ -88,6 +89,21 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/validate-vercel-deployment-event.mjs
+
+      - name: Verify the Vercel credential reaches the current team and project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs credential
+
+      - name: Verify Production defines the required variable names
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs env-names
+
+      - name: Confirm the candidate is staged
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs assert-staged
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -114,13 +130,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
 
-      # SAN-1362 — release the block only on a proven pass. `if: always()` keeps
-      # a failed certification from leaving the context stuck on the in-flight
-      # `failure`, so the real result is what a re-run and the dashboard show.
-      #
-      # `target_url` points the status "Details" link at this run; without it the
-      # failure is not diagnosable from the status list, because the candidate is
-      # a throwaway URL that no longer exists once the deployment is cleaned up.
+      # Diagnostic only. `if: always()` keeps a failed certification visible as `failure` on the
+      # commit; `target_url` points the "Details" link at this run, because the candidate is a
+      # throwaway URL that no longer exists once the deployment is cleaned up.
       - name: Publish certification result
         if: always()
         env:
@@ -132,13 +144,12 @@ jobs:
           set -euo pipefail
           if [ "${CERTIFY_OUTCOME}" = "success" ]; then
             state=success
-            # SAN-1367: must not be readable as "everything is healthy". Names exactly what passed
-            # (runtime) and exactly what was not evaluated (marketplace inventory). GitHub caps a
-            # commit-status description at 140 characters.
-            description="Candidate runtime certified — promotion checks passed. Marketplace inventory not evaluated."
+            # SAN-1367: names exactly what passed (runtime) and exactly what was not evaluated
+            # (marketplace inventory). GitHub caps a commit-status description at 140 characters.
+            description="Candidate runtime certified. Marketplace inventory not evaluated."
           else
             state=failure
-            description="Candidate runtime certification failed — do not promote"
+            description="Candidate runtime certification failed — not promoted"
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
             -f state="${state}" \
@@ -146,3 +157,20 @@ jobs:
             -f description="${description}" \
             -f target_url="${RUN_URL}" >/dev/null
           echo "published production-certification=${state} for ${SHA}"
+
+      # The ONLY step that can put a candidate on www.mdeai.co. Default `if: success()` plus the
+      # explicit certify outcome: any failed or skipped step above means no promotion command runs.
+      - name: Promote the exact certified deployment
+        if: ${{ success() && steps.certify.outcome == 'success' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "${VERCEL_DEPLOYMENT_ID}" \
+            --yes --scope "${VERCEL_SCOPE}" --token "${VERCEL_TOKEN}"
+
+      - name: Verify www.mdeai.co serves the exact certified deployment
+        if: ${{ success() }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-control.mjs assert-promoted
