@@ -1,6 +1,6 @@
 {
   "skill_name": "copilotkit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "evals": [
     {
       "id": 1,
@@ -43,6 +43,28 @@
         "Checks installed version before using examples",
         "Does not blindly substitute latest-main API behavior",
         "Preserves the v2 surface when applicable"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "CopilotKit verify says MDE has no hosted project/API key. Diagnose our self-hosted /api/copilotkit runtime without signing into Intelligence just to satisfy the CLI.",
+      "expected_output": "Uses OSS verification with a named agent and round trip, adds runtime URL/auth headers when needed, and treats exact-SHA browser certification as separate evidence.",
+      "files": [],
+      "expectations": [
+        "Uses --expect-runtime oss",
+        "Uses --round-trip with an explicit agent id",
+        "Does not create/select hosted Intelligence merely to make verify pass"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "We may add an MDE Slack agent later. Where should CopilotKit guidance come from, and should we put the Channel host inside our Vercel Next.js route now?",
+      "expected_output": "Routes through the canonical MDE CopilotKit skill to the vendored Channels references, explains that vendoring guidance does not enable Channels, and rejects a serverless request route as the long-running Channel host.",
+      "files": [],
+      "expectations": [
+        "Keeps copilotkit as the single MDE skill owner",
+        "Uses the vendored Channels references",
+        "Does not enable or host managed Channels inside the existing serverless request route"
       ]
     }
   ]
