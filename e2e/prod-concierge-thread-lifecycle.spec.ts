@@ -73,14 +73,16 @@ async function persistedMessagesContaining(threadId: string, text: string): Prom
 }
 
 /**
- * Click and report the pathname the page settles on. A client-side `router.push`
- * does not fire a load event, so wait up to 5s for any navigation away from
- * /chat before reading the URL; reading it immediately races the navigation.
+ * Click and report the pathname the page settles on. Success never navigates
+ * (both buttons push /chat while already on /chat), so this is a stability
+ * window, not a wait for success: a regression pushes a client-side route
+ * (the pre-fix bug pushed "/"), which commits well inside the window. The
+ * window was checked against a deployment that still had that bug.
  */
 async function pathAfterClick(page: Page, click: () => Promise<void>): Promise<string> {
   await click();
   await page
-    .waitForURL((url) => url.pathname !== "/chat", { timeout: 5_000 })
+    .waitForURL((url) => url.pathname !== "/chat", { timeout: 2_000 })
     .catch(() => undefined);
   return new URL(page.url()).pathname;
 }
@@ -154,6 +156,9 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
     await expect(savedA, "thread A is listed in the rail").toBeVisible({ timeout: 30_000 });
     const afterOpen = await pathAfterClick(page, () => savedA.click());
     expect.soft(afterOpen, "opening a saved chat stays on /chat").toBe("/chat");
+    await expect
+      .soft(page.locator("nav[data-active-thread-id]").first(), "the rail marks thread A as the open chat")
+      .toHaveAttribute("data-active-thread-id", threadA!);
 
     // Reopening A must continue A: the next run is on A and persists there.
     const markerC = `${marker}-C-${randomUUID().slice(0, 8)}`;
@@ -171,9 +176,11 @@ test.describe("SAN-1378 concierge thread lifecycle (/chat)", () => {
     expect(await persistedMessagesContaining(threadA!, markerB)).toBe(0);
   });
 
-  // Showing A's earlier messages on reopen needs a history loader MDE does not
-  // have: `@ag-ui/mastra`'s MastraAgent implements `run` but not `connect`, so
-  // CopilotKit can only replay runs still held in the current server process.
-  // Tracked as a follow-up to SAN-1378; this marks the gap instead of hiding it.
+  // Showing A's earlier messages on reopen needs replayable AG-UI event
+  // history. MDE uses CopilotKit's default InMemoryAgentRunner, whose replay
+  // store is process-local, so it is lost across serverless instances and
+  // restarts, and Mastra's persisted messages do not hydrate the CopilotKit
+  // chat UI by themselves. A durable, owner-checked history source is a
+  // follow-up to SAN-1378; this marks the gap instead of hiding it.
   test.fixme("a reopened saved chat shows its earlier messages", async () => {});
 });
