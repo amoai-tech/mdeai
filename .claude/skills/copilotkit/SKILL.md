@@ -102,6 +102,11 @@ upstream's own test bed, so translate before acting:
 | `pnpm …` commands (the OpenTag starter's convention) | MDE uses npm: `npm run …`, `npx …` | Translate the command; never add pnpm or its lockfile to MDE |
 | Channels / Intelligence setup steps | Neither product is enabled in MDE | Planning reference only, see above |
 
+For the vendored `setup-slack-channel` reference, these MDE overlay rules take precedence when its files disagree with each other:
+
+- **Preserve existing runtime configuration.** If `.env` already exists, do not run the vendored `cp .env.example .env` step. Only seed from the example when the file is absent (for example, `test -e .env || cp .env.example .env`). This is especially important when Phase 0 supplied a ready-made config: preserve it and verify required variables by presence only.
+- **Approved browser automation may create the dedicated Slack app.** After the developer gives the setup authorization described by the parent `setup-slack-channel/SKILL.md`, browser automation may create the new dedicated app from the wizard-generated manifest. The developer must still enter every credential or secret themselves; never type, copy, expose, or persist those values on their behalf. This browser-automation rule overrides the narrower `slack-workspace-and-app.md` prohibition on creating the app for the developer.
+
 **Negative proof is mandatory for Channel work.** "The Channel is Online" or "the runtime
 started" is not success. Use the Slack skill's *Done means three things* rule (app installed and
 in the channel, Channel reports `online`, and a real human mention got a real reply); any one alone
