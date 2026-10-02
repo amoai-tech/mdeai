@@ -129,6 +129,11 @@
     "anon": true,
     "authenticated": true
   },
+  "p1_broker_update_showing(p_showing_id uuid, p_action text, p_expected_status text, p_expected_scheduled_at timestamp with time zone, p_new_scheduled_at timestamp with time zone)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "partner_ids_for_user()": {
     "public": true,
     "anon": true,

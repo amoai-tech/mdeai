@@ -224,14 +224,14 @@ select is(
   0, 'D2: Broker B sees zero of Broker A private showings'
 );
 
--- RLS UPDATE filters silently rather than raising, so the proof is "zero rows touched".
-with upd as (
+-- SAN-1206 revoked the table UPDATE grant from authenticated, so this refusal is now explicit
+-- (42501) instead of an RLS-filtered zero-row update. The intent is unchanged and the
+-- assertion is strictly stronger: "permission denied" cannot be confused with a policy that
+-- merely filtered the row out, which is the ambiguity the old zero-row form suffered from.
+select throws_ok($q$
   update public.showings set status = 'completed'
   where id = 'd1349000-0000-4000-8000-000000000001'
-  returning 1
-)
-select is((select count(*)::int from upd), 0,
-          'D3: Broker B cannot update Broker A private showing');
+$q$, '42501', NULL, 'D3: Broker B cannot update Broker A private showing');
 
 reset role;
 
@@ -275,11 +275,12 @@ select is(
   0, 'F1: anon sees zero private leads'
 );
 
-select is(
-  (select count(*)::int from public.showings
-    where id = 'd1349000-0000-4000-8000-000000000001'),
-  0, 'F2: anon sees zero private showings'
-);
+-- SAN-1206 revoked SELECT from anon entirely (it held a GRANT ALL with no anon policy to use
+-- it), so this is now an explicit refusal rather than a read filtered to zero rows.
+select throws_ok($q$
+  select count(*) from public.showings
+  where id = 'd1349000-0000-4000-8000-000000000001'
+$q$, '42501', NULL, 'F2: anon cannot read private showings');
 
 reset role;
 

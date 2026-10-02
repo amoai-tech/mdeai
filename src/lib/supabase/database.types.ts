@@ -7833,6 +7833,16 @@ export type Database = {
         Args: { p_id: string; p_provider_id?: string }
         Returns: undefined
       }
+      p1_broker_update_showing: {
+        Args: {
+          p_action: string
+          p_expected_scheduled_at: string
+          p_expected_status: string
+          p_new_scheduled_at?: string
+          p_showing_id: string
+        }
+        Returns: Json
+      }
       p1_schedule_tour_atomic: {
         Args: {
           p_email: string

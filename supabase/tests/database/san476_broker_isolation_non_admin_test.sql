@@ -259,14 +259,14 @@ select is(
   0, 'C4: other broker denied the showing even knowing its exact UUID'
 );
 
--- RLS UPDATE filters silently rather than raising, so the proof is "zero rows touched".
-with upd as (
-  update public.showings set status = 'completed'
-  where id = current_setting('san476.showing_id')::uuid
-  returning 1
-)
-select is((select count(*)::int from upd), 0,
-          'C5: other broker cannot update the owning broker''s showing by exact UUID');
+-- SAN-1206 revoked the table UPDATE grant from authenticated, so this refusal is now explicit
+-- (42501) instead of an RLS-filtered zero-row update. The intent is unchanged and the
+-- assertion is strictly stronger: "permission denied" cannot be confused with a policy that
+-- merely filtered the row out, which is the ambiguity the old zero-row form suffered from.
+select throws_ok(format($q$
+  update public.showings set status = 'completed' where id = %L::uuid
+$q$, current_setting('san476.showing_id')),
+  '42501', NULL, 'C5: other broker cannot update the owning broker''s showing by exact UUID');
 
 reset role;
 
@@ -334,10 +334,12 @@ select is(
   0, 'E1: anon sees zero private leads'
 );
 
-select is(
-  (select count(*)::int from public.showings where id = current_setting('san476.showing_id')::uuid),
-  0, 'E2: anon denied the showing by exact UUID'
-);
+-- SAN-1206 revoked SELECT from anon entirely (it held a GRANT ALL with no anon policy to use
+-- it), so this is now an explicit refusal rather than a read filtered to zero rows.
+select throws_ok(format($q$
+  select count(*) from public.showings where id = %L::uuid
+$q$, current_setting('san476.showing_id')),
+  '42501', NULL, 'E2: anon cannot read the showing by exact UUID');
 
 reset role;
 

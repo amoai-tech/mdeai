@@ -1,8 +1,8 @@
 vendor: CopilotKit
 repository: https://github.com/CopilotKit/CopilotKit
 source_path: skills
-reviewed_commit: 8a7446186cd3e0d368ec885e61c5913f0918ef5d
-reviewed_at: 2026-09-15
+reviewed_commit: 632b050da4a3ee5a8eb3e263316b9acd2fdfe6ff
+reviewed_at: 2026-10-01
 policy:
   active_skill: copilotkit
   upstream_files_are_read_only: true
@@ -10,24 +10,45 @@ policy:
   update_flow: detect-diff-review-evals-pin
 sources:
   core:
-    path: skills/copilotkit/SKILL.md
-    local: references/official/copilotkit/SKILL.md
-    sha256: 8f910089af420640f5863506963f1aaf54314b5316b36d24789680bc680e14b1
+    path: skills/copilotkit
+    local: references/official/copilotkit
+    tree_sha256: 4e00f7ac6ee1a88e2cd4d491ad66ac113d5306cf398ca13a319878a93c44dfdc
   cli:
-    path: skills/copilotkit-cli/SKILL.md
-    local: references/official/copilotkit-cli/SKILL.md
-    sha256: 3a3708ff10e185c589c6d65b1be6c339268b3a2f5d6ed760bd66fd3138713fc9
+    path: skills/copilotkit-cli
+    local: references/official/copilotkit-cli
+    tree_sha256: a1ea0057eb3aa467884d7120ba5ffa840a045bdee3ec8ba9b77656dd8ff3b7e8
+  channels_setup:
+    path: skills/channels-setup
+    local: references/official/channels-setup
+    tree_sha256: 4de87e36382682bb989fe92458fa60312e4126a0687f1bca6470c8379789ecc0
+  channels:
+    path: skills/copilotkit-channels
+    local: references/official/copilotkit-channels
+    tree_sha256: bf5ab2769e0e49b9b1aef8959054bf7b540b2464a9258c6ff0010c7b642a26b6
+  intelligence_docs:
+    path: skills/intelligence-docs
+    local: references/official/intelligence-docs
+    tree_sha256: 4c23b48f55884f7c876915698ae2b836b6bb98c882f386cca8e27869c133cc0e
+  intelligence_vocabulary:
+    path: skills/intelligence-vocabulary
+    local: references/official/intelligence-vocabulary
+    tree_sha256: 91dcecc1dedf83cfc08e5bd362e6b02f075ffbcc0db8c5a343995e9b39718d86
+  setup_slack_channel:
+    path: skills/setup-slack-channel
+    local: references/official/setup-slack-channel
+    tree_sha256: c255bbf36ef992e2f8b9c8436865eff6abe6c5fa30618640d973d72e1b2a0d5c
 optional_upstream_skills:
-  - channels-setup
-  - copilotkit-channels
   - inspector-docs
   - inspector-workbench
-  - intelligence-docs
-  - setup-slack-channel
 
 local_integrity:
   algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
-  verified_at: "2026-09-28"
+  verified_at: "2026-10-01"
   trees:
-    references/official/copilotkit/SKILL.md: f9b67a5723637742b9afb08e9051819bdb22bde611c7764421125ef8bd6efefe
-    references/official/copilotkit-cli/SKILL.md: 669c0e0158031f8df0054138a10e5688e06aaf46acb888d54a4752a52a5b9278
+    references/official/copilotkit: 4e00f7ac6ee1a88e2cd4d491ad66ac113d5306cf398ca13a319878a93c44dfdc
+    references/official/copilotkit-cli: a1ea0057eb3aa467884d7120ba5ffa840a045bdee3ec8ba9b77656dd8ff3b7e8
+    references/official/channels-setup: 4de87e36382682bb989fe92458fa60312e4126a0687f1bca6470c8379789ecc0
+    references/official/copilotkit-channels: bf5ab2769e0e49b9b1aef8959054bf7b540b2464a9258c6ff0010c7b642a26b6
+    references/official/intelligence-docs: 4c23b48f55884f7c876915698ae2b836b6bb98c882f386cca8e27869c133cc0e
+    references/official/intelligence-vocabulary: 91dcecc1dedf83cfc08e5bd362e6b02f075ffbcc0db8c5a343995e9b39718d86
+    references/official/setup-slack-channel: c255bbf36ef992e2f8b9c8436865eff6abe6c5fa30618640d973d72e1b2a0d5c
