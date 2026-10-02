@@ -230,13 +230,14 @@ function liveToolCallIds(m: LiveMessage): string[] {
  * complete. A live message is kept only if it adds something the durable
  * history does not have. The same turn can reach us under a different id from
  * each side, so a live message is a duplicate when its id is known, or:
- *  - user/assistant text: a durable message of the same role has the same text;
+ *  - user/assistant text: an unclaimed durable message of the same role has the
+ *    same text. Each durable message can account for ONE live message, and a
+ *    durable message already matched by id accounts for none, so a genuinely
+ *    newer "yes" (a turn the database does not have yet) is kept next to an
+ *    older "yes" instead of being swallowed by it;
  *  - a tool call or tool result: its tool call id is one the durable history
  *    already has (tool call ids come from the model and are the same on both sides).
  * Kept extras come after the durable messages, in live order.
- *
- * Called once, at install time, when every live message is a replay of the
- * past, so a repeated "yes" is never dropped for being new.
  */
 export function reconcileSavedHistory<T extends LiveMessage>(
   persisted: readonly SavedThreadMessage[],
@@ -246,19 +247,28 @@ export function reconcileSavedHistory<T extends LiveMessage>(
   const callIds = new Set(
     persisted.flatMap((m) => (m.role === "assistant" && m.toolCalls ? m.toolCalls.map((c) => c.id) : [])),
   );
-  const turns = new Set(
-    persisted.flatMap((m) =>
-      (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content
-        ? [`${m.role}\u0000${m.content}`]
-        : [],
-    ),
-  );
+  // One token per durable text message that no live message already matches by id.
+  const liveIds = new Set(live.map((m) => m.id));
+  const tokens = new Map<string, number>();
+  for (const m of persisted) {
+    if (liveIds.has(m.id)) continue;
+    if ((m.role !== "user" && m.role !== "assistant") || typeof m.content !== "string" || !m.content) continue;
+    const key = `${m.role}\u0000${m.content}`;
+    tokens.set(key, (tokens.get(key) ?? 0) + 1);
+  }
   const extras = live.filter((m) => {
     if (ids.has(m.id)) return false;
     if (m.role === "tool") return !(typeof m.toolCallId === "string" && callIds.has(m.toolCallId));
     const calls = liveToolCallIds(m);
     if (calls.length > 0 && calls.some((id) => callIds.has(id))) return false;
-    if (typeof m.content === "string" && m.content && turns.has(`${m.role}\u0000${m.content}`)) return false;
+    if (typeof m.content === "string" && m.content) {
+      const key = `${m.role}\u0000${m.content}`;
+      const left = tokens.get(key) ?? 0;
+      if (left > 0) {
+        tokens.set(key, left - 1); // this durable message is now accounted for
+        return false;
+      }
+    }
     return true;
   });
   return [...persisted, ...extras];

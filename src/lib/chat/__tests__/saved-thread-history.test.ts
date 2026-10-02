@@ -189,6 +189,20 @@ describe("reconcileSavedHistory", () => {
     expect(reconcileSavedHistory(persisted, [extra])).toEqual([persisted[0], extra]);
   });
 
+  it("a replay of an old 'yes' is dropped, but a genuinely newer 'yes' is kept", () => {
+    const persisted = [p("1", "user", "yes")];
+    const replay = { id: "x1", role: "user", content: "yes" }; // CopilotKit's copy of the old one
+    const newer = { id: "x2", role: "user", content: "yes" }; // arrived after the history was read
+    expect(reconcileSavedHistory(persisted, [replay, newer])).toEqual([persisted[0], newer]);
+  });
+
+  it("a persisted message already matched by id does not also swallow a newer repeat", () => {
+    const persisted = [p("1", "user", "yes")];
+    const sameId = { id: "1", role: "user", content: "yes" };
+    const newer = { id: "x2", role: "user", content: "yes" };
+    expect(reconcileSavedHistory(persisted, [sameId, newer])).toEqual([persisted[0], newer]);
+  });
+
   it("an empty live view returns exactly the durable history", () => {
     const persisted = [p("1", "user", "a")];
     expect(reconcileSavedHistory(persisted, [])).toEqual(persisted);
