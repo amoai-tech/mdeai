@@ -78,14 +78,17 @@ not independent MDE routing owners:
 | CLI verification/onboarding | `references/official/copilotkit-cli/SKILL.md` |
 | First managed Channel setup | `references/official/channels-setup/SKILL.md` |
 | Managed Channels implementation | `references/official/copilotkit-channels/SKILL.md` |
-| Slack provider setup | `references/official/setup-slack-channel/SKILL.md` |
-| Intelligence docs structure | `references/official/intelligence-docs/SKILL.md` |
-| Intelligence customer-facing terminology | `references/official/intelligence-vocabulary/SKILL.md` |
+| OpenTag/example-style Slack provider setup | `references/official/setup-slack-channel/SKILL.md` |
+| Upstream CopilotKit Intelligence docs maintenance only | `references/official/intelligence-docs/SKILL.md` |
+| Official CopilotKit Intelligence terminology reference (not an MDE copywriting owner) | `references/official/intelligence-vocabulary/SKILL.md` |
 
 Vendoring Channels/Intelligence guidance does **not** enable those products in MDE. Managed
 Channels require their own supported deployment shape (including a long-running host); never
 move that lifecycle into the existing serverless Next.js request route just because the
-reference is available.
+reference is available. `intelligence-docs` and `intelligence-vocabulary` are scoped to
+CopilotKit upstream/customer-facing documentation; do not route ordinary MDE product docs or
+copy through them. `setup-slack-channel` assumes OpenTag/example conventions; for a future first
+MDE managed Channel, start with `channels-setup` and the current CLI onboarding graph.
 
 ## Reading vendored references against MDE
 
