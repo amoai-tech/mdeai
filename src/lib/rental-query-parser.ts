@@ -297,8 +297,8 @@ export function shouldInstantRentalClarify(
 
 const FAST_PATH_LIMIT = 8;
 
-function effectiveLimit(s: RentalQuerySignals, q?: ConciergeWorkingMemory["lastRentalQuery"]): number {
-  return s.explicitLimit ?? q?.limit ?? FAST_PATH_LIMIT;
+function effectiveLimit(s: RentalQuerySignals): number {
+  return s.explicitLimit ?? FAST_PATH_LIMIT;
 }
 
 export function buildRentalSearchParams(
@@ -309,7 +309,7 @@ export function buildRentalSearchParams(
 
   const s = scoreRentalQuery(text);
   const q = memory.lastRentalQuery;
-  const limit = effectiveLimit(s, q);
+  const limit = effectiveLimit(s);
 
   if (q?.genericAskPending) {
     const merged: RentalSearchApiParams = {

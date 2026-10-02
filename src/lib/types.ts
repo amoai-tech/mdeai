@@ -17,7 +17,6 @@ export type ConciergeWorkingMemory = {
     genericAskPending?: boolean;
     checkIn?: string;
     checkOut?: string;
-    limit?: number;
   };
   lastRentalResults?: Array<{
     id: string;
@@ -46,7 +45,8 @@ export type ConciergeWorkingMemory = {
     priceTier?: "$" | "$$" | "$$$" | "$$$$";
     genericAskPending?: boolean;
   };
-  mapUi?: import("@/platform/contracts/map-ui-state").MapUiState;
+  /** A patch (see conciergeWorkingMemorySchema): any part may be absent. */
+  mapUi?: Partial<import("@/platform/contracts/map-ui-state").MapUiState>;
 };
 
 export {
