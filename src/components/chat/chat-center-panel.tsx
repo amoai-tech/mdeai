@@ -9,6 +9,7 @@ import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
 import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
+import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { CenterPanelMapResultsSlot } from "@/components/chat/center-panel-map-results-slot";
 import { EventResultsPanel } from "@/components/chat/event-results-panel";
@@ -40,6 +41,7 @@ function ConciergeCopilotChat() {
 export function ChatCenterPanel() {
   const { sessionKey } = useConciergeSession();
   const deterministic = isDeterministicE2E();
+  const history = useSavedThreadHistory();
 
   return (
     <section
@@ -64,11 +66,40 @@ export function ChatCenterPanel() {
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>
-          {deterministic ? (
-            <DeterministicConciergeChat />
-          ) : (
-            <ConciergeCopilotChat />
-          )}
+          {history.status === "loading" ? (
+            <p
+              role="status"
+              data-testid="saved-history-loading"
+              className="px-2 py-3 text-sm text-muted-foreground"
+            >
+              Loading conversation…
+            </p>
+          ) : null}
+          {history.status === "error" ? (
+            <p
+              role="alert"
+              data-testid="saved-history-error"
+              className="px-2 py-3 text-sm text-destructive"
+            >
+              Couldn’t load this conversation.{" "}
+              <button type="button" className="font-medium underline" onClick={history.retry}>
+                Retry
+              </button>
+            </p>
+          ) : null}
+          {/* Not unmounted while loading: CopilotChat's own reconnect must run.
+              `inert` blocks typing/sending until the history is in place. */}
+          <div
+            inert={history.status !== "idle"}
+            aria-busy={history.status === "loading"}
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
+            {deterministic ? (
+              <DeterministicConciergeChat />
+            ) : (
+              <ConciergeCopilotChat />
+            )}
+          </div>
           <ConciergeLocalChatMessages />
           <RentalFastPathPanel />
           <EventFastPathPanel />
