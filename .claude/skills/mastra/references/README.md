@@ -17,6 +17,11 @@ Read **one** reference file per task (plus [`topic-routing.md`](topic-routing.md
 | [`embedded-docs.md`](embedded-docs.md) | Packages installed; need version-accurate API from `node_modules/@mastra` |
 | [`mcp-docs-lookup.md`](mcp-docs-lookup.md) | Using Cursor `user-mastra` MCP (`mastraDocs`, `searchMastraDocs`) |
 | [`remote-docs.md`](remote-docs.md) | No local packages; fetch from mastra.ai |
+| [`official/mastra/references/core-concepts.md`](official/mastra/references/core-concepts.md) | Choose between Agent, Workflow, Tool, Memory, and Storage primitives |
+| [`official/mastra/references/mastra-api.md`](official/mastra/references/mastra-api.md) | Inspect/call agents, workflows, traces, logs, scores, threads, and server resources with `mastra api` |
+| [`official/mastra/references/trace-query.md`](official/mastra/references/trace-query.md) | Select exact traces with field/span/score/feedback predicates |
+| [`official/mastra/references/trace-intelligence.md`](official/mastra/references/trace-intelligence.md) | Investigate recurring production failure themes before drilling into exact traces |
+| [`official/mastra/references/model-selection.md`](official/mastra/references/model-selection.md) | Validate provider/model names with the official registry before changing models |
 | [`create-mastra.md`](create-mastra.md) | New Mastra project / CLI setup |
 | [`workflows.md`](workflows.md) | DAG workflows, suspend/resume, HITL (Roberto) |
 | [`memory.md`](memory.md) | Memory, working memory, threads, recall |

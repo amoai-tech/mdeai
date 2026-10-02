@@ -4,7 +4,7 @@ description: >-
   Use for any MDE request clearly involving Mastra, including agents, tools, workflows, memory, storage, RequestContext, streaming, suspend/resume, HITL, evals, traces, runtime bridges, and Mastra-specific bugs/errors/failures. A known Mastra failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.0"
-  upstream-commit: "08428f9b47cdae1131d12cbd9f8e0886ff476211"
+  upstream-commit: "1ddd3219f44770f5b84d9930f99fccd6fd1890ed"
   verified-package: "@mastra/core 1.35.0"
   verified-at: "2026-09-28"
 ---
