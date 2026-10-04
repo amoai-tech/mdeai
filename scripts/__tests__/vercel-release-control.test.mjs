@@ -81,6 +81,26 @@ test("env names: reports a missing Gemini key by name", () => {
   assert.throws(() => checkEnvNames({ envs }), /GOOGLE_GENERATIVE_AI_API_KEY/);
 });
 
+test("env names: missing CPK Intelligence key blocks release", () => {
+  const envs = allRequired().filter((e) => e.key !== "CPK_INTELLIGENCE_API_KEY");
+  assert.throws(() => checkEnvNames({ envs }), /CPK_INTELLIGENCE_API_KEY/);
+});
+
+test("env names: missing public CopilotKit license key blocks release", () => {
+  const envs = allRequired().filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY");
+  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+});
+
+test("env names: legacy COPILOTKIT_API_KEY alone cannot satisfy the release contract", () => {
+  const envs = allRequired()
+    .filter((e) => !["CPK_INTELLIGENCE_API_KEY", "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"].includes(e.key))
+    .concat(env("COPILOTKIT_API_KEY"));
+  assert.throws(
+    () => checkEnvNames({ envs }),
+    /CPK_INTELLIGENCE_API_KEY.*NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/,
+  );
+});
+
 test("env names: accepts the legacy anon key in place of the publishable key", () => {
   const envs = allRequired()
     .filter((e) => e.key !== "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
@@ -158,9 +178,7 @@ test("promoted: a deployment that does not hold www.mdeai.co fails", () => {
   assert.throws(() => checkPromoted(promotedDeployment({ alias: ["mdeai-amoco.vercel.app"] }), expected), /www\.mdeai\.co/);
 });
 
-test("the required env names stay in step with scripts/check-env-contract.mjs", () => {
-  // One contract, two readers: the runtime checker defines what a healthy runtime
-  // needs; this gate must ask Vercel for exactly those names (plus nothing hidden).
+test("the release env contract intentionally differs from the application runtime auth contract", () => {
   const source = fs.readFileSync(path.resolve("scripts/check-env-contract.mjs"), "utf8");
   const block = (start) => {
     const from = source.indexOf(start);
@@ -168,7 +186,17 @@ test("the required env names stay in step with scripts/check-env-contract.mjs", 
     return source.slice(from, source.indexOf("\n];", from));
   };
   const names = (text) => [...text.matchAll(/\bname:\s*"([A-Z0-9_]+)"/g)].map((m) => m[1]);
-  const fromChecker = new Set([...names(block("const BUILD_CLIENT = [")), ...names(block("const RUNTIME = ["))]);
-  const here = new Set(REQUIRED_PRODUCTION_ENV.map((spec) => spec.name));
-  assert.deepEqual([...here].sort(), [...fromChecker].sort());
+  const appContract = new Set([...names(block("const BUILD_CLIENT = [")), ...names(block("const RUNTIME = ["))]);
+  const releaseContract = new Set(REQUIRED_PRODUCTION_ENV.map((spec) => spec.name));
+
+  // COPILOTKIT_API_KEY remains the custom internal service bearer used by the app.
+  // It must not be mistaken for either CopilotKit Cloud/Intelligence credential.
+  assert.equal(appContract.has("COPILOTKIT_API_KEY"), true);
+  assert.equal(releaseContract.has("COPILOTKIT_API_KEY"), false);
+  assert.equal(releaseContract.has("CPK_INTELLIGENCE_API_KEY"), true);
+  assert.equal(releaseContract.has("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"), true);
+
+  for (const name of appContract) {
+    if (name !== "COPILOTKIT_API_KEY") assert.equal(releaseContract.has(name), true, `${name} must stay release-gated`);
+  }
 });
