@@ -74,6 +74,14 @@ const BUILD_CLIENT = [
     why: "AdvancedMarker map id",
     productionOnly: true, // provisioned in Vercel Production/Preview, not in CI Floor
   },
+  {
+    // SAN-1330 — CopilotKit's public license key, passed to <CopilotKitProvider> as
+    // `publicLicenseKey` (src/lib/copilotkit-client-props.ts). NEXT_PUBLIC_* is compiled
+    // into the bundle, so a production build without it silently ships without a license.
+    name: "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY",
+    why: "CopilotKit public license key (browser provider)",
+    productionOnly: true, // provisioned in Vercel Production/Preview, not in CI Floor
+  },
 ];
 
 /** Runtime server configuration: required by a deployed production runtime. */
@@ -81,11 +89,12 @@ const RUNTIME = [
   { name: "DATABASE_URL", why: "Mastra Postgres storage — production fails closed without it" },
   { name: "SUPABASE_SERVICE_ROLE_KEY", why: "privileged server reads/writes (ai_runs, durability)" },
   {
-    // SAN-1358 · D20 — the CopilotKit runtime authenticates trusted service
-    // callers with this bearer. It is server-only: never expose it as
-    // NEXT_PUBLIC_*. Without it the runtime's service path cannot be validated.
-    name: "COPILOTKIT_API_KEY",
-    why: "CopilotKit runtime service-to-service bearer (server-only)",
+    // SAN-1330 — CopilotKit Intelligence credential (server-only; never NEXT_PUBLIC_*). This is
+    // CopilotKit's hosted platform key, read as `new CopilotKitIntelligence({ apiKey })`. MDE does
+    // NOT construct that client today (same-origin runtime on purpose: UX-001, D17), so this is a
+    // presence check for the provisioned credential; wiring it is a separate architecture decision.
+    name: "CPK_INTELLIGENCE_API_KEY",
+    why: "CopilotKit Intelligence API key (server-only)",
   },
   { name: "NEXT_PUBLIC_SUPABASE_URL", why: "SSR/proxy session refresh" },
   {
@@ -103,6 +112,10 @@ const RUNTIME = [
 
 /** Optional feature configuration: degrade gracefully, never block. */
 const OPTIONAL = [
+  // SAN-1330 — MDE's OWN service-to-service bearer for /api/copilotkit (src/lib/copilotkit-auth.ts).
+  // Not a CopilotKit credential. Optional because nothing in the repo presents it; when unset the
+  // service path is CLOSED (401), never open.
+  "MDE_COPILOTKIT_SERVICE_BEARER",
   "GOOGLE_API_KEY",
   "GOOGLE_PLACES_API_KEY",
   "GOOGLE_MAPS_API_KEY",

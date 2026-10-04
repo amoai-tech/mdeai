@@ -12,6 +12,7 @@ import {
   checkEnvNames,
   checkPromoted,
   checkStaged,
+  vercelGet,
 } from "../vercel-release-control.mjs";
 
 /**
@@ -22,13 +23,15 @@ import {
  */
 const SHA = "ef427a31f52837ccd9d8e73b5ca7720839ee16d9";
 const ID = "dpl_AhQPocB7UYbzTgRHioYxN6sZH7p3";
-const expected = { id: ID, sha: SHA };
+const HOST = "mdeai-abc123-amoco.vercel.app";
+const expected = { id: ID, sha: SHA, host: HOST };
 
 const stagedDeployment = (over = {}) => ({
   id: ID,
   projectId: PROJECT_ID,
   target: "production",
   readyState: "READY",
+  url: HOST,
   meta: { githubCommitSha: SHA, githubCommitRef: "main" },
   alias: [],
   ...over,
@@ -118,7 +121,7 @@ test("env names: refuses to guess when the API says there are more pages", () =>
 });
 
 test("env names: never touches or returns env values", () => {
-  const secret = "supersecret-value-that-must-never-appear";
+  const secret = "sentinel-env-value-that-must-never-appear";
   const envs = allRequired().map((e) => ({ ...e, value: secret }));
   const result = checkEnvNames({ envs });
   assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
@@ -178,7 +181,78 @@ test("promoted: a deployment that does not hold www.mdeai.co fails", () => {
   assert.throws(() => checkPromoted(promotedDeployment({ alias: ["mdeai-amoco.vercel.app"] }), expected), /www\.mdeai\.co/);
 });
 
-test("the release env contract intentionally differs from the application runtime auth contract", () => {
+test("staged: the certified URL must belong to the deployment id that gets promoted", () => {
+  // The workflow tests the URL from the event but promotes the id. A forged event pairing a healthy
+  // URL with another build's id would otherwise certify one build and release a different one.
+  assert.throws(
+    () => checkStaged(stagedDeployment({ url: "mdeai-someone-else-amoco.vercel.app" }), expected),
+    /url|host/i,
+  );
+});
+
+test("staged: the URL host comparison ignores letter case", () => {
+  assert.doesNotThrow(() => checkStaged(stagedDeployment({ url: HOST.toUpperCase() }), expected));
+});
+
+test("staged: a candidate URL is required, not optional", () => {
+  assert.throws(() => checkStaged(stagedDeployment(), { id: ID, sha: SHA }), /url|host/i);
+});
+
+test("vercelGet: a hung Vercel API fails fast instead of holding the job", async () => {
+  const hanging = (_url, { signal }) =>
+    new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason));
+    });
+  // AbortSignal.timeout's timer is unref'd; a real hung request holds a socket open, so keep the
+  // event loop alive here the way that socket would.
+  const keepAlive = setInterval(() => {}, 10);
+  const started = Date.now();
+  try {
+    await assert.rejects(
+      () => vercelGet("/v9/projects/x?teamId=y", { fetchImpl: hanging, timeoutMs: 40, token: "t" }),
+      /timed out/i,
+    );
+  } finally {
+    clearInterval(keepAlive);
+  }
+  assert.ok(Date.now() - started < 2_000, "must not wait for the 25-minute job limit");
+});
+
+test("vercelGet: an HTTP error reports status and path only, never the body or token", async () => {
+  const forbidden = async () => new Response(JSON.stringify({ error: { message: "account-detail-secret" } }), { status: 403 });
+  await assert.rejects(
+    () => vercelGet("/v9/projects/x?teamId=y", { fetchImpl: forbidden, token: "sentinel-token-value" }),
+    (error) =>
+      /403/.test(error.message) &&
+      !error.message.includes("account-detail-secret") &&
+      !error.message.includes("sentinel-token-value"),
+  );
+});
+
+test("vercelGet: sends the bearer token and returns parsed JSON", async () => {
+  let seen;
+  const ok = async (url, init) => {
+    seen = { url, auth: init.headers.authorization };
+    return new Response(JSON.stringify({ id: "x" }), { status: 200 });
+  };
+  const body = await vercelGet("/v9/projects/x?teamId=y", { fetchImpl: ok, token: "tok" });
+  assert.deepEqual(body, { id: "x" });
+  assert.equal(seen.auth, "Bearer tok");
+  assert.match(seen.url, /^https:\/\/api\.vercel\.com\/v9\/projects\/x/);
+});
+
+test("vercelGet: a missing token fails before any request is made", async () => {
+  let called = false;
+  await assert.rejects(
+    () => vercelGet("/v9/projects/x", { fetchImpl: async () => { called = true; return new Response("{}"); }, token: "  " }),
+    /VERCEL_TOKEN is required/,
+  );
+  assert.equal(called, false);
+});
+
+test("the release env contract is exactly the application's required env contract", () => {
+  // One contract, two readers: the runtime checker defines what a healthy production needs; this
+  // gate asks Vercel for exactly those names. (SAN-1330: it must check what the app consumes.)
   const source = fs.readFileSync(path.resolve("scripts/check-env-contract.mjs"), "utf8");
   const block = (start) => {
     const from = source.indexOf(start);
@@ -188,15 +262,11 @@ test("the release env contract intentionally differs from the application runtim
   const names = (text) => [...text.matchAll(/\bname:\s*"([A-Z0-9_]+)"/g)].map((m) => m[1]);
   const appContract = new Set([...names(block("const BUILD_CLIENT = [")), ...names(block("const RUNTIME = ["))]);
   const releaseContract = new Set(REQUIRED_PRODUCTION_ENV.map((spec) => spec.name));
+  assert.deepEqual([...releaseContract].sort(), [...appContract].sort());
 
-  // COPILOTKIT_API_KEY remains the custom internal service bearer used by the app.
-  // It must not be mistaken for either CopilotKit Cloud/Intelligence credential.
-  assert.equal(appContract.has("COPILOTKIT_API_KEY"), true);
-  assert.equal(releaseContract.has("COPILOTKIT_API_KEY"), false);
   assert.equal(releaseContract.has("CPK_INTELLIGENCE_API_KEY"), true);
   assert.equal(releaseContract.has("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"), true);
-
-  for (const name of appContract) {
-    if (name !== "COPILOTKIT_API_KEY") assert.equal(releaseContract.has(name), true, `${name} must stay release-gated`);
-  }
+  // The retired name must not come back in either contract.
+  assert.equal(releaseContract.has("COPILOTKIT" + "_API_KEY"), false);
+  assert.equal(appContract.has("COPILOTKIT" + "_API_KEY"), false);
 });

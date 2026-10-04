@@ -8,7 +8,8 @@
  *
  *   credential        the token sees the CURRENT team and project (not a stale one)
  *   env-names         the Production target defines every required variable NAME
- *   assert-staged     the candidate is READY, from main, and owns no production domain yet
+ *   assert-staged     the candidate is READY, from main, owns no production domain yet, and the
+ *                     certified URL belongs to this exact deployment id
  *   assert-promoted   www.mdeai.co now serves the exact tested deployment id and commit
  *
  * Names and IDs only. The env check reads variable NAMES and TARGETS and never
@@ -25,6 +26,9 @@ export const TEAM_ID = "team_OPBk3bdOXAg6fpYnL4vxnLZd";
 export const PRODUCTION_BRANCH = "main";
 export const PRODUCTION_DOMAINS = ["www.mdeai.co", "mdeai.co"];
 const PRIMARY_DOMAIN = "www.mdeai.co";
+// A hung Vercel API must not hold the certification job (and queue the next deployment) for the
+// whole 25-minute job limit. Each request gets its own short deadline.
+export const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * The names scripts/check-env-contract.mjs requires of a healthy production
@@ -99,10 +103,19 @@ function checkIdentity(deployment, expected) {
 /** Before certification: a candidate must not already own a production domain. */
 export function checkStaged(deployment, expected) {
   checkIdentity(deployment, expected);
+  // The workflow tests the URL from the dispatch event but promotes the deployment id. Bind them:
+  // otherwise a forged event could pair a healthy URL with another build's id, so the build that
+  // was certified would not be the build that is released.
+  if (!expected.host) fail("the certified candidate URL host is required");
+  if (String(deployment.url ?? "").toLowerCase() !== expected.host.toLowerCase()) {
+    fail("the certified candidate URL does not belong to this deployment id");
+  }
   const owned = (deployment.alias ?? []).filter((alias) => PRODUCTION_DOMAINS.includes(alias));
   if (owned.length) {
     fail(
-      `candidate already owns production domain(s) ${owned.join(", ")} — automatic production domain assignment is still on`,
+      `candidate already owns production domain(s) ${owned.join(", ")} — either automatic production domain ` +
+        "assignment is still on, or an earlier run of this workflow already promoted it and only verification " +
+        "is left (check what www.mdeai.co serves; do not re-run certification for an already-promoted deployment)",
     );
   }
 }
@@ -115,14 +128,27 @@ export function checkPromoted(deployment, expected) {
   }
 }
 
-async function vercelGet(pathAndQuery) {
-  const token = (process.env.VERCEL_TOKEN ?? "").trim();
-  if (!token) fail("VERCEL_TOKEN is required");
-  const response = await fetch(`https://api.vercel.com${pathAndQuery}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
+export async function vercelGet(
+  pathAndQuery,
+  { fetchImpl = fetch, timeoutMs = REQUEST_TIMEOUT_MS, token = process.env.VERCEL_TOKEN } = {},
+) {
+  const bearer = (token ?? "").trim();
+  if (!bearer) fail("VERCEL_TOKEN is required");
+  const label = pathAndQuery.split("?")[0];
+  let response;
+  try {
+    response = await fetchImpl(`https://api.vercel.com${pathAndQuery}`, {
+      headers: { authorization: `Bearer ${bearer}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      fail(`Vercel API timed out after ${Math.round(timeoutMs / 1000)}s for ${label}`);
+    }
+    fail(`Vercel API request failed for ${label}`);
+  }
   // Never echo the body: it can carry account detail. Status + the request label is enough.
-  if (!response.ok) fail(`Vercel API answered ${response.status} for ${pathAndQuery.split("?")[0]}`);
+  if (!response.ok) fail(`Vercel API answered ${response.status} for ${label}`);
   return response.json();
 }
 
@@ -141,7 +167,11 @@ async function main(command) {
     const { present } = checkEnvNames(await vercelGet(`/v10/projects/${PROJECT_ID}/env?teamId=${TEAM_ID}&limit=100`));
     console.log(`vercel-release: Production defines all ${present.length} required variable names`);
   } else if (command === "assert-staged") {
-    const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
+    const expected = {
+      id: required("VERCEL_DEPLOYMENT_ID"),
+      sha: required("VERCEL_DEPLOYMENT_SHA"),
+      host: new URL(required("VERCEL_DEPLOYMENT_URL")).host,
+    };
     checkStaged(await vercelGet(`/v13/deployments/${expected.id}?teamId=${TEAM_ID}`), expected);
     console.log(`vercel-release: ${expected.id} is staged (READY, main, no production domain)`);
   } else if (command === "assert-promoted") {

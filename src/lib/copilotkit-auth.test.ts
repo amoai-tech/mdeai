@@ -5,7 +5,7 @@ import { ANONYMOUS_RESOURCE_ID, SERVICE_RESOURCE_ID } from "./copilotkit-thread-
 
 /**
  * SAN-1358 · D20. The previous suite *asserted the vulnerability was correct*
- * ("allows any request when COPILOTKIT_API_KEY is unset" and "allows same-origin
+ * ("allows any request when MDE_COPILOTKIT_SERVICE_BEARER is unset" and "allows same-origin
  * browser POST in production without bearer"). Both are now inverted, and the
  * same-origin bypass is pinned as a regression.
  *
@@ -54,7 +54,7 @@ afterEach(() => {
 
 describe("service bearer path", () => {
   it("allows a matching bearer, owning a named resource rather than a shared one", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(serviceRequest(), { userId: null });
     expect(result).toEqual({
       allowed: true,
@@ -65,7 +65,7 @@ describe("service bearer path", () => {
 
   // The D17 regression: this previously returned early and skipped ownership.
   it("never lets a valid bearer open a real user's thread (403, not allow)", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(serviceRequest(), {
       userId: null,
       thread: { kind: "existing", threadId: "t", resourceId: USER_A },
@@ -74,7 +74,7 @@ describe("service bearer path", () => {
   });
 
   it("lets a valid bearer resume a thread the service itself owns", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(serviceRequest(), {
       userId: null,
       thread: { kind: "existing", threadId: "t", resourceId: SERVICE_RESOURCE_ID },
@@ -87,7 +87,7 @@ describe("service bearer path", () => {
   });
 
   it("rejects a valid bearer naming a legacy anonymous thread (D17)", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(serviceRequest(), {
       userId: null,
       thread: { kind: "existing", threadId: "t", resourceId: ANONYMOUS_RESOURCE_ID },
@@ -96,7 +96,7 @@ describe("service bearer path", () => {
   });
 
   it("rejects a valid bearer naming a thread with no owning resource", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(serviceRequest(), {
       userId: null,
       thread: { kind: "existing", threadId: "t", resourceId: null },
@@ -105,7 +105,7 @@ describe("service bearer path", () => {
   });
 
   it("rejects an invalid bearer with 401", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = evaluateCopilotKitAuth(
       request({ headers: { authorization: "Bearer not-the-key" } }),
       { userId: null },
@@ -113,9 +113,9 @@ describe("service bearer path", () => {
     expect(result).toMatchObject({ allowed: false, status: 401 });
   });
 
-  // INVERTED — previously "allows any request when COPILOTKIT_API_KEY is unset".
+  // INVERTED — previously "allows any request when MDE_COPILOTKIT_SERVICE_BEARER is unset".
   it("rejects a bearer when the key is not configured (401, never fail-open)", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", "");
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", "");
     const result = evaluateCopilotKitAuth(
       request({ headers: { authorization: `Bearer ${KEY}` } }),
       { userId: null },
@@ -125,7 +125,7 @@ describe("service bearer path", () => {
   });
 
   it("treats a whitespace-only key as unconfigured", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", "   ");
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", "   ");
     const result = evaluateCopilotKitAuth(
       request({ headers: { authorization: `Bearer ${KEY}` } }),
       { userId: null },
@@ -134,7 +134,7 @@ describe("service bearer path", () => {
   });
 
   it("never lets an unvalidatable bearer fall through to the browser path", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", "");
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", "");
     // An unvalidatable bearer must not fall through to the browser path.
     const result = evaluateCopilotKitAuth(
       request({ headers: { authorization: "Bearer junk" } }),
@@ -242,7 +242,7 @@ describe("identity is per-request, never shared or client-nominated", () => {
   });
 
   it("never assigns the shared anonymous resource to an allowed request", () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const allowed = [
       evaluateCopilotKitAuth(request(), { userId: USER_A }),
       evaluateCopilotKitAuth(serviceRequest(), { userId: null }),
@@ -277,7 +277,7 @@ describe("authorizeCopilotKitRequest response", () => {
   });
 
   it("never leaks the configured key into the response body", async () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = authorizeCopilotKitRequest(
       request({ headers: { authorization: "Bearer wrong" } }),
       { userId: null },
@@ -288,7 +288,7 @@ describe("authorizeCopilotKitRequest response", () => {
   });
 
   it("does not return the key for a same-origin unauthenticated request", async () => {
-    vi.stubEnv("COPILOTKIT_API_KEY", KEY);
+    vi.stubEnv("MDE_COPILOTKIT_SERVICE_BEARER", KEY);
     const result = authorizeCopilotKitRequest(sameOriginRequest(), { userId: null });
     expect(result.allowed === false && result.response.status).toBe(401);
     const body = await (result.allowed === false ? result.response : new Response()).text();

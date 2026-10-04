@@ -10,6 +10,11 @@
 #   validate event -> verify credential + Production variable names -> confirm candidate is staged
 #   -> certify the exact candidate (real concierge turn) -> promote the exact id -> verify www.mdeai.co
 #
+# Trust split: the candidate commit is checked out at the workspace root, but every step that holds
+# VERCEL_TOKEN (credential, names, staged, promote, verify) runs reviewed code from `.trusted/`, a
+# separate checkout of the default branch, never code from the candidate commit. The candidate's own
+# code only runs the Playwright certification, which never receives the Vercel token.
+#
 # Names-only configuration check is an EARLY signal; the real proof that Gemini / CopilotKit / the
 # database work is the certification step's real concierge turn on the exact candidate.
 #
@@ -48,7 +53,7 @@ env:
 jobs:
   credential-check:
     name: vercel-credential-check
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -85,25 +90,36 @@ jobs:
       - name: Checkout exact deployed commit
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
 
+      # AFTER the candidate checkout on purpose: a later root checkout runs `git clean` and would
+      # delete this folder. Reviewed default-branch code, not the candidate's.
+      - name: Checkout trusted release-control code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          path: .trusted
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Trusted validator, candidate working directory: `git rev-parse HEAD` is the candidate's.
       - name: Validate Vercel candidate trust boundary
         run: |
           set -euo pipefail
-          node scripts/validate-vercel-deployment-event.mjs
+          node .trusted/scripts/validate-vercel-deployment-event.mjs
 
       - name: Verify the Vercel credential reaches the current team and project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/vercel-release-control.mjs credential
+        run: node .trusted/scripts/vercel-release-control.mjs credential
 
       - name: Verify Production defines the required variable names
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/vercel-release-control.mjs env-names
+        run: node .trusted/scripts/vercel-release-control.mjs env-names
 
       - name: Confirm the candidate is staged
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/vercel-release-control.mjs assert-staged
+        run: node .trusted/scripts/vercel-release-control.mjs assert-staged
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -166,6 +182,8 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          # Run from the trusted checkout so the candidate's .npmrc / package.json cannot steer npx.
+          cd .trusted
           npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "${VERCEL_DEPLOYMENT_ID}" \
             --yes --scope "${VERCEL_SCOPE}" --token "${VERCEL_TOKEN}"
 
@@ -173,4 +191,4 @@ jobs:
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/vercel-release-control.mjs assert-promoted
+        run: node .trusted/scripts/vercel-release-control.mjs assert-promoted

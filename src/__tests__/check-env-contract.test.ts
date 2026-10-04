@@ -92,7 +92,7 @@ describe("check-env-contract — runtime mode", () => {
   const RUNTIME_COMPLETE = {
     DATABASE_URL: "postgresql://unit-test-host/unit-test-db",
     SUPABASE_SERVICE_ROLE_KEY: "unit-test-service-role",
-    COPILOTKIT_API_KEY: "unit-test-copilotkit-runtime-secret",
+    CPK_INTELLIGENCE_API_KEY: "unit-test-copilotkit-runtime-secret",
     // SAN-1388: a real runtime cannot be healthy without the Gemini key.
     GOOGLE_GENERATIVE_AI_API_KEY: "unit-test-gemini-key",
     NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
@@ -106,28 +106,28 @@ describe("check-env-contract — runtime mode", () => {
     });
     expect(out).toContain("MISSING DATABASE_URL");
     expect(out).toContain("MISSING SUPABASE_SERVICE_ROLE_KEY");
-    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(out).toContain("MISSING GOOGLE_GENERATIVE_AI_API_KEY");
     expect(status).toBe(1);
   });
 
-  // SAN-1358 · D20 — a required service credential must fail certification when
-  // absent, otherwise a deployment can ship with the runtime's service path
-  // unvalidatable and nothing notices.
-  it("fails the runtime contract when COPILOTKIT_API_KEY is absent", () => {
+  // SAN-1330 — the CopilotKit Intelligence credential is required for a healthy
+  // production runtime (it was previously named after MDE's own service bearer,
+  // which is now the optional MDE_COPILOTKIT_SERVICE_BEARER).
+  it("fails the runtime contract when CPK_INTELLIGENCE_API_KEY is absent", () => {
     const withoutKey: Record<string, string> = { ...RUNTIME_COMPLETE };
-    delete withoutKey.COPILOTKIT_API_KEY;
+    delete withoutKey.CPK_INTELLIGENCE_API_KEY;
     const { status, out } = run(["--mode=runtime"], withoutKey);
-    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(status).toBe(1);
   });
 
-  it("fails the runtime contract when COPILOTKIT_API_KEY is blank", () => {
+  it("fails the runtime contract when CPK_INTELLIGENCE_API_KEY is blank", () => {
     const { status, out } = run(["--mode=runtime"], {
       ...RUNTIME_COMPLETE,
-      COPILOTKIT_API_KEY: "   ",
+      CPK_INTELLIGENCE_API_KEY: "   ",
     });
-    expect(out).toContain("MISSING COPILOTKIT_API_KEY");
+    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(status).toBe(1);
   });
 
@@ -138,14 +138,33 @@ describe("check-env-contract — runtime mode", () => {
   });
 
   // The credential is server-only; it must never be required of the browser tier.
-  it("does not require COPILOTKIT_API_KEY in the build-time client tier", () => {
+  it("does not require CPK_INTELLIGENCE_API_KEY in the build-time client tier", () => {
     const { status, out } = run(["--mode=build", "--strict"], {
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: CI_CLIENT.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
     });
-    expect(out).not.toContain("MISSING COPILOTKIT_API_KEY");
+    expect(out).not.toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(status).toBe(0);
+  });
+
+  it("the retired service-bearer name alone does not satisfy the runtime contract", () => {
+    const withoutKey: Record<string, string> = { ...RUNTIME_COMPLETE };
+    delete withoutKey.CPK_INTELLIGENCE_API_KEY;
+    const { status, out } = run(["--mode=runtime"], {
+      ...withoutKey,
+      ["COPILOTKIT" + "_API_KEY"]: "legacy-name-must-not-count",
+    });
+    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
+    expect(status).toBe(1);
+  });
+
+  it("MDE_COPILOTKIT_SERVICE_BEARER is optional: absent or present, the contract does not depend on it", () => {
+    const absent = run(["--mode=runtime"], RUNTIME_COMPLETE);
+    expect(absent.status).toBe(0);
+    const present = run(["--mode=runtime"], { ...RUNTIME_COMPLETE, MDE_COPILOTKIT_SERVICE_BEARER: "unit-test-bearer" });
+    expect(present.status).toBe(0);
+    expect(present.out).not.toContain("unit-test-bearer");
   });
 
   it("reports the build-time tier as not enforced in runtime mode", () => {
@@ -160,7 +179,7 @@ describe("check-env-contract — output safety", () => {
     const { out } = run(["--mode=runtime", "--strict"], {
       DATABASE_URL: `postgresql://user:${secret}@host/db`,
       SUPABASE_SERVICE_ROLE_KEY: secret,
-      COPILOTKIT_API_KEY: secret,
+      CPK_INTELLIGENCE_API_KEY: secret,
       GOOGLE_GENERATIVE_AI_API_KEY: secret,
       NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,

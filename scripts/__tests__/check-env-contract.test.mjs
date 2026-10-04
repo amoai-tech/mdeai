@@ -61,7 +61,7 @@ const CLIENT = [
 const RUNTIME_WITHOUT_GEMINI = [
   "DATABASE_URL=sentinel-db-7f3a",
   "SUPABASE_SERVICE_ROLE_KEY=sentinel-service-7f3a",
-  "COPILOTKIT_API_KEY=sentinel-ck-7f3a",
+  "CPK_INTELLIGENCE_API_KEY=sentinel-ck-7f3a",
   "NEXT_PUBLIC_SUPABASE_URL=sentinel-url-7f3a",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sentinel-pub-7f3a",
 ].join("\n");
@@ -174,10 +174,68 @@ describe("Gemini is required for a real runtime only", () => {
 
   it("a production build does not need Gemini either", () => {
     const { status, out } = run(["--mode=build"], {
-      files: { ".env.local": `${CLIENT}\nNEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a\n` },
+      // A production build also needs the CopilotKit public license key (SAN-1330), but never Gemini.
+      files: { ".env.local": `${CLIENT}\nNEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a\nNEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY=sentinel-lic-7f3a\n` },
       env: { VERCEL_ENV: "production" },
     });
     assert.equal(status, 0, out);
+  });
+});
+
+describe("CopilotKit variables (SAN-1330)", () => {
+  const LICENSE = "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY=sentinel-lic-7f3a";
+  const PRODUCTION_BUILD = { VERCEL_ENV: "production" };
+  const MAPS_ID = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a";
+
+  it("a production build FAILS when the public license key is missing", () => {
+    const { status, out } = run(["--mode=build"], { files: { ".env.local": `${CLIENT}\n${MAPS_ID}` }, env: PRODUCTION_BUILD });
+    assert.equal(status, 1, out);
+    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+  });
+
+  it("a production build PASSES when the public license key is present", () => {
+    const { status, out } = run(["--mode=build"], { files: { ".env.local": `${CLIENT}\n${MAPS_ID}\n${LICENSE}` }, env: PRODUCTION_BUILD });
+    assert.equal(status, 0, out);
+  });
+
+  it("the mocked-CI strict build does not need the license key", () => {
+    const { status, out } = run(["--mode=build", "--strict"], { files: { ".env.local": CLIENT } });
+    assert.equal(status, 0, out);
+  });
+
+  it("runtime FAILS when CPK_INTELLIGENCE_API_KEY is missing", () => {
+    const without = RUNTIME_WITHOUT_GEMINI.replace(/^CPK_INTELLIGENCE_API_KEY=.*\n?/m, "");
+    const { status, out } = run(["--mode=runtime"], {
+      files: { ".env.local": `${without}\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
+    });
+    assert.equal(status, 1, out);
+    assert.match(out, /MISSING CPK_INTELLIGENCE_API_KEY/);
+  });
+
+  it("runtime PASSES with both Gemini and CPK_INTELLIGENCE_API_KEY configured", () => {
+    const { status, out } = run(["--mode=runtime"], {
+      files: { ".env.local": `${RUNTIME_WITHOUT_GEMINI}\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
+    });
+    assert.equal(status, 0, out);
+  });
+
+  it("the retired service-bearer name alone does NOT satisfy runtime", () => {
+    const without = RUNTIME_WITHOUT_GEMINI.replace(/^CPK_INTELLIGENCE_API_KEY=.*\n?/m, "");
+    const legacy = "COPILOTKIT" + "_API_KEY";
+    const { status, out } = run(["--mode=runtime"], {
+      files: { ".env.local": `${without}\n${legacy}=sentinel-legacy-7f3a\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
+    });
+    assert.equal(status, 1, out);
+    assert.match(out, /MISSING CPK_INTELLIGENCE_API_KEY/);
+    assert.doesNotMatch(out, /sentinel-legacy-7f3a/);
+  });
+
+  it("MDE_COPILOTKIT_SERVICE_BEARER is optional and never printed", () => {
+    const { status, out } = run(["--mode=runtime"], {
+      files: { ".env.local": `${RUNTIME_WITHOUT_GEMINI}\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\nMDE_COPILOTKIT_SERVICE_BEARER=sentinel-bearer-7f3a\n` },
+    });
+    assert.equal(status, 0, out);
+    assert.doesNotMatch(out, /sentinel-bearer-7f3a/);
   });
 });
 

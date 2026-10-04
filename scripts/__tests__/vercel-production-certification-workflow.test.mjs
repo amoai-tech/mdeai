@@ -113,6 +113,7 @@ test("order: validate, credential, names, staged, certify, publish, promote, ver
   const job = certifyJob(workflow());
   const order = [
     "Checkout exact deployed commit",
+    "Checkout trusted release-control code",
     "Validate Vercel candidate trust boundary",
     "Verify the Vercel credential reaches the current team and project",
     "Verify Production defines the required variable names",
@@ -149,17 +150,17 @@ test("publishes success only from the certification step's own outcome", () => {
 test("production is verified after promotion, and only if promotion succeeded", () => {
   const job = certifyJob(workflow());
   const verify = stepBody(job, "Verify www.mdeai.co serves the exact certified deployment");
-  assert.match(verify, /node scripts\/vercel-release-control\.mjs assert-promoted/);
+  assert.match(verify, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-promoted/);
   assert.match(verify, /if:\s*\$\{\{\s*success\(\)\s*\}\}/);
 });
 
 test("the candidate is validated, credential-checked and confirmed staged before any test runs", () => {
   const job = certifyJob(workflow());
   const validate = stepBody(job, "Validate Vercel candidate trust boundary");
-  assert.match(validate, /node scripts\/validate-vercel-deployment-event\.mjs/);
-  assert.match(job, /node scripts\/vercel-release-control\.mjs credential/);
-  assert.match(job, /node scripts\/vercel-release-control\.mjs env-names/);
-  assert.match(job, /node scripts\/vercel-release-control\.mjs assert-staged/);
+  assert.match(validate, /node \.trusted\/scripts\/validate-vercel-deployment-event\.mjs/);
+  assert.match(job, /node \.trusted\/scripts\/vercel-release-control\.mjs credential/);
+  assert.match(job, /node \.trusted\/scripts\/vercel-release-control\.mjs env-names/);
+  assert.match(job, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-staged/);
   const certify = stepIndex(job, "Certify exact staged candidate");
   for (const name of [
     "Validate Vercel candidate trust boundary",
@@ -200,6 +201,46 @@ test("only the certify job can promote; the manual credential check is read-only
   assert.match(credentialJob, /if: github\.event_name == 'workflow_dispatch'/);
   assert.doesNotMatch(credentialJob, /promote|statuses|gh api/, "the manual check must not promote or publish");
   assert.match(certifyJob(text), /github\.event_name == 'repository_dispatch'/);
+});
+
+test("the Vercel token only ever reaches reviewed code from the trusted checkout", () => {
+  const job = certifyJob(workflow());
+
+  // The candidate commit is checked out first; the default branch goes into .trusted AFTER it
+  // (a later root checkout runs `git clean` and would delete the folder).
+  const trusted = stepBody(job, "Checkout trusted release-control code");
+  assert.ok(
+    stepIndex(job, "Checkout exact deployed commit") < stepIndex(job, "Checkout trusted release-control code"),
+    "the trusted checkout must come after the candidate checkout",
+  );
+  assert.match(trusted, /ref: main/);
+  assert.match(trusted, /path: \.trusted/);
+  assert.match(trusted, /persist-credentials: false/);
+  assert.doesNotMatch(trusted, /client_payload/, "the trusted ref must not come from the dispatch payload");
+
+  // Every step that holds the token runs code from `.trusted/` (or the pinned npm CLI from there).
+  const steps = job.split("\n      - ").slice(1);
+  const withToken = steps.filter((step) => /VERCEL_TOKEN/.test(step));
+  assert.ok(withToken.length >= 5, "expected the credential, names, staged, promote and verify steps");
+  for (const step of withToken) {
+    const name = step.match(/name: (.+)/)?.[1] ?? "(unnamed)";
+    assert.match(step, /\.trusted(\/|\s|$)/m, `"${name}" holds VERCEL_TOKEN so it must run trusted code`);
+    assert.doesNotMatch(step, /node scripts\/|npm run|npx playwright|npm ci/, `"${name}" must not run candidate code`);
+  }
+
+  // The trust-boundary validator is the trusted copy too: a candidate cannot vouch for itself.
+  assert.doesNotMatch(job, /node scripts\/validate-vercel-deployment-event\.mjs/);
+  assert.doesNotMatch(job, /node scripts\/vercel-release-control\.mjs/);
+
+  // The pinned CLI runs from the trusted checkout so the candidate's .npmrc cannot steer npx.
+  assert.match(stepBody(job, "Promote the exact certified deployment"), /cd \.trusted/);
+});
+
+test("the manual credential check can only run from main", () => {
+  const text = workflow();
+  const start = text.indexOf("\n  credential-check:");
+  const credentialJob = text.slice(start, text.indexOf("\n  certify:"));
+  assert.match(credentialJob, /github\.ref == 'refs\/heads\/main'/);
 });
 
 test("candidates are certified one at a time", () => {
