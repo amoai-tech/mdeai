@@ -88,14 +88,6 @@ const BUILD_CLIENT = [
 const RUNTIME = [
   { name: "DATABASE_URL", why: "Mastra Postgres storage — production fails closed without it" },
   { name: "SUPABASE_SERVICE_ROLE_KEY", why: "privileged server reads/writes (ai_runs, durability)" },
-  {
-    // SAN-1330 — CopilotKit Intelligence credential (server-only; never NEXT_PUBLIC_*). This is
-    // CopilotKit's hosted platform key, read as `new CopilotKitIntelligence({ apiKey })`. MDE does
-    // NOT construct that client today (same-origin runtime on purpose: UX-001, D17), so this is a
-    // presence check for the provisioned credential; wiring it is a separate architecture decision.
-    name: "CPK_INTELLIGENCE_API_KEY",
-    why: "CopilotKit Intelligence API key (server-only)",
-  },
   { name: "NEXT_PUBLIC_SUPABASE_URL", why: "SSR/proxy session refresh" },
   {
     name: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
@@ -116,6 +108,13 @@ const OPTIONAL = [
   // Not a CopilotKit credential. Optional because nothing in the repo presents it; when unset the
   // service path is CLOSED (401), never open.
   "MDE_COPILOTKIT_SERVICE_BEARER",
+  // SAN-1330 — CopilotKit Intelligence credential (server-only; never NEXT_PUBLIC_*). Keep it
+  // provisioned, but do not gate a release on it: CopilotKit reads it only through
+  // `new CopilotKitIntelligence({ apiKey })`, which MDE does not construct today (same-origin
+  // runtime on purpose: UX-001, D17). When MDE enables Intelligence (Rich Threads, User Memory,
+  // Learning, Analytics, Channels) this moves to RUNTIME, with a real thread create/reopen proof
+  // rather than a presence check, because Intelligence would then be a live dependency.
+  "CPK_INTELLIGENCE_API_KEY",
   "GOOGLE_API_KEY",
   "GOOGLE_PLACES_API_KEY",
   "GOOGLE_MAPS_API_KEY",

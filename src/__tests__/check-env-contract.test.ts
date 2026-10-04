@@ -106,29 +106,30 @@ describe("check-env-contract — runtime mode", () => {
     });
     expect(out).toContain("MISSING DATABASE_URL");
     expect(out).toContain("MISSING SUPABASE_SERVICE_ROLE_KEY");
-    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(out).toContain("MISSING GOOGLE_GENERATIVE_AI_API_KEY");
+    // Optional until MDE enables CopilotKit Intelligence (see check-env-contract.mjs).
+    expect(out).not.toContain("MISSING CPK_INTELLIGENCE_API_KEY");
     expect(status).toBe(1);
   });
 
-  // SAN-1330 — the CopilotKit Intelligence credential is required for a healthy
-  // production runtime (it was previously named after MDE's own service bearer,
-  // which is now the optional MDE_COPILOTKIT_SERVICE_BEARER).
-  it("fails the runtime contract when CPK_INTELLIGENCE_API_KEY is absent", () => {
+  // SAN-1330 — CPK_INTELLIGENCE_API_KEY stays provisioned but does not gate a release: CopilotKit
+  // reads it only through new CopilotKitIntelligence(), which MDE does not construct today.
+  it("passes the runtime contract when CPK_INTELLIGENCE_API_KEY is absent", () => {
     const withoutKey: Record<string, string> = { ...RUNTIME_COMPLETE };
     delete withoutKey.CPK_INTELLIGENCE_API_KEY;
     const { status, out } = run(["--mode=runtime"], withoutKey);
-    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
-    expect(status).toBe(1);
+    expect(out).not.toContain("MISSING CPK_INTELLIGENCE_API_KEY");
+    expect(out).toContain("env-contract: OK");
+    expect(status).toBe(0);
   });
 
-  it("fails the runtime contract when CPK_INTELLIGENCE_API_KEY is blank", () => {
+  it("passes the runtime contract when CPK_INTELLIGENCE_API_KEY is blank, and never prints it", () => {
     const { status, out } = run(["--mode=runtime"], {
       ...RUNTIME_COMPLETE,
       CPK_INTELLIGENCE_API_KEY: "   ",
     });
-    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
-    expect(status).toBe(1);
+    expect(out).not.toContain("MISSING CPK_INTELLIGENCE_API_KEY");
+    expect(status).toBe(0);
   });
 
   it("passes when the runtime contract is complete", () => {
@@ -148,14 +149,17 @@ describe("check-env-contract — runtime mode", () => {
     expect(status).toBe(0);
   });
 
-  it("the retired service-bearer name alone does not satisfy the runtime contract", () => {
-    const withoutKey: Record<string, string> = { ...RUNTIME_COMPLETE };
-    delete withoutKey.CPK_INTELLIGENCE_API_KEY;
-    const { status, out } = run(["--mode=runtime"], {
-      ...withoutKey,
+  it("the retired legacy name alone does not satisfy a production build (the license key is still required)", () => {
+    const { status, out } = run(["--mode=build"], {
+      NEXT_PUBLIC_SUPABASE_URL: CI_CLIENT.NEXT_PUBLIC_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CI_CLIENT.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: CI_CLIENT.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+      NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: "unit-test-map-id",
+      VERCEL_ENV: "production",
       ["COPILOTKIT" + "_API_KEY"]: "legacy-name-must-not-count",
     });
-    expect(out).toContain("MISSING CPK_INTELLIGENCE_API_KEY");
+    expect(out).toContain("MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY");
+    expect(out).not.toContain("legacy-name-must-not-count");
     expect(status).toBe(1);
   });
 

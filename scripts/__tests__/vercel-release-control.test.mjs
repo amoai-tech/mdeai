@@ -84,9 +84,11 @@ test("env names: reports a missing Gemini key by name", () => {
   assert.throws(() => checkEnvNames({ envs }), /GOOGLE_GENERATIVE_AI_API_KEY/);
 });
 
-test("env names: missing CPK Intelligence key blocks release", () => {
+test("env names: a missing CPK Intelligence key does NOT block release (optional until Intelligence is wired)", () => {
+  // MDE never builds CopilotKitIntelligence today, so the app does not consume this key. When it
+  // does, move the name back into REQUIRED_PRODUCTION_ENV and prove a real thread create/reopen.
   const envs = allRequired().filter((e) => e.key !== "CPK_INTELLIGENCE_API_KEY");
-  assert.throws(() => checkEnvNames({ envs }), /CPK_INTELLIGENCE_API_KEY/);
+  assert.doesNotThrow(() => checkEnvNames({ envs }));
 });
 
 test("env names: missing public CopilotKit license key blocks release", () => {
@@ -96,12 +98,9 @@ test("env names: missing public CopilotKit license key blocks release", () => {
 
 test("env names: legacy COPILOTKIT_API_KEY alone cannot satisfy the release contract", () => {
   const envs = allRequired()
-    .filter((e) => !["CPK_INTELLIGENCE_API_KEY", "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"].includes(e.key))
+    .filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY")
     .concat(env("COPILOTKIT_API_KEY"));
-  assert.throws(
-    () => checkEnvNames({ envs }),
-    /CPK_INTELLIGENCE_API_KEY.*NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/,
-  );
+  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
 });
 
 test("env names: accepts the legacy anon key in place of the publishable key", () => {
@@ -264,8 +263,15 @@ test("the release env contract is exactly the application's required env contrac
   const releaseContract = new Set(REQUIRED_PRODUCTION_ENV.map((spec) => spec.name));
   assert.deepEqual([...releaseContract].sort(), [...appContract].sort());
 
-  assert.equal(releaseContract.has("CPK_INTELLIGENCE_API_KEY"), true);
   assert.equal(releaseContract.has("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"), true);
+  // The Intelligence key is optional until MDE constructs CopilotKitIntelligence: neither the app
+  // contract nor the release gate requires it, but it must stay documented as an optional name.
+  assert.equal(releaseContract.has("CPK_INTELLIGENCE_API_KEY"), false);
+  assert.equal(appContract.has("CPK_INTELLIGENCE_API_KEY"), false);
+  const optional = source.slice(source.indexOf("const OPTIONAL = ["), source.indexOf("\n];", source.indexOf("const OPTIONAL = [")));
+  assert.match(optional, /"CPK_INTELLIGENCE_API_KEY"/, "must remain listed as an optional variable");
+  const example = fs.readFileSync(path.resolve(".env.example"), "utf8");
+  assert.match(example, /^CPK_INTELLIGENCE_API_KEY=/m, ".env.example must keep documenting the key");
   // The retired name must not come back in either contract.
   assert.equal(releaseContract.has("COPILOTKIT" + "_API_KEY"), false);
   assert.equal(appContract.has("COPILOTKIT" + "_API_KEY"), false);

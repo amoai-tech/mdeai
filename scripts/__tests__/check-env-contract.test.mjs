@@ -203,13 +203,24 @@ describe("CopilotKit variables (SAN-1330)", () => {
     assert.equal(status, 0, out);
   });
 
-  it("runtime FAILS when CPK_INTELLIGENCE_API_KEY is missing", () => {
+  it("runtime PASSES without CPK_INTELLIGENCE_API_KEY: optional until MDE enables CopilotKit Intelligence", () => {
     const without = RUNTIME_WITHOUT_GEMINI.replace(/^CPK_INTELLIGENCE_API_KEY=.*\n?/m, "");
     const { status, out } = run(["--mode=runtime"], {
       files: { ".env.local": `${without}\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
     });
-    assert.equal(status, 1, out);
-    assert.match(out, /MISSING CPK_INTELLIGENCE_API_KEY/);
+    assert.equal(status, 0, out);
+    assert.doesNotMatch(out, /MISSING CPK_INTELLIGENCE_API_KEY/);
+    // It stays visible to operators as an optional variable (and its value is never printed).
+    assert.match(out, /unset\s+CPK_INTELLIGENCE_API_KEY/);
+  });
+
+  it("runtime reports CPK_INTELLIGENCE_API_KEY as set when it is provisioned, without printing it", () => {
+    const { status, out } = run(["--mode=runtime"], {
+      files: { ".env.local": `${RUNTIME_WITHOUT_GEMINI}\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
+    });
+    assert.equal(status, 0, out);
+    assert.match(out, /set\s+CPK_INTELLIGENCE_API_KEY/);
+    assert.doesNotMatch(out, /sentinel-ck-7f3a/);
   });
 
   it("runtime PASSES with both Gemini and CPK_INTELLIGENCE_API_KEY configured", () => {
@@ -219,14 +230,14 @@ describe("CopilotKit variables (SAN-1330)", () => {
     assert.equal(status, 0, out);
   });
 
-  it("the retired service-bearer name alone does NOT satisfy runtime", () => {
-    const without = RUNTIME_WITHOUT_GEMINI.replace(/^CPK_INTELLIGENCE_API_KEY=.*\n?/m, "");
+  it("the retired legacy name alone does NOT satisfy a production build (the license key is still required)", () => {
     const legacy = "COPILOTKIT" + "_API_KEY";
-    const { status, out } = run(["--mode=runtime"], {
-      files: { ".env.local": `${without}\n${legacy}=sentinel-legacy-7f3a\nGOOGLE_GENERATIVE_AI_API_KEY=sentinel-gem-7f3a\n` },
+    const { status, out } = run(["--mode=build"], {
+      files: { ".env.local": `${CLIENT}\n${MAPS_ID}\n${legacy}=sentinel-legacy-7f3a` },
+      env: PRODUCTION_BUILD,
     });
     assert.equal(status, 1, out);
-    assert.match(out, /MISSING CPK_INTELLIGENCE_API_KEY/);
+    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
     assert.doesNotMatch(out, /sentinel-legacy-7f3a/);
   });
 
