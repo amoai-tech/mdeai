@@ -8,11 +8,15 @@ import { test } from "node:test";
  *
  * The retired service-bearer name collided with CopilotKit's own credentials, so MDE's custom bearer
  * now has its own name (`MDE_COPILOTKIT_SERVICE_BEARER`) and the CopilotKit variables are exactly
- * `CPK_INTELLIGENCE_API_KEY` and `NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY`. This guard fails if
+ * `CPK_INTELLIGENCE_API_KEY` and `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY`. This guard fails if
  * production code, the env contract, the release gate, the workflows or `.env.example` ever read
- * the retired name again. Test files are excluded: they name it on purpose, as the negative case.
+ * a retired name again. Test files are excluded: they name it on purpose, as the negative case.
  */
-const RETIRED = new RegExp(`(?<![A-Z0-9_])${"COPILOTKIT"}_API_KEY(?![A-Z0-9_])`);
+// Two retired names: the service-bearer name, and the MDE-specific browser license name that
+// CopilotKit's own `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY` replaced. Built from parts so this file
+// never contains either literally.
+const RETIRED_NAMES = [`${"COPILOTKIT"}_API_KEY`, `NEXT_PUBLIC_COPILOTKIT_${"PUBLIC"}_LICENSE_KEY`];
+const RETIRED = new RegExp(`(?<![A-Z0-9_])(?:${RETIRED_NAMES.join("|")})(?![A-Z0-9_])`);
 const SKIP_DIRS = new Set(["node_modules", ".next", "__tests__", "__snapshots__"]);
 
 function* files(dir) {
@@ -42,12 +46,12 @@ test("no production code, contract, gate, workflow or example env reads the reti
 test("the service bearer reads only its own, correctly named variable", () => {
   const auth = fs.readFileSync("src/lib/copilotkit-auth.ts", "utf8");
   assert.match(auth, /process\.env\.MDE_COPILOTKIT_SERVICE_BEARER/);
-  assert.doesNotMatch(auth, /process\.env\.(CPK_INTELLIGENCE_API_KEY|NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY)/, "the bearer must never be a CopilotKit credential");
+  assert.doesNotMatch(auth, /process\.env\.(CPK_INTELLIGENCE_API_KEY|NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY)/, "the bearer must never be a CopilotKit credential");
 });
 
 test("the browser license key reaches the provider only through the shared prop builder", () => {
   const props = fs.readFileSync("src/lib/copilotkit-client-props.ts", "utf8");
-  assert.match(props, /process\.env\.NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+  assert.match(props, /process\.env\.NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY/);
   assert.match(props, /publicLicenseKey/);
   assert.doesNotMatch(props, /publicApiKey:/, "never pass the legacy Cloud key alias (UX-001)");
 });

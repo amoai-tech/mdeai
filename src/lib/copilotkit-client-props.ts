@@ -24,7 +24,7 @@ const STABLE_SELF_MANAGED_AGENTS: Record<string, never> = {};
  * There is also no hosted-Cloud (`publicApiKey`) shape: MDE always uses the
  * same-origin runtime below.
  *
- * License (SAN-1330): `NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY` is passed as
+ * License (SAN-1330): `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY` is passed as
  * `publicLicenseKey` when set. It is a LICENSE, not a hosting switch: in the
  * installed 1.75.0 provider `chatApiEndpoint = runtimeUrl ?? (key ? cloud : undefined)`,
  * so the same-origin `runtimeUrl` always wins and chat can never be redirected to
@@ -64,7 +64,7 @@ export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitCli
   // after dev restarts a stale .next chunk causes ChunkLoadError for that bundle.
   const inspectorOff = { showDevConsole: false as const };
   // Direct `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
-  const publicLicenseKey = process.env.NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY?.trim();
+  const publicLicenseKey = process.env.NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY?.trim();
 
   return {
     runtimeUrl: COPILOTKIT_BASE_PATH,

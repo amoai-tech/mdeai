@@ -175,7 +175,7 @@ describe("Gemini is required for a real runtime only", () => {
   it("a production build does not need Gemini either", () => {
     const { status, out } = run(["--mode=build"], {
       // A production build also needs the CopilotKit public license key (SAN-1330), but never Gemini.
-      files: { ".env.local": `${CLIENT}\nNEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a\nNEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY=sentinel-lic-7f3a\n` },
+      files: { ".env.local": `${CLIENT}\nNEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a\nNEXT_PUBLIC_COPILOTKIT_LICENSE_KEY=sentinel-lic-7f3a\n` },
       env: { VERCEL_ENV: "production" },
     });
     assert.equal(status, 0, out);
@@ -183,14 +183,14 @@ describe("Gemini is required for a real runtime only", () => {
 });
 
 describe("CopilotKit variables (SAN-1330)", () => {
-  const LICENSE = "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY=sentinel-lic-7f3a";
+  const LICENSE = "NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY=sentinel-lic-7f3a";
   const PRODUCTION_BUILD = { VERCEL_ENV: "production" };
   const MAPS_ID = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=sentinel-map-7f3a";
 
   it("a production build FAILS when the public license key is missing", () => {
     const { status, out } = run(["--mode=build"], { files: { ".env.local": `${CLIENT}\n${MAPS_ID}` }, env: PRODUCTION_BUILD });
     assert.equal(status, 1, out);
-    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY/);
   });
 
   it("a production build PASSES when the public license key is present", () => {
@@ -237,7 +237,7 @@ describe("CopilotKit variables (SAN-1330)", () => {
       env: PRODUCTION_BUILD,
     });
     assert.equal(status, 1, out);
-    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+    assert.match(out, /MISSING NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY/);
     assert.doesNotMatch(out, /sentinel-legacy-7f3a/);
   });
 

@@ -158,7 +158,7 @@ describe("check-env-contract — runtime mode", () => {
       VERCEL_ENV: "production",
       ["COPILOTKIT" + "_API_KEY"]: "legacy-name-must-not-count",
     });
-    expect(out).toContain("MISSING NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY");
+    expect(out).toContain("MISSING NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY");
     expect(out).not.toContain("legacy-name-must-not-count");
     expect(status).toBe(1);
   });

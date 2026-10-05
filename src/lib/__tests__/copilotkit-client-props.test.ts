@@ -65,8 +65,8 @@ describe("getCopilotKitClientProps", () => {
   });
 
   describe("public license key (SAN-1330)", () => {
-    it("passes NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY as publicLicenseKey, still on the same-origin runtime", () => {
-      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", "ck_pub_license_test_value");
+    it("passes NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY as publicLicenseKey, still on the same-origin runtime", () => {
+      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", "ck_pub_license_test_value");
 
       for (const agent of ["conciergeAgent", "hostEventAgent", "hostOpsAgent"] as const) {
         const props = getCopilotKitClientProps(agent);
@@ -80,18 +80,18 @@ describe("getCopilotKitClientProps", () => {
 
     it("omits publicLicenseKey entirely when the variable is unset, empty or blank", () => {
       for (const value of [undefined, "", "   "]) {
-        if (value === undefined) vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", "");
-        else vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", value);
+        if (value === undefined) vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", "");
+        else vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", value);
         expect("publicLicenseKey" in getCopilotKitClientProps("conciergeAgent")).toBe(false);
       }
     });
 
     it("trims the key, and keeps the other props identical with or without it", () => {
-      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", "  ck_pub_trim  ");
+      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", "  ck_pub_trim  ");
       const withKey = getCopilotKitClientProps("conciergeAgent");
       expect(withKey.publicLicenseKey).toBe("ck_pub_trim");
 
-      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", "");
+      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", "");
       const withoutKey = getCopilotKitClientProps("conciergeAgent");
       const rest: Record<string, unknown> = { ...withKey };
       delete rest.publicLicenseKey;
@@ -100,7 +100,7 @@ describe("getCopilotKitClientProps", () => {
 
     it("the legacy Cloud public API key is still ignored even when a license key is set", () => {
       vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY", "ck_pub_legacy_must_be_ignored");
-      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY", "ck_pub_license_test_value");
+      vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY", "ck_pub_license_test_value");
       const props = getCopilotKitClientProps("conciergeAgent");
       expect("publicApiKey" in props).toBe(false);
       expect(JSON.stringify(props)).not.toContain("ck_pub_legacy_must_be_ignored");

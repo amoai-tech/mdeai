@@ -92,15 +92,15 @@ test("env names: a missing CPK Intelligence key does NOT block release (optional
 });
 
 test("env names: missing public CopilotKit license key blocks release", () => {
-  const envs = allRequired().filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY");
-  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+  const envs = allRequired().filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY");
+  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY/);
 });
 
 test("env names: legacy COPILOTKIT_API_KEY alone cannot satisfy the release contract", () => {
   const envs = allRequired()
-    .filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY")
+    .filter((e) => e.key !== "NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY")
     .concat(env("COPILOTKIT_API_KEY"));
-  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY/);
+  assert.throws(() => checkEnvNames({ envs }), /NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY/);
 });
 
 test("env names: accepts the legacy anon key in place of the publishable key", () => {
@@ -289,7 +289,7 @@ test("the release env contract is exactly the application's required env contrac
   const releaseContract = new Set(REQUIRED_PRODUCTION_ENV.map((spec) => spec.name));
   assert.deepEqual([...releaseContract].sort(), [...appContract].sort());
 
-  assert.equal(releaseContract.has("NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY"), true);
+  assert.equal(releaseContract.has("NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY"), true);
   // The Intelligence key is optional until MDE constructs CopilotKitIntelligence: neither the app
   // contract nor the release gate requires it, but it must stay documented as an optional name.
   assert.equal(releaseContract.has("CPK_INTELLIGENCE_API_KEY"), false);

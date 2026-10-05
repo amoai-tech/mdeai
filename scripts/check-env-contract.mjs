@@ -78,7 +78,7 @@ const BUILD_CLIENT = [
     // SAN-1330 — CopilotKit's public license key, passed to <CopilotKitProvider> as
     // `publicLicenseKey` (src/lib/copilotkit-client-props.ts). NEXT_PUBLIC_* is compiled
     // into the bundle, so a production build without it silently ships without a license.
-    name: "NEXT_PUBLIC_COPILOTKIT_PUBLIC_LICENSE_KEY",
+    name: "NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY",
     why: "CopilotKit public license key (browser provider)",
     productionOnly: true, // provisioned in Vercel Production/Preview, not in CI Floor
   },
