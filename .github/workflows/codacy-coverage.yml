@@ -1,0 +1,60 @@
+name: Codacy Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codacy-coverage-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Report coverage to Codacy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate LCOV coverage
+        run: npm run test:coverage -- --coverage.reporter=lcov
+        env:
+          ANTHROPIC_API_KEY: ""
+          GOOGLE_API_KEY: ""
+          GOOGLE_GENERATIVE_AI_API_KEY: ""
+          GOOGLE_MAPS_API_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ""
+
+      - name: Require Codacy token on main
+        if: github.event_name == 'push' && env.CODACY_PROJECT_TOKEN == ''
+        run: |
+          echo "::error::CODACY_PROJECT_TOKEN is missing. Codacy coverage cannot be updated for main."
+          exit 1
+
+      - name: Upload coverage to Codacy
+        if: env.CODACY_PROJECT_TOKEN != ''
+        run: bash <(curl -Ls https://coverage.codacy.com/get.sh) report -r coverage/lcov.info
+
+      - name: Explain skipped upload for untrusted pull requests
+        if: github.event_name == 'pull_request' && env.CODACY_PROJECT_TOKEN == ''
+        run: echo "::notice::Codacy upload skipped because CODACY_PROJECT_TOKEN is unavailable to this pull request."
