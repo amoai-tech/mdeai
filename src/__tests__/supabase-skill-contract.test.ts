@@ -15,6 +15,26 @@ const declarativeRule = readFileSync(
   ".claude/skills/supabase/references/project-rules/supabase-declarative-schema.md",
   "utf8",
 );
+const functionsRule = readFileSync(
+  ".claude/skills/supabase/references/project-rules/supabase-database-functions.md",
+  "utf8",
+);
+const rlsRule = readFileSync(
+  ".claude/skills/supabase/references/project-rules/supabase-rls-policies.md",
+  "utf8",
+);
+const patternsRule = readFileSync(
+  ".claude/skills/supabase/references/project-rules/supabase-patterns.md",
+  "utf8",
+);
+const edgeFunctionsRule = readFileSync(
+  ".claude/skills/supabase/references/project-rules/supabase-edge-functions.md",
+  "utf8",
+);
+const storageRlsRule = readFileSync(
+  ".claude/skills/supabase/references/storage/rls-policies.md",
+  "utf8",
+);
 
 const emptySchemaPathsInDbMigrations =
   /^\[db\.migrations\](?:(?!^\[)[\s\S])*?^[ \t]*schema_paths[ \t]*=[ \t]*\[[ \t]*\][ \t]*(?:#.*)?$/m;
@@ -85,5 +105,65 @@ describe("Supabase skill repository contract", () => {
     expect(migrationsRule).not.toContain(
       "The file MUST be named in the format",
     );
+  });
+
+  it("requires explicit RPC execution privileges and truthful volatility", () => {
+    expect(functionsRule).toContain("intended caller");
+    expect(functionsRule).toContain("revoke execute on function");
+    expect(functionsRule).toContain("direct RPC");
+    expect(functionsRule).toContain("Leave PostgreSQL's `VOLATILE` default");
+    expect(functionsRule).not.toContain(
+      "Default to Immutable or Stable Functions",
+    );
+  });
+
+  it("requires production target identity before remote migration work", () => {
+    expect(migrationsRule).toContain(
+      "A valid credential is not proof that it points to MDE production",
+    );
+    expect(migrationsRule).toContain("verify the production target");
+    expect(migrationsRule).toContain(
+      "do not automate the production-target identity check",
+    );
+  });
+
+  it("treats grants, RLS policies, and allow-deny tests as one access contract", () => {
+    expect(rlsRule).toContain("Grants and RLS are separate gates");
+    expect(rlsRule).toContain("supabase test db");
+    expect(rlsRule).toContain("restrictive");
+    expect(rlsRule).not.toContain(
+      "Discourage `RESTRICTIVE` policies and encourage `PERMISSIVE` policies",
+    );
+  });
+
+  it("states that privileged credentials are not authorization", () => {
+    expect(patternsRule).toContain(
+      "Service/secret keys bypass RLS; they are never authorization",
+    );
+    expect(patternsRule).toContain("ownership/version/state");
+    expect(patternsRule).toContain(".maybeSingle()");
+  });
+
+  it("classifies Edge Function callers before implementation", () => {
+    expect(edgeFunctionsRule).toContain("Classify the caller before implementation");
+    expect(edgeFunctionsRule).toContain("User");
+    expect(edgeFunctionsRule).toContain("Internal/service");
+    expect(edgeFunctionsRule).toContain("Public");
+    expect(edgeFunctionsRule).toContain("Webhook");
+    expect(edgeFunctionsRule).toContain(
+      "Never disable JWT verification merely to make a failing request work",
+    );
+  });
+
+  it("documents Storage upsert prerequisites without FOR ALL policies", () => {
+    expect(storageRlsRule).toContain(
+      "Upsert/replace requires applicable INSERT, SELECT, and UPDATE policies",
+    );
+    expect(storageRlsRule).toContain('"user_read"');
+    expect(storageRlsRule).not.toMatch(/for all/i);
+  });
+
+  it("checks the installed Supabase CLI before version-sensitive work", () => {
+    expect(skill).toContain("supabase --version");
   });
 });
