@@ -1,4 +1,4 @@
-/** Deno copy — keep in sync with mdeapp/src/lib/events/slugify-event-title.ts */
+/** Deno copy — keep in sync with src/lib/events/slugify-event-title.ts */
 export function slugifyEventTitle(title: string): string {
   const base = title
     .normalize("NFD")

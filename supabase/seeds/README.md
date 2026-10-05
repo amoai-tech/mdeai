@@ -12,9 +12,8 @@ Canonical **source artifacts** (JSON, CSV) for DATA venue seeds. **Runtime SQL**
 Regenerate SQL from curated JSON:
 
 ```bash
-cd mdeapp
-node --env-file=.env.local scripts/seed-cafe-anchors.mjs --write-sql ../supabase/migrations/<timestamp>_data035_venue_anchors_cafes.sql
-node --env-file=.env.local scripts/seed-nightclub-anchors.mjs --write-sql ../supabase/migrations/<timestamp>_data005_venue_anchors_nightclubs.sql
+node --env-file=.env.local scripts/seed-cafe-anchors.mjs --write-sql supabase/migrations/<timestamp>_data035_venue_anchors_cafes.sql
+node --env-file=.env.local scripts/seed-nightclub-anchors.mjs --write-sql supabase/migrations/<timestamp>_data005_venue_anchors_nightclubs.sql
 ```
 
 Listings research (markdown): [`../../tasks/venues/tasks/listings/`](../../tasks/venues/tasks/listings/)

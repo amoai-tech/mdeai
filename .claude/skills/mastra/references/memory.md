@@ -73,7 +73,7 @@ Index via MCP: `mastraDocs` path `reference/memory/`
 }
 ```
 
-Package: `@mastra/memory` — use `readMastraDocs` with `projectPath: /home/sk/mdeai/mdeapp`.
+Package: `@mastra/memory` — use `readMastraDocs` with `projectPath` set to the absolute path of the current checkout root.
 
 ---
 
@@ -81,6 +81,6 @@ Package: `@mastra/memory` — use `readMastraDocs` with `projectPath: /home/sk/m
 
 | Artifact | Path |
 | --- | --- |
-| Concierge working memory schema | `mdeapp/src/mastra/agents/concierge.ts` + `mdeapp/src/lib/types.ts` |
+| Concierge working memory schema | `src/mastra/agents/concierge.ts` + `src/lib/types.ts` |
 | Concierge patterns | [`mdeai-concierge.md`](mdeai-concierge.md) |
 | v1 memory migration | https://mastra.ai/guides/migrations/upgrade-to-v1/memory |

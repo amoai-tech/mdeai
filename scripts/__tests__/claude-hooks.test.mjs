@@ -349,3 +349,67 @@ describe("hook sources", () => {
     for (const f of registered) assert.ok(files.includes(f), `${f} is registered but missing`);
   });
 });
+
+/**
+ * The app lives at the repository root; there is no `mdeapp/` directory. Path-shaped references to
+ * it send Claude (and developers) to a folder that does not exist, and a probe or hook that
+ * checks it fails or passes for the wrong reason. This bans those shapes, not the word:
+ * `mdeapp` as a package name, Supabase project id, script name or product name is legitimate.
+ *
+ * Scanned: everything under `.claude/` (hooks including `_deferred/`, agents, commands, rules,
+ * skills and their scripts) plus the operator scripts in `scripts/`.
+ * Exception: add `layout-path-allow: <reason>` to the line. `check-docs.mjs` is skipped as a whole
+ * because it lists these exact strings as things the docs must NOT contain.
+ */
+describe("no stale mdeapp/ layout paths in Claude tooling or operator scripts", () => {
+  const REPO = join(HOOKS, "..", "..");
+  const STALE = [
+    /\bmdeapp\/(src|supabase|scripts|node_modules|package\.json|\.env|\.mcp|tmp|workspace|commerce|e2e|graphify-out)/,
+    /\/home\/sk\/mdeai\/mdeapp/,
+    /\bcd\s+mdeapp\b/,
+    /projectPath[^\n]*\bmdeapp\b/,
+  ];
+  const SKIP = new Set(["scripts/check-docs.mjs"]);
+  const TEXT = /\.(mjs|js|ts|sh|md|json|ya?ml)$/;
+
+  const walk = (dir) =>
+    readdirSync(dir, { withFileTypes: true, recursive: true })
+      .filter((e) => e.isFile() && TEXT.test(e.name))
+      .map((e) => join(e.parentPath ?? e.path, e.name));
+
+  const files = [
+    ...walk(join(REPO, ".claude")),
+    ...walk(join(REPO, "scripts")).filter((f) => !f.includes("/scripts/__tests__/") && !f.includes("/scripts/pr-agent/evals/fixtures/")),
+  ].filter((f) => !SKIP.has(f.slice(REPO.length + 1)));
+
+  it("scans the places that matter", () => {
+    const rel = files.map((f) => f.slice(REPO.length + 1));
+    for (const must of [
+      ".claude/hooks/_deferred/post-migration-typegen.mjs",
+      ".claude/agents/security-reviewer.md",
+      ".claude/commands/verify-floor.md",
+      ".claude/skills/task-verifier/scripts/probe-disk.sh",
+    ]) assert.ok(rel.includes(must), `${must} is not being scanned`);
+  });
+
+  it("recognises the stale shapes and leaves legitimate identifiers alone", () => {
+    const hit = (s) => STALE.some((re) => re.test(s));
+    for (const bad of ["cd mdeapp && npm run dev", "mdeapp/src/lib/x.ts", "/home/sk/mdeai/mdeapp", "mdeapp/node_modules/x", "projectPath: mdeapp"]) {
+      assert.ok(hit(bad), `should flag: ${bad}`);
+    }
+    for (const ok of ['"name": "mdeapp"', 'project_id = "mdeapp"', "verify:commerce-mdeapp-env", "gh repo view amo-tech-ai/mdeapp", "the old mdeapp/ folder is gone"]) {
+      assert.ok(!hit(ok), `should allow: ${ok}`);
+    }
+  });
+
+  it("no file points at a removed mdeapp/ directory", () => {
+    for (const f of files) {
+      readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+        if (/layout-path-allow:/.test(line)) return;
+        for (const re of STALE) {
+          assert.doesNotMatch(line, re, `${f.slice(REPO.length + 1)}:${i + 1} assumes an mdeapp/ directory`);
+        }
+      });
+    }
+  });
+});

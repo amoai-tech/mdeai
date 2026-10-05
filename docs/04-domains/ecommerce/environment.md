@@ -56,7 +56,7 @@ infisical run --silent --env=dev --path=/commerce -- bun run dev
 mdeapp commands stay on path `/`:
 
 ```bash
-cd mdeapp && infisical run --silent --env=dev --path=/ -- npm run dev
+infisical run --silent --env=dev --path=/ -- npm run dev
 ```
 
 ## Local webhook
@@ -69,7 +69,6 @@ stripe listen --forward-to localhost:9000/hooks/payment/stripe_stripe
 ## Verification
 
 ```bash
-cd mdeapp
 node scripts/verify-commerce-env.mjs
 ```
 
@@ -77,6 +76,6 @@ Exit 0 = Phase 1 commerce env contract satisfied.
 
 ## Git safety
 
-- `.env*` gitignored at `mdeapp/` root (includes `commerce/.env`)
+- `.env*` gitignored at the repository root (includes `commerce/.env`)
 - `commerce/mercur/packages/api/.env` gitignored via package `.gitignore`
 - Never commit `sk_*`, `pk_live_*`, or `whsec_*`

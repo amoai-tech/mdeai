@@ -32,4 +32,4 @@ tasks/<feature>/<TASK-ID>/
 
 ## Out of scope for `tasks/`
 
-App code, tests, and runtime live in the separate `mdeapp/` repo. `tasks/` holds **specs, evidence, and process docs only** — so lint/build/Playwright/Vercel don't apply to commits here.
+App code, tests, and runtime live at the repository root (`src/`, `supabase/`, `scripts/`). `tasks/` holds **specs, evidence, and process docs only** — so lint/build/Playwright/Vercel don't apply to commits here.

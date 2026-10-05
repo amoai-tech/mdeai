@@ -9,7 +9,7 @@ tags: mastra, browser, playwright, cdp, workspace
 
 # Mastra browser — docs & reference index
 
-**mdeai Phase 1:** production concierge does **not** assign a Mastra `browser` to `conciergeAgent`. Web extraction for events uses **Firecrawl** (`mde-firecrawl` skill) and Places API — not `@mastra/agent-browser`. Bookmark this index for **EVP event-ingest** experiments, Studio screencast demos, or Phase 2 workspace agents. **Do not** add browser packages to `mdeapp/` unless a task explicitly scopes it (Vercel serverless + screencast WS constraints).
+**mdeai Phase 1:** production concierge does **not** assign a Mastra `browser` to `conciergeAgent`. Web extraction for events uses **Firecrawl** (`mde-firecrawl` skill) and Places API — not `@mastra/agent-browser`. Bookmark this index for **EVP event-ingest** experiments, Studio screencast demos, or Phase 2 workspace agents. **Do not** add browser packages to this app unless a task explicitly scopes it (Vercel serverless + screencast WS constraints).
 
 **Lookup order:** [`mcp-docs-lookup.md`](mcp-docs-lookup.md) → **`mastraDocs`** paths below → [`links.md`](../links.md).
 
@@ -119,5 +119,5 @@ const browser = new AgentBrowser({
 
 | Artifact | Path |
 | --- | --- |
-| Mastra agents (no browser today) | `mdeapp/src/mastra/agents/` |
+| Mastra agents (no browser today) | `src/mastra/agents/` |
 | Workspace docs | [`workspace.md`](workspace.md) |
