@@ -120,14 +120,14 @@ test("env names: refuses to guess when the API says there are more pages", () =>
 });
 
 test("env names: never touches or returns env values", () => {
-  const secret = "sentinel-env-value-that-must-never-appear";
-  const envs = allRequired().map((e) => ({ ...e, value: secret }));
+  const leakProbe = "sentinel-env-value-that-must-never-appear";
+  const envs = allRequired().map((e) => ({ ...e, value: leakProbe }));
   const result = checkEnvNames({ envs });
-  assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(leakProbe));
   const failing = envs.filter((e) => e.key !== "DATABASE_URL");
   assert.throws(
     () => checkEnvNames({ envs: failing }),
-    (error) => !String(error.message).includes(secret),
+    (error) => !String(error.message).includes(leakProbe),
   );
 });
 
