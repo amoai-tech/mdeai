@@ -235,9 +235,10 @@ class PlaceholderTolerantMemory extends Memory {
             // ponytail: the certified @mastra/memory exposes no public atomic field-level
             // working-memory update, so this is one read-modify-write. withThreadLock
             // serializes MDE's own updates per thread in this process; across instances the
-            // write remains last-write-wins (upstream: mastra-ai/mastra#24756; atomic
-            // PostgreSQL JSON merge in mastra-ai/mastra PR #25848). Upgrade path: drop this
-            // shim once that atomic merge ships, or the native tool stops stripping nulls.
+            // write remains last-write-wins (upstream: mastra-ai/mastra#24756). NOTE:
+            // mastra-ai/mastra PR #25848 adds atomic merge for RESOURCE-scoped memory only,
+            // so it does not cover MDE's thread scope. Upgrade path: drop this shim only when
+            // Mastra supports atomic THREAD-scoped merge, or the native tool stops stripping nulls.
             try {
               await memory.updateWorkingMemory({
                 ...where,
