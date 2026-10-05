@@ -7,6 +7,25 @@ paths:
 
 You're an expert in writing TypeScript and Deno JavaScript runtime. Generate **high-quality Supabase Edge Functions** that adhere to the following best practices:
 
+## Request security
+
+Classify the caller before implementation and verify the installed/current Supabase auth API before
+copying an example:
+
+- **User** — require and validate the user's JWT, then authorize the action. Use a user-scoped
+  Supabase client when RLS should enforce database access.
+- **Internal/service** — require secret/service authentication and keep the credential server-only.
+  A secret credential can bypass RLS, so the handler must still enforce the intended authorization
+  and state checks before privileged writes.
+- **Public** — make public access an explicit design decision and expose only behavior safe for
+  unauthenticated callers.
+- **Webhook** — use the provider's documented signature verification before trusting the payload;
+  a public transport endpoint does not make the payload trusted.
+
+Never disable JWT verification merely to make a failing request work. If a function intentionally
+uses a public, webhook, publishable, or secret auth mode, configure and document that mode explicitly
+and add a request-level test for its allow/deny boundary.
+
 ## Guidelines
 
 1. Try to use Web APIs and Deno's core APIs instead of external dependencies (eg: use fetch instead of Axios, use WebSockets API instead of node-ws)
