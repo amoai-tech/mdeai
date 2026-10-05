@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// PreToolUse hook for Edit|Write|MultiEdit. **DEFERRED — promote in W5 when Maps code lands.**
+// PreToolUse hook for Edit|Write|MultiEdit.
 // Blocks Places API New (places.googleapis.com/v1) writes that lack an X-Goog-FieldMask header.
 // Per CLAUDE.md hard rule: "EVERY Places API New call includes X-Goog-FieldMask".
 // Exit 2 = block. Bypass: MDEAI_ALLOW_PLACES_NO_FIELDMASK=1.
 
 import { readFileSync } from "node:fs";
+import { toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -15,9 +16,9 @@ try {
 
 const input = payload?.tool_input || {};
 const filePath = String(input.file_path || input.path || "");
-const rel = filePath.replace(/^.*?\/mdeai\/(\.claude\/worktrees\/[^/]+\/)?/, "");
+const rel = toRepoRelative(filePath);
 
-if (!/^mdeapp\/(src|supabase\/functions)\//.test(rel)) process.exit(0);
+if (!/^(src|supabase\/functions)\//.test(rel)) process.exit(0);
 if (/\.claude\/hooks\//.test(rel) || /\.test\.tsx?$/.test(rel) || /__mocks__\//.test(rel)) process.exit(0);
 
 const candidates = [];

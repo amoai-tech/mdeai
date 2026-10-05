@@ -1,0 +1,172 @@
+// @vitest-environment jsdom
+/**
+ * SAN-1205 — the contact lookup must never erase what the renter already typed.
+ *
+ * The form looks up the signed-in user asynchronously after it opens. For a signed-out renter
+ * that lookup resolves to "nobody", and the form used to respond by blanking name, email and
+ * phone — including text typed while the lookup was still in flight. A fast typist on a slow
+ * connection lost their name silently, and the live journey test hit it about one run in four.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+
+vi.mock("@/components/chat/rental-ui-context", () => ({ useRentalUi: vi.fn() }));
+vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
+  submitScheduleViewing: vi.fn(),
+  ScheduleViewingError: class extends Error {},
+}));
+vi.mock("@/lib/use-modal-a11y", () => ({ useModalA11y: vi.fn() }));
+
+type LookupUser = { email: string; user_metadata: { full_name: string } } | null;
+let resolveLookup: ((user: LookupUser) => void) | null = null;
+let nextLookup: () => Promise<{ data: { user: LookupUser } }>;
+
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({
+    auth: { getUser: () => nextLookup() },
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }),
+      }),
+    }),
+  }),
+}));
+
+import { useRentalUi } from "@/components/chat/rental-ui-context";
+import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const TARGET = {
+  listingId: "apt-laureles-001",
+  title: "2BR Laureles Apartment",
+  neighborhood: "Laureles",
+};
+
+let container: HTMLDivElement;
+let root: Root;
+let target: typeof TARGET | null;
+
+async function render() {
+  vi.mocked(useRentalUi).mockReturnValue({
+    scheduleTarget: target,
+    closeScheduleViewing: vi.fn(),
+    setLeadConfirmation: vi.fn(),
+  } as unknown as ReturnType<typeof useRentalUi>);
+  await act(async () => {
+    root.render(<ScheduleViewingModal />);
+    await Promise.resolve();
+  });
+}
+
+function inputByName(name: "name" | "email" | "phone") {
+  const form = container.querySelector("form");
+  const input = form?.elements.namedItem(name);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`${name} input not rendered`);
+  return input;
+}
+
+function type(name: "name" | "email" | "phone", value: string) {
+  const input = inputByName(name);
+  input.setAttribute("value", value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+const field = (name: "name" | "email" | "phone") => inputByName(name).value;
+
+async function settleLookup(user: LookupUser) {
+  await act(async () => {
+    resolveLookup?.(user);
+    await Promise.resolve();
+  });
+}
+
+/** A lookup the test settles by hand, so typing can happen while it is still in flight. */
+function pendingLookup() {
+  nextLookup = () =>
+    new Promise((resolve) => {
+      resolveLookup = (user) => {
+        resolve({ data: { user } });
+      };
+    });
+}
+
+beforeEach(() => {
+  target = TARGET;
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+  resolveLookup = null;
+  vi.clearAllMocks();
+});
+
+describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
+  it("keeps what a signed-out renter typed while the lookup was still running", async () => {
+    pendingLookup();
+    await render();
+
+    act(() => {
+      type("name", "Camila Test");
+      type("email", "camila@example.com");
+      type("phone", "+57 3000000000");
+    });
+
+    await settleLookup(null); // nobody is signed in
+
+    expect(field("name")).toBe("Camila Test");
+    expect(field("email")).toBe("camila@example.com");
+    expect(field("phone")).toBe("+57 3000000000");
+  });
+
+  it("still clears a previous user's prefill when the next visitor is signed out", async () => {
+    pendingLookup();
+    await render();
+    await settleLookup({ email: "owner@example.com", user_metadata: { full_name: "Previous User" } });
+    expect(field("name")).toBe("Previous User");
+    expect(field("email")).toBe("owner@example.com");
+
+    // Close, then reopen for a visitor who is not signed in.
+    target = null;
+    await render();
+    target = TARGET;
+    pendingLookup();
+    await render();
+    await settleLookup(null);
+
+    expect(field("name"), "a previous user's name must not leak").toBe("");
+    expect(field("email"), "a previous user's email must not leak").toBe("");
+  });
+
+  it("never takes ownership of text the renter typed, even when the lookup returns the same text", async () => {
+    pendingLookup();
+    await render();
+
+    // The renter types a name first. The slow lookup then returns that identical name, plus an
+    // email the renter has not typed.
+    act(() => {
+      type("name", "Sam");
+    });
+    await settleLookup({ email: "sam@example.com", user_metadata: { full_name: "Sam" } });
+    expect(field("name")).toBe("Sam");
+    expect(field("email"), "a blank field is still filled by the lookup").toBe("sam@example.com");
+
+    // Reopen for a visitor who is signed out.
+    target = null;
+    await render();
+    target = TARGET;
+    pendingLookup();
+    await render();
+    await settleLookup(null);
+
+    expect(field("name"), "the renter's own text must survive").toBe("Sam");
+    expect(field("email"), "text the lookup filled in is still removed").toBe("");
+  });
+});

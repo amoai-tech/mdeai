@@ -4,10 +4,14 @@
 // evidence that RLS coverage was verified before letting the turn end.
 // High-confidence only — only warns when the diff includes migration files AND
 // the final assistant message contains no RLS verification marker.
-// Warn-only (exit 0 with stderr); turn does not block.
+// Blocks the stop once (exit 2) so the model must add RLS evidence; a second stop passes
+// (`stop_hook_active`). It also blocks once when it cannot tell whether a migration changed.
+// RLS is launch-critical for MDE, so neither case is allowed to look like a pass.
+// Bypass: MDEAI_SKIP_RLS_GATE=1.
 
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { projectRoot } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -16,7 +20,7 @@ try {
   process.exit(0);
 }
 
-if (payload?.stop_hook_active) process.exit(0);
+if (payload?.stop_hook_active || process.env.MDEAI_SKIP_RLS_GATE === "1") process.exit(0);
 
 function sh(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 5000, ...opts });
@@ -24,10 +28,17 @@ function sh(cmd, args, opts = {}) {
   return (r.stdout || "").trim();
 }
 
-const mdeapp = "/home/sk/mdeai/mdeapp";
+const root = projectRoot();
+if (!root) {
+  process.stderr.write(
+    "stop-rls-gate: could not locate the repository root, so migration changes were NOT checked.\n" +
+      "Run from inside the repository, or skip on purpose with MDEAI_SKIP_RLS_GATE=1.\n",
+  );
+  process.exit(2);
+}
 
-// Detect changed migration/schema files in the working tree (mdeapp/.git).
-const changed = (sh("git", ["status", "--porcelain"], { cwd: mdeapp }) || "")
+// Detect changed migration/schema files in the working tree.
+const changed = (sh("git", ["status", "--porcelain", "-uall"], { cwd: root }) || "")
   .split("\n")
   .map((l) => l.slice(3))
   .filter(Boolean);
@@ -39,7 +50,7 @@ if (touched.length === 0) process.exit(0);
 const diffSummary = sh(
   "git",
   ["diff", "--stat", "HEAD", "--", "supabase/migrations", "supabase/schemas"],
-  { cwd: mdeapp },
+  { cwd: root },
 );
 
 // Read last assistant message from the transcript.
@@ -94,5 +105,5 @@ console.error(
     `     • explicit \`ENABLE ROW LEVEL SECURITY\` + \`CREATE POLICY\` lines in the migration.\n` +
     `   If intentionally RLS-free (admin-only schema), state that explicitly.\n`,
 );
-// Warn-only: do not block the turn.
-process.exit(0);
+console.error(`   To skip on purpose (admin-only schema, no user data): MDEAI_SKIP_RLS_GATE=1.\n`);
+process.exit(2);

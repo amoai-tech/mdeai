@@ -1,69 +1,40 @@
 ---
-description: Pre-commit floor check — same 5 gates as F09's `npm run floor` + an RLS evidence add-on
+description: Pre-commit floor check — runs `npm run floor` plus an RLS evidence add-on
 allowed-tools: Bash, Read, Grep
 ---
 
-# /verify-floor — pre-commit floor for mdeapp
+# /verify-floor — pre-commit floor
 
-Run the floor before any commit or PR. After F09 lands, this command delegates to `npm run floor` (the single source of truth) and then adds one RLS evidence check on top. Should finish in under 90 seconds.
-
-## What it checks
-
-The 5 gates match F09's `package.json` `floor` script verbatim — when F09 ships, this command **runs that exact script** rather than duplicating the gate list.
-
-| # | Gate | Command | Pass criterion |
-|---|------|---------|----------------|
-| 1 | Lint | `cd mdeapp && npm run lint` | exit 0 |
-| 2 | Typecheck | `cd mdeapp && npm run typecheck` (i.e. `tsc --noEmit`) | exit 0 |
-| 3 | Build | `cd mdeapp && npm run build` | exit 0 |
-| 4 | Test | `cd mdeapp && npm test` (Vitest, single-run) | exit 0 + ≥1 passing |
-| 5 | Audit (high+) | `cd mdeapp && npm run audit` (`--audit-level=high`) | exit 0 |
-| + | RLS evidence (add-on) | If `mdeapp/supabase/migrations/**` changed this session, confirm `pg_policies` query was run via Supabase MCP | hook `stop-rls-gate` emits no warning |
+Run the floor before any commit or PR. `npm run floor` is the single source of truth for the gate chain (see `package.json`); this command runs it and adds one RLS evidence check on top. It is slow, so run it once per change, not after every edit.
 
 ## Workflow
 
-**Once F09 is Done** (the `floor` script exists), just run:
+From the repository root (or any worktree after `scripts/worktree-bootstrap.sh`):
 
 ```bash
-cd mdeapp && npm run floor
+npm run floor
 ```
 
-Then add the RLS check below if any migration file is in the working tree.
+A fresh worktree needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` exported for the env check; see `AGENTS.md` § Build and test commands. Do not paste the key into any tracked file.
 
-**Before F09 ships** (no `floor` script yet) — run the 5 gates manually in the same order:
+If any migration file changed this session, also confirm RLS via the Supabase MCP (plugin) `execute_sql`:
 
-```bash
-cd mdeapp
-npm run lint     && echo "LINT  ✅" || { echo "LINT  ❌"; exit 1; }
-npm run typecheck && echo "TSC   ✅" || { echo "TSC   ❌"; exit 1; }
-npm run build    && echo "BUILD ✅" || { echo "BUILD ❌"; exit 1; }
-npm test         && echo "TEST  ✅" || { echo "TEST  ❌"; exit 1; }
-npm run audit    && echo "AUDIT ✅" || { echo "AUDIT ❌"; exit 1; }
-```
-
-If any migration file is in the working tree, query Supabase MCP:
 ```sql
 SELECT tablename, rowsecurity
 FROM pg_tables
 WHERE schemaname='public' AND tablename IN (<new tables this session>);
 ```
 
-Print the 6-row table (5 gates + RLS) and exit. Do not fix anything — surface failures only.
-
-## Expected output
+Print a two-row table (floor, RLS) and stop. Do not fix anything here; surface failures only.
 
 ```
-| Gate      | Result |
-|-----------|--------|
-| Lint      | ✅     |
-| Typecheck | ✅     |
-| Build     | ✅     |
-| Test      | ✅     |
-| Audit     | ✅     |
-| RLS       | ✅     |
+| Check | Result |
+|-------|--------|
+| Floor | ✅     |
+| RLS   | ✅     |
 ```
 
-If any row is ❌, do NOT proceed to commit. Investigate root cause.
+If any row is ❌, do NOT proceed to commit. Investigate the root cause. The Stop hook `stop-rls-gate` warns when a migration changed without RLS evidence.
 
 ## Run the floor as a `/goal`
 
@@ -72,13 +43,13 @@ If any row is ❌, do NOT proceed to commit. Investigate root cause.
 Paste one (one goal per session; `/goal` checks status, `/goal clear` stops):
 
 - **Floor only** —
-  `/goal The mdeapp floor is green: from mdeapp/, npm run lint, npm run typecheck, npm run build, npm test, and npm run audit each exit 0, with each command's exit status shown in the transcript. Do not modify any test, eslint config, tsconfig.json, or next.config to force a pass — fix the source. Stop after 15 turns and report if any gate is still red.`
+  `/goal The floor is green: npm run lint, npm run typecheck, npm run build, npm test, and npm run audit each exit 0, with each command's exit status shown in the transcript. Do not modify any test, eslint config, tsconfig.json, or next.config to force a pass — fix the source. Stop after 15 turns and report if any gate is still red.`
 
 - **Search / intelligence floor** (adds the golden-queries journey) —
-  `/goal The mdeapp floor is green (lint, typecheck, build, vitest, audit all exit 0 from mdeapp/, each shown in the transcript) AND npm run smoke:golden-queries passes with GQ-E01 "salsa this weekend" showing hybridUsed:true in its output. A green smoke exit code alone is insufficient — the hybridUsed:true line must appear. Do not edit tests, smoke scripts, or config to force a pass. Stop after 20 turns and report if not met.`
+  `/goal The floor is green (lint, typecheck, build, vitest, audit all exit 0 each shown in the transcript) AND npm run smoke:golden-queries passes with GQ-E01 "salsa this weekend" showing hybridUsed:true in its output. A green smoke exit code alone is insufficient — the hybridUsed:true line must appear. Do not edit tests, smoke scripts, or config to force a pass. Stop after 20 turns and report if not met.`
 
 - **Ship one small PR** (no merge) —
-  `/goal One small PR is open for the current change: the mdeapp floor is green (each gate's result shown in the transcript), the work is a single fresh branch off latest main (not stacked), git status shows only the intended files, and gh pr view shows the PR open. Do not merge and do not force-push. Stop after 25 turns and report status if not met.`
+  `/goal One small PR is open for the current change: the floor is green (each gate's result shown in the transcript), the work is a single fresh branch off latest main (not stacked), git status shows only the intended files, and gh pr view shows the PR open. Do not merge and do not force-push. Stop after 25 turns and report status if not met.`
 
 A goal is only as honest as the evidence surfaced in the transcript — keep printing real command output, not summaries. A permanent project Stop hook is **not** recommended for the floor: it would re-fire on every turn of every session, whereas the floor only matters pre-commit.
 

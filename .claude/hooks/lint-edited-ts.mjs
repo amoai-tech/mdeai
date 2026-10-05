@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // PostToolUse hook for Edit|Write|MultiEdit.
-// Runs `npx eslint <file>` on the touched file if it's .ts/.tsx under mdeapp/src/ or mdeapp/supabase/functions/.
-// Warn-only: prints output to stderr, never blocks. No-op if eslint config is missing.
+// Runs `eslint <file>` on a touched .ts/.tsx file under src/ or supabase/functions/.
+// Warn-only: prints output to stderr, never blocks. No-op if eslint is not installed.
 
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { join } from "node:path";
+import { findRepoRoot, toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -15,26 +16,18 @@ try {
 }
 
 const filePath = payload?.tool_input?.file_path || "";
-if (!filePath) process.exit(0);
+if (!filePath || !/\.(ts|tsx)$/.test(filePath)) process.exit(0);
+if (!/^(src|supabase\/functions)\//.test(toRepoRelative(filePath))) process.exit(0);
 
-const isTs = /\.(ts|tsx)$/.test(filePath);
-if (!isTs) process.exit(0);
+const root = findRepoRoot(filePath.replace(/[^/]*$/, "") || ".");
+const eslintBin = root && join(root, "node_modules/.bin/eslint");
+// A fresh worktree has no node_modules until it is bootstrapped; stay silent instead of noisy.
+if (!root || !existsSync(eslintBin)) process.exit(0);
 
-const isInScope = /\/mdeapp\/(src|supabase\/functions)\//.test(filePath);
-if (!isInScope) process.exit(0);
-
-// No-op gracefully if mdeapp has no eslint config (Phase 1 W1).
-const mdeapp = "/home/sk/mdeai/mdeapp";
-const hasEslintConfig =
-  existsSync(resolve(mdeapp, ".eslintrc.json")) ||
-  existsSync(resolve(mdeapp, ".eslintrc.js")) ||
-  existsSync(resolve(mdeapp, ".eslintrc.cjs")) ||
-  existsSync(resolve(mdeapp, "eslint.config.js")) ||
-  existsSync(resolve(mdeapp, "eslint.config.mjs"));
-if (!hasEslintConfig) process.exit(0);
-
-const result = spawnSync("npx", ["--no", "eslint", "--no-warn-ignored", filePath], {
-  cwd: mdeapp,
+// ESLint exits 0 on warnings, so without --max-warnings 0 this hook said nothing about them. The
+// repository standard (`npm run lint`) is zero warnings.
+const result = spawnSync(eslintBin, ["--no-warn-ignored", "--max-warnings", "0", filePath], {
+  cwd: root,
   encoding: "utf8",
   timeout: 20_000,
 });
