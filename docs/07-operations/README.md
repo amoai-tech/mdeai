@@ -66,6 +66,8 @@ Production promotion should follow the current release task/runbook and provider
 
 Representative production check: `npm run test:e2e:prod-synthetic`.
 
+If a certified release still turns out bad after it is live, follow [`production-rollback-runbook.md`](production-rollback-runbook.md): confirm production is really broken, roll back with `vercel rollback <exact id>`, prove the domains moved, and keep auto-assign OFF.
+
 ### Production health signals
 
 Three signals, and each states only what it actually tested:
