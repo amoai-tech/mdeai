@@ -76,7 +76,7 @@ Do not describe this as “v1-only.” The production rule is:
 
 > Keep the current pinned package version and `/v2` React API surface stable. Do not reintroduce bare v1 React imports into `src/app/**` or `src/components/**`, and do not upgrade CopilotKit packages opportunistically inside feature work.
 
-`npm run check:mastra` currently enforces the package pin and rejects bare v1 React imports in `src/app/**` and `src/components/**`. It does **not** prove all of `src/**` is free of bare-v1 imports. The broader CopilotKit audit command is currently broken because its referenced map script is missing; SAN-1300 owns that repair.
+`npm run check:mastra` currently enforces the package pin and rejects bare v1 React imports in `src/app/**` and `src/components/**`. The broader `npm run audit:copilotkit-v2` gate is also active: `package.json` maps it to the dependency-cruiser audit plus `scripts/audit-copilotkit-v2-no-new-v1.mjs`, and `npm run floor` runs that gate. SAN-1300 repaired this audit path; historical documents that still describe a missing `scripts/audit-copilotkit-v2-map.mjs` as a current defect are stale and must not reopen that completed work.
 
 ## Request context and authorization
 
@@ -251,15 +251,11 @@ npm run build
 
 Also run focused Playwright tests for UI/thread/HITL behavior and security tests for authorization boundaries.
 
-### Known guardrail gap
+### CopilotKit v2 guardrail status
 
-`package.json` currently defines:
+The `audit:copilotkit-v2` gate is active and repaired. Current `package.json` maps it to `audit:copilotkit-v2:depcruise`, which runs dependency-cruiser over `src` and then `scripts/audit-copilotkit-v2-no-new-v1.mjs`. The release `floor` invokes `npm run audit:copilotkit-v2`.
 
-```bash
-npm run audit:copilotkit-v2
-```
-
-but current `main` does not contain the referenced `scripts/audit-copilotkit-v2-map.mjs` file. Do not report this gate as passing until the command is repaired or replaced by equivalent verified coverage.
+`scripts/audit-copilotkit-v2-map.mjs` is absent, but no current package script references it, so its absence is **not** an outstanding guardrail gap. Historical documents that still describe that old map-script path as the active audit are stale; SAN-1300 remains completed.
 
 ## Exact references
 
