@@ -34,17 +34,17 @@ files. `npm run check:skills` fails on a copy, an absolute link, or a missing en
 | | `copilotkit-version-pin.mjs` | Keeps `@copilotkit/react-core` and `runtime` exact, aligned and at the certified version; blocks the full-rewrite package line. |
 | | `places-api-field-mask.mjs` | Blocks Places API (New) calls without `X-Goog-FieldMask`. |
 | | `advanced-marker-needs-mapid.mjs` | Blocks `<AdvancedMarker>` on a `<Map>` with no `mapId`. |
-| PreToolUse (Bash) | `dist-leak-scan.mjs` | Before a deploy-shaped command, scans build output for secrets. |
+| PreToolUse (Bash) | `dist-leak-scan.mjs` | Before a deploy-shaped command, scans build output for secrets. Blocks if it cannot find the repository. Bypass: `MDEAI_SKIP_DIST_LEAK_SCAN=1`. |
 | PostToolUse (edit) | `lint-edited-ts.mjs` | Warn-only ESLint on the edited file. |
-| Stop | `stop-rls-gate.mjs` | Warns when a migration changed with no RLS evidence. |
+| Stop | `stop-rls-gate.mjs` | Blocks once when a migration changed with no RLS evidence, or when it cannot find the repository. Bypass: `MDEAI_SKIP_RLS_GATE=1`. |
 | | `stop-plain-language-gate.mjs` | Blocks a final reply that names a task ID without its name; warns on arrow chains. |
-| | `stop-typecheck.mjs` | Whole-project `tsc` once per set of TypeScript edits; blocks the stop once if changed files have errors. |
+| | `stop-typecheck.mjs` | Whole-project `tsc` once per set of TypeScript edits; blocks the stop once if changed files have errors, or if it cannot run (no repository, no `tsc`, timeout). Bypass: `MDEAI_SKIP_STOP_TYPECHECK=1`. |
 
 `hooks/_deferred/` holds hooks that are written but not registered.
 
 ### Keeping hooks honest
 
-A hook that matches nothing exits 0, so a broken path check looks exactly like a passing one.
+A hook that matches nothing exits 0, so a broken path check looks exactly like a passing one. The same goes for a guard that cannot run: it must block (and say how to bypass), never report success. A Stop hook blocks only once; the second stop always passes, so the model is never stuck.
 `scripts/__tests__/claude-hooks.test.mjs` (run by `npm run check:release-gates`, so by `floor`)
 feeds every guard a bad edit inside a throwaway repo with an unrelated name and expects a block. It
 also fails if a hook hard-codes a machine path or the retired `mdeapp/` folder. When you add a hook,

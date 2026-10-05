@@ -51,6 +51,17 @@ function run(hook, { file, content, command, env = {}, extra = {}, cwd } = {}) {
   return { code: r.status, stderr: r.stderr };
 }
 
+/** Run a hook from a directory that is not inside any repository. */
+function runOutsideRepo(hook, outside, env = {}, toolInput = {}) {
+  const r = spawnSync("node", [join(HOOKS, `${hook}.mjs`)], {
+    input: JSON.stringify({ tool_input: toolInput }),
+    encoding: "utf8",
+    cwd: outside,
+    env: { ...process.env, CLAUDE_PROJECT_DIR: outside, DIST_LEAK_SCAN_ROOTS: "", ...env },
+  });
+  return { code: r.status, stderr: r.stderr };
+}
+
 describe("edit-time hooks block a bad edit at the real layout", () => {
   it("no-service-role-in-src blocks a service-role reference in browser code", () => {
     const bad = run("no-service-role-in-src", {
@@ -139,16 +150,41 @@ describe("Stop hooks see the right repository", () => {
     return spawnSync("git", args, { cwd: root, encoding: "utf8" });
   }
 
-  it("stop-rls-gate warns when a migration changed with no RLS evidence", () => {
+  it("stop-rls-gate blocks once when a migration changed with no RLS evidence", () => {
     git("init", "-q");
     git("config", "user.email", "t@example.com");
     git("config", "user.name", "t");
     git("add", "-A");
     git("commit", "-qm", "base");
     writeFileSync(join(root, "supabase/migrations/20260102_new_table.sql"), "create table t (id int);");
-    const r = run("stop-rls-gate", { extra: {} });
-    assert.equal(r.code, 0, "warn-only");
-    assert.match(r.stderr, /stop-rls-gate/);
+
+    const blocked = run("stop-rls-gate");
+    assert.equal(blocked.code, 2, blocked.stderr);
+    assert.match(blocked.stderr, /MDEAI_SKIP_RLS_GATE/);
+
+    assert.equal(run("stop-rls-gate", { extra: { stop_hook_active: true } }).code, 0, "a second stop passes");
+    assert.equal(run("stop-rls-gate", { env: { MDEAI_SKIP_RLS_GATE: "1" } }).code, 0, "explicit bypass");
+
+    const transcript = join(root, "transcript.jsonl");
+    writeFileSync(
+      transcript,
+      JSON.stringify({
+        message: { role: "assistant", content: [{ type: "text", text: "Checked pg_policies: RLS enabled, 2 policies." }] },
+      }) + "\n",
+    );
+    assert.equal(run("stop-rls-gate", { extra: { transcript_path: transcript } }).code, 0, "evidence in the reply");
+  });
+
+  it("stop-rls-gate blocks when it cannot find the repository", () => {
+    const outside = mkdtempSync(join(tmpdir(), "no-repo-"));
+    try {
+      const r = runOutsideRepo("stop-rls-gate", outside);
+      assert.equal(r.code, 2, r.stderr);
+      assert.match(r.stderr, /NOT checked/);
+      assert.equal(runOutsideRepo("stop-rls-gate", outside, { MDEAI_SKIP_RLS_GATE: "1" }).code, 0, "bypass");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it("stop-typecheck reports errors in changed files once, then lets the stop through", () => {
@@ -178,8 +214,35 @@ describe("Stop hooks see the right repository", () => {
     writeFileSync(join(root, "node_modules", ".bin", "tsc"), "#!/bin/sh\nsleep 5\n");
     writeFileSync(join(root, "src/lib/a.ts"), "export const a: number = 'timeout';");
     const r = run("stop-typecheck", { env: { MDEAI_STOP_TYPECHECK_TIMEOUT_MS: "300" } });
-    assert.equal(r.code, 0);
+    assert.equal(r.code, 2, r.stderr);
     assert.match(r.stderr, /NOT checked/);
+    assert.equal(
+      run("stop-typecheck", { env: { MDEAI_STOP_TYPECHECK_TIMEOUT_MS: "300", MDEAI_SKIP_STOP_TYPECHECK: "1" } }).code,
+      0,
+      "explicit bypass",
+    );
+  });
+
+  it("stop-typecheck blocks when dependencies are not installed", () => {
+    const bare = mkdtempSync(join(tmpdir(), "mdeai-wt-bare-"));
+    try {
+      writeFileSync(join(bare, "package.json"), "{}");
+      writeFileSync(join(bare, "tsconfig.json"), "{}");
+      mkdirSync(join(bare, ".claude"));
+      mkdirSync(join(bare, "src"));
+      spawnSync("git", ["init", "-q"], { cwd: bare });
+      writeFileSync(join(bare, "src/a.ts"), "export const a = 1;");
+      const r = spawnSync("node", [join(HOOKS, "stop-typecheck.mjs")], {
+        input: "{}",
+        encoding: "utf8",
+        cwd: bare,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: bare },
+      });
+      assert.equal(r.status, 2, r.stderr);
+      assert.match(r.stderr, /NOT checked/);
+    } finally {
+      rmSync(bare, { recursive: true, force: true });
+    }
   });
 
   it("stop hooks say so when no repository can be found", () => {
@@ -191,8 +254,25 @@ describe("Stop hooks see the right repository", () => {
         cwd: outside,
         env: { ...process.env, CLAUDE_PROJECT_DIR: outside },
       });
-      assert.equal(r.status, 0);
+      assert.equal(r.status, 2, r.stderr);
       assert.match(r.stderr, /NOT checked/);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("dist-leak-scan blocks a deploy when it cannot find the repository, and only then", () => {
+    const outside = mkdtempSync(join(tmpdir(), "no-repo-"));
+    try {
+      const deploy = runOutsideRepo("dist-leak-scan", outside, {}, { command: "git push origin main" });
+      assert.equal(deploy.code, 2, deploy.stderr);
+      assert.match(deploy.stderr, /MDEAI_SKIP_DIST_LEAK_SCAN/);
+      assert.equal(
+        runOutsideRepo("dist-leak-scan", outside, { MDEAI_SKIP_DIST_LEAK_SCAN: "1" }, { command: "git push origin main" }).code,
+        0,
+        "explicit bypass",
+      );
+      assert.equal(runOutsideRepo("dist-leak-scan", outside, {}, { command: "ls" }).code, 0, "not a deploy command");
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }

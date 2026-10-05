@@ -8,7 +8,7 @@
 //
 // Blocks the stop once (exit 2) so the errors reach the model; a second stop passes
 // (`stop_hook_active`). It never passes silently: when it cannot run (no repo, no tsc, timeout) it
-// says so on stderr. Bypass: MDEAI_SKIP_STOP_TYPECHECK=1.
+// blocks once too, saying why. Bypass: MDEAI_SKIP_STOP_TYPECHECK=1.
 
 import { readFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -28,13 +28,20 @@ try {
 }
 if (payload?.stop_hook_active || process.env.MDEAI_SKIP_STOP_TYPECHECK === "1") process.exit(0);
 
-function skip(reason) {
-  process.stderr.write(`stop-typecheck: ${reason}; TypeScript was NOT checked.\n`);
-  process.exit(0);
+/**
+ * The check could not run. That must not look like a pass: block the stop once with the reason
+ * and the escape hatch (a second stop passes through `stop_hook_active`).
+ */
+function couldNotRun(reason) {
+  process.stderr.write(
+    `stop-typecheck: ${reason}; TypeScript was NOT checked.\n` +
+      `Fix that and stop again, or skip this check on purpose with MDEAI_SKIP_STOP_TYPECHECK=1.\n`,
+  );
+  process.exit(2);
 }
 
 const root = projectRoot();
-if (!root) skip("could not locate the repository root");
+if (!root) couldNotRun("could not locate the repository root");
 
 function git(args) {
   const r = spawnSync("git", args, { cwd: root, encoding: "utf8", timeout: 10_000 });
@@ -49,7 +56,7 @@ const changed = git(["status", "--porcelain", "-uall"])
 if (changed.length === 0) process.exit(0);
 
 const tsc = join(root, "node_modules/.bin/tsc");
-if (!existsSync(tsc) || !existsSync(join(root, "tsconfig.json"))) skip("dependencies are not installed here");
+if (!existsSync(tsc) || !existsSync(join(root, "tsconfig.json"))) couldNotRun("dependencies are not installed here (run scripts/worktree-bootstrap.sh)");
 
 // Fingerprint the edits by file CONTENT. `git diff` is empty for untracked files, so a new file
 // edited again would otherwise look unchanged and skip the check.
@@ -84,7 +91,7 @@ const result = spawnSync(tsc, ["--noEmit", "--pretty", "false"], {
 });
 if (result.error || result.status === null) {
   // Timed out or could not start: do not record it as checked, and do not pretend it passed.
-  skip(`tsc did not finish within ${Math.round(TIMEOUT_MS / 1000)}s`);
+  couldNotRun(`tsc did not finish within ${Math.round(TIMEOUT_MS / 1000)}s`);
 }
 writeFileSync(marker, String(Date.now()));
 if (result.status === 0) process.exit(0);
