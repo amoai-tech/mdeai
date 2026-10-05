@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { noopObserve, ToolStream } from "@mastra/core/tools";
+import { RequestContext } from "@mastra/core/request-context";
 import { restaurantSchema } from "../search-restaurants";
 
 /**
@@ -62,10 +64,18 @@ describe("searchRestaurantsTool execute", () => {
   it("UX-T-014 returns structured envelope for CopilotKit disabled render (no writer.custom)", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurantsTool: isolatedTool } = await import("../search-restaurants.js");
-    const custom = vi.fn().mockResolvedValue(undefined);
-    const out = (await isolatedTool.execute!(
+    const writer = new ToolStream({
+      prefix: "test",
+      callId: "call-1",
+      name: "searchRestaurantsTool",
+      runId: "run-1",
+    });
+    const custom = vi.spyOn(writer, "custom");
+    const execute = isolatedTool.execute;
+    if (!execute) throw new Error("searchRestaurantsTool has no execute");
+    const out = (await execute(
       { neighborhood: "Laureles", limit: 2 },
-      { writer: { custom } },
+      { writer, requestContext: new RequestContext(), observe: noopObserve },
     )) as { results: unknown[]; total: number; source: string };
 
     expect(out.results.length).toBeGreaterThan(0);
@@ -80,9 +90,14 @@ describe("searchRestaurantsTool execute", () => {
   it("MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurantsTool: tool } = await import("../search-restaurants.js");
+    const execute = tool.execute;
+    if (!execute) throw new Error("searchRestaurantsTool has no execute");
 
     await expect(
-      tool.execute!({ neighborhood: "Laureles", limit: 3 }, {}),
+      execute(
+        { neighborhood: "Laureles", limit: 3 },
+        { requestContext: new RequestContext(), observe: noopObserve },
+      ),
     ).resolves.toMatchObject({
       results: expect.any(Array),
       total: expect.any(Number),

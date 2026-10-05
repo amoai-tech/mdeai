@@ -250,6 +250,93 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(cleared.saved?.mapUi).not.toHaveProperty("selectedPinId");
   });
 
+  it("soft-fails consistently when the thread lookup throws", async () => {
+    const tool = updateTool();
+    let saved: Record<string, unknown> | undefined;
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        agent: { threadId: "t", resourceId: "r" },
+        memory: {
+          getThreadById: async () => {
+            throw new Error("storage unavailable");
+          },
+          getWorkingMemory: async () => JSON.stringify(existing),
+          updateWorkingMemory: async (a: { workingMemory: string }) => {
+            saved = JSON.parse(a.workingMemory);
+          },
+        },
+      },
+    );
+    expect(out).toMatchObject({ success: false });
+    expect(saved).toBeUndefined();
+  });
+
+  it("soft-fails when reading working memory throws", async () => {
+    const tool = updateTool();
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        agent: { threadId: "t", resourceId: "r" },
+        memory: {
+          getThreadById: async () => ({ id: "t", resourceId: "r" }),
+          getWorkingMemory: async () => {
+            throw new Error("storage unavailable");
+          },
+          updateWorkingMemory: async () => {},
+        },
+      },
+    );
+    expect(out).toMatchObject({ success: false });
+  });
+
+  it("leaves a non-object stored document untouched and reports it instead of throwing", async () => {
+    const { out, saved } = await update(
+      { mapUi: { selectedPinId: null } },
+      null as never,
+    );
+    expect(out).toMatchObject({ success: false });
+    expect(saved).toBeUndefined();
+  });
+
+  it("soft-fails on malformed stored JSON without overwriting it", async () => {
+    const tool = updateTool();
+    let wrote = false;
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        agent: { threadId: "t", resourceId: "r" },
+        memory: {
+          getThreadById: async () => ({ id: "t", resourceId: "r" }),
+          getWorkingMemory: async () => "{ not json",
+          updateWorkingMemory: async () => {
+            wrote = true;
+          },
+        },
+      },
+    );
+    expect(out).toMatchObject({
+      success: false,
+      message: expect.stringContaining("not valid JSON"),
+    });
+    expect(wrote).toBe(false);
+  });
+
+  it("soft-fails when the context has no thread or resource identity", async () => {
+    const tool = updateTool();
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        memory: {
+          getThreadById: async () => ({ id: "t", resourceId: "r" }),
+          getWorkingMemory: async () => JSON.stringify(existing),
+          updateWorkingMemory: async () => {},
+        },
+      },
+    );
+    expect(out).toMatchObject({ success: false });
+  });
+
   it("real values survive: minBedrooms 0 (studio), false booleans, valid enums", async () => {
     const { out, saved } = await update({
       lastRentalQuery: { minBedrooms: 0, genericAskPending: false, budgetType: "nightly" },

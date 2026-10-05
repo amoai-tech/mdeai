@@ -68,6 +68,7 @@ const committedContract = JSON.parse(committedRaw) as {
   expectedTables: string[];
   adapterVersion: string;
   coreVersion: string;
+  adapterInitExtraTables?: string[];
 };
 
 function run(args: string[], contract?: Record<string, unknown>) {
@@ -257,9 +258,29 @@ describe("check-mastra-schema-contract — committed contract", () => {
     );
     expect(committedContract.expectedTables).toHaveLength(32);
     expect(new Set(committedContract.expectedTables).size).toBe(32);
-    // The pairing that reproduces it (same-day release as @mastra/core@1.35.0).
-    expect(committedContract.adapterVersion).toBe("1.11.0");
-    expect(committedContract.coreVersion).toBe("1.35.0");
+    // The certified pairing (SAN-1338): @mastra/pg@1.29.0 with @mastra/core@1.74.0.
+    // That adapter creates a superset of this list (see contract _derivation); the
+    // 32 production tables above remain the required set.
+    expect(committedContract.adapterVersion).toBe("1.29.0");
+    expect(committedContract.coreVersion).toBe("1.74.0");
+  });
+
+  it("documents the adapter's extra tables without treating them as required", () => {
+    // SAN-1338: @mastra/pg@1.29.0 creates a superset of the 32 production tables. The
+    // extras must stay documented but outside expectedTables (which is the production
+    // requirement), so a future upgrade cannot silently promote an unused table.
+    // Structural invariant only: the adapter's extras must never overlap the required
+    // production set, and must stay in Mastra's namespace. This must NOT fail merely
+    // because a future @mastra/pg patch adds, removes, or renames an optional table.
+    // Completeness (that the extras actually match a real mastra:init) is verified
+    // against a live scratch DB in storage-runtime-tables.integration.test.ts and is
+    // documented in the contract _derivation; it is not asserted here on purpose.
+    const extras = committedContract.adapterInitExtraTables ?? [];
+    expect(new Set(extras).size).toBe(extras.length);
+    for (const table of extras) {
+      expect(table).toMatch(/^mastra_[a-z0-9_]+$/);
+      expect(committedContract.expectedTables).not.toContain(table);
+    }
   });
 
   it("keeps every baseline table inside the mastra_ namespace", () => {

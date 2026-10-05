@@ -5,32 +5,35 @@ description: >-
 metadata:
   mde-version: "2.0.0"
   upstream-commit: "1ddd3219f44770f5b84d9930f99fccd6fd1890ed"
-  verified-package: "@mastra/core 1.35.0"
-  verified-at: "2026-09-28"
+  verified-package: "@mastra/core 1.74.0"
+  verified-at: "2026-10-05"
 ---
 
 # Mastra — official upstream + MDE overlay
 
 ## Package maturity — read before trusting a signature
 
-MDE runs a **mixed** Mastra surface: a stable core beside prerelease satellites.
-An API you find in the docs may sit in a package line that is still alpha here, so
-check the installed type definition rather than assuming coherence.
+MDE runs one **coherent stable** Mastra family (SAN-1338). The previous mixed
+alpha/beta surface and the `Memory.recall()` type-drift suppression are gone; verify
+against the installed type definition rather than assuming a signature.
 
 | Package | Installed | Line |
 |---|---|---|
-| `@mastra/core` | 1.35.0 | stable |
-| `@mastra/pg` | 1.11.0 | stable |
-| `@mastra/client-js` | 1.19.1 | stable |
-| `@mastra/memory` | 1.0.1-alpha.1 | **alpha** |
-| `@mastra/libsql` | 1.1.0-alpha.2 | **alpha** |
-| `mastra` | 1.1.0-alpha.3 | **alpha** |
-| `@ag-ui/mastra` | 0.2.1-beta.2 | **beta** |
+| `@mastra/core` | 1.74.0 | stable |
+| `@mastra/pg` | 1.29.0 | stable |
+| `@mastra/client-js` | 1.51.2 | stable |
+| `@mastra/memory` | 1.35.0 | stable |
+| `@mastra/libsql` | 1.25.0 | stable |
+| `mastra` | 1.32.1 | stable |
+| `@ag-ui/mastra` | 1.1.6 | stable |
 
-Known consequence: `@mastra/memory`'s `Memory.recall()` return shape does not match
-what `@mastra/core` expects, which the repo suppresses in `src/mastra/agents/index.ts`.
-Expect this class of drift and verify against the installed `.d.ts` before relying on
-a documented shape.
+`@ag-ui/mastra` is a real boundary: `LoggingMastraAgent` extends its `MastraAgent`, so
+re-verify `resourceId`, newest-turn trimming, streaming, and telemetry when it changes.
+
+MDE keeps one small working-memory shim in `src/mastra/lib/agent-memory.ts`: the native
+tool strips null optionals before its merge, which would silently drop MDE's deliberate
+`mapUi.selectedPinId: null` = "no pin selected". The shim keeps the blank-placeholder
+input schema and clears the pin through the public Memory API.
 
 ## Source order
 
