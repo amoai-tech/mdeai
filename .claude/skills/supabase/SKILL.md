@@ -29,9 +29,9 @@ Own Supabase schema/migrations, RLS/Auth, database functions/RPCs, Realtime, Sto
 - Never expose service-role/secret keys to browser code.
 - Treat `SECURITY DEFINER`, storage policies, exposed views, and cross-tenant access as security-critical changes.
 - UPDATE policies need both visibility and write checks; test allow and deny paths.
-- Current migration mode: **imperative**. `supabase/config.toml` has `[db.migrations] schema_paths = []`.
+- Current migration mode: **imperative**. `supabase/config.toml` has `[db.migrations] schema_paths = []` and no active `[experimental.pgdelta]` block.
 - Create imperative migrations with `supabase migration new <name>` and edit the CLI-generated file. Never invent migration timestamps or filenames manually.
-- Treat declarative schema guidance as conditional/future-only unless MDE intentionally enables a non-empty `schema_paths` configuration and adopts `supabase/schemas/` as canonical source.
+- Treat declarative schema guidance as conditional/future-only until MDE intentionally adopts it. On legacy `migra`, `schema_paths` configures declarative files; on `pg-delta`, `schema_paths` is ignored and declarative changes use `supabase/schemas/` with `supabase db schema declarative sync`.
 - For S3/S4 database work, prove tenant deny cases, replay/idempotency where relevant, and actual live/read-only state when authorized.
 
 ## Workflow
