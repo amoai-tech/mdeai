@@ -188,8 +188,8 @@ of repairing, and decide explicitly whether the canonical migration must actuall
 : "${GIT_VERSION:?set GIT_VERSION to the canonical Git migration version}"
 : "${LEDGER_VERSION:?set LEDGER_VERSION to the stray ledger migration version}"
 
-supabase migration repair "$GIT_VERSION"    --status applied  --db-url "$SUPABASE_DB_URL"
-supabase migration repair "$LEDGER_VERSION" --status reverted --db-url "$SUPABASE_DB_URL"
+supabase migration repair "$GIT_VERSION"    --status applied  --db-url "$SUPABASE_DB_URL" &&
+  supabase migration repair "$LEDGER_VERSION" --status reverted --db-url "$SUPABASE_DB_URL"
 ```
 
 Order matters: add the canonical version **first**. If the second command fails, production still records the migration as applied. `migration repair` changes migration history only — it never executes or reverts migration SQL. `reverted` deletes the history row; it does **not** roll back schema.
