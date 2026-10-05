@@ -4,6 +4,10 @@
  *
  * Run: VEB_MVP_010_INTEGRATION=1 infisical run --silent --env=dev --path=/ -- \
  *   npm test -- --run storage-durability.integration
+ *
+ * Refuses a non-loopback DATABASE_URL unless MASTRA_ALLOW_REMOTE_INTEGRATION=1 is set
+ * (see integration-db-guard.ts). The VEB-MVP-010 lane deliberately uses a dedicated
+ * remote test database, so that workflow sets the opt-in explicitly.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Mastra } from "@mastra/core/mastra";
@@ -14,6 +18,7 @@ import {
   resetMastraStorageForTests,
 } from "./storage";
 import { eventVenueBookingWorkflow } from "@/mastra/workflows/event-venue-booking-workflow";
+import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
 
 const BOOKING_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -109,6 +114,10 @@ describe.runIf(runIntegration)("VEB-MVP-010 Postgres cold-start durability", () 
   it(
     "uses PostgresStore and resumes suspended workflow after storage singleton reset",
     async () => {
+      assertLoopbackDatabaseUrl(
+        process.env.DATABASE_URL,
+        "VEB_MVP_010_INTEGRATION",
+      );
       const info = vi.spyOn(console, "info").mockImplementation(() => {});
 
       const mastraBefore = buildMastra();

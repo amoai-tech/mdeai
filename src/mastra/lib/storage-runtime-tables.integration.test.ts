@@ -14,17 +14,18 @@
  *   DATABASE_URL=postgresql://... MASTRA_TABLE_USAGE_INTEGRATION=1 \
  *     npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
  *
- * This is a manual/local proof: it is gated on DATABASE_URL + the flag, so the standard
- * `npm test` / `npm run floor` pipeline skips it. `.github/workflows/floor.yml`'s
- * `mastra-schema-init` job already provisions a postgres:17 service and runs
- * `mastra:init`, so setting the flag on that step would give this assertion CI
- * coverage; that workflow change needs approval first.
+ * This is gated on DATABASE_URL + the flag, so the standard `npm test` / `npm run floor`
+ * pipeline skips it. It runs automatically in `.github/workflows/floor.yml`'s
+ * `mastra-schema-init` job, which provisions a disposable postgres:17 service and runs
+ * `mastra:init`. It refuses a non-loopback DATABASE_URL (see `integration-db-guard.ts`)
+ * so it can never write test rows into a remote production database.
  */
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Memory } from "@mastra/memory";
 import { PostgresStore } from "@mastra/pg";
 import { conciergeWorkingMemorySchema } from "@/mastra/agents/concierge";
+import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const runIntegration =
@@ -55,6 +56,7 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
   it(
     "a thread + messages + working-memory path writes only the required tables",
     async () => {
+      assertLoopbackDatabaseUrl(DATABASE_URL, "MASTRA_TABLE_USAGE_INTEGRATION");
       const client = new Client({ connectionString: DATABASE_URL as string });
       await client.connect();
       const store = new PostgresStore({
