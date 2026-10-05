@@ -243,6 +243,27 @@ test("the manual credential check can only run from main", () => {
   assert.match(credentialJob, /github\.ref == 'refs\/heads\/main'/);
 });
 
+test("an older READY event cannot promote after main has moved", () => {
+  const job = certifyJob(workflow());
+  const stale = stepBody(job, "Reject stale main candidate");
+
+  assert.match(stale, /git rev-parse HEAD/, "must read the candidate checkout SHA");
+  assert.match(stale, /git -C \.trusted rev-parse HEAD/, "must read current main from the trusted checkout");
+  assert.match(stale, /exit 1/, "a SHA mismatch must fail closed");
+  assert.ok(
+    stepIndex(job, "Checkout trusted release-control code") < stepIndex(job, "Reject stale main candidate"),
+    "current main must be checked out before the freshness check",
+  );
+  assert.ok(
+    stepIndex(job, "Reject stale main candidate") < stepIndex(job, "Validate Vercel candidate trust boundary"),
+    "a stale candidate must fail before any release checks or certification",
+  );
+  assert.ok(
+    stepIndex(job, "Reject stale main candidate") < stepIndex(job, "Promote the exact certified deployment"),
+    "a stale candidate must never reach promotion",
+  );
+});
+
 test("candidates are certified one at a time", () => {
   const job = certifyJob(workflow());
   assert.match(job, /concurrency:\s*\n\s*group: vercel-production-certification\s*\n\s*cancel-in-progress: false/);
