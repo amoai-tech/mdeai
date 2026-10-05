@@ -7,6 +7,7 @@
 // Exit 2 = block; print reason to stderr.
 
 import { readFileSync } from "node:fs";
+import { toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -29,7 +30,7 @@ if (/^\/home\/sk\/mde\/(?!.*\/mdeai\/)/.test(filePath)) {
 }
 
 // Normalise to a workspace-relative path for mdeai/.
-const rel = filePath.replace(/^.*?\/mdeai\/(\.claude\/worktrees\/[^/]+\/)?/, "");
+const rel = toRepoRelative(filePath);
 
 // 1. .env protection (allow .env.example)
 const isEnvFile = /(^|\/)\.env(\.[^./]+)?$/.test(rel);

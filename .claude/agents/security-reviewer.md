@@ -1,7 +1,7 @@
 ---
 name: security-reviewer
-description: Use proactively to audit code changes for security issues — secret leakage, service-role exfil, missing RLS, JWT misconfig, XSS/injection, dangerous eval. Invoke before commit, after edits to mdeapp/src/**, mdeapp/supabase/functions/**, or migrations. Fast (haiku) and cheap; safe to run on every PR diff.
-tools: Read, Grep, Glob, Bash, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__get_advisors, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__execute_sql, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__list_tables
+description: Use proactively to audit code changes for security issues — secret leakage, service-role exfil, missing RLS, JWT misconfig, XSS/injection, dangerous eval. Invoke before commit, after edits to src/**, supabase/functions/**, or migrations. Fast (haiku) and cheap; safe to run on every PR diff.
+tools: Read, Grep, Glob, Bash, mcp__plugin_supabase_supabase__get_advisors, mcp__plugin_supabase_supabase__execute_sql, mcp__plugin_supabase_supabase__list_tables
 model: haiku
 color: red
 ---
@@ -30,14 +30,14 @@ Severity: P0 if found in committed text. P1 if found in `.env.example`.
 ### 2. Service-role in src/** (P0)
 
 `Grep` for `SUPABASE_SERVICE_ROLE_KEY`, `supabaseAdmin`, `service_role` under
-`mdeapp/src/**` (excluding `*.test.tsx`, `__mocks__/`).
+`src/**` (excluding `*.test.tsx`, `__mocks__/`).
 
-Per CLAUDE.md hard rule: service-role keys must never reach mdeapp/src.
+Per CLAUDE.md hard rule: service-role keys must never reach src.
 Severity: P0 always.
 
 ### 3. RLS gaps (P0)
 
-If any migration in `mdeapp/supabase/migrations/**` was edited:
+If any migration in `supabase/migrations/**` was edited:
 - Read the migration. For each `CREATE TABLE` statement, assert the migration
   also has `ALTER TABLE … ENABLE ROW LEVEL SECURITY` and at least one
   `CREATE POLICY`.
@@ -52,15 +52,15 @@ Severity: P0 if RLS off; P1 if RLS on but 0 policies (denies everything but sign
 
 ### 4. Edge function JWT bypass (P1)
 
-`Grep` for `verify_jwt: false` in `mdeapp/supabase/config.toml` or
-`mdeapp/supabase/functions/*/config.toml`.
+`Grep` for `verify_jwt: false` in `supabase/config.toml` or
+`supabase/functions/*/config.toml`.
 
 Each occurrence MUST have an adjacent comment explaining why (e.g., "Stripe
 webhook — verified by signature, not JWT"). Flag any without justification.
 
 ### 5. XSS / injection (P1)
 
-For TSX/JSX files in `mdeapp/src/**`:
+For TSX/JSX files in `src/**`:
 - `dangerouslySetInnerHTML` — must be paired with an `import DOMPurify` or
   trusted-source comment. Flag bare uses.
 - `eval(`, `new Function(`, `setTimeout(` with string arg — flag all.
@@ -73,7 +73,7 @@ as a regression vs. `tasks/core/F01b-vulnerability-triage.md`.
 
 ### 7. Open redirect / SSRF (P1)
 
-`Grep` for `fetch(` / `axios(` calls in `mdeapp/src/**` and edge functions
+`Grep` for `fetch(` / `axios(` calls in `src/**` and edge functions
 that take a URL from user input without an allowlist. Flag.
 
 ## Output format
@@ -86,8 +86,8 @@ Always produce this table — even on a clean review, print the table with one
 
 | Sev | Category | File:Line | Finding | Suggested fix |
 |-----|----------|-----------|---------|---------------|
-| P0 | Service-role in src | mdeapp/src/lib/db.ts:14 | imports supabaseAdmin from createClient(…SERVICE_ROLE) | Move to mdeapp/supabase/functions/admin/ |
-| P1 | XSS | mdeapp/src/components/RentalDescription.tsx:42 | dangerouslySetInnerHTML without sanitization | Use DOMPurify or render as text |
+| P0 | Service-role in src | src/lib/db.ts:14 | imports supabaseAdmin from createClient(…SERVICE_ROLE) | Move to supabase/functions/admin/ |
+| P1 | XSS | src/components/RentalDescription.tsx:42 | dangerouslySetInnerHTML without sanitization | Use DOMPurify or render as text |
 | P2 | Dependency | package.json | prismjs override removed | Restore "prismjs": ">=1.30.0" |
 
 **Summary:** 1 P0 · 1 P1 · 1 P2.
