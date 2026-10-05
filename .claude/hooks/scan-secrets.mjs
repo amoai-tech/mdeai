@@ -5,6 +5,7 @@
 // Bypass for one turn: MDEAI_ALLOW_SECRET_LITERAL=1
 
 import { readFileSync } from "node:fs";
+import { toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -25,7 +26,7 @@ if (Array.isArray(input.edits)) {
 if (candidates.length === 0) process.exit(0);
 
 const filePath = input.file_path || input.path || "";
-const rel = filePath.replace(/^.*?\/mdeai\/(\.claude\/worktrees\/[^/]+\/)?/, "");
+const rel = toRepoRelative(filePath);
 
 // Allow this hook itself and example/lock files to mention patterns.
 const allowPath =

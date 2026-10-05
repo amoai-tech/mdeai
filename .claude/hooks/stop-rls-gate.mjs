@@ -8,6 +8,7 @@
 
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { projectRoot } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -24,10 +25,10 @@ function sh(cmd, args, opts = {}) {
   return (r.stdout || "").trim();
 }
 
-const mdeapp = "/home/sk/mdeai/mdeapp";
+const root = projectRoot();
 
-// Detect changed migration/schema files in the working tree (mdeapp/.git).
-const changed = (sh("git", ["status", "--porcelain"], { cwd: mdeapp }) || "")
+// Detect changed migration/schema files in the working tree.
+const changed = (sh("git", ["status", "--porcelain", "-uall"], { cwd: root }) || "")
   .split("\n")
   .map((l) => l.slice(3))
   .filter(Boolean);
@@ -39,7 +40,7 @@ if (touched.length === 0) process.exit(0);
 const diffSummary = sh(
   "git",
   ["diff", "--stat", "HEAD", "--", "supabase/migrations", "supabase/schemas"],
-  { cwd: mdeapp },
+  { cwd: root },
 );
 
 // Read last assistant message from the transcript.

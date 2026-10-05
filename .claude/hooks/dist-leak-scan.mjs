@@ -18,6 +18,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { projectRoot } from "./lib/repo-path.mjs";
 
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
@@ -37,16 +38,16 @@ const DEPLOY_RE =
   /(\bgit\s+push\b|\bvercel\s+(deploy|--prod)\b|\bnpm\s+(run\s+)?deploy\b|\bnpx\s+vercel\b|\bsupabase\s+functions\s+deploy\b)/;
 if (!DEPLOY_RE.test(cmd)) process.exit(0);
 
-// Bundle locations to scan, relative to mdeapp/.
+// Bundle locations to scan, relative to the repository root.
 // DIST_LEAK_SCAN_ROOTS (colon-separated absolute dirs) overrides for tests.
-const MDEAPP = "/home/sk/mdeai/mdeapp";
+const REPO_ROOT = projectRoot();
 const ROOTS = process.env.DIST_LEAK_SCAN_ROOTS
   ? process.env.DIST_LEAK_SCAN_ROOTS.split(":").filter(Boolean).map((r) => resolve(r))
   : [
-      resolve(MDEAPP, ".next"),
-      resolve(MDEAPP, ".vercel/output"),
-      resolve(MDEAPP, "dist"),
-      resolve(MDEAPP, "build"),
+      resolve(REPO_ROOT, ".next"),
+      resolve(REPO_ROOT, ".vercel/output"),
+      resolve(REPO_ROOT, "dist"),
+      resolve(REPO_ROOT, "build"),
     ];
 
 // Secret class regexes (shapes — not values).
@@ -85,13 +86,11 @@ function loadMapsKeyAllowlist() {
   const hashes = new Set();
 
   for (const f of [
-    resolve(MDEAPP, ".env.local"),
-    resolve(MDEAPP, ".env.production"),
-    resolve(MDEAPP, ".env"),
-    resolve(MDEAPP, ".env.local.bak"),
-    resolve(MDEAPP, ".env.production.bak"),
-    "/home/sk/mdeai/.env.local",
-    "/home/sk/mdeai/.env.local.bak",
+    resolve(REPO_ROOT, ".env.local"),
+    resolve(REPO_ROOT, ".env.production"),
+    resolve(REPO_ROOT, ".env"),
+    resolve(REPO_ROOT, ".env.local.bak"),
+    resolve(REPO_ROOT, ".env.production.bak"),
   ]) {
     if (!existsSync(f)) continue;
     let txt;
