@@ -24,6 +24,7 @@
  */
 import { PostgresStore } from "@mastra/pg";
 import { applyThreadOwnershipGuardTo } from "./lib/mastra-thread-ownership-guard.mjs";
+import { applyMastraStorageLockdownTo } from "./lib/mastra-storage-lockdown.mjs";
 
 const connectionString = process.env.DATABASE_URL?.trim().replace(/^"|"$/g, "").trim();
 
@@ -52,11 +53,19 @@ try {
   console.log(`init-mastra-schema: initializing Mastra schema on ${safeTarget(connectionString)}`);
   await store.init();
 
+  // SAN-1368 — lock every vendor table to the trusted server path. This MUST run here,
+  // after the tables exist: the RLS migration replays before Mastra creates them, so on a
+  // fresh environment it locks nothing and the tables would be reachable by anon/
+  // authenticated through PostgREST.
+  await applyMastraStorageLockdownTo(connectionString);
+
   // SAN-547 — a thread's owner is immutable once claimed. Applied here rather than in
   // `supabase/migrations/**` because this script is what creates the vendor-owned
   // `mastra_*` tables; a fresh `supabase db reset` has no `mastra_threads` to guard.
   await applyThreadOwnershipGuardTo(connectionString);
-  console.log("init-mastra-schema: ok — Mastra schema present, thread ownership guard applied");
+  console.log(
+    "init-mastra-schema: ok — Mastra schema present, storage locked (RLS + FORCE + service_role policy), thread ownership guard applied",
+  );
 } catch (error) {
   console.error(
     `init-mastra-schema: FAILED — ${error instanceof Error ? error.message : String(error)}`,
