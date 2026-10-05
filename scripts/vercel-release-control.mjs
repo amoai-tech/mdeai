@@ -119,10 +119,20 @@ export function checkStaged(deployment, expected) {
   }
 }
 
-/** After promotion: the production domain serves exactly what was tested. */
-export function checkPromoted(deployment, expected) {
+/**
+ * After promotion: the production domain serves exactly what was tested.
+ *
+ * The domain-to-deployment link comes from the domain's own alias record, not from the deployment's
+ * `alias` array: Vercel does not list a promoted production domain in that array (proved on the first
+ * real promotion, SAN-1330), so reading it would fail a correct promotion.
+ */
+export function checkPromoted(deployment, expected, domainAlias) {
   checkIdentity(deployment, expected);
-  if (!(deployment.alias ?? []).includes(PRIMARY_DOMAIN)) {
+  if (!domainAlias || typeof domainAlias !== "object" || domainAlias.error) {
+    fail(`the ${PRIMARY_DOMAIN} alias could not be read from Vercel`);
+  }
+  if (domainAlias.alias !== PRIMARY_DOMAIN) fail(`Vercel answered for a different domain than ${PRIMARY_DOMAIN}`);
+  if (domainAlias.deploymentId !== expected.id) {
     fail(`${PRIMARY_DOMAIN} does not point at the certified deployment`);
   }
 }
@@ -181,7 +191,11 @@ async function main(command) {
     // `vercel promote` waits for completion; a short retry only absorbs alias read-after-write lag.
     for (let attempt = 1; attempt <= 6; attempt += 1) {
       try {
-        checkPromoted(await vercelGet(`/v13/deployments/${PRIMARY_DOMAIN}?teamId=${TEAM_ID}`), expected);
+        checkPromoted(
+          await vercelGet(`/v13/deployments/${expected.id}?teamId=${TEAM_ID}`),
+          expected,
+          await vercelGet(`/v4/aliases/${PRIMARY_DOMAIN}?teamId=${TEAM_ID}`),
+        );
         console.log(`vercel-release: ${PRIMARY_DOMAIN} serves the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`);
         return;
       } catch (error) {
