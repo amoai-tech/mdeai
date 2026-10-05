@@ -9,6 +9,9 @@ load_when: storage.objects policy, bucket RLS, file upload permissions
 
 All policies target `storage.objects`. Always use `(SELECT auth.uid())` not `auth.uid()` directly.
 
+Upsert/replace requires applicable INSERT, SELECT, and UPDATE policies. Test create, read, replace,
+and delete independently; do not broaden SELECT access merely to make upsert work.
+
 ## Public bucket — read-only (anyone can read)
 
 ```sql
@@ -36,9 +39,20 @@ CREATE POLICY "user_upload"
     AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
   );
 
+CREATE POLICY "user_read"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
+  );
+
 CREATE POLICY "user_update"
   ON storage.objects FOR UPDATE TO authenticated
   USING (
+    bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
+  )
+  WITH CHECK (
     bucket_id = 'avatars'
     AND (storage.foldername(name))[1] = (SELECT auth.uid()::text)
   );
@@ -108,9 +122,33 @@ CREATE POLICY "public_read_event_media"
 
 ## Admin-only bucket
 
+Keep operations separate so each policy has the correct `USING`/`WITH CHECK` semantics.
+
 ```sql
-CREATE POLICY "admin_only"
-  ON storage.objects FOR ALL TO authenticated
+CREATE POLICY "admin_read"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'admin-docs'
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = (SELECT auth.uid())
+      AND role IN ('admin', 'super_admin')
+    )
+  );
+
+CREATE POLICY "admin_insert"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'admin-docs'
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = (SELECT auth.uid())
+      AND role IN ('admin', 'super_admin')
+    )
+  );
+
+CREATE POLICY "admin_update"
+  ON storage.objects FOR UPDATE TO authenticated
   USING (
     bucket_id = 'admin-docs'
     AND EXISTS (
@@ -120,6 +158,17 @@ CREATE POLICY "admin_only"
     )
   )
   WITH CHECK (
+    bucket_id = 'admin-docs'
+    AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = (SELECT auth.uid())
+      AND role IN ('admin', 'super_admin')
+    )
+  );
+
+CREATE POLICY "admin_delete"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
     bucket_id = 'admin-docs'
     AND EXISTS (
       SELECT 1 FROM public.profiles
