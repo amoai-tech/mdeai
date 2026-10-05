@@ -17,6 +17,7 @@ const PROD_SPECS = [
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
+  "**/rental-conversion-journey.spec.ts",
 ];
 
 export default defineConfig({
