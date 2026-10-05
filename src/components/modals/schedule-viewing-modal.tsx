@@ -46,24 +46,32 @@ export const ScheduleViewingModal = () => {
   const [preferredAt, setPreferredAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // What the last lookup filled in, so a later signed-out lookup can remove exactly that and
+  // nothing the visitor typed themselves.
+  const prefilledRef = useRef<SchedulePrefill | null>(null);
 
   const isOpen = Boolean(scheduleTarget);
 
   // When the modal opens for a signed-in user, seed contact fields from their
   // profile + auth account. Only fills blanks (`prev || …`) so it never clobbers
-  // what the user has already typed, and signed-out users keep blank fields.
+  // what the user has already typed, and signed-out users keep whatever they typed.
   useEffect(() => {
     if (!isOpen) return undefined;
     let cancelled = false;
     const applyPrefill = (prefill: SchedulePrefill | null) => {
       if (!prefill) {
-        // Signed out: clear any values prefilled for a previous user so
-        // their name/email can't leak across sessions on a shared browser.
-        setName("");
-        setEmail("");
-        setPhone("");
+        // Signed out: remove values prefilled for a previous user so their details can't leak
+        // across sessions on a shared browser. Only those values: this lookup is async, so the
+        // visitor may already have typed, and blanking the form would silently erase it.
+        const previous = prefilledRef.current;
+        prefilledRef.current = null;
+        if (!previous) return;
+        setName((prev) => (prev === previous.name ? "" : prev));
+        setEmail((prev) => (prev === previous.email ? "" : prev));
+        setPhone((prev) => (prev === previous.phone ? "" : prev));
         return;
       }
+      prefilledRef.current = prefill;
       // `prev || …` only fills blanks, so it never clobbers what the user
       // typed and a blank prefill value is a no-op (no per-field guards needed).
       setName((prev) => prev || prefill.name);
