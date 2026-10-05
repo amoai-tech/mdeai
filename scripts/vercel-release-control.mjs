@@ -144,7 +144,9 @@ export async function vercelGet(
     if (error?.name === "TimeoutError" || error?.name === "AbortError") {
       fail(`Vercel API timed out after ${Math.round(timeoutMs / 1000)}s for ${label}`);
     }
-    fail(`Vercel API request failed for ${label}`);
+    const rawCode = error?.cause?.code ?? error?.code;
+    const safeCode = typeof rawCode === "string" && /^[A-Z0-9_]{2,32}$/.test(rawCode) ? rawCode : null;
+    fail(`Vercel API request failed for ${label}${safeCode ? ` (${safeCode})` : ""}`);
   }
   // Never echo the body: it can carry account detail. Status + the request label is enough.
   if (!response.ok) fail(`Vercel API answered ${response.status} for ${label}`);
