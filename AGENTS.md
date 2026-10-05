@@ -34,6 +34,12 @@ Traps worth knowing before you debug them:
 - `check:env:ci` fails in a fresh worktree with no `.env`; export `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` first.
 - `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
 - Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
+- A fresh git worktree needs `scripts/worktree-bootstrap.sh` (clean `npm ci`, links `.env`/`.env.local` from the main checkout, copies the local Codacy config). `npm run floor` also needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which lives in the main checkout's `.env`, not `.env.local`.
+- There is one Supabase project and it is production. Any test that uses the service-role key writes real rows, so it must clean up after itself and re-query to prove nothing is left (pattern: `e2e/san-1204-broker-viewing-requests.spec.ts`). An unknown count is never zero.
+- Anonymous viewing requests are limited to 20 per IP per hour (`chat-lead-capture`). Repeated E2E runs hit `RATE_LIMIT`; do not retry around it.
+- Local Codacy (`codacy-analysis analyze --pr`) needs `.codacy/`, which is untracked and exists only in the main checkout. With no config it runs zero tools and proves nothing: check `toolResults` is non-empty.
+- Never run `pkill -f <pattern>` from the agent shell: the pattern matches the shell's own command line and kills it. Stop a dev server by its port instead.
+- `next dev` maintains the `nextjs-agent-rules` block at the bottom of this file. It is committed on purpose so the tree stays clean; do not delete it.
 
 ## Instruction ownership
 
@@ -253,3 +259,13 @@ This bootstrap file does not define product behavior. Current source code, curre
 ## Response style
 
 Lead with the answer. Keep explanations concise, concrete, and tied to MDE. Always pair task numbers with task names.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
