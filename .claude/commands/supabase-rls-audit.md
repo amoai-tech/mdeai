@@ -1,6 +1,6 @@
 ---
 description: Audit RLS coverage on public schema — all tables must have rls + ≥1 policy
-allowed-tools: Bash, Read, Grep, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__execute_sql, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__list_tables, mcp__ed3787fc-985d-4fc2-87ac-e09815d3583a__get_advisors
+allowed-tools: Bash, Read, Grep, mcp__plugin_supabase_supabase__execute_sql, mcp__plugin_supabase_supabase__list_tables, mcp__plugin_supabase_supabase__get_advisors
 ---
 
 # /supabase-rls-audit — RLS coverage audit

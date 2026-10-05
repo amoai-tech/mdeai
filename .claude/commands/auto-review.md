@@ -10,25 +10,23 @@ Run before committing to surface drift `npm run floor` can't catch. Read-only. W
 ## What it does
 
 1. **Detect changed files** — `git diff --name-only HEAD` + `git status --porcelain` (covers staged + unstaged + untracked).
-2. **Filter to in-scope** — keep only `.ts` / `.tsx` under `mdeapp/src/**` or `mdeapp/supabase/functions/**`. Exclude test files (`**/*.{test,spec}.{ts,tsx}`, `**/__tests__/**`).
+2. **Filter to in-scope** — keep only `.ts` / `.tsx` under `src/**` or `supabase/functions/**`. Exclude test files (`**/*.{test,spec}.{ts,tsx}`, `**/__tests__/**`).
 3. **Detect review pass** — if last commit author is `claude` or message contains `mdeai-auto-review`, this is a follow-up. Surface in output as "pass N".
 4. **Invoke `mdeai-auto-reviewer` via the Task tool** with the file list as the prompt. The subagent reads `.claude/auto-review/rules.md`, applies R1–R5, returns findings + score + grade.
 5. **Print the subagent's output verbatim.** No interpretation. The user decides what to fix.
 
 ## Workflow
 
-From `/home/sk/mdeai/`:
+From the repository root:
 
 ```bash
-cd mdeapp
 CHANGED=$(
   { git diff --name-only HEAD; git status --porcelain | awk '{print $2}'; } \
     2>/dev/null \
   | sort -u \
   | grep -E '\.(ts|tsx)$' \
-  | grep -E '^(mdeapp/)?(src|supabase/functions)/' \
-  | grep -vE '(\.(test|spec)\.(ts|tsx)$|__tests__/)' \
-  | sed 's|^mdeapp/||'
+  | grep -E '^(src|supabase/functions)/' \
+  | grep -vE '(\.(test|spec)\.(ts|tsx)$|__tests__/)'
 )
 if [ -z "$CHANGED" ]; then
   echo "📋 /auto-review: no in-scope .ts/.tsx files changed since HEAD — skipped."
