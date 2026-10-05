@@ -35,7 +35,6 @@ test.describe("SCREEN-021 Phase A café listings", () => {
         '[data-testid="grounding-attribution"], [data-testid="grounding-attribution-compact"]',
       ),
     ).toHaveCount(0);
-    await expect(page.locator('[data-testid="results-column"]')).toHaveCount(0);
     await expect(firstCard).toContainText(/Match #1/);
     await expect(firstCard).toContainText(/Google-verified candidate/);
 

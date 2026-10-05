@@ -6,9 +6,9 @@ import {
 } from "./maps-layout";
 
 /**
- * Deterministic chat fixtures and steps shared by the deterministic specs (SAN-1341, SAN-966):
- * mocked rental, event, grounded-place, and restaurant fast-path APIs, and the real chat input driven the way a
- * renter drives it. One copy, so the specs cannot drift apart.
+ * Fixtures and steps shared by the SAN-1341 and SAN-966 deterministic specs: mocked rental, event,
+ * grounded-place and restaurant fast-path APIs, and the real chat input driven the way a renter
+ * drives it. One copy, so the specs cannot drift apart.
  */
 
 export const RESTAURANT_QUERY = RESTAURANT_FAST_PATH_QUERY;
@@ -61,6 +61,7 @@ export const event = {
   category: "music",
   venue: "Deterministic Social Club",
   neighborhood: "El Poblado",
+  // Static date: the mock returns it whatever the query says ("this weekend" is not evaluated).
   startsAt: "2026-10-10T01:00:00.000Z",
   pricePerTicket: 15,
   currency: "USD",

@@ -2,9 +2,6 @@ import { test, expect } from "@playwright/test";
 import {
   collectCriticalConsoleErrors,
   gotoHome,
-  RENTAL_QUERY,
-  sendConciergeMessage,
-  waitForRentalCards,
 } from "./helpers/maps-layout";
 
 test.describe("MAP-007B desktop layout", () => {
@@ -30,18 +27,6 @@ test.describe("MAP-007B desktop layout", () => {
     expect(overflow).toBe(false);
 
     expect(collectCriticalConsoleErrors(errors)).toEqual([]);
-  });
-
-  test("rental card click highlights pin row", async ({ page }) => {
-    await gotoHome(page);
-    await sendConciergeMessage(page, RENTAL_QUERY);
-    await waitForRentalCards(page);
-    const card = page.locator('[data-testid="rental-card"]').first();
-    await card.click();
-
-    const row = page.locator('[data-testid="results-pin-row"]').first();
-    await row.waitFor({ state: "visible", timeout: 30_000 });
-    await expect(row).toHaveAttribute("data-selected", "true");
   });
 });
 

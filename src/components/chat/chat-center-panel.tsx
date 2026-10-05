@@ -21,7 +21,7 @@ const CONCIERGE_LABELS = {
 
 /**
  * CopilotChat with ConciergeChatView slot — fast-path before agent (CK-V2-015). Latest-turn
- * results render inside its transcript (SAN-966), so nothing below it competes with the composer.
+ * results render inside its transcript through `ConciergeMessageView` (SAN-966).
  */
 function ConciergeCopilotChat() {
   return (

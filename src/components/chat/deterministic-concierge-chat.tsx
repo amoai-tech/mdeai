@@ -6,7 +6,13 @@ import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 
-/** Test-only chat surface: real MDE router/fast paths, no CopilotKit agent transport. */
+/**
+ * Test-only chat surface: real MDE router/fast paths, no CopilotKit agent transport. It renders
+ * the same results tail as the real transcript, with no `transcriptMessageIds` because there is no
+ * transcript to dedupe against. It shares the ORDER (results, then the composer) with the real
+ * chat, not its scroll container or composer positioning; the real layout is proven through the
+ * dev probe pages.
+ */
 export function DeterministicConciergeChat() {
   const handlers = useConciergeSendHandlers();
   const hydrated = useHydrated();
@@ -31,8 +37,7 @@ export function DeterministicConciergeChat() {
       data-hydrated={hydrated ? "true" : "false"}
       className="flex min-h-0 flex-1 flex-col justify-end"
     >
-      {/* Same tail the real transcript renders, so the test chat has the real order:
-          answer, results, then the composer. */}
+      {/* The same tail the real transcript renders, above the composer. */}
       <div className="mx-auto min-h-0 w-full max-w-3xl overflow-y-auto">
         <ConciergeTranscriptTail />
       </div>

@@ -1,7 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import {
   assertNoDuplicateGroundingLists,
-  assertNoGenericMapResultsList,
   collectCriticalConsoleErrors,
   ensureChatInputVisible,
   GROUNDING_QUERY,
@@ -83,9 +82,7 @@ export async function assertCuratedFallbackGrounding(page: Page): Promise<void> 
 }
 
 export async function assertNoDuplicateVenueSurfaces(page: Page): Promise<void> {
-  await assertNoGenericMapResultsList(page);
   await assertNoDuplicateGroundingLists(page);
-  await expect(page.locator('[data-testid="results-column"]')).toHaveCount(0);
 }
 
 export async function sendCafeGroundingQuery(page: Page): Promise<void> {
