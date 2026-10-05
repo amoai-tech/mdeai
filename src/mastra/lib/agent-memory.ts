@@ -145,7 +145,10 @@ class PlaceholderTolerantMemory extends Memory {
 
             const memory = ctx.memory;
             if (!memory) {
-              throw new Error("Memory instance is required for working memory updates");
+              return {
+                success: false,
+                message: "Memory is unavailable; the selected pin was not cleared.",
+              };
             }
             if (!lockKey) {
               return {
@@ -184,10 +187,27 @@ class PlaceholderTolerantMemory extends Memory {
                     threadId: where.threadId,
                     resourceId: where.resourceId,
                   });
-                } catch {
-                  // Another concurrent request may have created the thread first (upstream
-                  // atomic insert-if-absent: mastra-ai/mastra#20148). Fall through; the
-                  // read/write below surfaces any real failure.
+                } catch (error) {
+                  // A concurrent request may have created it first (upstream atomic
+                  // insert-if-absent: mastra-ai/mastra#20148). Re-check: only fall through
+                  // when the thread now exists; otherwise surface a real failure.
+                  let created: unknown = null;
+                  if (memory.getThreadById) {
+                    created = await memory.getThreadById({
+                      threadId: where.threadId,
+                    }).catch(() => null);
+                  }
+                  if (!created) {
+                    console.warn(
+                      "[agent-memory] thread creation failed:",
+                      error instanceof Error ? error.message : error,
+                    );
+                    return {
+                      success: false,
+                      message:
+                        "Could not ensure the thread; the selected pin was not cleared.",
+                    };
+                  }
                 }
               }
             }
