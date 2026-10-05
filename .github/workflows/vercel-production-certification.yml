@@ -100,6 +100,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # READY events can arrive out of order: reject an older main deployment after a newer main
+      # commit has already become current. Serialization alone cannot make event arrival chronological.
+      - name: Reject stale main candidate
+        run: |
+          set -euo pipefail
+          candidate_sha="$(git rev-parse HEAD)"
+          current_main_sha="$(git -C .trusted rev-parse HEAD)"
+          if [ "${candidate_sha}" != "${current_main_sha}" ]; then
+            echo "vercel-candidate: FAIL — candidate is stale; main moved before certification"
+            exit 1
+          fi
+
       # Trusted validator, candidate working directory: `git rev-parse HEAD` is the candidate's.
       - name: Validate Vercel candidate trust boundary
         run: |
