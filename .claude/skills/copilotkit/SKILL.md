@@ -112,15 +112,25 @@ started" is not success. Use the Slack skill's *Done means three things* rule (a
 in the channel, Channel reports `online`, and a real human mention got a real reply); any one alone
 is a false positive.
 
-## Two kinds of human-in-the-loop
+## Human-in-the-loop with Mastra
 
-Pick by where the tool actually executes, not by which hook you saw first:
+For MDE's current Mastra + CopilotKit integration, use the tool-based CopilotKit v2
+`useHumanInTheLoop` flow for the approval UI. Mastra does not emit the AG-UI interrupt
+events consumed by CopilotKit `useInterrupt`, so `useInterrupt` is not the MDE Mastra
+approval path.
 
-- **Frontend tool** → `useHumanInTheLoop`. The render callback owns the UI and calls
-  `respond(...)`.
-- **Backend tool** → mark the tool approval-gated and use `useInterrupt`. A backend
-  write such as the listing publish RPC is *not* gated by `useHumanInTheLoop`; that
-  hook would render an approval that never blocks the real mutation.
+- **Mastra + CopilotKit approval UI** → register the frontend approval tool with
+  `useHumanInTheLoop`; its render callback shows the review UI and calls `respond(...)`.
+- **Approved UI response** → records user intent only. It does not authorize a write.
+- **Protected action** → call the normal authenticated backend/RPC, which independently
+  authenticates the actor and revalidates ownership/role, record version/current state,
+  allowed transition, and idempotency before committing.
+- **`useInterrupt`** → use only with an integration that is verified to emit the supported
+  AG-UI interrupt events. Do not select it merely because a tool executes on the backend.
+- **Additional Mastra-native approval gates** → do not assume they automatically compose
+  with the CopilotKit approval UI. Add a second gate only after end-to-end proof on MDE's
+  exact installed versions shows approve, reject, reload/resume, retry, and exactly-once
+  execution work without double prompts or stuck runs.
 
 ```tsx
 import { useHumanInTheLoop } from "@copilotkit/react-core/v2";
@@ -141,10 +151,24 @@ useHumanInTheLoop({
 });
 ```
 
-Approval records intent, never authorization. The backend path must still revalidate
-the user, ownership, record version, and legal transition. `mastra` owns that half —
-see its `references/human-in-the-loop.md`.
+Canonical protected-write flow:
 
+```text
+useHumanInTheLoop review UI
+→ approved intent
+→ authenticated backend/RPC
+→ revalidate authorization + ownership + version + state
+→ idempotent/atomic write
+→ committed result
+```
+
+Approval records intent, never authorization. `mastra` owns the agent/tool/workflow half;
+the authenticated backend/database remains authoritative for protected writes.
+
+Official Mastra-specific CopilotKit guidance:
+
+- https://docs.copilotkit.ai/mastra/human-in-the-loop/tool-based
+- https://docs.copilotkit.ai/mastra/human-in-the-loop/interrupt-flow
 ## Workflow
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.
