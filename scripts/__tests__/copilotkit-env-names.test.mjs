@@ -16,7 +16,8 @@ import { test } from "node:test";
 // CopilotKit's own `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY` replaced. Built from parts so this file
 // never contains either literally.
 const RETIRED_NAMES = [`${"COPILOTKIT"}_API_KEY`, `NEXT_PUBLIC_COPILOTKIT_${"PUBLIC"}_LICENSE_KEY`];
-const RETIRED = new RegExp(`(?<![A-Z0-9_])(?:${RETIRED_NAMES.join("|")})(?![A-Z0-9_])`);
+// Whole-word comparison (a name is a run of A-Z, 0-9 and _), so no dynamic regular expression is built.
+const usesRetiredName = (text) => (text.match(/[A-Z0-9_]+/g) ?? []).some((word) => RETIRED_NAMES.includes(word));
 const SKIP_DIRS = new Set(["node_modules", ".next", "__tests__", "__snapshots__"]);
 
 function* files(dir) {
@@ -36,7 +37,7 @@ test("no production code, contract, gate, workflow or example env reads the reti
   const offenders = [];
   const check = (file) => {
     if (isTestFile(file) || !fs.existsSync(file)) return;
-    if (RETIRED.test(fs.readFileSync(file, "utf8"))) offenders.push(file);
+    if (usesRetiredName(fs.readFileSync(file, "utf8"))) offenders.push(file);
   };
   for (const dir of SCAN) if (fs.existsSync(dir)) for (const file of files(dir)) check(file);
   for (const file of SINGLE) check(file);
