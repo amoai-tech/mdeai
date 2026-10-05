@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Export live venue_signals → idempotent seed SQL (DATA-041-R02).
- * Usage: cd mdeapp && infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-seed.mjs
+ * Usage: infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-seed.mjs
  */
 import { writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";

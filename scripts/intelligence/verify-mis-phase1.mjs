@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * MIS Phase 1 live DB smoke — DATA-041 venue_signals + signal plane tables.
- * Usage: cd mdeapp && npm run verify:mis-phase1
+ * Usage: npm run verify:mis-phase1
  * Expect: 10/10 PASS, exit 0
  */
 import { createClient } from "@supabase/supabase-js";

@@ -12,7 +12,7 @@ implicate restaurant or CopilotKit budget work.
 | `npm run test:e2e:restaurant-fast-path` | `restaurant-card-fast-path.spec.ts` | Restaurant cards via `/api/restaurants/search` |
 | `npm run test:e2e:concierge-run-error` | `concierge-run-error.spec.ts` | UX-016 error bridge |
 
-**Precondition:** `cd mdeapp && npm run dev` (UI `:3001`, Mastra `:4111`). Restart dev
+**Precondition:** `npm run dev` (UI `:3001`, Mastra `:4111`). Restart dev
 between budget runs if a prior session triggered a CopilotKit POST storm.
 
 ## Query ownership

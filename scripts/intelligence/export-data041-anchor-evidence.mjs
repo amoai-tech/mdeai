@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Export live venue_source_evidence (anchor rows) → idempotent seed SQL (DATA-041-R06).
- * Usage: cd mdeapp && infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-anchor-evidence.mjs
+ * Usage: infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-anchor-evidence.mjs
  */
 import { createClient } from "@supabase/supabase-js";
 import { writeFileSync } from "node:fs";

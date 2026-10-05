@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { searchRestaurantsIntelligent } from "../intelligence-restaurant-search";
 import { hasLiveSupabase } from "./live-supabase-gate";
 
-/** Load mdeapp/.env.local when vitest runs without --env-file (CI skip path). */
+/** Load .env.local when vitest runs without --env-file (CI skip path). */
 function loadEnvLocal() {
   const path = resolve(process.cwd(), ".env.local");
   if (!existsSync(path)) return;

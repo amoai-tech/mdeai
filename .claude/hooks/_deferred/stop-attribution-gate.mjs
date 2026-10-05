@@ -5,6 +5,7 @@
 
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { projectRoot } from "../lib/repo-path.mjs";
 
 let payload;
 try {
@@ -15,10 +16,11 @@ try {
 
 if (payload?.stop_hook_active) process.exit(0);
 
-const mdeapp = "/home/sk/mdeai/mdeapp";
+const root = projectRoot();
+if (!root) process.exit(0);
 
 function sh(args) {
-  const r = spawnSync("git", args, { cwd: mdeapp, encoding: "utf8", timeout: 5000 });
+  const r = spawnSync("git", args, { cwd: root, encoding: "utf8", timeout: 5000 });
   return r.status === 0 ? (r.stdout || "").trim() : "";
 }
 

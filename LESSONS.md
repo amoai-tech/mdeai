@@ -97,6 +97,6 @@ Search this file for a keyword (`field mask`, `service-role`, `dedupe`, `latency
 
 ## 9. Always-on (don't even start down these roads)
 
-- ❌ `@anthropic-ai/*` SDK or `gpt-*` in `mdeapp/` → ✅ **Gemini only** (`gemini-3.5-flash`); re-verify model names via MCP.
+- ❌ `@anthropic-ai/*` SDK or `gpt-*` in this repo (`src/`) → ✅ **Gemini only** (`gemini-3.5-flash`); re-verify model names via MCP.
 - ❌ Spanish strings / `lang="es"` in Phase 1 → ✅ **English only** (Spanish is Phase 2).
 - ❌ Committing `.env*` or secrets → ✅ keys stay in `.env.local`, never committed.

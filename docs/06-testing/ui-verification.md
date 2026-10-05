@@ -18,7 +18,7 @@ See also [README.md](README.md) for the canonical testing documentation map.
 
 | Layer | What it is | Lives where | Survives PR/CI? |
 |---|---|---|---|
-| **Browser MCP tools** | Live, interactive checks I run *now* (Claude Preview, Claude in Chrome, chrome-devtools MCP, playwright-test MCP) | Harness-global — **not** in `mdeapp/.mcp.json` | ❌ Ephemeral — they prove "it works right now" |
+| **Browser MCP tools** | Live, interactive checks I run *now* (Claude Preview, Claude in Chrome, chrome-devtools MCP, playwright-test MCP) | Harness-global — **not** in the repository's `.mcp.json` | ❌ Ephemeral — they prove "it works right now" |
 | **Committed proof** | `e2e/*.spec.ts` Playwright specs + `npm run floor` + `npm run verify:task` | Tracked in the repo, run in CI | ✅ Durable — proves "it stays working" |
 
 **Rule:** browser MCPs are for live exploration and first-time "is it actually working";
@@ -26,7 +26,7 @@ committed `e2e/` specs are the regression net. **A persona-visible change needs 
 screenshot is not a test, and a passing unit test is not a clean console.
 
 > ⚠️ **Gap to know:** the chrome-devtools, playwright-test, Claude Preview, and Claude in
-> Chrome MCPs are provided by the agent harness, not by `mdeapp/.mcp.json` (which only lists
+> Chrome MCPs are provided by the agent harness, not by the repository's `.mcp.json` (which only lists
 > gemini-docs, copilotkit, mastra, linear, deepsource, mercur, medusa). They are available to
 > an agent session but are **not** project-standard tooling. The durable, teammate-portable
 > proof is always the committed `e2e/` spec + `floor`.

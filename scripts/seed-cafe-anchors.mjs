@@ -82,7 +82,7 @@ function buildMetadata(anchor, verify) {
 
 async function main() {
   if (!placesKey) {
-    console.error("Missing GOOGLE_PLACES_API_KEY — set in mdeapp/.env.local");
+    console.error("Missing GOOGLE_PLACES_API_KEY — set in .env.local");
     process.exit(1);
   }
 

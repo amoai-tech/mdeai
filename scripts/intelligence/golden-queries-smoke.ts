@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * DATA-046 — golden queries v2 smoke (multi-vertical MIS Phase 1b).
- * Run: cd mdeapp && npm run smoke:golden-queries
+ * Run: npm run smoke:golden-queries
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

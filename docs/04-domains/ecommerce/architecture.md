@@ -13,7 +13,7 @@ mdeai needs a marketplace commerce backend for Camila (buyer) and future sellers
 | Layer | Owner | Path / rule |
 |-------|--------|-------------|
 | **Commerce truth** | Mercur (Medusa 2) | `commerce/mercur/` |
-| **Buyer UI (Phase 2+)** | mdeapp | `mdeapp/src` — AI concierge only after C-018 |
+| **Buyer UI (Phase 2+)** | mdeapp | `src/` — AI concierge only after C-018 |
 | **Embeddings, trips, events, venues** | Supabase | Link via `medusa_product_id` — **read-only mirror** |
 | **Payment state** | Stripe (via Medusa payment module) | `STRIPE_*` in `/commerce` namespace |
 | **Communication** | HTTP Store/Admin API + `@medusajs/js-sdk` | No shared DB between mdeapp and Mercur |

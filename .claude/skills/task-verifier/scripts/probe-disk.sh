@@ -12,7 +12,8 @@ set -uo pipefail
 # Resolve the checkout root from this script's own location so the probe works in the main
 # checkout and in any worktree. Override with REPO=<path> when probing somewhere else.
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)}"
-APP="$REPO/mdeapp"
+# The app package lives at the repository root (the old mdeapp/ subfolder is gone).
+APP="$REPO"
 FILTER="${1:-}"
 
 red=0; yellow=0; green=0
@@ -55,10 +56,11 @@ echo
 # ---------- Project structure ----------
 if in_filter struct; then
   echo "## Project structure"
-  probe_path "$APP" "mdeapp/ present" "mdeapp/ missing"
-  probe_path "$APP/.git" "mdeapp/.git present" "mdeapp/.git missing"
+  probe_path "$APP/package.json" "package.json present" "package.json missing"
+  probe_path "$APP/.git" ".git present" ".git missing"
   probe_path "$REPO/CLAUDE.md" "CLAUDE.md present" "CLAUDE.md missing"
-  probe_path "$REPO/tasks/INDEX.md" "tasks/INDEX.md present" "tasks/INDEX.md missing"
+  # Linear is the task source of truth now; the old tasks/ folder is optional.
+  probe_optional_path "$REPO/tasks/INDEX.md" "tasks/INDEX.md present" "tasks/INDEX.md absent (Linear is the task source)"
   echo
 fi
 
@@ -98,10 +100,7 @@ fi
 # ---------- Pinned versions ----------
 if in_filter pins; then
   echo "## Pinned versions (regression check)"
-  # The app package lives at the repository root. `$APP` still points at the legacy mdeapp/
-  # subdirectory that other probe sections expect, so prefer the root and fall back.
-  CK_PKG="$REPO/package.json"
-  [ -f "$CK_PKG" ] || CK_PKG="$APP/package.json"
+  CK_PKG="$APP/package.json"
   ck_rc=$(node -p "require('$CK_PKG').dependencies['@copilotkit/react-core'] || ''")
   ck_rt=$(node -p "require('$CK_PKG').dependencies['@copilotkit/runtime'] || ''")
   # Mirrors the SAN-1301-owned contract and scripts/check-mastra.mjs: exact pins, with
@@ -134,11 +133,10 @@ if in_filter files; then
   for f in \
     "src/mastra/index.ts" \
     "src/mastra/agents/index.ts" \
-    "src/app/api/copilotkit/route.ts" \
+    "src/app/api/copilotkit/[[...path]]/route.ts" \
     "src/app/layout.tsx" \
     "src/app/page.tsx" \
     "src/lib/types.ts" \
-    ".env.local" \
     ".env.example" \
     "next.config.ts"; do
     probe_path "$APP/$f" "$f" "$f missing"
@@ -146,6 +144,7 @@ if in_filter files; then
 
   # Optional but commonly referenced
   for f in \
+    ".env.local" \
     "components.json" \
     "vitest.config.ts" \
     "tailwind.config.ts" \
@@ -164,7 +163,7 @@ if in_filter tasks; then
   task_files=("$REPO/tasks/core/"F*.md)
   shopt -u nullglob
   if [ ${#task_files[@]} -eq 0 ]; then
-    fail "no F*.md task files in $REPO/tasks/core/"
+    warn "no F*.md task files in $REPO/tasks/core/ (Linear is the task source)"
   else
     for f in "${task_files[@]}"; do
     base=$(basename "$f" .md)
@@ -225,7 +224,7 @@ if in_filter git; then
       warn "$dirty uncommitted files"
     fi
   else
-    fail "mdeapp not a git repo"
+    fail "$APP is not a git repo"
   fi
   echo
 fi
@@ -243,15 +242,15 @@ if in_filter env; then
     SUPABASE_SERVICE_ROLE_KEY; do
     if [ -f "$APP/.env.local" ] && grep -qE "^${v}=" "$APP/.env.local"; then
       if [ "$v" = "SUPABASE_SERVICE_ROLE_KEY" ]; then
-        fail "$v PRESENT in mdeapp/.env.local — must live only in edge functions"
+        fail "$v PRESENT in .env.local — must live only in edge functions"
       else
-        ok "$v present in mdeapp/.env.local"
+        ok "$v present in .env.local"
       fi
     else
       if [ "$v" = "SUPABASE_SERVICE_ROLE_KEY" ]; then
-        ok "$v correctly absent from mdeapp/.env.local"
+        ok "$v correctly absent from .env.local"
       else
-        warn "$v missing from mdeapp/.env.local"
+        warn "$v missing from .env.local"
       fi
     fi
   done
@@ -301,7 +300,7 @@ if in_filter beta; then
       fi
     fi
   else
-    warn "@mastra/core not installed under mdeapp/node_modules"
+    warn "@mastra/core not installed under node_modules"
   fi
   echo
 fi

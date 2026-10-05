@@ -91,7 +91,7 @@ Index via MCP: `mastraDocs` path `reference/workflows/`
 }
 ```
 
-Package: `@mastra/core` — use `readMastraDocs` with `projectPath: /home/sk/mdeai/mdeapp`.
+Package: `@mastra/core` — use `readMastraDocs` with `projectPath` set to the absolute path of the current checkout root.
 
 ---
 
