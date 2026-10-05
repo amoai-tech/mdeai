@@ -19,7 +19,7 @@ export function assertSmokeEnv() {
   }
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     smokeFail(
-      "missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (set in mdeapp/.env.local)",
+      "missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (set in .env.local)",
     );
   }
 }

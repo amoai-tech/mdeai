@@ -174,7 +174,6 @@ function printSummary(result) {
 function main() {
   if (!taskId) {
     console.error("Usage: npm run verify:task -- <TASK-ID> [--skip-floor] [--base URL]");
-    console.error("Docs:  mdeapp/scripts/verify-task.md");
     console.error("Registered:", Object.keys(REGISTRY).sort().join(", "));
     process.exit(1);
   }

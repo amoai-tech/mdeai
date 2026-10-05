@@ -319,7 +319,12 @@ describe("repo-path helper", async () => {
 });
 
 describe("hook sources", () => {
-  const files = readdirSync(HOOKS).filter((f) => f.endsWith(".mjs"));
+  // Deferred hooks are not registered today, but whoever promotes one inherits its paths, so they
+  // must pass the same static check now.
+  const files = [
+    ...readdirSync(HOOKS).filter((f) => f.endsWith(".mjs")),
+    ...readdirSync(join(HOOKS, "_deferred")).filter((f) => f.endsWith(".mjs")).map((f) => `_deferred/${f}`),
+  ];
 
   it("never hard-code a machine path or the retired mdeapp folder", () => {
     // Exception path: a line that genuinely needs a fixed path carries `hook-path-allow: <reason>`.
