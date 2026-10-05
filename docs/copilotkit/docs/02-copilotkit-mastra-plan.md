@@ -207,18 +207,21 @@ Do not create this task unless product actually wants voice input. Do not reuse 
 
 | Order | What to do now | Why now | Existing owner | Dependencies / blockers | Real-world success | Score |
 | ---: | --- | --- | --- | --- | --- | ---: |
-| 1 | Finish fresh-environment Mastra storage security | Memory/workflow features are unsafe if table creation can outrun RLS/grants | SAN-1368 | Exact package contract | Fresh environment creates Mastra tables with the same safe RLS/grants every time | 100 |
-| 2 | Finish DB connection hardening + fresh-runtime memory proof | Reliability before adding more state | SAN-1303 + SAN-548 | Storage environment | Deploy/restart occurs; Sofia’s thread persists without pool exhaustion | 99 |
-| 3 | Independently certify storage | Prevent “works on my branch” production claims | SAN-1311 | Steps 1–2 plus candidate SHA | Exact deployed SHA passes isolation, persistence and resume proof | 99 |
-| 4 | Add provider messageFilter | Cheap latency/request-size win; current server workaround proves the need | SAN-1399 | Measure before/after | 30-message thread sends only newest turn; full transcript remains visible | 96 |
-| 5 | Add truthful shared progress | Biggest visible latency UX improvement | SAN-609 then SAN-1032 | Existing AG-UI state/tool lifecycle probe | “Searching → 8 candidates → Ranking → Ready” appears before cards/map | 95 |
-| 6 | Consolidate protected-action HITL | Publish/checkout are consequential writes | SAN-595 + SAN-738 + SAN-740 | Current backend authorization/idempotency | Human approves exact action; backend reauthorizes and writes once | 97 |
-| 7 | Finish mobile chat | Core access path for renters | SAN-521 + SAN-522 | Real-device proof | Keyboard open, scroll/send/Stop all work normally | 96 |
-| 8 | Establish native Mastra trace correlation | Needed before tuning latency/cost/cache | SAN-1003 + SAN-856 | Version-compatible observability package/API | Operator follows a slow ai_runs row into the exact native trace | 93 |
-| 9 | Define minimal model failure policy | Single-model outage is still a reliability gap | SAN-1057 | Verify core 1.35 types; package upgrade if needed | Gemini 429 → proven fallback or clear degraded response, never fake results | 90 |
-| 10 | Turn scorers into a release eval gate | Existing scorers currently do not stop regressions by themselves | SAN-1061 + SAN-611 | Native Dataset/Experiment APIs on certified package | Over-budget/fabricated answer fixture fails CI | 89 |
-| 11 | Add cross-chat durable preferences | High UX value, but only after storage boundary is certified | SAN-597 → SAN-610 | Steps 1–3; SAN-1024 policy | Sofia’s budget/neighborhood follow her to a new chat, never another user | 89 |
-| 12 | Clean page context task + smart suggestions | Useful UX after correctness/reliability | SAN-737 + SAN-1398 | Current v2 API verification | Agent knows the current page; next-step buttons reduce typing | 84–88 |
+| 1 | Run one exact Mastra package-family GO/NO-GO preflight | Every storage, memory and newer native API decision depends on a coherent version family | SAN-1302 | Isolated worktree/candidate only; do not ship the upgrade here | One candidate proves install, type surface, fresh-runtime chat and suspend/resume compatibility | 100 |
+| 2 | Make fresh-environment Mastra storage security reproducible | New Mastra tables are unsafe if vendor initialization can outrun MDE RLS/grants | SAN-1368 | SAN-1302 exact candidate | Fresh environment creates the certified Mastra table set with safe RLS/FORCE RLS/grants | 100 |
+| 3 | Finish production Postgres connection hardening | Pool/SSL/Supavisor failure can erase all higher-level reliability wins | SAN-1303 | Exact storage adapter/candidate | Representative concurrency does not exhaust the pool and failures are explicit | 99 |
+| 4 | Ship the certified Mastra family with the smallest compatibility diff | Removes current stable/alpha type drift without mixing an upgrade into feature work | SAN-1338 | SAN-1302 GO; preserve CopilotKit and Google provider scope | Existing chat, tools, workflows, scorers and storage behave identically on the certified family | 99 |
+| 5 | Prove fresh-runtime chat memory after the candidate upgrade | Persistence needs a real restart proof, not only unit tests | SAN-548 | Steps 1–4 | Deploy/restart occurs; Sofia’s thread still has the right context and another user cannot read it | 99 |
+| 6 | Independently certify the exact production storage candidate | Prevent “works on my branch” production claims | SAN-1311 | Steps 1–5 and exact deployed SHA | Exact deployed SHA passes isolation, persistence and resume proof | 99 |
+| 7 | Add provider messageFilter | Cheap latency/request-size win; current server workaround proves the need | SAN-1399 | Measure before/after | 30-message thread sends only newest turn; full transcript remains visible | 96 |
+| 8 | Add truthful shared progress | Biggest visible latency UX improvement | SAN-609 then SAN-1032 | Existing AG-UI state/tool lifecycle probe | “Searching → 8 candidates → Ranking → Ready” appears before cards/map | 95 |
+| 9 | Consolidate protected-action HITL | Publish/checkout are consequential writes | SAN-595 + SAN-738 + SAN-740 | Current backend authorization/idempotency | Human approves exact action; backend reauthorizes and writes once | 97 |
+| 10 | Finish mobile chat | Core access path for renters | SAN-521 + SAN-522 | Real-device proof | Keyboard open, scroll/send/Stop all work normally | 96 |
+| 11 | Establish native Mastra trace correlation | Needed before tuning latency/cost/cache | SAN-1003 + SAN-856 | Certified Mastra family and version-compatible observability package/API | Operator follows a slow ai_runs row into the exact native trace | 93 |
+| 12 | Define minimal model failure policy | Single-model outage is still a reliability gap | SAN-1057 | Verify certified package types | Gemini 429 → proven fallback or clear degraded response, never fake results | 90 |
+| 13 | Turn scorers into a release eval gate | Existing scorers currently do not stop regressions by themselves | SAN-1061 + SAN-611 | Native Dataset/Experiment APIs on certified package | Over-budget/fabricated answer fixture fails CI | 89 |
+| 14 | Add cross-chat durable preferences | High UX value, but only after storage boundary is certified | SAN-597 → SAN-610 | Storage certification; SAN-1024 policy | Sofia’s budget/neighborhood follow her to a new chat, never another user | 89 |
+| 15 | Clean page context task + smart suggestions | Useful UX after correctness/reliability | SAN-737 + SAN-1398 | Current v2 API verification | Agent knows the current page; next-step buttons reduce typing | 84–88 |
 
 ## 7. Advanced priority order
 
@@ -357,6 +360,6 @@ Treat the next milestone as **reliability + transport efficiency + truthful UX**
 
 The fastest safe sequence is:
 
-**storage security/certification → messageFilter → progress → protected-action HITL → mobile → native trace correlation → model failure policy → eval gate → cross-chat preferences → suggestions → attachments.**
+**Mastra compatibility preflight → fresh-environment security → Postgres hardening → certified Mastra upgrade → fresh-runtime memory proof → final storage certification → messageFilter → progress → protected-action HITL → mobile → native trace correlation → model failure policy → eval gate → cross-chat preferences → suggestions → attachments.**
 
 Everything after that should be pulled by a measured user problem. MDE already has enough agent infrastructure to ship a strong product; the value now comes from making the current system reliable, understandable and hard to regress.
