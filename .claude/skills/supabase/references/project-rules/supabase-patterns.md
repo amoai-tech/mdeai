@@ -27,7 +27,8 @@ if (error) throw new Error(error.message);
 - SELECT: public for listings, user-scoped for personal data
 - INSERT/UPDATE/DELETE: always require `auth.uid()` match
 - Use subquery pattern: `(select auth.uid())` not direct `auth.uid()`
-- Admin writes use service role in edge functions only
+- Service/secret keys bypass RLS; they are never authorization. Keep them server-only and use them only for an intentional privileged carve-out.
+- Before any privileged write, independently authenticate the actor, authorize the action, and validate ownership/version/state. Prefer user-scoped/RLS writes when elevated access is unnecessary.
 
 ## Schema Changes
 
@@ -40,11 +41,11 @@ if (error) throw new Error(error.message);
 
 - Default pagination: `.range(0, 49)` (50 items)
 - Always `.select()` only needed columns for list views
-- Use `.single()` for detail views
+- Use `.single()` when exactly one row is a business invariant; use `.maybeSingle()` when zero rows is a valid result. Handle the returned error in either case.
 - Realtime via `useRealtimeChannel` hook — don't roll your own
 
 ## Security
 
 - `VITE_SUPABASE_PUBLISHABLE_KEY` (anon key) — safe for frontend
-- Service role key — edge functions only, never in VITE_ vars
+- Service/secret keys — server-only, never in `VITE_` vars; possession of the key does not replace actor authorization
 - `.env` contains only public keys — secrets in Supabase dashboard
