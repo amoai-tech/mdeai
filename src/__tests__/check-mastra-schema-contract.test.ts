@@ -68,6 +68,7 @@ const committedContract = JSON.parse(committedRaw) as {
   expectedTables: string[];
   adapterVersion: string;
   coreVersion: string;
+  adapterInitExtraTables?: string[];
 };
 
 function run(args: string[], contract?: Record<string, unknown>) {
@@ -262,6 +263,19 @@ describe("check-mastra-schema-contract — committed contract", () => {
     // 32 production tables above remain the required set.
     expect(committedContract.adapterVersion).toBe("1.29.0");
     expect(committedContract.coreVersion).toBe("1.74.0");
+  });
+
+  it("documents the adapter's extra tables without treating them as required", () => {
+    // SAN-1338: @mastra/pg@1.29.0 creates a superset of the 32 production tables. The
+    // extras must stay documented but outside expectedTables (which is the production
+    // requirement), so a future upgrade cannot silently promote an unused table.
+    const extras = committedContract.adapterInitExtraTables ?? [];
+    expect(extras.length).toBeGreaterThan(0);
+    expect(new Set(extras).size).toBe(extras.length);
+    for (const table of extras) {
+      expect(table).toMatch(/^mastra_[a-z0-9_]+$/);
+      expect(committedContract.expectedTables).not.toContain(table);
+    }
   });
 
   it("keeps every baseline table inside the mastra_ namespace", () => {

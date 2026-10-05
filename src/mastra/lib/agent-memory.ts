@@ -9,6 +9,54 @@ type PlainObject = Record<string, unknown>;
 const isPlainObject = (value: unknown): value is PlainObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+type WorkingMemoryApi = {
+  getWorkingMemory: (args: {
+    threadId?: string;
+    resourceId?: string;
+  }) => Promise<string | null>;
+  updateWorkingMemory: (args: {
+    threadId?: string;
+    resourceId?: string;
+    workingMemory: string;
+  }) => Promise<unknown>;
+};
+
+type WorkingMemoryContext = {
+  memory?: WorkingMemoryApi;
+  agent?: { threadId?: string; resourceId?: string };
+};
+
+/**
+ * Mirror of the certified native tool's documented merge, used only for the
+ * `selectedPinId: null` clear path (the native tool strips that null before merging).
+ * Objects merge, arrays replace, primitives overwrite, `null` deletes, `undefined`
+ * is skipped. MDE's `memoryInput` already removed provider padding, so the only null
+ * that reaches here is the deliberate pin clear.
+ */
+function mergeWorkingMemory(existing: PlainObject, patch: PlainObject): PlainObject {
+  const result: PlainObject = { ...existing };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) {
+      delete result[key];
+      continue;
+    }
+    if (Array.isArray(value)) {
+      result[key] = value;
+      continue;
+    }
+    if (isPlainObject(value)) {
+      result[key] = mergeWorkingMemory(
+        isPlainObject(result[key]) ? result[key] : {},
+        value,
+      );
+      continue;
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
 /**
  * SAN-1387 + SAN-1338 — MDE's working-memory boundary.
  *
@@ -44,48 +92,28 @@ class PlaceholderTolerantMemory extends Memory {
         inputSchema: z.object({ memory: this.memoryInput }),
         execute: async (inputData, context) => {
           const patch = (inputData as { memory?: unknown }).memory;
+          if (!isPlainObject(patch)) {
+            return originalExecute(inputData, context);
+          }
           const clearSelectedPin =
-            isPlainObject(patch) &&
             isPlainObject(patch.mapUi) &&
             Object.prototype.hasOwnProperty.call(patch.mapUi, "selectedPinId") &&
             patch.mapUi.selectedPinId === null;
-
           if (!clearSelectedPin) {
             return originalExecute(inputData, context);
           }
 
-          // Drop the null before the native merge (it would strip it anyway), let the
-          // native tool ensure the thread and apply any other fields, then clear the
-          // pin with the public Memory API.
-          const rest: PlainObject = { ...patch };
-          const mapUi = { ...(patch.mapUi as PlainObject) };
-          delete mapUi.selectedPinId;
-          if (Object.keys(mapUi).length > 0) rest.mapUi = mapUi;
-          else delete rest.mapUi;
-
-          const nativeResult = await originalExecute(
-            { memory: Object.keys(rest).length > 0 ? rest : undefined },
-            context,
-          );
-
-          const ctx = context as {
-            memory?: {
-              getWorkingMemory: (a: {
-                threadId?: string;
-                resourceId?: string;
-              }) => Promise<string | null>;
-              updateWorkingMemory: (a: {
-                threadId?: string;
-                resourceId?: string;
-                workingMemory: string;
-              }) => Promise<unknown>;
-            };
-            agent?: { threadId?: string; resourceId?: string };
-          };
+          const ctx = context as WorkingMemoryContext;
           const memory = ctx.memory;
           if (!memory) {
             throw new Error("Memory instance is required for working memory updates");
           }
+
+          // Run the native tool with no memory payload so it still ensures the thread
+          // exists without writing the patch, then apply the whole patch once with MDE's
+          // merge semantics — the native tool would strip the deliberate null.
+          await originalExecute({ memory: undefined }, context);
+
           const where = {
             threadId: ctx.agent?.threadId,
             resourceId: ctx.agent?.resourceId,
@@ -93,22 +121,30 @@ class PlaceholderTolerantMemory extends Memory {
           const existingRaw = await memory.getWorkingMemory(where);
           let existing: PlainObject = {};
           if (existingRaw) {
+            let parsed: unknown;
             try {
-              existing = JSON.parse(existingRaw) as PlainObject;
+              parsed = JSON.parse(existingRaw);
             } catch {
-              existing = {};
+              parsed = {};
             }
+            // A syntactically valid but non-object document (null / array / primitive)
+            // must not be rewritten — fail closed instead of clobbering it.
+            if (!isPlainObject(parsed)) {
+              throw new Error("Stored working memory must be a plain object");
+            }
+            existing = parsed;
           }
-          if (isPlainObject(existing.mapUi)) {
-            const nextMapUi = { ...existing.mapUi };
-            delete nextMapUi.selectedPinId;
-            existing.mapUi = nextMapUi;
-          }
+
+          // ponytail: the certified @mastra/memory exposes no public atomic field-level
+          // working-memory update, so this is one read-modify-write. Doing it once (not
+          // native-write + delete) removes the window where the native tool reports
+          // success but the pin survives. Upgrade path: drop this shim when the native
+          // tool stops stripping null optionals or exposes an atomic clear.
           await memory.updateWorkingMemory({
             ...where,
-            workingMemory: JSON.stringify(existing),
+            workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
           });
-          return nativeResult;
+          return { success: true };
         },
       } as Parameters<typeof createTool>[0]),
     } as ReturnType<Memory["listTools"]>;

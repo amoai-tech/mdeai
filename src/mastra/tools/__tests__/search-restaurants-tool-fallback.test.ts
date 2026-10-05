@@ -71,7 +71,9 @@ describe("searchRestaurantsTool execute", () => {
       runId: "run-1",
     });
     const custom = vi.spyOn(writer, "custom");
-    const out = (await isolatedTool.execute!(
+    const execute = isolatedTool.execute;
+    if (!execute) throw new Error("searchRestaurantsTool has no execute");
+    const out = (await execute(
       { neighborhood: "Laureles", limit: 2 },
       { writer, requestContext: new RequestContext(), observe: noopObserve },
     )) as { results: unknown[]; total: number; source: string };
@@ -88,9 +90,11 @@ describe("searchRestaurantsTool execute", () => {
   it("MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurantsTool: tool } = await import("../search-restaurants.js");
+    const execute = tool.execute;
+    if (!execute) throw new Error("searchRestaurantsTool has no execute");
 
     await expect(
-      tool.execute!(
+      execute(
         { neighborhood: "Laureles", limit: 3 },
         { requestContext: new RequestContext(), observe: noopObserve },
       ),
