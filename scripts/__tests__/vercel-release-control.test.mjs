@@ -217,6 +217,21 @@ test("vercelGet: a hung Vercel API fails fast instead of holding the job", async
   assert.ok(Date.now() - started < 2_000, "must not wait for the 25-minute job limit");
 });
 
+test("vercelGet: network failures report a safe transport code without leaking detail or token", async () => {
+  const networkFailure = async () => {
+    const error = new TypeError("sentinel-network-detail-that-must-never-appear");
+    error.cause = { code: "ENOTFOUND" };
+    throw error;
+  };
+  await assert.rejects(
+    () => vercelGet("/v9/projects/x?teamId=y", { fetchImpl: networkFailure, token: "sentinel-token-value" }),
+    (error) =>
+      /ENOTFOUND/.test(error.message) &&
+      !error.message.includes("sentinel-network-detail-that-must-never-appear") &&
+      !error.message.includes("sentinel-token-value"),
+  );
+});
+
 test("vercelGet: an HTTP error reports status and path only, never the body or token", async () => {
   const forbidden = async () => new Response(JSON.stringify({ error: { message: "account-detail-secret" } }), { status: 403 });
   await assert.rejects(
