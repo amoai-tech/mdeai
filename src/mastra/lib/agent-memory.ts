@@ -172,8 +172,9 @@ class PlaceholderTolerantMemory extends Memory {
                     resourceId: where.resourceId,
                   });
                 } catch {
-                  // Another concurrent request may have created the thread first. Fall
-                  // through; the read/write below surfaces any real failure.
+                  // Another concurrent request may have created the thread first (upstream
+                  // atomic insert-if-absent: mastra-ai/mastra#20148). Fall through; the
+                  // read/write below surfaces any real failure.
                 }
               }
             }
@@ -217,8 +218,9 @@ class PlaceholderTolerantMemory extends Memory {
             // ponytail: the certified @mastra/memory exposes no public atomic field-level
             // working-memory update, so this is one read-modify-write. withThreadLock
             // serializes MDE's own updates per thread in this process; across instances the
-            // write remains last-write-wins. Upgrade path: drop this shim when the native
-            // tool stops stripping null optionals or exposes an atomic clear.
+            // write remains last-write-wins (upstream: mastra-ai/mastra#24756; atomic
+            // PostgreSQL JSON merge in mastra-ai/mastra PR #25848). Upgrade path: drop this
+            // shim once that atomic merge ships, or the native tool stops stripping nulls.
             try {
               await memory.updateWorkingMemory({
                 ...where,

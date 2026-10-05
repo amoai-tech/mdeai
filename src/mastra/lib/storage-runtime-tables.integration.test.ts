@@ -6,6 +6,10 @@
  * It checks both writes (row counts) and accesses (`pg_stat_user_tables` scans + tuple
  * writes), so a read of an adapter-extra table is detected, not just a write.
  *
+ * A stronger but destructive variant is to drop the adapter extras from a throwaway DB
+ * and re-run the path (it must still succeed). This test stays non-destructive on
+ * purpose; the access counters cover the same risk without DDL.
+ *
  * Run against a scratch Postgres:
  *   DATABASE_URL=postgresql://... MASTRA_TABLE_USAGE_INTEGRATION=1 \
  *     npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
