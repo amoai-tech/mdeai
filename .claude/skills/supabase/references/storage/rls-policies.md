@@ -124,6 +124,8 @@ CREATE POLICY "public_read_event_media"
 
 Keep operations separate so each policy has the correct `USING`/`WITH CHECK` semantics.
 
+**Audit the whole policy set:** other applicable permissive policies on `storage.objects` combine with `OR`, so they can still grant access to `admin-docs`. Audit the complete `storage.objects` policy set before treating this bucket as admin-only.
+
 ```sql
 CREATE POLICY "admin_read"
   ON storage.objects FOR SELECT TO authenticated
