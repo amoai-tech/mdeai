@@ -105,8 +105,6 @@ rather than trusting the branch.
 
 ## Version caution
 
-MDE runs a mixed Mastra surface (see the package maturity table in `SKILL.md`).
-`@mastra/memory` is on a prerelease line, so its `Memory` shape can differ from what
-`@mastra/core` expects — the repo already carries a suppression for the
-`recall()` return shape. Re-read the installed type definitions before relying on
-any signature here.
+MDE runs one coherent stable Mastra family (see the package maturity table in
+`SKILL.md`); the previous mixed alpha/beta surface and the `recall()` suppression are
+gone. Re-read the installed type definitions before relying on any signature here.

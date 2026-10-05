@@ -23,6 +23,5 @@ export const hostOpsAgent = new Agent({
   tools: { listHostEventsTool, getSalesSummaryTool, getSalesInsightsTool },
   model: FLASH_MODEL,
   instructions: HOST_OPS_INSTRUCTIONS,
-  // @ts-expect-error beta drift — same as pingAgent / hostEventAgent
   memory: createThreadMemory(hostOpsMemorySchema),
 });

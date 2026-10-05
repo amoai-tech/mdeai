@@ -90,6 +90,5 @@ If zero results: state plainly why, relax exactly ONE filter (price OR category 
 ${formatEventSourcePromptHint()}`,
   model: FLASH_MODEL,
   tools: { searchEventsTool },
-  // @ts-expect-error beta drift: Memory.recall() shape vs MastraMemory (same as pingAgent)
   memory: createThreadMemory(eventWorkingMemorySchema),
 });

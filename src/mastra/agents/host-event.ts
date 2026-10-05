@@ -11,6 +11,5 @@ export const hostEventAgent = new Agent({
   workspace: () => undefined, // SAN-903 · opt out of global filesystem tools
   model: FLASH_MODEL,
   instructions: HOST_EVENT_INSTRUCTIONS,
-  // @ts-expect-error beta drift — same as pingAgent / F02
   memory: createHostEventThreadMemory(EventDraftStateSchema),
 });

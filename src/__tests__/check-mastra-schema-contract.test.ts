@@ -257,9 +257,11 @@ describe("check-mastra-schema-contract — committed contract", () => {
     );
     expect(committedContract.expectedTables).toHaveLength(32);
     expect(new Set(committedContract.expectedTables).size).toBe(32);
-    // The pairing that reproduces it (same-day release as @mastra/core@1.35.0).
-    expect(committedContract.adapterVersion).toBe("1.11.0");
-    expect(committedContract.coreVersion).toBe("1.35.0");
+    // The certified pairing (SAN-1338): @mastra/pg@1.29.0 with @mastra/core@1.74.0.
+    // That adapter creates a superset of this list (see contract _derivation); the
+    // 32 production tables above remain the required set.
+    expect(committedContract.adapterVersion).toBe("1.29.0");
+    expect(committedContract.coreVersion).toBe("1.74.0");
   });
 
   it("keeps every baseline table inside the mastra_ namespace", () => {

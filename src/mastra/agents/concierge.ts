@@ -375,7 +375,6 @@ ${formatEventSourcePromptHint()}`,
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input
   // tokens — and latency — on busy threads without changing follow-up behavior.
-  // @ts-expect-error beta drift: Memory.recall() shape vs MastraMemory (same as pingAgent)
   memory: createThreadMemory(conciergeWorkingMemorySchema, {
     lastMessages: 10,
     memoryInput: conciergeMemoryInput,

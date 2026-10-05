@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { noopObserve } from "@mastra/core/tools";
+import { RequestContext } from "@mastra/core/request-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -33,6 +35,17 @@ function mockSupabase() {
   return {} as SupabaseClient<Database>;
 }
 
+/** Minimal valid tool-execution context for the candidate's public ToolExecutionContext. */
+function execContext(userId?: string) {
+  const entries: Array<readonly [string, unknown]> = userId
+    ? [["mdeaiUserId", userId]]
+    : [];
+  return {
+    requestContext: new RequestContext<unknown>(entries),
+    observe: noopObserve,
+  };
+}
+
 describe("requestVenueBookingTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,7 +55,7 @@ describe("requestVenueBookingTool", () => {
   it("returns sign-in message when user is anonymous", async () => {
     const result = await requestVenueBookingTool.execute!(
       validInput,
-      undefined,
+      execContext(),
     );
     expect(result).toEqual({
       success: false,
@@ -63,11 +76,7 @@ describe("requestVenueBookingTool", () => {
 
     const result = await requestVenueBookingTool.execute!(
       validInput,
-      {
-        requestContext: {
-          get: (key: string) => (key === "mdeaiUserId" ? "user-abc" : undefined),
-        },
-      },
+      execContext("user-abc"),
     );
 
     expect(result).toMatchObject({
@@ -90,11 +99,7 @@ describe("requestVenueBookingTool", () => {
 
     const result = await requestVenueBookingTool.execute!(
       validInput,
-      {
-        requestContext: {
-          get: () => "user-abc",
-        },
-      },
+      execContext("user-abc"),
     );
 
     expect(result).toEqual({

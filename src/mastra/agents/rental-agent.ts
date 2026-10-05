@@ -121,6 +121,5 @@ If zero results: state plainly why, relax exactly ONE filter (price OR bedrooms 
 - Plain English. No emoji unless the user uses one first.`,
   model: FLASH_MODEL,
   tools: { searchRentalsTool },
-  // @ts-expect-error beta drift: Memory.recall() shape vs MastraMemory (same as pingAgent)
   memory: createThreadMemory(rentalWorkingMemorySchema),
 });
