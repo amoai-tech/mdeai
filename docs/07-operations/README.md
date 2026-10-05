@@ -107,6 +107,24 @@ Security references live under `docs/07-operations/security/`.
 
 Local QA details: `docs/06-testing/localhost-qa-runbook.md`.
 
+### CopilotKit environment variables (SAN-1330)
+
+Three different things used to share one confusing name. They are now separate, and each has one job:
+
+| Variable | What it is | Where it is read | Required? |
+| -- | -- | -- | -- |
+| `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY` | CopilotKit public **license** key (safe in the browser bundle) | Passed as `publicLicenseKey` by `src/lib/copilotkit-client-props.ts`. Chat still uses the same-origin `/api/copilotkit` runtime: in CopilotKit 1.75.0 `runtimeUrl` always wins, so this key never redirects chat to CopilotKit Cloud. | Yes in a **production build**; the mocked-CI floor does not need it. |
+| `CPK_INTELLIGENCE_API_KEY` | CopilotKit **Intelligence** API key (server-only, never `NEXT_PUBLIC_*`) | **Not read by the app today.** CopilotKit reads it only through `new CopilotKitIntelligence({ apiKey })`, which would move threads to CopilotKit's hosted platform. MDE keeps the same-origin runtime on purpose (UX-001 and the thread-ownership rules, D17), so enabling it is an architecture decision, not a rename. | **No, not yet.** Keep it provisioned in Vercel Production and documented in `.env.example`, but neither `check:env:runtime` nor the release gate requires it. When MDE constructs `CopilotKitIntelligence`, move it into the required lists and prove a real thread create/reopen, not only that the variable exists. |
+| `MDE_COPILOTKIT_SERVICE_BEARER` | MDE's **own** service-to-service bearer for `/api/copilotkit` (`src/lib/copilotkit-auth.ts`) | The route's service path. Nothing in the repo presents it today. | **No.** Unset means the service path is closed (401), never open. |
+
+The browser license variable uses CopilotKit's own documented name, `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY`. It replaced an earlier MDE-specific name. `NEXT_PUBLIC_*` values are compiled into the bundle, so Vercel Production (and Preview, if you want the license there) must define the new name and the app must be redeployed; the release gate checks the Production name before promotion.
+
+The retired name `COPILOTKIT_API_KEY` was MDE's own bearer, but it read like a CopilotKit credential. It is no longer used anywhere; `scripts/__tests__/copilotkit-env-names.test.mjs` fails if production code, the contract, the release gate, the workflows or `.env.example` read it again. Older audit and archive documents still mention it as a historical record.
+
+`scripts/vercel-release-control.mjs` checks the **names** of the variables the app actually consumes on the Vercel Production target before a candidate can be promoted (names only, never values). That list is kept equal to the app's own required list by a test.
+
+Why the Intelligence key is optional today: if CopilotKit Intelligence is down, the normal MDE concierge still works, so a release should not be blocked. After MDE adopts Rich Threads or User Memory, an Intelligence outage would stop users restoring conversations. It then becomes a real production dependency and must block a release.
+
 ## Troubleshooting rule
 
 When a failure is not understood, reproduce it first, capture the smallest failing command/journey, inspect current source/runtime evidence, then fix the root cause. Do not change production data or provider configuration merely to make a local symptom disappear.

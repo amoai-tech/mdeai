@@ -23,6 +23,12 @@ const STABLE_SELF_MANAGED_AGENTS: Record<string, never> = {};
  *
  * There is also no hosted-Cloud (`publicApiKey`) shape: MDE always uses the
  * same-origin runtime below.
+ *
+ * License (SAN-1330): `NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY` is passed as
+ * `publicLicenseKey` when set. It is a LICENSE, not a hosting switch: in the
+ * installed 1.75.0 provider `chatApiEndpoint = runtimeUrl ?? (key ? cloud : undefined)`,
+ * so the same-origin `runtimeUrl` always wins and chat can never be redirected to
+ * CopilotKit Cloud by this key. Never pass `publicApiKey` (legacy alias, UX-001).
  */
 type CopilotKitClientProps = {
   agentId: CopilotAgentName;
@@ -33,6 +39,8 @@ type CopilotKitClientProps = {
   agents__unsafe_dev_only: Record<string, never>;
   selfManagedAgents: Record<string, never>;
   showDevConsole: false;
+  /** CopilotKit public license key; omitted entirely when not configured. */
+  publicLicenseKey?: string;
 };
 
 /**
@@ -55,6 +63,8 @@ export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitCli
   // showDevConsole=false — CopilotKit defaults to loading web-inspector on localhost;
   // after dev restarts a stale .next chunk causes ChunkLoadError for that bundle.
   const inspectorOff = { showDevConsole: false as const };
+  // Direct `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
+  const publicLicenseKey = process.env.NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY?.trim();
 
   return {
     runtimeUrl: COPILOTKIT_BASE_PATH,
@@ -65,5 +75,6 @@ export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitCli
     agents__unsafe_dev_only: STABLE_DEV_AGENTS,
     selfManagedAgents: STABLE_SELF_MANAGED_AGENTS,
     ...inspectorOff,
+    ...(publicLicenseKey ? { publicLicenseKey } : {}),
   };
 }

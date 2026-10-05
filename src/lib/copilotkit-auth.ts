@@ -28,7 +28,13 @@ import {
  *     `Origin` host to the `Host` header, and both are attacker-supplied, so
  *     `curl -H 'Origin: https://www.mdeai.co' -H 'Host: www.mdeai.co'` passed.
  *   - It never falls open when configuration is absent. A missing
- *     `COPILOTKIT_API_KEY` closes the service path instead of opening the route.
+ *     `MDE_COPILOTKIT_SERVICE_BEARER` closes the service path instead of opening the route.
+ *
+ * `MDE_COPILOTKIT_SERVICE_BEARER` is MDE's OWN service-to-service bearer for this
+ * route. It is not a CopilotKit credential and must not be confused with
+ * `CPK_INTELLIGENCE_API_KEY` (CopilotKit's hosted Intelligence platform) or the
+ * public license key. Its previous name collided with those and was retired
+ * (SAN-1330); behaviour is unchanged, and unset still means "service path closed".
  *   - It never accepts the shared `anonymous` resource as an owner (D17).
  *
  * Every branch fails closed. There is no `return null` catch-all.
@@ -74,12 +80,12 @@ export function evaluateCopilotKitAuth(
     // A caller that presents a bearer is claiming to be a service. Validate that
     // claim or reject it; never fall through to the browser path, which would
     // let any junk Authorization header bypass the ownership check below.
-    const expectedKey = (process.env.COPILOTKIT_API_KEY ?? "").trim();
+    const expectedKey = (process.env.MDE_COPILOTKIT_SERVICE_BEARER ?? "").trim();
     if (!expectedKey) {
       return {
         allowed: false,
         status: 401,
-        reason: "service bearer presented but COPILOTKIT_API_KEY is not configured",
+        reason: "service bearer presented but MDE_COPILOTKIT_SERVICE_BEARER is not configured",
       };
     }
     if (authHeader !== `Bearer ${expectedKey}`) {
