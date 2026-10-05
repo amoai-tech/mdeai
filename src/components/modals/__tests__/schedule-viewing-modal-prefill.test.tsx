@@ -19,7 +19,7 @@ vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
 vi.mock("@/lib/use-modal-a11y", () => ({ useModalA11y: vi.fn() }));
 
 type LookupUser = { email: string; user_metadata: { full_name: string } } | null;
-let resolveLookup: ((_user: LookupUser) => void) | null = null;
+let resolveLookup: ((user: LookupUser) => void) | null = null;
 let nextLookup: () => Promise<{ data: { user: LookupUser } }>;
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -44,32 +44,41 @@ const TARGET = {
   neighborhood: "Laureles",
 };
 
-const nativeValueSetter = Object.getOwnPropertyDescriptor(
-  window.HTMLInputElement.prototype,
-  "value",
-)?.set;
-
-function type(name: string, value: string) {
-  const el = container.querySelector(`input[name="${name}"]`) as HTMLInputElement;
-  nativeValueSetter?.call(el, value);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-const field = (name: string) =>
-  (container.querySelector(`input[name="${name}"]`) as HTMLInputElement).value;
-
 let container: HTMLDivElement;
 let root: Root;
 let target: typeof TARGET | null;
 
-function render() {
+async function render() {
   vi.mocked(useRentalUi).mockReturnValue({
     scheduleTarget: target,
     closeScheduleViewing: vi.fn(),
     setLeadConfirmation: vi.fn(),
   } as unknown as ReturnType<typeof useRentalUi>);
-  return act(async () => {
+  await act(async () => {
     root.render(<ScheduleViewingModal />);
+    await Promise.resolve();
+  });
+}
+
+function inputByName(name: "name" | "email" | "phone") {
+  const form = container.querySelector("form");
+  const input = form?.elements.namedItem(name);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`${name} input not rendered`);
+  return input;
+}
+
+function type(name: "name" | "email" | "phone", value: string) {
+  const input = inputByName(name);
+  input.setAttribute("value", value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+const field = (name: "name" | "email" | "phone") => inputByName(name).value;
+
+async function settleLookup(user: LookupUser) {
+  await act(async () => {
+    resolveLookup?.(user);
+    await Promise.resolve();
   });
 }
 
@@ -77,7 +86,9 @@ function render() {
 function pendingLookup() {
   nextLookup = () =>
     new Promise((resolve) => {
-      resolveLookup = (user) => resolve({ data: { user } });
+      resolveLookup = (user) => {
+        resolve({ data: { user } });
+      };
     });
 }
 
@@ -102,15 +113,13 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
     pendingLookup();
     await render();
 
-    await act(() => {
+    act(() => {
       type("name", "Camila Test");
       type("email", "camila@example.com");
       type("phone", "+57 3000000000");
     });
 
-    await act(async () => {
-      resolveLookup?.(null); // nobody is signed in
-    });
+    await settleLookup(null); // nobody is signed in
 
     expect(field("name")).toBe("Camila Test");
     expect(field("email")).toBe("camila@example.com");
@@ -120,9 +129,7 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
   it("still clears a previous user's prefill when the next visitor is signed out", async () => {
     pendingLookup();
     await render();
-    await act(async () => {
-      resolveLookup?.({ email: "owner@example.com", user_metadata: { full_name: "Previous User" } });
-    });
+    await settleLookup({ email: "owner@example.com", user_metadata: { full_name: "Previous User" } });
     expect(field("name")).toBe("Previous User");
     expect(field("email")).toBe("owner@example.com");
 
@@ -132,9 +139,7 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
     target = TARGET;
     pendingLookup();
     await render();
-    await act(async () => {
-      resolveLookup?.(null);
-    });
+    await settleLookup(null);
 
     expect(field("name"), "a previous user's name must not leak").toBe("");
     expect(field("email"), "a previous user's email must not leak").toBe("");
@@ -146,12 +151,10 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
 
     // The renter types a name first. The slow lookup then returns that identical name, plus an
     // email the renter has not typed.
-    await act(() => {
+    act(() => {
       type("name", "Sam");
     });
-    await act(async () => {
-      resolveLookup?.({ email: "sam@example.com", user_metadata: { full_name: "Sam" } });
-    });
+    await settleLookup({ email: "sam@example.com", user_metadata: { full_name: "Sam" } });
     expect(field("name")).toBe("Sam");
     expect(field("email"), "a blank field is still filled by the lookup").toBe("sam@example.com");
 
@@ -161,9 +164,7 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
     target = TARGET;
     pendingLookup();
     await render();
-    await act(async () => {
-      resolveLookup?.(null);
-    });
+    await settleLookup(null);
 
     expect(field("name"), "the renter's own text must survive").toBe("Sam");
     expect(field("email"), "text the lookup filled in is still removed").toBe("");
