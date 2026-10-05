@@ -8,7 +8,8 @@
 # alias by ~3.5 s and is gone.)
 #
 #   validate event -> verify credential + Production variable names -> confirm candidate is staged
-#   -> certify the exact candidate (real concierge turn) -> promote the exact id -> verify www.mdeai.co
+#   -> certify the exact candidate (real concierge turn) -> re-confirm staged -> promote the exact id
+#   -> verify www.mdeai.co and mdeai.co
 #
 # Trust split: the candidate commit is checked out at the workspace root, but every step that holds
 # VERCEL_TOKEN (credential, names, staged, promote, verify) runs reviewed code from `.trusted/`, a
@@ -185,6 +186,14 @@ jobs:
             -f description="${description}" \
             -f target_url="${RUN_URL}" >/dev/null
           echo "published production-certification=${state} for ${SHA}"
+
+      # The tests above take minutes. Re-read the domain records and the auto-assign setting right before
+      # the one command that can change production, so a change made meanwhile stops the release (SAN-1402).
+      - name: Re-confirm the candidate is still staged right before promotion
+        if: ${{ success() && steps.certify.outcome == 'success' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node .trusted/scripts/vercel-release-control.mjs assert-staged
 
       # The ONLY step that can put a candidate on www.mdeai.co. Default `if: success()` plus the
       # explicit certify outcome: any failed or skipped step above means no promotion command runs.

@@ -10,7 +10,8 @@
  *   env-names         the Production target defines every required variable NAME
  *   assert-staged     the candidate is READY, from main, owns no production domain yet, and the
  *                     certified URL belongs to this exact deployment id
- *   assert-promoted   www.mdeai.co now serves the exact tested deployment id and commit
+ *   assert-promoted   www.mdeai.co AND mdeai.co now point at the exact tested deployment (alias records), and the
+ *                     deployment's id and commit are the ones that were certified
  *
  * Names and IDs only. The env check reads variable NAMES and TARGETS and never
  * touches a value; error messages never echo an API response body.
@@ -26,6 +27,7 @@ export const TEAM_ID = "team_OPBk3bdOXAg6fpYnL4vxnLZd";
 export const PRODUCTION_BRANCH = "main";
 export const PRODUCTION_DOMAINS = ["www.mdeai.co", "mdeai.co"];
 const PRIMARY_DOMAIN = "www.mdeai.co";
+const RUNBOOK = "docs/07-operations/production-rollback-runbook.md";
 // A hung Vercel API must not hold the certification job (and queue the next deployment) for the
 // whole 25-minute job limit. Each request gets its own short deadline.
 export const REQUEST_TIMEOUT_MS = 30_000;
@@ -114,26 +116,75 @@ export function checkStaged(deployment, expected) {
     fail(
       `candidate already owns production domain(s) ${owned.join(", ")} — either automatic production domain ` +
         "assignment is still on, or an earlier run of this workflow already promoted it and only verification " +
-        "is left (check what www.mdeai.co serves; do not re-run certification for an already-promoted deployment)",
+        `is left (check what www.mdeai.co serves; do not re-run certification for an already-promoted deployment; see ${RUNBOOK})`,
     );
   }
 }
 
 /**
- * After promotion: the production domain serves exactly what was tested.
+ * One alias record per production domain (`GET /v4/aliases/<domain>`).
  *
- * The domain-to-deployment link comes from the domain's own alias record, not from the deployment's
- * `alias` array: Vercel does not list a promoted production domain in that array (proved on the first
- * real promotion, SAN-1330), so reading it would fail a correct promotion.
+ * This is the source of truth for "which deployment does this domain serve?". The deployment's own
+ * `alias` array is NOT: Vercel leaves promoted custom domains out of it (proved on the first real
+ * promotion, SAN-1330). Returns the deployment id the domain points at; anything unreadable, for a
+ * different domain, or for a different project fails closed.
  */
-export function checkPromoted(deployment, expected, domainAlias) {
-  checkIdentity(deployment, expected);
-  if (!domainAlias || typeof domainAlias !== "object" || domainAlias.error) {
-    fail(`the ${PRIMARY_DOMAIN} alias could not be read from Vercel`);
+export function checkDomainAlias(domain, record) {
+  if (!record || typeof record !== "object" || record.error) {
+    fail(`the ${domain} alias could not be read from Vercel`);
   }
-  if (domainAlias.alias !== PRIMARY_DOMAIN) fail(`Vercel answered for a different domain than ${PRIMARY_DOMAIN}`);
-  if (domainAlias.deploymentId !== expected.id) {
-    fail(`${PRIMARY_DOMAIN} does not point at the certified deployment`);
+  if (record.alias !== domain) fail(`Vercel answered for a different domain than ${domain}`);
+  if (record.projectId !== PROJECT_ID) fail(`${domain} belongs to a different Vercel project`);
+  if (typeof record.deploymentId !== "string" || !record.deploymentId) {
+    fail(`${domain} does not point at any deployment`);
+  }
+  return record.deploymentId;
+}
+
+/**
+ * Before certification AND again right before promotion (SAN-1402): production must still be on the
+ * previous release. Automatic domain assignment must be OFF, and neither production domain may already
+ * point at the candidate. Returns what each domain serves now, so the log records the version to
+ * recover to if the release later turns out bad (ids only).
+ *
+ * This detects an accidental takeover; it cannot stop Vercel assigning a domain if auto-assign is
+ * switched back on, which is why that setting is checked here too.
+ */
+export function checkProductionDomains(project, domainAliases, candidateId) {
+  if (!project || typeof project !== "object" || project.error) {
+    fail("the Vercel project could not be read to confirm automatic domain assignment is off");
+  }
+  if (project.autoAssignCustomDomains !== false) {
+    fail(
+      "automatic production-domain assignment is not OFF — a new build could reach customers before it is " +
+        `certified; turn "Auto-assign Custom Production Domains" off (see ${RUNBOOK})`,
+    );
+  }
+  const current = {};
+  for (const domain of PRODUCTION_DOMAINS) {
+    const servedId = checkDomainAlias(domain, domainAliases?.[domain]);
+    if (servedId === candidateId) {
+      fail(
+        `candidate already owns ${domain} — it reached customers before certification, or an earlier run ` +
+          `already promoted it (see ${RUNBOOK}; do not re-run certification for an already-promoted deployment)`,
+      );
+    }
+    current[domain] = servedId;
+  }
+  return current;
+}
+
+/**
+ * After promotion: BOTH production domains serve exactly what was tested.
+ * The deployment read proves identity (id, project, production, READY, commit, main); the alias
+ * records prove which deployment each domain really points at.
+ */
+export function checkPromoted(deployment, expected, domainAliases) {
+  checkIdentity(deployment, expected);
+  for (const domain of PRODUCTION_DOMAINS) {
+    if (checkDomainAlias(domain, domainAliases?.[domain]) !== expected.id) {
+      fail(`${domain} does not point at the certified deployment`);
+    }
   }
 }
 
@@ -170,6 +221,12 @@ const required = (name) => {
 };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function readDomainAliases() {
+  const records = {};
+  for (const domain of PRODUCTION_DOMAINS) records[domain] = await vercelGet(`/v4/aliases/${domain}?teamId=${TEAM_ID}`);
+  return records;
+}
+
 async function main(command) {
   if (command === "credential") {
     checkCredential(await vercelGet(`/v9/projects/${PROJECT_ID}?teamId=${TEAM_ID}`));
@@ -184,7 +241,13 @@ async function main(command) {
       host: new URL(required("VERCEL_DEPLOYMENT_URL")).host,
     };
     checkStaged(await vercelGet(`/v13/deployments/${expected.id}?teamId=${TEAM_ID}`), expected);
-    console.log(`vercel-release: ${expected.id} is staged (READY, main, no production domain)`);
+    const current = checkProductionDomains(
+      await vercelGet(`/v9/projects/${PROJECT_ID}?teamId=${TEAM_ID}`),
+      await readDomainAliases(),
+      expected.id,
+    );
+    console.log(`vercel-release: ${expected.id} is staged (READY, main, no production domain, auto-assign OFF)`);
+    console.log(`vercel-release: production currently serves ${current[PRIMARY_DOMAIN]} (the version to recover to)`);
   } else if (command === "assert-promoted") {
     const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
     let lastError;
@@ -194,9 +257,11 @@ async function main(command) {
         checkPromoted(
           await vercelGet(`/v13/deployments/${expected.id}?teamId=${TEAM_ID}`),
           expected,
-          await vercelGet(`/v4/aliases/${PRIMARY_DOMAIN}?teamId=${TEAM_ID}`),
+          await readDomainAliases(),
         );
-        console.log(`vercel-release: ${PRIMARY_DOMAIN} serves the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`);
+        console.log(
+          `vercel-release: ${PRODUCTION_DOMAINS.join(" and ")} serve the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`,
+        );
         return;
       } catch (error) {
         lastError = error;
