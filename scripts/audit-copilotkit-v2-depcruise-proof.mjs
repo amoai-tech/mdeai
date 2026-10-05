@@ -60,12 +60,19 @@ const runtimeViolation = run("npx", ["depcruise", "--config", ".dependency-cruis
   env: { ...process.env, FORCE_COLOR: "0" },
 });
 await rm(join(ROOT, RUNTIME_VIOLATION_REL), { force: true });
-if (runtimeViolation.status === 0) {
-  console.error("FAIL: a bare @copilotkit/runtime import must be rejected by dependency-cruiser");
-  console.error(runtimeViolation.stdout || runtimeViolation.stderr);
+const runtimeViolationOutput = runtimeViolation.stdout + runtimeViolation.stderr;
+if (
+  runtimeViolation.status === 0 ||
+  !runtimeViolationOutput.includes("no-new-copilotkit-runtime") ||
+  !runtimeViolationOutput.includes(RUNTIME_VIOLATION_REL)
+) {
+  console.error(
+    "FAIL: the synthetic bare @copilotkit/runtime import must fail the no-new-copilotkit-runtime rule",
+  );
+  console.error(runtimeViolationOutput);
   process.exit(1);
 }
-console.log("✓ synthetic legacy @copilotkit/runtime import rejected by dependency-cruiser");
+console.log("✓ synthetic legacy @copilotkit/runtime import rejected by no-new-copilotkit-runtime");
 
 await writeFile(join(ROOT, RUNTIME_V2_OK_REL), 'import "@copilotkit/runtime/v2";\nexport const x = 1;\n');
 const runtimeV2 = run("npx", ["depcruise", "--config", ".dependency-cruiser.cjs", "src"], {
