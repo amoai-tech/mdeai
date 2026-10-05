@@ -171,6 +171,11 @@ export function checkProductionDomains(project, domainAliases, candidateId) {
     }
     current[domain] = servedId;
   }
+  // Split production state (www and the apex on different deployments) is an unexpected condition and
+  // leaves no single version to recover to: stop and let an operator look (see the runbook).
+  if (new Set(Object.values(current)).size !== 1) {
+    fail(`the production domains do not serve the same deployment (${JSON.stringify(current)}; see ${RUNBOOK})`);
+  }
   return current;
 }
 

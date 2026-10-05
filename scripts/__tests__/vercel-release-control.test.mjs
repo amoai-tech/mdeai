@@ -232,6 +232,11 @@ for (const domain of PRODUCTION_DOMAINS) {
   });
 }
 
+test("staged: www and the apex serving different existing deployments (split state) stops the release", () => {
+  const split = aliasesOf(OLD, { "mdeai.co": domainAlias("mdeai.co", { deploymentId: "dpl_AnotherPreviousDeployment1" }) });
+  assert.throws(() => checkProductionDomains(projectSetting(), split, ID), /do not serve the same deployment/);
+});
+
 test("staged: an unreadable alias record for either domain stops the release", () => {
   assert.throws(() => checkProductionDomains(projectSetting(), aliasesOf(OLD, { "mdeai.co": undefined }), ID), /mdeai\.co alias could not be read/);
   assert.throws(() => checkProductionDomains(projectSetting(), {}, ID), /could not be read/);
