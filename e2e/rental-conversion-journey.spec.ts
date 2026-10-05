@@ -29,8 +29,13 @@ import { createClient, type Session } from "@supabase/supabase-js";
  *
  * Opt-in, because it creates real rows in the shared Supabase project:
  *
- *   SAN1205_JOURNEY_E2E=1 PROD_SMOKE_BASE_URL=<release-candidate-or-production-url> \
+ *   SAN1205_JOURNEY_E2E=1 SAN1205_ALLOW_PRODUCTION_WRITES=1 \
+ *   PROD_SMOKE_BASE_URL=<release-candidate-or-production-url> \
  *     npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --retries=0
+ *
+ * SAN1205_ALLOW_PRODUCTION_WRITES=1 is required whenever the configured Supabase project is not
+ * local, whatever web address is under test. The run prints its fixture run id first, so rows
+ * stranded by a killed run can be found.
  *
  * A failed click is a failed test. The page's buttons are server-rendered HTML that only
  * respond after React attaches its handlers, so the test waits for that to be true and then
@@ -294,7 +299,10 @@ async function cleanupFixture(admin: Admin, fixture: PartialFixture): Promise<st
   ] as const) {
     try {
       const { data } = await retryCall(label, query);
-      for (const row of (data ?? []) as Array<{ id: string }>) leadIds.add(row.id);
+      // No data without an error is an unknown answer, not "no leads". Cleanup must not skip
+      // rows because a lookup returned nothing it could trust.
+      if (!data) throw new Error("lookup returned no result");
+      for (const row of data as Array<{ id: string }>) leadIds.add(row.id);
     } catch (err) {
       failures.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -343,7 +351,12 @@ async function findResidue(admin: Admin, fixture: Fixture): Promise<string[]> {
   ) => {
     try {
       const { count: found } = await retryCall(label, query);
-      if ((found ?? 0) > 0) leftovers.push(`${label}: ${found} row(s) remain`);
+      if (found === null) {
+        // An unknown answer is not zero. "Could not verify" must fail the run.
+        leftovers.push(`${label}: residue count unavailable, cannot prove zero rows remain`);
+      } else if (found > 0) {
+        leftovers.push(`${label}: ${found} row(s) remain`);
+      }
     } catch (err) {
       // A failed count must never be reported as "no residue".
       leftovers.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
@@ -414,7 +427,10 @@ async function countRequestRows(admin: Admin, fixture: Fixture) {
       .select("id", { count: "exact", head: true })
       .eq("apartment_id", fixture.apartmentId),
   );
-  return { leads: leads.count ?? 0, showings: showings.count ?? 0 };
+  if (leads.count === null || showings.count === null) {
+    throw new Error("row count unavailable: an unknown count must never be treated as zero");
+  }
+  return { leads: leads.count, showings: showings.count };
 }
 
 async function openBrokerWorkspace(browser: Browser, email: string, viewport?: typeof MOBILE_VIEWPORT) {
@@ -437,8 +453,21 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
 
   test("request, ownership, isolation, failure, replay and cleanup", async ({ browser }) => {
     test.setTimeout(600_000);
+    // This test writes real rows. The database decides whether that is production, not the web
+    // address: a local or preview site still writes to whatever Supabase project is configured.
+    const dbHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://invalid").hostname;
+    const dbIsLocal = ["localhost", "127.0.0.1", "[::1]"].includes(dbHost);
+    if (!dbIsLocal && process.env.SAN1205_ALLOW_PRODUCTION_WRITES !== "1") {
+      throw new Error(
+        "SAN-1205 writes and deletes real rows in the configured Supabase project, which is not " +
+          "local. Set SAN1205_ALLOW_PRODUCTION_WRITES=1 to confirm that is intended.",
+      );
+    }
+
     const admin = await getSupabaseAdmin();
     const run = randomUUID().slice(0, 8);
+    // Printed before anything is created, so rows stranded by a killed run can be found.
+    console.log(`SAN-1205 fixture run: ${run}  (rows: SAN1205 * ${run}, san1205-*-${run}-* emails)`);
     const fixture = await provisionFixture(admin, run);
 
     // The journey failure is captured, not thrown from `finally`: a cleanup error thrown there
@@ -474,19 +503,21 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
       await expect(renterPage.locator('[data-testid="schedule-viewing-error"]')).toHaveCount(0);
 
       // ── 2 · exactly one lead and one showing, tied to this listing ────────────
-      const { data: leads } = await admin
+      const { data: leads, error: leadsError } = await admin
         .from("leads")
         .select("id, apartment_id, email, status")
         .eq("apartment_id", fixture.apartmentId);
-      expect(leads ?? [], "exactly one lead for this listing").toHaveLength(1);
+      expect(leadsError, "the lead query itself must succeed").toBeNull();
+      expect(leads, "exactly one lead for this listing").toHaveLength(1);
       expect(leads![0].id).toBe(first.body.leadId);
       expect(leads![0].email).toBe(renter.email);
 
-      const { data: showings } = await admin
+      const { data: showings, error: showingsError } = await admin
         .from("showings")
         .select("id, lead_id, apartment_id, status")
         .eq("apartment_id", fixture.apartmentId);
-      expect(showings ?? [], "exactly one showing for this listing").toHaveLength(1);
+      expect(showingsError, "the showing query itself must succeed").toBeNull();
+      expect(showings, "exactly one showing for this listing").toHaveLength(1);
       expect(showings![0].id).toBe(first.body.showingId);
       expect(showings![0].lead_id).toBe(first.body.leadId);
 
@@ -604,8 +635,10 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
         .from("showings")
         .select("id")
         .eq("apartment_id", fixture.apartmentId);
-      expect(ownerLeads.data ?? [], "owner reads exactly the one lead").toHaveLength(1);
-      expect(ownerShowings.data ?? [], "owner reads exactly the one showing").toHaveLength(1);
+      expect(ownerLeads.error, "the owner's lead query must succeed").toBeNull();
+      expect(ownerShowings.error, "the owner's showing query must succeed").toBeNull();
+      expect(ownerLeads.data, "owner reads exactly the one lead").toHaveLength(1);
+      expect(ownerShowings.data, "owner reads exactly the one showing").toHaveLength(1);
 
       const ownerApi = await owner.page.request.get(
         route(`/api/host/rentals/listings/${fixture.apartmentId}/detail`),
@@ -639,8 +672,11 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
         .from("showings")
         .select("id")
         .eq("apartment_id", fixture.apartmentId);
-      expect(otherLeads.data ?? [], "RLS must hide the lead from another broker").toHaveLength(0);
-      expect(otherShowings.data ?? [], "RLS must hide the showing from another broker").toHaveLength(0);
+      // A failed query also returns no rows, so prove the query worked before trusting "zero".
+      expect(otherLeads.error, "the other broker's lead query must succeed, not fail").toBeNull();
+      expect(otherShowings.error, "the other broker's showing query must succeed, not fail").toBeNull();
+      expect(otherLeads.data, "RLS must hide the lead from another broker").toEqual([]);
+      expect(otherShowings.data, "RLS must hide the showing from another broker").toEqual([]);
 
       const otherApi = await other.page.request.get(
         route(`/api/host/rentals/listings/${fixture.apartmentId}/detail`),
