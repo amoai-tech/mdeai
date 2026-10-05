@@ -109,7 +109,7 @@ test("promotion cannot run after any failed step", () => {
   assert.doesNotMatch(before, /continue-on-error:\s*true/, "a step that may fail must not precede promotion");
 });
 
-test("order: validate, credential, names, staged, certify, publish, promote, verify", () => {
+test("order: validate, credential, names, staged, certify, publish, re-confirm staged, promote, verify", () => {
   const job = certifyJob(workflow());
   const order = [
     "Checkout exact deployed commit",
@@ -120,10 +120,26 @@ test("order: validate, credential, names, staged, certify, publish, promote, ver
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
     "Publish certification result",
+    "Re-confirm the candidate is still staged right before promotion",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
+});
+
+test("the staged check runs again right before promotion, success-only and trusted (SAN-1402)", () => {
+  const job = certifyJob(workflow());
+  const recheck = stepBody(job, "Re-confirm the candidate is still staged right before promotion");
+  assert.match(recheck, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-staged/);
+  assert.match(recheck, /if:\s*\$\{\{\s*success\(\)\s*&&\s*steps\.certify\.outcome == 'success'\s*\}\}/);
+  assert.doesNotMatch(recheck, /always\(\)|failure\(\)|cancelled\(\)|continue-on-error/);
+  // Count by workflow step (not by raw text): exactly two steps run the staged check.
+  const stagedSteps = job
+    .split("\n      - ")
+    .slice(1)
+    .filter((step) => /run:\s*node \.trusted\/scripts\/vercel-release-control\.mjs assert-staged\s*$/m.test(step))
+    .map((step) => step.match(/name: (.+)/)?.[1]);
+  assert.deepEqual(stagedSteps, ["Confirm the candidate is staged", "Re-confirm the candidate is still staged right before promotion"]);
 });
 
 test("certification runs on the exact candidate URL, before and never after promotion", () => {

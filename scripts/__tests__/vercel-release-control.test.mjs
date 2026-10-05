@@ -9,7 +9,9 @@ import {
   REQUIRED_PRODUCTION_ENV,
   TEAM_ID,
   checkCredential,
+  checkDomainAlias,
   checkEnvNames,
+  checkProductionDomains,
   checkPromoted,
   checkStaged,
   vercelGet,
@@ -39,7 +41,17 @@ const stagedDeployment = (over = {}) => ({
 // Real shape (first promotion, SAN-1330): the deployment's own `alias` array omits the promoted custom
 // domains; the link lives in the domain's alias record (GET /v4/aliases/<domain>).
 const promotedDeployment = (over = {}) => stagedDeployment({ alias: ["mdeai-amoco.vercel.app"], ...over });
-const domainAlias = (over = {}) => ({ alias: "www.mdeai.co", deploymentId: ID, ...over });
+const domainAlias = (domain, over = {}) => ({ alias: domain, projectId: PROJECT_ID, deploymentId: ID, ...over });
+// Both production domains served by `id` (default: the certified candidate).
+const aliasesOf = (id = ID, over = {}) => ({
+  "www.mdeai.co": domainAlias("www.mdeai.co", { deploymentId: id }),
+  "mdeai.co": domainAlias("mdeai.co", { deploymentId: id }),
+  ...over,
+});
+// Plain-text message check (no regular expression built from a variable).
+const messageIncludes = (text) => (error) => error instanceof Error && error.message.includes(text);
+const OLD = "dpl_PreviousDeployment123456";
+const projectSetting = (over = {}) => ({ id: PROJECT_ID, autoAssignCustomDomains: false, ...over });
 
 const project = (over = {}) => ({
   id: PROJECT_ID,
@@ -160,28 +172,25 @@ for (const [name, over, pattern] of [
   });
 }
 
-test("promoted: www.mdeai.co serving the exact tested id and sha passes", () => {
-  assert.doesNotThrow(() => checkPromoted(promotedDeployment(), expected, domainAlias()));
+test("promoted: both production domains serving the exact tested id and sha pass", () => {
+  assert.doesNotThrow(() => checkPromoted(promotedDeployment(), expected, aliasesOf()));
 });
 
-test("promoted: passes even though the deployment's own alias array omits www.mdeai.co (the real shape)", () => {
+test("promoted: passes even though the deployment's own alias array omits the domains (the real shape)", () => {
   const deployment = promotedDeployment();
   assert.ok(!deployment.alias.includes("www.mdeai.co"));
-  assert.doesNotThrow(() => checkPromoted(deployment, expected, domainAlias()));
+  assert.doesNotThrow(() => checkPromoted(deployment, expected, aliasesOf()));
 });
 
-test("promoted: the previous deployment still serving the domain fails", () => {
-  assert.throws(
-    () => checkPromoted(promotedDeployment(), expected, domainAlias({ deploymentId: "dpl_PreviousDeployment123456" })),
-    /certified deployment/,
-  );
-});
+for (const domain of PRODUCTION_DOMAINS) {
+  test(`promoted: ${domain} still pointing at the previous deployment fails`, () => {
+    const aliases = aliasesOf(ID, { [domain]: domainAlias(domain, { deploymentId: OLD }) });
+    assert.throws(() => checkPromoted(promotedDeployment(), expected, aliases), messageIncludes(`${domain} does not point`));
+  });
+}
 
 test("promoted: the deployment read is not the certified id", () => {
-  assert.throws(
-    () => checkPromoted(promotedDeployment({ id: "dpl_PreviousDeployment123456" }), expected, domainAlias()),
-    /id/i,
-  );
+  assert.throws(() => checkPromoted(promotedDeployment({ id: OLD }), expected, aliasesOf()), /id/i);
 });
 
 test("promoted: the right id but a different commit fails", () => {
@@ -190,16 +199,61 @@ test("promoted: the right id but a different commit fails", () => {
       checkPromoted(
         promotedDeployment({ meta: { githubCommitSha: "1".repeat(40), githubCommitRef: "main" } }),
         expected,
-        domainAlias(),
+        aliasesOf(),
       ),
     /sha|commit/i,
   );
 });
 
-test("promoted: an unreadable or mismatched domain record fails", () => {
+test("promoted: a missing alias record fails closed", () => {
   assert.throws(() => checkPromoted(promotedDeployment(), expected, undefined), /alias could not be read/);
-  assert.throws(() => checkPromoted(promotedDeployment(), expected, { error: { code: "not_found" } }), /alias could not be read/);
-  assert.throws(() => checkPromoted(promotedDeployment(), expected, domainAlias({ alias: "mdeai.co" })), /different domain/);
+  assert.throws(() => checkPromoted(promotedDeployment(), expected, { "www.mdeai.co": domainAlias("www.mdeai.co") }), /mdeai\.co alias could not be read/);
+});
+
+// SAN-1402: the early check reads Vercel's record per domain, not the deployment's alias array.
+test("domain alias: a record for another domain, another project, or no deployment fails closed", () => {
+  assert.equal(checkDomainAlias("www.mdeai.co", domainAlias("www.mdeai.co")), ID);
+  assert.throws(() => checkDomainAlias("www.mdeai.co", undefined), /could not be read/);
+  assert.throws(() => checkDomainAlias("www.mdeai.co", { error: { code: "not_found" } }), /could not be read/);
+  assert.throws(() => checkDomainAlias("www.mdeai.co", domainAlias("mdeai.co")), /different domain/);
+  assert.throws(() => checkDomainAlias("www.mdeai.co", domainAlias("www.mdeai.co", { projectId: "prj_other" })), /different Vercel project/);
+  assert.throws(() => checkDomainAlias("www.mdeai.co", domainAlias("www.mdeai.co", { deploymentId: undefined })), /any deployment/);
+});
+
+test("staged: production still on the previous release passes and names what to recover to", () => {
+  const current = checkProductionDomains(projectSetting(), aliasesOf(OLD), ID);
+  assert.deepEqual(current, { "www.mdeai.co": OLD, "mdeai.co": OLD });
+});
+
+for (const domain of PRODUCTION_DOMAINS) {
+  test(`staged: a candidate that already owns ${domain} (absent from its own alias list) is caught`, () => {
+    // The real shape: the deployment's alias array is empty, only the domain's record shows ownership.
+    const aliases = aliasesOf(OLD, { [domain]: domainAlias(domain, { deploymentId: ID }) });
+    assert.doesNotThrow(() => checkStaged(stagedDeployment({ alias: [] }), expected));
+    assert.throws(() => checkProductionDomains(projectSetting(), aliases, ID), messageIncludes(`already owns ${domain}`));
+  });
+}
+
+test("staged: www and the apex serving different existing deployments (split state) stops the release", () => {
+  const split = aliasesOf(OLD, { "mdeai.co": domainAlias("mdeai.co", { deploymentId: "dpl_AnotherPreviousDeployment1" }) });
+  assert.throws(() => checkProductionDomains(projectSetting(), split, ID), /do not serve the same deployment/);
+});
+
+test("staged: an unreadable alias record for either domain stops the release", () => {
+  assert.throws(() => checkProductionDomains(projectSetting(), aliasesOf(OLD, { "mdeai.co": undefined }), ID), /mdeai\.co alias could not be read/);
+  assert.throws(() => checkProductionDomains(projectSetting(), {}, ID), /could not be read/);
+});
+
+test("staged: automatic production-domain assignment must be OFF", () => {
+  for (const setting of [{ autoAssignCustomDomains: true }, { autoAssignCustomDomains: undefined }, { autoAssignCustomDomains: null }]) {
+    assert.throws(() => checkProductionDomains(projectSetting(setting), aliasesOf(OLD), ID), /not OFF/);
+  }
+  assert.throws(() => checkProductionDomains(undefined, aliasesOf(OLD), ID), /project could not be read/);
+});
+
+test("staged: the stop messages point the operator at the rollback runbook", () => {
+  assert.throws(() => checkProductionDomains(projectSetting({ autoAssignCustomDomains: true }), aliasesOf(OLD), ID), /production-rollback-runbook\.md/);
+  assert.throws(() => checkProductionDomains(projectSetting(), aliasesOf(ID), ID), /production-rollback-runbook\.md/);
 });
 
 test("staged: the certified URL must belong to the deployment id that gets promoted", () => {

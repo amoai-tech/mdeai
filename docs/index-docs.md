@@ -132,6 +132,7 @@ Use for local development, deployment, security operations, observability, runbo
 
 Current workflow plan:
 - [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+- [production-rollback-runbook.md](07-operations/production-rollback-runbook.md) — confirm production is really broken, roll back to the previous release, prove it, keep auto-assign OFF.
 
 ### Strategy
 [08-strategy/README.md](08-strategy/README.md)
@@ -273,6 +274,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
 | Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
 | Operations | [`07-operations/merge-approval-history.md`](07-operations/merge-approval-history.md) | Markdown | Current |
+| Operations | [`07-operations/production-rollback-runbook.md`](07-operations/production-rollback-runbook.md) | Markdown | Current |
 | Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
 | Strategy | [`08-strategy/README.md`](08-strategy/README.md) | Markdown | Current |
