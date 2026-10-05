@@ -154,10 +154,18 @@ class PlaceholderTolerantMemory extends Memory {
             // only. Calling the native tool with no payload would rewrite the stored
             // document (and clobber a non-object one) — exactly what this path avoids.
             if (where.threadId && memory.getThreadById) {
-              const existingThread = await memory.getThreadById({
-                threadId: where.threadId,
-              });
-              if (!existingThread && memory.createThread) {
+              let existingThread: unknown;
+              let lookupFailed = false;
+              try {
+                existingThread = await memory.getThreadById({
+                  threadId: where.threadId,
+                });
+              } catch {
+                // A lookup failure (storage error/timeout) must not crash the turn:
+                // skip the existence check and let the read below surface a real problem.
+                lookupFailed = true;
+              }
+              if (!lookupFailed && !existingThread && memory.createThread) {
                 try {
                   await memory.createThread({
                     threadId: where.threadId,
@@ -170,7 +178,16 @@ class PlaceholderTolerantMemory extends Memory {
               }
             }
 
-            const existingRaw = await memory.getWorkingMemory(where);
+            let existingRaw: string | null;
+            try {
+              existingRaw = await memory.getWorkingMemory(where);
+            } catch {
+              return {
+                success: false,
+                message:
+                  "Could not read working memory; the selected pin was not cleared.",
+              };
+            }
             let existing: PlainObject = {};
             if (existingRaw) {
               let parsed: unknown;
@@ -202,10 +219,18 @@ class PlaceholderTolerantMemory extends Memory {
             // serializes MDE's own updates per thread in this process; across instances the
             // write remains last-write-wins. Upgrade path: drop this shim when the native
             // tool stops stripping null optionals or exposes an atomic clear.
-            await memory.updateWorkingMemory({
-              ...where,
-              workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
-            });
+            try {
+              await memory.updateWorkingMemory({
+                ...where,
+                workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
+              });
+            } catch {
+              return {
+                success: false,
+                message:
+                  "Could not update working memory; the selected pin was not cleared.",
+              };
+            }
             return { success: true };
           };
           return withThreadLock(lockKey, run);

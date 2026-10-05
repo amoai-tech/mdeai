@@ -250,6 +250,46 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(cleared.saved?.mapUi).not.toHaveProperty("selectedPinId");
   });
 
+  it("survives a thread-lookup failure and clears the pin without throwing", async () => {
+    const tool = updateTool();
+    let saved: Record<string, unknown> | undefined;
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        agent: { threadId: "t", resourceId: "r" },
+        memory: {
+          getThreadById: async () => {
+            throw new Error("storage unavailable");
+          },
+          getWorkingMemory: async () => JSON.stringify(existing),
+          updateWorkingMemory: async (a: { workingMemory: string }) => {
+            saved = JSON.parse(a.workingMemory);
+          },
+        },
+      },
+    );
+    expect(out).toMatchObject({ success: true });
+    expect(saved?.mapUi).not.toHaveProperty("selectedPinId");
+  });
+
+  it("soft-fails when reading working memory throws", async () => {
+    const tool = updateTool();
+    const out = await tool.execute(
+      { memory: { mapUi: { selectedPinId: null } } },
+      {
+        agent: { threadId: "t", resourceId: "r" },
+        memory: {
+          getThreadById: async () => ({ id: "t", resourceId: "r" }),
+          getWorkingMemory: async () => {
+            throw new Error("storage unavailable");
+          },
+          updateWorkingMemory: async () => {},
+        },
+      },
+    );
+    expect(out).toMatchObject({ success: false });
+  });
+
   it("leaves a non-object stored document untouched and reports it instead of throwing", async () => {
     const { out, saved } = await update(
       { mapUi: { selectedPinId: null } },
