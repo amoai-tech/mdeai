@@ -17,9 +17,9 @@ Run the commands from the linked checkout (the repo root with `.vercel/project.j
 **Do not roll back because an alarm says "promotion verification failed".** On 2026-10-05 production was healthy and the verifier itself was wrong (fixed in PR #201). Check the facts first:
 
 ```bash
-# Print only the deployment id (stderr dropped so the CLI banner cannot corrupt the pipe):
-vercel api /v4/aliases/www.mdeai.co --raw --scope amoco 2>/dev/null | jq -r '.deploymentId'   # what customers get now
-vercel api /v4/aliases/mdeai.co --raw --scope amoco 2>/dev/null | jq -r '.deploymentId'       # must be the same id
+# Print only the deployment id. Errors (for example an expired login) stay visible, and a missing id exits non-zero:
+vercel api /v4/aliases/www.mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'   # what customers get now
+vercel api /v4/aliases/mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'       # must be the same id
 ```
 
 Print only the id. The full response carries unrelated account detail that does not belong in an incident channel or a CI log.
@@ -60,8 +60,8 @@ vercel rollback status --scope amoco
 ## 3. Prove it worked
 
 ```bash
-vercel api /v4/aliases/www.mdeai.co --raw --scope amoco 2>/dev/null | jq -r '.deploymentId'   # must equal the id you rolled back to
-vercel api /v4/aliases/mdeai.co --raw --scope amoco 2>/dev/null | jq -r '.deploymentId'       # same id
+vercel api /v4/aliases/www.mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'   # must equal the id you rolled back to
+vercel api /v4/aliases/mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'       # same id
 ```
 
 Run Production Runtime Smoke again and confirm it passes. Record in Linear: the bad deployment id, the id restored, the time, and why.
@@ -71,7 +71,7 @@ Run Production Runtime Smoke again and confirm it passes. Record in Linear: the 
 **Auto-assign must stay OFF.** After a rollback Vercel turns automatic production-domain assignment off. If you later undo the rollback with `vercel promote`, Vercel turns it back **on**, which would let the next untested build reach customers. MDE needs it off. After any recovery or roll-forward, check it before the next release:
 
 ```bash
-vercel api /v9/projects/prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB --raw --scope amoco 2>/dev/null | jq '.autoAssignCustomDomains'   # must print false
+vercel api /v9/projects/prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB --raw --scope amoco | jq '.autoAssignCustomDomains'   # must print false
 ```
 
 If it prints `true`, switch off "Auto-assign Custom Production Domains" (Vercel project, Settings, Environments, Production, Branch Tracking). The release pipeline also refuses to certify while it is on.
