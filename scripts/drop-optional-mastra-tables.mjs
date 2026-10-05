@@ -12,8 +12,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
-/** Hosts that can only ever be the local machine. Mirrors src/mastra/lib/integration-db-guard.ts. */
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::", "::1"]);
+/**
+ * Hosts that can only ever be the local machine. Read from the same source of truth as the
+ * TypeScript guard so the two enforcement paths cannot drift. `::` is the IPv6
+ * *unspecified* address, NOT loopback, so the shared list deliberately excludes it.
+ */
+const LOOPBACK_HOSTS = new Set(
+  JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL("../src/mastra/lib/integration-loopback-hosts.json", import.meta.url),
+      ),
+      "utf8",
+    ),
+  ),
+);
 const OPT_IN = "MASTRA_ALLOW_REMOTE_INTEGRATION";
 const IDENTIFIER = /^mastra_[a-z0-9_]+$/;
 

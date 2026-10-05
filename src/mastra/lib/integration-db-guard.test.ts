@@ -32,6 +32,13 @@ describe("assertLoopbackDatabaseUrl", () => {
     ).toThrow(/non-loopback/);
   });
 
+  it("refuses the IPv6 unspecified address :: (not loopback)", () => {
+    delete process.env[REMOTE_INTEGRATION_OPT_IN];
+    expect(() =>
+      assertLoopbackDatabaseUrl("postgresql://postgres:pw@[::]:5432/postgres", FLAG),
+    ).toThrow(/non-loopback/);
+  });
+
   it("refuses the direct Supabase host", () => {
     delete process.env[REMOTE_INTEGRATION_OPT_IN];
     expect(() =>

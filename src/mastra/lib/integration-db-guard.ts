@@ -14,8 +14,15 @@
  * mistaken for an intentional one.
  */
 
-/** Hosts that can only ever be the local machine. Deliberately narrow. */
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::", "::1"]);
+import loopbackHosts from "./integration-loopback-hosts.json";
+
+/**
+ * Hosts that can only ever be the local machine. Deliberately narrow: `::` is the IPv6
+ * *unspecified* address ("all interfaces"), NOT loopback, so it is excluded — only
+ * `::1` is loopback. This JSON file is the single source of truth, shared with
+ * `scripts/drop-optional-mastra-tables.mjs`, so the two enforcement paths cannot drift.
+ */
+const LOOPBACK_HOSTS = new Set<string>(loopbackHosts);
 
 export const REMOTE_INTEGRATION_OPT_IN = "MASTRA_ALLOW_REMOTE_INTEGRATION";
 

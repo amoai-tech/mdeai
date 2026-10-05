@@ -33,26 +33,29 @@ describe.runIf(runIntegration)("SAN-1311 legacy production row compatibility", (
     "reads and updates a thread/message/working-memory row written by the previous version",
     async () => {
       assertLoopbackDatabaseUrl(DATABASE_URL, "MASTRA_LEGACY_COMPAT_INTEGRATION");
-      const client = new Client({ connectionString: DATABASE_URL as string });
-      await client.connect();
-      const store = new PostgresStore({
-        id: "san1311-legacy-compat",
-        connectionString: DATABASE_URL as string,
-        disableInit: true,
-      });
-      const memory = new Memory({
-        storage: store,
-        options: {
-          workingMemory: {
-            enabled: true,
-            scope: "thread",
-            schema: conciergeWorkingMemorySchema,
-          },
-          lastMessages: 20,
-        },
-      });
       const { thread, messages } = fixture;
+      // Everything after the guard is constructed inside the try, so whichever resources
+      // were created can be closed by the finally if a later construction throws.
+      const client = new Client({ connectionString: DATABASE_URL as string });
+      let store: PostgresStore | undefined;
       try {
+        await client.connect();
+        store = new PostgresStore({
+          id: "san1311-legacy-compat",
+          connectionString: DATABASE_URL as string,
+          disableInit: true,
+        });
+        const memory = new Memory({
+          storage: store,
+          options: {
+            workingMemory: {
+              enabled: true,
+              scope: "thread",
+              schema: conciergeWorkingMemorySchema,
+            },
+            lastMessages: 20,
+          },
+        });
         await client.query(
           `insert into public.mastra_threads (id, "resourceId", title, metadata, "createdAt", "updatedAt")
            values ($1, $2, $3, $4::jsonb, $5, $6)
@@ -138,13 +141,17 @@ describe.runIf(runIntegration)("SAN-1311 legacy production row compatibility", (
         expect(reread.lastIntent).toBe("rental_refine");
         expect(reread.mapUi?.selectedPinId).toBe("legacy-rental-2");
       } finally {
-        await client.query(
-          "delete from public.mastra_messages where id = any($1::text[])",
-          [messages.map((message) => message.id)],
-        );
-        await client.query("delete from public.mastra_threads where id = $1", [thread.id]);
-        await client.end();
-        await store.close();
+        try {
+          await client.query(
+            "delete from public.mastra_messages where id = any($1::text[])",
+            [messages.map((message) => message.id)],
+          );
+          await client.query("delete from public.mastra_threads where id = $1", [thread.id]);
+        } catch {
+          // The connection may never have opened; best-effort cleanup only.
+        }
+        if (store) await store.close().catch(() => undefined);
+        await client.end().catch(() => undefined);
       }
     },
     120_000,

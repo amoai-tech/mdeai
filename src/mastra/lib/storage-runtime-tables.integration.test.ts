@@ -58,27 +58,31 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
     async () => {
       assertLoopbackDatabaseUrl(DATABASE_URL, "MASTRA_TABLE_USAGE_INTEGRATION");
       const client = new Client({ connectionString: DATABASE_URL as string });
-      await client.connect();
-      const store = new PostgresStore({
-        id: "san1338-runtime-tables",
-        connectionString: DATABASE_URL as string,
-        disableInit: true,
-      });
-      const memory = new Memory({
-        storage: store,
-        options: {
-          workingMemory: {
-            enabled: true,
-            scope: "thread",
-            schema: conciergeWorkingMemorySchema,
-          },
-          lastMessages: 20,
-        },
-      });
+      // Identity is created before the try so cleanup can reach it even if construction
+      // fails partway through.
+      const threadId = `san1338-usage-${Date.now()}`;
+      const resourceId = "san1338-usage-user";
+      let store: PostgresStore | undefined;
       try {
+        await client.connect();
+        store = new PostgresStore({
+          id: "san1338-runtime-tables",
+          connectionString: DATABASE_URL as string,
+          disableInit: true,
+        });
+        const memory = new Memory({
+          storage: store,
+          options: {
+            workingMemory: {
+              enabled: true,
+              scope: "thread",
+              schema: conciergeWorkingMemorySchema,
+            },
+            lastMessages: 20,
+          },
+        });
+
         const countsBefore = await tableCounts(client);
-        const threadId = `san1338-usage-${Date.now()}`;
-        const resourceId = "san1338-usage-user";
         await memory.saveThread({
           thread: {
             id: threadId,
@@ -114,8 +118,17 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
         );
         expect(changed.sort()).toEqual([...RUNTIME_WRITE_TABLES].sort());
       } finally {
-        await client.end();
-        await store.close();
+        // Close the store first, then remove exactly the rows this proof created, then
+        // disconnect. Every step is guarded so cleanup cannot mask the test result, and a
+        // reusable scratch database is left as it was found.
+        if (store) await store.close().catch(() => undefined);
+        try {
+          await client.query("delete from public.mastra_messages where thread_id = $1", [threadId]);
+          await client.query("delete from public.mastra_threads where id = $1", [threadId]);
+        } catch {
+          // The connection may never have opened; best-effort cleanup only.
+        }
+        await client.end().catch(() => undefined);
       }
     },
     120_000,
