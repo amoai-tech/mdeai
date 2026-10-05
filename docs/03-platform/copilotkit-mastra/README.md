@@ -251,15 +251,11 @@ npm run build
 
 Also run focused Playwright tests for UI/thread/HITL behavior and security tests for authorization boundaries.
 
-### Known guardrail gap
+### CopilotKit v2 guardrail status
 
-`package.json` currently defines:
+The `audit:copilotkit-v2` gate is active and repaired. Current `package.json` maps it to `audit:copilotkit-v2:depcruise`, which runs dependency-cruiser over `src` and then `scripts/audit-copilotkit-v2-no-new-v1.mjs`. The release `floor` invokes `npm run audit:copilotkit-v2`.
 
-```bash
-npm run audit:copilotkit-v2
-```
-
-but current `main` does not contain the referenced `scripts/audit-copilotkit-v2-map.mjs` file. Do not report this gate as passing until the command is repaired or replaced by equivalent verified coverage.
+`scripts/audit-copilotkit-v2-map.mjs` is absent, but no current package script references it, so its absence is **not** an outstanding guardrail gap. Historical documents that still describe that old map-script path as the active audit are stale; SAN-1300 remains completed.
 
 ## Exact references
 
