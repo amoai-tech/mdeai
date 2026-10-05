@@ -26,7 +26,9 @@ Own Supabase schema/migrations, RLS/Auth, database functions/RPCs, Realtime, Sto
 
 - Every exposed table must have an explicit access model; RLS is the database boundary, not frontend filtering.
 - Never authorize from user-editable metadata; use trusted app metadata or relational ownership.
-- Never expose service-role/secret keys to browser code.
+- Never expose service-role/secret keys to browser code. Privileged credentials are not authorization; authenticate and authorize the actor before privileged writes.
+- Every new or changed RPC/function must classify `EXECUTE` access explicitly and prove direct allow/deny calls for the intended roles.
+- For exposed tables, treat table grants and RLS policies as separate gates and test both.
 - Treat `SECURITY DEFINER`, storage policies, exposed views, and cross-tenant access as security-critical changes.
 - UPDATE policies need both visibility and write checks; test allow and deny paths.
 - Current migration mode: **imperative**. `supabase/config.toml` has `[db.migrations] schema_paths = []` and no active `[experimental.pgdelta]` block.
@@ -37,7 +39,7 @@ Own Supabase schema/migrations, RLS/Auth, database functions/RPCs, Realtime, Sto
 ## Workflow
 
 1. Classify: schema/migration, RLS/Auth, RPC/function, Realtime, Storage, Edge Function, vector/search, or performance.
-2. Load official Supabase guidance plus official Postgres rules for any SQL/schema work.
+2. Load official Supabase guidance plus official Postgres rules for any SQL/schema work. For version-sensitive CLI work, run `supabase --version` and confirm the command/flags against `--help` or current docs.
 3. Load only the matching MDE reference/project rule already in this skill directory.
 4. Inspect current migration/schema conventions before editing.
 5. Make the smallest safe change; do not use privileged code to bypass an unexplained permission failure.
