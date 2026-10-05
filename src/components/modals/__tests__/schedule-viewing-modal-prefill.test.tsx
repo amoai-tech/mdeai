@@ -139,4 +139,33 @@ describe("ScheduleViewingModal contact lookup (SAN-1205)", () => {
     expect(field("name"), "a previous user's name must not leak").toBe("");
     expect(field("email"), "a previous user's email must not leak").toBe("");
   });
+
+  it("never takes ownership of text the renter typed, even when the lookup returns the same text", async () => {
+    pendingLookup();
+    await render();
+
+    // The renter types a name first. The slow lookup then returns that identical name, plus an
+    // email the renter has not typed.
+    await act(() => {
+      type("name", "Sam");
+    });
+    await act(async () => {
+      resolveLookup?.({ email: "sam@example.com", user_metadata: { full_name: "Sam" } });
+    });
+    expect(field("name")).toBe("Sam");
+    expect(field("email"), "a blank field is still filled by the lookup").toBe("sam@example.com");
+
+    // Reopen for a visitor who is signed out.
+    target = null;
+    await render();
+    target = TARGET;
+    pendingLookup();
+    await render();
+    await act(async () => {
+      resolveLookup?.(null);
+    });
+
+    expect(field("name"), "the renter's own text must survive").toBe("Sam");
+    expect(field("email"), "text the lookup filled in is still removed").toBe("");
+  });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
@@ -32,6 +32,9 @@ const loadPrefillForCurrentUser = async (): Promise<SchedulePrefill | null> => {
   }
 };
 
+type ContactField = "name" | "email" | "phone";
+const CONTACT_FIELDS: readonly ContactField[] = ["name", "email", "phone"];
+
 /** SCREEN-008 — schedule viewing modal → POST /api/leads/schedule-viewing (G2). */
 export const ScheduleViewingModal = () => {
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } = useRentalUi();
@@ -46,9 +49,18 @@ export const ScheduleViewingModal = () => {
   const [preferredAt, setPreferredAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // What the last lookup filled in, so a later signed-out lookup can remove exactly that and
-  // nothing the visitor typed themselves.
-  const prefilledRef = useRef<SchedulePrefill | null>(null);
+  // Who owns each contact field. `values` mirrors what is in the box right now; `fromLookup`
+  // is true only for a field the account lookup filled while it was blank. Ownership goes back
+  // to the renter the moment they type in it, and a lookup never claims a field that already
+  // had text, even identical text. A later signed-out lookup clears only lookup-owned fields.
+  const contactValuesRef = useRef<Record<ContactField, string>>({ name: "", email: "", phone: "" });
+  const fromLookupRef = useRef<Record<ContactField, boolean>>({ name: false, email: false, phone: false });
+
+  const setContact = useCallback((field: ContactField, value: string, ownedByLookup: boolean) => {
+    contactValuesRef.current[field] = value;
+    fromLookupRef.current[field] = ownedByLookup;
+    ({ name: setName, email: setEmail, phone: setPhone })[field](value);
+  }, []);
 
   const isOpen = Boolean(scheduleTarget);
 
@@ -59,24 +71,18 @@ export const ScheduleViewingModal = () => {
     if (!isOpen) return undefined;
     let cancelled = false;
     const applyPrefill = (prefill: SchedulePrefill | null) => {
-      if (!prefill) {
-        // Signed out: remove values prefilled for a previous user so their details can't leak
-        // across sessions on a shared browser. Only those values: this lookup is async, so the
-        // visitor may already have typed, and blanking the form would silently erase it.
-        const previous = prefilledRef.current;
-        prefilledRef.current = null;
-        if (!previous) return;
-        setName((prev) => (prev === previous.name ? "" : prev));
-        setEmail((prev) => (prev === previous.email ? "" : prev));
-        setPhone((prev) => (prev === previous.phone ? "" : prev));
-        return;
+      for (const field of CONTACT_FIELDS) {
+        if (!prefill) {
+          // Signed out: remove values a lookup filled in for a previous user so their details
+          // can't leak across sessions on a shared browser. Only those fields: this lookup is
+          // async, so the visitor may already have typed, and blanking the form would
+          // silently erase it.
+          if (fromLookupRef.current[field]) setContact(field, "", false);
+        } else if (contactValuesRef.current[field] === "" && prefill[field] !== "") {
+          // Only a blank field is filled, so the lookup never overwrites or claims typed text.
+          setContact(field, prefill[field], true);
+        }
       }
-      prefilledRef.current = prefill;
-      // `prev || …` only fills blanks, so it never clobbers what the user
-      // typed and a blank prefill value is a no-op (no per-field guards needed).
-      setName((prev) => prev || prefill.name);
-      setEmail((prev) => prev || prefill.email);
-      setPhone((prev) => prev || prefill.phone);
     };
     (async () => {
       const prefill = await loadPrefillForCurrentUser();
@@ -85,7 +91,7 @@ export const ScheduleViewingModal = () => {
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, setContact]);
 
   if (!scheduleTarget) return null;
 
@@ -113,9 +119,7 @@ export const ScheduleViewingModal = () => {
         listingTitle: scheduleTarget.title,
       });
       closeScheduleViewing();
-      setName("");
-      setEmail("");
-      setPhone("");
+      for (const field of CONTACT_FIELDS) setContact(field, "", false);
       setPreferredAt("");
     } catch (err) {
       // The modal stays open with the typed values intact so the renter can fix
@@ -158,7 +162,7 @@ export const ScheduleViewingModal = () => {
               autoComplete="name"
               required
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setContact("name", e.target.value, false)}
               disabled={submitting}
             />
           </label>
@@ -171,7 +175,7 @@ export const ScheduleViewingModal = () => {
               autoComplete="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setContact("email", e.target.value, false)}
               disabled={submitting}
             />
           </label>
@@ -183,7 +187,7 @@ export const ScheduleViewingModal = () => {
               name="phone"
               autoComplete="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setContact("phone", e.target.value, false)}
               disabled={submitting}
             />
           </label>
