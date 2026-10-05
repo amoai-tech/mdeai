@@ -171,6 +171,21 @@ describe("Supabase skill repository contract", () => {
     expect(migrationsRule).toContain('"$LEDGER_VERSION"');
   });
 
+  it("keeps migration-history repair ordered and fail-closed", () => {
+    expect(migrationsRule).toContain(
+      '--status applied  --db-url "$SUPABASE_DB_URL" &&',
+    );
+    expect(migrationsRule).toContain(
+      'supabase migration repair "$LEDGER_VERSION" --status reverted --db-url "$SUPABASE_DB_URL"',
+    );
+  });
+
+  it("warns that admin-only Storage access depends on the complete policy set", () => {
+    expect(storageRlsRule).toContain("permissive policies");
+    expect(storageRlsRule).toContain("combine with `OR`");
+    expect(storageRlsRule).toContain("complete `storage.objects` policy set");
+  });
+
   it("checks the installed Supabase CLI before version-sensitive work", () => {
     expect(skill).toContain("supabase --version");
   });
