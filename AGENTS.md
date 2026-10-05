@@ -34,7 +34,7 @@ Traps worth knowing before you debug them:
 - `check:env:ci` fails in a fresh worktree with no `.env`; export `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` first.
 - `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
 - Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
-- A fresh git worktree needs `scripts/worktree-bootstrap.sh` (clean `npm ci`, links `.env`/`.env.local` from the main checkout, copies the local Codacy config). `npm run floor` also needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which lives in the main checkout's `.env`, not `.env.local`.
+- A fresh git worktree needs `scripts/worktree-bootstrap.sh` (clean `npm ci`, copies local Codacy config). Production-backed `.env`/`.env.local` links require explicit `MDE_WORKTREE_LINK_ENV=1` opt-in. `npm run floor` also needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which lives in the main checkout's `.env`, not `.env.local`.
 - There is one Supabase project and it is production. Any test that uses the service-role key writes real rows, so it must clean up after itself and re-query to prove nothing is left (pattern: `e2e/san-1204-broker-viewing-requests.spec.ts`). An unknown count is never zero.
 - Anonymous viewing requests are limited to 20 per IP per hour (`chat-lead-capture`). Repeated E2E runs hit `RATE_LIMIT`; do not retry around it.
 - Local Codacy (`codacy-analysis analyze --pr`) needs `.codacy/`, which is untracked and exists only in the main checkout. With no config it runs zero tools and proves nothing: check `toolResults` is non-empty.
