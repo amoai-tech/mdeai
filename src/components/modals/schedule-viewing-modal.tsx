@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
 import { createClient } from "@/lib/supabase/client";
 import { useModalA11y } from "@/lib/use-modal-a11y";
+import { contactReducer, INITIAL_CONTACT } from "./contact-fields";
 
 /**
  * Look up the signed-in user + profile and build their contact prefill.
@@ -32,9 +33,6 @@ const loadPrefillForCurrentUser = async (): Promise<SchedulePrefill | null> => {
   }
 };
 
-type ContactField = "name" | "email" | "phone";
-const CONTACT_FIELDS: readonly ContactField[] = ["name", "email", "phone"];
-
 /** SCREEN-008 — schedule viewing modal → POST /api/leads/schedule-viewing (G2). */
 export const ScheduleViewingModal = () => {
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } = useRentalUi();
@@ -43,55 +41,27 @@ export const ScheduleViewingModal = () => {
   // SAN-1203 — `setSubmitting` is async, so a fast double-click could fire two
   // requests before the button disables. This ref is the synchronous lock.
   const submitLockRef = useRef(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
   const [preferredAt, setPreferredAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Who owns each contact field. `values` mirrors what is in the box right now; `fromLookup`
-  // is true only for a field the account lookup filled while it was blank. Ownership goes back
-  // to the renter the moment they type in it, and a lookup never claims a field that already
-  // had text, even identical text. A later signed-out lookup clears only lookup-owned fields.
-  const contactValuesRef = useRef<Record<ContactField, string>>({ name: "", email: "", phone: "" });
-  const fromLookupRef = useRef<Record<ContactField, boolean>>({ name: false, email: false, phone: false });
-
-  const setContact = useCallback((field: ContactField, value: string, ownedByLookup: boolean) => {
-    contactValuesRef.current[field] = value;
-    fromLookupRef.current[field] = ownedByLookup;
-    ({ name: setName, email: setEmail, phone: setPhone })[field](value);
-  }, []);
 
   const isOpen = Boolean(scheduleTarget);
 
-  // When the modal opens for a signed-in user, seed contact fields from their
-  // profile + auth account. Only fills blanks (`prev || …`) so it never clobbers
-  // what the user has already typed, and signed-out users keep whatever they typed.
+  // When the modal opens, look up the signed-in user and seed blank contact fields from their
+  // profile + auth account. The reducer decides ownership (see contact-fields.ts), so a slow
+  // lookup never overwrites or erases what the renter typed.
   useEffect(() => {
     if (!isOpen) return undefined;
     let cancelled = false;
-    const applyPrefill = (prefill: SchedulePrefill | null) => {
-      for (const field of CONTACT_FIELDS) {
-        if (!prefill) {
-          // Signed out: remove values a lookup filled in for a previous user so their details
-          // can't leak across sessions on a shared browser. Only those fields: this lookup is
-          // async, so the visitor may already have typed, and blanking the form would
-          // silently erase it.
-          if (fromLookupRef.current[field]) setContact(field, "", false);
-        } else if (contactValuesRef.current[field] === "" && prefill[field] !== "") {
-          // Only a blank field is filled, so the lookup never overwrites or claims typed text.
-          setContact(field, prefill[field], true);
-        }
-      }
-    };
     (async () => {
       const prefill = await loadPrefillForCurrentUser();
-      if (!cancelled) applyPrefill(prefill);
+      if (!cancelled) dispatchContact({ type: "lookup", prefill });
     })();
     return () => {
       cancelled = true;
     };
-  }, [isOpen, setContact]);
+  }, [isOpen]);
 
   if (!scheduleTarget) return null;
 
@@ -106,9 +76,9 @@ export const ScheduleViewingModal = () => {
         listingId: scheduleTarget.listingId,
         listingTitle: scheduleTarget.title,
         neighborhood: scheduleTarget.neighborhood,
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
+        name: contact.name.value.trim(),
+        email: contact.email.value.trim(),
+        phone: contact.phone.value.trim() || undefined,
         preferredAt,
       });
       // SAN-1203 — reaching here proves leadId + showingId are both committed.
@@ -119,7 +89,7 @@ export const ScheduleViewingModal = () => {
         listingTitle: scheduleTarget.title,
       });
       closeScheduleViewing();
-      for (const field of CONTACT_FIELDS) setContact(field, "", false);
+      dispatchContact({ type: "reset" });
       setPreferredAt("");
     } catch (err) {
       // The modal stays open with the typed values intact so the renter can fix
@@ -161,8 +131,8 @@ export const ScheduleViewingModal = () => {
               name="name"
               autoComplete="name"
               required
-              value={name}
-              onChange={(e) => setContact("name", e.target.value, false)}
+              value={contact.name.value}
+              onChange={(e) => dispatchContact({ type: "typed", field: "name", value: e.target.value })}
               disabled={submitting}
             />
           </label>
@@ -174,8 +144,8 @@ export const ScheduleViewingModal = () => {
               name="email"
               autoComplete="email"
               required
-              value={email}
-              onChange={(e) => setContact("email", e.target.value, false)}
+              value={contact.email.value}
+              onChange={(e) => dispatchContact({ type: "typed", field: "email", value: e.target.value })}
               disabled={submitting}
             />
           </label>
@@ -186,8 +156,8 @@ export const ScheduleViewingModal = () => {
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               name="phone"
               autoComplete="tel"
-              value={phone}
-              onChange={(e) => setContact("phone", e.target.value, false)}
+              value={contact.phone.value}
+              onChange={(e) => dispatchContact({ type: "typed", field: "phone", value: e.target.value })}
               disabled={submitting}
             />
           </label>
