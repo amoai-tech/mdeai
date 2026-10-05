@@ -1,8 +1,8 @@
 # MDE AI — CopilotKit + Mastra Forensic Implementation Plan
 
-> Audit date: 2026-10-05 UTC. Repository truth inspected on current main. Scores are MDE product/architecture judgments, not vendor ratings.
+> Audit snapshot: 2026-10-05 UTC. Runtime truth was inspected against PR base `e5cb9881af29c790f862214291dec4c80aff9676` and evidence head `ddfb42ec51fde515f69ce5d308bb08364e948ab1`. Later commits in this PR are documentation corrections only. Scores are MDE product/architecture judgments, not vendor ratings.
 >
-> Important: this file was requested at this legacy path. The current canonical platform docs are under **docs/03-platform/copilotkit-mastra/**. Treat this plan as the current decision record; do not infer that **docs/copilotkit/** is the canonical docs taxonomy.
+> Authority rule: this is a dated audit snapshot, not a second living source of truth. Runtime code, installed package types, the canonical **docs/03-platform/copilotkit-mastra/** documentation, and current Linear task state are authoritative. Revalidate task status and installed APIs before implementation. This file remains at the requested legacy path; do not infer that **docs/copilotkit/** is the canonical docs taxonomy.
 
 ## 1. Executive summary
 
@@ -23,6 +23,20 @@ Current verified package baseline:
 | @mastra/client-js | 1.19.1 |
 | mastra CLI/package | 1.1.0-alpha.3 |
 | @ai-sdk/google | 2.0.74 |
+
+### Runtime evidence ledger
+
+These paths were verified at the runtime evidence head above. They prove that the capability exists in source; user-facing behavior still needs the focused browser/runtime proof named by its task before that task is closed.
+
+| Current-use claim | Repository evidence | What it proves |
+| --- | --- | --- |
+| v2 generative/tool UI | `src/components/copilot/search-tool-renders.tsx` | `useRenderTool` is imported from `@copilotkit/react-core/v2` and used for search-tool rendering |
+| v2 shared agent state | `src/components/chat/concierge-coagent-context.tsx`, `src/components/host/host-event-copilot-bridge.tsx` | `useAgent` is already the shared-state seam; do not recreate v1 `useCoAgent` state |
+| v2 page/app context | `src/components/host/host-context-provider.tsx` | `useAgentContext` already publishes host context; SAN-737 must extend only proven gaps |
+| v2 HITL UI | `src/components/host/host-event-copilot-bridge.tsx` | Existing event-publish approval already uses the v2 hook path; compatibility must be proven before rewrites |
+| Mastra production storage | `src/mastra/lib/storage.ts` | Production storage uses `PostgresStore`; remaining work is hardening/certification, not replacement |
+| Thread-scoped memory | `src/mastra/lib/agent-memory.ts` | Working memory is configured with thread scope; cross-chat resource memory is a separate future capability |
+| Workflow suspend/resume | `src/mastra/workflows/event-venue-booking-workflow.ts` | The booking workflow has a real suspension point for admin review |
 
 The production path already uses:
 
@@ -61,6 +75,8 @@ Several old tasks are dangerous if an AI coding agent follows them literally:
 - The 2026-09-20 adoption plan describes identity/thread-authorization defects that are now fixed by completed work. Do not re-open or rebuild those fixes from the historical document.
 
 ## 2. Current feature scorecard
+
+Value-score rubric: **90–100 = core / production-critical**, **75–89 = high-value next**, **50–74 = advanced or measure first**, **below 50 = defer unless a measured user problem changes the tradeoff**. Scores combine user impact, reliability/security risk, reuse leverage and implementation cost; they are not vendor quality ratings.
 
 Status legend:
 
@@ -134,7 +150,7 @@ Status legend:
 | “Model fallbacks exist in current docs” does not prove core 1.35 supports the same shape | Latest docs can be ahead of MDE | SAN-1057 must inspect installed types/tagged source before adding a model array |
 | useThreads is attractive but wrong for current architecture | CopilotKit thread-management features are tied to Intelligence-managed persistence; MDE intentionally owns thread persistence/authorization | Keep MDE’s /api/threads path and saved-thread replay |
 | Current CopilotKit Mastra quickstart uses a remote MastraClient + InMemoryAgentRunner | Copying it would replace MDE’s proven in-process/authenticated runtime shape | Use it only as protocol reference; preserve current route |
-| HITL can be mistaken for authorization | A user click only proves intent | Every publish/checkout/booking backend must re-check authenticated user, ownership, current version/state and idempotency |
+| HITL can be mistaken for authorization | A user click only proves intent, and an approval can become stale before execution | Bind approval to the exact resource/action + current version/price/state; backend re-checks authentication and ownership, rejects stale approvals and executes idempotently |
 | Progress can become fake | Invented percentages or candidate counts erode trust | Emit only states/counts the backend really knows; clear on Stop/failure/thread switch |
 | SAN-1303 is partly implemented already | Re-applying pool code wastes time and risks changing a working storage contract | Narrow it to remaining Supavisor/SSL/load verification and measured pool behavior |
 | SAN-597 and SAN-610 overlap | Two tasks could build two memory paths | SAN-597 owns resource-scoped durable memory infrastructure; SAN-610 owns preference extraction/use on top of it |
@@ -150,7 +166,7 @@ Status legend:
 | SAN-1398 — Smart Follow-Up Buttons | v2 useConfigureSuggestions, max 2–3 suggestions | Keep. Verify 1.75.0 installed type before implementation |
 | SAN-595 — Require Approval Before Publish/Checkout | Shared product/security approval contract | Keep as parent/contract; backend authorization remains deterministic |
 | SAN-738 — Event publish HITL | Current main already has v2 useHumanInTheLoop for preview_and_publish | Re-verify end-to-end and close/retarget; do not reimplement |
-| SAN-740 — Booking/payment confirmation | Exact price/details confirmation before money movement | Keep for payment path; approval must bind to current price/version |
+| SAN-740 — Booking/payment confirmation | Exact price/details confirmation before money movement | Keep for payment path; bind approval to resource + action + current price/version/state, and reject stale approval if any consequential value changes |
 | SAN-737 — Page-specific AI context | Extend existing v2 useAgentContext only to proven missing pages | Rewrite body: delete useCopilotReadable/v1 skill references |
 | SAN-739 — Generative rental card | Current v2 useRenderTool search render is already present | Verify acceptance against current card renderer; close or narrow to missing card action only |
 | SAN-741 — Map/UI synchronization | Current map UI already pushes summary into agent state and tool results update pins | Verify browser journey and close/retarget; delete useCoAgent/v1 schema plan |
@@ -165,10 +181,10 @@ Status legend:
 | SAN-856 — AI cost/error ledger + trace correlation | Keep ai_runs lean and link it to native Mastra trace | Keep; depends on native observability owner |
 | SAN-1003 — Native Mastra observability | Establish the version-compatible native trace path | Keep; do not build a second custom trace tree |
 | SAN-396 — Grounded tool-output gate | Stop bad provenance before the model treats it as fact | Keep; reuse typed tool result boundary |
-| SAN-597 — Resource-scoped durable preferences | Native resource memory infrastructure and isolation | Keep; infrastructure owner |
-| SAN-610 — Preference extraction | Extract only allowlisted durable preferences into SAN-597 memory | Keep dependent on SAN-597; no second store |
+| SAN-597 — Resource-scoped durable preferences | Native resource memory infrastructure, isolation and lifecycle | Keep; infrastructure owner. Must support update/forget behavior and prove cross-user isolation |
+| SAN-610 — Preference extraction | Extract only allowlisted durable preferences into SAN-597 memory | Keep dependent on SAN-597; no second store. Explicit corrections replace stale values; “forget this” removes the durable preference |
 | SAN-1061 — Rental evaluation pipeline | Native Dataset → Experiment → Scorer plumbing | Keep |
-| SAN-611 — Golden-query evaluation suite | Canonical corpus + reproducible CI regression gate | Keep dependent on SAN-1061; no parallel dataset system |
+| SAN-611 — Golden-query evaluation suite | Canonical corpus + reproducible CI regression gate | Keep dependent on SAN-1061; cover grounding, cross-user memory isolation, tool failure, model failure/degraded response and HITL exactly-once behavior; no parallel dataset system |
 | SAN-1057 — Rental model failure recovery | Deterministic path → primary → at most one proven fallback → degraded response | Keep. This should own fallback behavior; SAN-1060 stays canceled |
 | SAN-601 — Safe checkout workflow | Use workflow only if multi-step orchestration/approval/resume is actually required | Keep conditional; do not wrap a single atomic RPC in workflow ceremony |
 | SAN-607 — Workflow compensation | Add compensation only where a partial side effect can really occur | Keep conditional and side-effect-specific |
@@ -213,9 +229,9 @@ Do not create this task unless product actually wants voice input. Do not reuse 
 | 4 | Ship the certified Mastra family with the smallest compatibility diff | Removes current stable/alpha type drift without mixing an upgrade into feature work | SAN-1338 | SAN-1302 GO; preserve CopilotKit and Google provider scope | Existing chat, tools, workflows, scorers and storage behave identically on the certified family | 99 |
 | 5 | Prove fresh-runtime chat memory after the candidate upgrade | Persistence needs a real restart proof, not only unit tests | SAN-548 | Steps 1–4 | Deploy/restart occurs; Sofia’s thread still has the right context and another user cannot read it | 99 |
 | 6 | Independently certify the exact production storage candidate | Prevent “works on my branch” production claims | SAN-1311 | Steps 1–5 and exact deployed SHA | Exact deployed SHA passes isolation, persistence and resume proof | 99 |
-| 7 | Add provider messageFilter | Cheap latency/request-size win; current server workaround proves the need | SAN-1399 | Measure before/after | 30-message thread sends only newest turn; full transcript remains visible | 96 |
+| 7 | Measure browser→runtime history, certify `messageFilter` on installed CopilotKit 1.75.0, then implement only if duplication is confirmed | Cheap latency/request-size win if wire measurement proves the browser is resending redundant history | SAN-1399 | Capture before/after payload; installed-type proof first | 30-message thread keeps the full visible transcript while the outbound request is measurably bounded and tool-call/result pairs stay valid | 96 |
 | 8 | Add truthful shared progress | Biggest visible latency UX improvement | SAN-609 then SAN-1032 | Existing AG-UI state/tool lifecycle probe | “Searching → 8 candidates → Ranking → Ready” appears before cards/map | 95 |
-| 9 | Consolidate protected-action HITL | Publish/checkout are consequential writes | SAN-595 + SAN-738 + SAN-740 | Current backend authorization/idempotency | Human approves exact action; backend reauthorizes and writes once | 97 |
+| 9 | Consolidate protected-action HITL | Publish/checkout are consequential writes | SAN-595 + SAN-738 + SAN-740 | Current backend authorization/idempotency | Human approves the exact resource/action/price/version; backend rejects stale approval or reauthorizes and writes exactly once | 97 |
 | 10 | Finish mobile chat | Core access path for renters | SAN-521 + SAN-522 | Real-device proof | Keyboard open, scroll/send/Stop all work normally | 96 |
 | 11 | Establish native Mastra trace correlation | Needed before tuning latency/cost/cache | SAN-1003 + SAN-856 | Certified Mastra family and version-compatible observability package/API | Operator follows a slow ai_runs row into the exact native trace | 93 |
 | 12 | Define minimal model failure policy | Single-model outage is still a reliability gap | SAN-1057 | Verify certified package types | Gemini 429 → proven fallback or clear degraded response, never fake results | 90 |
@@ -252,7 +268,7 @@ Use one shared rule for every task:
    - Copilot UI/state → current v2 provider, useAgent, useAgentContext, useRenderTool, useHumanInTheLoop.
    - Agent orchestration → current Mastra Agent/Tool/Workflow/Memory.
    - Durable truth/auth → current Supabase/RLS/RPC.
-5. **Verify the installed API.** Current docs are discovery only. Before implementation, inspect the installed package type/source for MDE’s pinned version.
+5. **Verify the installed API.** Current docs are discovery only. Before implementation, inspect the installed package type/source for MDE’s pinned version. Record the exact installed type/source evidence in the owning task so the next agent does not repeat discovery.
 6. **Write one failing focused regression.**
 7. **Make the smallest production change.** Avoid package upgrades inside feature tasks.
 8. **Run focused proof first, then the existing release floor.**
@@ -294,9 +310,11 @@ Do not parallelize multiple tasks that all change the runtime route, Mastra pack
 
 - [ ] Thread/resource identity is server-derived.
 - [ ] User A cannot read/write User B’s threads or durable preferences.
+- [ ] Durable preferences support correction and explicit forget/delete; deleted or superseded values are not silently resurrected.
 - [ ] Fresh Mastra tables receive required RLS/FORCE RLS/grants reproducibly.
 - [ ] No service-role credential reaches the browser.
-- [ ] Human approval is followed by backend authorization, version/state validation and idempotency.
+- [ ] Human approval is bound to the exact resource/action plus consequential version/price/state; stale approvals are rejected.
+- [ ] Backend authorization and idempotency run after approval and before mutation.
 - [ ] Reject/cancel paths write nothing.
 
 ### Reliability
@@ -312,6 +330,7 @@ Do not parallelize multiple tasks that all change the runtime route, Mastra pack
 - [ ] Native trace path is version-compatible and correlated with the lean ai_runs record.
 - [ ] Sensitive content is not duplicated into trace/ledger data.
 - [ ] Faithfulness and grounding scorers run against a canonical versioned dataset.
+- [ ] Golden cases cover grounding, cross-user memory isolation, tool failure, model failure/degraded response and HITL exactly-once behavior.
 - [ ] A deliberately bad answer fails the release evaluation.
 - [ ] Cache/token/output-shaping work happens only after baseline measurement.
 
