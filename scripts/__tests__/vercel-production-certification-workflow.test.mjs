@@ -133,7 +133,13 @@ test("the staged check runs again right before promotion, success-only and trust
   assert.match(recheck, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-staged/);
   assert.match(recheck, /if:\s*\$\{\{\s*success\(\)\s*&&\s*steps\.certify\.outcome == 'success'\s*\}\}/);
   assert.doesNotMatch(recheck, /always\(\)|failure\(\)|cancelled\(\)|continue-on-error/);
-  assert.equal(job.match(/vercel-release-control\.mjs assert-staged/g)?.length, 2, "once before the tests, once before promotion");
+  // Count by workflow step (not by raw text): exactly two steps run the staged check.
+  const stagedSteps = job
+    .split("\n      - ")
+    .slice(1)
+    .filter((step) => /run:\s*node \.trusted\/scripts\/vercel-release-control\.mjs assert-staged\s*$/m.test(step))
+    .map((step) => step.match(/name: (.+)/)?.[1]);
+  assert.deepEqual(stagedSteps, ["Confirm the candidate is staged", "Re-confirm the candidate is still staged right before promotion"]);
 });
 
 test("certification runs on the exact candidate URL, before and never after promotion", () => {

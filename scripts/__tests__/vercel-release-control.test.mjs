@@ -48,6 +48,8 @@ const aliasesOf = (id = ID, over = {}) => ({
   "mdeai.co": domainAlias("mdeai.co", { deploymentId: id }),
   ...over,
 });
+// Plain-text message check (no regular expression built from a variable).
+const messageIncludes = (text) => (error) => error instanceof Error && error.message.includes(text);
 const OLD = "dpl_PreviousDeployment123456";
 const projectSetting = (over = {}) => ({ id: PROJECT_ID, autoAssignCustomDomains: false, ...over });
 
@@ -183,7 +185,7 @@ test("promoted: passes even though the deployment's own alias array omits the do
 for (const domain of PRODUCTION_DOMAINS) {
   test(`promoted: ${domain} still pointing at the previous deployment fails`, () => {
     const aliases = aliasesOf(ID, { [domain]: domainAlias(domain, { deploymentId: OLD }) });
-    assert.throws(() => checkPromoted(promotedDeployment(), expected, aliases), new RegExp(`${domain.replace(".", "\\.")} does not point`));
+    assert.throws(() => checkPromoted(promotedDeployment(), expected, aliases), messageIncludes(`${domain} does not point`));
   });
 }
 
@@ -228,7 +230,7 @@ for (const domain of PRODUCTION_DOMAINS) {
     // The real shape: the deployment's alias array is empty, only the domain's record shows ownership.
     const aliases = aliasesOf(OLD, { [domain]: domainAlias(domain, { deploymentId: ID }) });
     assert.doesNotThrow(() => checkStaged(stagedDeployment({ alias: [] }), expected));
-    assert.throws(() => checkProductionDomains(projectSetting(), aliases, ID), new RegExp(`already owns ${domain.replace(".", "\\.")}`));
+    assert.throws(() => checkProductionDomains(projectSetting(), aliases, ID), messageIncludes(`already owns ${domain}`));
   });
 }
 
