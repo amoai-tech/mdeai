@@ -8,25 +8,34 @@ paths:
 ## Conditional / future workflow
 
 MDE does **not** currently use the declarative-schema workflow. In `supabase/config.toml`,
-`[db.migrations]` has `schema_paths = []`.
+the active `[db.migrations]` section has `schema_paths = []`, and there is no active
+`[experimental.pgdelta]` block.
 
 Use `references/project-rules/supabase-migrations.md` and the imperative
-`supabase migration new <name>` workflow while that remains true.
+`supabase migration new <name>` workflow while MDE remains on this path.
 
-This file becomes active guidance only after MDE intentionally adopts declarative schemas:
-`schema_paths` is non-empty, the canonical schema files exist under `supabase/schemas/`, and
-the migration/release process has been updated and reviewed for that change. Do not infer that
-declarative mode is active merely because this reference file exists.
+This file becomes active guidance only after MDE intentionally adopts declarative schemas,
+establishes canonical schema files, and reviews the migration/release process for that change.
+Do not infer declarative mode merely from this file or from `schema_paths` alone.
 
 ## If MDE intentionally enables declarative schemas
 
-1. Treat the configured files in `supabase/schemas/` as the desired schema state.
-2. Keep schema files ordered so dependencies resolve deterministically.
-3. Generate migrations from the declared state with the supported Supabase CLI workflow and
-   inspect every generated migration before applying it.
-4. Keep production release safeguards from `supabase-migrations.md`: preflight, dry-run,
+Check the configured diff engine first:
+
+- **pg-delta** — when `[experimental.pgdelta] enabled = true`, `schema_paths` is ignored.
+  Keep declarative files in `supabase/schemas/` and generate migrations with
+  `supabase db schema declarative sync`.
+- **legacy migra** — without pg-delta, configure declarative files through
+  `[db.migrations].schema_paths` and use the supported legacy `supabase db diff` workflow.
+
+Then:
+
+1. Treat the configured declarative files as the desired schema state.
+2. Generate migrations with the command for the active diff engine and inspect every generated
+   migration before applying it.
+3. Keep production release safeguards from `supabase-migrations.md`: preflight, dry-run,
    exact manifest inspection, then an explicitly approved push.
-5. For rollback, change the desired schema state and generate/review a new forward migration.
+4. For rollback, change the desired schema state and generate/review a new forward migration.
    Do not edit already-applied production migration history.
 
 ## Known declarative-diff caveats
