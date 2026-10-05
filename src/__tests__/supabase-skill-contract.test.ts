@@ -164,9 +164,11 @@ describe("Supabase skill repository contract", () => {
     expect(storageRlsRule).not.toMatch(/for all/i);
   });
 
-  it("uses copy-safe migration-repair placeholders", () => {
-    expect(migrationsRule).toContain("CANONICAL_GIT_VERSION");
-    expect(migrationsRule).toContain("STRAY_LEDGER_VERSION");
+  it("fails closed until explicit migration-repair versions are set", () => {
+    expect(migrationsRule).toContain("GIT_VERSION:?");
+    expect(migrationsRule).toContain("LEDGER_VERSION:?");
+    expect(migrationsRule).toContain('"$GIT_VERSION"');
+    expect(migrationsRule).toContain('"$LEDGER_VERSION"');
   });
 
   it("checks the installed Supabase CLI before version-sensitive work", () => {
