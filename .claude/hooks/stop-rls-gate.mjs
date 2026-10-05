@@ -26,6 +26,10 @@ function sh(cmd, args, opts = {}) {
 }
 
 const root = projectRoot();
+if (!root) {
+  process.stderr.write("stop-rls-gate: could not locate the repository root, so migration changes were NOT checked.\n");
+  process.exit(0);
+}
 
 // Detect changed migration/schema files in the working tree.
 const changed = (sh("git", ["status", "--porcelain", "-uall"], { cwd: root }) || "")

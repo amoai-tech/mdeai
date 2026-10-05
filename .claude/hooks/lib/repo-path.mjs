@@ -24,11 +24,16 @@ export function findRepoRoot(start) {
   }
 }
 
-/** Repository root for the current session: Claude's project dir, else walk up from cwd. */
+/**
+ * Repository root for the current session: Claude's project dir when it is a repo root, else the
+ * nearest repo root above the current directory, else `null`. It never guesses a non-repo
+ * directory: callers must say so and skip, because a guard that checks the wrong folder looks
+ * exactly like a guard that passed.
+ */
 export function projectRoot() {
   const fromEnv = process.env.CLAUDE_PROJECT_DIR;
   if (fromEnv && isRepoRoot(resolve(fromEnv))) return resolve(fromEnv);
-  return findRepoRoot(process.cwd()) ?? resolve(fromEnv || process.cwd());
+  return findRepoRoot(process.cwd());
 }
 
 /** `filePath` relative to its repository root, with forward slashes. */

@@ -48,7 +48,12 @@ A hook that matches nothing exits 0, so a broken path check looks exactly like a
 `scripts/__tests__/claude-hooks.test.mjs` (run by `npm run check:release-gates`, so by `floor`)
 feeds every guard a bad edit inside a throwaway repo with an unrelated name and expects a block. It
 also fails if a hook hard-codes a machine path or the retired `mdeapp/` folder. When you add a hook,
-add its case there. Resolve paths with `hooks/lib/repo-path.mjs`, never a literal path.
+add its case there. Resolve paths with `hooks/lib/repo-path.mjs` rather than a literal path.
+
+**Exception path.** If a hook genuinely needs a fixed path (for example the frozen legacy tree), put
+`hook-path-allow: <why>` on that line. The test lets only marked lines through, and the reason is
+reviewed in the PR like any other change. There is no other bypass, so a literal path cannot slip
+in unnoticed.
 
 ## Related
 

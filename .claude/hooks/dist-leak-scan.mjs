@@ -41,6 +41,10 @@ if (!DEPLOY_RE.test(cmd)) process.exit(0);
 // Bundle locations to scan, relative to the repository root.
 // DIST_LEAK_SCAN_ROOTS (colon-separated absolute dirs) overrides for tests.
 const REPO_ROOT = projectRoot();
+if (!REPO_ROOT && !process.env.DIST_LEAK_SCAN_ROOTS) {
+  process.stderr.write("dist-leak-scan: could not locate the repository root, so the build output was NOT scanned.\n");
+  process.exit(0);
+}
 const ROOTS = process.env.DIST_LEAK_SCAN_ROOTS
   ? process.env.DIST_LEAK_SCAN_ROOTS.split(":").filter(Boolean).map((r) => resolve(r))
   : [
@@ -85,12 +89,15 @@ function loadMapsKeyAllowlist() {
   const values = new Set();
   const hashes = new Set();
 
+  // These files are read only to learn which Maps key values are PUBLISHABLE (allowlisted), not
+  // to scan for leaks. In a worktree `.env.local` is a symlink to the main checkout's file, so the
+  // old hard-coded copy of that path was redundant.
   for (const f of [
-    resolve(REPO_ROOT, ".env.local"),
-    resolve(REPO_ROOT, ".env.production"),
-    resolve(REPO_ROOT, ".env"),
-    resolve(REPO_ROOT, ".env.local.bak"),
-    resolve(REPO_ROOT, ".env.production.bak"),
+    resolve(REPO_ROOT ?? process.cwd(), ".env.local"),
+    resolve(REPO_ROOT ?? process.cwd(), ".env.production"),
+    resolve(REPO_ROOT ?? process.cwd(), ".env"),
+    resolve(REPO_ROOT ?? process.cwd(), ".env.local.bak"),
+    resolve(REPO_ROOT ?? process.cwd(), ".env.production.bak"),
   ]) {
     if (!existsSync(f)) continue;
     let txt;

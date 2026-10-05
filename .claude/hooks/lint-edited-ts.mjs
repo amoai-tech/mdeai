@@ -24,7 +24,9 @@ const eslintBin = root && join(root, "node_modules/.bin/eslint");
 // A fresh worktree has no node_modules until it is bootstrapped; stay silent instead of noisy.
 if (!root || !existsSync(eslintBin)) process.exit(0);
 
-const result = spawnSync(eslintBin, ["--no-warn-ignored", filePath], {
+// ESLint exits 0 on warnings, so without --max-warnings 0 this hook said nothing about them. The
+// repository standard (`npm run lint`) is zero warnings.
+const result = spawnSync(eslintBin, ["--no-warn-ignored", "--max-warnings", "0", filePath], {
   cwd: root,
   encoding: "utf8",
   timeout: 20_000,

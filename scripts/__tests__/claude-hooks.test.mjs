@@ -109,10 +109,14 @@ describe("edit-time hooks block a bad edit at the real layout", () => {
     );
   });
 
-  it("lint-edited-ts runs the repo's eslint on a source file, and stays quiet elsewhere", () => {
+  it("lint-edited-ts reports warnings (zero-warnings standard) on a source file, and stays quiet elsewhere", () => {
     const bin = join(root, "node_modules", ".bin");
     mkdirSync(bin, { recursive: true });
-    writeFileSync(join(bin, "eslint"), "#!/bin/sh\necho 'x.ts: lint problem'\nexit 1\n");
+    // Like real ESLint, a warning exits 0 unless --max-warnings 0 is passed.
+    writeFileSync(
+      join(bin, "eslint"),
+      "#!/bin/sh\ncase \"$*\" in *\"--max-warnings 0\"*) echo 'x.ts: lint warning'; exit 1;; esac\nexit 0\n",
+    );
     chmodSync(join(bin, "eslint"), 0o755);
     const inSrc = run("lint-edited-ts", { file: "src/components/x.ts" });
     assert.equal(inSrc.code, 0, "warn-only");
@@ -159,8 +163,78 @@ describe("Stop hooks see the right repository", () => {
     assert.match(first.stderr, /src\/lib\/a\.ts/);
 
     assert.equal(run("stop-typecheck").code, 0, "the same edits are not re-checked");
+
+    // A new (untracked) file edited again must be re-checked: its content changed.
     writeFileSync(join(root, "src/lib/a.ts"), "export const a: number = 'y';");
+    const again = run("stop-typecheck");
+    assert.equal(again.code, 2, "changed content is checked again");
+    assert.match(again.stderr, /src\/lib\/a\.ts/);
+
+    writeFileSync(join(root, "src/lib/a.ts"), "export const a: number = 'z';");
     assert.equal(run("stop-typecheck", { extra: { stop_hook_active: true } }).code, 0, "a second stop passes");
+  });
+
+  it("stop-typecheck says so when tsc times out instead of passing silently", () => {
+    writeFileSync(join(root, "node_modules", ".bin", "tsc"), "#!/bin/sh\nsleep 5\n");
+    writeFileSync(join(root, "src/lib/a.ts"), "export const a: number = 'timeout';");
+    const r = run("stop-typecheck", { env: { MDEAI_STOP_TYPECHECK_TIMEOUT_MS: "300" } });
+    assert.equal(r.code, 0);
+    assert.match(r.stderr, /NOT checked/);
+  });
+
+  it("stop hooks say so when no repository can be found", () => {
+    const outside = mkdtempSync(join(tmpdir(), "no-repo-"));
+    try {
+      const r = spawnSync("node", [join(HOOKS, "stop-typecheck.mjs")], {
+        input: "{}",
+        encoding: "utf8",
+        cwd: outside,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: outside },
+      });
+      assert.equal(r.status, 0);
+      assert.match(r.stderr, /NOT checked/);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("repo-path helper", async () => {
+  const { findRepoRoot, toRepoRelative, projectRoot } = await import(join(HOOKS, "lib", "repo-path.mjs"));
+
+  it("finds the root from any depth, whatever the checkout is called", () => {
+    assert.equal(findRepoRoot(join(root, "src/components")), root);
+    assert.equal(findRepoRoot(root), root);
+  });
+
+  it("returns paths relative to that root, and leaves relative paths alone", () => {
+    assert.equal(toRepoRelative(join(root, "src/lib/a.ts")), "src/lib/a.ts");
+    assert.equal(toRepoRelative("./src/lib/a.ts"), "src/lib/a.ts");
+  });
+
+  it("falls back to the file name for a path outside any repository", () => {
+    assert.equal(toRepoRelative("/nonexistent-dir/deep/file.ts"), "file.ts");
+  });
+
+  it("projectRoot honours CLAUDE_PROJECT_DIR only when it is a repo, and is null otherwise", () => {
+    const keep = process.env.CLAUDE_PROJECT_DIR;
+    try {
+      process.env.CLAUDE_PROJECT_DIR = root;
+      assert.equal(projectRoot(), root);
+      const outside = mkdtempSync(join(tmpdir(), "no-repo-"));
+      process.env.CLAUDE_PROJECT_DIR = outside;
+      const cwd = process.cwd();
+      process.chdir(outside);
+      try {
+        assert.equal(projectRoot(), null);
+      } finally {
+        process.chdir(cwd);
+        rmSync(outside, { recursive: true, force: true });
+      }
+    } finally {
+      if (keep === undefined) delete process.env.CLAUDE_PROJECT_DIR;
+      else process.env.CLAUDE_PROJECT_DIR = keep;
+    }
   });
 });
 
@@ -168,10 +242,15 @@ describe("hook sources", () => {
   const files = readdirSync(HOOKS).filter((f) => f.endsWith(".mjs"));
 
   it("never hard-code a machine path or the retired mdeapp folder", () => {
+    // Exception path: a line that genuinely needs a fixed path carries `hook-path-allow: <reason>`.
+    // The reason is reviewed in the PR; this test only lets the marked line through.
     for (const f of files) {
-      const text = readFileSync(join(HOOKS, f), "utf8");
-      assert.doesNotMatch(text, /mdeapp/, `${f} mentions mdeapp/`);
-      assert.doesNotMatch(text, /\/home\/sk\/mdeai\b/, `${f} hard-codes /home/sk/mdeai`);
+      const lines = readFileSync(join(HOOKS, f), "utf8").split("\n");
+      lines.forEach((line, i) => {
+        if (/hook-path-allow:/.test(line)) return;
+        assert.doesNotMatch(line, /mdeapp/, `${f}:${i + 1} mentions mdeapp/`);
+        assert.doesNotMatch(line, /\/home\/sk\/mdeai\b/, `${f}:${i + 1} hard-codes /home/sk/mdeai`);
+      });
     }
   });
 
