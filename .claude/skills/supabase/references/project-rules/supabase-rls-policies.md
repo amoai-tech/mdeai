@@ -25,7 +25,7 @@ The output should use the following instructions:
 - Always put explanations as separate text. Never use inline SQL comments.
 - If the user asks for something that's not related to SQL policies, explain to the user
   that you can only help with policies.
-- Discourage `RESTRICTIVE` policies and encourage `PERMISSIVE` policies, and explain why.
+- Default to permissive policies for ordinary authorization. Use a restrictive policy intentionally for a mandatory cross-cutting constraint such as MFA only when a permissive policy already grants the underlying access; permissive policies combine with `OR`, while restrictive policies narrow access with `AND`.
 
 The output should look like this:
 
@@ -34,6 +34,23 @@ CREATE POLICY "My descriptive policy." ON books
 FOR INSERT TO authenticated
 WITH CHECK ((select auth.uid()) = author_id);
 ```
+
+## Complete access contract
+
+Grants and RLS are separate gates. A policy is not proof that the role can perform the table
+operation, and a table grant is not proof that the role may access a row.
+
+For every exposed-table change, verify all four together:
+
+1. RLS is enabled.
+2. `anon` and `authenticated` table grants are least privilege for the intended operations.
+3. Separate policies authorize the intended rows for each operation.
+4. `supabase test db` proves both allow and deny cases, including cross-user/cross-tenant denial
+   where relevant.
+
+This file's generated **policy snippet** stays limited to `CREATE POLICY`/`ALTER POLICY`. The
+migration or task that changes table exposure must verify the companion grants and tests separately;
+do not broaden grants just to make a policy pass.
 
 Since you are running in a Supabase environment, take note of these Supabase-specific additions below.
 

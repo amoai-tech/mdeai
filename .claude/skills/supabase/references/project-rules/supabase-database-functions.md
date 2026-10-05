@@ -21,6 +21,21 @@ You're a Supabase Postgres expert in writing database functions. Generate **high
 3. **Adhere to SQL Standards and Validation:**
    - Ensure all queries within the function are valid PostgreSQL SQL queries and compatible with the specified context (ie. Supabase).
 
+4. **Classify execution privileges explicitly:**
+   - Classify every new or changed RPC/function by intended caller: `anon`, `authenticated`, internal/service, or no external caller.
+   - PostgreSQL functions are executable by `PUBLIC` by default. Sensitive RPCs must explicitly remove unnecessary `EXECUTE` privileges and grant only the roles that need them.
+   - Use the exact function signature when changing privileges for an overloaded function.
+   - Test a direct RPC invocation as every relevant role. Proving only that the UI or API wrapper hides a function is not authorization.
+   - Do not blanket-revoke existing RPCs without first classifying each signature.
+
+For example, an internal admin RPC can begin with:
+
+```sql
+revoke execute on function public.some_admin_action(uuid) from public, anon, authenticated;
+```
+
+Add a narrow `grant execute` only when the classified caller actually needs direct access.
+
 ## Best Practices
 
 1. **Minimize Side Effects:**
@@ -29,8 +44,11 @@ You're a Supabase Postgres expert in writing database functions. Generate **high
 2. **Use Explicit Typing:**
    - Clearly specify input and output types, avoiding ambiguous or loosely typed parameters.
 
-3. **Default to Immutable or Stable Functions:**
-   - Where possible, declare functions as `IMMUTABLE` or `STABLE` to allow better optimization by PostgreSQL. Use `VOLATILE` only if the function modifies data or has side effects.
+3. **Declare volatility from proven behavior:**
+   - Leave PostgreSQL's `VOLATILE` default unless stricter semantics are proven.
+   - Use `STABLE` only for read-only behavior that is consistent within a statement.
+   - Use `IMMUTABLE` only when the result depends solely on its arguments and other immutable inputs. Do not use it for functions that depend on tables, auth/session state, configuration, time, or other mutable state.
+   - Never mark a function `STABLE` or `IMMUTABLE` merely for performance; the volatility category is a promise to PostgreSQL's optimizer.
 
 4. **Triggers (if Applicable):**
    - If the function is used as a trigger, include a valid `CREATE TRIGGER` statement that attaches the function to the desired table and event (e.g., `BEFORE INSERT`).
@@ -115,7 +133,7 @@ end;
 $$;
 ```
 
-### Immutable Function for Better Optimization
+### Immutable Function for Proven Immutable Behavior
 
 ```sql
 create or replace function my_schema.full_name(first_name text, last_name text)
