@@ -315,7 +315,10 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
         },
       },
     );
-    expect(out).toMatchObject({ success: false });
+    expect(out).toMatchObject({
+      success: false,
+      message: expect.stringContaining("not valid JSON"),
+    });
     expect(wrote).toBe(false);
   });
 

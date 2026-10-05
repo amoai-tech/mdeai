@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 /**
  * SAN-1338 — proves which `mastra_*` tables the upgraded runtime touches on a normal
  * memory path, so the extra tables the certified adapter creates are not silently
@@ -20,8 +21,6 @@
  * `mastra:init`, so setting the flag on that step would give this assertion CI
  * coverage; that workflow change needs approval first.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Memory } from "@mastra/memory";
@@ -34,9 +33,18 @@ const runIntegration =
 
 const RUNTIME_WRITE_TABLES = ["mastra_messages", "mastra_threads"];
 
-const contract = JSON.parse(
-  readFileSync(resolve(process.cwd(), "scripts/mastra-schema-contract.json"), "utf8"),
-) as { adapterInitExtraTables?: string[] };
+// Root-absolute glob (same pattern as check-mastra-schema-contract.test.ts): resolved
+// by Vite from the project root, so it is robust to both cwd and this file moving.
+const CONTRACT_SOURCES = import.meta.glob("/scripts/mastra-schema-contract.json", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const contractRaw = Object.values(CONTRACT_SOURCES)[0];
+if (typeof contractRaw !== "string") {
+  throw new Error("committed contract not found via import.meta.glob");
+}
+const contract = JSON.parse(contractRaw) as { adapterInitExtraTables?: string[] };
 const ADAPTER_EXTRA_TABLES = contract.adapterInitExtraTables ?? [];
 
 type Counts = Record<string, number>;
