@@ -3,8 +3,7 @@ name: supabase
 description: >-
   Use for any MDE request clearly involving Supabase, including Database, Auth, RLS, migrations, RPC/functions, Realtime, Storage, pgvector, Edge Functions, logs, live database behavior, Postgres schema/SQL/indexes/locking/performance/tenant isolation, and Supabase-specific bugs/errors/failures. Known Supabase/RLS failures stay with this domain owner rather than generic systematic-debugging.
 metadata:
-  mde-version: "2.0.0"
-  upstream-commit: "8331f910845103c08d51f6ca1d86ebb7d1f745e3"
+  mde-version: "2.0.1"
   verified-package: "@supabase/supabase-js ^2.106.1"
 ---
 
@@ -30,7 +29,9 @@ Own Supabase schema/migrations, RLS/Auth, database functions/RPCs, Realtime, Sto
 - Never expose service-role/secret keys to browser code.
 - Treat `SECURITY DEFINER`, storage policies, exposed views, and cross-tenant access as security-critical changes.
 - UPDATE policies need both visibility and write checks; test allow and deny paths.
-- Verify migration workflow from the repo before creating schema history; do not guess CLI commands or filenames.
+- Current migration mode: **imperative**. `supabase/config.toml` has `[db.migrations] schema_paths = []`.
+- Create imperative migrations with `supabase migration new <name>` and edit the CLI-generated file. Never invent migration timestamps or filenames manually.
+- Treat declarative schema guidance as conditional/future-only unless MDE intentionally enables a non-empty `schema_paths` configuration and adopts `supabase/schemas/` as canonical source.
 - For S3/S4 database work, prove tenant deny cases, replay/idempotency where relevant, and actual live/read-only state when authorized.
 
 ## Workflow
@@ -52,7 +53,7 @@ For auth/RLS/storage/functions: prove authorized success and unauthorized denial
 
 ## References
 
-Vendored and pinned read-only (`upstream.yaml` records the reviewed commit and hashes):
+`upstream.yaml` is the canonical upstream provenance record. The vendored official files it identifies are pinned and read-only:
 
 - `references/official/supabase/SKILL.md`
 - `references/official/supabase-postgres-best-practices/SKILL.md`
@@ -61,7 +62,7 @@ MDE project rules — read the matching file before changing that area:
 
 - `references/project-rules/supabase-migrations.md` — migration file shape and ordering
 - `references/project-rules/supabase-rls-policies.md` — policy authoring
-- `references/project-rules/supabase-declarative-schema.md` — schema declarations
+- `references/project-rules/supabase-declarative-schema.md` — conditional/future declarative-schema workflow
 - `references/project-rules/supabase-database-functions.md` — function and RPC rules
 - `references/project-rules/supabase-edge-functions.md` — edge function conventions
 - `references/project-rules/supabase-realtime.md` — realtime publication and channels
