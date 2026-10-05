@@ -18,9 +18,8 @@
     },
     {
       "file": "src/app/api/copilotkit/[[...path]]/route.ts",
-      "classification": "migrate",
-      "step": 10,
-      "note": "The only file in the repository importing the bare `@copilotkit/runtime`. Uses ExperimentalEmptyAdapter and copilotRuntimeNextJSAppRouterEndpoint."
+      "classification": "keep",
+      "note": "SAN-1378 Stage B+C (PR #187, commit 1f648f366) moved this route onto CopilotRuntime + createCopilotRuntimeHandler from @copilotkit/runtime/v2 with mode: COPILOTKIT_HANDLER_MODE. The legacy ExperimentalEmptyAdapter and copilotRuntimeNextJSAppRouterEndpoint are gone; src/__tests__/api/copilotkit-v2-contract.test.ts rejects their return, and SAN-1401 adds a dedicated dependency-cruiser prohibition."
     },
     {
       "file": "src/__tests__/api/copilotkit-rate-limit-route.test.ts",

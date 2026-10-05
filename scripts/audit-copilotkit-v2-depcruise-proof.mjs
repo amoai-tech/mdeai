@@ -51,4 +51,39 @@ if (depcruise.status !== 0) {
 }
 console.log("✓ dependency-cruiser passes on main src/");
 
+// SAN-1401 — the dedicated CopilotKit audit must reject the legacy root runtime.
+const RUNTIME_VIOLATION_REL = "src/__fixtures__/san1401-runtime-violation.ts";
+const RUNTIME_V2_OK_REL = "src/__fixtures__/san1401-runtime-v2-ok.ts";
+
+await writeFile(join(ROOT, RUNTIME_VIOLATION_REL), 'import "@copilotkit/runtime";\nexport const x = 1;\n');
+const runtimeViolation = run("npx", ["depcruise", "--config", ".dependency-cruiser.cjs", "src"], {
+  env: { ...process.env, FORCE_COLOR: "0" },
+});
+await rm(join(ROOT, RUNTIME_VIOLATION_REL), { force: true });
+const runtimeViolationOutput = runtimeViolation.stdout + runtimeViolation.stderr;
+if (
+  runtimeViolation.status === 0 ||
+  !runtimeViolationOutput.includes("no-new-copilotkit-runtime") ||
+  !runtimeViolationOutput.includes(RUNTIME_VIOLATION_REL)
+) {
+  console.error(
+    "FAIL: the synthetic bare @copilotkit/runtime import must fail the no-new-copilotkit-runtime rule",
+  );
+  console.error(runtimeViolationOutput);
+  process.exit(1);
+}
+console.log("✓ synthetic legacy @copilotkit/runtime import rejected by no-new-copilotkit-runtime");
+
+await writeFile(join(ROOT, RUNTIME_V2_OK_REL), 'import "@copilotkit/runtime/v2";\nexport const x = 1;\n');
+const runtimeV2 = run("npx", ["depcruise", "--config", ".dependency-cruiser.cjs", "src"], {
+  env: { ...process.env, FORCE_COLOR: "0" },
+});
+await rm(join(ROOT, RUNTIME_V2_OK_REL), { force: true });
+if (runtimeV2.status !== 0) {
+  console.error("FAIL: @copilotkit/runtime/v2 must remain allowed");
+  console.error(runtimeV2.stdout || runtimeV2.stderr);
+  process.exit(1);
+}
+console.log("✓ @copilotkit/runtime/v2 remains allowed");
+
 console.log("\nSAN-910 depcruise proof: ALL PASS");
