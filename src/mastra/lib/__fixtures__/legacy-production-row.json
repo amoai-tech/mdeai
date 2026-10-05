@@ -1,0 +1,52 @@
+{
+  "_source": "Anonymized shape recorded read-only from MDE production project zkwcbyxiwklihegjhuql. Every production message is role user|assistant, type v2, content.format 2 (parts[] + content + metadata). No real user text is stored here.",
+  "thread": {
+    "id": "00000000-0000-4000-8000-0000000000a1",
+    "resourceId": "00000000-0000-4000-8000-0000000000b2",
+    "title": "Legacy conversation",
+    "createdAt": "2026-09-20T12:00:00.000Z",
+    "updatedAt": "2026-09-20T12:05:00.000Z",
+    "workingMemory": "{\"lastIntent\":\"rental_search\",\"lastRentalQuery\":{\"neighborhood\":\"Laureles\",\"minBedrooms\":2,\"maxPricePerNight\":200,\"budgetType\":\"nightly\"},\"lastRentalResults\":[{\"id\":\"legacy-rental-1\",\"title\":\"2BR in Laureles\",\"neighborhood\":\"Laureles\",\"nightly_price\":180}],\"mapUi\":{\"selectedPinId\":\"legacy-rental-1\",\"activeCategories\":[\"rental\"],\"viewport\":{\"lat\":6.2442,\"lng\":-75.5812,\"zoom\":14}}}"
+  },
+  "messages": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000c3",
+      "role": "user",
+      "type": "v2",
+      "createdAt": "2026-09-20T12:00:00.000Z",
+      "content": {
+        "format": 2,
+        "content": "Find me a 2BR in Laureles under 4M",
+        "parts": [
+          { "type": "step-start" },
+          { "type": "text", "text": "Find me a 2BR in Laureles under 4M" }
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-0000000000c4",
+      "role": "assistant",
+      "type": "v2",
+      "createdAt": "2026-09-20T12:00:05.000Z",
+      "content": {
+        "format": 2,
+        "content": "Here are three 2BR apartments in Laureles.",
+        "parts": [
+          { "type": "step-start" },
+          { "type": "text", "text": "Here are three 2BR apartments in Laureles." },
+          {
+            "type": "tool-invocation",
+            "toolInvocation": {
+              "toolCallId": "legacy-call-1",
+              "toolName": "search-rentals",
+              "state": "result",
+              "args": { "neighborhood": "Laureles", "minBedrooms": 2 }
+            }
+          }
+        ],
+        "metadata": {}
+      }
+    }
+  ]
+}

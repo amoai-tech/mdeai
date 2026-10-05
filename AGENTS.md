@@ -219,7 +219,7 @@ A PR body that only restates the diff has added nothing.
 
 ## CI and merge approval
 
-`floor` is the only required status check on `main`. It runs on every PR regardless of base branch, because a stacked PR still needs the same proof.
+`floor` and `mastra-schema-init` are required status checks on `main`. `floor` runs on every PR regardless of base branch, because a stacked PR still needs the same general repository proof; `mastra-schema-init` independently gates the Mastra storage/schema contract.
 
 Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 

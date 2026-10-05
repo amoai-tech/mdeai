@@ -98,3 +98,43 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: npm run check:mastra:schema:init
+
+      # SAN-1311 — the gate above proves the adapter provisions the committed schema.
+      # These prove the runtime actually uses it, that a conversation written by the
+      # previous version is still readable, and that a suspended workflow survives a cold
+      # start. All of them write rows, so they run only in this disposable database and
+      # refuse a non-loopback host by default (src/mastra/lib/integration-db-guard.ts).
+      - name: Prove the runtime writes only the required tables
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_TABLE_USAGE_INTEGRATION: "1"
+        run: npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
+
+      - name: Prove a previous-version conversation is still readable
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_LEGACY_COMPAT_INTEGRATION: "1"
+        run: npx vitest run src/mastra/lib/storage-legacy-compat.integration.test.ts
+
+      - name: Prove a suspended workflow resumes after a cold start
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          VEB_MVP_010_INTEGRATION: "1"
+        run: npx vitest run src/mastra/lib/storage-durability.integration.test.ts
+
+      # Strongest storage proof: remove the optional adapter tables and re-run both
+      # runtime proofs. A missing-relation error here means the upgraded runtime needs a
+      # table production may not have — the failure we want before deployment, not after.
+      - name: Drop the optional adapter tables
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: node scripts/drop-optional-mastra-tables.mjs
+
+      - name: Prove the runtime needs only the certified tables
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_TABLE_USAGE_INTEGRATION: "1"
+          VEB_MVP_010_INTEGRATION: "1"
+        run: |
+          npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
+          npx vitest run src/mastra/lib/storage-durability.integration.test.ts
