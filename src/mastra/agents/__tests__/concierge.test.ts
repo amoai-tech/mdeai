@@ -250,6 +250,15 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(cleared.saved?.mapUi).not.toHaveProperty("selectedPinId");
   });
 
+  it("leaves a non-object stored document untouched and reports it instead of throwing", async () => {
+    const { out, saved } = await update(
+      { mapUi: { selectedPinId: null } },
+      null as never,
+    );
+    expect(out).toMatchObject({ success: false });
+    expect(saved).toBeUndefined();
+  });
+
   it("real values survive: minBedrooms 0 (studio), false booleans, valid enums", async () => {
     const { out, saved } = await update({
       lastRentalQuery: { minBedrooms: 0, genericAskPending: false, budgetType: "nightly" },

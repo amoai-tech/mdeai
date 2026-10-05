@@ -1,11 +1,17 @@
 /**
- * SAN-1338 — proves which \`mastra_*\` tables the upgraded runtime touches on a normal
+ * SAN-1338 — proves which `mastra_*` tables the upgraded runtime touches on a normal
  * memory path, so the extra tables the certified adapter creates are not silently
- * required by production (\`src/mastra/lib/storage.ts\` runs with \`disableInit: true\`).
+ * required by production (`src/mastra/lib/storage.ts` runs with `disableInit: true`).
  *
  * Run against a scratch Postgres:
  *   DATABASE_URL=postgresql://... MASTRA_TABLE_USAGE_INTEGRATION=1 \
  *     npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
+ *
+ * This is a manual/local proof: it is gated on DATABASE_URL + the flag, so the standard
+ * `npm test` / `npm run floor` pipeline skips it. The `.github/workflows/floor.yml`
+ * `mastra-schema-init` job already provisions a postgres:17 service and runs
+ * `mastra:init`, so wiring this assertion there (set the flag on that step) would give
+ * it CI coverage; that workflow change needs approval first.
  */
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";

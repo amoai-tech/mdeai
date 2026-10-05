@@ -10,6 +10,11 @@ const isPlainObject = (value: unknown): value is PlainObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 type WorkingMemoryApi = {
+  getThreadById?: (args: { threadId: string }) => Promise<unknown>;
+  createThread?: (args: {
+    threadId: string;
+    resourceId?: string;
+  }) => Promise<unknown>;
   getWorkingMemory: (args: {
     threadId?: string;
     resourceId?: string;
@@ -58,6 +63,30 @@ function mergeWorkingMemory(existing: PlainObject, patch: PlainObject): PlainObj
 }
 
 /**
+ * Serializes working-memory tool calls per thread in this process. The certified
+ * `Memory` mutex covers only the write, so two overlapping updates could interleave
+ * their read-merge-write. This closes the in-process window; across instances the
+ * storage write is last-write-wins (see the `ponytail:` note in the clear path).
+ */
+const workingMemoryLocks = new Map<string, Promise<unknown>>();
+
+function withThreadLock<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const previous = workingMemoryLocks.get(key) ?? Promise.resolve();
+  const next = previous.then(run, run);
+  const tail = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  workingMemoryLocks.set(key, tail);
+  void tail.then(() => {
+    if (workingMemoryLocks.get(key) === tail) {
+      workingMemoryLocks.delete(key);
+    }
+  });
+  return next;
+}
+
+/**
  * SAN-1387 + SAN-1338 — MDE's working-memory boundary.
  *
  * MDE accepts the model's args with `memoryInput` so a blank Gemini placeholder is
@@ -91,60 +120,83 @@ class PlaceholderTolerantMemory extends Memory {
         description: original.description,
         inputSchema: z.object({ memory: this.memoryInput }),
         execute: async (inputData, context) => {
-          const patch = (inputData as { memory?: unknown }).memory;
-          if (!isPlainObject(patch)) {
-            return originalExecute(inputData, context);
-          }
-          const clearSelectedPin =
-            isPlainObject(patch.mapUi) &&
-            Object.prototype.hasOwnProperty.call(patch.mapUi, "selectedPinId") &&
-            patch.mapUi.selectedPinId === null;
-          if (!clearSelectedPin) {
-            return originalExecute(inputData, context);
-          }
-
           const ctx = context as WorkingMemoryContext;
-          const memory = ctx.memory;
-          if (!memory) {
-            throw new Error("Memory instance is required for working memory updates");
-          }
+          const lockKey = ctx.agent?.threadId
+            ? `thread:${ctx.agent.threadId}`
+            : ctx.agent?.resourceId
+              ? `resource:${ctx.agent.resourceId}`
+              : undefined;
+          const run = async () => {
+            const patch = (inputData as { memory?: unknown }).memory;
+            if (!isPlainObject(patch)) {
+              return originalExecute(inputData, context);
+            }
+            const clearSelectedPin =
+              isPlainObject(patch.mapUi) &&
+              Object.prototype.hasOwnProperty.call(patch.mapUi, "selectedPinId") &&
+              patch.mapUi.selectedPinId === null;
+            if (!clearSelectedPin) {
+              return originalExecute(inputData, context);
+            }
 
-          // Run the native tool with no memory payload so it still ensures the thread
-          // exists without writing the patch, then apply the whole patch once with MDE's
-          // merge semantics — the native tool would strip the deliberate null.
-          await originalExecute({ memory: undefined }, context);
+            const memory = ctx.memory;
+            if (!memory) {
+              throw new Error("Memory instance is required for working memory updates");
+            }
 
-          const where = {
-            threadId: ctx.agent?.threadId,
-            resourceId: ctx.agent?.resourceId,
+            const where = {
+              threadId: ctx.agent?.threadId,
+              resourceId: ctx.agent?.resourceId,
+            };
+            // Ensure the thread exists before the single write, using public Memory APIs
+            // only. Calling the native tool with no payload would rewrite the stored
+            // document (and clobber a non-object one) — exactly what this path avoids.
+            if (where.threadId && memory.getThreadById) {
+              const existingThread = await memory.getThreadById({
+                threadId: where.threadId,
+              });
+              if (!existingThread && memory.createThread) {
+                await memory.createThread({
+                  threadId: where.threadId,
+                  resourceId: where.resourceId,
+                });
+              }
+            }
+
+            const existingRaw = await memory.getWorkingMemory(where);
+            let existing: PlainObject = {};
+            if (existingRaw) {
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(existingRaw);
+              } catch {
+                parsed = {};
+              }
+              // A syntactically valid but non-object document (null / array / primitive)
+              // must not be rewritten. Fail soft so a corrupted row surfaces as a tool
+              // message instead of an unhandled 500, and the stored value is left intact.
+              if (!isPlainObject(parsed)) {
+                return {
+                  success: false,
+                  message:
+                    "Stored working memory is not a JSON object; the selected pin was not cleared.",
+                };
+              }
+              existing = parsed;
+            }
+
+            // ponytail: the certified @mastra/memory exposes no public atomic field-level
+            // working-memory update, so this is one read-modify-write. withThreadLock
+            // serializes MDE's own updates per thread in this process; across instances the
+            // write remains last-write-wins. Upgrade path: drop this shim when the native
+            // tool stops stripping null optionals or exposes an atomic clear.
+            await memory.updateWorkingMemory({
+              ...where,
+              workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
+            });
+            return { success: true };
           };
-          const existingRaw = await memory.getWorkingMemory(where);
-          let existing: PlainObject = {};
-          if (existingRaw) {
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(existingRaw);
-            } catch {
-              parsed = {};
-            }
-            // A syntactically valid but non-object document (null / array / primitive)
-            // must not be rewritten — fail closed instead of clobbering it.
-            if (!isPlainObject(parsed)) {
-              throw new Error("Stored working memory must be a plain object");
-            }
-            existing = parsed;
-          }
-
-          // ponytail: the certified @mastra/memory exposes no public atomic field-level
-          // working-memory update, so this is one read-modify-write. Doing it once (not
-          // native-write + delete) removes the window where the native tool reports
-          // success but the pin survives. Upgrade path: drop this shim when the native
-          // tool stops stripping null optionals or exposes an atomic clear.
-          await memory.updateWorkingMemory({
-            ...where,
-            workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
-          });
-          return { success: true };
+          return lockKey ? withThreadLock(lockKey, run) : run();
         },
       } as Parameters<typeof createTool>[0]),
     } as ReturnType<Memory["listTools"]>;

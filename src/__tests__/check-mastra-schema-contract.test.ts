@@ -269,8 +269,10 @@ describe("check-mastra-schema-contract — committed contract", () => {
     // SAN-1338: @mastra/pg@1.29.0 creates a superset of the 32 production tables. The
     // extras must stay documented but outside expectedTables (which is the production
     // requirement), so a future upgrade cannot silently promote an unused table.
+    // Structural invariant only: the adapter's extras must never overlap the required
+    // production set, and must stay in Mastra's namespace. This must NOT fail merely
+    // because a future @mastra/pg patch adds, removes, or renames an optional table.
     const extras = committedContract.adapterInitExtraTables ?? [];
-    expect(extras.length).toBeGreaterThan(0);
     expect(new Set(extras).size).toBe(extras.length);
     for (const table of extras) {
       expect(table).toMatch(/^mastra_[a-z0-9_]+$/);
