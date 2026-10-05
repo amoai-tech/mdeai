@@ -60,11 +60,12 @@ Never run `supabase db push` against production without working through this ord
 2.  git status --short            → no modified tracked files
 3.  git branch --show-current     → must be main
 4.  git rev-parse HEAD            → must equal origin/main
-5.  inspect supabase/migrations newer than production
-6.  supabase migration list       --db-url "$SUPABASE_DB_URL"
-7.  supabase db push --dry-run    --db-url "$SUPABASE_DB_URL"
-8.  manually verify EVERY migration in the dry-run list
-9.  only then approve the push
+5.  verify the production target  → project/ref/database must be canonical MDE production
+6.  inspect supabase/migrations newer than production
+7.  supabase migration list       --db-url "$SUPABASE_DB_URL"
+8.  supabase db push --dry-run    --db-url "$SUPABASE_DB_URL"
+9.  manually verify EVERY migration in the dry-run list
+10. only then approve the push
 ```
 
 Steps 1–4 are automated:
@@ -72,6 +73,12 @@ Steps 1–4 are automated:
 ```bash
 npm run preflight:migration          # add --no-fetch to skip the network fetch
 ```
+
+**Step 5 is a separate identity check.** Before any remote migration command, verify the project
+ref/database identity represented by `SUPABASE_DB_URL` against MDE's canonical production identity.
+A valid credential is not proof that it points to MDE production. If the target cannot be proven
+unambiguously, stop. The current npm migration scripts do not automate the production-target identity check,
+so operator verification remains mandatory before `migration:dry-run` or `push:migration`.
 
 ### One-command release, gates included
 
@@ -110,8 +117,9 @@ These npm scripts interpolate the connection string with POSIX shell syntax
 (`"$SUPABASE_DB_URL"`), so they assume a POSIX shell — macOS, Linux, WSL, or Git Bash. Under
 `cmd.exe` or PowerShell the variable is not expanded and Supabase rejects the literal
 `$SUPABASE_DB_URL`: the command fails before reaching the database, which is the safe direction but
-not a useful one. On Windows, use WSL/Git Bash or call `npx supabase db push --db-url <url>`
-directly.
+not a useful one. On Windows, use WSL/Git Bash, or reproduce the same target-identity,
+preflight, dry-run, manifest-inspection, and acknowledgement gates manually. Do not bypass the gates
+with a direct `supabase db push` command.
 
 ### The dry-run list **is** the deployment manifest
 
