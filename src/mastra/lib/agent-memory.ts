@@ -121,11 +121,13 @@ class PlaceholderTolerantMemory extends Memory {
         inputSchema: z.object({ memory: this.memoryInput }),
         execute: async (inputData, context) => {
           const ctx = context as WorkingMemoryContext;
+          // Always take a lock. MDE always supplies a thread/resource id; the global
+          // fallback keeps anonymous/ephemeral contexts serialized too instead of racing.
           const lockKey = ctx.agent?.threadId
             ? `thread:${ctx.agent.threadId}`
             : ctx.agent?.resourceId
               ? `resource:${ctx.agent.resourceId}`
-              : undefined;
+              : "working-memory:global";
           const run = async () => {
             const patch = (inputData as { memory?: unknown }).memory;
             if (!isPlainObject(patch)) {
@@ -156,10 +158,15 @@ class PlaceholderTolerantMemory extends Memory {
                 threadId: where.threadId,
               });
               if (!existingThread && memory.createThread) {
-                await memory.createThread({
-                  threadId: where.threadId,
-                  resourceId: where.resourceId,
-                });
+                try {
+                  await memory.createThread({
+                    threadId: where.threadId,
+                    resourceId: where.resourceId,
+                  });
+                } catch {
+                  // Another concurrent request may have created the thread first. Fall
+                  // through; the read/write below surfaces any real failure.
+                }
               }
             }
 
@@ -170,7 +177,12 @@ class PlaceholderTolerantMemory extends Memory {
               try {
                 parsed = JSON.parse(existingRaw);
               } catch {
-                parsed = {};
+                // Malformed JSON must not be replaced with {} — leave it intact.
+                return {
+                  success: false,
+                  message:
+                    "Stored working memory is not valid JSON; the selected pin was not cleared.",
+                };
               }
               // A syntactically valid but non-object document (null / array / primitive)
               // must not be rewritten. Fail soft so a corrupted row surfaces as a tool
@@ -196,7 +208,7 @@ class PlaceholderTolerantMemory extends Memory {
             });
             return { success: true };
           };
-          return lockKey ? withThreadLock(lockKey, run) : run();
+          return withThreadLock(lockKey, run);
         },
       } as Parameters<typeof createTool>[0]),
     } as ReturnType<Memory["listTools"]>;
