@@ -121,13 +121,15 @@ class PlaceholderTolerantMemory extends Memory {
         inputSchema: z.object({ memory: this.memoryInput }),
         execute: async (inputData, context) => {
           const ctx = context as WorkingMemoryContext;
-          // Always take a lock. MDE always supplies a thread/resource id; the global
-          // fallback keeps anonymous/ephemeral contexts serialized too instead of racing.
-          const lockKey = ctx.agent?.threadId
-            ? `thread:${ctx.agent.threadId}`
-            : ctx.agent?.resourceId
-              ? `resource:${ctx.agent.resourceId}`
-              : "working-memory:global";
+          const threadId = ctx.agent?.threadId;
+          const resourceId = ctx.agent?.resourceId;
+          // Lock per thread/resource. Identity-less contexts share no stored document, so
+          // they are not serialized onto one global lock; they fail clearly instead (below).
+          const lockKey = threadId
+            ? `thread:${threadId}`
+            : resourceId
+              ? `resource:${resourceId}`
+              : undefined;
           const run = async () => {
             const patch = (inputData as { memory?: unknown }).memory;
             if (!isPlainObject(patch)) {
@@ -145,27 +147,38 @@ class PlaceholderTolerantMemory extends Memory {
             if (!memory) {
               throw new Error("Memory instance is required for working memory updates");
             }
+            if (!lockKey) {
+              return {
+                success: false,
+                message:
+                  "Missing thread or resource identity; the selected pin was not cleared.",
+              };
+            }
 
-            const where = {
-              threadId: ctx.agent?.threadId,
-              resourceId: ctx.agent?.resourceId,
-            };
+            const where = { threadId, resourceId };
             // Ensure the thread exists before the single write, using public Memory APIs
             // only. Calling the native tool with no payload would rewrite the stored
             // document (and clobber a non-object one) — exactly what this path avoids.
             if (where.threadId && memory.getThreadById) {
               let existingThread: unknown;
-              let lookupFailed = false;
               try {
                 existingThread = await memory.getThreadById({
                   threadId: where.threadId,
                 });
-              } catch {
-                // A lookup failure (storage error/timeout) must not crash the turn:
-                // skip the existence check and let the read below surface a real problem.
-                lookupFailed = true;
+              } catch (error) {
+                // Fail the same way as a read/write failure (consistent, not swallowed) so
+                // a transient storage problem is visible in logs and to the caller.
+                console.warn(
+                  "[agent-memory] thread lookup failed:",
+                  error instanceof Error ? error.message : error,
+                );
+                return {
+                  success: false,
+                  message:
+                    "Could not look up the thread; the selected pin was not cleared.",
+                };
               }
-              if (!lookupFailed && !existingThread && memory.createThread) {
+              if (!existingThread && memory.createThread) {
                 try {
                   await memory.createThread({
                     threadId: where.threadId,
@@ -182,7 +195,11 @@ class PlaceholderTolerantMemory extends Memory {
             let existingRaw: string | null;
             try {
               existingRaw = await memory.getWorkingMemory(where);
-            } catch {
+            } catch (error) {
+              console.warn(
+                "[agent-memory] working-memory read failed:",
+                error instanceof Error ? error.message : error,
+              );
               return {
                 success: false,
                 message:
@@ -226,7 +243,11 @@ class PlaceholderTolerantMemory extends Memory {
                 ...where,
                 workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
               });
-            } catch {
+            } catch (error) {
+              console.warn(
+                "[agent-memory] working-memory update failed:",
+                error instanceof Error ? error.message : error,
+              );
               return {
                 success: false,
                 message:
@@ -235,7 +256,7 @@ class PlaceholderTolerantMemory extends Memory {
             }
             return { success: true };
           };
-          return withThreadLock(lockKey, run);
+          return lockKey ? withThreadLock(lockKey, run) : run();
         },
       } as Parameters<typeof createTool>[0]),
     } as ReturnType<Memory["listTools"]>;

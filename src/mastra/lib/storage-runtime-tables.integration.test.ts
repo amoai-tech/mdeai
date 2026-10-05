@@ -21,6 +21,7 @@
  * coverage; that workflow change needs approval first.
  */
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Memory } from "@mastra/memory";
@@ -34,7 +35,7 @@ const runIntegration =
 const RUNTIME_WRITE_TABLES = ["mastra_messages", "mastra_threads"];
 
 const contract = JSON.parse(
-  readFileSync(new URL("../../../scripts/mastra-schema-contract.json", import.meta.url), "utf8"),
+  readFileSync(resolve(process.cwd(), "scripts/mastra-schema-contract.json"), "utf8"),
 ) as { adapterInitExtraTables?: string[] };
 const ADAPTER_EXTRA_TABLES = contract.adapterInitExtraTables ?? [];
 
@@ -42,10 +43,17 @@ type Counts = Record<string, number>;
 type Access = { scans: number; writes: number };
 type Accesses = Record<string, Access>;
 
+const MASTRA_TABLE = /^mastra_[a-z0-9_]+$/;
+
 async function tableCounts(client: Client): Promise<Counts> {
   const { rows } = await client.query("select tablename from pg_tables where schemaname = 'public' and tablename like 'mastra_%'");
   const counts: Counts = {};
   for (const row of rows as Array<{ tablename: string }>) {
+    // A table name cannot be parameterized. Only ever interpolate a catalog name that
+    // matches MDE's strict mastra_ identifier, so nothing untrusted reaches the SQL.
+    if (!MASTRA_TABLE.test(row.tablename)) {
+      throw new Error(`unexpected table name from catalog: ${row.tablename}`);
+    }
     const result = await client.query(`select count(*)::int as n from public."${row.tablename}"`);
     counts[row.tablename] = (result.rows[0] as { n: number } | undefined)?.n ?? 0;
   }
