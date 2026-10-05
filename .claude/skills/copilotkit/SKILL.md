@@ -128,6 +128,9 @@ verified after an adapter or version change.
   allowed transition, and idempotency before committing.
 - **`useInterrupt`** → use only with an integration that is verified to emit the supported
   AG-UI interrupt events. Do not select it merely because a tool executes on the backend.
+- **Before changing MDE's proven HITL path** → follow the official Mastra skill: verify the
+  exact installed `@mastra/*` and `@ag-ui/mastra` APIs/source. Do not infer CopilotKit
+  interrupt compatibility from Mastra `suspend()` support alone.
 - **Additional Mastra-native approval gates** → do not assume they automatically compose
   with the CopilotKit approval UI. Add a second gate only after end-to-end proof on MDE's
   exact installed versions shows approve, reject, reload/resume, retry, and exactly-once
