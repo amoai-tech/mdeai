@@ -90,8 +90,8 @@ jobs:
       - name: Checkout exact deployed commit
         uses: vercel/repository-dispatch/actions/checkout@30f760c6640485cd92f8c785ef361382555fb712 # v1
 
-      # AFTER the candidate checkout on purpose: a later root checkout runs `git clean` and would
-      # delete this folder. Reviewed default-branch code, not the candidate's.
+      # AFTER the candidate checkout on purpose: that root checkout runs `git clean`, which would
+      # delete a `.trusted` folder created before it. Reviewed default-branch code, not the candidate's.
       - name: Checkout trusted release-control code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

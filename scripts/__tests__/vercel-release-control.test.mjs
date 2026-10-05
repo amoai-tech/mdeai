@@ -243,6 +243,17 @@ test("vercelGet: an HTTP error reports status and path only, never the body or t
   );
 });
 
+test("release checks never carry unrelated account detail into their result or error text", () => {
+  // A caller that logs a check's result or error must not be able to print account detail.
+  const detail = "account-detail-sentinel";
+  const result = checkEnvNames({ envs: allRequired().map((e) => ({ ...e, value: detail, owner: detail })) });
+  assert.equal(JSON.stringify(result).includes(detail), false);
+  assert.throws(
+    () => checkStaged({ ...stagedDeployment(), creator: { email: detail }, meta: { githubCommitSha: "0".repeat(40) } }, { id: ID, sha: SHA, host: HOST }),
+    (error) => !error.message.includes(detail),
+  );
+});
+
 test("vercelGet: sends the bearer token and returns parsed JSON", async () => {
   let seen;
   const ok = async (url, init) => {
