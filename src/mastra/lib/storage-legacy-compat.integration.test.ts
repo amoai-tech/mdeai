@@ -25,8 +25,9 @@ import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
 import fixture from "./__fixtures__/legacy-production-row.json";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const runIntegration =
-  Boolean(DATABASE_URL) && process.env.MASTRA_LEGACY_COMPAT_INTEGRATION === "1";
+// Flag on means the proof MUST run. A missing DATABASE_URL fails inside the test (the
+// guard throws) instead of silently skipping to a green build.
+const runIntegration = process.env.MASTRA_LEGACY_COMPAT_INTEGRATION === "1";
 
 describe.runIf(runIntegration)("SAN-1311 legacy production row compatibility", () => {
   it(
@@ -140,12 +141,35 @@ describe.runIf(runIntegration)("SAN-1311 legacy production row compatibility", (
         ) as { lastIntent?: string; mapUi?: { selectedPinId?: string } };
         expect(reread.lastIntent).toBe("rental_refine");
         expect(reread.mapUi?.selectedPinId).toBe("legacy-rental-2");
+
+        // 5. Sofia can keep chatting: append a CURRENT-format turn to the legacy thread and
+        // prove both the old and the new messages survive a reload.
+        await memory.saveMessages({
+          messages: [
+            {
+              id: `${thread.id}-followup`,
+              role: "user",
+              createdAt: new Date(),
+              threadId: thread.id,
+              resourceId: thread.resourceId,
+              content: {
+                format: 2 as const,
+                parts: [{ type: "text" as const, text: "show me cheaper ones" }],
+              },
+            } as never,
+          ],
+        });
+        const after = (await memStore.listMessages({
+          threadId: thread.id,
+          perPage: 20,
+        })) as { messages?: Array<{ role?: string; content?: unknown }> };
+        expect(after.messages?.length).toBe(3);
+        const serializedAfter = JSON.stringify(after.messages);
+        expect(serializedAfter).toContain("Find me a 2BR in Laureles under 4M");
+        expect(serializedAfter).toContain("show me cheaper ones");
       } finally {
         try {
-          await client.query(
-            "delete from public.mastra_messages where id = any($1::text[])",
-            [messages.map((message) => message.id)],
-          );
+          await client.query("delete from public.mastra_messages where thread_id = $1", [thread.id]);
           await client.query("delete from public.mastra_threads where id = $1", [thread.id]);
         } catch {
           // The connection may never have opened; best-effort cleanup only.

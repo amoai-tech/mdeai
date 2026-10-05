@@ -5,9 +5,11 @@
  * Run: VEB_MVP_010_INTEGRATION=1 infisical run --silent --env=dev --path=/ -- \
  *   npm test -- --run storage-durability.integration
  *
- * Refuses a non-loopback DATABASE_URL unless MASTRA_ALLOW_REMOTE_INTEGRATION=1 is set
- * (see integration-db-guard.ts). The VEB-MVP-010 lane deliberately uses a dedicated
- * remote test database, so that workflow sets the opt-in explicitly.
+ * Refuses a non-loopback DATABASE_URL unless MASTRA_ALLOW_REMOTE_DB_HOST names that
+ * exact host (see integration-db-guard.ts). The VEB-MVP-010 lane deliberately uses a
+ * dedicated remote test database, so that workflow pins its host explicitly. A bare
+ * boolean opt-in is not accepted: it would let any remote database, including production,
+ * through.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Mastra } from "@mastra/core/mastra";
@@ -18,7 +20,7 @@ import {
   resetMastraStorageForTests,
 } from "./storage";
 import { eventVenueBookingWorkflow } from "@/mastra/workflows/event-venue-booking-workflow";
-import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
+import { assertLoopbackDatabaseUrl, REMOTE_DB_HOST_PIN } from "./integration-db-guard";
 
 const BOOKING_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -70,9 +72,9 @@ async function deleteWorkflowSnapshot(runId: string): Promise<void> {
   }
 }
 
-const runIntegration =
-  Boolean(process.env.DATABASE_URL) &&
-  process.env.VEB_MVP_010_INTEGRATION === "1";
+// Flag on means the proof MUST run. A missing DATABASE_URL fails inside the test (the
+// guard throws) instead of silently skipping to a green build.
+const runIntegration = process.env.VEB_MVP_010_INTEGRATION === "1";
 
 describe.runIf(runIntegration)("VEB-MVP-010 Postgres cold-start durability", () => {
   const runIdsToCleanup: string[] = [];
@@ -114,10 +116,9 @@ describe.runIf(runIntegration)("VEB-MVP-010 Postgres cold-start durability", () 
   it(
     "uses PostgresStore and resumes suspended workflow after storage singleton reset",
     async () => {
-      assertLoopbackDatabaseUrl(
-        process.env.DATABASE_URL,
-        "VEB_MVP_010_INTEGRATION",
-      );
+      assertLoopbackDatabaseUrl(process.env.DATABASE_URL, "VEB_MVP_010_INTEGRATION", {
+        allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
+      });
       const info = vi.spyOn(console, "info").mockImplementation(() => {});
 
       const mastraBefore = buildMastra();

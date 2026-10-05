@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   assertLoopbackDatabaseUrl,
-  REMOTE_INTEGRATION_OPT_IN,
+  REMOTE_DB_HOST_PIN,
 } from "./integration-db-guard";
 
 const FLAG = "MASTRA_TEST_INTEGRATION";
-const originalOptIn = process.env[REMOTE_INTEGRATION_OPT_IN];
+const originalPin = process.env[REMOTE_DB_HOST_PIN];
 
 describe("assertLoopbackDatabaseUrl", () => {
   afterEach(() => {
-    if (originalOptIn === undefined) delete process.env[REMOTE_INTEGRATION_OPT_IN];
-    else process.env[REMOTE_INTEGRATION_OPT_IN] = originalOptIn;
+    if (originalPin === undefined) delete process.env[REMOTE_DB_HOST_PIN];
+    else process.env[REMOTE_DB_HOST_PIN] = originalPin;
   });
 
   it.each([
@@ -18,12 +18,19 @@ describe("assertLoopbackDatabaseUrl", () => {
     ["127.0.0.1", "postgresql://postgres:pw@127.0.0.1:5432/postgres"],
     ["IPv6 ::1", "postgresql://postgres:pw@[::1]:5432/postgres"],
   ])("allows a loopback host (%s)", (_label, url) => {
-    delete process.env[REMOTE_INTEGRATION_OPT_IN];
+    delete process.env[REMOTE_DB_HOST_PIN];
     expect(() => assertLoopbackDatabaseUrl(url, FLAG)).not.toThrow();
   });
 
+  it("refuses the IPv6 unspecified address :: (not loopback)", () => {
+    delete process.env[REMOTE_DB_HOST_PIN];
+    expect(() =>
+      assertLoopbackDatabaseUrl("postgresql://postgres:pw@[::]:5432/postgres", FLAG),
+    ).toThrow(/non-loopback/);
+  });
+
   it("refuses the Supabase pooler used in this audit", () => {
-    delete process.env[REMOTE_INTEGRATION_OPT_IN];
+    delete process.env[REMOTE_DB_HOST_PIN];
     expect(() =>
       assertLoopbackDatabaseUrl(
         "postgresql://postgres.zkwcbyxiwklihegjhuql:pw@aws-1-us-east-1.pooler.supabase.com:6543/postgres",
@@ -32,15 +39,8 @@ describe("assertLoopbackDatabaseUrl", () => {
     ).toThrow(/non-loopback/);
   });
 
-  it("refuses the IPv6 unspecified address :: (not loopback)", () => {
-    delete process.env[REMOTE_INTEGRATION_OPT_IN];
-    expect(() =>
-      assertLoopbackDatabaseUrl("postgresql://postgres:pw@[::]:5432/postgres", FLAG),
-    ).toThrow(/non-loopback/);
-  });
-
   it("refuses the direct Supabase host", () => {
-    delete process.env[REMOTE_INTEGRATION_OPT_IN];
+    delete process.env[REMOTE_DB_HOST_PIN];
     expect(() =>
       assertLoopbackDatabaseUrl(
         "postgresql://postgres:pw@db.zkwcbyxiwklihegjhuql.supabase.co:5432/postgres",
@@ -50,7 +50,7 @@ describe("assertLoopbackDatabaseUrl", () => {
   });
 
   it("does not mistake a lookalike hostname for loopback", () => {
-    delete process.env[REMOTE_INTEGRATION_OPT_IN];
+    delete process.env[REMOTE_DB_HOST_PIN];
     expect(() =>
       assertLoopbackDatabaseUrl("postgresql://u:p@localhost.evil.example:5432/db", FLAG),
     ).toThrow(/non-loopback/);
@@ -65,13 +65,37 @@ describe("assertLoopbackDatabaseUrl", () => {
     expect(() => assertLoopbackDatabaseUrl("not a url", FLAG)).toThrow(/not a parseable/);
   });
 
-  it("allows a remote host only with the explicit opt-in", () => {
-    process.env[REMOTE_INTEGRATION_OPT_IN] = "1";
+  it("refuses a remote host even when a pin is set, unless the caller opts in", () => {
+    process.env[REMOTE_DB_HOST_PIN] = "remote-test-db.example";
     expect(() =>
-      assertLoopbackDatabaseUrl(
-        "postgresql://postgres:pw@remote-test-db.example:5432/postgres",
-        FLAG,
-      ),
+      assertLoopbackDatabaseUrl("postgresql://u:p@remote-test-db.example:5432/db", FLAG),
+    ).toThrow(/non-loopback/);
+  });
+
+  it("allows the exact pinned remote host when the caller opts in", () => {
+    process.env[REMOTE_DB_HOST_PIN] = "remote-test-db.example";
+    expect(() =>
+      assertLoopbackDatabaseUrl("postgresql://u:p@remote-test-db.example:5432/db", FLAG, {
+        allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
+      }),
     ).not.toThrow();
+  });
+
+  it("refuses a remote host that does not match the pin", () => {
+    process.env[REMOTE_DB_HOST_PIN] = "expected-test-db.example";
+    expect(() =>
+      assertLoopbackDatabaseUrl("postgresql://u:p@someone-elses-db.example:5432/db", FLAG, {
+        allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
+      }),
+    ).toThrow(/does not match the pinned/);
+  });
+
+  it("refuses a remote host when the caller opts in but the pin is unset", () => {
+    delete process.env[REMOTE_DB_HOST_PIN];
+    expect(() =>
+      assertLoopbackDatabaseUrl("postgresql://u:p@anywhere.example:5432/db", FLAG, {
+        allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
+      }),
+    ).toThrow(/non-loopback/);
   });
 });

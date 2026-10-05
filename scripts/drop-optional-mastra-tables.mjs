@@ -4,9 +4,11 @@
  * runtime proofs can show the upgraded runtime does not require them.
  *
  * Used only by the disposable `mastra-schema-init` Postgres in
- * `.github/workflows/floor.yml`. Refuses a non-loopback host (unless
- * MASTRA_ALLOW_REMOTE_INTEGRATION=1) and validates every identifier against the contract
- * before it reaches SQL, so a corrupted contract cannot drop an arbitrary relation.
+ * `.github/workflows/floor.yml`. This script runs `DROP TABLE ... CASCADE`, so it is
+ * **loopback-only with no remote escape hatch**: an accidentally exported production
+ * DATABASE_URL can never cause a real table to be dropped. Identifiers are validated
+ * against the contract, the contract must not label a required table as optional, and the
+ * optional list must not be empty.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -14,35 +16,39 @@ import { Client } from "pg";
 
 /**
  * Hosts that can only ever be the local machine. Read from the same source of truth as the
- * TypeScript guard so the two enforcement paths cannot drift. `::` is the IPv6
- * *unspecified* address, NOT loopback, so the shared list deliberately excludes it.
+ * TypeScript guard so the two enforcement paths cannot drift. `::` is NOT loopback.
  */
 const LOOPBACK_HOSTS = new Set(
   JSON.parse(
     readFileSync(
-      fileURLToPath(
-        new URL("../src/mastra/lib/integration-loopback-hosts.json", import.meta.url),
-      ),
+      fileURLToPath(new URL("../src/mastra/lib/integration-loopback-hosts.json", import.meta.url)),
       "utf8",
     ),
   ),
 );
-const OPT_IN = "MASTRA_ALLOW_REMOTE_INTEGRATION";
 const IDENTIFIER = /^mastra_[a-z0-9_]+$/;
 
 const contract = JSON.parse(
-  readFileSync(
-    fileURLToPath(new URL("./mastra-schema-contract.json", import.meta.url)),
-    "utf8",
-  ),
+  readFileSync(fileURLToPath(new URL("./mastra-schema-contract.json", import.meta.url)), "utf8"),
 );
+const expectedTables = Array.isArray(contract.expectedTables) ? contract.expectedTables : [];
 const tables = Array.isArray(contract.adapterInitExtraTables)
   ? contract.adapterInitExtraTables
   : [];
 
+if (expectedTables.length === 0) {
+  throw new Error("schema contract has no expectedTables; refusing to drop anything");
+}
+if (tables.length === 0) {
+  throw new Error("schema contract has no adapterInitExtraTables; nothing to drop");
+}
+const required = new Set(expectedTables);
 for (const table of tables) {
   if (!IDENTIFIER.test(table)) {
     throw new Error(`refusing unexpected table name in the schema contract: ${table}`);
+  }
+  if (required.has(table)) {
+    throw new Error(`contract labels required table ${table} as optional; refusing to drop it`);
   }
 }
 
@@ -53,10 +59,10 @@ const host = new URL(connectionString).hostname
   .replace(/^\[|\]$/g, "")
   .replace(/\.$/, "")
   .toLowerCase();
-if (!LOOPBACK_HOSTS.has(host) && process.env[OPT_IN] !== "1") {
+if (!LOOPBACK_HOSTS.has(host)) {
   throw new Error(
     `Refusing to drop tables on non-loopback database host "${host}". ` +
-      `Point DATABASE_URL at a scratch Postgres, or set ${OPT_IN}=1 if deliberate.`,
+      "This script has no remote override; point DATABASE_URL at the disposable scratch Postgres.",
   );
 }
 

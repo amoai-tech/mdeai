@@ -49,8 +49,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           VEB_MVP_010_INTEGRATION: "1"
           NODE_ENV: production
-          # SAN-1311 — this lane deliberately targets a dedicated remote test database.
-          # The durability proof refuses a non-loopback host by default; this is the
-          # explicit opt-in. Never point the secret at production.
-          MASTRA_ALLOW_REMOTE_INTEGRATION: "1"
+          # SAN-1311 — this lane targets a dedicated remote test database. The durability
+          # proof refuses every non-loopback host unless this EXACT host is pinned, so an
+          # accidentally-exported production URL can never be reached. Set the repository
+          # variable VEB_MVP_010_DB_HOST to the test database's hostname.
+          MASTRA_ALLOW_REMOTE_DB_HOST: ${{ vars.VEB_MVP_010_DB_HOST }}
         run: node scripts/verify-veb-mvp-010-integration.mjs

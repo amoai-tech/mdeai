@@ -28,8 +28,9 @@ import { conciergeWorkingMemorySchema } from "@/mastra/agents/concierge";
 import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const runIntegration =
-  Boolean(DATABASE_URL) && process.env.MASTRA_TABLE_USAGE_INTEGRATION === "1";
+// Flag on means the proof MUST run. A missing DATABASE_URL fails inside the test (the
+// guard throws) instead of silently skipping to a green build.
+const runIntegration = process.env.MASTRA_TABLE_USAGE_INTEGRATION === "1";
 
 const RUNTIME_WRITE_TABLES = ["mastra_messages", "mastra_threads"];
 const MASTRA_TABLE = /^mastra_[a-z0-9_]+$/;
