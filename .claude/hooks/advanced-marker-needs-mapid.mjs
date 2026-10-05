@@ -7,6 +7,7 @@
 // Exit 2 = block. Bypass: MDEAI_ALLOW_MAP_NO_MAPID=1.
 
 import { readFileSync } from "node:fs";
+import { toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -17,9 +18,9 @@ try {
 
 const input = payload?.tool_input || {};
 const filePath = String(input.file_path || input.path || "");
-const rel = filePath.replace(/^.*?\/mdeai\/(\.claude\/worktrees\/[^/]+\/)?/, "");
+const rel = toRepoRelative(filePath);
 
-if (!/^mdeapp\/src\//.test(rel)) process.exit(0);
+if (!/^src\//.test(rel)) process.exit(0);
 if (!/\.(tsx|jsx)$/.test(rel)) process.exit(0);
 if (/\.claude\/hooks\//.test(rel) || /\.test\.tsx?$/.test(rel) || /__mocks__\//.test(rel)) process.exit(0);
 

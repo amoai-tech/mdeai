@@ -7,8 +7,8 @@
  * `.github/workflows/floor.yml`. This script runs `DROP TABLE ... CASCADE`, so it is
  * **loopback-only with no remote escape hatch**: an accidentally exported production
  * DATABASE_URL can never cause a real table to be dropped. Identifiers are validated
- * against the contract, the contract must not label a required table as optional, and the
- * optional list must not be empty.
+ * against the contract and the contract must not label a required table as optional. An
+ * empty optional list is a valid zero-work case for a future adapter.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

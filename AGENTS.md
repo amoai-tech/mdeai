@@ -34,6 +34,12 @@ Traps worth knowing before you debug them:
 - `check:env:ci` fails in a fresh worktree with no `.env`; export `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` first.
 - `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
 - Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
+- A fresh git worktree needs `scripts/worktree-bootstrap.sh` (clean `npm ci`, copies local Codacy config). Production-backed `.env`/`.env.local` links require explicit `MDE_WORKTREE_LINK_ENV=1` opt-in. `npm run floor` also needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which lives in the main checkout's `.env`, not `.env.local`.
+- There is one Supabase project and it is production. Any test that uses the service-role key writes real rows, so it must clean up after itself and re-query to prove nothing is left (pattern: `e2e/san-1204-broker-viewing-requests.spec.ts`). An unknown count is never zero.
+- Anonymous viewing requests are limited to 20 per IP per hour (`chat-lead-capture`). Repeated E2E runs hit `RATE_LIMIT`; do not retry around it.
+- Local Codacy (`codacy-analysis analyze --pr`) needs `.codacy/`, which is untracked and exists only in the main checkout. With no config it runs zero tools and proves nothing: check `toolResults` is non-empty.
+- Never run `pkill -f <pattern>` from the agent shell: the pattern matches the shell's own command line and kills it. Stop a dev server by its port instead.
+- `next dev` maintains the `nextjs-agent-rules` block at the bottom of this file. It is committed on purpose so the tree stays clean; do not delete it.
 
 ## Instruction ownership
 
@@ -192,9 +198,9 @@ Before broad repository searching on substantial code tasks:
 
 ## Enforced automatically
 
-`.claude/hooks/` blocks these mechanically, so expect a failure rather than a warning:
+`.claude/hooks/` blocks these mechanically, so expect a failure rather than a warning (`scripts/__tests__/claude-hooks.test.mjs` proves each guard fires, in `floor`):
 
-`guard-sensitive-paths` · `scan-secrets` · `no-service-role-in-src` · `gemini-model-pin` · `copilotkit-version-pin` · `places-api-field-mask` · `advanced-marker-needs-mapid` · `dist-leak-scan` (PreToolUse) · `lint-edited-ts` · `typecheck-edited-ts` (PostToolUse) · `stop-rls-gate` · `stop-plain-language-gate` (Stop) · `session-start` (SessionStart).
+`guard-sensitive-paths` · `scan-secrets` · `no-service-role-in-src` · `gemini-model-pin` · `copilotkit-version-pin` · `places-api-field-mask` · `advanced-marker-needs-mapid` · `dist-leak-scan` (PreToolUse) · `lint-edited-ts` (PostToolUse) · `stop-rls-gate` · `stop-plain-language-gate` · `stop-typecheck` (Stop) · `session-start` (SessionStart).
 
 Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase-rls-audit`. Review subagents: `mdeai-auto-reviewer`, `pr-scope-reviewer`, `security-reviewer`.
 
@@ -213,7 +219,7 @@ A PR body that only restates the diff has added nothing.
 
 ## CI and merge approval
 
-`floor` is the only required status check on `main`. It runs on every PR regardless of base branch, because a stacked PR still needs the same proof.
+`floor` and `mastra-schema-init` are required status checks on `main`. `floor` runs on every PR regardless of base branch, because a stacked PR still needs the same general repository proof; `mastra-schema-init` independently gates the Mastra storage/schema contract.
 
 Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 
@@ -253,3 +259,13 @@ This bootstrap file does not define product behavior. Current source code, curre
 ## Response style
 
 Lead with the answer. Keep explanations concise, concrete, and tied to MDE. Always pair task numbers with task names.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

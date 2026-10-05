@@ -3,76 +3,50 @@ paths:
   - "supabase/**"
 ---
 
-# Database: Declarative Database Schema
+# Database: Declarative schema (conditional / future)
 
-Mandatory Instructions for Supabase Declarative Schema Management
+## Conditional / future workflow
 
-## 1. **Exclusive Use of Declarative Schema**
+MDE does **not** currently use the declarative-schema workflow. In `supabase/config.toml`,
+the active `[db.migrations]` section has `schema_paths = []`, and there is no active
+`[experimental.pgdelta]` block.
 
-- **All database schema modifications must be defined within `.sql` files located in the `supabase/schemas/` directory.
-- **Do not** create or modify files directly in the `supabase/migrations/` directory unless the modification is about the known caveats below. Migration files are to be generated automatically through the CLI.
+Use `references/project-rules/supabase-migrations.md` and the imperative
+`supabase migration new <name>` workflow while MDE remains on this path.
 
-## 2. **Schema Declaration**
+This file becomes active guidance only after MDE intentionally adopts declarative schemas,
+establishes canonical schema files, and reviews the migration/release process for that change.
+Do not infer declarative mode merely from this file or from `schema_paths` alone.
 
-- For each database entity (e.g., tables, views, functions), create or update a corresponding `.sql` file in the `supabase/schemas/` directory
-- Ensure that each `.sql` file accurately represents the desired final state of the entity
+## If MDE intentionally enables declarative schemas
 
-## 3. **Migration Generation**
+Check the configured diff engine first:
 
-- Before generating migrations, **stop the local Supabase development environment**
-```bash
-supabase stop
-```
-- Generate migration files by diffing the declared schema against the current database state
-```bash
-supabase db diff -f <migration_name>
-```
-Replace `<migration_name>` with a descriptive name for the migration
+- **pg-delta** — when `[experimental.pgdelta] enabled = true`, `schema_paths` is ignored.
+  Keep declarative files in `supabase/schemas/` and generate migrations with
+  `supabase db schema declarative sync`.
+- **legacy migra** — without pg-delta, configure declarative files through
+  `[db.migrations].schema_paths` and use the supported legacy `supabase db diff` workflow.
 
-## 4. **Schema File Organization**
+Then:
 
-- Schema files are executed in lexicographic order. To manage dependencies (e.g., foreign keys), name files to ensure correct execution order
-- When adding new columns, append them to the end of the table definition to prevent unnecessary diffs
+1. Treat the configured declarative files as the desired schema state.
+2. Generate migrations with the command for the active diff engine and inspect every generated
+   migration before applying it.
+3. Keep production release safeguards from `supabase-migrations.md`: preflight, dry-run,
+   exact manifest inspection, then an explicitly approved push.
+4. For rollback, change the desired schema state and generate/review a new forward migration.
+   Do not edit already-applied production migration history.
 
-## 5. **Rollback Procedures**
+## Known declarative-diff caveats
 
-- To revert changes
-  - Manually update the relevant `.sql` files in `supabase/schemas/` to reflect the desired state
-  - Generate a new migration file capturing the rollback
-  ```bash
-  supabase db diff -f <rollback_migration_name>
-  ```
-  - Review the generated migration file carefully to avoid unintentional data loss
+Schema diffing does not capture every database change reliably. When declarative mode is enabled,
+keep versioned migration SQL for changes that the diff cannot faithfully represent, including:
 
-## 6. **Known caveats**
+- data manipulation such as `insert`, `update`, and `delete`
+- view ownership, grants, and some view recreation cases
+- some RLS policy changes and column privileges
+- schema privileges, comments, partitions, domains, and some publication changes
 
-The migra diff tool used for generating schema diff is capable of tracking most database changes. However, there are edge cases where it can fail.
-
-If you need to use any of the entities below, remember to add them through versioned migrations instead.
-
-### Data manipulation language
-
-- DML statements such as insert, update, delete, etc., are not captured by schema diff
-
-### View ownership
-
-- view owner and grants
-- security invoker on views
-- materialized views
-- doesn't recreate views when altering column type
-
-### RLS policies
-
-- alter policy statements
-- column privileges
-- Other entities#
-- schema privileges are not tracked because each schema is diffed separately
-- comments are not tracked
-- partitions are not tracked
-- alter publication ... add table ...
-- create domain statements are ignored
-- grant statements are duplicated from default privileges
-
----
-
-**Non-compliance with these instructions may lead to inconsistent database states and is strictly prohibited.**
+Review generated SQL for security, grants, RLS, destructive operations, and unintended diff noise
+before it reaches the production release flow.

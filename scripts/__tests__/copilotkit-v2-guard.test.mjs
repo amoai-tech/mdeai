@@ -92,7 +92,7 @@ test("the real guard exists and is wired as the audit:copilotkit-v2 command", ()
     /node scripts\/audit-copilotkit-v2-no-new-v1\.mjs/.test(pkg.scripts["audit:copilotkit-v2:depcruise"]),
     "audit:copilotkit-v2:depcruise must invoke the no-new-v1 guard",
   );
-  // Floor is the only required status check, so the guard must be in it.
+  // Floor remains the universal code-quality required check, so the guard must be in it.
   assert.match(pkg.scripts.floor, /npm run audit:copilotkit-v2(?!:)/);
 });
 

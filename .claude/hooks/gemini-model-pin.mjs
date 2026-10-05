@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // PreToolUse hook for Edit|Write|MultiEdit.
-// Blocks writes to mdeapp/src/** that reference deprecated/wrong AI models.
-// Per CLAUDE.md hard rule: "Production AI is Gemini only. No @anthropic-ai/* SDK in mdeapp/."
+// Blocks writes to src/** that reference deprecated/wrong AI models.
+// Per CLAUDE.md hard rule: "Production AI is Gemini only. No @anthropic-ai/* SDK in src/."
 // Current model: gemini-3.5-flash (released 2026-05-19). Deprecated: 2.0-flash*, 2.5-flash*, 3-flash-preview.
 // Exit 2 = block. Bypass: MDEAI_ALLOW_MODEL_DRIFT=1.
 
 import { readFileSync } from "node:fs";
+import { toRepoRelative } from "./lib/repo-path.mjs";
 
 let payload;
 try {
@@ -16,10 +17,10 @@ try {
 
 const input = payload?.tool_input || {};
 const filePath = String(input.file_path || input.path || "");
-const rel = filePath.replace(/^.*?\/mdeai\/(\.claude\/worktrees\/[^/]+\/)?/, "");
+const rel = toRepoRelative(filePath);
 
-// Only police mdeapp/src/** and mdeapp/supabase/functions/** edits. Skip plan/, docs/, tasks/.
-if (!/^mdeapp\/(src|supabase\/functions)\//.test(rel)) process.exit(0);
+// Only police src/** and supabase/functions/** edits. Skip plan/, docs/, tasks/.
+if (!/^(src|supabase\/functions)\//.test(rel)) process.exit(0);
 
 // Allow this hook itself, CLAUDE.md, .env.example, docs/, plan/, tests.
 if (
@@ -48,9 +49,9 @@ const banned = [
   { name: "gemini-2.5-flash-lite", re: /["'`]gemini-2\.5-flash-lite["'`]/ },
   { name: "gemini-2.5-pro", re: /["'`]gemini-2\.5-pro["'`]/ },
   { name: "gemini-3-flash-preview (superseded by 3.5)", re: /["'`]gemini-3-flash-preview["'`]/ },
-  { name: "OpenAI SDK in mdeapp/src (Gemini-only project)", re: /from\s+["']@ai-sdk\/openai["']/ },
-  { name: "OpenAI gpt-* model literal in mdeapp/src", re: /openai\s*\(\s*["']gpt-[0-9]/ },
-  { name: "Anthropic SDK in mdeapp/src (Gemini-only project)", re: /from\s+["']@anthropic-ai\/(?:sdk|client)["']/ },
+  { name: "OpenAI SDK in src (Gemini-only project)", re: /from\s+["']@ai-sdk\/openai["']/ },
+  { name: "OpenAI gpt-* model literal in src", re: /openai\s*\(\s*["']gpt-[0-9]/ },
+  { name: "Anthropic SDK in src (Gemini-only project)", re: /from\s+["']@anthropic-ai\/(?:sdk|client)["']/ },
 ];
 
 for (const text of candidates) {

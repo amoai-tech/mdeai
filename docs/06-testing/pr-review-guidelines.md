@@ -35,10 +35,11 @@ Publish only a changed-code defect with evidence and a realistic failure path. E
 
 ## Merge gates
 
-`main` is protected by **one** required status check — `floor` (`.github/workflows/floor.yml`: migration-timestamp uniqueness plus `npm run floor`; no path filters, so it runs on every pull request to `main`) — plus **required conversation resolution**. That pair is deliberate, and its consequence is easy to misread:
+`main` is protected by **two** required status checks — `floor` (`.github/workflows/floor.yml`: migration-timestamp uniqueness plus `npm run floor`; no path filters, so it runs on every pull request to `main`) and `mastra-schema-init` (the disposable-Postgres Mastra schema/storage certification job) — plus **required conversation resolution**. That combination is deliberate, and its consequence is easy to misread:
 
 ```text
-required_status_checks.contexts = ["floor"]     one gate, owned by deterministic CI
+required_status_checks.contexts = ["floor", "mastra-schema-init"]
+                                                two gates, owned by deterministic CI
 required_conversation_resolution = enabled      every unresolved review thread also gates
 ```
 
@@ -100,7 +101,7 @@ One Kilo thread on PR #120 arrived **10 seconds after the merge** (23:11:16Z aga
 ### Non-decisions — do not "fix" these
 
 - `required_conversation_resolution` **stays enabled**. Disabling it removes the guarantee that an unresolved *human* finding is addressed, and no bot setting can restore that.
-- `floor` **stays the required status check**. It is a genuine universal gate, not an advisory one.
+- `floor` **stays a required status check**. It is the genuine universal repository gate, not an advisory one; `mastra-schema-init` is the separate required storage/schema gate.
 - CodeRabbit, Sourcery and Codacy inline findings **stay**. Silencing them would have lost the `error.cause` classification fix and the `threadId` trimming fix that are in this repository's history.
 - `required_approving_review_count` is **1**, applied through the GitHub API — branch protection is not a repository file. Its real effect was **measured, not assumed** (PR #124), and the consequences are easier to read as a list:
   - **It is binding.** The pull request showed `reviewDecision: REVIEW_REQUIRED` and `mergeStateStatus: BLOCKED` before any review arrived.
