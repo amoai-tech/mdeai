@@ -1,5 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import {
+  EVENT_QUERY,
+  GROUNDED_QUERY,
   RENTAL_QUERY,
   RESTAURANT_QUERY,
   chooseRestaurantFilter,
@@ -18,14 +20,12 @@ import {
  *
  * What this proves, in the deterministic test chat (real router and fast paths, mocked search
  * APIs, no CopilotKit transport):
- *   - the last visible result is above the composer, at phone and desktop widths;
+ *   - rental, event, grounded-place, and restaurant results stay above the composer;
+ *   - rental results stay above the composer at phone and desktop widths;
  *   - nothing scrolls sideways;
  *   - the generic center-column map-results list is gone (the right-side map owns pins);
  *   - a shortcut question is shown once, and in order: question, answer, results, composer;
  *   - New Chat leaves no result or shortcut message behind.
- *
- * Event and grounded-place results use the same transcript tail but have no deterministic
- * fixtures in this suite yet, so they are not asserted here.
  */
 
 const VIEWPORTS = [
@@ -91,6 +91,34 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
       await expect(page.getByTestId("center-chat-panel").getByTestId("results-column")).toHaveCount(0);
     });
   }
+
+  test("event results are above the composer", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    await expectReadsBefore(
+      page.getByTestId("event-fast-path-panel"),
+      "the event results",
+      composer(page),
+      "the message box",
+    );
+  });
+
+  test("grounded-place results are above the composer", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expectReadsBefore(
+      page.getByTestId("grounded-fast-path-panel"),
+      "the grounded-place results",
+      composer(page),
+      "the message box",
+    );
+  });
 
   test("a shortcut question is shown once, in order, with everything above the composer", async ({ page }) => {
     await gotoDeterministicChat(page);

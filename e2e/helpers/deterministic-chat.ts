@@ -7,12 +7,14 @@ import {
 
 /**
  * Deterministic chat fixtures and steps shared by the deterministic specs (SAN-1341, SAN-966):
- * mocked rental and restaurant fast-path APIs, and the real chat input driven the way a
+ * mocked rental, event, grounded-place, and restaurant fast-path APIs, and the real chat input driven the way a
  * renter drives it. One copy, so the specs cannot drift apart.
  */
 
 export const RESTAURANT_QUERY = RESTAURANT_FAST_PATH_QUERY;
 export const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
+export const EVENT_QUERY = "salsa events this weekend";
+export const GROUNDED_QUERY = "best cafes medellin";
 
 export const restaurant = {
   id: "rst_test_001",
@@ -53,6 +55,40 @@ export const rental = {
   longitude: -75.5922,
 };
 
+export const event = {
+  id: "evt_test_001",
+  title: "Deterministic Salsa Night",
+  category: "music",
+  venue: "Deterministic Social Club",
+  neighborhood: "El Poblado",
+  startsAt: "2026-10-10T01:00:00.000Z",
+  pricePerTicket: 15,
+  currency: "USD",
+  imageUrl: "",
+  sourceUrl: "https://mdeai.co/events/evt_test_001",
+  latitude: 6.2088,
+  longitude: -75.5671,
+};
+
+export const groundedPlace = {
+  id: "gnd_test_001",
+  title: "Deterministic Coffee Lab",
+  mapsUrl: "https://maps.google.com/?cid=1001",
+  directionsUrl: "https://www.google.com/maps/dir/?api=1&destination_place_id=ChIJDeterministic",
+  reviewsUrl: "https://search.google.com/local/reviews?placeid=ChIJDeterministic",
+  latitude: 6.2442,
+  longitude: -75.5812,
+  placeId: "ChIJDeterministic",
+  rating: 4.7,
+  userRatingCount: 321,
+  priceLevel: "PRICE_LEVEL_MODERATE",
+  openNow: true,
+  formattedAddress: "Laureles, Medellín",
+  primaryType: "coffee_shop",
+  summary: "Quiet specialty coffee with workspace seating.",
+  fieldMaskVersion: "places-v1",
+};
+
 export async function mockFastPaths(page: Page) {
   await page.route("**/api/restaurants/search", async (route) => {
     await route.fulfill({
@@ -66,6 +102,25 @@ export async function mockFastPaths(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ results: [rental], total: 1, source: "mock" }),
+    });
+  });
+  await page.route("**/api/events/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ results: [event], total: 1, source: "mock" }),
+    });
+  });
+  await page.route("**/api/grounded/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        results: [groundedPlace],
+        attribution: [],
+        source: "mock",
+        metadata: { venueKind: "cafe" },
+      }),
     });
   });
 }

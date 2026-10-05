@@ -40,7 +40,6 @@ vi.mock("@/components/chat/rental-fast-path-panel", () => ({ RentalFastPathPanel
 vi.mock("@/components/chat/event-fast-path-panel", () => ({ EventFastPathPanel: () => null }));
 vi.mock("@/components/chat/grounded-fast-path-panel", () => ({ GroundedFastPathPanel: () => null }));
 vi.mock("@/components/chat/restaurant-fast-path-panel", () => ({ RestaurantFastPathPanel: () => null }));
-vi.mock("@/components/chat/event-results-panel", () => ({ EventResultsPanel: () => null }));
 
 vi.mock("@/components/chat/restaurant-filter-chips", () => ({
   RestaurantFilterChips: () => React.createElement("div", { "data-testid": "filter-chips" }),
@@ -48,10 +47,15 @@ vi.mock("@/components/chat/restaurant-filter-chips", () => ({
 
 import { ConciergeMessageView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
+import { ConciergeTranscriptTail } from "@/components/chat/concierge-transcript-tail";
 import {
   EventLocalChatProvider,
   useEventLocalChat,
 } from "@/components/chat/event-local-chat-context";
+import {
+  EventSearchResultsProvider,
+  useEventSearchResults,
+} from "@/components/chat/event-search-results-context";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -113,6 +117,40 @@ function ClarifyScenario({ transcriptHasIt }: { transcriptHasIt: boolean }) {
   return <ConciergeLocalChatMessages excludeIds={excludeIds} />;
 }
 
+function EventCitationScenario() {
+  const { setWebCitations } = useEventSearchResults();
+  useEffect(() => {
+    setWebCitations([
+      {
+        title: "Medellín event source",
+        url: "https://example.com/medellin-events",
+        snippet: "Verified event source",
+      },
+    ]);
+  }, [setWebCitations]);
+  return <ConciergeTranscriptTail />;
+}
+
+describe("ConciergeTranscriptTail event citations (SAN-966)", () => {
+  it("keeps the real event citation panel inside the transcript tail", () => {
+    const { container, unmount } = mount(
+      <EventLocalChatProvider>
+        <EventSearchResultsProvider>
+          <EventCitationScenario />
+        </EventSearchResultsProvider>
+      </EventLocalChatProvider>,
+    );
+    const tail = container.querySelector('[data-testid="concierge-transcript-tail"]');
+    const panel = container.querySelector('[data-testid="event-results-panel"]');
+    const link = container.querySelector('[data-testid="web-citation-link"]');
+    expect(tail).not.toBeNull();
+    expect(panel).not.toBeNull();
+    expect(link?.textContent).toBe("Medellín event source");
+    expect(tail!.contains(panel)).toBe(true);
+    unmount();
+  });
+});
+
 describe("ConciergeLocalChatMessages clarify (SAN-966)", () => {
   it("keeps the filter chips but not a second copy of the question the transcript shows", () => {
     const { container, unmount } = mount(
@@ -147,7 +185,9 @@ describe("ConciergeMessageView (SAN-966)", () => {
   it("renders the stock message list first, then the results tail", () => {
     const { container, unmount } = mount(
       <EventLocalChatProvider>
-        <ConciergeMessageView messages={[{ id: "a1", role: "assistant" as const, content: "hi" }]} />
+        <EventSearchResultsProvider>
+          <ConciergeMessageView messages={[{ id: "a1", role: "assistant" as const, content: "hi" }]} />
+        </EventSearchResultsProvider>
       </EventLocalChatProvider>,
     );
     const list = container.querySelector('[data-testid="stock-message-list"]');
@@ -162,7 +202,9 @@ describe("ConciergeMessageView (SAN-966)", () => {
     const messages = [{ id: "a1", role: "assistant" as const, content: "hi" }];
     const { unmount } = mount(
       <EventLocalChatProvider>
-        <ConciergeMessageView messages={messages} isRunning />
+        <EventSearchResultsProvider>
+          <ConciergeMessageView messages={messages} isRunning />
+        </EventSearchResultsProvider>
       </EventLocalChatProvider>,
     );
     expect(stockProps.last?.messages).toBe(messages);
