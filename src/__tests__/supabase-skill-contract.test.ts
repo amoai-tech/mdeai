@@ -122,6 +122,7 @@ describe("Supabase skill repository contract", () => {
       "A valid credential is not proof that it points to MDE production",
     );
     expect(migrationsRule).toContain("verify the production target");
+    expect(migrationsRule).toContain("supabase/README.md");
     expect(migrationsRule).toContain(
       "do not automate the production-target identity check",
     );
