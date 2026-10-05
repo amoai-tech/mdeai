@@ -56,8 +56,8 @@ Several old tasks are dangerous if an AI coding agent follows them literally:
 - **SAN-739** still tells the implementer to use v1 **useCopilotAction**, but current MDE already uses v2 **useRenderTool** for rental/search cards.
 - **SAN-741** still tells the implementer to use v1 **useCoAgent**, but map state is already synchronized through v2 **useAgent** state via the concierge co-agent wrapper.
 - **SAN-834** is entirely a v1 running/nodeName design. Current MDE already has **agent.isRunning** plus a thinking indicator, and SAN-609 owns richer progress.
-- The Mastra workflow reference still mentions CopilotKit **renderAndWaitForResponse**, an obsolete v1 pattern.
-- The current platform README still says the CopilotKit v2 audit script is broken; current package scripts show the repaired dependency-cruiser audit in the release floor.
+- **`.claude/skills/mastra/references/workflows.md`** still maps HITL to CopilotKit **renderAndWaitForResponse**. That is legacy v1-era terminology, but several repository docs/checklists still use it to describe existing approval behavior. Current runtime source uses v2 **useHumanInTheLoop**. Treat this as migration debt: do not mechanically rewrite a working approval flow; first prove the current hook + respond/approval behavior end-to-end, then update only references proven stale.
+- The canonical **`docs/03-platform/copilotkit-mastra/README.md`** on PR base/head still said the CopilotKit audit was broken because `scripts/audit-copilotkit-v2-map.mjs` was missing. That statement was stale: current **`package.json`** maps `audit:copilotkit-v2` to the dependency-cruiser + no-new-v1 audit and runs it from **`floor`**. This PR corrects the README; do not reopen completed SAN-1300 work.
 - The 2026-09-20 adoption plan describes identity/thread-authorization defects that are now fixed by completed work. Do not re-open or rebuild those fixes from the historical document.
 
 ## 2. Current feature scorecard
@@ -126,8 +126,8 @@ Status legend:
 | SAN-739 body says useCopilotAction | Current MDE already renders search tools with v2 useRenderTool | Treat current render code/tests as the baseline; close or narrow the task to a missing card behavior |
 | SAN-741 body says useCoAgent and asks for a new mapPins schema | Current map state is already synchronized via v2 agent state plus the existing map contracts; a parallel schema risks drift | Reuse MapUiSync, ToolPinsSync and current contracts; verify behavior, then close/retarget |
 | SAN-834 is a v1 running/nodeName task | useCoAgent is forbidden and a generic thinking indicator already exists | Merge the user outcome into SAN-609; do not build SAN-834 as written |
-| Mastra workflow reference mentions renderAndWaitForResponse | That is an obsolete CopilotKit v1 pattern | Replace the reference with current useHumanInTheLoop / workflow suspend-resume guidance |
-| Platform README says audit:copilotkit-v2 is broken | Current package.json now runs the dependency-cruiser proof in the release floor | Update the doc; do not reopen SAN-1300 |
+| Mastra workflow reference still maps HITL to renderAndWaitForResponse | The phrase is legacy v1-era terminology, but repository docs/checklists also use it to describe existing approval behavior; blindly replacing it could damage a working contract | Runtime source is already v2 useHumanInTheLoop. Before changing any existing approval flow, prove the current render/respond path and backend authorization end-to-end; then update only stale reference text |
+| Canonical platform README carried a stale “audit is broken” claim on the PR base | Current package.json maps audit:copilotkit-v2 to dependency-cruiser + no-new-v1 and floor invokes it | Correct the README in this PR; SAN-1300 remains completed and must not be reopened |
 | Sep-20 adoption plan says identity/thread authorization are open defects | SAN-547 and SAN-1358 are Done; current route derives a required resourceId and denies unsafe thread routes | Mark those sections historical/superseded |
 | Current Mastra package family is mixed stable + alpha/beta | Memory/core type drift is already suppressed with ts-expect-error | Do not expand advanced memory features before SAN-1302/SAN-1338 certifies a coherent family |
 | Native observability docs are newer than MDE’s installed setup | Latest docs show @mastra/observability; current package.json does not install it and Mastra({}) has no observability config | SAN-1003 must verify the version-compatible path before SAN-856 adds correlation |
@@ -324,6 +324,23 @@ Do not parallelize multiple tasks that all change the runtime route, Mastra pack
 - [ ] Linear task text matches the architecture actually shipped.
 
 ## 10. Official reference URLs — exactly how to use them
+
+### Material evidence receipts
+
+These are the sources that materially changed recommendations in this plan. Repository source and installed package versions remain authoritative when latest vendor docs differ.
+
+| Evidence | Exact source / section | Decision informed | Version / commit inspected |
+| --- | --- | --- | --- |
+| MDE package contract | `package.json` — CopilotKit/Mastra versions; `audit:copilotkit-v2`; `floor` | The CopilotKit audit is active; do not reopen SAN-1300. Latest docs never override MDE's installed API surface. | PR pre-fix head `ddfb42ec51fde515f69ce5d308bb08364e948ab1`; CopilotKit 1.75.0; `@mastra/core` 1.35.0 |
+| MDE current HITL source | `src/components/host/host-event-copilot-bridge.tsx` — `useHumanInTheLoop` registration for `preview_and_publish` | Existing event-publish UI is already on the v2 hook; verify behavior before retargeting SAN-738 or rewriting approval docs. | `ddfb42ec51fde515f69ce5d308bb08364e948ab1` |
+| MDE legacy/compatibility references | `.claude/skills/mastra/references/workflows.md`, `checklist.md`, UI-verification docs | `renderAndWaitForResponse` references are migration debt, not permission to mechanically replace an existing tested flow. | `ddfb42ec51fde515f69ce5d308bb08364e948ab1` |
+| CopilotKit v2 HITL | https://docs.copilotkit.ai/reference/v2/hooks/useHumanInTheLoop — import + render/respond contract | Use `@copilotkit/react-core/v2` `useHumanInTheLoop` for new/current v2 approval UI; a click is still not backend authorization. | Current official docs inspected 2026-10-05; installed CopilotKit 1.75.0 must remain the compile-time authority |
+| CopilotKit message history | https://docs.copilotkit.ai/backend/message-history — `messageFilter` | SAN-1399 should measure first, then use the provider filter to trim outbound history without deleting the visible transcript; tool-call/result repair stays CopilotKit-owned. | Current official docs inspected 2026-10-05; installed CopilotKit 1.75.0 must be verified before implementation |
+| Mastra workflow HITL | https://mastra.ai/docs/workflows/human-in-the-loop and https://mastra.ai/docs/workflows/suspend-and-resume — suspend/resume schemas and run resume | Keep durable workflow suspension separate from CopilotKit's frontend approval renderer; do not turn frontend intent into authorization. | Current official docs inspected 2026-10-05; installed `@mastra/core` 1.35.0 remains authoritative |
+| Mastra model fallback | https://mastra.ai/models — model fallback capability | SAN-1057 owns one minimal fallback policy; latest syntax is capability discovery only until 1.35.0 installed types/source prove compatibility. | Current official docs inspected 2026-10-05; installed `@mastra/core` 1.35.0 |
+| Mastra observability | https://mastra.ai/docs/observability/overview — native tracing/observability | SAN-1003 must establish a version-compatible native trace path before SAN-856 correlates it to `ai_runs`; do not build a second custom trace tree. | Current official docs inspected 2026-10-05; no `@mastra/observability` package on inspected MDE head |
+
+### Reference catalog
 
 | Reference | URL | Use for MDE | Do not use it for |
 | --- | --- | --- | --- |
