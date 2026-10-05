@@ -7,16 +7,9 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
-import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
-import { CenterPanelMapResultsSlot } from "@/components/chat/center-panel-map-results-slot";
-import { EventResultsPanel } from "@/components/chat/event-results-panel";
-import { EventFastPathPanel } from "@/components/chat/event-fast-path-panel";
-import { GroundedFastPathPanel } from "@/components/chat/grounded-fast-path-panel";
-import { RentalFastPathPanel } from "@/components/chat/rental-fast-path-panel";
-import { RestaurantFastPathPanel } from "@/components/chat/restaurant-fast-path-panel";
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -26,7 +19,10 @@ const CONCIERGE_LABELS = {
     'Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: "1BR in Laureles under $80/night" or "salsa events this weekend".',
 };
 
-/** CopilotChat with ConciergeChatView slot — fast-path before agent (CK-V2-015). */
+/**
+ * CopilotChat with ConciergeChatView slot — fast-path before agent (CK-V2-015). Latest-turn
+ * results render inside its transcript (SAN-966), so nothing below it competes with the composer.
+ */
 function ConciergeCopilotChat() {
   return (
     <CopilotChat
@@ -100,14 +96,7 @@ export function ChatCenterPanel() {
               <ConciergeCopilotChat />
             )}
           </div>
-          <ConciergeLocalChatMessages />
-          <RentalFastPathPanel />
-          <EventFastPathPanel />
-          <GroundedFastPathPanel />
-          <RestaurantFastPathPanel />
         </div>
-        <EventResultsPanel />
-        <CenterPanelMapResultsSlot />
       </div>
     </section>
   );

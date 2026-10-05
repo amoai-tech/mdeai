@@ -29,6 +29,8 @@ const copilotChatView = vi.hoisted(() =>
 );
 vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotChatView: copilotChatView,
+  // SAN-966: the concierge message view wraps the stock message list.
+  CopilotChatMessageView: () => null,
 }));
 
 vi.mock("@/components/chat/concierge-coagent-context", () => ({

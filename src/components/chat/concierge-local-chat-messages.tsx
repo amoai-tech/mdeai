@@ -4,9 +4,25 @@ import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { RestaurantFilterChips } from "@/components/chat/restaurant-filter-chips";
 import { sanitizeAssistantChatContent } from "@/lib/sanitize-assistant-chat-content";
 
-/** Render local fast-path exchanges that do not belong to the CopilotKit thread. */
-export function ConciergeLocalChatMessages() {
-  const { messages, clarifyKind } = useEventLocalChat();
+/**
+ * Render local fast-path exchanges. Each exchange is also published into the CopilotKit thread
+ * with the same ids, so `excludeIds` (the ids the transcript already shows) keeps every
+ * shortcut answer on screen exactly once. With no transcript (or before the agent exists) all
+ * local messages show.
+ *
+ * A clarifying question is the exception: the transcript shows its text but only this component
+ * can show its filter chips, so for a clarify the transcript already has, only the chips remain.
+ */
+export function ConciergeLocalChatMessages({
+  excludeIds,
+}: {
+  excludeIds?: ReadonlySet<string>;
+}) {
+  const { messages: allMessages, clarifyKind } = useEventLocalChat();
+  const shownByTranscript = (id: string) => excludeIds?.has(id) ?? false;
+  const messages = allMessages.filter(
+    (message) => message.isClarify || !shownByTranscript(message.id),
+  );
 
   if (messages.length === 0) return null;
 
@@ -45,7 +61,7 @@ export function ConciergeLocalChatMessages() {
               : "event-clarify";
           return (
             <div key={message.id} data-testid={testId}>
-              {assistant}
+              {shownByTranscript(message.id) ? null : assistant}
               {clarifyKind === "restaurant" ? <RestaurantFilterChips /> : null}
             </div>
           );

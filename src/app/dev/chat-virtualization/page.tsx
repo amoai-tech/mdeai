@@ -8,6 +8,14 @@ import {
   CopilotKitProvider,
   HttpAgent,
 } from "@copilotkit/react-core/v2";
+import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
+import { ConciergeMessageView } from "@/components/chat/concierge-copilot-chat-view";
+import { EventFastPathProvider } from "@/components/chat/event-fast-path-context";
+import { EventLocalChatProvider } from "@/components/chat/event-local-chat-context";
+import { EventSearchResultsProvider } from "@/components/chat/event-search-results-context";
+import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-context";
+import { RentalFastPathProvider } from "@/components/chat/rental-fast-path-context";
+import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -104,7 +112,31 @@ export default function ChatVirtualizationProbePage() {
             stretch and collapses to zero height — which is exactly the condition that
             disables virtualization.
           */}
-          <CopilotChatView messages={messages} className="h-full min-h-0 w-full" />
+          {/*
+            SAN-966: the probe renders the app's own `messageView` (the stock list plus the
+            latest-turn results tail), so this same 500-message proof also shows the wrapper
+            keeps the stock list virtualized, and the tail sits inside the transcript. The
+            providers are the ones the tail reads; with nothing seeded it renders no content.
+          */}
+          <ConciergeCoAgentProvider>
+            <RentalFastPathProvider>
+              <EventFastPathProvider>
+                <RestaurantFastPathProvider>
+                  <GroundedFastPathProvider>
+                    <EventSearchResultsProvider>
+                      <EventLocalChatProvider>
+                        <CopilotChatView
+                          messages={messages}
+                          messageView={ConciergeMessageView}
+                          className="h-full min-h-0 w-full"
+                        />
+                      </EventLocalChatProvider>
+                    </EventSearchResultsProvider>
+                  </GroundedFastPathProvider>
+                </RestaurantFastPathProvider>
+              </EventFastPathProvider>
+            </RentalFastPathProvider>
+          </ConciergeCoAgentProvider>
         </CopilotChatConfigurationProvider>
       </CopilotKitProvider>
     </div>

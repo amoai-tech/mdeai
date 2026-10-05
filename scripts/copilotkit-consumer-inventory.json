@@ -176,6 +176,11 @@
       "note": "Factory-mocks @copilotkit/react-core/v2. Must export the new provider names once Step 13 renders them."
     },
     {
+      "file": "src/components/chat/__tests__/concierge-transcript-tail.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 (CopilotChatMessageView, CopilotChatView) to test the concierge messageView wrapper and the results tail."
+    },
+    {
       "file": "src/components/host/__tests__/host-os-body.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks CopilotChat. Must export the new provider names once Step 15 renders them."
