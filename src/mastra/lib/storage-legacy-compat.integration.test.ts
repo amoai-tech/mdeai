@@ -144,21 +144,22 @@ describe.runIf(runIntegration)("SAN-1311 legacy production row compatibility", (
 
         // 5. Sofia can keep chatting: append a CURRENT-format turn to the legacy thread and
         // prove both the old and the new messages survive a reload.
-        await memory.saveMessages({
-          messages: [
-            {
-              id: `${thread.id}-followup`,
-              role: "user",
-              createdAt: new Date(),
-              threadId: thread.id,
-              resourceId: thread.resourceId,
-              content: {
-                format: 2 as const,
-                parts: [{ type: "text" as const, text: "show me cheaper ones" }],
-              },
-            } as never,
-          ],
-        });
+        // Built in the format-2 shape production stores (every production row is v2 /
+        // content.format 2), typed against the exact argument saveMessages accepts, so a
+        // format drift fails typecheck instead of passing here and breaking in production.
+        type StoredMessage = Parameters<Memory["saveMessages"]>[0]["messages"][number];
+        const followUp: StoredMessage = {
+          id: `${thread.id}-followup`,
+          role: "user",
+          createdAt: new Date(),
+          threadId: thread.id,
+          resourceId: thread.resourceId,
+          content: {
+            format: 2,
+            parts: [{ type: "text", text: "show me cheaper ones" }],
+          },
+        };
+        await memory.saveMessages({ messages: [followUp] });
         const after = (await memStore.listMessages({
           threadId: thread.id,
           perPage: 20,

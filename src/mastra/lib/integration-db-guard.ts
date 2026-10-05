@@ -89,6 +89,11 @@ export function assertLoopbackDatabaseUrl(
           `it does not match the pinned ${pinName} "${pinned}".`,
       );
     }
+    throw new Error(
+      `Refusing to run a destructive integration proof against database host "${host}": ` +
+        `${pinName} is not set, so no remote host is authorised. Set ${pinName} to this host's ` +
+        "exact name if the remote run is deliberate.",
+    );
   }
 
   throw new Error(

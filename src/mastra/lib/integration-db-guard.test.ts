@@ -96,6 +96,6 @@ describe("assertLoopbackDatabaseUrl", () => {
       assertLoopbackDatabaseUrl("postgresql://u:p@anywhere.example:5432/db", FLAG, {
         allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
       }),
-    ).toThrow(/non-loopback/);
+    ).toThrow(/is not set, so no remote host is authorised/);
   });
 });

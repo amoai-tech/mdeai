@@ -36,11 +36,16 @@ const tables = Array.isArray(contract.adapterInitExtraTables)
   ? contract.adapterInitExtraTables
   : [];
 
-if (expectedTables.length === 0) {
-  throw new Error("schema contract has no expectedTables; refusing to drop anything");
-}
 if (tables.length === 0) {
-  throw new Error("schema contract has no adapterInitExtraTables; nothing to drop");
+  // A future adapter may stop creating optional tables. That is a valid zero-work case,
+  // not a failure: the runtime proofs still run against the full certified schema.
+  console.log("no adapterInitExtraTables in the schema contract; nothing to drop");
+  process.exit(0);
+}
+if (expectedTables.length === 0) {
+  throw new Error(
+    "schema contract has no expectedTables; refusing to drop because the required/optional overlap cannot be verified",
+  );
 }
 const required = new Set(expectedTables);
 for (const table of tables) {

@@ -84,28 +84,28 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
         });
 
         const countsBefore = await tableCounts(client);
-        await memory.saveThread({
-          thread: {
-            id: threadId,
-            resourceId,
-            title: "usage",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            metadata: {},
-          } as never,
-        });
-        await memory.saveMessages({
-          messages: [
-            {
-              id: `${threadId}-m1`,
-              role: "user",
-              createdAt: new Date(),
-              threadId,
-              resourceId,
-              content: { format: 2 as const, parts: [{ type: "text" as const, text: "find a rental" }] },
-            } as never,
-          ],
-        });
+        // Build the rows in the real storage types (not `as never`) so a shape or
+        // message-format drift fails typecheck here instead of only at runtime.
+        type StoredThread = Parameters<Memory["saveThread"]>[0]["thread"];
+        type StoredMessage = Parameters<Memory["saveMessages"]>[0]["messages"][number];
+        const thread: StoredThread = {
+          id: threadId,
+          resourceId,
+          title: "usage",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          metadata: {},
+        };
+        const message: StoredMessage = {
+          id: `${threadId}-m1`,
+          role: "user",
+          createdAt: new Date(),
+          threadId,
+          resourceId,
+          content: { format: 2, parts: [{ type: "text", text: "find a rental" }] },
+        };
+        await memory.saveThread({ thread });
+        await memory.saveMessages({ messages: [message] });
         await memory.updateWorkingMemory({
           threadId,
           resourceId,
