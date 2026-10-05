@@ -5,13 +5,15 @@ import { RestaurantFilterChips } from "@/components/chat/restaurant-filter-chips
 import { sanitizeAssistantChatContent } from "@/lib/sanitize-assistant-chat-content";
 
 /**
- * Render local fast-path exchanges. Each exchange is also published into the CopilotKit thread
- * with the same ids, so `excludeIds` (the ids the transcript already shows) keeps every
- * shortcut answer on screen exactly once. With no transcript (or before the agent exists) all
- * local messages show.
+ * Render local fast-path exchanges. Each exchange is also published (or queued until the agent
+ * exists) into the CopilotKit thread with the same ids, so `excludeIds` (the ids the transcript
+ * already shows) hides what is already on screen. Without `excludeIds` (the deterministic test
+ * chat, which has no transcript) every local message shows.
  *
- * A clarifying question is the exception: the transcript shows its text but only this component
- * can show its filter chips, so for a clarify the transcript already has, only the chips remain.
+ * Only a restaurant clarifying question is kept when the transcript already has it: the transcript
+ * shows its text, but only this component can show its filter chips, so only the chips remain.
+ * The user's own bubble of that exchange is still hidden. Event and rental clarifies have no chips,
+ * so nothing is left to show.
  */
 export function ConciergeLocalChatMessages({
   excludeIds,
@@ -21,7 +23,8 @@ export function ConciergeLocalChatMessages({
   const { messages: allMessages, clarifyKind } = useEventLocalChat();
   const shownByTranscript = (id: string) => excludeIds?.has(id) ?? false;
   const messages = allMessages.filter(
-    (message) => message.isClarify || !shownByTranscript(message.id),
+    (message) =>
+      !shownByTranscript(message.id) || (message.isClarify && clarifyKind === "restaurant"),
   );
 
   if (messages.length === 0) return null;
@@ -30,7 +33,6 @@ export function ConciergeLocalChatMessages({
     <div
       data-testid="concierge-local-messages"
       className="space-y-3 px-4 pb-3"
-      aria-live="polite"
     >
       {messages.map((message) => {
         if (message.role === "user") {

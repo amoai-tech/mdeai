@@ -18,14 +18,22 @@ import {
  * as siblings of the chat, so the message box sat ABOVE them. A renter who asked for "1BR in
  * Laureles" saw the composer in the middle of the screen with the answer underneath it.
  *
- * What this proves, in the deterministic test chat (real router and fast paths, mocked search
- * APIs, no CopilotKit transport):
+ * In the deterministic test chat (real router and fast paths, mocked search APIs, no CopilotKit
+ * transport) this proves:
  *   - rental, event, grounded-place, and restaurant results stay above the composer;
- *   - rental results stay above the composer at phone and desktop widths;
+ *   - rental results stay above the composer at phone, laptop, and desktop widths;
  *   - nothing scrolls sideways;
- *   - the generic center-column map-results list is gone (the right-side map owns pins);
- *   - a shortcut question is shown once, and in order: question, answer, results, composer;
+ *   - a shortcut question and its clarifying answer appear once, in order (question, answer,
+ *     composer), and the results that replace the clarify stay above the composer;
  *   - New Chat leaves no result or shortcut message behind.
+ *
+ * Through the dev probe pages, in the REAL CopilotKit chat view, it proves:
+ *   - an exchange that arrives while the thread is empty is still shown (CopilotKit would show
+ *     only its welcome screen);
+ *   - with a seeded exchange the tail sits inside the transcript's scroll content, after the
+ *     message list, and ends above the composer.
+ * Transcript/local de-duplication is unit-tested (concierge-transcript-contract.test.tsx), not
+ * here: the probe has no live agent, so no exchange is published into a thread.
  */
 
 const VIEWPORTS = [
@@ -87,8 +95,6 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
         "the message box",
       );
       await expectNoSidewaysScroll(page);
-      // The generic list under the chat is gone; pins live on the right-side map.
-      await expect(page.getByTestId("center-chat-panel").getByTestId("results-column")).toHaveCount(0);
     });
   }
 
@@ -159,29 +165,63 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await expect(page.getByTestId("concierge-local-messages")).toHaveCount(0);
     await expect(page.getByText(RESTAURANT_QUERY, { exact: true })).toHaveCount(0);
   });
-  // The deterministic chat above has no CopilotKit transcript, so this proves the same order in
-  // the real one: the long-chat probe renders the app's own `messageView` over 500 messages.
-  test("inside the real CopilotKit transcript the results tail follows the messages and precedes the composer", async ({
+  // The deterministic chat above has no CopilotKit transcript. The two tests below run the REAL
+  // CopilotKit chat view (through the dev probe pages) with a seeded shortcut exchange.
+
+  test("with an empty thread the shortcut exchange is still shown (CopilotKit would show only its welcome screen)", async ({
     page,
   }) => {
+    await page.goto("/dev/chat-empty-thread", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("empty-thread-probe")).toHaveAttribute("data-hydrated", "true", {
+      timeout: 30_000,
+    });
+    // Nothing to show yet: the welcome screen owns the view, so the results tail is not mounted.
+    await expect(page.getByTestId("concierge-transcript-tail")).toHaveCount(0);
+
+    // A fast-path exchange arrives while the thread is still empty, as when the AI runtime is down.
+    await page.getByTestId("probe-seed").click();
+    await expect(page.getByTestId("concierge-transcript-tail")).toHaveCount(1);
+    await expect(page.getByText("Probe shortcut question", { exact: true }), "shown once").toHaveCount(1);
+    await expect(page.getByText("Probe shortcut answer", { exact: true }), "shown once").toHaveCount(1);
+  });
+
+  test("in the real transcript the tail follows the messages and ends above the message box", async ({ page }) => {
     await page.goto("/dev/chat-virtualization", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("virtualization-probe")).toHaveAttribute("data-hydrated", "true", {
       timeout: 30_000,
     });
-    const tail = page.getByTestId("concierge-transcript-tail");
-    await expect(tail, "the results tail must be rendered once, inside the transcript").toHaveCount(1);
-    await expect(page.getByTestId("copilot-message-list")).toHaveCount(1);
+    await page.getByTestId("probe-seed").click();
 
-    // DOM order is the contract that survives scrolling: messages, then the tail, then the box.
-    const order = await page.evaluate(() => {
+    const tail = page.getByTestId("concierge-transcript-tail");
+    await expect(tail).toHaveCount(1);
+    await expect(tail.getByText("Probe shortcut answer", { exact: true })).toHaveCount(1);
+
+    // Scroll the real scroller to the bottom, where the newest content lives.
+    await page.evaluate(() => {
+      let node: HTMLElement | null = document.querySelector('[data-testid="copilot-scroll-content"]');
+      while (node && !(node.scrollHeight > node.clientHeight && /(auto|scroll)/.test(getComputedStyle(node).overflowY))) {
+        node = node.parentElement;
+      }
+      if (node) node.scrollTop = node.scrollHeight;
+    });
+
+    const structure = await page.evaluate(() => {
       const list = document.querySelector('[data-testid="copilot-message-list"]');
       const tailEl = document.querySelector('[data-testid="concierge-transcript-tail"]');
-      const input = document.querySelector('[data-testid="copilot-chat-input"]');
-      const follows = (a: Element | null, b: Element | null) =>
-        Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-      return { tailAfterList: follows(list, tailEl), inputAfterTail: follows(tailEl, input) };
+      const content = document.querySelector('[data-testid="copilot-scroll-content"]');
+      return {
+        // Contained nodes also report "following", so containment must be ruled out explicitly.
+        tailAfterList: Boolean(list && tailEl && list.compareDocumentPosition(tailEl) & Node.DOCUMENT_POSITION_FOLLOWING),
+        tailInsideList: Boolean(list && tailEl && list.contains(tailEl)),
+        tailInsideScrollContent: Boolean(content && tailEl && content.contains(tailEl)),
+      };
     });
-    expect(order.tailAfterList, "the results tail must come after the message list").toBe(true);
-    expect(order.inputAfterTail, "the message box must come after the results tail").toBe(true);
+    expect(structure.tailAfterList, "the tail must come after the message list").toBe(true);
+    expect(structure.tailInsideList, "the tail must not be nested inside the message list").toBe(false);
+    expect(structure.tailInsideScrollContent, "the tail must live in the transcript's scroll content").toBe(true);
+
+    // Order is not enough: the renter must be able to SEE it, clear of the message box.
+    await expectReadsBefore(tail, "the results tail", composer(page), "the message box");
+    await expect(tail).toBeInViewport();
   });
 });

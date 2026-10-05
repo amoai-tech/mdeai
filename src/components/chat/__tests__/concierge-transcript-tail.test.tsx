@@ -73,13 +73,20 @@ function mount(element: React.ReactElement) {
   };
 }
 
-/** Shows one exchange, then renders the local messages, hiding the ids the transcript has. */
+/**
+ * Shows two exchanges, then renders the local messages hiding only the FIRST exchange's ids when
+ * the transcript is said to have it. The second exchange is the positive control: it must still
+ * show, so a "hidden" assertion cannot pass just because nothing rendered.
+ */
 function Scenario({ transcriptHasExchange }: { transcriptHasExchange: boolean }) {
   const { messages, showExchange } = useEventLocalChat();
   useEffect(() => {
     showExchange("1BR in Laureles", "Found 4 rentals");
+    showExchange("Second question", "Second answer");
   }, [showExchange]);
-  const excludeIds = transcriptHasExchange ? new Set(messages.map((m) => m.id)) : new Set<string>();
+  const excludeIds = transcriptHasExchange
+    ? new Set(messages.slice(0, 2).map((m) => m.id))
+    : new Set<string>();
   return <ConciergeLocalChatMessages excludeIds={excludeIds} />;
 }
 
@@ -103,6 +110,8 @@ describe("ConciergeLocalChatMessages (SAN-966)", () => {
     );
     expect(container.textContent).not.toContain("Found 4 rentals");
     expect(container.textContent).not.toContain("1BR in Laureles");
+    // Positive control: the exchange the transcript does not have is still shown.
+    expect(container.textContent).toContain("Second answer");
     unmount();
   });
 });

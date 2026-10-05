@@ -54,6 +54,12 @@ vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({
 vi.mock("@/lib/concierge-send-user-message", () => ({
   sendConciergeUserMessage: mocks.sendConciergeUserMessage,
 }));
+// SAN-966: the chat view asks the tail whether it has content (for the welcome screen). That is
+// covered in concierge-transcript-contract.test.tsx; here it is not the subject.
+vi.mock("@/components/chat/concierge-transcript-tail", () => ({
+  ConciergeTranscriptTail: () => null,
+  useTranscriptTailHasContent: () => false,
+}));
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import {
   EventLocalChatProvider,

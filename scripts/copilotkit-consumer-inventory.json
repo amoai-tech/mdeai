@@ -54,9 +54,9 @@
       "note": "Imports the v2 stylesheet only."
     },
     {
-      "file": "src/app/dev/chat-virtualization/page.tsx",
+      "file": "src/app/dev/_probe/concierge-probe.tsx",
       "classification": "keep",
-      "note": "Dev-only virtualization probe from PR #171. Already uses the <CopilotKitProvider> + <CopilotChatConfigurationProvider> pair, so it is the reference model for Steps 12 to 15."
+      "note": "Shared dev-only probe (moved out of the virtualization page by SAN-966; also used by the empty-thread page). Already uses the <CopilotKitProvider> + <CopilotChatConfigurationProvider> pair, so it is the reference model for Steps 12 to 15."
     },
     {
       "file": "src/components/chat/chat-center-panel.tsx",
@@ -179,6 +179,11 @@
       "file": "src/components/chat/__tests__/concierge-transcript-tail.test.tsx",
       "classification": "test-only",
       "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 (CopilotChatMessageView, CopilotChatView) to test the concierge messageView wrapper and the results tail."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-transcript-contract.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 to test the welcome-screen rule, the tail-content hook and the transcript dedupe."
     },
     {
       "file": "src/components/host/__tests__/host-os-body.test.tsx",

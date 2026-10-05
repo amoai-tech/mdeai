@@ -1,21 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { notFound } from "next/navigation";
-import {
-  CopilotChatConfigurationProvider,
-  CopilotChatView,
-  CopilotKitProvider,
-  HttpAgent,
-} from "@copilotkit/react-core/v2";
-import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
-import { ConciergeMessageView } from "@/components/chat/concierge-copilot-chat-view";
-import { EventFastPathProvider } from "@/components/chat/event-fast-path-context";
-import { EventLocalChatProvider } from "@/components/chat/event-local-chat-context";
-import { EventSearchResultsProvider } from "@/components/chat/event-search-results-context";
-import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-context";
-import { RentalFastPathProvider } from "@/components/chat/rental-fast-path-context";
-import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
+import { ConciergeProbe } from "@/app/dev/_probe/concierge-probe";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -32,7 +18,8 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
  * SSE + AG-UI mock we measure whether the mock is needed at all.
  *
  * Deliberately NOT used here:
- *   - `DeterministicConciergeChat` — it bypasses CopilotKit and renders no messages.
+ *   - `DeterministicConciergeChat` — it bypasses CopilotKit and renders no transcript (only
+ *     the local results tail), so it cannot say anything about the real message list.
  *   - the app's `getCopilotKitClientProps("conciergeAgent")` provider, because pointing
  *     the probe at a real runtime makes `useAgent` throw when `/info` advertises no
  *     agents. That uncaught error aborts the client render, so the page never hydrates
@@ -40,23 +27,14 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
  *   - a `children` render prop on the message view — that silently disables
  *     virtualization, which is the exact failure this probe is looking for.
  *
+ * SAN-966: the shared probe renders the app's own `messageView` (the stock list plus the results
+ * tail), so this same 500-message proof also shows the wrapper keeps the stock list virtualized
+ * (see chat-virtualization.spec.ts, which asserts the `[data-index]` row counts).
+ *
  * Gated to non-production deterministic E2E only, so it can never reach a real user.
  */
 
 const MESSAGE_COUNT = 500;
-const PROBE_AGENT_ID = "conciergeAgent";
-
-/**
- * `useAgent` throws unless the requested agent is registered or a runtime sync is in a
- * pending/error state — installed react-core v2, dist
- * `copilotkit-CoWG8EAX.mjs:4605-4607`. The probe never starts a run, so the agent only
- * has to *exist*; registering it locally via `agents__unsafe_dev_only` is the dev-only
- * escape hatch that the library's own error message points to. The URL is deliberately
- * unreachable so that any accidental transport fails loudly instead of passing quietly.
- */
-const PROBE_AGENTS = {
-  [PROBE_AGENT_ID]: new HttpAgent({ url: "http://127.0.0.1:1/probe-agent-never-runs" }),
-};
 
 /**
  * Valid AG-UI messages (`z.infer<typeof MessageSchema>`, discriminated on `role`).
@@ -73,72 +51,5 @@ function makeProbeMessages() {
 export default function ChatVirtualizationProbePage() {
   // Never render outside deterministic E2E, and never in production.
   if (!isDeterministicE2E()) notFound();
-
-  // Hydration proof. CopilotKit's `ScrollView` only provides `ScrollElementContext` from
-  // its own mount effect, so an un-hydrated page can only ever show the server-rendered
-  // pre-mount branch — where virtualization silently stays off. This flag is set from an
-  // effect for exactly that reason: if this effect ran, `ScrollView`'s did too. The spec
-  // waits on the marker before measuring, so a broken client render can never be mistaken
-  // for a virtualization result. (A DOM attribute rather than state: state would mean a
-  // `setState` in an effect, which the repo's lint rules reject.)
-  const probeRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    probeRef.current?.setAttribute("data-hydrated", "true");
-  }, []);
-
-  const messages = makeProbeMessages();
-
-  return (
-    <div
-      ref={probeRef}
-      data-testid="virtualization-probe"
-      data-hydrated="false"
-      // A fixed, explicitly non-zero-height flex parent. CopilotKit warns and disables
-      // virtualization when the scroll container reports clientHeight === 0, so the
-      // height here is part of the probe's contract, not decoration.
-      style={{ height: "600px", display: "flex", minHeight: 0 }}
-    >
-      {/*
-        `CopilotChatView` calls `useCopilotKit`, so a CopilotKit provider is required for
-        CONTEXT alone. This is the v2 `CopilotKitProvider` rather than the v1-compat
-        `<CopilotKit>` shim, and it needs no `runtimeUrl` because the agent is registered
-        locally — so no runtime info request and no agent sync are issued at all.
-      */}
-      <CopilotKitProvider agents__unsafe_dev_only={PROBE_AGENTS}>
-        <CopilotChatConfigurationProvider agentId={PROBE_AGENT_ID}>
-          {/*
-            `className` must make the view FILL the 600px parent. Measured: without it the
-            message list mounts but reports `hidden`, because the view's own root does not
-            stretch and collapses to zero height — which is exactly the condition that
-            disables virtualization.
-          */}
-          {/*
-            SAN-966: the probe renders the app's own `messageView` (the stock list plus the
-            latest-turn results tail), so this same 500-message proof also shows the wrapper
-            keeps the stock list virtualized, and the tail sits inside the transcript. The
-            providers are the ones the tail reads; with nothing seeded it renders no content.
-          */}
-          <ConciergeCoAgentProvider>
-            <RentalFastPathProvider>
-              <EventFastPathProvider>
-                <RestaurantFastPathProvider>
-                  <GroundedFastPathProvider>
-                    <EventSearchResultsProvider>
-                      <EventLocalChatProvider>
-                        <CopilotChatView
-                          messages={messages}
-                          messageView={ConciergeMessageView}
-                          className="h-full min-h-0 w-full"
-                        />
-                      </EventLocalChatProvider>
-                    </EventSearchResultsProvider>
-                  </GroundedFastPathProvider>
-                </RestaurantFastPathProvider>
-              </EventFastPathProvider>
-            </RentalFastPathProvider>
-          </ConciergeCoAgentProvider>
-        </CopilotChatConfigurationProvider>
-      </CopilotKitProvider>
-    </div>
-  );
+  return <ConciergeProbe messages={makeProbeMessages()} testId="virtualization-probe" />;
 }
