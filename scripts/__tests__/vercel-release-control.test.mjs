@@ -36,8 +36,10 @@ const stagedDeployment = (over = {}) => ({
   alias: [],
   ...over,
 });
-const promotedDeployment = (over = {}) =>
-  stagedDeployment({ alias: ["www.mdeai.co", "mdeai.co", "mdeai-amoco.vercel.app"], ...over });
+// Real shape (first promotion, SAN-1330): the deployment's own `alias` array omits the promoted custom
+// domains; the link lives in the domain's alias record (GET /v4/aliases/<domain>).
+const promotedDeployment = (over = {}) => stagedDeployment({ alias: ["mdeai-amoco.vercel.app"], ...over });
+const domainAlias = (over = {}) => ({ alias: "www.mdeai.co", deploymentId: ID, ...over });
 
 const project = (over = {}) => ({
   id: PROJECT_ID,
@@ -159,25 +161,45 @@ for (const [name, over, pattern] of [
 }
 
 test("promoted: www.mdeai.co serving the exact tested id and sha passes", () => {
-  assert.doesNotThrow(() => checkPromoted(promotedDeployment(), expected));
+  assert.doesNotThrow(() => checkPromoted(promotedDeployment(), expected, domainAlias()));
+});
+
+test("promoted: passes even though the deployment's own alias array omits www.mdeai.co (the real shape)", () => {
+  const deployment = promotedDeployment();
+  assert.ok(!deployment.alias.includes("www.mdeai.co"));
+  assert.doesNotThrow(() => checkPromoted(deployment, expected, domainAlias()));
 });
 
 test("promoted: the previous deployment still serving the domain fails", () => {
   assert.throws(
-    () => checkPromoted(promotedDeployment({ id: "dpl_PreviousDeployment123456" }), expected),
+    () => checkPromoted(promotedDeployment(), expected, domainAlias({ deploymentId: "dpl_PreviousDeployment123456" })),
+    /certified deployment/,
+  );
+});
+
+test("promoted: the deployment read is not the certified id", () => {
+  assert.throws(
+    () => checkPromoted(promotedDeployment({ id: "dpl_PreviousDeployment123456" }), expected, domainAlias()),
     /id/i,
   );
 });
 
 test("promoted: the right id but a different commit fails", () => {
   assert.throws(
-    () => checkPromoted(promotedDeployment({ meta: { githubCommitSha: "1".repeat(40), githubCommitRef: "main" } }), expected),
+    () =>
+      checkPromoted(
+        promotedDeployment({ meta: { githubCommitSha: "1".repeat(40), githubCommitRef: "main" } }),
+        expected,
+        domainAlias(),
+      ),
     /sha|commit/i,
   );
 });
 
-test("promoted: a deployment that does not hold www.mdeai.co fails", () => {
-  assert.throws(() => checkPromoted(promotedDeployment({ alias: ["mdeai-amoco.vercel.app"] }), expected), /www\.mdeai\.co/);
+test("promoted: an unreadable or mismatched domain record fails", () => {
+  assert.throws(() => checkPromoted(promotedDeployment(), expected, undefined), /alias could not be read/);
+  assert.throws(() => checkPromoted(promotedDeployment(), expected, { error: { code: "not_found" } }), /alias could not be read/);
+  assert.throws(() => checkPromoted(promotedDeployment(), expected, domainAlias({ alias: "mdeai.co" })), /different domain/);
 });
 
 test("staged: the certified URL must belong to the deployment id that gets promoted", () => {
