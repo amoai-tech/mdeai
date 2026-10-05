@@ -35,7 +35,7 @@ Do not hardcode developer-specific legacy app paths or obsolete split repositori
 
 ## Dependency setup
 
-Use the repository's current package-manager/bootstrap contract. Do not reuse `node_modules` through symlinks. If an existing dependency tree is reused through hardlinks, treat it as read-only and never run an install that could mutate shared inodes; otherwise prefer a clean install in the worktree.
+Run `scripts/worktree-bootstrap.sh` from inside the new worktree. It does a clean `npm ci`, links `.env`/`.env.local` from the main checkout (never copied), and copies the local Codacy config. Do not reuse `node_modules` through symlinks. If an existing dependency tree is reused through hardlinks, treat it as read-only and never run an install that could mutate shared inodes; otherwise prefer a clean install in the worktree.
 
 ## Forensic cleanup
 
