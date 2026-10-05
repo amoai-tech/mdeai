@@ -32,8 +32,6 @@ async function withSyntheticFixture(rel, content, fn) {
   }
 }
 
-await mkdir(FIXTURE_DIR, { recursive: true });
-
 const main = run("node", ["scripts/audit-copilotkit-v2-no-new-v1.mjs"]);
 if (main.status !== 0) {
   console.error("FAIL: main allowlist scan should pass");
@@ -41,6 +39,8 @@ if (main.status !== 0) {
   process.exit(1);
 }
 console.log("✓ main allowlist scan passes");
+
+await mkdir(FIXTURE_DIR, { recursive: true });
 
 const violation = await withSyntheticFixture(
   SYNTHETIC_REL,
