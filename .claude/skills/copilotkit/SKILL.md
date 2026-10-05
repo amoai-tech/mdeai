@@ -114,10 +114,11 @@ is a false positive.
 
 ## Human-in-the-loop with Mastra
 
-For MDE's current Mastra + CopilotKit integration, use the tool-based CopilotKit v2
-`useHumanInTheLoop` flow for the approval UI. Mastra does not emit the AG-UI interrupt
-events consumed by CopilotKit `useInterrupt`, so `useInterrupt` is not the MDE Mastra
-approval path.
+For MDE's current installed Mastra + CopilotKit integration, use the tool-based CopilotKit
+v2 `useHumanInTheLoop` flow for the approval UI. The current MDE integration is not
+verified to emit the supported AG-UI interrupt events consumed by CopilotKit `useInterrupt`,
+so `useInterrupt` is not the MDE Mastra approval path unless that capability is explicitly
+verified after an adapter or version change.
 
 - **Mastra + CopilotKit approval UI** → register the frontend approval tool with
   `useHumanInTheLoop`; its render callback shows the review UI and calls `respond(...)`.
