@@ -5,10 +5,7 @@
     "SessionStart": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/session-start.mjs"
-          }
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/session-start.mjs" }
         ]
       }
     ],
@@ -16,43 +13,19 @@
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/guard-sensitive-paths.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/scan-secrets.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/no-service-role-in-src.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/gemini-model-pin.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/copilotkit-version-pin.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/places-api-field-mask.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/advanced-marker-needs-mapid.mjs"
-          }
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/guard-sensitive-paths.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/scan-secrets.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/no-service-role-in-src.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/gemini-model-pin.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/copilotkit-version-pin.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/places-api-field-mask.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/advanced-marker-needs-mapid.mjs" }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/dist-leak-scan.mjs"
-          }
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/dist-leak-scan.mjs" }
         ]
       }
     ],
@@ -60,28 +33,16 @@
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/lint-edited-ts.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-edited-ts.mjs"
-          }
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/lint-edited-ts.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-edited-ts.mjs" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/stop-rls-gate.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/stop-plain-language-gate.mjs"
-          }
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/stop-rls-gate.mjs" },
+          { "type": "command", "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/stop-plain-language-gate.mjs" }
         ]
       }
     ]
