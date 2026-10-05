@@ -75,9 +75,9 @@ npm run preflight:migration          # add --no-fetch to skip the network fetch
 ```
 
 **Step 5 is a separate identity check.** Before any remote migration command, verify the project
-ref/database identity represented by `SUPABASE_DB_URL` against MDE's canonical production identity.
-A valid credential is not proof that it points to MDE production. If the target cannot be proven
-unambiguously, stop. The current npm migration scripts do not automate the production-target identity check,
+ref/database identity represented by `SUPABASE_DB_URL` against MDE's canonical production identity in
+`supabase/README.md`. A valid credential is not proof that it points to MDE production. If the target
+cannot be proven unambiguously, stop. The current npm migration scripts do not automate the production-target identity check,
 so operator verification remains mandatory before `migration:dry-run` or `push:migration`.
 
 ### One-command release, gates included
