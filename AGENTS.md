@@ -192,9 +192,9 @@ Before broad repository searching on substantial code tasks:
 
 ## Enforced automatically
 
-`.claude/hooks/` blocks these mechanically, so expect a failure rather than a warning:
+`.claude/hooks/` blocks these mechanically, so expect a failure rather than a warning (`scripts/__tests__/claude-hooks.test.mjs` proves each guard fires, in `floor`):
 
-`guard-sensitive-paths` · `scan-secrets` · `no-service-role-in-src` · `gemini-model-pin` · `copilotkit-version-pin` · `places-api-field-mask` · `advanced-marker-needs-mapid` · `dist-leak-scan` (PreToolUse) · `lint-edited-ts` · `typecheck-edited-ts` (PostToolUse) · `stop-rls-gate` · `stop-plain-language-gate` (Stop) · `session-start` (SessionStart).
+`guard-sensitive-paths` · `scan-secrets` · `no-service-role-in-src` · `gemini-model-pin` · `copilotkit-version-pin` · `places-api-field-mask` · `advanced-marker-needs-mapid` · `dist-leak-scan` (PreToolUse) · `lint-edited-ts` (PostToolUse) · `stop-rls-gate` · `stop-plain-language-gate` · `stop-typecheck` (Stop) · `session-start` (SessionStart).
 
 Slash commands: `/verify-floor`, `/auto-review`, `/copilotkit-check`, `/supabase-rls-audit`. Review subagents: `mdeai-auto-reviewer`, `pr-scope-reviewer`, `security-reviewer`.
 
