@@ -171,10 +171,10 @@ class PlaceholderTolerantMemory extends Memory {
               } catch (error) {
                 // Fail the same way as a read/write failure (consistent, not swallowed) so
                 // a transient storage problem is visible in logs and to the caller.
-                console.warn(
-                  "[agent-memory] thread lookup failed:",
-                  error instanceof Error ? error.message : error,
-                );
+                console.warn("[agent-memory] thread lookup failed", {
+                  threadId: where.threadId,
+                  error: error instanceof Error ? error.message : error,
+                });
                 return {
                   success: false,
                   message:
@@ -198,10 +198,10 @@ class PlaceholderTolerantMemory extends Memory {
                     }).catch(() => null);
                   }
                   if (!created) {
-                    console.warn(
-                      "[agent-memory] thread creation failed:",
-                      error instanceof Error ? error.message : error,
-                    );
+                    console.warn("[agent-memory] thread creation failed", {
+                      threadId: where.threadId,
+                      error: error instanceof Error ? error.message : error,
+                    });
                     return {
                       success: false,
                       message:
@@ -216,10 +216,10 @@ class PlaceholderTolerantMemory extends Memory {
             try {
               existingRaw = await memory.getWorkingMemory(where);
             } catch (error) {
-              console.warn(
-                "[agent-memory] working-memory read failed:",
-                error instanceof Error ? error.message : error,
-              );
+              console.warn("[agent-memory] working-memory read failed", {
+                threadId: where.threadId,
+                error: error instanceof Error ? error.message : error,
+              });
               return {
                 success: false,
                 message:
@@ -265,10 +265,10 @@ class PlaceholderTolerantMemory extends Memory {
                 workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)),
               });
             } catch (error) {
-              console.warn(
-                "[agent-memory] working-memory update failed:",
-                error instanceof Error ? error.message : error,
-              );
+              console.warn("[agent-memory] working-memory update failed", {
+                threadId: where.threadId,
+                error: error instanceof Error ? error.message : error,
+              });
               return {
                 success: false,
                 message:
