@@ -40,7 +40,7 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
     assert.ok(idx > 0, flag + " must be present");
     const expression = verdict.slice(cursor, idx);
     assert.ok(
-      expression.includes("not f.is_test_fixture and"),
+      /not f\.is_test_fixture\s+and/.test(expression),
       flag + " must exclude test fixtures conjunctively",
     );
     cursor = idx;
