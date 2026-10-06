@@ -248,6 +248,71 @@ create trigger mastra_threads_reject_anonymous
   for each row
   execute function public.mastra_threads_reject_anonymous();
 
+-- (4b) Integrity guard: a message may only reference an existing thread. -----
+-- Mastra persists a turn's messages AFTER the stream ends. If cleanup deletes the
+-- thread in that gap, the late insert used to land as an invisible orphan row
+-- (observed on production 2026-10-02; see e2e/prod-copilotkit-isolation.spec.ts).
+-- Reject the late write instead: fail closed at the trust boundary. 23503 is the
+-- standard foreign_key_violation code, which is what a real FK would have raised.
+create or replace function public.mastra_messages_reject_orphan()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog, public
+as $orphan_guard$
+begin
+  if to_regclass('public.mastra_threads') is null then
+    return NEW;
+  end if;
+  if NEW.thread_id is null then
+    raise exception 'mastra_messages % has no thread_id', NEW.id
+      using errcode = '23503',
+            hint = 'A message must reference an existing mastra_threads row.';
+  end if;
+  -- FOR KEY SHARE, not a plain existence check: it takes the same row lock a real
+  -- foreign key would, so a concurrent DELETE of this thread must wait for the insert,
+  -- and the insert sees the thread gone once that delete commits. A snapshot-only
+  -- check could still let a delete commit between the check and the insert.
+  perform 1 from public.mastra_threads where id = NEW.thread_id for key share;
+  if not found then
+    raise exception 'mastra_messages % references missing thread %', NEW.id, NEW.thread_id
+      using errcode = '23503',
+            hint = 'The thread was deleted (or never existed); refusing to create an orphan message.';
+  end if;
+  return NEW;
+end;
+$orphan_guard$;
+
+drop trigger if exists mastra_messages_reject_orphan on public.mastra_messages;
+create trigger mastra_messages_reject_orphan
+  before insert or update of thread_id on public.mastra_messages
+  for each row
+  execute function public.mastra_messages_reject_orphan();
+
+-- (4c) Delete backstop: deleting a thread removes its messages. ---------------
+-- mastra_messages has no foreign key to mastra_threads, so any thread delete
+-- (vendor, app, or e2e cleanup) would otherwise strand its messages. This is the
+-- ON DELETE CASCADE the vendor pair does not declare, applied at delete time.
+create or replace function public.mastra_threads_delete_messages()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog, public
+as $thread_cascade$
+begin
+  if to_regclass('public.mastra_messages') is not null then
+    delete from public.mastra_messages where thread_id = OLD.id;
+  end if;
+  return OLD;
+end;
+$thread_cascade$;
+
+drop trigger if exists mastra_threads_delete_messages on public.mastra_threads;
+create trigger mastra_threads_delete_messages
+  before delete on public.mastra_threads
+  for each row
+  execute function public.mastra_threads_delete_messages();
+
 -- (5) Assertions / counts (read-only). --------------------------------------
 create or replace function public.mastra_anonymous_thread_count()
 returns integer
@@ -310,7 +375,9 @@ begin
     'public.mastra_anonymous_thread_count()',
     'public.mastra_orphan_message_count()',
     'public.mastra_assert_no_anonymous_threads()',
-    'public.mastra_threads_reject_anonymous()'
+    'public.mastra_threads_reject_anonymous()',
+    'public.mastra_messages_reject_orphan()',
+    'public.mastra_threads_delete_messages()'
   ]::text[]
   loop
     execute 'revoke all on function ' || f || ' from public';

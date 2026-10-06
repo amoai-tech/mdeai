@@ -117,6 +117,15 @@ jobs:
           MASTRA_RETENTION_INTEGRATION: "1"
         run: node --test scripts/__tests__/mastra-retention.integration.test.mjs
 
+      # Orphan-message prevention: a late write after thread deletion must be
+      # rejected (23503), deleting a thread must remove its messages, and the
+      # database must end with orphanMessages=0.
+      - name: Prove no late message write can orphan a thread
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_INTEGRITY_INTEGRATION: "1"
+        run: node --test scripts/__tests__/mastra-integrity.integration.test.mjs
+
       # SAN-1311 — the gate above proves the adapter provisions the committed schema.
       # These prove the runtime actually uses it, that a conversation written by the
       # previous version is still readable, and that a suspended workflow survives a cold
