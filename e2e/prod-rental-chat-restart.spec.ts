@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { test, expect, type Page } from "@playwright/test";
 import {
@@ -31,9 +31,9 @@ import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
  *   SAN548_PROD_CERT=1 SAN548_PHASE=B PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
  *     npx playwright test --project=prod-san548
  *
- * Phase A writes the fixture to SAN548_STATE_FILE (default tmp/san548-cert.json). Phase B
- * reads it, proves reopen + semantic follow-up + privacy + database invariants, and owns
- * cleanup (resilient: it attempts every identity). Deliberately outside PROD_SPECS.
+ * Phase A writes a versioned handoff to SAN548_STATE_FILE (default tmp/san548-cert.json);
+ * Phase B validates it, proves reopen + semantic follow-up + privacy + database invariants,
+ * and owns cleanup. Deliberately outside PROD_SPECS.
  */
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const phase = (process.env.SAN548_PHASE ?? "").toUpperCase();
@@ -41,16 +41,62 @@ const enabled = process.env.SAN548_PROD_CERT === "1" && Boolean(baseUrl);
 const stateFile = process.env.SAN548_STATE_FILE?.trim() || "tmp/san548-cert.json";
 const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
+const STATE_VERSION = 1;
+const MAX_STATE_AGE_MS = 24 * 60 * 60 * 1000;
 
-type PhaseState = { threadId: string; camilaEmail: string; camilaUserId: string };
+// Fail fast: a typo in SAN548_PHASE must not produce a green run with zero phases
+// (Playwright treats test.skip() as an expected skip, not a failure).
+if (enabled && phase !== "A" && phase !== "B") {
+  throw new Error(`SAN-548: set SAN548_PHASE to exactly A or B (got: ${phase || "<empty>"})`);
+}
+
+type PhaseState = {
+  version: number;
+  status: "A-in-progress" | "A-complete";
+  baseUrl: string;
+  createdAt: string;
+  threadId?: string;
+  camilaEmail: string;
+  camilaUserId: string;
+};
 
 function writeState(state: PhaseState): void {
   mkdirSync(dirname(stateFile), { recursive: true });
-  writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  const temp = `${stateFile}.tmp`;
+  writeFileSync(temp, JSON.stringify(state, null, 2));
+  renameSync(temp, stateFile); // atomic replace
 }
 
-function readState(): PhaseState {
-  return JSON.parse(readFileSync(stateFile, "utf8")) as PhaseState;
+function readStateOrNull(): PhaseState | null {
+  if (!existsSync(stateFile)) return null;
+  try {
+    return JSON.parse(readFileSync(stateFile, "utf8")) as PhaseState;
+  } catch {
+    throw new Error(`SAN-548: ${stateFile} is corrupt; delete it and re-run Phase A`);
+  }
+}
+
+function removeState(): void {
+  rmSync(stateFile, { force: true });
+  rmSync(`${stateFile}.tmp`, { force: true });
+}
+
+/** Runtime-validate the Phase B handoff before touching production. */
+function requireCompleteState(): PhaseState {
+  const state = readStateOrNull();
+  if (!state) throw new Error(`SAN-548: no handoff at ${stateFile}; run Phase A first`);
+  const problems: string[] = [];
+  if (state.version !== STATE_VERSION) problems.push(`version ${state.version} != ${STATE_VERSION}`);
+  if (state.status !== "A-complete") problems.push(`status is "${state.status}"`);
+  if (state.baseUrl !== baseUrl) problems.push(`baseUrl ${state.baseUrl} != ${baseUrl}`);
+  if (!state.threadId) problems.push("threadId missing");
+  if (!state.camilaEmail || !state.camilaUserId) problems.push("Camila identity missing");
+  const age = Date.now() - Date.parse(state.createdAt);
+  if (!Number.isFinite(age) || age < 0 || age > MAX_STATE_AGE_MS) problems.push("handoff is stale");
+  if (problems.length > 0) {
+    throw new Error(`SAN-548: refusing Phase B — ${problems.join("; ")}. Run Phase A again.`);
+  }
+  return state;
 }
 
 /** Thread ids of every `agent/run` envelope the browser sends, in order. */
@@ -100,7 +146,10 @@ async function threadOwner(threadId: string): Promise<string | null> {
   return (data as { resourceId?: string } | null)?.resourceId ?? null;
 }
 
-/** Paginated column read: Supabase caps a single `.select()` at 1000 rows. */
+/**
+ * Paginated column read. Supabase caps a single `.select()` at 1000 rows, and a
+ * `.range()` page is only stable when ordered — so order by the unique `id` key.
+ */
 async function selectAllValues(
   table: "mastra_threads" | "mastra_messages",
   column: string,
@@ -109,7 +158,11 @@ async function selectAllValues(
   const pageSize = 1000;
   const values: Array<string | null> = [];
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await admin.from(table).select(column).range(from, from + pageSize - 1);
+    const { data, error } = await admin
+      .from(table)
+      .select(column)
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
     if (error) throw new Error(`${table} read failed: ${error.message}`);
     const rows = (data ?? []) as unknown as Array<Record<string, string | null>>;
     for (const row of rows) values.push(row[column] ?? null);
@@ -130,7 +183,6 @@ async function orphanMessageCount(): Promise<number> {
 async function signInWithBypass(page: Page, email: string): Promise<void> {
   if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
   await signInAsOnOrigin(page, baseUrl, email);
-  // Session injection clears cookies; restore the same-origin bypass afterwards.
   if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
 }
 
@@ -144,46 +196,77 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
   test("Phase A — Camila records a rental chat and corrects the budget (5M -> 4M)", async ({ page }) => {
     test.skip(phase !== "A", "set SAN548_PHASE=A for this phase");
     test.setTimeout(600_000);
+
+    // Refuse to clobber a live handoff: a pending one means Phase B has not run.
+    const existing = readStateOrNull();
+    if (existing) {
+      throw new Error(`SAN-548: ${stateFile} already exists (status "${existing.status}"). Run Phase B or delete it first.`);
+    }
+
     const camila = await createThrowawayIdentity("qa-san548-camila");
-    await signInWithBypass(page, camila.email);
-    const runThreads = recordRunThreadIds(page);
-    await gotoConcierge(page);
+    // Recovery record FIRST: if the process dies mid-Phase-A, this names the identity.
+    writeState({
+      version: STATE_VERSION,
+      status: "A-in-progress",
+      baseUrl,
+      createdAt: new Date().toISOString(),
+      camilaEmail: camila.email,
+      camilaUserId: camila.userId,
+    });
 
-    // Turn 1 — the rental ask ("furnished" is not modeled in working memory; it lives in history).
-    await sendConciergeMessage(page, "Busco un apartamento amoblado (furnished) de 2 habitaciones en Laureles, presupuesto 5 millones de pesos colombianos por mes. Responde en una frase.");
-    await waitForCopilotIdle(page, 180_000);
-    const threadA = runThreads.at(-1);
-    expect(threadA, "Camila's first run named a thread").toBeTruthy();
-    await expect.poll(() => persistedContaining(threadA!, "furnished"), { timeout: 30_000 }).toBeGreaterThan(0);
+    try {
+      await signInWithBypass(page, camila.email);
+      const runThreads = recordRunThreadIds(page);
+      await gotoConcierge(page);
 
-    // Turn 2 — correct the budget to 4M.
-    await sendConciergeMessage(page, "Mejor cambia el presupuesto a 4 millones de pesos colombianos por mes. Responde en una frase.");
-    await waitForCopilotIdle(page, 180_000);
+      // Turn 1 — the rental ask ("furnished" is not modeled in working memory; it lives in history).
+      await sendConciergeMessage(page, "Busco un apartamento amoblado (furnished) de 2 habitaciones en Laureles, presupuesto 5 millones de pesos colombianos por mes. Responde en una frase.");
+      await waitForCopilotIdle(page, 180_000);
+      const threadA = runThreads.at(-1);
+      expect(threadA, "Camila's first run named a thread").toBeTruthy();
+      await expect.poll(() => persistedContaining(threadA!, "furnished"), { timeout: 30_000 }).toBeGreaterThan(0);
 
-    // Poll the CORRECTED state, not "lastRentalQuery exists" — turn 1 already created it.
-    // maxPricePerNight is a derived USD/night search value (search-rentals.ts
-    // NIGHTLY_BUDGET_CURRENCY; rental-query-parser.ts normalizes monthly -> nightly), so the
-    // canonical amount+currency+period contract is a product decision (SAN-548).
-    await expect
-      .poll(async () => {
-        const wm = await threadWorkingMemory(threadA!);
-        const query = (wm?.lastRentalQuery ?? {}) as {
-          neighborhood?: string;
-          minBedrooms?: number;
-          budgetType?: string;
-        };
-        return `${query.neighborhood}|${query.minBedrooms}|${query.budgetType}`;
-      }, { timeout: 90_000 })
-      .toBe("Laureles|2|monthly");
+      // Turn 2 — correct the budget to 4M.
+      await sendConciergeMessage(page, "Mejor cambia el presupuesto a 4 millones de pesos colombianos por mes. Responde en una frase.");
+      await waitForCopilotIdle(page, 180_000);
 
-    writeState({ threadId: threadA!, camilaEmail: camila.email, camilaUserId: camila.userId });
-    // Phase A intentionally does NOT clean up: Phase B needs Camila after the redeploy.
+      // Poll the CORRECTED state, not "lastRentalQuery exists" — turn 1 already created it.
+      // maxPricePerNight is a derived USD/night search value; the canonical
+      // amount+currency+period contract is a product decision (SAN-548).
+      await expect
+        .poll(async () => {
+          const wm = await threadWorkingMemory(threadA!);
+          const query = (wm?.lastRentalQuery ?? {}) as {
+            neighborhood?: string;
+            minBedrooms?: number;
+            budgetType?: string;
+          };
+          return `${query.neighborhood}|${query.minBedrooms}|${query.budgetType}`;
+        }, { timeout: 90_000 })
+        .toBe("Laureles|2|monthly");
+
+      // Handoff committed only once the thread is ready.
+      writeState({
+        version: STATE_VERSION,
+        status: "A-complete",
+        baseUrl,
+        createdAt: new Date().toISOString(),
+        threadId: threadA!,
+        camilaEmail: camila.email,
+        camilaUserId: camila.userId,
+      });
+    } catch (error) {
+      // Do not leak the production identity/rows when Phase A fails before the handoff.
+      await deleteThrowawayIdentity(camila).catch(() => undefined);
+      removeState();
+      throw error;
+    }
   });
 
   test("Phase B — after the redeploy: reopen, semantic follow-up, Roberto refused, invariants", async ({ browser }) => {
     test.skip(phase !== "B", "set SAN548_PHASE=B for this phase");
     test.setTimeout(900_000);
-    const state = readState();
+    const state = requireCompleteState();
     const camila: ThrowawayIdentity = { email: state.camilaEmail, userId: state.camilaUserId };
     let roberto: ThrowawayIdentity | undefined;
     const failures: string[] = [];
@@ -233,7 +316,7 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
         await otherContext.close();
       }
 
-      expect(await threadOwner(state.threadId), "owner is still Camila").toBe(camila.userId);
+      expect(await threadOwner(state.threadId!), "owner is still Camila").toBe(camila.userId);
       const admin = await getSupabaseAdmin();
       const anon = await admin
         .from("mastra_threads")
@@ -251,7 +334,15 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
           failures.push(`${identity.email}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
-      if (failures.length > 0) throw new Error(`SAN-548 Phase B cleanup failed — ${failures.join("; ")}`);
+      if (failures.length === 0) {
+        removeState(); // certification complete: the handoff is spent
+      } else {
+        console.error(
+          `SAN-548: cleanup failed; retaining ${stateFile} for recovery. ` +
+            `Camila identity: ${camila.email} / ${camila.userId}`,
+        );
+        throw new Error(`SAN-548 Phase B cleanup failed — ${failures.join("; ")}`);
+      }
     }
   });
 });
