@@ -51,21 +51,21 @@ describe("submitBrokerOnboarding place verification branches", () => {
   it("maps PlacesConfigError to a temporary-unavailable message", async () => {
     verifyPlaceId.mockRejectedValue(new PlacesConfigError("missing key"));
     const result = await submitBrokerOnboarding(input);
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure result");
     expect(result.message).toContain("temporarily unavailable");
   });
 
   it("maps PlacesRequestError to a Google-unreachable message", async () => {
     verifyPlaceId.mockRejectedValue(new PlacesRequestError("timeout"));
     const result = await submitBrokerOnboarding(input);
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure result");
     expect(result.message).toContain("could not reach Google");
   });
 
   it("maps a not-found place to pick-again", async () => {
     verifyPlaceId.mockResolvedValue(null);
     const result = await submitBrokerOnboarding(input);
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure result");
     expect(result.message).toContain("Pick it again");
   });
 
@@ -73,7 +73,7 @@ describe("submitBrokerOnboarding place verification branches", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     verifyPlaceId.mockRejectedValue(new Error("boom"));
     const result = await submitBrokerOnboarding(input);
-    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure result");
     expect(result.message).toContain("temporarily unavailable");
     spy.mockRestore();
   });
