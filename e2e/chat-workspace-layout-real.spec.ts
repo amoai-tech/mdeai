@@ -94,6 +94,32 @@ async function measure(page: Page) {
   });
 }
 
+test("the very first search after load scrolls its newest results into view", async ({ page }) => {
+  test.setTimeout(240_000);
+  await open(page, 1280, 800);
+  // No earlier message: the results are the first thing in the transcript.
+  await send(page, "1BR apartment in Laureles under 80 dollars per night");
+  await expect(page.getByTestId("rental-card")).toHaveCount(10, { timeout: 30_000 });
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const cards = document.querySelectorAll('[data-testid="rental-card"]');
+          let node: HTMLElement | null = cards[cards.length - 1] as HTMLElement | null;
+          while (node) {
+            const style = getComputedStyle(node);
+            if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 4) {
+              return Math.round(node.scrollHeight - node.clientHeight - node.scrollTop);
+            }
+            node = node.parentElement;
+          }
+          return -1;
+        }),
+      { timeout: 15_000, message: "pixels of results still hidden below the transcript's visible area" },
+    )
+    .toBeLessThanOrEqual(8);
+});
+
 for (const viewport of [
   { width: 1440, height: 900, sidebar: 240, column: 600 },
   { width: 1024, height: 768, sidebar: 208, column: 408 },
