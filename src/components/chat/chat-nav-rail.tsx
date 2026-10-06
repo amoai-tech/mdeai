@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
+import { threadLabel } from "@/lib/chat/thread-label";
 import { useNavThreads } from "@/lib/chat/use-nav-threads";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -45,7 +47,7 @@ const EXPLORE_ITEMS: NavItem[] = [
 const LIBRARY_ITEMS: NavItem[] = [
   { slug: "saved", label: "Saved", href: "/saved", Icon: Heart },
   { slug: "tickets", label: "Tickets", href: "/me/tickets", Icon: Ticket },
-  { slug: "trips", label: "Trips", href: null, Icon: Luggage },
+  { slug: "trips", label: "Trips", href: "/trips", Icon: Luggage },
   { slug: "profile", label: "Profile", href: null, Icon: User },
 ];
 
@@ -54,14 +56,14 @@ function NavItemRow({ item }: { item: NavItem }) {
   if (href) {
     return (
       <li>
-        <a
+        <Link
           href={href}
           data-testid={`nav-${slug}-link`}
           className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Icon className="size-4 shrink-0" aria-hidden />
           {label}
-        </a>
+        </Link>
       </li>
     );
   }
@@ -167,25 +169,28 @@ export function ChatNavRail({
             </span>
           </li>
         ) : threads.length > 0 ? (
-          threads.map((thread) => (
-            <li key={thread.id}>
-              <button
-                type="button"
-                data-testid="nav-thread-item"
-                data-thread-id={thread.id}
-                onClick={() => onSelectThread(thread.id)}
-                className={cn(
-                  "w-full truncate rounded-md px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
-                  activeThreadId === thread.id
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground",
-                )}
-                title={thread.title}
-              >
-                {thread.title}
-              </button>
-            </li>
-          ))
+          threads.map((thread) => {
+            const label = threadLabel(thread.title, thread.updatedAt);
+            return (
+              <li key={thread.id}>
+                <button
+                  type="button"
+                  data-testid="nav-thread-item"
+                  data-thread-id={thread.id}
+                  onClick={() => onSelectThread(thread.id)}
+                  className={cn(
+                    "w-full truncate rounded-md px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
+                    activeThreadId === thread.id
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground",
+                  )}
+                  title={label}
+                >
+                  {label}
+                </button>
+              </li>
+            );
+          })
         ) : (
           <li>
             <span

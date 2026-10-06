@@ -99,7 +99,7 @@ export function EventBrowseView({
                 variant="outline"
                 size="sm"
                 nativeButton={false}
-                render={<Link href="/" />}
+                render={<Link href="/chat" />}
               >
                 Ask the concierge
               </Button>

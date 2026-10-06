@@ -59,7 +59,7 @@ export default async function HostEventsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm text-primary hover:underline">
+          <Link href="/chat" className="text-sm text-primary hover:underline">
             Back to chat
           </Link>
           <Link

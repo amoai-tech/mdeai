@@ -28,7 +28,7 @@ export function MyTicketsList({ orders, upcoming, past }: MyTicketsListProps) {
           After checkout, open the link from your confirmation email, or sign in to
           see tickets linked to your account.
         </p>
-        <Link href="/" className={cn(buttonVariants({ variant: "outline" }), "mt-4 inline-flex")}>
+        <Link href="/chat" className={cn(buttonVariants({ variant: "outline" }), "mt-4 inline-flex")}>
           Back to chat
         </Link>
       </div>

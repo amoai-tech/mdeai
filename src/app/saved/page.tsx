@@ -32,7 +32,7 @@ export default async function SavedPage() {
             Shortlists from chat — rentals, events, and places you hearted.
           </p>
         </div>
-        <Link href="/" className="text-sm text-primary hover:underline">
+        <Link href="/chat" className="text-sm text-primary hover:underline">
           Back to chat
         </Link>
       </div>
@@ -56,7 +56,7 @@ export default async function SavedPage() {
           />
           <div className="mt-4 text-center">
             <Link
-              href="/"
+              href="/chat"
               data-testid="saved-start-chat"
               className="text-sm font-medium text-primary hover:underline"
             >

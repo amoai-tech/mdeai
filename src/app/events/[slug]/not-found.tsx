@@ -12,7 +12,7 @@ export default function EventNotFound() {
       <p className="max-w-md text-center text-sm text-muted-foreground">
         This event is not published or the link may be outdated.
       </p>
-      <Link href="/" className={buttonVariants({ variant: "default" })}>
+      <Link href="/chat" className={buttonVariants({ variant: "default" })}>
         Back to chat
       </Link>
     </main>

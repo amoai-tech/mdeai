@@ -29,7 +29,7 @@ export default async function TripsPage() {
             Plans for Camila&apos;s Medellín move, weekends, and event runs.
           </p>
         </div>
-        <Link href="/" className="text-sm text-primary hover:underline">
+        <Link href="/chat" className="text-sm text-primary hover:underline">
           Back to chat
         </Link>
       </div>
@@ -53,7 +53,7 @@ export default async function TripsPage() {
           />
           <div className="mt-4 text-center">
             <Link
-              href="/"
+              href="/chat"
               data-testid="trips-start-chat"
               className="text-sm font-medium text-primary hover:underline"
             >
