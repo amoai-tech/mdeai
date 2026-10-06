@@ -13,7 +13,8 @@
 --   map_ready    = searchable + valid coordinate pair + PostGIS location consistent
 --   launch_ready = active + approved + published + not fixture + valid price/currency
 --                  + usable image + map_ready + freshness evidence + canonical owner
---   requestable  = active + approved + published + canonical owner (SAN-1349 is authoritative)
+--   requestable  = active + approved + published + canonical owner + current availability
+--                  window — the SAN-1349 predicate, reused unchanged
 --
 -- This statement is read-only. It never writes.
 
@@ -22,6 +23,7 @@ with base as (
     a.id, a.title, a.slug, a.neighborhood, a.source, a.metadata,
     a.status, a.moderation_status, a.listing_workflow_status, a.freshness_status,
     a.price_monthly, a.currency, a.latitude, a.longitude, a.location,
+    a.available_from, a.available_to,
     a.last_checked_at, a.landlord_id, a.source_url, a.source_listing_id,
     (select count(*) from unnest(a.images) as img
       where coalesce(trim(img), '') <> '') as image_count,
@@ -68,7 +70,9 @@ verdict as (
       and f.coord_pair_valid and f.postgis_consistent and f.has_freshness_evidence
       and f.has_canonical_owner) as launch_ready,
     (f.status = 'active' and f.moderation_status = 'approved'
-      and f.listing_workflow_status = 'published' and f.has_canonical_owner) as requestable
+      and f.listing_workflow_status = 'published' and f.has_canonical_owner
+      and (f.available_from is null or f.available_from <= current_date)
+      and (f.available_to is null or f.available_to >= current_date)) as requestable
   from flags f
 ),
 detail as (
