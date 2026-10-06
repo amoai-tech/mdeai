@@ -102,7 +102,8 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       await expect(page.locator(MAP_CONTENT)).toBeHidden();
 
       // No lingering overlay should intercept the CopilotKit composer.
-      const input = page.locator(".copilotKitInput textarea").first();
+      // (The current chat renders `data-testid="copilot-chat-textarea"`, not the old `.copilotKitInput`.)
+      const input = page.getByTestId("copilot-chat-textarea");
       await input.click({ timeout: 5_000 });
       await expect(input).toBeFocused();
     });
