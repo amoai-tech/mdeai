@@ -46,8 +46,8 @@ const MAX_STATE_AGE_MS = 24 * 60 * 60 * 1000;
 
 // Fail fast: a typo in SAN548_PHASE must not produce a green run with zero phases
 // (Playwright treats test.skip() as an expected skip, not a failure).
-if (enabled && phase !== "A" && phase !== "B") {
-  throw new Error(`SAN-548: set SAN548_PHASE to exactly A or B (got: ${phase || "<empty>"})`);
+if (enabled && phase !== "A" && phase !== "B" && phase !== "RECOVER") {
+  throw new Error(`SAN-548: set SAN548_PHASE to exactly A, B, or RECOVER (got: ${phase || "<empty>"})`);
 }
 
 type PhaseState = {
@@ -204,17 +204,17 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
     }
 
     const camila = await createThrowawayIdentity("qa-san548-camila");
-    // Recovery record FIRST: if the process dies mid-Phase-A, this names the identity.
-    writeState({
-      version: STATE_VERSION,
-      status: "A-in-progress",
-      baseUrl,
-      createdAt: new Date().toISOString(),
-      camilaEmail: camila.email,
-      camilaUserId: camila.userId,
-    });
-
     try {
+      // Recovery record FIRST: if the process dies mid-Phase-A, this names the identity.
+      // Inside the try so a write failure also triggers identity cleanup.
+      writeState({
+        version: STATE_VERSION,
+        status: "A-in-progress",
+        baseUrl,
+        createdAt: new Date().toISOString(),
+        camilaEmail: camila.email,
+        camilaUserId: camila.userId,
+      });
       await signInWithBypass(page, camila.email);
       const runThreads = recordRunThreadIds(page);
       await gotoConcierge(page);
@@ -256,11 +256,54 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
         camilaUserId: camila.userId,
       });
     } catch (error) {
-      // Do not leak the production identity/rows when Phase A fails before the handoff.
-      await deleteThrowawayIdentity(camila).catch(() => undefined);
-      removeState();
+      // Cleanup succeeded -> no leak, drop the handoff. Cleanup failed -> KEEP a recovery
+      // record so the production identity is not lost with the error.
+      const cleaned = await deleteThrowawayIdentity(camila).then(
+        () => true,
+        () => false,
+      );
+      if (cleaned) {
+        removeState();
+      } else {
+        try {
+          writeState({
+            version: STATE_VERSION,
+            status: "A-in-progress",
+            baseUrl,
+            createdAt: new Date().toISOString(),
+            camilaEmail: camila.email,
+            camilaUserId: camila.userId,
+          });
+        } catch {
+          // Best effort; the identity is still named in the log below.
+        }
+        console.error(
+          `SAN-548: Phase A cleanup failed; retained ${stateFile}. Recover with: ` +
+            `SAN548_PROD_CERT=1 SAN548_PHASE=RECOVER ... (identity ${camila.email} / ${camila.userId})`,
+        );
+      }
       throw error;
     }
+  });
+
+  test("Recovery — remove an abandoned Phase A identity and its rows", async () => {
+    test.skip(phase !== "RECOVER", "set SAN548_PHASE=RECOVER for recovery");
+    test.setTimeout(120_000);
+    const state = readStateOrNull();
+    if (!state) {
+      console.info(`SAN-548: nothing to recover (no ${stateFile}).`);
+      return;
+    }
+    await deleteThrowawayIdentity({ email: state.camilaEmail, userId: state.camilaUserId });
+    const admin = await getSupabaseAdmin();
+    const remaining = await admin
+      .from("mastra_threads")
+      .select("id", { count: "exact", head: true })
+      .eq("resourceId", state.camilaUserId);
+    if (remaining.error) throw new Error(`verify cleanup failed: ${remaining.error.message}`);
+    expect(remaining.count ?? 0, "Camila's threads are gone").toBe(0);
+    removeState();
+    console.info(`SAN-548: recovered ${state.camilaEmail} and removed the handoff.`);
   });
 
   test("Phase B — after the redeploy: reopen, semantic follow-up, Roberto refused, invariants", async ({ browser }) => {
@@ -296,9 +339,9 @@ test.describe("SAN-548 two-phase production rental chat certification", () => {
           .getByTestId("copilot-assistant-message")
           .last()
           .innerText();
-        expect(answer, "answer names the corrected amount").toMatch(/4\s*(millones|M\b|\.000\.000)/i);
-        expect(answer, "answer names the currency").toMatch(/COP|pesos/i);
-        expect(answer, "answer names the period").toMatch(/mensual|mes|month|monthly/i);
+        expect(answer, "answer names the corrected amount").toMatch(/(?<!\d)4(?:\s*(?:millones?|M)\b|(?:[.,]000){2})(?!\d)/i);
+        expect(answer, "answer names the currency").toMatch(/\b(?:COP|pesos(?:\s+colombianos)?)\b/i);
+        expect(answer, "answer names the period").toMatch(/\b(?:mensual|mensuales|mes|month|monthly)\b/i);
       } finally {
         await freshContext.close();
       }
