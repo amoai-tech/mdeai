@@ -8,6 +8,8 @@
 export const FRESHNESS_STATUSES = ["active", "unconfirmed", "stale"];
 /** Matches the live property_verifications.status contract. */
 export const VERIFICATION_STATUSES = ["pending", "verified", "rejected", "revoked"];
+/** SAN-468 §5.4: matches the live rental_listing_images.rights_status contract. */
+export const IMAGE_RIGHTS_STATUSES = ["unverified", "authorized", "revoked"];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Provider/evidence tokens: bounded, no whitespace or shell/path characters. */
@@ -65,6 +67,7 @@ export function parseCertificationEvidenceArgs(argv) {
   }
 
   const imageUrl = (args["image-url"] ?? "").trim() || null;
+  const imageRights = (args["image-rights"] ?? "").trim() || null;
   const sourceUrl = (args["source-url"] ?? "").trim() || null;
   const sourceType = (args["source-type"] ?? "").trim() || null;
   const verificationStatus = (args["verification-status"] ?? "").trim() || null;
@@ -72,6 +75,12 @@ export function parseCertificationEvidenceArgs(argv) {
   const notes = (args.notes ?? "").trim() || null;
 
   if (imageUrl && !isHttpUrl(imageUrl)) errors.push("--image-url must be an http(s) URL");
+  if (imageRights && !IMAGE_RIGHTS_STATUSES.includes(imageRights)) {
+    errors.push(`--image-rights must be one of ${IMAGE_RIGHTS_STATUSES.join("|")}`);
+  }
+  if (imageRights && !imageUrl) {
+    errors.push("--image-rights requires --image-url (photo rights describe a specific photo)");
+  }
   if (sourceUrl && !isHttpUrl(sourceUrl)) errors.push("--source-url must be an http(s) URL");
   if (sourceType && !TOKEN_RE.test(sourceType)) {
     errors.push("--source-type must be 1-64 chars of [A-Za-z0-9_-]");
@@ -96,6 +105,7 @@ export function parseCertificationEvidenceArgs(argv) {
       checkedAt,
       freshnessStatus,
       imageUrl,
+      imageRights,
       sourceType,
       sourceUrl,
       verificationStatus,
