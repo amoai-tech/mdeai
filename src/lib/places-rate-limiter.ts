@@ -7,10 +7,10 @@ type Bucket = { count: number; resetAt: number };
 export interface PlacesRateLimiter {
   isRateLimited(key: string): boolean;
   /**
-   * Derives a per-client bucket key from the request.
-   * Returns the first hop of x-forwarded-for, x-real-ip, or "unknown".
-   * In production (Vercel) x-forwarded-for is always injected, so "unknown"
-   * is only reachable in local dev or bare Node environments.
+   * Derives a per-client bucket key from the request. Vercel overwrites
+   * x-forwarded-for to prevent spoofing and also provides x-vercel-forwarded-for,
+   * which is the safer signal when another proxy sits in front. Preference:
+   * x-vercel-forwarded-for -> x-forwarded-for -> x-real-ip -> "unknown".
    */
   rateLimitKey(req: Request): string;
   resetForTests(): void;
@@ -49,12 +49,19 @@ export function createPlacesRateLimiter(maxPerWindow: number): PlacesRateLimiter
   }
 
   function rateLimitKey(req: Request): string {
-    const forwarded = req.headers.get("x-forwarded-for");
-    if (forwarded) {
-      const first = forwarded.split(",")[0]?.trim();
+    // x-vercel-forwarded-for is only trustworthy when Vercel is the edge that sets
+    // it. Behind any other proxy it can be spoofed, so use the standard chain there.
+    const headers =
+      process.env.VERCEL === "1"
+        ? ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]
+        : ["x-forwarded-for", "x-real-ip"];
+    for (const header of headers) {
+      const value = req.headers.get(header);
+      if (!value) continue;
+      const first = value.split(",")[0]?.trim();
       if (first) return first;
     }
-    return req.headers.get("x-real-ip") ?? "unknown";
+    return "unknown";
   }
 
   function resetForTests(): void {
