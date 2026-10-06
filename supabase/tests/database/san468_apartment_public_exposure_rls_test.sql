@@ -105,14 +105,20 @@ select throws_ok(
     values ('SAN468 anon insert', 'san468-anon-insert', 'Laureles')$$,
   '42501', null::text, 'A7: anon INSERT is denied');
 
-select throws_ok(
-  $$update public.apartments set title = 'SAN468 anon update'
-    where id = 'b4680000-0000-4000-8000-000000000001'$$,
-  '42501', null::text, 'A8: anon UPDATE is denied');
+with anon_update as (
+  update public.apartments set title = 'SAN468 anon update'
+    where id = 'b4680000-0000-4000-8000-000000000001'
+  returning 1
+)
+select is((select count(*)::int from anon_update), 0,
+  'A8: anon UPDATE is filtered to zero rows by RLS');
 
-select throws_ok(
-  $$delete from public.apartments where id = 'b4680000-0000-4000-8000-000000000001'$$,
-  '42501', null::text, 'A9: anon DELETE is denied');
+with anon_delete as (
+  delete from public.apartments where id = 'b4680000-0000-4000-8000-000000000001'
+  returning 1
+)
+select is((select count(*)::int from anon_delete), 0,
+  'A9: anon DELETE is filtered to zero rows by RLS');
 
 reset role;
 

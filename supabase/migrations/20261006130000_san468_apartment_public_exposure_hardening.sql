@@ -9,11 +9,12 @@
 --    ('active','inactive','booked','pending'), so 'featured' can never match and
 --    the disjunct is dead. Dropping it is behaviour-neutral.
 --
--- 2. Revoke the unnecessary end-user write privileges on apartments from `anon`.
---    Supabase's default grant left anon with INSERT/UPDATE/DELETE/TRUNCATE/
---    REFERENCES/TRIGGER. RLS already denied every write (no anon write policy),
---    so this is defense-in-depth: an anonymous client can only SELECT, subject
---    to RLS. `authenticated` keeps its write grants; `service_role` is unchanged.
+-- 2. Table grants were reviewed and deliberately NOT changed. RLS has no anon
+--    write policy, so anon writes are already filtered to zero rows (INSERT is
+--    rejected with 42501). Revoking the table-level grant would change that
+--    observable contract to a hard "permission denied" and break the SAN-1054
+--    lifecycle probe, so it belongs to a separate reviewed security change, not
+--    this inventory task.
 --
 -- Deliberately NOT changed here:
 --   * the public predicate stays `status = 'active'`. Tightening it to
@@ -31,7 +32,3 @@ create policy anyone_can_view_active_apartments
   for select
   to public
   using (status = 'active');
-
-revoke insert, update, delete, truncate, references, trigger
-  on public.apartments
-  from anon;
