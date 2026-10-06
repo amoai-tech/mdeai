@@ -62,7 +62,18 @@ try {
 }
 
 const sql = readFileSync(sqlPath, "utf8");
-const { rows } = await client.query(sql);
+let rows;
+try {
+  ({ rows } = await client.query(sql));
+} catch (err) {
+  // A failing query (syntax, permission, schema drift) must produce a clean FAIL
+  // and release the connection rather than an unhandled rejection.
+  console.error(
+    `FAIL inventory-quality report (query failed): ${err instanceof Error ? err.message : err}`,
+  );
+  await client.end().catch(() => {});
+  process.exit(1);
+}
 await client.end();
 
 const report = rows[0]?.report;
