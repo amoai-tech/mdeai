@@ -56,7 +56,6 @@ vi.mock("@/components/chat/restaurant-filter-chips", () => ({
 
 import {
   ConciergeMessageView,
-  conciergeInputSlot,
   conciergeWelcomeScreen,
 } from "@/components/chat/concierge-copilot-chat-view";
 import { useTranscriptTailHasContent } from "@/components/chat/concierge-transcript-tail";
@@ -99,21 +98,6 @@ function mount(element: React.ReactElement) {
     },
   };
 }
-
-describe("conciergeInputSlot", () => {
-  const send = () => {};
-
-  it("leaves the input alone when CopilotKit gave no submit handler (agent not ready)", () => {
-    const custom = { autoFocus: true };
-    expect(conciergeInputSlot(custom, undefined)).toBe(custom);
-    expect(conciergeInputSlot(undefined, undefined)).toBeUndefined();
-  });
-
-  it("adds our handler when CopilotKit is ready, keeping an existing input object", () => {
-    expect(conciergeInputSlot({ autoFocus: true }, send)).toEqual({ autoFocus: true, onSubmitMessage: send });
-    expect(conciergeInputSlot(undefined, send)).toEqual({ onSubmitMessage: send });
-  });
-});
 
 describe("conciergeWelcomeScreen", () => {
   it("turns the welcome screen off when the tail has content, whatever was asked for", () => {

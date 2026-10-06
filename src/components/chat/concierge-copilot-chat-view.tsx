@@ -59,18 +59,12 @@ export function conciergeWelcomeScreen<T>(hasTailContent: boolean, welcomeScreen
 }
 
 /**
- * CopilotChat passes `onSubmitMessage` only once the agent is ready; without it the composer
- * cannot send. Supply our classify + fast-path handler only when CopilotKit supplied one, so that
- * readiness gate stays effective. An existing input object is preserved either way.
+ * Wrap CopilotChatView — route composer submit through classify + fast-path before agent fallback (CK-V2-015).
+ *
+ * Our send handler is wired UNCONDITIONALLY. CopilotChat passes no `onSubmitMessage` while the AI
+ * runtime is unreachable (agent not ready), and without one the send button is disabled, so a renter
+ * could not even ask for rentals that the fast-path answers without the agent.
  */
-export function conciergeInputSlot<T>(input: T, onSubmitMessage: ((text: string) => void) | undefined) {
-  if (!onSubmitMessage) return input;
-  return typeof input === "object" && input !== null && !("$$typeof" in input)
-    ? { ...input, onSubmitMessage }
-    : { onSubmitMessage };
-}
-
-/** Wrap CopilotChatView — route composer submit through classify + fast-path before agent fallback (CK-V2-015). */
 function ConciergeChatViewInner(props: CopilotChatViewProps) {
   const handlers = useConciergeSendHandlers();
   const hasTailContent = useTranscriptTailHasContent();
@@ -86,7 +80,13 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
         {...props}
         messageView={ConciergeMessageView}
         welcomeScreen={conciergeWelcomeScreen(hasTailContent, props.welcomeScreen)}
-        input={conciergeInputSlot(props.input, props.onSubmitMessage ? onSubmitMessage : undefined)}
+        input={
+          typeof props.input === "object" &&
+          props.input !== null &&
+          !("$$typeof" in props.input)
+            ? { ...props.input, onSubmitMessage }
+            : { onSubmitMessage }
+        }
       />
     </div>
   );

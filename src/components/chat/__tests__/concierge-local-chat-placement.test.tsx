@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
 });
 
 const copilotChatView = vi.hoisted(() =>
-  vi.fn(({ messages = [], welcomeScreen }: { messages?: Array<{ id: string; role: string; content: string }>; welcomeScreen?: unknown }) =>
+  vi.fn(({ messages = [], welcomeScreen }: { messages?: Array<{ id: string; role: string; content: string }>; welcomeScreen?: unknown; input?: unknown }) =>
     React.createElement(
       "div",
       {
@@ -292,6 +292,25 @@ describe("Concierge transcript ownership", () => {
     expect(container.textContent).toBe(
       "older agent replysearch rentalsFound 4 rentals",
     );
+    unmount();
+  });
+
+  // Regression: CopilotChat passes no onSubmitMessage while the AI runtime is unreachable (agent
+  // not ready). The concierge handler must still be wired, because it answers from the fast-path
+  // searches without the agent; without it the send button is disabled and nothing can be sent.
+  it("keeps the composer able to send when CopilotKit reports the agent is not ready", () => {
+    const { unmount } = renderWithAct(
+      React.createElement(ConciergeChatView, { input: { autoFocus: true } } as never),
+    );
+    const input = copilotChatView.mock.calls.at(-1)?.[0]?.input as {
+      autoFocus?: boolean;
+      onSubmitMessage?: (text: string) => void;
+    };
+
+    expect(typeof input.onSubmitMessage).toBe("function");
+    expect(input.autoFocus).toBe(true);
+    input.onSubmitMessage?.("1BR in Laureles");
+    expect(mocks.sendConciergeUserMessage).toHaveBeenCalledWith("1BR in Laureles", expect.anything());
     unmount();
   });
 
