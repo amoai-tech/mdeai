@@ -1,6 +1,6 @@
 [
   {
-    "query": "Redesign /rentals so the result cards, map, filters and Ask MDE feel like one premium responsive workspace instead of separate widgets.",
+    "query": "Redesign /rentals so result cards, map, filters and Ask MDE feel like one premium responsive workspace instead of separate widgets.",
     "should_trigger": true
   },
   {
@@ -13,6 +13,34 @@
   },
   {
     "query": "Review this property screen at desktop and mobile widths and propose a stronger visual composition while keeping MDE design tokens.",
+    "should_trigger": true
+  },
+  {
+    "query": "Design a renter viewing-status screen for requested, confirmed, rescheduled and declined states with a clear mobile CTA.",
+    "should_trigger": true
+  },
+  {
+    "query": "Reshape the MDE chat-and-map workspace so the information hierarchy remains readable at 1440px, tablet and mobile widths.",
+    "should_trigger": true
+  },
+  {
+    "query": "Polish the rental recommendation card hierarchy: photography, monthly price, grounded Why it fits reasons and viewing CTA.",
+    "should_trigger": true
+  },
+  {
+    "query": "Design the review step for Request viewing so the renter understands the property, time, contact details and final commitment.",
+    "should_trigger": true
+  },
+  {
+    "query": "Improve the visual hierarchy of the AI progress and requirements summary without exposing agent names or internal tool telemetry.",
+    "should_trigger": true
+  },
+  {
+    "query": "Create a deliberate responsive layout for a new MDE marketplace dashboard using the existing design tokens and components.",
+    "should_trigger": true
+  },
+  {
+    "query": "The page is functional but visually inconsistent with MDE. Rework spacing, typography, states and interaction hierarchy across breakpoints.",
     "should_trigger": true
   },
   {
@@ -29,6 +57,26 @@
   },
   {
     "query": "Add a database migration for viewing request idempotency and verify it in Supabase.",
+    "should_trigger": false
+  },
+  {
+    "query": "A rental map pin is stale after filtering. Diagnose MapContext identity and synchronization without redesigning the UI.",
+    "should_trigger": false
+  },
+  {
+    "query": "Change the Mastra rentalAgent tool schema and orchestration so hard eligibility happens before semantic ranking.",
+    "should_trigger": false
+  },
+  {
+    "query": "Review this PR for authorization bugs, data leaks and regression risk. Do not redesign the screens.",
+    "should_trigger": false
+  },
+  {
+    "query": "This Vitest suite is flaky after a timer change. Find the root cause and make the tests deterministic.",
+    "should_trigger": false
+  },
+  {
+    "query": "Correct the spelling of one existing button label; no layout, hierarchy, component or interaction changes are needed.",
     "should_trigger": false
   }
 ]

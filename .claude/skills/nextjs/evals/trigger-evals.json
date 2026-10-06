@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Refactor this Next.js App Router page so cookie access follows the installed version's async request API.",
+    "should_trigger": true
+  },
+  {
+    "query": "Decide the correct Server and Client Component boundary for this interactive rental detail route.",
+    "should_trigger": true
+  },
+  {
+    "query": "This React component has nine boolean mode props. Replace the prop matrix with a scalable composition pattern.",
+    "should_trigger": true
+  },
+  {
+    "query": "Two sibling controls need the same UI state. Refactor the provider and state ownership without introducing global state.",
+    "should_trigger": true
+  },
+  {
+    "query": "The page has a serial data-fetching waterfall. Restructure the Next.js work so independent requests can start together.",
+    "should_trigger": true
+  },
+  {
+    "query": "The client bundle grew after adding a rental workspace dependency. Find and measure the narrowest bundle fix.",
+    "should_trigger": true
+  },
+  {
+    "query": "Add a Suspense boundary so independent App Router content can stream without moving unnecessary code to the client.",
+    "should_trigger": true
+  },
+  {
+    "query": "Fix this Next.js cache and revalidation behavior for user-scoped data without leaking one user's result to another.",
+    "should_trigger": true
+  },
+  {
+    "query": "Update metadata for this App Router route using the installed Next.js contract.",
+    "should_trigger": true
+  },
+  {
+    "query": "Create and verify a Vercel preview for this branch without promoting it to production.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review whether proxy or middleware is the correct Next.js boundary for this request interception behavior.",
+    "should_trigger": true
+  },
+  {
+    "query": "Change the rental card spacing, typography, photo crop and color hierarchy; component APIs and state ownership stay unchanged.",
+    "should_trigger": false
+  },
+  {
+    "query": "Fix the Supabase viewing_requests RLS policy and database grants.",
+    "should_trigger": false
+  },
+  {
+    "query": "Change the Mastra concierge routing rules and rental search tool schema.",
+    "should_trigger": false
+  },
+  {
+    "query": "Rental cards and Google Maps markers select different IDs. Fix the map-domain synchronization contract.",
+    "should_trigger": false
+  },
+  {
+    "query": "Review an existing PR for security and regression risks across several domains.",
+    "should_trigger": false
+  },
+  {
+    "query": "A production bug happens somewhere between API, database and UI and the failing subsystem is not known yet.",
+    "should_trigger": false
+  },
+  {
+    "query": "Choose the minimum test suite and browser checks needed to prove this already-implemented feature.",
+    "should_trigger": false
+  },
+  {
+    "query": "Refactor this standalone TypeScript date formatter; it does not run in React or Next.js.",
+    "should_trigger": false
+  },
+  {
+    "query": "Rewrite the Request viewing confirmation copy so it says Viewing requested instead of Lead submitted, with no framework change.",
+    "should_trigger": false
+  }
+]
