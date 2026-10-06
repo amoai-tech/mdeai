@@ -20,6 +20,10 @@ const KINDS: readonly FastPathVertical[] = ["rental", "event", "restaurant", "gr
  * results arrive; it never touches the vertical you pass in.
  *
  * It also empties the map pins of the other kinds, so the map and the list never disagree.
+ *
+ * SAN-1422 — pass `{ clearOtherPins: false }` when the new search produced nothing to pin: the other
+ * kinds' panels are still replaced, but their pins stay (a grounded search that finds no mappable
+ * place must not wipe the renter's rental or event pins).
  */
 export function useClearOtherFastPathResults() {
   const { setToolResult: setRental, setSearchMeta: setRentalSearchMeta } = useRentalFastPath();
@@ -30,7 +34,7 @@ export function useClearOtherFastPathResults() {
   const { mergePinsByCategory } = useMapContext();
 
   return useCallback(
-    (keep: FastPathVertical) => {
+    (keep: FastPathVertical, { clearOtherPins = true }: { clearOtherPins?: boolean } = {}) => {
       if (keep !== "rental") {
         setRental(null);
         setRentalSearchMeta(null);
@@ -41,7 +45,9 @@ export function useClearOtherFastPathResults() {
       }
       if (keep !== "restaurant") setRestaurant(null);
       if (keep !== "grounded") setGrounded(null);
-      for (const kind of KINDS) if (kind !== keep) mergePinsByCategory(kind, []);
+      if (clearOtherPins) {
+        for (const kind of KINDS) if (kind !== keep) mergePinsByCategory(kind, []);
+      }
     },
     [setRental, setRentalSearchMeta, setEvent, setRestaurant, setGrounded, clearWebCitations, mergePinsByCategory],
   );

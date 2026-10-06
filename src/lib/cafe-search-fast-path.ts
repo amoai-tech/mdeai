@@ -1,3 +1,4 @@
+import { withMapCoverage } from "@/lib/map-result-summary";
 import { analyzeVenueIntelligenceQuery } from "@/mastra/lib/intelligence-restaurant-venue-wrapper";
 
 export type CafeSearchApiParams = {
@@ -38,6 +39,7 @@ export function canFastPathCafeSearch(text: string): boolean {
 
 export function fastPathCafeSummary(
   count: number,
+  pinCount: number,
   neighborhood?: string,
   query?: string,
 ): string {
@@ -49,7 +51,7 @@ export function fastPathCafeSummary(
   }
   const area = neighborhood ? ` in the ${neighborhood} area` : " in Medellín";
   if (query && analyzeVenueIntelligenceQuery(query).route === "nightlife_anchor") {
-    return `Found ${count} nightlife venue${count === 1 ? "" : "s"}${area} — see cards below and pins on the map.`;
+    return withMapCoverage(`Found ${count} nightlife venue${count === 1 ? "" : "s"}${area}`, count, pinCount);
   }
-  return `Found ${count} specialty coffee shop${count === 1 ? "" : "s"}${area} — see cards below and pins on the map.`;
+  return withMapCoverage(`Found ${count} specialty coffee shop${count === 1 ? "" : "s"}${area}`, count, pinCount);
 }

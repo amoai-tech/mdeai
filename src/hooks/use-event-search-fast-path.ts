@@ -14,6 +14,7 @@ import {
   eventCardsToToolEnvelope,
   eventSearchParamsFromChip,
   fastPathAssistantSummary,
+  fastPathEventFallbackSummary,
   shouldInstantEventClarify,
   type EventSearchApiParams,
 } from "@/lib/event-search-fast-path";
@@ -81,16 +82,17 @@ export function useEventSearchFastPath() {
         })),
       );
       const { pins } = normalizeToolOutput("event", envelope);
-      if (pins.length > 0) {
-        mergePinsByCategory("event", pins);
-        if (pins.length >= 2) requestFitBounds();
-      }
+      // Always replace the category (an empty set clears the previous search's pins); only zoom to fit
+      // when there is something to fit.
+      mergePinsByCategory("event", pins);
+      if (pins.length >= 2) requestFitBounds();
       setState({
         ...memory,
         lastIntent: "event_discovery",
         lastEventQuery: query,
         lastEventResults: eventCardsToPanelRows(cards),
       });
+      return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setRows, setToolResult, setWebCitations, setState, clearOthers],
   );
@@ -124,10 +126,10 @@ export function useEventSearchFastPath() {
           dateWindow: usedFallback ? "any" : (params.dateWindow ?? "any"),
           genericAskPending: false,
         };
-        applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
+        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
         const summary = usedFallback
-          ? `Nothing for ${params.dateWindow?.replace("_", " ")} — showing ${cards.length} upcoming event${cards.length === 1 ? "" : "s"} instead.`
-          : fastPathAssistantSummary(cards.length);
+          ? fastPathEventFallbackSummary(cards.length, pinCount, params.dateWindow)
+          : fastPathAssistantSummary(cards.length, pinCount);
         showExchange(userText, summary);
         return true;
       } catch (err) {

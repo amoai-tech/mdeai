@@ -1,3 +1,4 @@
+import { withMapCoverage } from "@/lib/map-result-summary";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 import { analyzeVenueIntelligenceQuery } from "@/mastra/lib/intelligence-restaurant-venue-wrapper";
@@ -181,10 +182,14 @@ export function restaurantsToToolEnvelope(cards: Restaurant[]) {
   };
 }
 
-export function fastPathRestaurantSummary(count: number, neighborhood?: string): string {
+export function fastPathRestaurantSummary(
+  count: number,
+  pinCount: number,
+  neighborhood?: string,
+): string {
   if (count === 0) {
     return "No restaurants matched — try another neighborhood or cuisine.";
   }
   const area = neighborhood ? ` in ${neighborhood}` : " across Medellín";
-  return `Found ${count} restaurant${count === 1 ? "" : "s"}${area} — see cards below and pins on the map.`;
+  return withMapCoverage(`Found ${count} restaurant${count === 1 ? "" : "s"}${area}`, count, pinCount);
 }
