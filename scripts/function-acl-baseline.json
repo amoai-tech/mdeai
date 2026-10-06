@@ -184,6 +184,11 @@
     "anon": true,
     "authenticated": true
   },
+  "publish_verified_rental(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "record_check_in(p_event_id uuid, p_attendee_id uuid, p_qr_token text, p_scanned_by uuid, p_scanner_device text, p_ip_address inet, p_result text, p_details jsonb)": {
     "public": false,
     "anon": false,
