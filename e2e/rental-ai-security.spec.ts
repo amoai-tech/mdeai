@@ -7,6 +7,7 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
+import { E2E_FIXTURE_METADATA } from "./helpers/rental-fixture-marker";
 
 /**
  * SAN-1054 · Gate 2 — rental authorization boundaries at the HTTP + database edge.
@@ -188,6 +189,7 @@ test.describe("rental AI authorization boundaries (SAN-1054 · Gate 2)", () => {
         listing_workflow_status: "published",
         moderation_status: "approved",
         available_to: "2099-12-31",
+        metadata: E2E_FIXTURE_METADATA,
       })
       .select("id")
       .single();
