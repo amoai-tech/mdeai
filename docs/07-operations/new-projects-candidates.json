@@ -447,7 +447,7 @@
       "key": "medellin:new-project:palma",
       "slug": "palma",
       "name": "Palma",
-      "owner": "Amarilo",
+      "owner": "Amarilo / C.A.S.A.",
       "hood": "Ciudad del Río",
       "status": "pre_sale",
       "priceFrom": null,
@@ -477,7 +477,9 @@
               166
             ],
             "project_status": "Sobre planos",
-            "vis_flag": false
+            "vis_flag": false,
+            "builder": "C.A.S.A.",
+            "marketer": "Amarilo"
           }
         }
       ],

@@ -25,12 +25,11 @@ Every source in the JSON carries its own: `http_status`, `checked_at`, `source_u
 | `medellin:new-project:nutibara-parkway` | Nutibara Parkway | BEMSA / Proin | Laureles | Zonario Laureles | aggregator | 200 | 2026-10-06 | 2026-09-26 |
 | `medellin:new-project:distrito-33` | Distrito 33 | Arco Construcciones e Ingeniería SAS | Laureles | TuLugar | marketplace | 200 | 2026-10-06 | — |
 | `medellin:new-project:grand-coral` | Grand Coral | Construcciones Prisma | Laureles | Prisma | developer | 200 | 2026-10-06 | — |
-
 | `medellin:new-project:vigo` | Vigo | SR Proyectos Constructivos | Laureles | TuLugar | marketplace | 200 | 2026-10-06 | — |
 | `medellin:new-project:arrayan` | Arrayán | Amarilo | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
 | `medellin:new-project:saman` | Samán | Amarilo / C.A.S.A. | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
 | `medellin:new-project:guayacanes` | Guayacanes | Amarilo / C.A.S.A. | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
-| `medellin:new-project:palma` | Palma | Amarilo | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
+| `medellin:new-project:palma` | Palma | Amarilo / C.A.S.A. | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
 | `medellin:new-project:river-park` | River Park | Arquitectura y Concreto / Londoño Gómez | Ciudad del Río | Londoño Gómez | developer | 200 | 2026-10-06 | — |
 
 ## Facts recorded vs. left unknown
@@ -41,6 +40,8 @@ address strings exactly as published, Arrayán's developer coordinates, Arrayán
 River Park (650,217,000 COP) price-from, the Zonario Tier-B cards for Nexus (136 m², 1,587,000,000 COP, Entrega 2027, NO VIS) and Nutibara Parkway (19–47 m², 370,406,379–834,843,174 COP, NO VIS), and the developer typology blocks — built, private and balcony
 area, bedrooms and bathrooms where the page shows them (Arrayán 30–100 m², Samán 56/80/89, Guayacanes
 96/110/162, Palma 129/150/166, Distrito 33 from 27 m², Vigo from 31 m², River Park from 47 m²).
+
+**Builder vs marketer:** Palma's developer page states "Construido por C.A.S.A. y comercializado por Amarilo", so `source_owner` is `Amarilo / C.A.S.A.` and `observed_facts` records `builder` and `marketer` separately.
 
 **Tier-B promotion rule:** canonical numeric fields (`price_from_cents`, `price_to_cents`, `expected_delivery_year`, `vis_flag`) may be seeded from a Tier-B aggregator card when the value is stated per project. Every such value is also kept in `observed_facts`, and the source row's `confidence` (B) plus `source_updated_at` record its trust level, so downstream can treat Tier-A and Tier-B facts differently. Unknown still stays NULL.
 
