@@ -84,17 +84,27 @@ export function formatBathrooms(bathrooms: number | null | undefined): string | 
   return bathrooms === 1 ? "1 bathroom" : `${bathrooms} bathrooms`;
 }
 
-const PROJECT_STATUS_LABELS: Record<string, string> = {
-  pre_launch: "Pre-launch",
-  pre_sale: "Pre-sale · on plans",
-  under_construction: "Under construction",
-  delivered: "Delivered",
-  sold_out: "Sold out",
-};
-
+/**
+ * Explicit switch rather than an object index: the status comes from the database, and a
+ * dynamic lookup reads as a generic object-injection sink to static analysis (and would
+ * silently walk the prototype chain for a crafted key).
+ */
 export function projectStatusLabel(status: string | null): string | null {
   if (!status) return null;
-  return PROJECT_STATUS_LABELS[status] ?? status;
+  switch (status) {
+    case "pre_launch":
+      return "Pre-launch";
+    case "pre_sale":
+      return "Pre-sale · on plans";
+    case "under_construction":
+      return "Under construction";
+    case "delivered":
+      return "Delivered";
+    case "sold_out":
+      return "Sold out";
+    default:
+      return status;
+  }
 }
 
 export function formatDelivery(

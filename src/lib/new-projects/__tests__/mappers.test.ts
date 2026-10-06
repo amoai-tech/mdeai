@@ -59,7 +59,7 @@ function unitRow(overrides: Partial<DevelopmentUnitTypeRow> = {}): DevelopmentUn
     price_to_cents: null,
     private_area_m2: 101,
     project_id: "p1",
-    source_key: "palma-129m-3br",
+    source_key: "unit-fixture-a",
     source_kind: "developer",
     source_url: "https://amarilo.com.co/proyecto/palma",
     updated_at: "2026-10-08T09:00:00Z",

@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ProjectCard } from "@/components/new-projects/project-card";
 import type { NewProjectSummary } from "@/lib/new-projects/types";
+
+/**
+ * Assertions query the rendered DOM instead of substring-matching an HTML string. That is both
+ * a stronger test (element + attribute) and avoids feeding markup to `expect`, which static
+ * analysis (rightly) treats as a mixed-HTML sink.
+ */
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function project(overrides: Partial<NewProjectSummary> = {}): NewProjectSummary {
   return {
@@ -28,46 +37,66 @@ function project(overrides: Partial<NewProjectSummary> = {}): NewProjectSummary 
   };
 }
 
-function render(overrides: Partial<NewProjectSummary> = {}): string {
-  return renderToStaticMarkup(<ProjectCard project={project(overrides)} />);
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+function render(overrides: Partial<NewProjectSummary> = {}): HTMLDivElement {
+  act(() => {
+    root.render(<ProjectCard project={project(overrides)} />);
+  });
+  return container;
 }
 
 describe("ProjectCard — partial and unknown data", () => {
   it("renders the identity, price-from and verification date", () => {
-    const html = render();
-    expect(html).toContain('data-testid="new-project-card-arrayan"');
-    expect(html).toContain('data-testid="new-project-card-link-arrayan"');
-    expect(html).toContain("Ciudad del Río");
-    expect(html).toContain("From COP 575,000,000");
-    expect(html).toContain("Price-from, not an exact unit price.");
-    expect(html).toContain("Verified 6 Oct 2026");
-    expect(html).toContain("1–3 bedrooms");
+    const el = render();
+    expect(el.querySelector('[data-testid="new-project-card-arrayan"]')).not.toBeNull();
+    const link = el.querySelector<HTMLAnchorElement>('[data-testid="new-project-card-link-arrayan"]');
+    expect(link?.getAttribute("href")).toBe("/new-projects/arrayan");
+    expect(el.querySelector('[data-testid="new-project-card-neighborhood"]')?.textContent).toContain(
+      "Ciudad del Río",
+    );
+    expect(el.querySelector('[data-testid="new-project-card-price"]')?.textContent).toContain(
+      "From COP 575,000,000",
+    );
+    expect(container.textContent).toContain("Price-from, not an exact unit price.");
+    expect(container.textContent).toContain("Verified 6 Oct 2026");
+    expect(container.textContent).toContain("1–3 bedrooms");
   });
 
   it("says the price is not published instead of showing zero", () => {
-    const html = render({ priceFromCents: null, priceToCents: null });
-    expect(html).toContain("Not published");
-    expect(html).toContain("Price not published; ask us.");
-    expect(html).not.toContain("COP 0");
+    const el = render({ priceFromCents: null, priceToCents: null });
+    expect(el.textContent).toContain("Not published");
+    expect(el.textContent).toContain("Price not published; ask us.");
+    expect(el.textContent).not.toContain("COP 0");
   });
 
   it("states that the delivery date is not published when no source gave one", () => {
-    const html = render({
-      expectedDeliveryYear: null,
-      expectedDeliveryQuarter: null,
-      deliveryNote: null,
-    });
-    expect(html).toContain("Delivery date not published");
+    const el = render({ expectedDeliveryYear: null, expectedDeliveryQuarter: null, deliveryNote: null });
+    expect(el.textContent).toContain("Delivery date not published");
   });
 
   it("shows an estimated delivery note honestly", () => {
-    const html = render({ expectedDeliveryYear: null, deliveryNote: "Estimada" });
-    expect(html).toContain("Delivery: Estimada");
-    expect(html).not.toContain("Delivery 2027");
+    const el = render({ expectedDeliveryYear: null, deliveryNote: "Estimada" });
+    expect(el.textContent).toContain("Delivery: Estimada");
+    expect(el.textContent).not.toContain("Delivery 2027");
   });
 
   it("omits the bedroom badge when no unit type established a range", () => {
-    const html = render({ minBedrooms: null, maxBedrooms: null });
-    expect(html).not.toContain("bedrooms");
+    const el = render({ minBedrooms: null, maxBedrooms: null });
+    expect(el.textContent).not.toContain("bedrooms");
   });
 });
