@@ -1,0 +1,165 @@
+#!/usr/bin/env node
+/**
+ * SAN-468 §5.4 — record REAL rental certification evidence against the existing model.
+ *
+ * Operator-run and deliberately explicit: it refuses to write without
+ * `--confirm-write=true`, requires the actual check timestamp, and never invents a
+ * fact. It writes only:
+ *   * public.rental_freshness_log   — one row per (listing_id, checked_at)
+ *   * public.apartments             — last_checked_at + freshness_status (+ an
+ *                                     authorized image URL, appended, when supplied)
+ *   * public.rental_grounding       — optional source grounding
+ *   * public.property_verifications — optional property verification
+ *
+ * Every insert is existence-guarded, so re-running is a no-op.
+ *
+ * Usage:
+ *   node --env-file=.env.local scripts/record-rental-certification-evidence.mjs \
+ *     --apartment-id=<uuid> --checked-at=<iso> --freshness-status=active \
+ *     --confirm-write=true [--image-url=…] [--source-type=… --source-url=…] \
+ *     [--verification-status=… --verified-by=<uuid> --notes=…]
+ */
+import pg from "pg";
+import { parseCertificationEvidenceArgs } from "./lib/certification-evidence-args.mjs";
+
+const argv = process.argv.slice(2);
+const dbArg = argv.find((a) => a.startsWith("--database-url="));
+const parsed = parseCertificationEvidenceArgs(argv);
+if (!parsed.ok) {
+  console.error("Refusing to write — fix these first:");
+  for (const error of parsed.errors) console.error(`  ✗ ${error}`);
+  process.exit(2);
+}
+
+const v = parsed.value;
+const dbUrl =
+  (dbArg ? dbArg.slice("--database-url=".length) : null) ||
+  process.env.SUPABASE_DB_URL ||
+  process.env.DATABASE_URL;
+if (!dbUrl) {
+  console.error("No database URL: pass --database-url= or set SUPABASE_DB_URL.");
+  process.exit(2);
+}
+
+function hostOf(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "unparseable-host";
+  }
+}
+
+const client = new pg.Client({ connectionString: dbUrl });
+await client.connect();
+let failed = false;
+try {
+  const {
+    rows: [apartment],
+  } = await client.query(
+    `select id, title, status, moderation_status, listing_workflow_status,
+            freshness_status, last_checked_at,
+            coalesce(array_length(images, 1), 0) as image_count, metadata
+       from public.apartments where id = $1`,
+    [v.apartmentId],
+  );
+  if (!apartment) throw new Error(`apartment ${v.apartmentId} not found`);
+  if (String(apartment.metadata?.is_test_fixture) === "true") {
+    throw new Error("refusing to record certification evidence for an is_test_fixture row");
+  }
+
+  console.log(`Target: ${hostOf(dbUrl)} · ${apartment.title}`);
+  console.log(
+    `Before: ${apartment.status}/${apartment.moderation_status}/${apartment.listing_workflow_status} · freshness=${apartment.freshness_status} · last_checked_at=${apartment.last_checked_at?.toISOString?.() ?? "null"} · images=${apartment.image_count}`,
+  );
+
+  await client.query("begin");
+
+  const freshness = await client.query(
+    `insert into public.rental_freshness_log (listing_id, checked_at, status)
+     select $1::uuid, $2::timestamptz, $3
+      where not exists (
+        select 1 from public.rental_freshness_log
+         where listing_id = $1::uuid and checked_at = $2::timestamptz)
+     returning id`,
+    [v.apartmentId, v.checkedAt, v.freshnessStatus],
+  );
+
+  await client.query(
+    `update public.apartments
+        set freshness_status = $2, last_checked_at = $3::timestamptz
+      where id = $1::uuid`,
+    [v.apartmentId, v.freshnessStatus, v.checkedAt],
+  );
+
+  let grounding = 0;
+  if (v.sourceType && v.sourceUrl) {
+    const g = await client.query(
+      `insert into public.rental_grounding (apartment_id, source_type, source_url, checked_at)
+       select $1::uuid, $2, $3, $4::timestamptz
+        where not exists (
+          select 1 from public.rental_grounding
+           where apartment_id = $1::uuid and source_url = $3 and checked_at = $4::timestamptz)
+       returning id`,
+      [v.apartmentId, v.sourceType, v.sourceUrl, v.checkedAt],
+    );
+    grounding = g.rowCount ?? 0;
+  }
+
+  let verification = 0;
+  if (v.verificationStatus) {
+    const pv = await client.query(
+      `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at)
+       select $1::uuid, $2::uuid, $3, $4, $5::timestamptz
+        where not exists (
+          select 1 from public.property_verifications
+           where apartment_id = $1::uuid and verified_at = $5::timestamptz)
+       returning id`,
+      [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt],
+    );
+    verification = pv.rowCount ?? 0;
+  }
+
+  let imageAdded = 0;
+  if (v.imageUrl) {
+    const img = await client.query(
+      `update public.apartments
+          set images = array_append(coalesce(images, '{}'::text[]), $2)
+        where id = $1::uuid and not ($2 = any(coalesce(images, '{}'::text[])))
+       returning id`,
+      [v.apartmentId, v.imageUrl],
+    );
+    imageAdded = img.rowCount ?? 0;
+  }
+
+  await client.query("commit");
+
+  const {
+    rows: [after],
+  } = await client.query(
+    `select freshness_status, last_checked_at,
+            coalesce(array_length(images, 1), 0) as image_count,
+            (select count(*)::int from public.rental_freshness_log where listing_id = $1::uuid) as freshness_rows,
+            (select count(*)::int from public.rental_grounding where apartment_id = $1::uuid) as grounding_rows,
+            (select count(*)::int from public.property_verifications where apartment_id = $1::uuid) as verification_rows
+       from public.apartments where id = $1::uuid`,
+    [v.apartmentId],
+  );
+
+  console.log(
+    `Wrote: freshness_log+${freshness.rowCount ?? 0} grounding+${grounding} verification+${verification} image+${imageAdded}`,
+  );
+  console.log(
+    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at.toISOString()} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,
+  );
+} catch (err) {
+  try {
+    await client.query("rollback");
+  } catch {
+    /* the transaction may already be closed */
+  }
+  console.error(`FAIL: ${err instanceof Error ? err.message : err}`);
+  failed = true;
+} finally {
+  await client.end();
+}
+process.exit(failed ? 1 : 0);
