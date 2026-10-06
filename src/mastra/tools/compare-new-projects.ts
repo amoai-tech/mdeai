@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { rowToUnitType } from "@/lib/new-projects/mappers";
 import {
+  formatCheckedAt,
   formatDelivery,
   formatPriceFromCents,
   formatPriceRangeLabel,
@@ -37,6 +38,7 @@ export const compareProjectSchema = z.object({
   statusLabel: z.string().nullable(),
   verifiedLabel: z.string(),
   primarySourceUrl: z.string().nullable(),
+  primarySourceCheckedLabel: z.string().nullable(),
   unitTypes: z.array(compareUnitSchema),
   unknownFields: z.array(z.string()),
 });
@@ -96,6 +98,7 @@ export function buildProjectComparison(
       statusLabel: projectStatusLabel(row.project_status),
       verifiedLabel: formatVerified(row.verified_at),
       primarySourceUrl: primary?.source_url ?? null,
+      primarySourceCheckedLabel: primary ? formatCheckedAt(primary.checked_at) : null,
       unitTypes: projectUnits.map((unit) => ({
         name: unit.name,
         builtAreaM2: unit.built_area_m2,

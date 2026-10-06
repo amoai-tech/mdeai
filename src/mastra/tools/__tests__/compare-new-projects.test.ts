@@ -55,6 +55,7 @@ describe("buildProjectComparison", () => {
     expect(projects[0].unitTypes[0].areasLabel).toBe("31 m² built");
     expect(projects[1].unitTypes[0].areasLabel).toBe("30 m² built · 22 m² private");
     expect(projects[0].primarySourceUrl).toBe("https://tulugar.com/en/projects/colombia/vigo");
+    expect(projects[0].primarySourceCheckedLabel).toBe("6 Oct 2026");
   });
 
   it("names missing/unpublished slugs instead of inventing a project", () => {

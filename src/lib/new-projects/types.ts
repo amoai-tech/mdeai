@@ -37,6 +37,16 @@ export interface NewProjectSource {
   observedFacts: Json;
 }
 
+/**
+ * A known bedroom count and the cheapest published typology price for it, in cents.
+ * `priceFromCents: null` means the typology exists but its price is not published — which must
+ * NOT be treated as affordable when a budget is combined with a bedroom filter.
+ */
+export interface NewProjectBedroomOption {
+  bedrooms: number;
+  priceFromCents: number | null;
+}
+
 /** Browse-card view model. `null` means "not published" — the UI must say so, not show 0. */
 export interface NewProjectSummary {
   id: string;
@@ -58,6 +68,8 @@ export interface NewProjectSummary {
   minBedrooms: number | null;
   maxBedrooms: number | null;
   unitTypeCount: number;
+  /** Real typology bedroom options, so "2 bedroom" can mean exactly two, not "2 or more". */
+  bedroomOptions: NewProjectBedroomOption[];
 }
 
 /** Profile view model: summary plus the facts and evidence shown on the detail page. */
@@ -76,7 +88,10 @@ export interface NewProjectFilters {
   neighborhood: string | null;
   /** Maximum price-from in COP pesos (not cents). */
   maxPriceCop: number | null;
+  /** "2+ bedrooms" / "at least 2" — matches any typology with that many bedrooms or more. */
   minBedrooms: number | null;
+  /** "2 bedroom" — matches a typology with exactly this bedroom count. Takes precedence. */
+  bedroomsExact: number | null;
   /** Exact expected delivery year. */
   deliveryYear: number | null;
   /** Projects whose delivery date is not published. */

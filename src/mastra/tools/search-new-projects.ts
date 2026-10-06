@@ -63,12 +63,15 @@ export const searchNewProjectsInputSchema = z.object({
     .positive()
     .optional()
     .describe("Maximum price-from in COP pesos, e.g. 900000000"),
+  /** "2+ bedrooms" / "at least 2" — any typology with that many or more. */
   minBedrooms: z.number().int().min(1).max(6).optional(),
+  /** "2 bedroom" — a typology with exactly this count. Takes precedence over minBedrooms. */
+  bedroomsExact: z.number().int().min(1).max(6).optional(),
   deliveryYear: z.number().int().min(2024).max(2040).optional(),
   /** True = only projects whose delivery date/note is not published. */
   deliveryUnknown: z.boolean().optional(),
   limit: z.number().int().min(1).max(5).default(5),
-});
+}).strict();
 
 export type NewProjectSearchInput = z.infer<typeof searchNewProjectsInputSchema>;
 
@@ -160,6 +163,86 @@ function getSupabaseClient() {
   return _client;
 }
 
+export interface NewProjectSearchResult {
+  results: NewProjectCard[];
+  totalPublished: number;
+  returned: number;
+  note: string;
+}
+
+/**
+ * The application search: hard filters first, published rows only (RLS), grounded cards with
+ * provenance and explicit unknowns. Both the Mastra tool and the HTTP route call THIS, so the
+ * route never reaches into Mastra's internal `execute` callback — and a tool-contract change
+ * cannot silently turn a server failure into a fake empty 200.
+ */
+export async function searchNewProjects(
+  input: NewProjectSearchInput,
+): Promise<NewProjectSearchResult> {
+  const {
+    neighborhood,
+    maxPriceCop,
+    minBedrooms,
+    bedroomsExact,
+    deliveryYear,
+    deliveryUnknown,
+    limit = 5,
+  } = input;
+  const filters: NewProjectFilters = {
+    neighborhood: neighborhood ?? null,
+    maxPriceCop: maxPriceCop ?? null,
+    minBedrooms: minBedrooms ?? null,
+    bedroomsExact: bedroomsExact ?? null,
+    deliveryYear: deliveryYear ?? null,
+    deliveryUnknown: deliveryUnknown ?? false,
+  };
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Supabase anon environment is not configured");
+  }
+
+  const { data: projectData, error: projectError } = await supabase
+    .from("development_projects")
+    .select("*")
+    .eq("publish_state", "published")
+    .order("name", { ascending: true });
+  if (projectError) {
+    throw new Error("Failed to load new projects: " + projectError.message);
+  }
+
+  const projects = (projectData ?? []) as DevelopmentProjectRow[];
+  const ids = projects.map((project) => project.id);
+
+  let units: DevelopmentUnitTypeRow[] = [];
+  let sources: DevelopmentProjectSourceRow[] = [];
+  if (ids.length > 0) {
+    const [unitsResult, sourcesResult] = await Promise.all([
+      supabase.from("development_unit_types").select(UNIT_COLUMNS).in("project_id", ids),
+      supabase.from("development_project_sources").select("*").in("project_id", ids),
+    ]);
+    if (unitsResult.error) {
+      throw new Error("Failed to load project unit types: " + unitsResult.error.message);
+    }
+    if (sourcesResult.error) {
+      throw new Error("Failed to load project provenance: " + sourcesResult.error.message);
+    }
+    units = (unitsResult.data ?? []) as DevelopmentUnitTypeRow[];
+    sources = (sourcesResult.data ?? []) as DevelopmentProjectSourceRow[];
+  }
+
+  const results = buildNewProjectCards(projects, units, sources, filters, limit);
+  return {
+    results,
+    totalPublished: projects.length,
+    returned: results.length,
+    note:
+      results.length === 0
+        ? "No published projects matched those hard filters. Unknown facts are excluded, not guessed."
+        : "Price is price-from, not an exact unit price. Unit types are not exact unit availability.",
+  };
+}
+
 /**
  * SAN-1380 — deterministic eligibility search for New Projects. It applies the buyer's hard
  * filters BEFORE any ranking or model narration, reads only published projects through RLS,
@@ -176,60 +259,5 @@ export const searchNewProjectsTool = createTool({
     returned: z.number(),
     note: z.string(),
   }),
-  execute: async (input: NewProjectSearchInput) => {
-    const { neighborhood, maxPriceCop, minBedrooms, deliveryYear, deliveryUnknown, limit = 5 } =
-      input;
-    const filters: NewProjectFilters = {
-      neighborhood: neighborhood ?? null,
-      maxPriceCop: maxPriceCop ?? null,
-      minBedrooms: minBedrooms ?? null,
-      deliveryYear: deliveryYear ?? null,
-      deliveryUnknown: deliveryUnknown ?? false,
-    };
-
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      throw new Error("Supabase anon environment is not configured");
-    }
-
-    const { data: projectData, error: projectError } = await supabase
-      .from("development_projects")
-      .select("*")
-      .eq("publish_state", "published")
-      .order("name", { ascending: true });
-    if (projectError) {
-      throw new Error("Failed to load new projects: " + projectError.message);
-    }
-
-    const projects = (projectData ?? []) as DevelopmentProjectRow[];
-    const ids = projects.map((project) => project.id);
-
-    let units: DevelopmentUnitTypeRow[] = [];
-    let sources: DevelopmentProjectSourceRow[] = [];
-    if (ids.length > 0) {
-      const [unitsResult, sourcesResult] = await Promise.all([
-        supabase.from("development_unit_types").select(UNIT_COLUMNS).in("project_id", ids),
-        supabase.from("development_project_sources").select("*").in("project_id", ids),
-      ]);
-      if (unitsResult.error) {
-        throw new Error("Failed to load project unit types: " + unitsResult.error.message);
-      }
-      if (sourcesResult.error) {
-        throw new Error("Failed to load project provenance: " + sourcesResult.error.message);
-      }
-      units = (unitsResult.data ?? []) as DevelopmentUnitTypeRow[];
-      sources = (sourcesResult.data ?? []) as DevelopmentProjectSourceRow[];
-    }
-
-    const results = buildNewProjectCards(projects, units, sources, filters, limit);
-    return {
-      results,
-      totalPublished: projects.length,
-      returned: results.length,
-      note:
-        results.length === 0
-          ? "No published projects matched those hard filters. Unknown facts are excluded, not guessed."
-          : "Price is price-from, not an exact unit price. Unit types are not exact unit availability.",
-    };
-  },
+  execute: searchNewProjects,
 });

@@ -65,11 +65,13 @@ describe("new-project chat cards", () => {
       priceLabel: "From COP 575,000,000", deliveryLabel: "Delivery date not published",
       statusLabel: "Pre-sale · on plans", verifiedLabel: "Verified 6 Oct 2026",
       primarySourceUrl: "https://amarilo.com.co/proyecto/arrayan",
+      primarySourceCheckedLabel: "6 Oct 2026",
       unitTypes: [{ name: "Apto 30 m²", areasLabel: "30 m² built · 22 m² private", priceLabel: null }],
       unknownFields: ["delivery date"],
     };
     const el = render(<NewProjectComparisonResults result={{ projects: [compare] }} />);
     expect(el.querySelector('[data-testid="new-project-compare-card-arrayan"]')).not.toBeNull();
     expect(container.textContent).toContain("30 m² built · 22 m² private");
+    expect(container.textContent).toContain("checked 6 Oct 2026");
   });
 });

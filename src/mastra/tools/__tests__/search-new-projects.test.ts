@@ -97,6 +97,7 @@ function filters(overrides: Partial<NewProjectFilters> = {}): NewProjectFilters 
     neighborhood: null,
     maxPriceCop: null,
     minBedrooms: null,
+    bedroomsExact: null,
     deliveryYear: null,
     deliveryUnknown: false,
     ...overrides,
@@ -172,6 +173,47 @@ describe("buildNewProjectCards — grounded, honest cards", () => {
     const undated = project({ id: "p2", slug: "undated", name: "Undated", expected_delivery_year: null });
     const cards = buildNewProjectCards([dated, undated], [], [], filters({ deliveryYear: 2027 }), 8);
     expect(cards.map((card) => card.slug)).toEqual(["dated"]);
+  });
+
+  it("exact bedrooms require a matching typology, not the project maximum", () => {
+    // One project with 1BR + 3BR but no 2BR: "2+" matches, exact "2" does not.
+    const noTwoBr = project({
+      id: "p1",
+      slug: "no-two",
+      name: "NoTwo",
+      price_from_cents: 50000000000,
+    });
+    const units = [
+      unit({ id: "u1", project_id: "p1", bedrooms: 1, price_from_cents: 50000000000 }),
+      unit({ id: "u2", project_id: "p1", bedrooms: 3, price_from_cents: null }),
+    ];
+    expect(buildNewProjectCards([noTwoBr], units, [], filters({ minBedrooms: 2 }), 5)).toHaveLength(1);
+    expect(
+      buildNewProjectCards([noTwoBr], units, [], filters({ bedroomsExact: 2 }), 5),
+    ).toHaveLength(0);
+  });
+
+  it("combines bedrooms and budget on a single typology and fails closed on unknown unit price", () => {
+    const row = project({ id: "p1", slug: "arrayan", name: "Arrayán", price_from_cents: 57500000000 });
+    const units = [
+      unit({ id: "u1", project_id: "p1", bedrooms: 1, price_from_cents: 50000000000 }),
+      unit({ id: "u2", project_id: "p1", bedrooms: 2, price_from_cents: null }),
+    ];
+    // The project price-from is under budget and a 2BR exists, but the 2BR price is unknown.
+    expect(
+      buildNewProjectCards(
+        [row],
+        units,
+        [],
+        filters({ bedroomsExact: 2, maxPriceCop: 600000000 }),
+        5,
+      ),
+    ).toHaveLength(0);
+    // Give the 2BR a published price under budget and it qualifies.
+    const priced = [units[0], unit({ id: "u2", project_id: "p1", bedrooms: 2, price_from_cents: 59000000000 })];
+    expect(
+      buildNewProjectCards([row], priced, [], filters({ bedroomsExact: 2, maxPriceCop: 600000000 }), 5),
+    ).toHaveLength(1);
   });
 
   it("sorts deterministically by name and respects the limit", () => {

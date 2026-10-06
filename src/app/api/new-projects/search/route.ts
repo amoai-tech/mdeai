@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  searchNewProjects,
   searchNewProjectsInputSchema,
-  searchNewProjectsTool,
 } from "@/mastra/tools/search-new-projects";
 
 export const runtime = "nodejs";
@@ -12,10 +12,10 @@ export const dynamic = "force-dynamic";
  * It runs the same hardened query as the Mastra tool: hard filters first, published rows only
  * (via RLS), grounded cards with provenance and explicit unknowns. It never writes.
  *
- * The body is validated against the tool's own schema before `execute` runs, because a direct
- * `execute` call bypasses Mastra's pre-call validation. Errors carry a stable code so a client
- * can tell a bad request (400, not retryable) from an upstream outage (503, retryable); the
- * underlying message stays in the server log and is never returned.
+ * The body is a trust boundary, so it is validated against the tool's own schema. The route then
+ * calls the shared `searchNewProjects` application function — never Mastra's internal `execute`
+ * callback. Errors carry a stable code so a client can tell a bad request (400, not retryable)
+ * from an upstream outage (503, retryable); the underlying message stays in the server log.
  */
 export async function POST(request: NextRequest) {
   let raw: unknown;
@@ -46,13 +46,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const execute = searchNewProjectsTool.execute as
-      | ((input: unknown, context: unknown) => Promise<unknown>)
-      | undefined;
-    const result = await execute?.(parsed.data, {});
-    return NextResponse.json(
-      result ?? { results: [], totalPublished: 0, returned: 0, note: "" },
-    );
+    const result = await searchNewProjects(parsed.data);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[/api/new-projects/search]", (error as Error).message);
     return NextResponse.json(

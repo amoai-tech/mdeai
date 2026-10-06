@@ -39,6 +39,7 @@ interface CompareProjectRow {
   statusLabel: string | null;
   verifiedLabel: string;
   primarySourceUrl: string | null;
+  primarySourceCheckedLabel: string | null;
   unitTypes: CompareUnitRow[];
   unknownFields: string[];
 }
@@ -164,7 +165,7 @@ export function NewProjectComparisonResults({ result }: { result: unknown }) {
             <p className="mt-2 text-xs text-muted-foreground">No verified typologies published.</p>
           )}
           <UnknownNote fields={row.unknownFields} />
-          <SourceLink url={row.primarySourceUrl} checked={null} />
+          <SourceLink url={row.primarySourceUrl} checked={row.primarySourceCheckedLabel} />
         </article>
       ))}
     </div>
