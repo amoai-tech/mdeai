@@ -33,6 +33,11 @@ function project(overrides: Partial<NewProjectSummary> = {}): NewProjectSummary 
     minBedrooms: 1,
     maxBedrooms: 3,
     unitTypeCount: 6,
+    bedroomOptions: [
+      { bedrooms: 1, priceFromCents: null },
+      { bedrooms: 2, priceFromCents: null },
+      { bedrooms: 3, priceFromCents: null },
+    ],
     ...overrides,
   };
 }

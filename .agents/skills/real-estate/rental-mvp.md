@@ -1,0 +1,1 @@
+../../../.claude/skills/real-estate/rental-mvp.md
