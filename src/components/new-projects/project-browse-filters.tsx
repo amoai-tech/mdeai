@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
+import { toTestId } from "@/lib/new-projects/format";
 import {
   BED_OPTIONS,
   DELIVERY_OPTIONS,
@@ -19,10 +20,6 @@ function chipClass(active: boolean): string {
     "min-h-9 rounded-full px-3",
     active && "border-primary bg-primary/10 text-primary",
   );
-}
-
-function neighborhoodSlug(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, "-");
 }
 
 /**
@@ -48,7 +45,7 @@ export function ProjectBrowseFilters({ filters }: { filters: NewProjectFilters }
                 key={option}
                 href={buildNewProjectsHref(next)}
                 aria-pressed={active}
-                data-testid={"new-projects-filter-neighborhood-" + neighborhoodSlug(option)}
+                data-testid={"new-projects-filter-neighborhood-" + toTestId(option)}
                 className={chipClass(active)}
               >
                 {option}

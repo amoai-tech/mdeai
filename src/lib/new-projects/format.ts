@@ -16,6 +16,19 @@ export function formatCopAmount(cop: number): string {
   return `COP ${amountFormatter.format(cop)}`;
 }
 
+/**
+ * Turns any source-provided label into an ASCII, attribute-safe test id, so an accented
+ * neighborhood or a partner-set unit key cannot break a selector or a CSS attribute match.
+ */
+export function toTestId(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function formatAmountFromCents(cents: number, currency: string): string {
   const amount = Math.round(cents / 100);
   return currency === "COP" ? formatCopAmount(amount) : `${currency} ${amountFormatter.format(amount)}`;
@@ -41,9 +54,8 @@ export function formatPriceRangeLabel(
 ): string {
   const from = formatPriceFromCents(fromCents, currency);
   const to = formatPriceFromCents(toCents, currency);
-  if (from && to && from !== to) {
+  if (from && to && fromCents != null && toCents != null && from !== to) {
     // A range reads better with the currency stated once: "COP 370,406,379 – 834,843,174".
-    if (fromCents == null || toCents == null) return `${from} – ${to}`;
     const fromAmount = amountFormatter.format(Math.round(fromCents / 100));
     const toAmount = amountFormatter.format(Math.round(toCents / 100));
     return currency === "COP"

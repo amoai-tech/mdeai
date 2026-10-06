@@ -10,6 +10,7 @@ import {
   formatUnitTypeSummary,
   formatVerified,
   projectStatusLabel,
+  toTestId,
   visLabel,
 } from "@/lib/new-projects/format";
 import type { NewProjectUnitType } from "@/lib/new-projects/types";
@@ -91,6 +92,13 @@ describe("format — status, delivery and evidence", () => {
   it("formats the verification date or says it is not verified", () => {
     expect(formatVerified("2026-10-06T09:21:53Z")).toBe("Verified 6 Oct 2026");
     expect(formatVerified(null)).toBe("Not yet verified");
+  });
+
+  it("builds ASCII, attribute-safe test ids from source-provided labels", () => {
+    expect(toTestId("Ciudad del Río")).toBe("ciudad-del-rio");
+    expect(toTestId("palma-129m-3br")).toBe("palma-129m-3br");
+    expect(toTestId("Apto 30 m² / Torre A")).toBe("apto-30-m-torre-a");
+    expect(toTestId("  --Nexus--  ")).toBe("nexus");
   });
 
   it("formats VIS and unit summary from partial data", () => {

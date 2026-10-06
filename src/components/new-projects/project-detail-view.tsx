@@ -14,6 +14,7 @@ import {
   formatUnitAreas,
   formatVerified,
   projectStatusLabel,
+  toTestId,
   visLabel,
 } from "@/lib/new-projects/format";
 import type { NewProjectDetail } from "@/lib/new-projects/types";
@@ -76,7 +77,8 @@ export function ProjectDetailView({ detail }: { detail: NewProjectDetail }) {
   );
   const mapsHref =
     detail.latitude != null && detail.longitude != null
-      ? "https://www.google.com/maps/search/?api=1&query=" + detail.latitude + "," + detail.longitude
+      ? "https://www.google.com/maps/search/?api=1&query=" +
+        encodeURIComponent(detail.latitude + "," + detail.longitude)
       : null;
 
   const facts: Array<{ label: string; value: string }> = [
@@ -217,7 +219,7 @@ export function ProjectDetailView({ detail }: { detail: NewProjectDetail }) {
                 <li
                   key={unit.id}
                   className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  data-testid={"new-project-unit-" + unit.sourceKey}
+                  data-testid={"new-project-unit-" + toTestId(unit.sourceKey)}
                 >
                   <div>
                     <p className="font-medium">{unit.name}</p>
