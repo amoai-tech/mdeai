@@ -1,10 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_at": "2026-10-06",
+  "verification_batch_checked_at": "2026-10-06T09:21:53Z",
   "task": "SAN-1405 → SAN-1404",
   "city": "Medellín",
   "project_count": 10,
-  "note": "Facts are only recorded where a live source showed them; unknown facts are null. Developers are external and are NOT MDE partners.",
+  "note": "Facts are only recorded where a live source showed them; unknown facts are null. Developers are external and are NOT MDE partners. Every source carries its own http_status/checked_at/scope.",
   "projects": [
     {
       "key": "medellin:new-project:nexus",
@@ -24,7 +25,11 @@
         {
           "url": "https://www.zonario.co/proyectos-de-vivienda/medellin/laureles",
           "type": "aggregator",
-          "conf": "B",
+          "scope": "project",
+          "confidence": "B",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": "2026-09-26",
           "facts": {
             "project_name": "Nexus",
             "listed_in_laureles_inventory": true
@@ -39,7 +44,7 @@
       "name": "Distrito 33",
       "owner": "Arco Construcciones e Ingeniería SAS",
       "hood": "Laureles",
-      "status": null,
+      "status": "pre_sale",
       "priceFrom": null,
       "delivYear": null,
       "delivNote": null,
@@ -51,10 +56,15 @@
         {
           "url": "https://tulugar.com/en/projects/colombia/distrito-33",
           "type": "marketplace",
-          "conf": "B",
+          "scope": "project",
+          "confidence": "B",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Distrito 33",
             "developer": "Arco Construcciones e Ingeniería SAS",
+            "project_status": "Pre-Sale",
             "bedrooms_min": 1,
             "unit_area_min_m2": 27
           }
@@ -64,8 +74,10 @@
         {
           "name": "Desde 27 m² · 1 alcoba",
           "bedrooms": 1,
+          "bathrooms": null,
           "built": 27,
           "priv": null,
+          "kind": "marketplace",
           "url": "https://tulugar.com/en/projects/colombia/distrito-33"
         }
       ]
@@ -88,7 +100,11 @@
         {
           "url": "https://landing.construccionesprisma.com.co/grand-coral-apartamentos/",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Grand Coral Apartamentos",
             "developer": "Construcciones Prisma"
@@ -115,7 +131,11 @@
         {
           "url": "https://www.zonario.co/proyectos-de-vivienda/medellin/laureles",
           "type": "aggregator",
-          "conf": "B",
+          "scope": "project",
+          "confidence": "B",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": "2026-09-26",
           "facts": {
             "project_name": "Nutibara Parkway",
             "listed_in_laureles_inventory": true
@@ -130,7 +150,7 @@
       "name": "Vigo",
       "owner": "SR Proyectos Constructivos",
       "hood": "Laureles",
-      "status": null,
+      "status": "under_construction",
       "priceFrom": null,
       "delivYear": null,
       "delivNote": null,
@@ -142,10 +162,15 @@
         {
           "url": "https://tulugar.com/en/projects/colombia/vigo",
           "type": "marketplace",
-          "conf": "B",
+          "scope": "project",
+          "confidence": "B",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Vigo",
             "developer": "Sr Proyectos Constructivos",
+            "project_status": "Under Development",
             "bedrooms_min": 1,
             "bedrooms_max": 2,
             "unit_area_min_m2": 31
@@ -156,8 +181,10 @@
         {
           "name": "Desde 31 m² · 1–2 alcobas",
           "bedrooms": 1,
+          "bathrooms": null,
           "built": 31,
           "priv": null,
+          "kind": "marketplace",
           "url": "https://tulugar.com/en/projects/colombia/vigo"
         }
       ]
@@ -180,7 +207,11 @@
         {
           "url": "https://amarilo.com.co/proyecto/arrayan",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Arrayán",
             "developer": "Amarilo",
@@ -200,38 +231,56 @@
         {
           "name": "Apto 30 m²",
           "bedrooms": 1,
+          "bathrooms": 1,
           "built": 30,
-          "priv": 22
+          "priv": 22,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         },
         {
           "name": "Apto 39 m²",
           "bedrooms": 1,
+          "bathrooms": 1,
           "built": 39,
-          "priv": 31
+          "priv": 31,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         },
         {
           "name": "Apto 45 m²",
-          "bedrooms": null,
+          "bedrooms": 1,
+          "bathrooms": 1,
           "built": 45,
-          "priv": null
+          "priv": 35,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         },
         {
           "name": "Apto 64 m²",
-          "bedrooms": null,
+          "bedrooms": 2,
+          "bathrooms": 2,
           "built": 64,
-          "priv": null
+          "priv": 54,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         },
         {
           "name": "Apto 83 m²",
-          "bedrooms": null,
+          "bedrooms": 3,
+          "bathrooms": 3,
           "built": 83,
-          "priv": null
+          "priv": 72,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         },
         {
           "name": "Apto 100 m²",
-          "bedrooms": null,
+          "bedrooms": 3,
+          "bathrooms": 3,
           "built": 100,
-          "priv": null
+          "priv": 86,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/arrayan"
         }
       ]
     },
@@ -253,7 +302,11 @@
         {
           "url": "https://amarilo.com.co/proyecto/saman-jardines-del-rio",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Samán - Jardines del Río",
             "developer": "Amarilo",
@@ -275,20 +328,29 @@
         {
           "name": "Apto 56 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 56,
-          "priv": 43
+          "priv": 43,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/saman-jardines-del-rio"
         },
         {
           "name": "Apto 80 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 80,
-          "priv": 66
+          "priv": 66,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/saman-jardines-del-rio"
         },
         {
           "name": "Apto 89 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 89,
-          "priv": null
+          "priv": 76,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/saman-jardines-del-rio"
         }
       ]
     },
@@ -310,7 +372,11 @@
         {
           "url": "https://amarilo.com.co/proyecto/guayacanes-jardines-del-rio",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Guayacanes - Jardines del Río",
             "developer": "Amarilo",
@@ -332,20 +398,29 @@
         {
           "name": "Apto 96 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 96,
-          "priv": 78
+          "priv": 78,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/guayacanes-jardines-del-rio"
         },
         {
           "name": "Apto 110 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 110,
-          "priv": 92
+          "priv": 92,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/guayacanes-jardines-del-rio"
         },
         {
           "name": "Apto 162 m²",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 162,
-          "priv": null
+          "priv": 128,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/guayacanes-jardines-del-rio"
         }
       ]
     },
@@ -367,14 +442,17 @@
         {
           "url": "https://amarilo.com.co/proyecto/palma",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "Palma",
             "developer": "Amarilo",
             "address": "Calle 17 # 43F-122",
             "delivery_note": "Segundo Semestre 2029 Etapa 1",
             "areas_m2": [
-              103,
               129,
               150,
               166
@@ -384,28 +462,31 @@
       ],
       "units": [
         {
-          "name": "Apto 103 m²",
-          "bedrooms": null,
-          "built": 103,
-          "priv": null
-        },
-        {
           "name": "Apto 129 m²",
           "bedrooms": 3,
+          "bathrooms": null,
           "built": 129,
-          "priv": 101
+          "priv": 101,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/palma"
         },
         {
           "name": "Apto 150 m²",
           "bedrooms": 3,
+          "bathrooms": null,
           "built": 150,
-          "priv": 118
+          "priv": 118,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/palma"
         },
         {
           "name": "Apto 166 m²",
-          "bedrooms": null,
+          "bedrooms": 3,
+          "bathrooms": null,
           "built": 166,
-          "priv": null
+          "priv": 125,
+          "kind": "developer",
+          "url": "https://amarilo.com.co/proyecto/palma"
         }
       ]
     },
@@ -427,7 +508,11 @@
         {
           "url": "https://londonogomez.com/proyectos-vivienda/medellin/river-park-0",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "River Park",
             "neighborhood": "Ciudad del Río / El Poblado",
@@ -441,7 +526,11 @@
         {
           "url": "https://arquitecturayconcreto.com/proyectos/antioquia/river-park/",
           "type": "developer",
-          "conf": "A",
+          "scope": "project",
+          "confidence": "A",
+          "http_status": 200,
+          "checked_at": "2026-10-06T09:21:53Z",
+          "source_updated_at": null,
           "facts": {
             "project_name": "River Park"
           }
@@ -451,8 +540,10 @@
         {
           "name": "Desde 47 m² · 1–2 alcobas",
           "bedrooms": null,
+          "bathrooms": null,
           "built": 47,
           "priv": null,
+          "kind": "developer",
           "url": "https://londonogomez.com/proyectos-vivienda/medellin/river-park-0"
         }
       ]
