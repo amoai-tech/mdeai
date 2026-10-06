@@ -14,6 +14,7 @@ import {
   eventCardsToToolEnvelope,
   eventSearchParamsFromChip,
   fastPathAssistantSummary,
+  fastPathEventFallbackSummary,
   shouldInstantEventClarify,
   type EventSearchApiParams,
 } from "@/lib/event-search-fast-path";
@@ -127,7 +128,7 @@ export function useEventSearchFastPath() {
         };
         const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
         const summary = usedFallback
-          ? `Nothing for ${params.dateWindow?.replace("_", " ")} — showing ${cards.length} upcoming event${cards.length === 1 ? "" : "s"} instead.`
+          ? fastPathEventFallbackSummary(cards.length, pinCount, params.dateWindow)
           : fastPathAssistantSummary(cards.length, pinCount);
         showExchange(userText, summary);
         return true;

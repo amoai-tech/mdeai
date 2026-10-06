@@ -251,3 +251,46 @@ describe("a finished search with no mappable results clears that category's old 
     });
   }
 });
+
+// SAN-1422 — a grounded search that finds nothing to pin must not erase other kinds' pins.
+describe("a grounded search with nothing to pin leaves the other kinds' pins alone", () => {
+  const savedFixtures = new Map(FIXTURE);
+  afterEach(() => {
+    for (const [url, body] of savedFixtures) FIXTURE.set(url, body);
+  });
+
+  const emptyGrounded = () => FIXTURE.set("/api/grounded/search", { results: [], attribution: [], metadata: { venueKind: "cafe" } });
+  const coordinateLessGrounded = () => {
+    const row = { ...(FIXTURE_BY_URL["/api/grounded/search"] as { results: Array<Record<string, unknown>> }).results[0]! };
+    delete row.latitude;
+    delete row.longitude;
+    FIXTURE.set("/api/grounded/search", { results: [row], attribution: [], metadata: { venueKind: "cafe" } });
+  };
+
+  for (const kept of ["rental", "event"] as const) {
+    for (const [label, arrange] of [
+      ["no results", emptyGrounded],
+      ["results without coordinates", coordinateLessGrounded],
+    ] as const) {
+      it(`${kept} pin → grounded search with ${label} → the ${kept} pin stays, the grounded panel replaces the ${kept} panel`, async () => {
+        await search(kept);
+        expect(map.pins.get(kept)).toHaveLength(1);
+
+        arrange();
+        await search("grounded");
+
+        expect(map.pins.get(kept), `${kept} pin must survive`).toHaveLength(1);
+        expect(map.pins.get("grounded")).toEqual([]);
+        expect(probe.shown()).toEqual(["grounded"]);
+      });
+    }
+  }
+
+  it("a grounded search WITH pins still replaces the other kinds' pins", async () => {
+    await search("rental");
+    await search("grounded");
+    expect(map.pins.get("rental")).toEqual([]);
+    expect(map.pins.get("grounded")).toHaveLength(1);
+  });
+});
+

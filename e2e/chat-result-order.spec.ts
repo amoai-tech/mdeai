@@ -7,6 +7,7 @@ import {
   chooseRestaurantFilter,
   event,
   gotoDeterministicChat,
+  groundedPlace,
   mockFastPaths,
   rental,
   typeAndSubmit,
@@ -341,6 +342,32 @@ test.describe("SAN-1422 map pins match the results", { tag: ["@critical", "@dete
     await expect(page.getByTestId("map-pin")).toHaveCount(0);
     await expect(page.getByText("Map locations aren't available for these yet.")).toBeVisible();
     await expect(page.getByText(/pins on the map/)).toHaveCount(0);
+  });
+
+  test("a café search with no coordinates replaces the rental cards but leaves the rental pin on the map", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await askForRentals(page);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
+
+    await page.route("**/api/grounded/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [withoutCoordinates(groundedPlace)],
+          attribution: [],
+          source: "mock",
+          metadata: { venueKind: "cafe" },
+        }),
+      });
+    });
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expect(page.getByTestId("rental-card")).toHaveCount(0);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
   });
 
   test("when only some results have coordinates the chat says how many are on the map", async ({ page }) => {

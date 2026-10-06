@@ -179,6 +179,20 @@ export function eventCardsToToolEnvelope(
   };
 }
 
+/** The requested window had nothing, so upcoming events are shown instead. `count` is at least 1. */
+export function fastPathEventFallbackSummary(
+  count: number,
+  pinCount: number,
+  dateWindow?: string,
+): string {
+  const window = dateWindow ? dateWindow.replace("_", " ") : "that date";
+  return withMapCoverage(
+    `Nothing for ${window}, so here ${count === 1 ? "is 1 upcoming event" : `are ${count} upcoming events`}`,
+    count,
+    pinCount,
+  );
+}
+
 export function fastPathAssistantSummary(count: number, pinCount: number): string {
   if (count === 0) {
     return "No events matched — try another category, neighborhood, or date.";

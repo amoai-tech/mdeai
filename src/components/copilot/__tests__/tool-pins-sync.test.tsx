@@ -90,9 +90,24 @@ describe("ToolPinsSync leaves the map alone for unfinished input", () => {
     ["null", null],
     ["undefined", undefined],
     ["a half-streamed JSON string", '{"results": [{"id": "e1", "lat'],
+    ["a wrapper whose inner result is null", { result: null }],
+    ["an AG-UI tool-result whose inner result is half-streamed", [{ type: "tool-result", result: '{"results": [{"id": "e1", "lat' }]],
+    ["an AG-UI tool-result whose inner result is null", [{ type: "tool-result", result: null }]],
   ])("%s", (_label, result) => {
     show("event", result);
     expect(merge).not.toHaveBeenCalled();
+  });
+});
+
+describe("ToolPinsSync still handles a finished wrapped result", () => {
+  it("an AG-UI tool-result carrying a finished payload is normalized and merged", () => {
+    show("event", [{ type: "tool-result", result: JSON.stringify({ results: [mapped("e1", 6.2, -75.5)] }) }]);
+    expect(merge).toHaveBeenLastCalledWith("event", [expect.objectContaining({ id: "event-e1" })]);
+  });
+
+  it("an AG-UI tool-result carrying a finished empty payload clears the category", () => {
+    show("event", [{ type: "tool-result", result: JSON.stringify({ results: [] }) }]);
+    expect(merge).toHaveBeenLastCalledWith("event", []);
   });
 });
 

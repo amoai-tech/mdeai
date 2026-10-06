@@ -38,9 +38,10 @@ export function useGroundedSearchFastPath() {
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
-      clearOthers("grounded");
-      setToolResult(envelope);
       const { pins } = normalizeToolOutput("grounded", envelope);
+      // A grounded search with nothing to pin replaces the other result panels but keeps their pins.
+      clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      setToolResult(envelope);
       mergePinsByCategory("grounded", pins);
       if (pins.length >= 2) requestFitBounds();
       const count =

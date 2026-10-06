@@ -54,7 +54,20 @@ function unwrapAgUiToolPayload(result: unknown): unknown {
   return value;
 }
 
-/** Normalize AG-UI / CopilotKit v2 tool payloads into card envelope fields. */
+/**
+ * True once the tool output has actually arrived: the fully unwrapped payload is an object, not a
+ * missing value, half-streamed JSON, or an AG-UI wrapper whose inner `result` is still empty.
+ * (An empty `results: []` is a finished answer; a `{ result: null }` wrapper is not.)
+ */
+export function isFinishedToolPayload(result: unknown): boolean {
+  const value = unwrapAgUiToolPayload(result);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  return (
+    !("result" in payload) || "results" in payload || "total" in payload || "citations" in payload
+  );
+}
+
 /** Normalize AG-UI / CopilotKit v2 tool payloads into card envelope fields. */
 export function normalizeToolEnvelope(result: unknown): {
   results?: unknown[];
