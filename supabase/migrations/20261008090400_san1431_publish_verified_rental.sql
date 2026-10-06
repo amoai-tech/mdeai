@@ -27,8 +27,12 @@
 --     becomes impossible; a racing duplicate insert fails closed.
 --   * public.publish_verified_rental(uuid, uuid) — locks the row, re-authorizes
 --     against the locked owner (no read-check-lock TOCTOU), refuses unless the
---     canonical evidence predicate is empty, requires publisher attribution, then
---     promotes and converts the provenance metadata to MDE-controlled.
+--     canonical evidence predicate is empty (verified owner, valid price/currency,
+--     explicit current availability, canonical identity, coordinates, verified
+--     property, authorized photo, current freshness), requires publisher
+--     attribution, then promotes and converts the provenance metadata to
+--     MDE-controlled. The permanent database-wide invariant (so direct UPDATE and
+--     transition_listing_workflow cannot bypass it) remains SAN-1349.
 --
 -- SECURITY
 --   SECURITY INVOKER, search_path = '', fully qualified names. Anon has no EXECUTE
@@ -85,6 +89,14 @@ begin
   if not (r.price_monthly is not null and r.price_monthly > 0
           and coalesce(r.currency in ('COP', 'USD'), false)) then
     b := b || 'missing/invalid price or currency'::text;
+  end if;
+
+  -- Availability must be explicit and current. A recent freshness check does not
+  -- prove the unit is still offered, so an absent or expired window fails closed.
+  if not (r.available_from is not null
+          and r.available_from <= current_date
+          and (r.available_to is null or r.available_to >= current_date)) then
+    b := b || 'no current availability evidence'::text;
   end if;
 
   if p_include_state and coalesce(r.verified, false) is not true then
@@ -208,7 +220,11 @@ declare
   v_actor uuid;
   v_missing text[];
 begin
-  -- Friendly pre-check so a non-owner gets 42501 instead of an RLS "not found".
+  -- Pre-check. Visibility follows the RLS SELECT policy: a caller who can see the
+  -- row (a public listing, or their own) but does not own it gets 42501. A row
+  -- hidden by RLS (another broker's unpublished draft) is indistinguishable from a
+  -- missing id and returns P0002. That hidden-vs-missing property is the RLS
+  -- guarantee, so we deliberately do NOT add a SECURITY DEFINER existence oracle.
   select a.* into v_row from public.apartments a where a.id = p_apartment_id;
   if not found then
     raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';

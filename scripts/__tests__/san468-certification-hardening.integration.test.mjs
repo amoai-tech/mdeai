@@ -79,9 +79,9 @@ test(
           `insert into public.apartments
              (id, title, slug, neighborhood, address, city, status, moderation_status,
               listing_workflow_status, landlord_id, verified, price_monthly, currency,
-              latitude, longitude, metadata)
+              available_from, latitude, longitude, metadata)
            values ($1, $2, $3, 'Laureles', $4, 'Medellín', $5, $6, $7, $8, $9, 2500000, 'COP',
-                   $10, $11, $12)`,
+                   current_date, $10, $11, $12)`,
           [
             id,
             overrides.title ?? "SAN468 certification row",

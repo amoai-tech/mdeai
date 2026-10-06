@@ -69,6 +69,7 @@ test("launch_ready requires verified owner, verified property, current freshness
     "PostGIS location drift",
     "no canonical property identity",
     "missing/invalid price or currency",
+    "no current availability evidence",
   ]) {
     assert.ok(migration.includes(required), "canonical predicate must require " + required);
   }

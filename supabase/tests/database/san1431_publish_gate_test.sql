@@ -1,18 +1,18 @@
 -- SAN-1431 Step 6 — gated publish allow/deny proof (canonical contract).
 --
--- Proves public.publish_verified_rental(uuid, uuid):
---   * reuses public.rental_listing_launch_blockers for the launch contract;
---   * refuses missing owner/verified-owner, price, canonical identity, coordinates,
---     verified property, authorized photo and current freshness;
---   * converts external-lead metadata so the canonical public predicate accepts it;
---   * requires publisher attribution (auth.uid() or p_actor_id);
---   * allows an owning broker and refuses a non-owner;
---   * ties in rental_freshness_log are rejected at the database.
+-- Proves public.publish_verified_rental(uuid, uuid) reuses
+-- public.rental_listing_launch_blockers and refuses missing owner/verified-owner,
+-- price, availability, canonical identity, coordinates, verified property,
+-- authorized photo and current freshness; converts external metadata; requires
+-- publisher attribution; allows an owning broker and refuses a non-owner; and that
+-- tied freshness is rejected at the database. Hidden drafts stay hidden: a
+-- non-owner gets P0002 (RLS does not reveal existence), a visible non-owned and
+-- published listing gets 42501.
 --
 -- Run with: supabase test db
 begin;
 
-select plan(25);
+select plan(27);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -42,61 +42,65 @@ values
 
 insert into public.apartments
   (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
-   landlord_id, verified, price_monthly, currency, latitude, longitude, metadata)
+   landlord_id, verified, price_monthly, currency, available_from, available_to,
+   latitude, longitude, metadata)
 values
   ('e1431000-0000-4000-8000-000000000001', 'SAN1431 A', 'san1431-a', 'Laureles',
    'SAN1431 A address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916,
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916,
    '{"inventory_kind":"external_candidate","inventory_type":"external","allowed_action":"view_original_listing"}'::jsonb),
   ('e1431000-0000-4000-8000-000000000002', 'SAN1431 B', 'san1431-b', 'Laureles',
    'SAN1431 B address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000003', 'SAN1431 C', 'san1431-c', 'Laureles',
    'SAN1431 C address', 'inactive', 'pending', 'draft', null,
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000004', 'SAN1431 D', 'san1431-d', 'Laureles',
    'SAN1431 D address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', null, null, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, null, null, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000005', 'SAN1431 E', 'san1431-e', 'Laureles',
    'SAN1431 E address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000006', 'SAN1431 F', 'san1431-f', 'Laureles',
    'SAN1431 F address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000007', 'SAN1431 G', 'san1431-g', 'Laureles',
    'SAN1431 G address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000008', 'SAN1431 H', 'san1431-h', 'Laureles',
    'SAN1431 H address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000009', 'SAN1431 I', 'san1431-i', 'Laureles',
    'SAN1431 I address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000012',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb),
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-00000000000a', 'SAN1431 J', 'san1431-j', 'Laureles',
    'SAN1431 J address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, null, null, 6.2447, -75.5916, '{}'::jsonb),
+   false, null, null, current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-00000000000b', 'SAN1431 K', 'san1431-k', 'Laureles',
    null, 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
-   false, 2900000, 'COP', 6.2447, -75.5916, '{}'::jsonb);
+   false, 2900000, 'COP', current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
+  ('e1431000-0000-4000-8000-00000000000c', 'SAN1431 M', 'san1431-m', 'Laureles',
+   'SAN1431 M address', 'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011',
+   false, 2900000, 'COP', null, null, 6.2447, -75.5916, '{}'::jsonb);
 
 insert into public.property_verifications (apartment_id, status, verified_at)
 select id, 'verified', now() from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-f','san1431-g',
-                'san1431-h','san1431-i','san1431-j','san1431-k');
+                'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m');
 insert into public.property_verifications (apartment_id, status)
 values ('e1431000-0000-4000-8000-000000000005', 'pending');
 
 insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
 select id, 'san1431/' || slug || '.jpg', 'image/jpeg', 'authorized' from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-e','san1431-g',
-                'san1431-h','san1431-i','san1431-j','san1431-k');
+                'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m');
 insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
 values ('e1431000-0000-4000-8000-000000000006', 'san1431/f.jpg', 'image/jpeg', 'unverified');
 
 insert into public.rental_freshness_log (listing_id, checked_at, status)
 select id, now(), 'active' from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-e','san1431-f',
-                'san1431-h','san1431-i','san1431-j','san1431-k');
+                'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m');
 insert into public.rental_freshness_log (listing_id, checked_at, status)
 values ('e1431000-0000-4000-8000-000000000007', now(), 'stale');
 
@@ -147,6 +151,8 @@ select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-800
   '23514', null::text, 'N7: a missing price/currency is refused');
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-00000000000b', 'd1431000-0000-4000-8000-000000000001')$$,
   '23514', null::text, 'N8: a missing canonical property identity is refused');
+select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-00000000000c', 'd1431000-0000-4000-8000-000000000001')$$,
+  '23514', null::text, 'N9: a missing current availability window is refused');
 
 -- ── Tied freshness evidence is impossible at the database ────────────────────
 select throws_ok(
@@ -156,12 +162,15 @@ select throws_ok(
 
 -- ── Authorization ────────────────────────────────────────────────────────────
 set local role authenticated;
+select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000002', true);
+select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
+  'P0002', null::text, 'Z0: a non-owner cannot publish a hidden draft (RLS keeps it indistinguishable from missing)');
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000001', true);
 select lives_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
   'Z1: the owning broker can publish its verified listing');
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000002', true);
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
-  '42501', null::text, 'Z2: a non-owner cannot publish');
+  '42501', null::text, 'Z2: a non-owner cannot publish a listing they can see');
 reset role;
 
 select * from finish();
