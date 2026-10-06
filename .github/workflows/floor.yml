@@ -83,6 +83,15 @@ jobs:
       - name: Install
         run: npm ci
 
+      # SAN-1368 — make the disposable database look like Supabase (the three roles the
+      # lockdown targets, plus the permissive default grants it revokes) so the required check
+      # proves the full invariant, not just RLS. Without these roles the policy/grant
+      # assertions in the verifier are skipped.
+      - name: Seed Supabase-equivalent roles and default grants
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: node scripts/seed-supabase-proof-roles.mjs
+
       # Disposable database: exercise the real package entry point from empty.
       - name: Provision the Mastra schema through mastra:init
         env:

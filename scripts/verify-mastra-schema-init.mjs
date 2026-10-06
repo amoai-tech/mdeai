@@ -35,6 +35,7 @@ import {
   THREAD_OWNERSHIP_GUARD_NAME,
   THREAD_OWNERSHIP_REJECTION_CODE,
 } from "./lib/mastra-thread-ownership-guard.mjs";
+import { MASTRA_LOCKDOWN_POLICY } from "./lib/mastra-storage-lockdown.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -179,6 +180,81 @@ async function assertThreadOwnershipImmutable(primary) {
   }
 }
 
+/**
+ * SAN-1368 — prove every runtime-created Mastra table is locked to the trusted server path.
+ *
+ * Enabled AND forced RLS is required on every table. The service_role policy and the
+ * anon/authenticated revocation are asserted only when those Supabase roles exist, because
+ * the mastra-schema-init CI job runs a plain Postgres that has none of them.
+ *
+ * This asserts; it never applies. `mastra:init` owns the lockdown, so a table created here
+ * by `store.init()` without it must FAIL rather than be quietly locked.
+ */
+async function assertStorageLockdown(primary) {
+  const { rows } = await primary.query(
+    "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND starts_with(c.relname, 'mastra_') ORDER BY c.relname",
+  );
+  if (rows.length === 0) {
+    console.error("  storage lockdown     : FAIL — no mastra_* tables found to assert");
+    process.exitCode = 1;
+    return;
+  }
+
+  const notRls = rows.filter((r) => !r.relrowsecurity).map((r) => r.relname);
+  const notForced = rows.filter((r) => !r.relforcerowsecurity).map((r) => r.relname);
+
+  const { rows: roleRows } = await primary.query(
+    "SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role')",
+  );
+  const roles = new Set(roleRows.map((r) => r.rolname));
+
+  let missingPolicy = [];
+  if (roles.has("service_role")) {
+    const { rows: policyRows } = await primary.query(
+      "SELECT tablename FROM pg_policies WHERE schemaname = 'public' AND policyname = $1 AND starts_with(tablename, 'mastra_')",
+      [MASTRA_LOCKDOWN_POLICY],
+    );
+    const withPolicy = new Set(policyRows.map((r) => r.tablename));
+    missingPolicy = rows.map((r) => r.relname).filter((t) => !withPolicy.has(t));
+  }
+
+  const exposed = [];
+  for (const role of ["anon", "authenticated"]) {
+    if (!roles.has(role)) continue;
+    for (const r of rows) {
+      const { rows: priv } = await primary.query(
+        "SELECT has_table_privilege($1::name, format('public.%I', $2::text), 'SELECT') OR has_table_privilege($1::name, format('public.%I', $2::text), 'INSERT') OR has_table_privilege($1::name, format('public.%I', $2::text), 'UPDATE') OR has_table_privilege($1::name, format('public.%I', $2::text), 'DELETE') AS any_priv",
+        [role, r.relname],
+      );
+      if (priv[0]?.any_priv) exposed.push(`${role}:${r.relname}`);
+    }
+  }
+
+  console.log(
+    `  storage lockdown     : ${rows.length} table(s); RLS on=${rows.length - notRls.length}, forced=${rows.length - notForced.length}`,
+  );
+  console.log(`  lockdown roles       : ${[...roles].sort().join(", ") || "(none — Supabase roles absent)"}`);
+  if (roles.has("service_role")) {
+    console.log(`  ${MASTRA_LOCKDOWN_POLICY} policy : ${rows.length - missingPolicy.length}/${rows.length}`);
+  }
+
+  const failures = [];
+  if (notRls.length) failures.push(`RLS NOT enabled on: ${notRls.join(", ")}`);
+  if (notForced.length) failures.push(`RLS NOT forced on: ${notForced.join(", ")}`);
+  if (missingPolicy.length) {
+    failures.push(`missing ${MASTRA_LOCKDOWN_POLICY} policy on: ${missingPolicy.join(", ")}`);
+  }
+  if (exposed.length) failures.push(`anon/authenticated still hold privileges on: ${exposed.join(", ")}`);
+
+  if (failures.length) {
+    console.error("\nmastra-schema-init-check: FAIL — runtime-created Mastra storage is exposed.");
+    for (const failure of failures) console.error(`  * ${failure}`);
+    process.exitCode = 1;
+  } else {
+    console.log("  storage lockdown     : OK — every Mastra table is server-only.");
+  }
+}
+
 try {
   console.log(`mastra-schema-init-check: provisioning ${safeTarget(connectionString)}`);
   await store.init();
@@ -210,6 +286,9 @@ try {
   // this script must FAIL when the guard is absent rather than install it itself:
   // installing it here would mask an initializer that silently stopped applying it.
   await assertThreadOwnershipImmutable(client);
+
+  // SAN-1368 — asserted, never applied (see the function comment).
+  await assertStorageLockdown(client);
 } catch (error) {
   console.error(
     `mastra-schema-init-check: FAILED — ${error instanceof Error ? error.message : String(error)}`,
