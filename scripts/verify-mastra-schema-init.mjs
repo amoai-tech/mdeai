@@ -255,6 +255,59 @@ async function assertStorageLockdown(primary) {
   }
 }
 
+/**
+ * Orphan-message prevention — assert the write guard and delete backstop exist, and
+ * that the database currently has zero orphan messages.
+ *
+ * Asserted, never applied: `mastra:init` installs the guards, so a database that
+ * skipped that step must FAIL here rather than be quietly repaired.
+ */
+async function assertMessageIntegrity(primary) {
+  const { rows: fnRows } = await primary.query(
+    "SELECT to_regprocedure('public.mastra_orphan_message_count()') IS NOT NULL AS present",
+  );
+  if (!fnRows[0]?.present) {
+    console.error(
+      "  orphan guard         : MISSING — public.mastra_orphan_message_count() is absent.\n" +
+        "  Run `npm run mastra:init` against this database first — it installs the guards.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const expected = [
+    ["mastra_messages", "mastra_messages_reject_orphan"],
+    ["mastra_threads", "mastra_threads_delete_messages"],
+  ];
+  const missing = [];
+  for (const [table, trigger] of expected) {
+    const { rows } = await primary.query(
+      "SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = $1 AND t.tgname = $2 AND NOT t.tgisinternal",
+      [table, trigger],
+    );
+    if (rows.length === 0) missing.push(`${trigger} on ${table}`);
+  }
+
+  const { rows: countRows } = await primary.query("SELECT public.mastra_orphan_message_count() AS n");
+  const orphans = countRows[0]?.n ?? -1;
+  console.log(
+    `  orphan guard         : ${missing.length ? "MISSING — " + missing.join(", ") : "present (write guard + delete backstop)"}`,
+  );
+  console.log(`  orphan messages      : ${orphans}`);
+
+  const failures = [];
+  if (missing.length) failures.push(`missing trigger: ${missing.join(", ")}`);
+  if (orphans !== 0) failures.push(`expected 0 orphan messages, found ${orphans}`);
+
+  if (failures.length) {
+    console.error("\nmastra-schema-init-check: FAIL — orphan-message prevention is not in place.");
+    for (const failure of failures) console.error(`  * ${failure}`);
+    process.exitCode = 1;
+  } else {
+    console.log("  orphan guard         : OK — no message can reference a missing thread.");
+  }
+}
+
 try {
   console.log(`mastra-schema-init-check: provisioning ${safeTarget(connectionString)}`);
   await store.init();
@@ -289,6 +342,9 @@ try {
 
   // SAN-1368 — asserted, never applied (see the function comment).
   await assertStorageLockdown(client);
+
+  // Orphan-message prevention — the deterministic orphanMessages=0 gate.
+  await assertMessageIntegrity(client);
 } catch (error) {
   console.error(
     `mastra-schema-init-check: FAILED — ${error instanceof Error ? error.message : String(error)}`,

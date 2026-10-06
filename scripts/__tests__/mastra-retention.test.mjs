@@ -64,6 +64,22 @@ test("new anonymous threads are rejected at write time with 42501", () => {
   assert.match(sql, /do not auto-delete/i);
 });
 
+test("messages cannot reference a missing thread (fail-closed orphan guard)", () => {
+  const sql = mastraRetentionSql();
+  assert.match(sql, /create or replace function public\.mastra_messages_reject_orphan/i);
+  assert.match(sql, /before insert or update of thread_id on public\.mastra_messages/i);
+  assert.match(sql, /references missing thread/);
+  assert.match(sql, /errcode = '23503'/);
+  assert.match(sql, /refusing to create an orphan message/i);
+});
+
+test("deleting a thread removes its messages (cascade backstop)", () => {
+  const sql = mastraRetentionSql();
+  assert.match(sql, /create or replace function public\.mastra_threads_delete_messages/i);
+  assert.match(sql, /before delete on public\.mastra_threads/i);
+  assert.match(sql, /delete from public\.mastra_messages where thread_id = OLD\.id/i);
+});
+
 test("an assertion exists that fails when an anonymous thread is present", () => {
   const sql = mastraRetentionSql();
   assert.match(sql, /create or replace function public\.mastra_assert_no_anonymous_threads/i);

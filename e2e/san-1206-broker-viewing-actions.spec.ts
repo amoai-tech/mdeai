@@ -228,8 +228,11 @@ async function deleteIdentityVerified(identity: ThrowawayIdentity): Promise<stri
   const admin = await getSupabaseAdmin();
   try {
     await deleteThrowawayIdentity(identity);
-  } catch {
-    // Deliberately swallowed: the outcome check below is the assertion, not this call.
+  } catch (error) {
+    // Not swallowed: a partial row cleanup is exactly how an earlier run left orphaned
+    // messages behind. The identity check below is an additional assertion, not a
+    // replacement for this one.
+    return "cleanup failed: " + (error instanceof Error ? error.message : String(error));
   }
 
   const { data, error } = await admin.auth.admin.getUserById(identity.userId);
