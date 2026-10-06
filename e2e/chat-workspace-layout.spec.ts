@@ -27,6 +27,7 @@ import {
 const VIEWPORTS = [
   { width: 1024, height: 768, sidebar: 208, column: 408 },
   { width: 1280, height: 800, sidebar: 240, column: 520 },
+  { width: 1366, height: 768, sidebar: 240, column: 563 },
   { width: 1440, height: 900, sidebar: 240, column: 600 },
   { width: 2000, height: 1166, sidebar: 240, column: 880 },
 ] as const;

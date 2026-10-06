@@ -122,6 +122,7 @@ test("the very first search after load scrolls its newest results into view", as
 
 for (const viewport of [
   { width: 1440, height: 900, sidebar: 240, column: 600 },
+  { width: 1366, height: 768, sidebar: 240, column: 563 },
   { width: 1024, height: 768, sidebar: 208, column: 408 },
 ] as const) {
   test(`real chat view is a fixed workspace at ${viewport.width}×${viewport.height}`, async ({ page }) => {
