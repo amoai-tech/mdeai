@@ -1,4 +1,5 @@
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
+import { withMapCoverage } from "@/lib/map-result-summary";
 
 export type RentalResultRow = {
   id: string;
@@ -133,9 +134,9 @@ export function fastPathRentalNarrative(count: number): string {
   return "";
 }
 
-export function fastPathRentalSummary(count: number): string {
+export function fastPathRentalSummary(count: number, pinCount: number): string {
   if (count === 0) {
     return "No rentals matched — try a wider budget or another neighborhood.";
   }
-  return `Found ${count} rental${count === 1 ? "" : "s"} — see cards below and pins on the map.`;
+  return withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
 }

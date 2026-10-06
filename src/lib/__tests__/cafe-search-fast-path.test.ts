@@ -24,7 +24,7 @@ describe("cafe-search-fast-path", () => {
       intent: "nightlife",
       neighborhood: "El Poblado",
     });
-    expect(fastPathCafeSummary(4, "El Poblado", q)).toMatch(/nightlife venue/);
+    expect(fastPathCafeSummary(4, 4, "El Poblado", q)).toMatch(/nightlife venue/);
   });
 
   it("matches SCREEN-022 nightlife grounding query", () => {
@@ -32,11 +32,11 @@ describe("cafe-search-fast-path", () => {
       "Salsa bars and rooftop cocktails locals go to in El Poblado";
     expect(canFastPathCafeSearch(q)).toBe(true);
     expect(buildCafeSearchParams(q)?.neighborhood).toBe("El Poblado");
-    expect(fastPathCafeSummary(3, "El Poblado", q)).toMatch(/nightlife venue/);
+    expect(fastPathCafeSummary(3, 3, "El Poblado", q)).toMatch(/nightlife venue/);
   });
 
   it("summarizes card count for Camila", () => {
-    expect(fastPathCafeSummary(5, "Laureles")).toMatch(/Found 5 specialty coffee shops/);
-    expect(fastPathCafeSummary(0)).toMatch(/No cafés matched/);
+    expect(fastPathCafeSummary(5, 5, "Laureles")).toMatch(/Found 5 specialty coffee shops/);
+    expect(fastPathCafeSummary(0, 0)).toMatch(/No cafés matched/);
   });
 });

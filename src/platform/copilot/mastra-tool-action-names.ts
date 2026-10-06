@@ -4,6 +4,8 @@
  */
 export const MASTRA_COPILOT_TOOL_ACTIONS = {
   rentals: "searchRentalsTool",
+  newProjects: "searchNewProjectsTool",
+  compareProjects: "compareNewProjectsTool",
   events: "searchEventsTool",
   restaurants: "searchRestaurantsTool",
   attractions: "searchAttractionsTool",
@@ -15,6 +17,8 @@ export const MASTRA_COPILOT_TOOL_ACTIONS = {
 /** Legacy createTool ids — register duplicate renders if AG-UI streams these names. */
 export const MASTRA_TOOL_IDS = {
   rentals: "search-rentals",
+  newProjects: "search-new-projects",
+  compareProjects: "compare-new-projects",
   events: "search-events",
   restaurants: "search-restaurants",
   attractions: "search-attractions",

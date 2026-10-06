@@ -57,10 +57,8 @@ export function useEventVenueBookingFastPath() {
       mergePinsByCategory("grounded", []);
       mergePinsByCategory("rental", []);
       const { pins } = normalizeToolOutput("restaurant", envelope);
-      if (pins.length > 0) {
-        mergePinsByCategory("restaurant", pins);
-        if (pins.length >= 2) requestFitBounds();
-      }
+      mergePinsByCategory("restaurant", pins);
+      if (pins.length >= 2) requestFitBounds();
       setState({
         ...(state ?? {}),
         lastIntent: "venue_booking",

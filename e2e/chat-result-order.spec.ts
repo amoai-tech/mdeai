@@ -5,8 +5,11 @@ import {
   RENTAL_QUERY,
   RESTAURANT_QUERY,
   chooseRestaurantFilter,
+  event,
   gotoDeterministicChat,
+  groundedPlace,
   mockFastPaths,
+  rental,
   typeAndSubmit,
   waitForPost,
 } from "./helpers/deterministic-chat";
@@ -295,5 +298,125 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     // Order is not enough: the renter must be able to SEE it, clear of the message box.
     await expectReadsBefore(tail, "the results tail", composer(page), "the message box");
     await expect(tail).toBeInViewport();
+  });
+});
+
+/**
+ * SAN-1422 · Make map results truthful and clear stale pins when results have no coordinates.
+ * A search can return cards that cannot be pinned. The chat must say so, and the map must not keep
+ * the previous search's pins.
+ */
+test.describe("SAN-1422 map pins match the results", { tag: ["@critical", "@deterministic"] }, () => {
+  /** The same fixture with its coordinates removed: a usable card that cannot be pinned. */
+  const withoutCoordinates = <T extends { latitude: number; longitude: number }>(row: T) => {
+    const copy: Partial<T> = { ...row };
+    delete copy.latitude;
+    delete copy.longitude;
+    return copy;
+  };
+  const unmappedEvent = withoutCoordinates(event);
+
+  test.beforeEach(async ({ page }) => {
+    await mockFastPaths(page);
+  });
+
+  test("a search with no mappable results removes the earlier search's pins and does not promise any", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await askForRentals(page);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
+
+    // Routes registered later win, so this replaces the mocked events response for this test only.
+    await page.route("**/api/events/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [unmappedEvent], total: 1, source: "mock" }),
+      });
+    });
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    await expect(page.getByTestId("rental-card")).toHaveCount(0);
+    await expect(page.getByTestId("map-pin")).toHaveCount(0);
+    await expect(page.getByText("Map locations aren't available for these yet.")).toBeVisible();
+    await expect(page.getByText(/pins on the map/)).toHaveCount(0);
+  });
+
+  test("a café search with no coordinates replaces the rental cards but leaves the rental pin on the map", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await askForRentals(page);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
+
+    await page.route("**/api/grounded/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [withoutCoordinates(groundedPlace)],
+          attribution: [],
+          source: "mock",
+          metadata: { venueKind: "cafe" },
+        }),
+      });
+    });
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expect(page.getByTestId("rental-card")).toHaveCount(0);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
+  });
+
+  test("when only some results have coordinates the chat says how many are on the map", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.route("**/api/rentals/search", async (route) => {
+      const unmapped = withoutCoordinates(rental);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [rental, { ...unmapped, id: "rnt_test_002", title: "Second 1BR, no location yet" }],
+          total: 2,
+          source: "mock",
+        }),
+      });
+    });
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("rental-card")).toHaveCount(2);
+    await expect(page.getByTestId("map-pin")).toHaveCount(1);
+    await expect(page.getByText(/2 rentals · 1 shown on the map/)).toBeVisible();
+    await expect(page.getByText(/pins on the map/)).toHaveCount(0);
+  });
+
+  test("on a 390px phone an event without coordinates is still a card above the composer", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.route("**/api/events/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [unmappedEvent], total: 1, source: "mock" }),
+      });
+    });
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    await expect(page.getByText("Map locations aren't available for these yet.")).toBeVisible();
+    await expectReadsBefore(
+      page.getByTestId("event-fast-path-panel"),
+      "the event results",
+      composer(page),
+      "the message box",
+    );
+    await expectNoSidewaysScroll(page);
   });
 });

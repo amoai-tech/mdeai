@@ -38,13 +38,12 @@ export function useGroundedSearchFastPath() {
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
-      clearOthers("grounded");
-      setToolResult(envelope);
       const { pins } = normalizeToolOutput("grounded", envelope);
-      if (pins.length > 0) {
-        mergePinsByCategory("grounded", pins);
-        if (pins.length >= 2) requestFitBounds();
-      }
+      // A grounded search with nothing to pin replaces the other result panels but keeps their pins.
+      clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      setToolResult(envelope);
+      mergePinsByCategory("grounded", pins);
+      if (pins.length >= 2) requestFitBounds();
       const count =
         envelope &&
         typeof envelope === "object" &&
@@ -55,7 +54,7 @@ export function useGroundedSearchFastPath() {
         ...(state ?? {}),
         lastIntent: "restaurant_discovery",
       });
-      return count;
+      return { count, pinCount: pins.length };
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, state],
   );
@@ -69,10 +68,10 @@ export function useGroundedSearchFastPath() {
       busyRef.current = true;
       try {
         const envelope = await fetchGroundedSearch(params);
-        const count = applySearchResults(envelope);
+        const { count, pinCount } = applySearchResults(envelope);
         showExchange(
           userText,
-          fastPathCafeSummary(count, params.neighborhood, userText),
+          fastPathCafeSummary(count, pinCount, params.neighborhood, userText),
         );
         return true;
       } catch (err) {

@@ -67,7 +67,7 @@ export function ChatMapPanel() {
             <EmptyState
               testId="map-empty-state-card"
               title="Map is ready"
-              description="Ask for rentals, events, or cafés — pins will appear here."
+              description="Search in chat to see available map locations."
               icon={<MapPin className="size-8" />}
               className="pointer-events-auto max-w-xs bg-background/95"
             />

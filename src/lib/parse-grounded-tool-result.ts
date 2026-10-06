@@ -1,4 +1,4 @@
-import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
 
 export type GroundedAttributionRow = {
   source?: string;
@@ -114,14 +114,10 @@ function readPhotoAuthorAttributions(
 
 /** Normalize CopilotKit / Mastra grounded tool payloads for cards + pins. */
 export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResult {
-  let root: unknown = result;
-  if (typeof root === "string") {
-    try {
-      root = JSON.parse(root) as unknown;
-    } catch {
-      return { results: [], attribution: [] };
-    }
-  }
+  // Decode once into the canonical payload: JSON strings and AG-UI `tool-result` wrappers are
+  // unwrapped first, so a wrapper array is never mistaken for a bare array of places.
+  let root: unknown = unwrapAgUiToolPayload(result);
+  if (root == null) return { results: [], attribution: [] };
   if (Array.isArray(root)) {
     root = { results: root, source: "grounding" };
   }

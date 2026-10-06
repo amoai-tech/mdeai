@@ -77,15 +77,14 @@ export function useRestaurantSearchFastPath() {
       clearOthers("restaurant");
       setToolResult(envelope);
       const { pins } = normalizeToolOutput("restaurant", envelope);
-      if (pins.length > 0) {
-        mergePinsByCategory("restaurant", pins);
-        if (pins.length >= 2) requestFitBounds();
-      }
+      mergePinsByCategory("restaurant", pins);
+      if (pins.length >= 2) requestFitBounds();
       setState({
         ...(state ?? {}),
         lastIntent: "restaurant_discovery",
         lastRestaurantQuery: buildRestaurantMemoryPatch(params, chip),
       });
+      return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, state],
   );
@@ -114,10 +113,10 @@ export function useRestaurantSearchFastPath() {
           resultCount: cards.length,
           ts: new Date().toISOString(),
         });
-        applySearchResults(cards, params, chip);
+        const pinCount = applySearchResults(cards, params, chip);
         showExchange(
           userText,
-          fastPathRestaurantSummary(cards.length, params.neighborhood),
+          fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
         );
         return true;
       } catch (err) {

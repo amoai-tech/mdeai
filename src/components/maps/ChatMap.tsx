@@ -92,6 +92,8 @@ export function ChatMap({
     >
       <Map
         mapId={mapId}
+        // Google Maps agent-skill usage attribution; @vis.gl adds its own id alongside this one.
+        internalUsageAttributionIds={["gmp_git_agentskills_v1"]}
         defaultCenter={MEDELLIN_CENTER}
         defaultZoom={DEFAULT_MAP_ZOOM}
         gestureHandling="greedy"
