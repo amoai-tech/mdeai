@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { BROKER_ONBOARDING_NEIGHBORHOODS } from "@/lib/rentals/broker-onboarding-constants";
 import type { BrokerOnboardingFormInput } from "@/lib/rentals/broker-onboarding-validate";
 import { submitBrokerOnboarding } from "@/lib/rentals/submit-broker-onboarding";
+import { BrokerAddressSearch } from "@/components/host/rentals/broker-address-search";
+import type { PlaceSearchResult } from "@/lib/place-search";
 import { cn } from "@/lib/utils";
 
 type Step = 1 | 2 | 3;
@@ -22,6 +24,10 @@ const INITIAL: BrokerOnboardingFormInput = {
   monthlyRentCop: 0,
   photoUrl: "",
   confirmedListingRights: false,
+  placeId: "",
+  formattedAddress: "",
+  latitude: null,
+  longitude: null,
 };
 
 // skipcq: JS-0067
@@ -87,6 +93,20 @@ export function RentalsOnboardingWizard() {
     value: BrokerOnboardingFormInput[K],
   ) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function patchPlace(result: PlaceSearchResult | null) {
+    setForm((prev) =>
+      result
+        ? {
+            ...prev,
+            placeId: result.placeId,
+            formattedAddress: result.formattedAddress ?? "",
+            latitude: result.latitude,
+            longitude: result.longitude,
+          }
+        : { ...prev, placeId: "", formattedAddress: "", latitude: null, longitude: null },
+    );
   }
 
   function handleSubmit() {
@@ -172,12 +192,21 @@ export function RentalsOnboardingWizard() {
         >
           <div className="space-y-2">
             <Label htmlFor="ro-address">Street address</Label>
-            <Input
-              id="ro-address"
+            <BrokerAddressSearch
               value={form.address}
-              onChange={(e) => patch("address", e.target.value)}
-              placeholder="72 10th Street, Laureles"
+              onTextChange={(value) => patch("address", value)}
+              onSelect={(result) => patchPlace(result)}
+              onClearSelection={() => patchPlace(null)}
             />
+            {form.placeId ? (
+              <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
+                Address selected. We confirm it with Google when you save.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Pick the matching address to save trusted coordinates. You can still save a draft without them.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -253,6 +282,11 @@ export function RentalsOnboardingWizard() {
               <span className="font-medium">Listing:</span> {form.address} · {form.bedrooms}BR ·{" "}
               {form.bathrooms}BA · COP {form.monthlyRentCop.toLocaleString("en-US")}
             </p>
+            {form.placeId ? (
+              <p>
+                <span className="font-medium">Location:</span> {form.formattedAddress || form.address} · selected (confirmed on save)
+              </p>
+            ) : null}
             {form.photoUrl ? (
               <p>
                 <span className="font-medium">Photo:</span> {form.photoUrl}
