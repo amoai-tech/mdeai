@@ -44,6 +44,17 @@ test("anonymous cleanup exists as a one-time function, never a scheduled path", 
   assert.match(sql, /ONE-TIME/);
 });
 
+test("anonymous cleanup fails closed on unexpected dependents", () => {
+  const sql = mastraRetentionSql();
+  assert.match(sql, /unexpectedDependents/);
+  assert.match(sql, /refusing to delete anything/);
+  assert.match(sql, /No threads or messages were deleted/);
+  assert.match(sql, /observationalMemory/);
+  assert.match(sql, /backgroundTasks/);
+  assert.match(sql, /workflowSnapshots/);
+  assert.match(sql, /scorers/);
+});
+
 test("new anonymous threads are rejected at write time with 42501", () => {
   const sql = mastraRetentionSql();
   assert.match(sql, /create or replace function public\.mastra_threads_reject_anonymous/i);

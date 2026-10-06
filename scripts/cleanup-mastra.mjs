@@ -89,13 +89,25 @@ async function main() {
     }
     if (command === "anonymous") {
       const execute = hasFlag("--execute");
+      // Reference analysis first. Execute refuses (inside the SQL function) when any
+      // unexpected anonymous-owned dependent record exists, so nothing is ever
+      // partially deleted.
+      print(await one(client, "select public.mastra_anonymous_references() as result"));
       const result = await one(
         client,
         "select public.mastra_cleanup_anonymous_threads($1::boolean) as result",
         [!execute],
       );
       print(result);
-      console.log(execute ? "one-time anonymous cleanup executed" : "dry run only; add --execute after review");
+      if (!execute) {
+        console.log(
+          result && result.blocked
+            ? "BLOCKED: unexpected anonymous dependents exist; nothing would be deleted. Investigate before --execute."
+            : "dry run only; add --execute after review",
+        );
+      } else {
+        console.log("one-time anonymous cleanup executed");
+      }
       return;
     }
     if (command === "spans") {

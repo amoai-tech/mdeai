@@ -53,6 +53,9 @@ end;
 $spans$;
 
 -- (2) One-time legacy anonymous sweep. NOT scheduled. -----------------------
+-- FAILS CLOSED: if any anonymous-owned dependent record exists that this sweep
+-- does not remove (observational memory, background tasks, workflow snapshots,
+-- scorers), execute refuses before deleting anything, and dry run reports blocked.
 create or replace function public.mastra_cleanup_anonymous_threads(
   p_dry_run boolean default false
 )
@@ -65,17 +68,53 @@ declare
   v_thread_ids jsonb := '[]'::jsonb;
   v_threads integer := 0;
   v_messages integer := 0;
+  v_dependents jsonb := '{}'::jsonb;
+  v_dep_total integer := 0;
 begin
   if to_regclass('public.mastra_threads') is null then
     return jsonb_build_object(
-      'dryRun', p_dry_run, 'deletedThreads', 0, 'deletedMessages', 0, 'threadIds', '[]'::jsonb
+      'dryRun', p_dry_run, 'blocked', false, 'deletedThreads', 0, 'deletedMessages', 0,
+      'threadIds', '[]'::jsonb, 'unexpectedDependents', '{}'::jsonb
     );
   end if;
+
+  -- Dependents this sweep does NOT remove. Counted BEFORE any delete, so a partial
+  -- cleanup is impossible: either everything expected is removed, or nothing is.
+  if to_regclass('public.mastra_observational_memory') is not null then
+    v_dependents := v_dependents || jsonb_build_object('observationalMemory',
+      (select count(*)::int from public.mastra_observational_memory o join public.mastra_threads t on t.id = o."threadId" where t."resourceId" = 'anonymous'));
+  end if;
+  if to_regclass('public.mastra_background_tasks') is not null then
+    v_dependents := v_dependents || jsonb_build_object('backgroundTasks',
+      (select count(*)::int from public.mastra_background_tasks b join public.mastra_threads t on t.id = b.thread_id where t."resourceId" = 'anonymous'));
+  end if;
+  if to_regclass('public.mastra_workflow_snapshot') is not null then
+    v_dependents := v_dependents || jsonb_build_object('workflowSnapshots',
+      (select count(*)::int from public.mastra_workflow_snapshot where "resourceId" = 'anonymous'));
+  end if;
+  if to_regclass('public.mastra_scorers') is not null then
+    v_dependents := v_dependents || jsonb_build_object('scorers',
+      (select count(*)::int from public.mastra_scorers where "resourceId" = 'anonymous'));
+  end if;
+  select coalesce(sum(value::int), 0) into v_dep_total from jsonb_each_text(v_dependents);
 
   select coalesce(jsonb_agg(id order by id), '[]'::jsonb), count(*)::int
     into v_thread_ids, v_threads
     from public.mastra_threads
    where "resourceId" = 'anonymous';
+
+  if v_dep_total > 0 then
+    if p_dry_run then
+      return jsonb_build_object(
+        'dryRun', true, 'blocked', true, 'threads', v_threads, 'threadIds', v_thread_ids,
+        'unexpectedDependents', v_dependents, 'deletedThreads', 0, 'deletedMessages', 0
+      );
+    end if;
+    raise exception 'anonymous threads have % unexpected dependent record(s); refusing to delete anything: %',
+      v_dep_total, v_dependents::text
+      using errcode = 'P0001',
+            hint = 'Investigate the dependent rows first. No threads or messages were deleted.';
+  end if;
 
   if to_regclass('public.mastra_messages') is not null then
     if p_dry_run then
@@ -98,10 +137,9 @@ begin
   end if;
 
   return jsonb_build_object(
-    'dryRun', p_dry_run,
-    'deletedThreads', v_threads,
-    'deletedMessages', v_messages,
-    'threadIds', v_thread_ids
+    'dryRun', p_dry_run, 'blocked', false,
+    'deletedThreads', v_threads, 'deletedMessages', v_messages,
+    'threadIds', v_thread_ids, 'unexpectedDependents', v_dependents
   );
 end;
 $anon$;
@@ -144,6 +182,13 @@ begin
     v := v || jsonb_build_object('scorers',
       (select count(*)::int from public.mastra_scorers where "resourceId" = 'anonymous'));
   end if;
+  v := v || jsonb_build_object(
+    'unexpectedDependents',
+    coalesce((v->>'observationalMemory')::int, 0)
+    + coalesce((v->>'backgroundTasks')::int, 0)
+    + coalesce((v->>'workflowSnapshots')::int, 0)
+    + coalesce((v->>'scorers')::int, 0)
+  );
   return v;
 end;
 $refs$;
