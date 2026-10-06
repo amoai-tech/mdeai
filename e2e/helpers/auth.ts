@@ -97,7 +97,8 @@ type AdminClient = Awaited<ReturnType<typeof getSupabaseAdmin>>;
 /**
  * Errors that only mean the vendor-owned Mastra tables are not provisioned here.
  *
- * The stable codes are authoritative. The message fallbacks are deliberately
+ * The stable codes are authoritative; the message checks below are defense-in-depth
+ * only (a code could be absent on a different error path). They are deliberately
  * relation/table-specific: a bare "does not exist" substring would also match a
  * missing *column*, which must NOT be mistaken for a missing table (that would skip
  * cleanup on a real error). PostgREST reports an unknown table as PGRST205, Postgres
@@ -119,7 +120,10 @@ function isMissingMastraTable(error: { code?: string; message?: string } | null)
  *
  * Mastra persists a turn's messages AFTER the stream ends, so "the UI is idle" is not
  * "the database is done". Deleting in that gap stranded late messages on production
- * (2026-10-02). Two identical consecutive reads count as settled.
+ * (2026-10-02). Two identical consecutive reads count as settled, so the 90s ceiling
+ * is only ever paid on a genuine stall. The bound matches the existing
+ * waitForSettledMessages in e2e/prod-copilotkit-isolation.spec.ts rather than being
+ * tuned to an unmeasured latency; lower it only with observed persistence data.
  */
 async function waitForSettledThreads(admin: AdminClient, userId: string, timeoutMs = 90_000): Promise<void> {
   const readCount = async (): Promise<number> => {
