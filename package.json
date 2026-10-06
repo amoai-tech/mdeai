@@ -57,6 +57,7 @@
     "check:function-acl": "node scripts/check-function-acl-optin.mjs",
     "check:skills": "python3 scripts/check-skill-layout.py && python3 scripts/check-skill-upstream.py",
     "mastra:init": "node --env-file-if-exists=.env.local scripts/init-mastra-schema.mjs",
+    "mastra:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-mastra.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit": "npm audit --audit-level=high",
