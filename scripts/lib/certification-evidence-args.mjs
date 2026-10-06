@@ -8,6 +8,17 @@
 export const FRESHNESS_STATUSES = ["active", "unconfirmed", "stale"];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Provider/evidence tokens: bounded, no whitespace or shell/path characters. */
+const TOKEN_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * @param {string[]} argv - process.argv.slice(2)
@@ -20,10 +31,14 @@ export function parseCertificationEvidenceArgs(argv) {
     if (!raw.startsWith("--")) continue;
     const eq = raw.indexOf("=");
     if (eq === -1) {
-      args[raw.slice(2)] = "true";
+      const key = raw.slice(2);
+      if (key !== "database-url") args[key] = "true";
       continue;
     }
-    args[raw.slice(2, eq)] = raw.slice(eq + 1);
+    const key = raw.slice(2, eq);
+    // The recorder reads --database-url separately; it is not a certification fact.
+    if (key === "database-url") continue;
+    args[key] = raw.slice(eq + 1);
   }
 
   const errors = [];
@@ -47,6 +62,23 @@ export function parseCertificationEvidenceArgs(argv) {
     errors.push("--confirm-write=true is required (this writes production evidence)");
   }
 
+  const imageUrl = (args["image-url"] ?? "").trim() || null;
+  const sourceUrl = (args["source-url"] ?? "").trim() || null;
+  const sourceType = (args["source-type"] ?? "").trim() || null;
+  const verificationStatus = (args["verification-status"] ?? "").trim() || null;
+  const verifiedBy = (args["verified-by"] ?? "").trim() || null;
+  const notes = (args.notes ?? "").trim() || null;
+
+  if (imageUrl && !isHttpUrl(imageUrl)) errors.push("--image-url must be an http(s) URL");
+  if (sourceUrl && !isHttpUrl(sourceUrl)) errors.push("--source-url must be an http(s) URL");
+  if (sourceType && !TOKEN_RE.test(sourceType)) {
+    errors.push("--source-type must be 1-64 chars of [A-Za-z0-9_-]");
+  }
+  if (verificationStatus && !TOKEN_RE.test(verificationStatus)) {
+    errors.push("--verification-status must be 1-64 chars of [A-Za-z0-9_-]");
+  }
+  if (verifiedBy && !UUID_RE.test(verifiedBy)) errors.push("--verified-by must be a UUID");
+
   return {
     ok: errors.length === 0,
     errors,
@@ -54,12 +86,12 @@ export function parseCertificationEvidenceArgs(argv) {
       apartmentId,
       checkedAt,
       freshnessStatus,
-      imageUrl: (args["image-url"] ?? "").trim() || null,
-      sourceType: (args["source-type"] ?? "").trim() || null,
-      sourceUrl: (args["source-url"] ?? "").trim() || null,
-      verificationStatus: (args["verification-status"] ?? "").trim() || null,
-      verifiedBy: (args["verified-by"] ?? "").trim() || null,
-      notes: (args.notes ?? "").trim() || null,
+      imageUrl,
+      sourceType,
+      sourceUrl,
+      verificationStatus,
+      verifiedBy,
+      notes,
     },
   };
 }

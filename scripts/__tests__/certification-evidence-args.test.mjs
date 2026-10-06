@@ -54,3 +54,27 @@ test("parses optional evidence fields", () => {
   assert.equal(parsed.value.imageUrl, "https://example.com/a.jpg");
   assert.equal(parsed.value.verificationStatus, "verified");
 });
+
+test("refuses each missing required argument", () => {
+  for (const flag of ["--apartment-id", "--checked-at", "--freshness-status"]) {
+    const parsed = parseCertificationEvidenceArgs(BASE.filter((a) => !a.startsWith(flag)));
+    assert.equal(parsed.ok, false, `missing ${flag} must be refused`);
+  }
+});
+
+test("refuses a non-UUID --verified-by", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, "--verification-status=verified", "--verified-by=not-a-uuid"]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /verified-by/);
+});
+
+test("refuses malformed evidence URLs", () => {
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--image-url=not-a-url"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--source-type=listing", "--source-url=javascript:alert(1)"]).ok, false);
+});
+
+test("does not treat --database-url as a certification argument", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
+  assert.equal(parsed.ok, true, parsed.errors.join("; "));
+  assert.equal(parsed.value.databaseUrl, undefined);
+});

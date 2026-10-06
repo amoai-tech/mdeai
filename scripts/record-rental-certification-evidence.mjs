@@ -63,7 +63,9 @@ try {
     [v.apartmentId],
   );
   if (!apartment) throw new Error(`apartment ${v.apartmentId} not found`);
-  if (String(apartment.metadata?.is_test_fixture) === "true") {
+  const isFixture =
+    apartment.metadata?.is_test_fixture === true || apartment.metadata?.is_test_fixture === "true";
+  if (isFixture) {
     throw new Error("refusing to record certification evidence for an is_test_fixture row");
   }
 
