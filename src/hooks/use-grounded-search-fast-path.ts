@@ -40,9 +40,6 @@ export function useGroundedSearchFastPath() {
     (envelope: unknown) => {
       clearOthers("grounded");
       setToolResult(envelope);
-      // UX-033 / J15 — clear prior vertical pins (parity with event fast-path → rental).
-      mergePinsByCategory("rental", []);
-      mergePinsByCategory("event", []);
       const { pins } = normalizeToolOutput("grounded", envelope);
       if (pins.length > 0) {
         mergePinsByCategory("grounded", pins);

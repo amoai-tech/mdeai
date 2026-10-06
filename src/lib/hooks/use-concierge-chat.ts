@@ -11,6 +11,15 @@ export function useConciergeChat() {
 
   const isLoading = Boolean(agent?.isRunning);
 
+  // True unless CopilotKit has a connected runtime. This is CopilotKit's own readiness rule
+  // (useAgent / CopilotChat treat disconnected, connecting and error alike as "not ready"). Read at
+  // call time so a send always sees the current state; compared as a string because the enum is not
+  // part of the v2 surface this app imports from.
+  const isRuntimeUnavailable = useCallback(
+    () => String(copilotkit.runtimeConnectionStatus) !== "connected",
+    [copilotkit],
+  );
+
   // Stop a reply that is still streaming before switching conversation.
   // CopilotKit 1.75.0 clears the view on a thread switch but leaves an
   // in-flight run attached, and for a runtime agent `stopAgent` only POSTs
@@ -49,5 +58,5 @@ export function useConciergeChat() {
     [agent, copilotkit],
   );
 
-  return { isLoading, reset, stopActiveRun, appendMessage };
+  return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };
 }

@@ -65,7 +65,6 @@ export function useEventSearchFastPath() {
       },
     ) => {
       clearOthers("event");
-      mergePinsByCategory("rental", []);
       const envelope = eventCardsToToolEnvelope(cards, meta);
       setToolResult(envelope);
       setWebCitations([]);

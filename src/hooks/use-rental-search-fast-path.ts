@@ -76,7 +76,6 @@ export function useRentalSearchFastPath() {
       meta?: { hybridUsed?: boolean; rankExplanation?: Array<{ factor: string; score: number; note: string }> },
     ) => {
       clearOthers("rental");
-      mergePinsByCategory("event", []);
       const envelope = rentalsToToolEnvelope(cards, meta);
       setToolResult(envelope);
       const { pins } = normalizeToolOutput("rental", envelope);
