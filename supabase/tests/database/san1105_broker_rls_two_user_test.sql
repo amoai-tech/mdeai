@@ -1,22 +1,20 @@
 -- SAN-1105 · Broker isolation — two-user proof + apartment-orphan guard.
 --
 -- WHAT THIS LOCKS IN
---   1. `showings` INSERT authorizes through the owning-broker chain
---      auth.uid() → landlord_profiles.user_id → landlord_profiles.id → apartments.landlord_id,
---      and through nothing else. No `leads.user_id`, no `assigned_agent_id`, no `is_admin()`.
+--   1. `showings` has NO direct INSERT path: no INSERT policy and no INSERT table privilege for
+--      anon/authenticated. The single writer is the service-role SECURITY DEFINER
+--      p1_schedule_tour_atomic, which commits exactly one lead + one showing.
 --   2. Broker A reads only A data and Broker B reads only B data, both directions.
 --   3. A signed-in user with no landlord profile owns nothing: acting_landlord_ids() is empty.
 --   4. Anonymous cannot read private leads or showings.
 --   5. `apartments_landlord_id_fkey` is ON DELETE RESTRICT, so deleting an owner with listings
 --      fails loudly instead of silently orphaning them.
 --
--- PRIMARY VS DEFENCE-IN-DEPTH
---   SAN-1206 (2026-09-29) revoked INSERT/UPDATE/DELETE on public.showings from authenticated. The
---   primary control for a direct signed-in INSERT is therefore the *table privilege* (42501), not
---   the RLS policy. Section F proves both: the privilege refusal as the production behaviour, and
---   — under a transaction-scoped probe grant that is rolled back — that the corrected policy
---   admits the owning broker and rejects a non-owner. Without the probe the policy alignment would
---   be unobservable.
+-- WHY "NO POLICY" IS STRONGER THAN "A BETTER POLICY"
+--   SAN-1206 (2026-09-29) revoked INSERT on public.showings from authenticated. This migration
+--   removes the leftover INSERT policy entirely. A direct signed-in INSERT is then denied twice:
+--   no table privilege, and no permissive policy even if that privilege were re-granted. Section F
+--   proves the second half under a transaction-scoped probe grant that is rolled back.
 --
 -- FIXTURES follow the established san1349 pattern: a real auth.users → landlord_profiles chain,
 -- auth.uid() simulated with request.jwt.claim.sub, all transaction-owned and rolled back.
@@ -25,7 +23,7 @@
 
 begin;
 
-select plan(26);
+select plan(25);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES
@@ -58,7 +56,8 @@ insert into public.profiles (id, email, full_name)
 values ('a1105000-0000-4000-8000-000000000003', 'san1105-renter@example.com', 'SAN1105 Renter');
 
 -- A's apartment is deliberately 'active' so Broker B can read it through the public catalog
--- policy; the INSERT denial in section F is then attributable to ownership, not row visibility.
+-- policy; the INSERT denial in section F is then attributable to the missing INSERT path, not
+-- to row visibility.
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
    landlord_id, available_to)
@@ -91,47 +90,33 @@ values
    'b1105000-0000-4000-8000-000000000002', '2099-11-02 14:00:00+00', 'scheduled', '{}'::jsonb);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- A · CONTRACT — one ownership model, and the orphan boundary is explicit.
+-- A · CONTRACT — no direct INSERT path, and the orphan boundary is explicit.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-select ok(
-  exists (select 1 from pg_policies
-           where schemaname = 'public' and tablename = 'showings'
-             and policyname = 'showings_insert_broker' and cmd = 'INSERT'),
-  'A1: showings_insert_broker exists for INSERT');
+select is(
+  (select count(*)::int from pg_policies
+    where schemaname = 'public' and tablename = 'showings' and cmd = 'INSERT'),
+  0, 'A1: no INSERT policy exists on showings (RLS default deny)');
 
-select ok(
-  (select position('apartments' in with_check) > 0
-      and position('acting_landlord_ids' in with_check) > 0
-   from pg_policies
-   where schemaname = 'public' and tablename = 'showings'
-     and policyname = 'showings_insert_broker'),
-  'A2: the INSERT policy authorizes through apartments + acting_landlord_ids()');
+select is(
+  has_table_privilege('authenticated', 'public.showings', 'INSERT'),
+  false, 'A2: authenticated has no INSERT privilege on showings');
 
-select ok(
-  (select position('leads' in with_check) = 0
-   from pg_policies
-   where schemaname = 'public' and tablename = 'showings'
-     and policyname = 'showings_insert_broker'),
-  'A3: the INSERT policy no longer authorizes through the lead-owner model');
-
-select ok(
-  not exists (select 1 from pg_policies
-               where schemaname = 'public' and tablename = 'showings'
-                 and policyname = 'showings_insert_authenticated'),
-  'A4: the old lead-owner INSERT policy is gone');
+select is(
+  has_table_privilege('anon', 'public.showings', 'INSERT'),
+  false, 'A3: anon has no INSERT privilege on showings');
 
 select ok(
   (select position('ON DELETE RESTRICT' in pg_get_constraintdef(oid)) > 0
    from pg_constraint
    where conrelid = 'public.apartments'::regclass
      and conname = 'apartments_landlord_id_fkey'),
-  'A5: apartments_landlord_id_fkey is ON DELETE RESTRICT');
+  'A4: apartments_landlord_id_fkey is ON DELETE RESTRICT');
 
 set local role anon;
 select set_config('request.jwt.claim.sub', '', true);
 select throws_ok($q$ select public.acting_landlord_ids() $q$, '42501', NULL,
-  'A6: anon cannot execute acting_landlord_ids()');
+  'A5: anon cannot execute acting_landlord_ids()');
 reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -217,21 +202,22 @@ select is((select count(*)::int from public.leads
 reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- F · INSERT POLICY — production refusal, then the corrected policy under a probe grant.
---     The probe grant is transaction-scoped and rolled back; it never reaches production.
+-- F · DIRECT INSERT — denied by missing privilege, and still denied by RLS even
+--     if the privilege is re-granted. The probe grant is rolled back.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 grant insert on public.showings to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1105000-0000-4000-8000-000000000001', true);
-select lives_ok($q$
+select throws_ok($q$
   insert into public.showings (id, lead_id, apartment_id, scheduled_at, status, metadata)
   values ('d1105000-0000-4000-8000-000000000003',
           'c1105000-0000-4000-8000-000000000001',
           'b1105000-0000-4000-8000-000000000001',
           '2099-11-03 14:00:00+00', 'scheduled', '{}'::jsonb)
-$q$, 'F1: the owning broker may create a showing for its own apartment');
+$q$, '42501', NULL,
+  'F1: even with INSERT granted, the owning broker is denied by RLS default-deny');
 reset role;
 
 set local role authenticated;
@@ -242,7 +228,7 @@ select throws_ok($q$
           'c1105000-0000-4000-8000-000000000001',
           'b1105000-0000-4000-8000-000000000001',
           '2099-11-04 14:00:00+00', 'scheduled', '{}'::jsonb)
-$q$, '42501', NULL, 'F2: a non-owner cannot create a showing for another broker apartment');
+$q$, '42501', NULL, 'F2: a non-owner is denied as well');
 reset role;
 
 revoke insert on public.showings from authenticated;

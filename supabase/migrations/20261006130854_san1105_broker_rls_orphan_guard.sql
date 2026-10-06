@@ -8,13 +8,14 @@
 --    `leads.user_id / leads.assigned_agent_id / is_admin()` — the *lead-owner* model — while
 --    every other broker-facing path authorizes through
 --    `apartments.landlord_id → acting_landlord_ids()` — the *listing-owner* model SAN-1349
---    established. Two ownership models on one table is the defect. This migration replaces the
---    policy with the owning-broker rule and drops the is_admin() widening.
+--    established. Two ownership models on one table is the defect. The correct end state is no
+--    direct INSERT policy at all: with RLS on and no permissive INSERT policy, a signed-in
+--    INSERT is denied by default, and a future accidental table GRANT cannot open it.
 --
---    Defence in depth, not the primary control: SAN-1206 (2026-09-29) already revoked insert on
---    public.showings from `authenticated` and routes real creates through the service-role
---    security definer `p1_schedule_tour_atomic`. The policy is corrected so that if insert is
---    ever re-granted it grants only the owning broker — never a lead-owner or an admin.
+--    SAN-1206 (2026-09-29) already revoked insert on public.showings from `authenticated` and
+--    routes real creates through the service-role security definer `p1_schedule_tour_atomic`.
+--    This migration removes the leftover policy and restates the revoke so source and live ACL
+--    agree and the boundary is provable.
 --
 -- 2. apartments.landlord_id
 --    `apartments_landlord_id_fkey` was on delete set null: deleting a landlord_profiles row
@@ -25,25 +26,17 @@
 
 begin;
 
--- 1 · showings insert — owning broker only.
+-- 1 · showings insert — remove every direct INSERT path.
+--
+-- Stronger than replacing the policy. With RLS enabled and NO permissive INSERT
+-- policy, a signed-in INSERT is denied by default even if a future migration or
+-- dashboard action accidentally re-grants the table privilege. A broker never
+-- authors a showing directly: the single writer is the service-role SECURITY
+-- DEFINER p1_schedule_tour_atomic, which commits exactly one lead + one showing.
 drop policy if exists showings_insert_authenticated on public.showings;
 drop policy if exists showings_insert_broker on public.showings;
 
-create policy showings_insert_broker
-  on public.showings
-  for insert
-  to authenticated
-  with check (
-    exists (
-      select 1
-      from public.apartments a
-      where a.id = showings.apartment_id
-        and a.landlord_id in (select public.acting_landlord_ids())
-    )
-  );
-
-comment on policy showings_insert_broker on public.showings is
-  'SAN-1105: a signed-in broker may create a showing only for an apartment it owns through the canonical landlord_id → acting_landlord_ids() chain. No lead-owner and no is_admin() path.';
+revoke insert on table public.showings from anon, authenticated;
 
 -- 2 · Apartments must never be silently orphaned by deleting their owner.
 alter table public.apartments
