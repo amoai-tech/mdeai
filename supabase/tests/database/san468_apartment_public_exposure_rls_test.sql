@@ -5,8 +5,9 @@
 --   1. RLS is enabled on public.apartments.
 --   2. Anonymous clients see only `status = 'active'` inventory, and never a draft,
 --      paused, rejected, or fail-closed external candidate row — even by exact UUID.
---   3. Anonymous clients cannot write (their write grants are revoked; RLS has no
---      anon write policy).
+--   3. Anonymous row writes are denied by RLS; anon DML grants are retained for the
+--      existing SAN-1054 behaviour contract. TRUNCATE/REFERENCES/TRIGGER are revoked
+--      because PostgreSQL does not enforce them through RLS.
 --   4. The owning broker can read all of its own states and update its own row.
 --   5. A different broker cannot read or update another broker's private draft,
 --      and an owning broker cannot insert an apartment under another landlord.
@@ -17,7 +18,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(22);
+select plan(25);
 
 -- ── Fixtures (transaction-owned, rolled back) ────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -70,6 +71,18 @@ select is(
     where schemaname = 'public' and tablename = 'apartments'
       and policyname = 'anyone_can_view_active_apartments'),
   1, 'C2: the public SELECT policy exists');
+
+select ok(
+  not has_table_privilege('anon', 'public.apartments', 'TRUNCATE'),
+  'C3: anon lacks TRUNCATE on apartments');
+
+select ok(
+  not has_table_privilege('anon', 'public.apartments', 'REFERENCES'),
+  'C4: anon lacks REFERENCES on apartments');
+
+select ok(
+  not has_table_privilege('anon', 'public.apartments', 'TRIGGER'),
+  'C5: anon lacks TRIGGER on apartments');
 
 -- ── Anonymous ────────────────────────────────────────────────────────────────
 set local role anon;

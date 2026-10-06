@@ -9,12 +9,12 @@
 --    ('active','inactive','booked','pending'), so 'featured' can never match and
 --    the disjunct is dead. Dropping it is behaviour-neutral.
 --
--- 2. Table grants were reviewed and deliberately NOT changed. With no anon write
---    policy, RLS semantics are: UPDATE and DELETE affect zero rows silently, while
---    INSERT is rejected with 42501 (new row violates row-level security policy).
---    Revoking the table-level grant would replace that with a hard "permission
---    denied" for every write and break the SAN-1054 lifecycle probe, so it
---    belongs to a separate reviewed security change, not this inventory task.
+-- 2. Table grants: retain anon INSERT/UPDATE/DELETE so the existing SAN-1054
+--    lifecycle probe keeps its contract (anon UPDATE/DELETE affect zero rows via
+--    RLS; anon INSERT is rejected 42501). REVOKE TRUNCATE, REFERENCES and TRIGGER,
+--    which PostgreSQL does NOT enforce through row-level security — leaving them
+--    would let an anonymous client truncate the table or attach triggers.
+--    (Precedent: 20260929174626_san1206_broker_viewing_actions.sql.)
 --
 -- Deliberately NOT changed here:
 --   * the public predicate stays `status = 'active'`. Tightening it to
@@ -32,3 +32,8 @@ create policy anyone_can_view_active_apartments
   for select
   to public
   using (status = 'active');
+
+-- Not covered by RLS; an RLS-only defense would leave these live.
+revoke truncate, references, trigger
+  on table public.apartments
+  from anon;
