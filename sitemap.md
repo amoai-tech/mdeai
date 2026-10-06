@@ -1,6 +1,6 @@
 ---
 title: mdeai — Sitemap
-updated: 2026-06-06
+updated: 2026-10-06
 app: src/app/ (Next.js App Router, repo root)
 prod: https://www.mdeai.co
 ---
@@ -45,7 +45,7 @@ prod: https://www.mdeai.co
 │
 ├── /saved                           ✅ LIVE    Saved places + collections
 │
-├── /trips                           ⚠️ SHELL   Trips dashboard (page exists, incomplete)
+├── /trips                           ✅ LIVE    Trips dashboard — opens from the chat sidebar (SAN-1411); logged-out → login; empty state → "Start in chat"
 │   └── /trips/[id]                  ⚠️ SHELL   Trip workspace + itinerary panel
 │
 ├── /me
