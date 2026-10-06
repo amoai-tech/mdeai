@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
 import { Badge } from "@/components/ui/badge";
 import {
   useRentalUi,
@@ -368,6 +369,10 @@ export function CafeDetailPanel({
                     From search summary
                   </p>
                   <p className="mt-1 text-sm leading-relaxed">{detail.summary}</p>
+                  <GroundingAttribution
+                    compact
+                    rows={[{ placeUri: merged.mapsUrl, title: detail.title }]}
+                  />
                 </div>
               ) : null}
 

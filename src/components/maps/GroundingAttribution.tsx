@@ -1,5 +1,7 @@
 "use client";
 
+import { cleanGroundingAttributionTitle } from "@/lib/parse-grounded-tool-result";
+
 type AttributionRow = {
   source?: string;
   placeUri?: string;
@@ -15,7 +17,13 @@ export function GroundingAttribution({
 }) {
   if (!rows.length) return null;
 
-  if (compact && rows.length === 1 && rows[0]?.placeUri) {
+  // SAN-878 — one grounded result: "Source: Google Maps · <place name>", linked to the source URL.
+  // Google's grounding rule asks for the source name, a link to its URL, and the unchanged text
+  // "Google Maps" (never translated). With no URL it still attributes, but never invents a link.
+  if (compact && rows.length === 1) {
+    const row = rows[0]!;
+    const name = row.title ? cleanGroundingAttributionTitle(row.title) : "";
+    const label = name ? `Google Maps · ${name}` : "Google Maps";
     return (
       <p
         className="mt-1 text-xs text-muted-foreground"
@@ -23,14 +31,18 @@ export function GroundingAttribution({
         translate="no"
       >
         Source:{" "}
-        <a
-          href={rows[0].placeUri}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline"
-        >
-          Google Maps
-        </a>
+        {row.placeUri ? (
+          <a
+            href={row.placeUri}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline"
+          >
+            {label}
+          </a>
+        ) : (
+          <span>{label}</span>
+        )}
       </p>
     );
   }

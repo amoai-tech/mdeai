@@ -121,6 +121,14 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await typeAndSubmit(page, GROUNDED_QUERY);
     expect((await response).ok()).toBe(true);
     await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    // SAN-878 — Google's rule for grounded results: the source is shown with the card, named, linked to
+    // its URL, attributed as "Google Maps", and never translated.
+    const source = page.getByTestId("grounded-card").getByTestId("grounding-attribution");
+    await expect(source).toBeVisible();
+    await expect(source).toContainText("Google Maps");
+    await expect(source).toContainText(groundedPlace.title);
+    await expect(source).toHaveAttribute("translate", "no");
+    await expect(source.getByRole("link")).toHaveAttribute("href", groundedPlace.mapsUrl);
     await expectReadsBefore(
       page.getByTestId("grounded-fast-path-panel"),
       "the grounded-place results",

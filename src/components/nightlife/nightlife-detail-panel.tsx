@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
 import { Badge } from "@/components/ui/badge";
 import {
   useRentalUi,
@@ -212,7 +213,13 @@ export function NightlifeDetailPanel({
         ) : null}
 
         {summary ? (
-          <p className="mt-3 text-sm leading-relaxed text-foreground">{summary}</p>
+          <>
+            <p className="mt-3 text-sm leading-relaxed text-foreground">{summary}</p>
+            <GroundingAttribution
+              compact
+              rows={[{ placeUri: mapsUrl, title: detail.title }]}
+            />
+          </>
         ) : null}
 
         {enrichment.status === "loading" ? (
