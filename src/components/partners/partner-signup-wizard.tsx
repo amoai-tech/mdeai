@@ -24,10 +24,10 @@ import {
   type PartnerSignupFormState,
 } from "@/lib/partners/activate-client";
 import { PARTNER_TYPE_LABELS } from "@/lib/partners/parse-partner-signup-params";
-import type { PartnerType } from "@/lib/partners/partner-types";
+import type { PartnerSignupType } from "@/lib/partners/partner-types";
 
 type PartnerSignupWizardProps = {
-  partnerType: PartnerType;
+  partnerType: PartnerSignupType;
   draftId?: string;
   /** Prefills the Category field when the hub passes ?category= (venue subtypes). */
   initialCategory?: string;

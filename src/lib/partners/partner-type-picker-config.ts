@@ -10,7 +10,7 @@ import {
   Ticket,
 } from "lucide-react";
 
-import type { PartnerType } from "@/lib/partners/partner-types";
+import type { PartnerSignupType } from "@/lib/partners/partner-types";
 
 export type PartnerTypePickerMeta = {
   description: string;
@@ -18,7 +18,7 @@ export type PartnerTypePickerMeta = {
   Icon: LucideIcon;
 };
 
-export const PARTNER_TYPE_PICKER: Record<PartnerType, PartnerTypePickerMeta> = {
+export const PARTNER_TYPE_PICKER: Record<PartnerSignupType, PartnerTypePickerMeta> = {
   host: {
     description:
       "Publish salsa nights, workshops, and ticketed experiences.",
