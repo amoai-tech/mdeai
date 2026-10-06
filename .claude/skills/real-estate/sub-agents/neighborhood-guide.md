@@ -1,6 +1,6 @@
 ---
 name: neighborhood-guide-creator
-description: Build comprehensive, shareable neighborhood guides that showcase local expertise and help buyers connect emotionally with an area
+description: Use when drafting neighborhood content from trusted structured facts and verified current sources.
 metadata:
   version: "1.0"
   author: NextAutomation
