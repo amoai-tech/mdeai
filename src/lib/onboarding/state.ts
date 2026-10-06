@@ -1,5 +1,6 @@
 import {
   draftPayloadSchema,
+  transactionIntentSchema,
   type OnboardingEvaluationInput,
   type OnboardingLifecycle,
   type OnboardingReadiness,
@@ -9,6 +10,8 @@ import {
 import {
   ALL_REQUIRED_FIELD_IDS,
   ONBOARDING_STEPS,
+  isFieldValid,
+  onboardingStepIdAt,
   onboardingStepIndex,
   requiredFieldIdsFor,
 } from "./definitions";
@@ -17,7 +20,9 @@ import {
  * SAN-1391 — pure, deterministic onboarding state machine.
  *
  * No AI, React, CopilotKit, Mastra, or pgvector: this module is the single
- * place that decides readiness from a persisted draft.
+ * place that decides readiness from a persisted draft. A field counts only when
+ * its value passes the field's validator, so `"banana"` cannot satisfy
+ * `actorRole` and `-50` cannot satisfy `priceAmount`.
  */
 
 /** Exhaustiveness guard — a new union member becomes a compile error. */
@@ -40,21 +45,6 @@ export function isMaterializableIntent(intent: TransactionIntent): boolean {
   }
 }
 
-/**
- * A field counts as present when it carries real user input. `false`, empty
- * strings, empty arrays, and empty objects are treated as absent — a boolean
- * field only becomes present when it is confirmed true.
- */
-export function isFieldPresent(value: unknown): boolean {
-  if (value === undefined || value === null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (typeof value === "boolean") return value;
-  if (Array.isArray(value)) return value.some(isFieldPresent);
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return false;
-}
-
 function clampStepIndex(step: number): number {
   if (!Number.isFinite(step)) return 1;
   const truncated = Math.trunc(step);
@@ -70,7 +60,10 @@ function readPayloadData(payload: unknown): Record<string, unknown> {
 
 /**
  * Evaluate a persisted draft into a readiness snapshot. Deterministic and
- * side-effect free. An unparseable payload contributes no present fields.
+ * side-effect free. An unparseable payload contributes no valid fields.
+ *
+ * `readyToSubmit` additionally requires a materializable intent, so a `sell`
+ * draft — whose backend does not exist — can never be counted as ready.
  */
 export function evaluateOnboarding(
   input: OnboardingEvaluationInput,
@@ -79,29 +72,37 @@ export function evaluateOnboarding(
   const step = ONBOARDING_STEPS[stepIndex - 1];
   const data = readPayloadData(input.payload);
 
-  const presentIds = new Set(
-    ALL_REQUIRED_FIELD_IDS.filter((fieldId) => isFieldPresent(data[fieldId])),
+  const validIds = new Set(
+    ALL_REQUIRED_FIELD_IDS.filter((fieldId) =>
+      isFieldValid(fieldId, data[fieldId]),
+    ),
   );
 
   const missingRequiredFieldIds = requiredFieldIdsFor(step.id).filter(
-    (fieldId) => !presentIds.has(fieldId),
+    (fieldId) => !validIds.has(fieldId),
   );
 
   const totalRequired = ALL_REQUIRED_FIELD_IDS.length;
-  const presentCount = presentIds.size;
+  const validCount = validIds.size;
   const completion =
-    totalRequired === 0
-      ? 0
-      : Math.round((presentCount / totalRequired) * 100);
+    totalRequired === 0 ? 0 : Math.round((validCount / totalRequired) * 100);
 
-  const allRequiredPresent = presentCount === totalRequired;
+  const allRequiredValid = validCount === totalRequired;
   const submitted = input.submittedAt != null;
+
+  const parsedIntent = transactionIntentSchema.safeParse(
+    data.transactionIntent,
+  );
+  const materializable =
+    parsedIntent.success && isMaterializableIntent(parsedIntent.data);
+
+  const isReady = allRequiredValid && materializable && !submitted;
 
   const lifecycle: OnboardingLifecycle = submitted
     ? "submitted"
-    : allRequiredPresent
+    : isReady
       ? "ready_to_submit"
-      : presentCount === 0
+      : validCount === 0
         ? "not_started"
         : "in_progress";
 
@@ -111,22 +112,32 @@ export function evaluateOnboarding(
     missingRequiredFieldIds,
     completion,
     lifecycle,
-    readyToSubmit: allRequiredPresent && !submitted,
+    readyToSubmit: isReady,
   };
 }
 
 /**
- * Legal step transitions. Forward is exactly one step — required fields cannot
- * be skipped. Any backward move (to fix an earlier answer) is allowed. Staying
- * on the same step is not a transition.
+ * Legal step transitions. Forward is exactly one step AND only when the current
+ * step is complete — required fields cannot be skipped. Any backward move (to
+ * fix an earlier answer) is allowed. Staying on the same step is not a
+ * transition.
  */
 export function canTransition(
   from: OnboardingStepId,
   to: OnboardingStepId,
+  fromStepComplete = false,
 ): boolean {
   const fromIndex = onboardingStepIndex(from);
   const toIndex = onboardingStepIndex(to);
   if (toIndex === fromIndex) return false;
   if (toIndex < fromIndex) return true;
-  return toIndex === fromIndex + 1;
+  return toIndex === fromIndex + 1 && fromStepComplete;
+}
+
+/** True when the current step is complete and a next step exists. */
+export function canAdvance(readiness: OnboardingReadiness): boolean {
+  return (
+    readiness.missingRequiredFieldIds.length === 0 &&
+    onboardingStepIdAt(readiness.stepIndex + 1) !== undefined
+  );
 }

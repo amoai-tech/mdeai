@@ -1,17 +1,21 @@
+import { z } from "zod";
 import {
+  ACTOR_ROLES,
   ONBOARDING_STEP_IDS,
+  PROPERTY_RELATIONSHIPS,
+  TRANSACTION_INTENTS,
   draftPayloadSchema,
   type OnboardingDraftPayload,
   type OnboardingStepId,
 } from "./contracts";
 
 /**
- * SAN-1391 — the one source of truth for step metadata.
+ * SAN-1391 — the one source of truth for step metadata and field validation.
  *
- * Order comes from ONBOARDING_STEP_IDS in contracts.ts; labels and stable
- * required-field ids live here and nowhere else. Field ids are stable strings
- * because they double as `partner_drafts.payload.data` keys and as the public
- * contract consumed by future UI steps.
+ * Order comes from ONBOARDING_STEP_IDS in contracts.ts; labels, required fields
+ * and each field's validator live here and nowhere else. Field ids are stable
+ * strings because they double as `partner_drafts.payload.data` keys and as the
+ * public contract consumed by future UI steps.
  */
 
 export interface OnboardingStepDefinition {
@@ -27,6 +31,12 @@ interface OnboardingStepContent {
   readonly requiredFieldIds: readonly string[];
 }
 
+/**
+ * What a real rental partner must supply. Deliberately includes the facts a
+ * listing cannot be published without: location identity (placeId), the rental
+ * shape (bedrooms/bathrooms), currency, and the two rights attestations.
+ * `bio` is optional prose and is not required anywhere.
+ */
 const STEP_CONTENT: Readonly<Record<OnboardingStepId, OnboardingStepContent>> = {
   identity: {
     label: "Identity",
@@ -38,27 +48,32 @@ const STEP_CONTENT: Readonly<Record<OnboardingStepId, OnboardingStepContent>> = 
   },
   about: {
     label: "About",
-    requiredFieldIds: ["displayName", "bio"],
+    requiredFieldIds: ["displayName"],
   },
   property: {
     label: "Property",
-    requiredFieldIds: ["propertyRelationship", "propertyType"],
+    requiredFieldIds: [
+      "propertyRelationship",
+      "propertyType",
+      "bedrooms",
+      "bathrooms",
+    ],
   },
   address: {
     label: "Address",
-    requiredFieldIds: ["addressLine", "city", "neighborhood"],
+    requiredFieldIds: ["addressLine", "city", "neighborhood", "placeId"],
   },
   photos: {
     label: "Photos",
-    requiredFieldIds: ["photoUrls"],
+    requiredFieldIds: ["photoUrls", "photoPublicationRightsConfirmed"],
   },
   price_availability: {
     label: "Price & availability",
-    requiredFieldIds: ["priceAmount", "availability"],
+    requiredFieldIds: ["priceAmount", "currency", "availability"],
   },
   review: {
     label: "Review",
-    requiredFieldIds: [],
+    requiredFieldIds: ["listingRightsConfirmed"],
   },
 };
 
@@ -113,6 +128,45 @@ export const ALL_REQUIRED_FIELD_IDS: readonly string[] = Object.freeze(
   ONBOARDING_STEPS.flatMap((step) => [...step.requiredFieldIds]),
 );
 
+/**
+ * One validator per required field. Presence is not truth: `"banana"` is not an
+ * `actorRole` and `-50` is not a price, so readiness is computed from these
+ * schemas rather than from whether a key exists.
+ *
+ * `availability` is the ISO date the listing becomes available. Rights fields
+ * are attestations the partner must affirm — `false` is not a valid value.
+ */
+export const FIELD_VALIDATORS: Readonly<
+  Record<string, z.ZodType<unknown>>
+> = Object.freeze({
+  actorRole: z.enum(ACTOR_ROLES),
+  fullName: z.string().trim().min(2),
+  email: z.string().trim().email(),
+  phone: z.string().trim().min(7),
+  transactionIntent: z.enum(TRANSACTION_INTENTS),
+  displayName: z.string().trim().min(1),
+  propertyRelationship: z.enum(PROPERTY_RELATIONSHIPS),
+  propertyType: z.string().trim().min(1),
+  bedrooms: z.number().int().min(0),
+  bathrooms: z.number().int().min(0),
+  addressLine: z.string().trim().min(1),
+  city: z.string().trim().min(1),
+  neighborhood: z.string().trim().min(1),
+  placeId: z.string().trim().min(1),
+  photoUrls: z.array(z.string().trim().min(1)).min(1),
+  photoPublicationRightsConfirmed: z.literal(true),
+  priceAmount: z.number().int().positive(),
+  currency: z.string().trim().length(3),
+  availability: z.string().trim().min(1),
+  listingRightsConfirmed: z.literal(true),
+});
+
+/** True only when `value` is a valid value for `fieldId`. */
+export function isFieldValid(fieldId: string, value: unknown): boolean {
+  const validator = FIELD_VALIDATORS[fieldId];
+  return validator ? validator.safeParse(value).success : false;
+}
+
 /** Narrow an untrusted value to a canonical step id. */
 export function isOnboardingStepId(
   value: unknown,
@@ -140,4 +194,14 @@ export function parseDraftWritePayload(
     );
   }
   return parsed;
+}
+
+/**
+ * Parse a payload read from storage. Throws instead of falling back to an empty
+ * draft, so a corrupt or stale row is reported rather than silently discarded.
+ */
+export function parseStoredDraftPayload(
+  payload: unknown,
+): OnboardingDraftPayload {
+  return draftPayloadSchema.parse(payload);
 }

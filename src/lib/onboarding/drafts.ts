@@ -2,12 +2,12 @@ import type { Database, Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import {
   type OnboardingDraftPayload,
-  type OnboardingStepId,
   type PartnerDraftType,
-  draftPayloadSchema,
-  emptyDraftPayload,
 } from "./contracts";
-import { onboardingStepIdAt, parseDraftWritePayload } from "./definitions";
+import {
+  parseDraftWritePayload,
+  parseStoredDraftPayload,
+} from "./definitions";
 
 /**
  * SAN-1391 — thin server-only adapter over the EXISTING public.partner_drafts
@@ -21,12 +21,10 @@ import { onboardingStepIdAt, parseDraftWritePayload } from "./definitions";
 
 type DbPartnerType = Database["public"]["Enums"]["partner_type"];
 
-// ponytail: database.types.ts is generated and predates the
-// 20261006131205_san1391_add_landlord_partner_type migration, so its enum union
-// does not yet include 'landlord'. Remove this cast after the next
-// `supabase gen types` run includes it.
+// The generated enum union includes "landlord" (added by the SAN-1391 migration),
+// so a PartnerDraftType is already a valid partner_type and no cast is needed.
 function toDbPartnerType(type: PartnerDraftType): DbPartnerType {
-  return type as unknown as DbPartnerType;
+  return type;
 }
 
 function fromDbPartnerType(type: DbPartnerType): PartnerDraftType {
@@ -36,7 +34,7 @@ function fromDbPartnerType(type: DbPartnerType): PartnerDraftType {
 }
 
 const DRAFT_COLUMNS =
-  "id, profile_id, type, step, payload, completion_score, submitted_at" as const;
+  "id, profile_id, type, step, payload, completion_score, submitted_at, updated_at" as const;
 
 /** Normalized, camelCase draft returned by the adapter. */
 export interface PartnerDraft {
@@ -48,6 +46,8 @@ export interface PartnerDraft {
   payload: OnboardingDraftPayload;
   completionScore: number;
   submittedAt: string | null;
+  /** Concurrency token: pass to upsertDraft as expectedUpdatedAt. */
+  updatedAt: string;
 }
 
 interface PartnerDraftRow {
@@ -58,20 +58,31 @@ interface PartnerDraftRow {
   payload: Json;
   completion_score: number;
   submitted_at: string | null;
+  updated_at: string;
 }
 
 function mapRow(row: PartnerDraftRow): PartnerDraft {
-  const parsed = draftPayloadSchema.safeParse(row.payload);
-  const fallbackStepId: OnboardingStepId =
-    onboardingStepIdAt(row.step) ?? "identity";
+  let payload: OnboardingDraftPayload;
+  try {
+    payload = parseStoredDraftPayload(row.payload);
+  } catch (error) {
+    // Do not silently replace a corrupt/stale payload with an empty draft: that
+    // would discard the partner's answers while looking like a fresh start.
+    throw new Error(
+      `partner_drafts ${row.id} has an unreadable payload: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
   return {
     id: row.id,
     profileId: row.profile_id,
     type: fromDbPartnerType(row.type),
     step: row.step,
-    payload: parsed.success ? parsed.data : emptyDraftPayload(fallbackStepId),
+    payload,
     completionScore: row.completion_score,
     submittedAt: row.submitted_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -84,6 +95,12 @@ export interface UpsertDraftInput {
   completionScore?: number;
   partnerId?: string | null;
   threadId?: string | null;
+  /**
+   * Optimistic-concurrency token. When provided, the update only applies if the
+   * stored `updated_at` still matches; otherwise it throws a conflict. This is
+   * what stops an older tab from overwriting newer answers.
+   */
+  expectedUpdatedAt?: string;
 }
 
 /** Read the single unsubmitted draft for (profile, type), or null. */
@@ -147,16 +164,7 @@ export async function upsertDraft(
   }
 
   if (active.data) {
-    const { data, error } = await supabase
-      .from("partner_drafts")
-      .update(mutable)
-      .eq("id", active.data.id)
-      .select(DRAFT_COLUMNS)
-      .single();
-    if (error) {
-      throw new Error(`upsertDraft update failed: ${error.message}`);
-    }
-    return mapRow(data as PartnerDraftRow);
+    return updateExistingDraft(active.data.id, mutable, input.expectedUpdatedAt);
   }
 
   const { data, error } = await supabase
@@ -192,16 +200,31 @@ export async function upsertDraft(
     );
   }
 
-  const recovered = await supabase
-    .from("partner_drafts")
-    .update(mutable)
-    .eq("id", winner.data.id)
-    .select(DRAFT_COLUMNS)
-    .single();
-  if (recovered.error) {
+  return updateExistingDraft(winner.data.id, mutable, input.expectedUpdatedAt);
+}
+
+async function updateExistingDraft(
+  id: string,
+  mutable: Record<string, unknown>,
+  expectedUpdatedAt: string | undefined,
+): Promise<PartnerDraft> {
+  const supabase = await createClient();
+  let query = supabase.from("partner_drafts").update(mutable).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+
+  const { data, error } = expectedUpdatedAt !== undefined
+    ? await query.select(DRAFT_COLUMNS).maybeSingle()
+    : await query.select(DRAFT_COLUMNS).single();
+
+  if (error) {
+    throw new Error(`upsertDraft update failed: ${error.message}`);
+  }
+  if (!data) {
     throw new Error(
-      `upsertDraft race update failed: ${recovered.error.message}`,
+      "upsertDraft conflict: the draft changed since it was loaded; reload before saving",
     );
   }
-  return mapRow(recovered.data as PartnerDraftRow);
+  return mapRow(data as PartnerDraftRow);
 }
