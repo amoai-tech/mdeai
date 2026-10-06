@@ -134,7 +134,8 @@ export function ChatNavRail({
         mdeai
       </div>
 
-      <ul className="flex flex-col gap-1 text-sm">
+      {/* SAN-1414: three groups so only the saved chats scroll — New chat and Explore/Library stay on screen. */}
+      <ul className="flex shrink-0 flex-col gap-1 text-sm">
         {/* New chat */}
         <li>
           <button
@@ -147,7 +148,10 @@ export function ChatNavRail({
             New chat
           </button>
         </li>
+      </ul>
 
+      <div data-testid="nav-thread-list" className="min-h-24 flex-1 overflow-y-auto">
+        <ul className="flex flex-col gap-1 text-sm">
         {/* Thread list */}
         {loading ? (
           <li className="space-y-1 px-1 pt-1">
@@ -201,7 +205,10 @@ export function ChatNavRail({
             </span>
           </li>
         )}
+        </ul>
+      </div>
 
+      <ul className="flex shrink-0 flex-col gap-1 text-sm">
         {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
         <NavSectionLabel>Explore</NavSectionLabel>
         {EXPLORE_ITEMS.map((item) => (
@@ -215,7 +222,7 @@ export function ChatNavRail({
         ))}
       </ul>
 
-      <p className="mt-auto text-xs text-muted-foreground">
+      <p className="mt-auto shrink-0 text-xs text-muted-foreground">
         Ask for rentals, events, cafés, or map pins in Laureles and Poblado.
       </p>
       <a
