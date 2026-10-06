@@ -70,6 +70,9 @@ test("launch_ready requires verified owner, verified property, current freshness
     "no canonical property identity",
     "missing/invalid price or currency",
     "no current availability evidence",
+    "no owner-control evidence",
+    "no publish permission",
+    "no viewing permission",
   ]) {
     assert.ok(migration.includes(required), "canonical predicate must require " + required);
   }

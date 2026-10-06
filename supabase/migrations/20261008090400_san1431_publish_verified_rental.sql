@@ -7,7 +7,8 @@
 -- WHY
 --   1. public.transition_listing_workflow (SAN-1106) publishes on ownership and
 --      workflow state alone: no verified owner, no price, no canonical property
---      identity, no coordinates, no verified property, no authorized photo and no
+--      identity, no coordinates, no verified property, no listing-specific
+--      owner-control/publish/viewing permission, no authorized photo and no
 --      freshness. A listing could go live — and become requestable — while the
 --      repository's launch gate still rejects it.
 --   2. A staged candidate carries metadata.inventory_kind='external_candidate',
@@ -122,6 +123,32 @@ begin
        and pv.verified_at is not null
   ) then
     b := b || 'no verified property evidence'::text;
+  end if;
+
+  -- Listing-specific authorization: a verified MDE partner is not the same as that
+  -- partner authorizing THIS property to be published and to receive viewings.
+  if not exists (
+    select 1 from public.property_verifications pv
+     where pv.apartment_id = r.id
+       and lower(coalesce(pv.metadata->>'owner_control', '')) = 'verified'
+  ) then
+    b := b || 'no owner-control evidence'::text;
+  end if;
+
+  if not exists (
+    select 1 from public.property_verifications pv
+     where pv.apartment_id = r.id
+       and lower(coalesce(pv.metadata->>'publish_permission', '')) = 'granted'
+  ) then
+    b := b || 'no publish permission'::text;
+  end if;
+
+  if not exists (
+    select 1 from public.property_verifications pv
+     where pv.apartment_id = r.id
+       and lower(coalesce(pv.metadata->>'viewings_permission', '')) = 'granted'
+  ) then
+    b := b || 'no viewing permission'::text;
   end if;
 
   select count(*) into v_latest_count
