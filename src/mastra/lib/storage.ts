@@ -7,26 +7,30 @@
  */
 import { LibSQLStore } from "@mastra/libsql";
 import { PostgresStore } from "@mastra/pg";
-
-const storageGlobalKey = "__mdeaiMastraStorage";
+import { SUPABASE_CA_CERT } from "./supabase-ca";
 
 type StorageSingleton = {
   store: ReturnType<typeof createMastraStorage>;
   modeLogged: boolean;
 };
 
+declare global {
+  // A typed global survives Next dev HMR so exactly one storage instance exists.
+  // A literal property name (not a computed key) also keeps the object-injection rule
+  // satisfied without suppressing it.
+  var __mdeaiMastraStorage: StorageSingleton | undefined;
+}
+
 function getStorageGlobal(): StorageSingleton | undefined {
-  return (globalThis as Record<string, unknown>)[storageGlobalKey] as
-    | StorageSingleton
-    | undefined;
+  return globalThis.__mdeaiMastraStorage;
 }
 
 function setStorageGlobal(value: StorageSingleton | undefined) {
   if (value === undefined) {
-    delete (globalThis as Record<string, unknown>)[storageGlobalKey];
+    delete globalThis.__mdeaiMastraStorage;
     return;
   }
-  (globalThis as Record<string, unknown>)[storageGlobalKey] = value;
+  globalThis.__mdeaiMastraStorage = value;
 }
 
 function normalizeDatabaseUrl(): string | undefined {
@@ -63,9 +67,9 @@ export const POSTGRES_IDLE_TIMEOUT_MS = 10_000;
  * silently downgrade production traffic to plaintext (measured: the production URL has
  * no sslmode and connected with client_ssl=none). Removing those parameters makes the
  * `ssl` object below the single source of truth, so plaintext is impossible regardless
- * of the URL. Supabase's pooler presents a chain node-postgres does not trust by
- * default, so encryption is required without CA verification (equivalent to
- * sslmode=require); `verify-full` is deferred until the Supabase CA is provisioned.
+ * of the URL. Certificate and hostname verification (verify-full) are performed with
+ * the Supabase CA in supabase-ca.ts, so encryption cannot be silently downgraded and
+ * the server identity is authenticated.
  */
 /** Loopback/local hosts that legitimately do not offer TLS. Everything else must. */
 export function isLocalDatabaseHost(hostname: string): boolean {
@@ -132,7 +136,9 @@ export function createMastraStorage(id: string) {
       connectionString: requireTls
         ? resolveRuntimeConnectionString(connectionString!)
         : connectionString!,
-      ...(requireTls ? { ssl: { rejectUnauthorized: false } } : {}),
+      // Full verification: the Supabase CA is trusted AND the hostname is checked.
+      // (verify-full, not just encryption.)
+      ...(requireTls ? { ssl: { ca: SUPABASE_CA_CERT, rejectUnauthorized: true } } : {}),
       max: POSTGRES_POOL_MAX,
       idleTimeoutMillis: POSTGRES_IDLE_TIMEOUT_MS,
       disableInit: true,

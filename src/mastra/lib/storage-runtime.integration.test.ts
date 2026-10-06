@@ -41,15 +41,17 @@ describeMaybe("production storage runtime", () => {
 
     // 1. TLS is forced by the code, whatever the URL says.
     const store = createMastraStorage("san1303-runtime") as unknown as PooledStore;
-    expect(store.pool.options.ssl).toEqual({ rejectUnauthorized: false });
+    const tlsOptions = store.pool.options.ssl as { rejectUnauthorized: boolean; ca: string };
+    expect(tlsOptions.rejectUnauthorized).toBe(true);
+    expect(tlsOptions.ca).toContain("BEGIN CERTIFICATE");
     expect(store.pool.options.max).toBe(POSTGRES_POOL_MAX);
     await store.pool.query("select 1");
 
     // Client-side TLS is the direct proof; pg_stat_ssl covers the backend leg only.
-    const ssl = await store.pool.query(
+    const backendSsl = await store.pool.query(
       "select ssl from pg_stat_ssl where pid = pg_backend_pid()",
     );
-    console.info("[san1303] ssl config set; pg_stat_ssl backend=" + JSON.stringify(ssl.rows[0]));
+    console.info("[san1303] ssl config set; pg_stat_ssl backend=" + JSON.stringify(backendSsl.rows[0]));
 
     // 2. close -> recreate -> reconnect, a few cycles.
     for (let cycle = 0; cycle < 3; cycle++) {

@@ -68,7 +68,9 @@ describe("createMastraStorage", () => {
     vi.stubEnv("MASTRA_DEV_LIBSQL", "");
     vi.stubEnv("DATABASE_URL", "postgresql://u:p@aws-1-us-east-1.pooler.supabase.com:6543/db?sslmode=disable");
     const store = createMastraStorage("test-tls") as unknown as PooledStore;
-    expect(store.pool.options.ssl).toEqual({ rejectUnauthorized: false });
+    const ssl = store.pool.options.ssl as { rejectUnauthorized: boolean; ca: string };
+    expect(ssl.rejectUnauthorized).toBe(true);
+    expect(ssl.ca).toContain("BEGIN CERTIFICATE");
     expect(store.pool.options.max).toBe(POSTGRES_POOL_MAX);
     expect(store.pool.options.idleTimeoutMillis).toBe(POSTGRES_IDLE_TIMEOUT_MS);
   });
