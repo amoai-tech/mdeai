@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readlinkSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const retiredSkill = ["mde", "real", "estate"].join("-");
@@ -25,12 +25,23 @@ describe("real-estate skill canonicalization", () => {
     expect(existsSync(".claude/skills/real-estate/SKILL.md")).toBe(true);
     expect(existsSync(".agents/skills/real-estate/SKILL.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/marketplace-v1.md")).toBe(true);
+    expect(existsSync(".claude/skills/real-estate/rental-mvp.md")).toBe(true);
+    expect(existsSync(".claude/skills/real-estate/broker-operations.md")).toBe(true);
+    expect(existsSync(".agents/skills/real-estate/rental-mvp.md")).toBe(true);
+    expect(existsSync(".agents/skills/real-estate/broker-operations.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/mls-v2.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/industry-context.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/sub-agents/lead-qualifier.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/sub-agents/neighborhood-guide.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/sub-agents/property-description.md")).toBe(true);
     expect(existsSync(".claude/skills/real-estate/gemini")).toBe(true);
+
+    expect(readlinkSync(".agents/skills/real-estate/rental-mvp.md")).toBe(
+      "../../../.claude/skills/real-estate/rental-mvp.md",
+    );
+    expect(readlinkSync(".agents/skills/real-estate/broker-operations.md")).toBe(
+      "../../../.claude/skills/real-estate/broker-operations.md",
+    );
 
     const retiredTrackedPaths = execFileSync(
       "git",
