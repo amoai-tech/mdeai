@@ -94,15 +94,23 @@ export async function createThrowawayIdentity(label: string): Promise<ThrowawayI
 
 type AdminClient = Awaited<ReturnType<typeof getSupabaseAdmin>>;
 
-/** Errors that only mean the vendor-owned Mastra tables are not provisioned here. */
+/**
+ * Errors that only mean the vendor-owned Mastra tables are not provisioned here.
+ *
+ * The stable codes are authoritative. The message fallbacks are deliberately
+ * relation/table-specific: a bare "does not exist" substring would also match a
+ * missing *column*, which must NOT be mistaken for a missing table (that would skip
+ * cleanup on a real error). PostgREST reports an unknown table as PGRST205, Postgres
+ * as 42P01 / 'relation "…" does not exist'.
+ */
 function isMissingMastraTable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   const text = (error.message ?? "").toLowerCase();
   return (
     error.code === "42P01" ||
     error.code === "PGRST205" ||
-    text.includes("does not exist") ||
-    text.includes("could not find the table")
+    /relation .* does not exist/.test(text) ||
+    /could not find the table/.test(text)
   );
 }
 

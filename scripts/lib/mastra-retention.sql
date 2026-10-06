@@ -269,7 +269,12 @@ begin
       using errcode = '23503',
             hint = 'A message must reference an existing mastra_threads row.';
   end if;
-  if not exists (select 1 from public.mastra_threads where id = NEW.thread_id) then
+  -- FOR KEY SHARE, not a plain existence check: it takes the same row lock a real
+  -- foreign key would, so a concurrent DELETE of this thread must wait for the insert,
+  -- and the insert sees the thread gone once that delete commits. A snapshot-only
+  -- check could still let a delete commit between the check and the insert.
+  perform 1 from public.mastra_threads where id = NEW.thread_id for key share;
+  if not found then
     raise exception 'mastra_messages % references missing thread %', NEW.id, NEW.thread_id
       using errcode = '23503',
             hint = 'The thread was deleted (or never existed); refusing to create an orphan message.';

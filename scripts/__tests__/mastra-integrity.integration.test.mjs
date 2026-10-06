@@ -85,6 +85,34 @@ test("a late message write is rejected instead of orphaning the thread", { skip:
       "an update to a missing thread is rejected",
     );
 
+    // --- the guard takes a row lock: an insert waits for a concurrent delete ---
+    const lockThread = run + "-lock-thread";
+    await insertThread(client, lockThread, UUID_USER);
+    const deleter = new Client({ connectionString });
+    await deleter.connect();
+    try {
+      await deleter.query("begin");
+      await deleter.query("delete from public.mastra_threads where id = $1", [lockThread]);
+      // The uncommitted delete holds the row lock. The insert's FOR KEY SHARE must
+      // wait for it, so a short lock_timeout surfaces as 55P03 rather than success.
+      await client.query("set lock_timeout = '400ms'");
+      await assert.rejects(
+        () => insertMessage(client, run + "-locked", lockThread),
+        (error) => error.code === "55P03",
+        "an insert waits for a concurrent thread delete",
+      );
+      await client.query("set lock_timeout = default");
+      await deleter.query("commit");
+    } finally {
+      await deleter.query("rollback").catch(() => undefined);
+      await deleter.end().catch(() => undefined);
+    }
+    await assert.rejects(
+      () => insertMessage(client, run + "-after-delete", lockThread),
+      (error) => error.code === "23503",
+      "after the delete commits the same insert is rejected",
+    );
+
     // --- thread delete removes its messages (backstop) ---------------------
     await client.query("delete from public.mastra_threads where id = $1", [chatThread]);
     assert.equal(await messagesFor(client, chatThread), 0, "deleting the thread removes its messages");
