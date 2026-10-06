@@ -53,15 +53,22 @@ describe("CafeDetailPanel enrichment fallback", () => {
 });
 
 describe("CafeDetailPanel Google Maps source (SAN-878)", () => {
-  it("attributes the summary to Google Maps with the place name and URL", () => {
-    const html = renderToStaticMarkup(<CafeDetailPanel detail={detail} siblings={[detail]} />);
+  const grounded = { uri: "https://maps.google.com/?cid=5", title: "Test Café" };
+
+  it("attributes the summary to its Google source with the place name and URL", () => {
+    const withSource = { ...detail, groundingSource: grounded };
+    const html = renderToStaticMarkup(<CafeDetailPanel detail={withSource} siblings={[withSource]} />);
     const source = html.indexOf('data-testid="grounding-attribution"');
     expect(source).toBeGreaterThan(-1);
     expect(html.indexOf("A test café")).toBeLessThan(source);
     const block = html.slice(source, html.indexOf("</p>", source));
-    expect(block).toContain('href="https://maps.google.com"');
+    expect(block).toContain('href="https://maps.google.com/?cid=5"');
     expect(block).toContain("Google Maps");
     expect(block).toContain("Test Café");
   });
-});
 
+  it("a curated fallback café is not attributed to Google Maps", () => {
+    const html = renderToStaticMarkup(<CafeDetailPanel detail={detail} siblings={[detail]} />);
+    expect(html).not.toContain('data-testid="grounding-attribution"');
+  });
+});

@@ -215,10 +215,12 @@ export function NightlifeDetailPanel({
         {summary ? (
           <>
             <p className="mt-3 text-sm leading-relaxed text-foreground">{summary}</p>
-            <GroundingAttribution
-              compact
-              rows={[{ placeUri: mapsUrl, title: detail.title }]}
-            />
+            {detail.groundingSource ? (
+              <GroundingAttribution
+                compact
+                rows={[{ placeUri: detail.groundingSource.uri, title: detail.groundingSource.title }]}
+              />
+            ) : null}
           </>
         ) : null}
 

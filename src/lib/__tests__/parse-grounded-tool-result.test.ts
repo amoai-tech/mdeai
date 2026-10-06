@@ -142,3 +142,74 @@ describe("attribution display helpers", () => {
     );
   });
 });
+
+// SAN-878 · GND-002 — Maps attribution ToS on grounded cards.
+// A card may say "Google Maps" only when Google actually grounded it: the result's `attribution`
+// carries a source whose URL equals the card's URL. Curated fallback rows never have one.
+describe("grounding source (SAN-878)", () => {
+  const url = "https://maps.google.com/?cid=1";
+  const row = (extra: Record<string, unknown> = {}) => ({
+    id: "p1",
+    title: "Pausa Coffee & Brunch",
+    mapsUrl: url,
+    latitude: 6.24,
+    longitude: -75.59,
+    ...extra,
+  });
+
+  it("attaches the matching Google source to a grounded row, by URL", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row()],
+      attribution: [{ source: "google_maps_grounding", placeUri: url, title: "Pausa Coffee & Brunch - Google Maps" }],
+    });
+    expect(parsed.results[0]?.groundingSource).toEqual({ uri: url, title: "Pausa Coffee & Brunch" });
+  });
+
+  it("gives a curated fallback row no Google source and says it is a fallback", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row()],
+      attribution: [],
+      metadata: { fallback: "curated", venueKind: "cafe" },
+    });
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
+    expect(parsed.fallback).toBe("curated");
+  });
+
+  it("never matches by position: another place's source is not attached", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row({ id: "p2", mapsUrl: "https://maps.google.com/?cid=2" })],
+      attribution: [{ placeUri: url, title: "Some Other Place" }],
+    });
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
+  });
+
+  it("does not manufacture a source from a record with no URL", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row()],
+      attribution: [{ source: "google_maps_grounding", title: "Pausa Coffee & Brunch" }],
+    });
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
+  });
+
+  it("does not attribute a row that has no URL of its own", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row({ mapsUrl: undefined })],
+      attribution: [{ placeUri: url, title: "Pausa" }],
+    });
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
+  });
+
+  it("falls back to the card's own name when the source has no title", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row()],
+      attribution: [{ placeUri: url }],
+    });
+    expect(parsed.results[0]?.groundingSource).toEqual({ uri: url, title: "Pausa Coffee & Brunch" });
+  });
+});

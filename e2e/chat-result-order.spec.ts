@@ -127,7 +127,7 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await expect(source).toBeVisible();
     await expect(source).toContainText("Google Maps");
     await expect(source).toContainText(groundedPlace.title);
-    await expect(source).toHaveAttribute("translate", "no");
+    await expect(source.locator('[translate="no"]')).toHaveText("Google Maps");
     await expect(source.getByRole("link")).toHaveAttribute("href", groundedPlace.mapsUrl);
     await expectReadsBefore(
       page.getByTestId("grounded-fast-path-panel"),
@@ -135,6 +135,29 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
       composer(page),
       "the message box",
     );
+  });
+
+  test("a curated fallback café never claims Google Maps as its source", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    await page.route("**/api/grounded/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [groundedPlace],
+          attribution: [],
+          source: "grounding",
+          metadata: { venueKind: "cafe", fallback: "curated" },
+        }),
+      });
+    });
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expect(page.getByTestId("grounding-attribution")).toHaveCount(0);
+    await expect(page.getByText("Google-verified candidate")).toHaveCount(0);
   });
 
   test("a later search of another kind replaces the earlier results (grounded → event → rental)", async ({ page }) => {
