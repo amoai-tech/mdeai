@@ -20,7 +20,7 @@ export function ToolPinsSync({
     // SAN-1422 — only a missing or still-streaming result is a no-op. A finished result always
     // replaces its category, including with no pins, so a coordinate-less search can't leave the
     // previous search's pins on the map.
-    if (!isFinishedToolPayload(result)) return;
+    if (!isFinishedToolPayload(result, { rowArray: category === "grounded" })) return;
     const { pins } = normalizeToolOutput(category, result);
     // The location is part of the key: the same pin id with corrected coordinates is a real update.
     const key = `${category}:${pins

@@ -99,6 +99,18 @@ describe("ToolPinsSync leaves the map alone for unfinished input", () => {
   });
 });
 
+describe("a bare array of rows", () => {
+  it("is a finished grounded result", () => {
+    show("grounded", [groundedRow("g1", 6.24, -75.58)]);
+    expect(merge).toHaveBeenLastCalledWith("grounded", [expect.objectContaining({ id: "grounded-g1" })]);
+  });
+
+  it("is not a finished result for any other category (only the grounded tool returns that shape)", () => {
+    show("event", [mapped("e1", 6.2, -75.5)]);
+    expect(merge).not.toHaveBeenCalled();
+  });
+});
+
 describe("ToolPinsSync still handles a finished wrapped result", () => {
   it("an AG-UI tool-result carrying a finished payload is normalized and merged", () => {
     show("event", [{ type: "tool-result", result: JSON.stringify({ results: [mapped("e1", 6.2, -75.5)] }) }]);

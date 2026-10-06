@@ -23,7 +23,7 @@ type AgUiToolResultPart = {
 };
 
 /** CopilotKit v2 passes `toolMessage.content` — often AG-UI `[{ type: "tool-result", result }]`. */
-function unwrapAgUiToolPayload(result: unknown): unknown {
+export function unwrapAgUiToolPayload(result: unknown): unknown {
   let value = decodeToolJson(result);
   if (value == null) return value;
 
@@ -54,14 +54,27 @@ function unwrapAgUiToolPayload(result: unknown): unknown {
   return value;
 }
 
+/** An AG-UI message part (`{ type: "text" | "tool-result" | … }`), as opposed to a result row. */
+function isAgUiContentPart(item: unknown): boolean {
+  return Boolean(item) && typeof item === "object" && typeof (item as { type?: unknown }).type === "string";
+}
+
 /**
  * True once the tool output has actually arrived: the fully unwrapped payload is an object, not a
- * missing value, half-streamed JSON, or an AG-UI wrapper whose inner `result` is still empty.
- * (An empty `results: []` is a finished answer; a `{ result: null }` wrapper is not.)
+ * missing value, half-streamed JSON, an AG-UI message that is not a result yet, or an AG-UI wrapper
+ * whose inner `result` is still empty. (An empty `results: []` is a finished answer; a
+ * `{ result: null }` wrapper is not.)
+ *
+ * `rowArray` accepts a bare array of result rows as a finished payload — only the grounded places
+ * tool returns that shape (see `parseGroundedToolResult`).
  */
-export function isFinishedToolPayload(result: unknown): boolean {
+export function isFinishedToolPayload(
+  result: unknown,
+  { rowArray = false }: { rowArray?: boolean } = {},
+): boolean {
   const value = unwrapAgUiToolPayload(result);
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (Array.isArray(value)) return rowArray && !value.some(isAgUiContentPart);
+  if (!value || typeof value !== "object") return false;
   const payload = value as Record<string, unknown>;
   return (
     !("result" in payload) || "results" in payload || "total" in payload || "citations" in payload
