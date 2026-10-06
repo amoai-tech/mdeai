@@ -8,6 +8,7 @@ import {
   parseDraftWritePayload,
   parseStoredDraftPayload,
 } from "./definitions";
+import { evaluateOnboarding } from "./state";
 
 /**
  * SAN-1391 — thin server-only adapter over the EXISTING public.partner_drafts
@@ -15,8 +16,12 @@ import {
  * guard is the existing partial unique index
  * `idx_partner_drafts_active_unique (profile_id, type) WHERE submitted_at IS NULL`.
  *
- * The actor-role -> partner_drafts.type mapping itself lives in contracts.ts so
- * it stays pure and unit-testable.
+ * Two invariants live here:
+ *   * `completion_score` is derived from `evaluateOnboarding`, never supplied by
+ *     the caller, so the database can never disagree with canonical readiness.
+ *   * concurrency fails closed. An update needs a matching `expectedUpdatedAt`;
+ *     a lost insert race returns a conflict carrying the winning draft instead of
+ *     overwriting it.
  */
 
 type DbPartnerType = Database["public"]["Enums"]["partner_type"];
@@ -29,7 +34,7 @@ function toDbPartnerType(type: PartnerDraftType): DbPartnerType {
 
 function fromDbPartnerType(type: DbPartnerType): PartnerDraftType {
   if (type === "broker") return "broker";
-  if ((type as string) === "landlord") return "landlord";
+  if (type === "landlord") return "landlord";
   throw new Error(`partner_drafts.type "${type}" is not an onboarding type`);
 }
 
@@ -44,6 +49,7 @@ export interface PartnerDraft {
   /** 1-based canonical step index. */
   step: number;
   payload: OnboardingDraftPayload;
+  /** Derived from canonical readiness when written; never caller-controlled. */
   completionScore: number;
   submittedAt: string | null;
   /** Concurrency token: pass to upsertDraft as expectedUpdatedAt. */
@@ -59,6 +65,20 @@ interface PartnerDraftRow {
   completion_score: number;
   submitted_at: string | null;
   updated_at: string;
+}
+
+/**
+ * Raised instead of silently winning or losing a concurrent write. `latest` is
+ * the current stored draft (best effort) so the caller can reload and merge.
+ */
+export class DraftConflictError extends Error {
+  readonly latest: PartnerDraft | null;
+
+  constructor(message: string, latest: PartnerDraft | null) {
+    super(message);
+    this.name = "DraftConflictError";
+    this.latest = latest;
+  }
 }
 
 function mapRow(row: PartnerDraftRow): PartnerDraft {
@@ -92,13 +112,11 @@ export interface UpsertDraftInput {
   /** 1-based canonical step index. */
   step: number;
   payload: OnboardingDraftPayload;
-  completionScore?: number;
   partnerId?: string | null;
   threadId?: string | null;
   /**
-   * Optimistic-concurrency token. When provided, the update only applies if the
-   * stored `updated_at` still matches; otherwise it throws a conflict. This is
-   * what stops an older tab from overwriting newer answers.
+   * Optimistic-concurrency token from a prior read. Required when an active
+   * draft already exists, so a stale tab can never overwrite newer answers.
    */
   expectedUpdatedAt?: string;
 }
@@ -124,9 +142,14 @@ export async function getActiveDraft(
 }
 
 /**
- * Create or update the active draft in one call. Safe under the
- * (profile_id, type) WHERE submitted_at IS NULL uniqueness: a concurrent insert
- * loses with 23505 and is retried as an update of the winning row.
+ * Create or update the active draft in one call.
+ *
+ * - The payload and step are validated before anything reaches the database.
+ * - `completion_score` is derived from `evaluateOnboarding`.
+ * - If a draft already exists, `expectedUpdatedAt` must match or a
+ *   `DraftConflictError` is thrown.
+ * - A lost insert race (23505) throws a `DraftConflictError` carrying the winner
+ *   rather than overwriting it.
  */
 export async function upsertDraft(
   input: UpsertDraftInput,
@@ -141,19 +164,23 @@ export async function upsertDraft(
     input.payload,
   ) as unknown as Json;
 
+  // Canonical readiness is the only source for completion_score.
+  const completionScore = evaluateOnboarding({
+    step: input.step,
+    payload: input.payload,
+  }).completion;
+
   const mutable = {
     step: input.step,
     payload,
-    ...(input.completionScore !== undefined
-      ? { completion_score: input.completionScore }
-      : {}),
+    completion_score: completionScore,
     ...(input.partnerId !== undefined ? { partner_id: input.partnerId } : {}),
     ...(input.threadId !== undefined ? { thread_id: input.threadId } : {}),
   };
 
   const active = await supabase
     .from("partner_drafts")
-    .select("id")
+    .select(DRAFT_COLUMNS)
     .eq("profile_id", input.profileId)
     .eq("type", dbType)
     .is("submitted_at", null)
@@ -164,7 +191,14 @@ export async function upsertDraft(
   }
 
   if (active.data) {
-    return updateExistingDraft(active.data.id, mutable, input.expectedUpdatedAt);
+    const existing = active.data as PartnerDraftRow;
+    if (input.expectedUpdatedAt === undefined) {
+      throw new DraftConflictError(
+        "an active draft already exists; reload before saving",
+        mapRow(existing),
+      );
+    }
+    return updateExistingDraft(existing.id, mutable, input.expectedUpdatedAt);
   }
 
   const { data, error } = await supabase
@@ -185,45 +219,52 @@ export async function upsertDraft(
     throw new Error(`upsertDraft insert failed: ${error.message}`);
   }
 
-  // Race loss: another request inserted the active row first. Update it.
+  // Lost the insert race. Never overwrite the winner: report a conflict with the
+  // winning row so the caller reloads and merges deliberately.
   const winner = await supabase
     .from("partner_drafts")
-    .select("id")
+    .select(DRAFT_COLUMNS)
     .eq("profile_id", input.profileId)
     .eq("type", dbType)
     .is("submitted_at", null)
     .maybeSingle();
 
-  if (winner.error || !winner.data) {
-    throw new Error(
-      `upsertDraft race recovery failed: ${winner.error?.message ?? "no active draft"}`,
-    );
+  if (winner.error) {
+    throw new Error(`upsertDraft race lookup failed: ${winner.error.message}`);
   }
 
-  return updateExistingDraft(winner.data.id, mutable, input.expectedUpdatedAt);
+  throw new DraftConflictError(
+    "another session created this draft first; reload before saving",
+    winner.data ? mapRow(winner.data as PartnerDraftRow) : null,
+  );
 }
 
 async function updateExistingDraft(
   id: string,
   mutable: Record<string, unknown>,
-  expectedUpdatedAt: string | undefined,
+  expectedUpdatedAt: string,
 ): Promise<PartnerDraft> {
   const supabase = await createClient();
-  let query = supabase.from("partner_drafts").update(mutable).eq("id", id);
-  if (expectedUpdatedAt !== undefined) {
-    query = query.eq("updated_at", expectedUpdatedAt);
-  }
-
-  const { data, error } = expectedUpdatedAt !== undefined
-    ? await query.select(DRAFT_COLUMNS).maybeSingle()
-    : await query.select(DRAFT_COLUMNS).single();
+  const { data, error } = await supabase
+    .from("partner_drafts")
+    .update(mutable)
+    .eq("id", id)
+    .eq("updated_at", expectedUpdatedAt)
+    .select(DRAFT_COLUMNS)
+    .maybeSingle();
 
   if (error) {
     throw new Error(`upsertDraft update failed: ${error.message}`);
   }
   if (!data) {
-    throw new Error(
-      "upsertDraft conflict: the draft changed since it was loaded; reload before saving",
+    const latest = await supabase
+      .from("partner_drafts")
+      .select(DRAFT_COLUMNS)
+      .eq("id", id)
+      .maybeSingle();
+    throw new DraftConflictError(
+      "the draft changed since it was loaded; reload before saving",
+      latest.data ? mapRow(latest.data as PartnerDraftRow) : null,
     );
   }
   return mapRow(data as PartnerDraftRow);

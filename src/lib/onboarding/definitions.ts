@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
   ACTOR_ROLES,
+  CURRENCIES,
   ONBOARDING_STEP_IDS,
   PROPERTY_RELATIONSHIPS,
+  PROPERTY_TYPES,
   TRANSACTION_INTENTS,
   draftPayloadSchema,
   type OnboardingDraftPayload,
@@ -146,18 +148,39 @@ export const FIELD_VALIDATORS: Readonly<
   transactionIntent: z.enum(TRANSACTION_INTENTS),
   displayName: z.string().trim().min(1),
   propertyRelationship: z.enum(PROPERTY_RELATIONSHIPS),
-  propertyType: z.string().trim().min(1),
+  propertyType: z.enum(PROPERTY_TYPES),
   bedrooms: z.number().int().min(0),
   bathrooms: z.number().int().min(0),
   addressLine: z.string().trim().min(1),
   city: z.string().trim().min(1),
   neighborhood: z.string().trim().min(1),
-  placeId: z.string().trim().min(1),
-  photoUrls: z.array(z.string().trim().min(1)).min(1),
+  // Structural check only. SAN-1392/SAN-1107 must still verify the Places ID
+  // server-side before it can become a trusted address fact.
+  placeId: z.string().trim().regex(/^[A-Za-z0-9_-]{10,}$/, "placeId must be a Google Place ID"),
+  photoUrls: z
+    .array(
+      z.string().trim().refine(
+        (value) =>
+          /^https:\/\/[^\s]+$/.test(value) ||
+          /^listing-photos\/[^\s]+$/.test(value),
+        "photoUrls entries must be an https URL or a listing-photos storage path",
+      ),
+    )
+    .min(1),
   photoPublicationRightsConfirmed: z.literal(true),
   priceAmount: z.number().int().positive(),
-  currency: z.string().trim().length(3),
-  availability: z.string().trim().min(1),
+  currency: z.enum(CURRENCIES),
+  availability: z.union([
+    z.literal("available_now"),
+    z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "availability must be YYYY-MM-DD")
+      .refine(
+        (value) => !Number.isNaN(Date.parse(value)),
+        "availability must be a real date",
+      ),
+  ]),
   listingRightsConfirmed: z.literal(true),
 });
 

@@ -127,11 +127,21 @@ describe("isFieldValid", () => {
     expect(isFieldValid("priceAmount", 3_800_000)).toBe(true);
     expect(isFieldValid("currency", "COP")).toBe(true);
     expect(isFieldValid("currency", "CO")).toBe(false);
+    expect(isFieldValid("currency", "XXX")).toBe(false);
+    expect(isFieldValid("propertyType", "banana")).toBe(false);
+    expect(isFieldValid("propertyType", "apartment")).toBe(true);
     expect(isFieldValid("listingRightsConfirmed", false)).toBe(false);
     expect(isFieldValid("listingRightsConfirmed", true)).toBe(true);
     expect(isFieldValid("photoUrls", [])).toBe(false);
     expect(isFieldValid("photoUrls", [""])).toBe(false);
+    expect(isFieldValid("photoUrls", ["not-a-url"])).toBe(false);
     expect(isFieldValid("photoUrls", ["https://example.com/a.jpg"])).toBe(true);
+    expect(isFieldValid("photoUrls", ["listing-photos/user/a.jpg"])).toBe(true);
+    expect(isFieldValid("availability", "whenever")).toBe(false);
+    expect(isFieldValid("availability", "2026-11-01")).toBe(true);
+    expect(isFieldValid("availability", "2026-13-40")).toBe(false);
+    expect(isFieldValid("placeId", "banana")).toBe(false);
+    expect(isFieldValid("placeId", "ChIJabc12345")).toBe(true);
   });
 
   it("returns false for an unknown field id", () => {

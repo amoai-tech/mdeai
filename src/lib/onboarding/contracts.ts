@@ -22,6 +22,20 @@ export const PROPERTY_RELATIONSHIPS = [
 ] as const;
 export type PropertyRelationship = (typeof PROPERTY_RELATIONSHIPS)[number];
 
+/** Supported rental property types. Anything else is not a supported listing. */
+export const PROPERTY_TYPES = [
+  "apartment",
+  "house",
+  "studio",
+  "room",
+  "penthouse",
+] as const;
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+/** Supported currencies. The rental MVP is COP-only. */
+export const CURRENCIES = ["COP"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
 /**
  * The canonical resumable step order. Index is the step's 1-based position and
  * is exactly what `partner_drafts.step` persists. This array owns the order;
