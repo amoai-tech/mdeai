@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "skill_name": "frontend-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Reshape MDE /rentals into a desktop and mobile discovery workspace with filters, ranked cards, a map and persistent Ask MDE. Preserve the existing search/map contracts and show loading, empty and error states.",
+      "expected_output": "Uses the existing MDE design system, establishes clear discovery hierarchy and responsive states, keeps AI progress user-facing, and does not invent business truth.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Design the MDE rental detail experience for desktop and mobile. It needs a photo gallery, grounded Why it fits reasons, availability, location, and a persistent Request viewing action, including missing-photo and unavailable states.",
+      "expected_output": "Produces intentional visual hierarchy and responsive behavior, explicitly covers degraded states, and treats match reasons and requestability as canonical inputs rather than UI-derived claims.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Polish the renter viewing-request journey: choose a time, review the request, submit once, then show requested/confirmed/rescheduled/declined status without exposing internal lead terminology.",
+      "expected_output": "Uses progressive disclosure, clear review/commit boundaries, user-facing language and state-specific UX without implying backend success before confirmation.",
+      "files": []
+    }
+  ]
+}

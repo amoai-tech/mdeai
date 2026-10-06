@@ -1,7 +1,7 @@
 # DESIGN.MD — mdeai Design System & UI/UX Planning
 
 > **Scope:** Phase 1 (Week 1–6) · Platform: mdeapp repo root (Next.js 16, React 19, Tailwind v4, shadcn/ui, `@base-ui/react`)
-> **Skills to load for UI work:** `shadcn` · `tailwind-best-practices` · `ui-ux-pro-max` · `copilotkit-integrations` · `web-design-guidelines`
+> **Skills to load for UI work:** `shadcn` · `tailwind-best-practices` · `frontend-design` · `copilotkit-integrations` · `web-design-guidelines`
 > **Design system:** `base-nova` (shadcn style using `@base-ui/react` primitives, Tailwind v4 + oklch color space)
 > **Last updated:** 2026-06-02
 
@@ -560,7 +560,7 @@ Load these when working on UI tasks (max 5 per task):
 | shadcn/ui components | `shadcn` | Any component implementation |
 | Tailwind v4 patterns | `tailwind-best-practices` | Layout, spacing, responsive |
 | CopilotKit screens | `copilotkit-integrations` | Any CopilotKit render/action |
-| UI/UX design work | `ui-ux-pro-max` | Design decisions, wireframe review |
+| UI/UX design work | `frontend-design` | Design decisions, wireframe review |
 | Web design guidelines | `web-design-guidelines` | Accessibility, polish |
 | Maps integration | `maps` | Any map, pin, or Places work |
 | Testing standards | `testing` + `webapp-testing` | Before marking any screen Done |
@@ -570,7 +570,7 @@ Load these when working on UI tasks (max 5 per task):
 1. shadcn                   (component building blocks)
 2. tailwind-best-practices  (layout + responsive)
 3. copilotkit-integrations  (if useCopilotAction/useCoAgent involved)
-4. ui-ux-pro-max            (design review gate)
+4. frontend-design         (visual direction + MDE UX patterns)
 5. webapp-testing           (before marking Done)
 ```
 
