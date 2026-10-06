@@ -143,16 +143,6 @@ jobs:
           MASTRA_LEGACY_COMPAT_INTEGRATION: "1"
         run: npx vitest run src/mastra/lib/storage-legacy-compat.integration.test.ts
 
-      # SAN-548 — a realistic rental chat (12 turns, "furnished", Laureles, 2BR,
-      # 5M -> 4M correction) survives close -> genuinely fresh store/Memory -> reload,
-      # the stale 5M does not win, and User B is denied. This is the fresh-runtime
-      # proof the legacy-compat test above does not make.
-      - name: Prove rental chat memory survives a fresh runtime
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
-          MASTRA_CHAT_MEMORY_DURABILITY: "1"
-        run: npx vitest run src/mastra/lib/chat-memory-durability.integration.test.ts
-
       - name: Prove a suspended workflow resumes after a cold start
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
@@ -175,3 +165,14 @@ jobs:
         run: |
           npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
           npx vitest run src/mastra/lib/storage-durability.integration.test.ts
+
+      # SAN-548 — deliberately AFTER the optional adapter tables are dropped, so this runs
+      # against the production-style 32-table contract (no mastra_thread_state). A realistic
+      # rental chat (12 turns, "furnished", Laureles, 2BR, 5M -> 4M) survives close -> fresh
+      # PostgresStore + Memory recreation -> reload; the stale 5M does not win; User B is
+      # denied through the real auth gate.
+      - name: Prove rental chat memory survives a fresh store recreation
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_CHAT_MEMORY_DURABILITY: "1"
+        run: npx vitest run src/mastra/lib/chat-memory-durability.integration.test.ts

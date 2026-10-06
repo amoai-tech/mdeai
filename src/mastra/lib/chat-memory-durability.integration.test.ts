@@ -1,13 +1,15 @@
 /**
- * SAN-548 — proves a real renter conversation survives a fresh runtime.
+ * SAN-548 — proves a real renter conversation survives a fresh PostgresStore + Memory
+ * recreation (persistence/reopen, not a new OS process).
  *
  * Real journey: Camila says "furnished 2BR in Laureles under 5M", then corrects to 4M.
- * The runtime restarts. She reloads the same thread and must still see "furnished" in
- * message history, the modeled fields (Laureles, 2BR, current 4M + budget type) in
- * thread-scoped working memory, and Roberto must be denied.
+ * The store is closed and a new one opens. She reloads the same thread and must still see
+ * "furnished" in message history, the modeled fields (Laureles, 2BR, current 4M + budget
+ * type) in thread-scoped working memory, and Roberto must be denied.
  *
- * This is the missing L2 proof (close -> genuinely fresh store/Memory -> reload); the
- * existing legacy-compat test proves old ROWS stay readable, not fresh-runtime reopen.
+ * This is the missing L2 proof (close -> fresh store/Memory -> reload); the existing
+ * legacy-compat test proves old ROWS stay readable after an upgrade. True fresh-process /
+ * deployment continuity belongs to SAN-548 Task 4 (production journey).
  *
  * Opt-in, disposable-database only (writes rows):
  *   DATABASE_URL=postgresql://... MASTRA_CHAT_MEMORY_DURABILITY=1 \
@@ -75,7 +77,7 @@ describe.runIf(runIntegration)("SAN-548 rental chat memory durability", () => {
           storage: store,
           options: {
             workingMemory: { enabled: true, scope: "thread", schema: conciergeWorkingMemorySchema },
-            lastMessages: 40,
+            lastMessages: 10,
           },
         });
         await memory.createThread({ threadId, resourceId: userA });
@@ -135,7 +137,7 @@ describe.runIf(runIntegration)("SAN-548 rental chat memory durability", () => {
           storage: store,
           options: {
             workingMemory: { enabled: true, scope: "thread", schema: conciergeWorkingMemorySchema },
-            lastMessages: 40,
+            lastMessages: 10,
           },
         });
 
@@ -182,7 +184,8 @@ describe.runIf(runIntegration)("SAN-548 rental chat memory durability", () => {
               headers: { "content-type": "application/json" },
               body: requestBody,
             }),
-            { userId, thread: { kind: "existing", threadId, resourceId: userA } },
+            // Bind to the owner actually reloaded from storage, not a duplicated literal.
+            { userId, thread: { kind: "existing", threadId, resourceId: loaded?.resourceId ?? null } },
           );
         const denied = asUser(userB);
         expect(denied.allowed).toBe(false);
@@ -213,7 +216,6 @@ describe.runIf(runIntegration)("SAN-548 rental chat memory durability", () => {
         expect(orphans.rows[0].n).toBe(0);
       } finally {
         try {
-          await client.query("delete from public.mastra_thread_state where \"threadId\" = $1", [threadId]);
           await client.query("delete from public.mastra_messages where thread_id = $1", [threadId]);
           await client.query("delete from public.mastra_threads where id = $1", [threadId]);
         } catch {
