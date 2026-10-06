@@ -24,6 +24,19 @@ A `RENTV2` label, external-discovery fallback, trust/dedupe task, saved search, 
 
 For current MDE rental discovery/viewing work, use [rental-mvp.md](rental-mvp.md).
 
+## Evidence gate before implementation
+
+For a provider/feed integration, implementation starts only after all of these are evidenced:
+
+1. the exact owning requirement and intended user/business outcome;
+2. the actual provider/feed and current licensing, data-use, attribution, and redistribution authority;
+3. mapping from provider identity/provenance into MDE's canonical rental identity;
+4. compatibility with canonical eligibility/result/requestability contracts, including which facts remain external or unknown.
+
+Missing provider authority or identity/provenance mapping is a **STOP** for schema/feed implementation; discovery and evidence gathering may continue.
+
+For **additional scale infrastructure** (new search engine, geo service, clustering tier, or similar), also require a reproducible benchmark showing the current stack misses a documented correctness, latency, throughput, or scale requirement. An explicit feed requirement alone does not prove a new search/geo stack is needed.
+
 ## Scale rules
 
 1. Measure the current bottleneck before introducing new infrastructure.
