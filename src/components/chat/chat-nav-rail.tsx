@@ -104,6 +104,7 @@ export function ChatNavRail({
   const { startNewChat, stopActiveRun } = useConciergeSession();
   const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
+  const hasChats = !loading && !error && threads.length > 0;
 
   // Both stay on /chat, where the concierge lives (D-13). These used to push
   // "/" from before the concierge moved, which dropped Sofia on the marketing
@@ -129,7 +130,7 @@ export function ChatNavRail({
       aria-label="Concierge navigation"
       className="flex h-full min-h-0 flex-col gap-4"
     >
-      <div className="flex items-center gap-2 text-sm font-semibold">
+      <div className="flex items-center gap-2 text-sm font-semibold lg:hidden">
         <Sparkles className="size-4 text-primary" aria-hidden />
         mdeai
       </div>
@@ -150,7 +151,10 @@ export function ChatNavRail({
         </li>
       </ul>
 
-      <div data-testid="nav-thread-list" className="min-h-24 flex-1 overflow-y-auto">
+      <div
+        data-testid="nav-thread-list"
+        className={cn("overflow-y-auto", hasChats ? "min-h-24 flex-1" : "shrink-0")}
+      >
         <ul className="flex flex-col gap-1 text-sm">
         {/* Thread list */}
         {loading ? (
