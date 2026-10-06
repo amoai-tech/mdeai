@@ -113,7 +113,9 @@ test("the very first search after load scrolls its newest results into view", as
             }
             node = node.parentElement;
           }
-          return -1;
+          // No scrolling transcript found: report "everything hidden" so the assertion fails
+          // (a negative number would satisfy `<= 8` and pass for the wrong reason).
+          return Number.MAX_SAFE_INTEGER;
         }),
       { timeout: 15_000, message: "pixels of results still hidden below the transcript's visible area" },
     )

@@ -226,6 +226,29 @@ test.describe("SAN-1414 /chat is a fixed workspace", { tag: ["@deterministic"] }
     });
   }
 
+  test("with no saved chats the empty message stays on screen and nothing scrolls (1440×900)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockSavedChats(page, 0);
+    await gotoDeterministicChat(page);
+    await expect(page.getByTestId("nav-thread-item")).toHaveCount(0);
+    const empty = page.getByTestId("nav-threads-empty");
+    await expect(empty).toBeVisible();
+    const box = await empty.boundingBox();
+    expect(box, "the empty message must be on screen").not.toBeNull();
+    expect((box?.y ?? -1) >= 0 && (box?.y ?? 0) + (box?.height ?? 0) <= 900).toBe(true);
+    for (const testId of ["nav-new-chat", "nav-restaurants-link", "nav-saved-link"]) {
+      const link = await page.getByTestId(testId).first().boundingBox();
+      expect((link?.y ?? -1) >= 0 && (link?.y ?? 0) + (link?.height ?? 0) <= 900, `${testId} must be inside the window`).toBe(true);
+    }
+    const sidebar = await page.evaluate(() => {
+      const aside = document.querySelector("aside");
+      return { asideScrolls: !!aside && aside.scrollHeight > aside.clientHeight + 1 };
+    });
+    expect(sidebar.asideScrolls, "an empty chat list must not make the sidebar scroll").toBe(false);
+    const measured = await measure(page);
+    expect(measured.pageHeight).toBeLessThanOrEqual(measured.windowHeight);
+  });
+
   test("the sidebar's supported height: 720px keeps one scroll owner, shorter windows fall back without losing the box", async ({
     page,
   }) => {
