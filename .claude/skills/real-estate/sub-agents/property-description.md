@@ -1,6 +1,6 @@
 ---
 name: property-description-generator
-description: Generate MLS-ready, social media, and luxury listing descriptions using benefit-driven real estate copywriting
+description: Use when drafting property marketing copy from authorized structured listing facts and verified sources.
 metadata:
   version: "1.0"
   author: NextAutomation
