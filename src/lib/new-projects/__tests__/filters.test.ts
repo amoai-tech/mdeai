@@ -28,7 +28,11 @@ function project(overrides: Partial<NewProjectSummary> = {}): NewProjectSummary 
     verifiedAt: "2026-10-06T09:21:53Z",
     minBedrooms: 1,
     maxBedrooms: 3,
-    unitTypeCount: 6,
+    unitTypeCount: 2,
+    bedroomOptions: [
+      { bedrooms: 1, priceFromCents: 57500000000 },
+      { bedrooms: 3, priceFromCents: null },
+    ],
     ...overrides,
   };
 }
@@ -46,6 +50,7 @@ describe("parseProjectFilters", () => {
       neighborhood: "Laureles",
       maxPriceCop: 600000000,
       minBedrooms: 2,
+      bedroomsExact: null,
       deliveryYear: 2027,
       deliveryUnknown: false,
     });
@@ -63,6 +68,7 @@ describe("parseProjectFilters", () => {
       neighborhood: null,
       maxPriceCop: null,
       minBedrooms: null,
+      bedroomsExact: null,
       deliveryYear: null,
       deliveryUnknown: false,
     });
@@ -89,11 +95,64 @@ describe("projectMatchesFilters — hard deterministic filters", () => {
     expect(projectMatchesFilters(project({ priceFromCents: null }), filters)).toBe(false);
   });
 
-  it("requires the maximum known bedrooms to reach the requested minimum", () => {
-    const filters = parseProjectFilters({ beds: "3" });
-    expect(projectMatchesFilters(project({ maxBedrooms: 3 }), filters)).toBe(true);
-    expect(projectMatchesFilters(project({ maxBedrooms: 2 }), filters)).toBe(false);
-    expect(projectMatchesFilters(project({ maxBedrooms: null }), filters)).toBe(false);
+  it("matches \"2+ bedrooms\" against real typology options", () => {
+    const filters = parseProjectFilters({ beds: "2" });
+    expect(projectMatchesFilters(project(), filters)).toBe(true); // has a 3BR option
+    expect(
+      projectMatchesFilters(
+        project({ maxBedrooms: 1, bedroomOptions: [{ bedrooms: 1, priceFromCents: 100 }] }),
+        filters,
+      ),
+    ).toBe(false);
+    expect(projectMatchesFilters(project({ bedroomOptions: [] }), filters)).toBe(false);
+  });
+
+  it("\"2 bedroom\" means exactly two, not two-or-more", () => {
+    const exact = { ...parseProjectFilters({}), bedroomsExact: 2 };
+    // 1BR + 3BR options exist, but no 2BR: exact-2 must fail where 2+ would pass.
+    expect(projectMatchesFilters(project(), exact)).toBe(false);
+    expect(
+      projectMatchesFilters(
+        project({ bedroomOptions: [{ bedrooms: 2, priceFromCents: null }] }),
+        exact,
+      ),
+    ).toBe(true);
+  });
+
+  it("combines budget and bedrooms against ONE typology and fails closed on an unknown price", () => {
+    const exactBudget = {
+      ...parseProjectFilters({ maxPrice: "600000000" }),
+      bedroomsExact: 2,
+    };
+    // A 2BR exists but its price is unknown, and a cheap 1BR must not satisfy "2BR under budget".
+    const uncorrelated = project({
+      priceFromCents: 50000000000,
+      bedroomOptions: [
+        { bedrooms: 1, priceFromCents: 50000000000 },
+        { bedrooms: 2, priceFromCents: null },
+      ],
+    });
+    expect(projectMatchesFilters(uncorrelated, exactBudget)).toBe(false);
+
+    const correlated = project({
+      priceFromCents: 90000000000,
+      bedroomOptions: [
+        { bedrooms: 1, priceFromCents: 50000000000 },
+        { bedrooms: 2, priceFromCents: 58000000000 },
+      ],
+    });
+    expect(projectMatchesFilters(correlated, exactBudget)).toBe(true);
+  });
+
+  it("locks the precedence: bedroomsExact wins when both are set by a direct caller", () => {
+    const both = { ...parseProjectFilters({ beds: "3" }), bedroomsExact: 2 };
+    expect(
+      projectMatchesFilters(project({ bedroomOptions: [{ bedrooms: 2, priceFromCents: 1 }] }), both),
+    ).toBe(true);
+    // A 3BR-only project satisfies minBedrooms: 3, but exact-2 must win and reject it.
+    expect(
+      projectMatchesFilters(project({ bedroomOptions: [{ bedrooms: 3, priceFromCents: 1 }] }), both),
+    ).toBe(false);
   });
 
   it("matches an exact delivery year and never a project without one", () => {
@@ -115,9 +174,21 @@ describe("projectMatchesFilters — hard deterministic filters", () => {
     const filters = parseProjectFilters({ neighborhood: "Laureles", beds: "2" });
     const results = applyProjectFilters(
       [
-        project({ slug: "a", neighborhood: "Laureles", maxBedrooms: 3 }),
-        project({ slug: "b", neighborhood: "Laureles", maxBedrooms: 1 }),
-        project({ slug: "c", neighborhood: "Ciudad del Río", maxBedrooms: 3 }),
+        project({
+          slug: "a",
+          neighborhood: "Laureles",
+          bedroomOptions: [{ bedrooms: 1, priceFromCents: 1 }, { bedrooms: 3, priceFromCents: 1 }],
+        }),
+        project({
+          slug: "b",
+          neighborhood: "Laureles",
+          bedroomOptions: [{ bedrooms: 1, priceFromCents: 1 }],
+        }),
+        project({
+          slug: "c",
+          neighborhood: "Ciudad del Río",
+          bedroomOptions: [{ bedrooms: 1, priceFromCents: 1 }, { bedrooms: 3, priceFromCents: 1 }],
+        }),
       ],
       filters,
     );

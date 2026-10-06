@@ -34,12 +34,12 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `code-review` | 98 | KEEP | Universal PR/diff review; CI-specific invariants live in `references/ci-review.md` |
 | `copilotkit` | 97 | KEEP | Maintain version/source verification and v2 entrypoint accuracy |
 | `events` | 91 | KEEP | Add domain references only as event rules grow |
-| `frontend-design` | 94 | KEEP + BENCHMARK | Canonical visual-design owner; MDE UX patterns load progressively from `references/ui-ux-patterns.md` |
+| `frontend-design` | 94 | KEEP | Canonical visual-design owner; 3/3 paired behavior evals passed after consolidation |
 | `gemini` | 96 | KEEP | Maintain current-model/provider evidence |
 | `maps` | 94 | KEEP + IMPROVE | Add trigger and behavior evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
-| `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/React/Vercel domain owner; composition, review, deploy, and performance detail use progressive-disclosure references |
+| `nextjs` | 98 | KEEP | Single Next.js/React/Vercel owner; 5/5 paired behavior/routing evals passed after consolidation |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
 | `ponytail` | 93 | KEEP + BENCHMARK | Owner for reuse-before-build, source receipts, and the evidence split; eval pack added — next, measure the diff-size effect with and without the skill |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |

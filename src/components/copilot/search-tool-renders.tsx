@@ -13,6 +13,10 @@ import {
   RentalResults,
   RestaurantResults,
 } from "@/components/copilot/search-tool-result-cards";
+import {
+  NewProjectComparisonResults,
+  NewProjectResults,
+} from "@/components/new-projects/concierge/project-result-cards";
 import { useChatWorkflow } from "@/components/chat/chat-workflow-context";
 import {
   MASTRA_COPILOT_TOOL_ACTIONS,
@@ -171,6 +175,32 @@ function rentalToolRender({ status, result }: ToolRenderProps): ReactElement {
   );
 }
 
+function newProjectToolRender({ status, result }: ToolRenderProps): ReactElement {
+  const body = resolveToolBody({
+    status,
+    result,
+    renderResults: <NewProjectResults result={result} />,
+  });
+  return (
+    <ToolRenderShell kind="new_project" status={status}>
+      {body}
+    </ToolRenderShell>
+  );
+}
+
+function compareProjectsToolRender({ status, result }: ToolRenderProps): ReactElement {
+  const body = resolveToolBody({
+    status,
+    result,
+    renderResults: <NewProjectComparisonResults result={result} />,
+  });
+  return (
+    <ToolRenderShell kind="new_project" status={status}>
+      {body}
+    </ToolRenderShell>
+  );
+}
+
 function eventToolRender({ status, result }: ToolRenderProps): ReactElement {
   const citations =
     status === "complete" && result
@@ -293,6 +323,14 @@ export function useSearchToolRenders() {
     (props: ToolRenderProps) => rentalToolRender(props),
     [],
   );
+  const newProjectRender = useCallback(
+    (props: ToolRenderProps) => newProjectToolRender(props),
+    [],
+  );
+  const compareProjectsRender = useCallback(
+    (props: ToolRenderProps) => compareProjectsToolRender(props),
+    [],
+  );
   const eventRender = useCallback(
     (props: ToolRenderProps) => eventToolRender(props),
     [],
@@ -319,6 +357,18 @@ export function useSearchToolRenders() {
     MASTRA_TOOL_IDS.rentals,
     searchRentalsParams,
     rentalRender,
+  );
+  useDualToolRender(
+    MASTRA_COPILOT_TOOL_ACTIONS.newProjects,
+    MASTRA_TOOL_IDS.newProjects,
+    looseToolParams,
+    newProjectRender,
+  );
+  useDualToolRender(
+    MASTRA_COPILOT_TOOL_ACTIONS.compareProjects,
+    MASTRA_TOOL_IDS.compareProjects,
+    looseToolParams,
+    compareProjectsRender,
   );
   useDualToolRender(
     MASTRA_COPILOT_TOOL_ACTIONS.events,

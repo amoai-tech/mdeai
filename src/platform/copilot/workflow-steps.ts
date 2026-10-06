@@ -2,6 +2,7 @@
 
 export type WorkflowKind =
   | "rental"
+  | "new_project"
   | "event"
   | "restaurant"
   | "attraction"
@@ -11,6 +12,7 @@ export type WorkflowPhase = "idle" | "running" | "complete" | "error";
 
 export const WORKFLOW_STEP_LABELS: Record<WorkflowKind, readonly string[]> = {
   rental: ["Searching listings", "Ranking matches", "Results ready"],
+  new_project: ["Finding projects", "Checking facts", "Results ready"],
   event: ["Discovering events", "Filtering by vibe", "Results ready"],
   restaurant: ["Finding places", "Checking ratings", "Results ready"],
   attraction: ["Scanning spots", "Curating picks", "Results ready"],
@@ -20,6 +22,10 @@ export const WORKFLOW_STEP_LABELS: Record<WorkflowKind, readonly string[]> = {
 const TOOL_KIND_MAP: Record<string, WorkflowKind> = {
   searchRentalsTool: "rental",
   "search-rentals": "rental",
+  searchNewProjectsTool: "new_project",
+  "search-new-projects": "new_project",
+  compareNewProjectsTool: "new_project",
+  "compare-new-projects": "new_project",
   searchEventsTool: "event",
   "search-events": "event",
   searchRestaurantsTool: "restaurant",
