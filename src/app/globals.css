@@ -193,6 +193,9 @@ html {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* CopilotKit's message toolbars use -5px margins, so they poke 5px outside their row. With
+     overflow-y set, overflow-x computes to auto and that shows a stray horizontal scrollbar. */
+  overflow-x: hidden;
 }
 
 .mde-center-copilot-chat .copilotKitInput {
