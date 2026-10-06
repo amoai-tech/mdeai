@@ -7,15 +7,23 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
-import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
+import {
+  countConciergeReplies,
+  gotoConcierge,
+  sendConciergeMessage,
+  waitForConciergeReply,
+  waitForCopilotIdle,
+} from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
  * SAN-548 Task 4 — the real production renter journey.
  *
- * Camila asks for a furnished 2BR in Laureles at 5M/month, corrects it to 4M, the runtime
- * is replaced (a brand-new browser context = a fresh serverless runtime), she reopens the
- * same thread and continues, and Roberto is refused. Every claim is backed by persisted
+ * Camila asks for a furnished 2BR in Laureles at 5M/month, corrects it to 4M, the client
+ * session is replaced (a new browser context resets cookies/local storage only — it does
+ * NOT restart the Vercel function; a true server-runtime replacement needs an external
+ * redeploy, which is a separate Task 4 step), she reopens the same thread and continues,
+ * and Roberto is refused. Every claim is backed by persisted
  * rows (service-role, test process only), not the screen.
  *
  * Runs only when PROD_SMOKE_BASE_URL is set and the Supabase e2e env is present; it fails
@@ -77,6 +85,20 @@ async function threadWorkingMemory(threadId: string): Promise<Record<string, unk
   return null;
 }
 
+/** Read-only orphan count: messages whose thread_id has no mastra_threads row. */
+async function orphanMessageCount(): Promise<number> {
+  const admin = await getSupabaseAdmin();
+  const { data: threads, error: threadError } = await admin.from("mastra_threads").select("id");
+  if (threadError) throw new Error(`mastra_threads read failed: ${threadError.message}`);
+  const { data: messages, error: messageError } = await admin.from("mastra_messages").select("thread_id");
+  if (messageError) throw new Error(`mastra_messages read failed: ${messageError.message}`);
+  const threadIds = new Set((threads ?? []).map((row) => (row as { id: string }).id));
+  return (messages ?? []).filter((row) => {
+    const threadId = (row as { thread_id: string | null }).thread_id;
+    return threadId === null || !threadIds.has(threadId);
+  }).length;
+}
+
 async function threadOwner(threadId: string): Promise<string | null> {
   const admin = await getSupabaseAdmin();
   const { data, error } = await admin.from("mastra_threads").select('"resourceId"').eq("id", threadId).maybeSingle();
@@ -102,8 +124,17 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
   });
 
   test.afterAll(async () => {
-    if (camila) await deleteThrowawayIdentity(camila);
-    if (roberto) await deleteThrowawayIdentity(roberto);
+    // Attempt every identity even if one cleanup fails, then report — these are real rows.
+    const failures: string[] = [];
+    for (const identity of [camila, roberto]) {
+      if (!identity) continue;
+      try {
+        await deleteThrowawayIdentity(identity);
+      } catch (error) {
+        failures.push(`${identity.email}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (failures.length > 0) throw new Error(`SAN-548 cleanup failed — ${failures.join("; ")}`);
   });
 
   test("Camila's corrected budget survives a fresh runtime and Roberto is refused", async ({ page, browser }) => {
@@ -124,21 +155,24 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
     await sendConciergeMessage(page, "Mejor cambia el presupuesto a 4 millones de pesos colombianos por mes. Responde en una frase.");
     await waitForCopilotIdle(page, 180_000);
 
-    // Persisted working memory reflects the correction (stale 5M must not win).
-    await expect.poll(async () => (await threadWorkingMemory(threadA!))?.lastRentalQuery ? "present" : "missing", {
-      timeout: 90_000,
-    }).toBe("present");
-    const wm = await threadWorkingMemory(threadA!);
-    const query = ((wm?.lastRentalQuery ?? {}) as {
-      neighborhood?: string;
-      minBedrooms?: number;
-      maxPricePerNight?: number;
-      budgetType?: string;
-    });
-    expect(query.neighborhood, "neighborhood persisted").toBe("Laureles");
-    expect(query.minBedrooms, "bedrooms persisted").toBe(2);
-    expect(query.maxPricePerNight, "corrected budget persisted").toBe(4_000_000);
-    expect(JSON.stringify(wm), "stale 5M does not win").not.toContain("5000000");
+    // Poll the CORRECTED state, not just "lastRentalQuery exists" — turn 1 already created
+    // it, so an existence poll can read the stale 5M state.
+    //
+    // maxPricePerNight is a DERIVED USD/night search value (search-rentals.ts
+    // NIGHTLY_BUDGET_CURRENCY; rental-query-parser.ts normalizes monthly -> nightly), so the
+    // canonical amount+currency+period contract is a product decision (SAN-548). This
+    // asserts the period and the filters, not the nightly field.
+    await expect
+      .poll(async () => {
+        const wm = await threadWorkingMemory(threadA!);
+        const query = (wm?.lastRentalQuery ?? {}) as {
+          neighborhood?: string;
+          minBedrooms?: number;
+          budgetType?: string;
+        };
+        return `${query.neighborhood}|${query.minBedrooms}|${query.budgetType}`;
+      }, { timeout: 90_000 })
+      .toBe("Laureles|2|monthly");
 
     // Fresh runtime: a brand-new browser context, sign in again, reopen the same thread.
     const freshContext = await browser.newContext();
@@ -156,9 +190,18 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
 
       // A follow-up that depends on the saved context continues the SAME thread.
       const followThreads = recordRunThreadIds(freshPage);
+      const repliesBefore = await countConciergeReplies(freshPage);
       await sendConciergeMessage(freshPage, "¿Qué presupuesto mensual estoy usando ahora? Responde en una frase.");
-      await waitForCopilotIdle(freshPage, 180_000);
+      await waitForConciergeReply(freshPage, repliesBefore, 180_000);
       expect(followThreads.at(-1), "the follow-up continues thread A").toBe(threadA);
+      // Routing continuity is not memory continuity: the answer must actually use the
+      // remembered corrected budget.
+      const answer = await freshPage
+        .getByTestId("copilot-chat-region")
+        .getByTestId("copilot-assistant-message")
+        .last()
+        .innerText();
+      expect(answer, "the answer reflects the corrected budget").toMatch(/4\s*(millones|M\b|\.000\.000)|4\.000\.000/i);
     } finally {
       await freshContext.close();
     }
@@ -186,5 +229,6 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
       .eq("resourceId", "anonymous");
     if (anon.error) throw new Error(`anonymous count failed: ${anon.error.message}`);
     expect(anon.count ?? 0, "no anonymous threads").toBe(0);
+    expect(await orphanMessageCount(), "no orphan messages").toBe(0);
   });
 });

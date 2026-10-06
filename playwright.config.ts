@@ -142,6 +142,21 @@ export default defineConfig({
         trace: "off",
       },
     },
+    {
+      // SAN-548 opt-in certification. Deliberately OUTSIDE PROD_SPECS so it never runs in the
+      // normal production gate; run it explicitly with --project=prod-san548.
+      name: "prod-san548",
+      testMatch: "**/prod-rental-chat-restart.spec.ts",
+      testIgnore: VITEST_TESTS,
+      retries: 0,
+      workers: 1,
+      timeout: 900_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: prodBaseURL || "https://www.mdeai.co",
+        trace: "off",
+      },
+    },
   ],
   webServer: process.env.PW_SKIP_WEBSERVER
     ? undefined
