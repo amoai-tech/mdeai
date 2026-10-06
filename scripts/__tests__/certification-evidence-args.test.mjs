@@ -85,6 +85,25 @@ test("refuses notes longer than 2000 characters", () => {
   assert.match(parsed.errors.join(" "), /notes/);
 });
 
+test("refuses a verification status outside the live contract", () => {
+  const parsed = parseCertificationEvidenceArgs([
+    ...BASE,
+    "--verification-status=approved",
+    "--verified-by=750e8400-e29b-41d4-a716-446655440002",
+  ]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /verification-status/);
+});
+
+test("requires --source-type and --source-url together", () => {
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--source-type=listing"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--source-url=https://example.com/x"]).ok, false);
+  assert.equal(
+    parseCertificationEvidenceArgs([...BASE, "--source-type=listing", "--source-url=https://example.com/x"]).ok,
+    true,
+  );
+});
+
 test("does not treat --database-url as a certification argument", () => {
   const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
   assert.equal(parsed.ok, true, parsed.errors.join("; "));

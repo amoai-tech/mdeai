@@ -6,6 +6,8 @@
  */
 
 export const FRESHNESS_STATUSES = ["active", "unconfirmed", "stale"];
+/** Matches the live property_verifications.status contract. */
+export const VERIFICATION_STATUSES = ["pending", "verified", "rejected", "revoked"];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Provider/evidence tokens: bounded, no whitespace or shell/path characters. */
@@ -74,8 +76,11 @@ export function parseCertificationEvidenceArgs(argv) {
   if (sourceType && !TOKEN_RE.test(sourceType)) {
     errors.push("--source-type must be 1-64 chars of [A-Za-z0-9_-]");
   }
-  if (verificationStatus && !TOKEN_RE.test(verificationStatus)) {
-    errors.push("--verification-status must be 1-64 chars of [A-Za-z0-9_-]");
+  if (verificationStatus && !VERIFICATION_STATUSES.includes(verificationStatus)) {
+    errors.push(`--verification-status must be one of ${VERIFICATION_STATUSES.join("|")}`);
+  }
+  if (Boolean(sourceType) !== Boolean(sourceUrl)) {
+    errors.push("--source-type and --source-url must be provided together");
   }
   if (verifiedBy && !UUID_RE.test(verifiedBy)) errors.push("--verified-by must be a UUID");
   if (verificationStatus && !verifiedBy) {

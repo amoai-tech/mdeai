@@ -97,19 +97,32 @@ try {
   await client.query("begin");
   inTransaction = true;
 
-  const freshness = await client.query(
-    `insert into public.rental_freshness_log (listing_id, checked_at, status)
-     select $1::uuid, $2::timestamptz, $3
-      where not exists (
-        select 1 from public.rental_freshness_log
-         where listing_id = $1::uuid and checked_at = $2::timestamptz)
-     returning id`,
-    [v.apartmentId, v.checkedAt, v.freshnessStatus],
+  // Same (listing, checked_at): an identical status is a no-op; a different status is
+  // a conflict, never a silent overwrite and never a silent ignore.
+  const { rows: priorFreshness } = await client.query(
+    `select status from public.rental_freshness_log
+      where listing_id = $1::uuid and checked_at = $2::timestamptz
+      limit 1`,
+    [v.apartmentId, v.checkedAt],
   );
+  let freshnessRows = 0;
+  if (priorFreshness.length === 0) {
+    const freshness = await client.query(
+      `insert into public.rental_freshness_log (listing_id, checked_at, status)
+       values ($1::uuid, $2::timestamptz, $3)
+       returning id`,
+      [v.apartmentId, v.checkedAt, v.freshnessStatus],
+    );
+    freshnessRows = freshness.rowCount ?? 0;
+  } else if (priorFreshness[0].status !== v.freshnessStatus) {
+    throw new Error(
+      `rental_freshness_log already records "${priorFreshness[0].status}" at this checked_at; refusing to record "${v.freshnessStatus}" for the same timestamp. Record the change under a new --checked-at.`,
+    );
+  }
 
   // Mirror the apartment only when the (listing, checked_at) evidence row was new,
   // so re-running the same evidence is a true no-op.
-  if ((freshness.rowCount ?? 0) > 0) {
+  if (freshnessRows > 0) {
     await client.query(
       `update public.apartments
           set freshness_status = $2, last_checked_at = $3::timestamptz
@@ -139,17 +152,33 @@ try {
       throw new Error("--verified-by is required with --verification-status");
     }
     // property_verifications is UNIQUE(apartment_id): one verification per listing.
-    // Guard on that key so a re-run is a no-op instead of a unique violation.
-    const pv = await client.query(
-      `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at)
-       select $1::uuid, $2::uuid, $3, $4, $5::timestamptz
-        where not exists (
-          select 1 from public.property_verifications
-           where apartment_id = $1::uuid)
-       returning id`,
-      [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt],
+    // Identical evidence is a no-op; different evidence must be an explicit update,
+    // never a silent skip that leaves a stale status behind.
+    const { rows: priorVerification } = await client.query(
+      `select status, verified_by, notes from public.property_verifications
+        where apartment_id = $1::uuid limit 1`,
+      [v.apartmentId],
     );
-    verification = pv.rowCount ?? 0;
+    if (priorVerification.length === 0) {
+      const pv = await client.query(
+        `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at)
+         values ($1::uuid, $2::uuid, $3, $4, $5::timestamptz)
+         returning id`,
+        [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt],
+      );
+      verification = pv.rowCount ?? 0;
+    } else {
+      const prior = priorVerification[0];
+      const identical =
+        prior.status === v.verificationStatus &&
+        prior.verified_by === v.verifiedBy &&
+        (prior.notes ?? "") === (v.notes ?? "");
+      if (!identical) {
+        throw new Error(
+          `apartment already has a "${prior.status}" verification; refusing to overwrite it with "${v.verificationStatus}". Use an explicit update workflow.`,
+        );
+      }
+    }
   }
 
   let imageAdded = 0;
@@ -180,7 +209,7 @@ try {
   );
 
   console.log(
-    `Wrote: freshness_log+${freshness.rowCount ?? 0} grounding+${grounding} verification+${verification} image+${imageAdded}`,
+    `Wrote: freshness_log+${freshnessRows} grounding+${grounding} verification+${verification} image+${imageAdded}`,
   );
   console.log(
     `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,

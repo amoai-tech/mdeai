@@ -103,6 +103,20 @@ test(
       assert.match(second.stdout, /grounding\+0/);
       assert.match(second.stdout, /verification\+0/);
       assert.match(second.stdout, /image\+0/);
+
+      // 5. Same timestamp, different freshness status → conflict, not silence.
+      const freshnessConflict = runRecorder(
+        baseArgs.map((a) => (a.startsWith("--freshness-status") ? "--freshness-status=stale" : a)),
+      );
+      assert.equal(freshnessConflict.status, 1, freshnessConflict.stderr);
+      assert.match(freshnessConflict.stderr, /already records "active"/i);
+
+      // 6. Changed verification evidence → conflict, not a silent skip.
+      const verificationConflict = runRecorder(
+        baseArgs.map((a) => (a.startsWith("--verification-status") ? "--verification-status=rejected" : a)),
+      );
+      assert.equal(verificationConflict.status, 1, verificationConflict.stderr);
+      assert.match(verificationConflict.stderr, /already has a "verified" verification/i);
     } finally {
       await client.query("delete from public.rental_freshness_log where listing_id = $1 and checked_at = $2::timestamptz", [apt.id, checkedAt]);
       await client.query("delete from public.rental_grounding where apartment_id = $1 and checked_at = $2::timestamptz", [apt.id, checkedAt]);
