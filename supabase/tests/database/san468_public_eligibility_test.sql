@@ -9,7 +9,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(21);
+select plan(24);
 
 -- Catalog + predicate unit checks -------------------------------------------
 select has_function(
@@ -53,6 +53,13 @@ select ok(
     'public.rental_listing_is_public(text,text,text,uuid,jsonb)', 'EXECUTE'),
   'F6: the predicate is executable by anon and authenticated');
 
+select is(
+  (select count(*)::int from pg_policies
+    where schemaname = 'public' and tablename = 'property_verifications'
+      and policyname = 'property_verifications_select_public'),
+  1,
+  'F7: verification reads use the scoped visibility policy');
+
 -- Fixtures -------------------------------------------------------------------
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
                         email_confirmed_at, created_at, updated_at)
@@ -95,6 +102,11 @@ values
   ('e4680000-0000-4000-8000-000000000007', 'SAN468 active unowned', 'san468-el-unowned',
    'Laureles', 'active', 'pending', 'draft', null, '{}'::jsonb);
 
+insert into public.property_verifications (apartment_id, status, notes)
+values
+  ('e4680000-0000-4000-8000-000000000001', 'verified', 'public listing verification'),
+  ('e4680000-0000-4000-8000-000000000002', 'pending', 'private draft verification');
+
 -- Anonymous ------------------------------------------------------------------
 set local role anon;
 set local search_path = public, extensions, pg_temp;
@@ -121,6 +133,12 @@ select is((select count(*)::int from public.apartments
 select is((select count(*)::int from public.apartments
            where id = 'e4680000-0000-4000-8000-000000000007'), 0,
   'A7: anon cannot see an active-but-unapproved/unowned row');
+select is((select count(*)::int from public.property_verifications
+           where apartment_id = 'e4680000-0000-4000-8000-000000000001'), 1,
+  'A8: anon can read verification for a public listing');
+select is((select count(*)::int from public.property_verifications
+           where apartment_id = 'e4680000-0000-4000-8000-000000000002'), 0,
+  'A9: anon cannot read verification for a private draft');
 reset role;
 
 -- Authenticated renter (no landlord profile) ---------------------------------

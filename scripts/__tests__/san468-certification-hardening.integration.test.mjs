@@ -48,6 +48,7 @@ const ID = {
   notVerified: "f4680000-0000-4000-8000-0000000000b8",
   external: "f4680000-0000-4000-8000-0000000000b9",
   fixture: "f4680000-0000-4000-8000-0000000000ba",
+  denormDrift: "f4680000-0000-4000-8000-0000000000bb",
 };
 const ADDRESS = "Calle Nunca 000, Medellín, Antioquia";
 
@@ -111,10 +112,11 @@ test(
       await insertApartment(ID.fixture, "san468-cert-fixture", {
         metadata: { is_test_fixture: true },
       });
+      await insertApartment(ID.denormDrift, "san468-cert-denorm-drift");
 
       const withProperty = [
         ID.positive, ID.duplicate, ID.staleFreshness, ID.oldFreshness,
-        ID.pendingOwner, ID.rightsUnverified, ID.notVerified,
+        ID.pendingOwner, ID.rightsUnverified, ID.notVerified, ID.denormDrift,
       ];
       for (const id of withProperty) {
         await client.query(
@@ -129,7 +131,7 @@ test(
         [ID.noProperty],
       );
 
-      const withRights = [ID.positive, ID.duplicate, ID.staleFreshness, ID.oldFreshness, ID.pendingOwner, ID.notVerified];
+      const withRights = [ID.positive, ID.duplicate, ID.staleFreshness, ID.oldFreshness, ID.pendingOwner, ID.notVerified, ID.denormDrift];
       for (const id of withRights) {
         await client.query(
           `insert into public.rental_listing_images (listing_id, storage_path, source_url, mime_type, rights_status)
@@ -161,6 +163,16 @@ test(
          values ($1, now() - interval '40 days', 'active')`,
         [ID.oldFreshness],
       );
+      // Fresh denormalized fields with a stale canonical log: the log must win.
+      await client.query(
+        `update public.apartments set freshness_status = 'active', last_checked_at = now() where id = $1`,
+        [ID.denormDrift],
+      );
+      await client.query(
+        `insert into public.rental_freshness_log (listing_id, checked_at, status)
+         values ($1, now(), 'stale')`,
+        [ID.denormDrift],
+      );
 
       const { rows } = await client.query(reportSql);
       const report = rows[0].report;
@@ -188,6 +200,13 @@ test(
       assert.equal(row(ID.rightsUnverified).has_authorized_photo, false);
       assert.equal(row(ID.rightsUnverified).has_any_image, true, "the image exists but is not authorized");
       assert.equal(row(ID.notVerified).launch_ready, false, "unverified listing must fail");
+      assert.equal(
+        row(ID.denormDrift).launch_ready,
+        false,
+        "fresh denormalized fields must not override a stale canonical freshness log",
+      );
+      assert.equal(row(ID.denormDrift).has_current_freshness, false);
+      assert.equal(row(ID.denormDrift).has_freshness_denorm_drift, true);
       assert.equal(row(ID.external).publicly_eligible, false, "external candidate must not be public");
       assert.equal(row(ID.external).launch_ready, false);
       assert.equal(row(ID.fixture).publicly_eligible, false, "test fixture must not be public");

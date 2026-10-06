@@ -111,12 +111,19 @@ flags as (
           and abs(st_x(b.location::geometry) - b.longitude) < 0.000001
           and abs(st_y(b.location::geometry) - b.latitude) < 0.000001)) as postgis_consistent,
     (b.last_checked_at is not null or b.freshness_evidence > 0) as has_freshness_evidence,
-    coalesce(
-      lf.status = 'active' and lf.checked_at >= now() - interval '30 days',
-      false
-    )
-    or (b.freshness_status = 'active' and b.last_checked_at is not null
-        and b.last_checked_at >= now() - interval '30 days') as has_current_freshness,
+    -- The canonical rental_freshness_log is authoritative whenever any row exists.
+    -- The denormalized apartments columns must never override a stale/unconfirmed
+    -- log entry, or the two could drift and false-green the gate.
+    case
+      when lf.listing_id is not null then
+        (lf.status = 'active' and lf.checked_at >= now() - interval '30 days')
+      else
+        (b.freshness_status = 'active' and b.last_checked_at is not null
+         and b.last_checked_at >= now() - interval '30 days')
+    end as has_current_freshness,
+    (lf.listing_id is not null
+      and (b.freshness_status is distinct from lf.status
+           or b.last_checked_at is distinct from lf.checked_at)) as has_freshness_denorm_drift,
     (b.landlord_id is not null) as has_canonical_owner,
     (b.verified_property_evidence > 0) as has_verified_property,
     (coalesce(b.verified, false) = true) as is_verified,
@@ -183,6 +190,7 @@ detail as (
     v.latitude, v.longitude,
     v.has_any_image, v.has_authorized_photo, v.has_coords, v.coord_pair_valid,
     v.postgis_consistent, v.has_freshness_evidence, v.has_current_freshness,
+    v.has_freshness_denorm_drift,
     v.has_canonical_owner, v.has_verified_owner, v.has_verified_property,
     v.is_verified, v.has_canonical_identity, v.has_provenance,
     v.publicly_eligible, v.searchable, v.map_ready, v.launch_ready, v.requestable,
@@ -245,6 +253,7 @@ select json_build_object(
         count(*) filter (where postgis_consistent) as postgis_consistent,
         count(*) filter (where has_freshness_evidence) as freshness_evidence,
         count(*) filter (where has_current_freshness) as current_freshness,
+        count(*) filter (where has_freshness_denorm_drift) as freshness_denorm_drift,
         count(*) filter (where has_canonical_owner) as canonical_owner,
         count(*) filter (where has_verified_owner) as verified_owner,
         count(*) filter (where has_verified_property) as verified_property,

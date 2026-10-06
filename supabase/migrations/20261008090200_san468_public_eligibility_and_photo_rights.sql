@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261007090000_san468_public_eligibility_and_photo_rights.sql
+-- Migration: 20261008090200_san468_public_eligibility_and_photo_rights.sql
 -- Task:      SAN-468 · REAL-002 — Make Production Rental Inventory Launch-Ready
 -- =============================================================================
 -- SAN-468 §4.2 (public/search eligibility), §5.4 (authorized photo evidence) and
@@ -128,3 +128,45 @@ update public.apartments a
         and pv.status = 'verified'
         and pv.verified_at is not null
    );
+
+-- §5 — stop private-candidate verification rows from being publicly readable ---
+-- property_verifications_select_all was USING (true), so anon could read the
+-- verification status/notes of every apartment, including the private SAN-1431
+-- external candidates whose apartment rows are correctly hidden. Public
+-- transparency is preserved only for publicly eligible listings; admins and the
+-- owning broker keep their own visibility.
+drop policy if exists property_verifications_select_all on public.property_verifications;
+drop policy if exists property_verifications_select_visible on public.property_verifications;
+
+-- Anonymous/renter visibility: only verifications for publicly eligible listings.
+-- Kept separate so anon never evaluates acting_landlord_ids(), which is not granted
+-- to the anonymous role.
+create policy property_verifications_select_public
+  on public.property_verifications
+  for select
+  to public
+  using (
+    exists (
+      select 1
+        from public.apartments a
+       where a.id = property_verifications.apartment_id
+         and public.rental_listing_is_public(
+              a.status, a.moderation_status, a.listing_workflow_status, a.landlord_id, a.metadata
+            )
+    )
+  );
+
+-- Owning broker / admin visibility for their own (including private) listings.
+create policy property_verifications_select_owner_or_admin
+  on public.property_verifications
+  for select
+  to authenticated
+  using (
+    (select public.is_admin())
+    or exists (
+      select 1
+        from public.apartments a
+       where a.id = property_verifications.apartment_id
+         and a.landlord_id in (select public.acting_landlord_ids())
+    )
+  );

@@ -134,6 +134,11 @@ test("public and launch-ready rows can never carry PostGIS drift", () => {
   assert.match(runner, /publicly_eligible_with_drift/);
   assert.match(runner, /launch_ready_with_drift/);
 });
+test("canonical freshness log takes priority over denormalized fields", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /when lf\.listing_id is not null then/);
+  assert.match(executable, /has_freshness_denorm_drift/);
+});
 test("inventory-quality npm script is wired", () => {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   assert.match(

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261007092000_san1431_stage_external_candidates.sql
+-- Migration: 20261008090300_san1431_stage_external_candidates.sql
 -- Task:      SAN-1431 — Source, stage, and verify 10 real Medellín rental candidates
 -- Parent:    SAN-468 · REAL-002
 -- =============================================================================
