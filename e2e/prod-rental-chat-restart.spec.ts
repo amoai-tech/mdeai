@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { test, expect, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
@@ -17,33 +19,39 @@ import {
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
- * SAN-548 Task 4 — the real production renter journey.
+ * SAN-548 Task 4 — two-phase production rental-chat certification (opt-in).
  *
- * Camila asks for a furnished 2BR in Laureles at 5M/month, corrects it to 4M, the client
- * session is replaced (a new browser context resets cookies/local storage only — it does
- * NOT restart the Vercel function; a true server-runtime replacement needs an external
- * redeploy, which is a separate Task 4 step), she reopens the same thread and continues,
- * and Roberto is refused. Every claim is backed by persisted
- * rows (service-role, test process only), not the screen.
+ * Phase A and Phase B are SEPARATE invocations so an operator can perform a real Vercel
+ * redeploy between them. A new browser context is client isolation only — it does not
+ * restart the server runtime, so it cannot substitute for the redeploy.
  *
- * Runs only when PROD_SMOKE_BASE_URL is set and the Supabase e2e env is present; it fails
- * loudly when a target is set without credentials. It writes real rows under throwaway
- * identities and deletes them in afterAll.
+ *   SAN548_PROD_CERT=1 SAN548_PHASE=A PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+ *     npx playwright test --project=prod-san548
+ *   # verify the deployed SHA, run the real redeploy, verify the new deployment
+ *   SAN548_PROD_CERT=1 SAN548_PHASE=B PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+ *     npx playwright test --project=prod-san548
  *
- * STATUS (2026-10-06): deliberately NOT in playwright.config.ts PROD_SPECS yet. Against
- * production it fails on purpose: after Camila corrects the budget to 4 million COP/month,
- * the persisted lastRentalQuery.maxPricePerNight was observed as 1000/100 (and 1000/110 with
- * clearer Spanish), not the corrected value. That is a product-semantics question
- * (maxPricePerNight looks nightly, and the prompt's budget intelligence is calibrated for
- * 3-4 digit figures), not a persistence failure — the deterministic SAN-548 test already
- * proves persistence. Run it explicitly:
- *   PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
- *     npx playwright test e2e/prod-rental-chat-restart.spec.ts --project=prod-smoke --workers=1
+ * Phase A writes the fixture to SAN548_STATE_FILE (default tmp/san548-cert.json). Phase B
+ * reads it, proves reopen + semantic follow-up + privacy + database invariants, and owns
+ * cleanup (resilient: it attempts every identity). Deliberately outside PROD_SPECS.
  */
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
-const enabled = Boolean(baseUrl);
-const isVercelPreview = /.vercel.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
+const phase = (process.env.SAN548_PHASE ?? "").toUpperCase();
+const enabled = process.env.SAN548_PROD_CERT === "1" && Boolean(baseUrl);
+const stateFile = process.env.SAN548_STATE_FILE?.trim() || "tmp/san548-cert.json";
+const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
+
+type PhaseState = { threadId: string; camilaEmail: string; camilaUserId: string };
+
+function writeState(state: PhaseState): void {
+  mkdirSync(dirname(stateFile), { recursive: true });
+  writeFileSync(stateFile, JSON.stringify(state, null, 2));
+}
+
+function readState(): PhaseState {
+  return JSON.parse(readFileSync(stateFile, "utf8")) as PhaseState;
+}
 
 /** Thread ids of every `agent/run` envelope the browser sends, in order. */
 function recordRunThreadIds(page: Page): string[] {
@@ -85,25 +93,38 @@ async function threadWorkingMemory(threadId: string): Promise<Record<string, unk
   return null;
 }
 
-/** Read-only orphan count: messages whose thread_id has no mastra_threads row. */
-async function orphanMessageCount(): Promise<number> {
-  const admin = await getSupabaseAdmin();
-  const { data: threads, error: threadError } = await admin.from("mastra_threads").select("id");
-  if (threadError) throw new Error(`mastra_threads read failed: ${threadError.message}`);
-  const { data: messages, error: messageError } = await admin.from("mastra_messages").select("thread_id");
-  if (messageError) throw new Error(`mastra_messages read failed: ${messageError.message}`);
-  const threadIds = new Set((threads ?? []).map((row) => (row as { id: string }).id));
-  return (messages ?? []).filter((row) => {
-    const threadId = (row as { thread_id: string | null }).thread_id;
-    return threadId === null || !threadIds.has(threadId);
-  }).length;
-}
-
 async function threadOwner(threadId: string): Promise<string | null> {
   const admin = await getSupabaseAdmin();
   const { data, error } = await admin.from("mastra_threads").select('"resourceId"').eq("id", threadId).maybeSingle();
   if (error) throw new Error(`mastra_threads read failed: ${error.message}`);
   return (data as { resourceId?: string } | null)?.resourceId ?? null;
+}
+
+/** Paginated column read: Supabase caps a single `.select()` at 1000 rows. */
+async function selectAllValues(
+  table: "mastra_threads" | "mastra_messages",
+  column: string,
+): Promise<Array<string | null>> {
+  const admin = await getSupabaseAdmin();
+  const pageSize = 1000;
+  const values: Array<string | null> = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin.from(table).select(column).range(from, from + pageSize - 1);
+    if (error) throw new Error(`${table} read failed: ${error.message}`);
+    const rows = (data ?? []) as unknown as Array<Record<string, string | null>>;
+    for (const row of rows) values.push(row[column] ?? null);
+    if (rows.length < pageSize) break;
+  }
+  return values;
+}
+
+/** Read-only orphan count: messages whose thread_id has no mastra_threads row. */
+async function orphanMessageCount(): Promise<number> {
+  const threadIds = new Set(
+    (await selectAllValues("mastra_threads", "id")).filter((id): id is string => id !== null),
+  );
+  const messageThreadIds = await selectAllValues("mastra_messages", "thread_id");
+  return messageThreadIds.filter((id) => id === null || !threadIds.has(id)).length;
 }
 
 async function signInWithBypass(page: Page, email: string): Promise<void> {
@@ -113,38 +134,22 @@ async function signInWithBypass(page: Page, email: string): Promise<void> {
   if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
 }
 
-test.describe("SAN-548 rental chat survives a fresh runtime", () => {
-  test.skip(!enabled, "Set PROD_SMOKE_BASE_URL to the deployment under test");
-
-  let camila: ThrowawayIdentity | undefined;
-  let roberto: ThrowawayIdentity | undefined;
+test.describe("SAN-548 two-phase production rental chat certification", () => {
+  test.skip(!enabled, "opt-in: SAN548_PROD_CERT=1 + PROD_SMOKE_BASE_URL");
 
   test.beforeAll(() => {
     expect(hasE2eEnv(), "Supabase e2e credentials are required when a target is set").toBe(true);
   });
 
-  test.afterAll(async () => {
-    // Attempt every identity even if one cleanup fails, then report — these are real rows.
-    const failures: string[] = [];
-    for (const identity of [camila, roberto]) {
-      if (!identity) continue;
-      try {
-        await deleteThrowawayIdentity(identity);
-      } catch (error) {
-        failures.push(`${identity.email}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    if (failures.length > 0) throw new Error(`SAN-548 cleanup failed — ${failures.join("; ")}`);
-  });
-
-  test("Camila's corrected budget survives a fresh runtime and Roberto is refused", async ({ page, browser }) => {
+  test("Phase A — Camila records a rental chat and corrects the budget (5M -> 4M)", async ({ page }) => {
+    test.skip(phase !== "A", "set SAN548_PHASE=A for this phase");
     test.setTimeout(600_000);
-    camila = await createThrowawayIdentity("qa-san548-camila");
+    const camila = await createThrowawayIdentity("qa-san548-camila");
     await signInWithBypass(page, camila.email);
     const runThreads = recordRunThreadIds(page);
     await gotoConcierge(page);
 
-    // Turn 1 — the rental ask (furnished is NOT modeled in working memory; it must live in history).
+    // Turn 1 — the rental ask ("furnished" is not modeled in working memory; it lives in history).
     await sendConciergeMessage(page, "Busco un apartamento amoblado (furnished) de 2 habitaciones en Laureles, presupuesto 5 millones de pesos colombianos por mes. Responde en una frase.");
     await waitForCopilotIdle(page, 180_000);
     const threadA = runThreads.at(-1);
@@ -155,13 +160,10 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
     await sendConciergeMessage(page, "Mejor cambia el presupuesto a 4 millones de pesos colombianos por mes. Responde en una frase.");
     await waitForCopilotIdle(page, 180_000);
 
-    // Poll the CORRECTED state, not just "lastRentalQuery exists" — turn 1 already created
-    // it, so an existence poll can read the stale 5M state.
-    //
-    // maxPricePerNight is a DERIVED USD/night search value (search-rentals.ts
+    // Poll the CORRECTED state, not "lastRentalQuery exists" — turn 1 already created it.
+    // maxPricePerNight is a derived USD/night search value (search-rentals.ts
     // NIGHTLY_BUDGET_CURRENCY; rental-query-parser.ts normalizes monthly -> nightly), so the
-    // canonical amount+currency+period contract is a product decision (SAN-548). This
-    // asserts the period and the filters, not the nightly field.
+    // canonical amount+currency+period contract is a product decision (SAN-548).
     await expect
       .poll(async () => {
         const wm = await threadWorkingMemory(threadA!);
@@ -174,61 +176,82 @@ test.describe("SAN-548 rental chat survives a fresh runtime", () => {
       }, { timeout: 90_000 })
       .toBe("Laureles|2|monthly");
 
-    // Fresh runtime: a brand-new browser context, sign in again, reopen the same thread.
-    const freshContext = await browser.newContext();
+    writeState({ threadId: threadA!, camilaEmail: camila.email, camilaUserId: camila.userId });
+    // Phase A intentionally does NOT clean up: Phase B needs Camila after the redeploy.
+  });
+
+  test("Phase B — after the redeploy: reopen, semantic follow-up, Roberto refused, invariants", async ({ browser }) => {
+    test.skip(phase !== "B", "set SAN548_PHASE=B for this phase");
+    test.setTimeout(900_000);
+    const state = readState();
+    const camila: ThrowawayIdentity = { email: state.camilaEmail, userId: state.camilaUserId };
+    let roberto: ThrowawayIdentity | undefined;
+    const failures: string[] = [];
     try {
-      const freshPage = await freshContext.newPage();
-      await signInWithBypass(freshPage, camila.email);
-      await gotoConcierge(freshPage);
-      const saved = freshPage.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
-      await expect(saved, "the saved room is listed after the restart").toBeVisible({ timeout: 30_000 });
-      await saved.click();
-      await expect(freshPage.getByTestId("copilot-chat-region"), "history still shows furnished").toContainText(
-        "furnished",
-        { timeout: 30_000 },
-      );
+      const freshContext = await browser.newContext();
+      try {
+        const freshPage = await freshContext.newPage();
+        await signInWithBypass(freshPage, camila.email);
+        await gotoConcierge(freshPage);
+        const saved = freshPage.locator(`[data-testid="nav-thread-item"][data-thread-id="${state.threadId}"]`).first();
+        await expect(saved, "the saved chat is listed after the redeploy").toBeVisible({ timeout: 30_000 });
+        await saved.click();
+        await expect(freshPage.getByTestId("copilot-chat-region"), "history still shows furnished").toContainText(
+          "furnished",
+          { timeout: 30_000 },
+        );
 
-      // A follow-up that depends on the saved context continues the SAME thread.
-      const followThreads = recordRunThreadIds(freshPage);
-      const repliesBefore = await countConciergeReplies(freshPage);
-      await sendConciergeMessage(freshPage, "¿Qué presupuesto mensual estoy usando ahora? Responde en una frase.");
-      await waitForConciergeReply(freshPage, repliesBefore, 180_000);
-      expect(followThreads.at(-1), "the follow-up continues thread A").toBe(threadA);
-      // Routing continuity is not memory continuity: the answer must actually use the
-      // remembered corrected budget.
-      const answer = await freshPage
-        .getByTestId("copilot-chat-region")
-        .getByTestId("copilot-assistant-message")
-        .last()
-        .innerText();
-      expect(answer, "the answer reflects the corrected budget").toMatch(/4\s*(millones|M\b|\.000\.000)|4\.000\.000/i);
+        const followThreads = recordRunThreadIds(freshPage);
+        const repliesBefore = await countConciergeReplies(freshPage);
+        await sendConciergeMessage(freshPage, "¿Qué presupuesto mensual estoy usando ahora? Responde en una frase.");
+        await waitForConciergeReply(freshPage, repliesBefore, 180_000);
+        expect(followThreads.at(-1), "the follow-up continues the same thread").toBe(state.threadId);
+        // Routing continuity is not memory continuity: the answer must use the remembered
+        // corrected budget, with its currency and period.
+        const answer = await freshPage
+          .getByTestId("copilot-chat-region")
+          .getByTestId("copilot-assistant-message")
+          .last()
+          .innerText();
+        expect(answer, "answer names the corrected amount").toMatch(/4\s*(millones|M\b|\.000\.000)/i);
+        expect(answer, "answer names the currency").toMatch(/COP|pesos/i);
+        expect(answer, "answer names the period").toMatch(/mensual|mes|month|monthly/i);
+      } finally {
+        await freshContext.close();
+      }
+
+      roberto = await createThrowawayIdentity("qa-san548-roberto");
+      const historyUrl = new URL(`/api/threads/${state.threadId}/messages`, baseUrl).toString();
+      const otherContext = await browser.newContext();
+      try {
+        const otherPage = await otherContext.newPage();
+        await signInWithBypass(otherPage, roberto.email);
+        const refused = await otherPage.request.get(historyUrl);
+        expect(refused.status(), "another signed-in user is refused").toBe(403);
+        expect(await refused.text(), "no content leaks").not.toContain("furnished");
+      } finally {
+        await otherContext.close();
+      }
+
+      expect(await threadOwner(state.threadId), "owner is still Camila").toBe(camila.userId);
+      const admin = await getSupabaseAdmin();
+      const anon = await admin
+        .from("mastra_threads")
+        .select("id", { count: "exact", head: true })
+        .eq("resourceId", "anonymous");
+      if (anon.error) throw new Error(`anonymous count failed: ${anon.error.message}`);
+      expect(anon.count ?? 0, "no anonymous threads").toBe(0);
+      expect(await orphanMessageCount(), "no orphan messages").toBe(0);
     } finally {
-      await freshContext.close();
+      for (const identity of [camila, roberto]) {
+        if (!identity) continue;
+        try {
+          await deleteThrowawayIdentity(identity);
+        } catch (error) {
+          failures.push(`${identity.email}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (failures.length > 0) throw new Error(`SAN-548 Phase B cleanup failed — ${failures.join("; ")}`);
     }
-
-    // Roberto is refused, with no trace of Camila's content.
-    roberto = await createThrowawayIdentity("qa-san548-roberto");
-    const historyUrl = new URL(`/api/threads/${threadA}/messages`, baseUrl).toString();
-    const otherContext = await browser.newContext();
-    try {
-      const otherPage = await otherContext.newPage();
-      await signInWithBypass(otherPage, roberto.email);
-      const refused = await otherPage.request.get(historyUrl);
-      expect(refused.status(), "another signed-in user is refused").toBe(403);
-      expect(await refused.text(), "no content leaks").not.toContain("furnished");
-    } finally {
-      await otherContext.close();
-    }
-
-    // Durable invariants: owner is Camila and the shared anonymous bucket is empty.
-    expect(await threadOwner(threadA!)).toBe(camila.userId);
-    const admin = await getSupabaseAdmin();
-    const anon = await admin
-      .from("mastra_threads")
-      .select("id", { count: "exact", head: true })
-      .eq("resourceId", "anonymous");
-    if (anon.error) throw new Error(`anonymous count failed: ${anon.error.message}`);
-    expect(anon.count ?? 0, "no anonymous threads").toBe(0);
-    expect(await orphanMessageCount(), "no orphan messages").toBe(0);
   });
 });
