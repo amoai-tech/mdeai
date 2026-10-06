@@ -110,6 +110,15 @@ test.describe("SAN-1380 new-projects AI search contract", () => {
     expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
+  test("rejects contradictory bedroom filters with 400", async ({ request }) => {
+    const res = await request.post("/api/new-projects/search", {
+      data: { bedroomsExact: 2, minBedrooms: 3 },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   test("rejects a non-JSON body with 400 INVALID_JSON", async ({ request }) => {
     const res = await request.post("/api/new-projects/search", {
       headers: { "Content-Type": "application/json" },

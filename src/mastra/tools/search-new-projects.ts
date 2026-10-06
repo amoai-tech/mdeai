@@ -51,9 +51,10 @@ export const newProjectCardSchema = z.object({
 export type NewProjectCard = z.infer<typeof newProjectCardSchema>;
 
 /**
- * The tool's input contract. The route validates with THIS schema before calling `execute`,
- * because a direct `execute` call bypasses Mastra's own pre-call validation. `limit` is capped
- * at 5 to match the concierge instruction ("Max 5 project cards per reply").
+ * The tool's input contract, shared by the Mastra tool and the HTTP route: the route validates
+ * against THIS schema and then calls the same `searchNewProjects` application function, so an
+ * agent-schema change cannot drift from the HTTP API. `limit` is capped at 5 to match the
+ * concierge instruction ("Max 5 project cards per reply").
  */
 export const searchNewProjectsInputSchema = z.object({
   neighborhood: z.string().optional().describe("e.g. Laureles, Ciudad del Río"),
@@ -65,13 +66,23 @@ export const searchNewProjectsInputSchema = z.object({
     .describe("Maximum price-from in COP pesos, e.g. 900000000"),
   /** "2+ bedrooms" / "at least 2" — any typology with that many or more. */
   minBedrooms: z.number().int().min(1).max(6).optional(),
-  /** "2 bedroom" — a typology with exactly this count. Takes precedence over minBedrooms. */
+  /** "2 bedroom" — a typology with exactly this count. Pass this OR minBedrooms, never both. */
   bedroomsExact: z.number().int().min(1).max(6).optional(),
   deliveryYear: z.number().int().min(2024).max(2040).optional(),
   /** True = only projects whose delivery date/note is not published. */
   deliveryUnknown: z.boolean().optional(),
   limit: z.number().int().min(1).max(5).default(5),
-}).strict();
+})
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.bedroomsExact != null && value.minBedrooms != null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["bedroomsExact"],
+        message: "Pass either bedroomsExact (exactly N) or minBedrooms (N or more), not both.",
+      });
+    }
+  });
 
 export type NewProjectSearchInput = z.infer<typeof searchNewProjectsInputSchema>;
 

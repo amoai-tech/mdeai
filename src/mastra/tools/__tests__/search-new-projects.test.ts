@@ -116,6 +116,18 @@ describe("searchNewProjectsInputSchema", () => {
     expect(searchNewProjectsInputSchema.safeParse({ maxPriceCop: -1 }).success).toBe(false);
     expect(searchNewProjectsInputSchema.safeParse({ minBedrooms: 0 }).success).toBe(false);
   });
+
+  it("rejects contradictory bedroom filters instead of silently preferring one", () => {
+    expect(
+      searchNewProjectsInputSchema.safeParse({ bedroomsExact: 2, minBedrooms: 3 }).success,
+    ).toBe(false);
+    expect(searchNewProjectsInputSchema.safeParse({ bedroomsExact: 2 }).success).toBe(true);
+    expect(searchNewProjectsInputSchema.safeParse({ minBedrooms: 3 }).success).toBe(true);
+  });
+
+  it("rejects an unknown field instead of silently dropping it (strict)", () => {
+    expect(searchNewProjectsInputSchema.safeParse({ maxPriceCOP: 600000000 }).success).toBe(false);
+  });
 });
 
 describe("buildNewProjectCards — grounded, honest cards", () => {
