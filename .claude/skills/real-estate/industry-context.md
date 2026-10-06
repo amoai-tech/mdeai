@@ -10,6 +10,17 @@ allowed-tools:
   - Edit
 ---
 
+## MDE / Colombia usage boundary
+
+This file is generic industry background, much of it US-oriented. It is **not** MDE product truth, Colombian legal guidance, or a source of current market facts.
+
+For MDE work:
+- prefer the exact Linear task, current `main`, live Supabase, and verified Medellín/Colombia sources;
+- verify law/regulation with current official Colombian or Medellín authorities before relying on it;
+- do not import US MLS/NAR/FHA/RESPA/CCPA/ADA, lending, school, late-fee, disclosure, currency, sqft/acre/mile, or buyer/seller assumptions into MDE requirements;
+- do not use this file to override canonical rental eligibility, ownership, provenance, authorization, or viewing contracts in [rental-mvp.md](rental-mvp.md) and [broker-operations.md](broker-operations.md);
+- treat all dynamic prices, rates, availability, market statistics, and regulatory claims as unverified until sourced.
+
 # Real Estate Expert
 
 Expert guidance for real estate systems, property management, Multiple Listing Service (MLS) integration, customer relationship management, virtual tours, and market analysis.
