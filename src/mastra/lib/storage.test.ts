@@ -64,20 +64,19 @@ describe("createMastraStorage", () => {
     );
   });
 
-  it("production forces TLS and the measured pool even when the URL says sslmode=disable", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("DATABASE_URL", "postgresql://u:p@h:6543/db?sslmode=disable");
+  it("encrypts a remote host and ignores sslmode=disable", () => {
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "");
+    vi.stubEnv("DATABASE_URL", "postgresql://u:p@aws-1-us-east-1.pooler.supabase.com:6543/db?sslmode=disable");
     const store = createMastraStorage("test-tls") as unknown as PooledStore;
     expect(store.pool.options.ssl).toEqual({ rejectUnauthorized: false });
     expect(store.pool.options.max).toBe(POSTGRES_POOL_MAX);
     expect(store.pool.options.idleTimeoutMillis).toBe(POSTGRES_IDLE_TIMEOUT_MS);
   });
 
-  it("development does not force TLS on a local database", () => {
-    vi.stubEnv("NODE_ENV", "development");
+  it("does not force TLS on a loopback database", () => {
     vi.stubEnv("MASTRA_DEV_LIBSQL", "");
     vi.stubEnv("DATABASE_URL", "postgresql://u:p@127.0.0.1:5432/db");
-    const store = createMastraStorage("test-dev-pg") as unknown as PooledStore;
+    const store = createMastraStorage("test-local-pg") as unknown as PooledStore;
     expect(store.pool.options.ssl).toBeUndefined();
   });
 

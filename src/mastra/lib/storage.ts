@@ -67,6 +67,27 @@ export const POSTGRES_IDLE_TIMEOUT_MS = 10_000;
  * default, so encryption is required without CA verification (equivalent to
  * sslmode=require); `verify-full` is deferred until the Supabase CA is provisioned.
  */
+/** Loopback/local hosts that legitimately do not offer TLS. Everything else must. */
+export function isLocalDatabaseHost(hostname: string): boolean {
+  const host = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  );
+}
+
+/** True unless the connection target is a local host. */
+export function shouldRequireTls(connectionString: string): boolean {
+  try {
+    return !isLocalDatabaseHost(new URL(connectionString).hostname);
+  } catch {
+    return true;
+  }
+}
+
 export function resolveRuntimeConnectionString(connectionString: string): string {
   const [base, query] = connectionString.split("?", 2);
   if (!query) return connectionString;
@@ -101,16 +122,17 @@ export function createMastraStorage(id: string) {
   }
   if (shouldUsePostgresStorage()) {
     const connectionString = normalizeDatabaseUrl();
-    // Production runtime only: require TLS and make the URL unable to disable it.
-    // Development against a local Postgres (no TLS) keeps its previous behaviour, and
-    // the disposable-database integration tests construct their own store.
-    const isProductionRuntime = process.env.NODE_ENV === "production";
+    // Encrypt every non-local database connection. Production is the Supabase pooler,
+    // so this always applies there; loopback (local dev and the disposable integration
+    // databases) stays plaintext because those servers do not offer TLS. The URL is
+    // passed through resolveRuntimeConnectionString so it cannot disable TLS.
+    const requireTls = shouldRequireTls(connectionString!);
     return new PostgresStore({
       id,
-      connectionString: isProductionRuntime
+      connectionString: requireTls
         ? resolveRuntimeConnectionString(connectionString!)
         : connectionString!,
-      ...(isProductionRuntime ? { ssl: { rejectUnauthorized: false } } : {}),
+      ...(requireTls ? { ssl: { rejectUnauthorized: false } } : {}),
       max: POSTGRES_POOL_MAX,
       idleTimeoutMillis: POSTGRES_IDLE_TIMEOUT_MS,
       disableInit: true,
