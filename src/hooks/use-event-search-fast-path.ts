@@ -5,8 +5,7 @@ import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context
 import type { EventCard } from "@/mastra/tools/search-events";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
-import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
-import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import { EVENT_CLARIFY_MESSAGE } from "@/lib/event-clarify-copy";
 import {
   buildEventSearchParams,
@@ -50,9 +49,7 @@ export function useEventSearchFastPath() {
   const { clarifyPending, clarifyKind, showClarify, showExchange, clearLocalMessages } =
     useEventLocalChat();
   const { setToolResult } = useEventFastPath();
-  const { setToolResult: setRestaurantToolResult } = useRestaurantFastPath();
-  const { setToolResult: setRentalToolResult, setSearchMeta: setRentalSearchMeta } =
-    useRentalFastPath();
+  const clearOthers = useClearOtherFastPathResults();
   const { setRows, setWebCitations } = useEventSearchResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
@@ -67,9 +64,7 @@ export function useEventSearchFastPath() {
         rankExplanation?: Array<{ factor: string; score: number; note: string }>;
       },
     ) => {
-      setRentalToolResult(null);
-      setRentalSearchMeta(null);
-      mergePinsByCategory("rental", []);
+      clearOthers("event");
       const envelope = eventCardsToToolEnvelope(cards, meta);
       setToolResult(envelope);
       setWebCitations([]);
@@ -97,7 +92,7 @@ export function useEventSearchFastPath() {
         lastEventResults: eventCardsToPanelRows(cards),
       });
     },
-    [mergePinsByCategory, requestFitBounds, setRows, setToolResult, setWebCitations, setState, setRentalToolResult, setRentalSearchMeta],
+    [mergePinsByCategory, requestFitBounds, setRows, setToolResult, setWebCitations, setState, clearOthers],
   );
 
   const runSearch = useCallback(
@@ -109,7 +104,6 @@ export function useEventSearchFastPath() {
       if (busyRef.current) return true;
       busyRef.current = true;
       try {
-        setRestaurantToolResult(null);
         let { results: cards, hybridUsed, rankExplanation } =
           await fetchEventSearch(params);
         let usedFallback = false;
@@ -144,7 +138,7 @@ export function useEventSearchFastPath() {
         busyRef.current = false;
       }
     },
-    [applySearchResults, showExchange, setToolResult, setRestaurantToolResult],
+    [applySearchResults, showExchange, setToolResult],
   );
 
   const handleUserMessage = useCallback(
@@ -169,8 +163,8 @@ export function useEventSearchFastPath() {
         busyRef.current = true;
         try {
           setToolResult(null);
-        setRestaurantToolResult(null);
-        showClarify(trimmed, EVENT_CLARIFY_MESSAGE, "event");
+          clearOthers("event");
+          showClarify(trimmed, EVENT_CLARIFY_MESSAGE, "event");
           return true;
         } finally {
           busyRef.current = false;
@@ -185,7 +179,7 @@ export function useEventSearchFastPath() {
       clearLocalMessages();
       return runSearch(trimmed, params, memory);
     },
-    [clarifyKind, clarifyPending, clearLocalMessages, runSearch, setToolResult, setRestaurantToolResult, showClarify, state],
+    [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, state],
   );
 
   const handleEventChip = useCallback(

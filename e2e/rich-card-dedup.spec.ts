@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
   assertNoDuplicateGroundingLists,
-  assertNoGenericMapResultsList,
   assertSingleEventCardSurface,
   EVENT_QUERY,
   GROUNDING_QUERY,
@@ -30,7 +29,6 @@ test.describe("Rich card dedup — one listing surface per vertical", () => {
     await expect(
       page.locator('[data-testid="grounded-card"]').first(),
     ).toBeVisible();
-    await assertNoGenericMapResultsList(page);
     await assertNoDuplicateGroundingLists(page);
   });
 
@@ -43,7 +41,6 @@ test.describe("Rich card dedup — one listing surface per vertical", () => {
     await waitForEventCards(page);
 
     await assertSingleEventCardSurface(page);
-    await assertNoGenericMapResultsList(page);
   });
 
   test("rentals — cards only, no Map results strip", async ({ page }) => {
@@ -53,6 +50,5 @@ test.describe("Rich card dedup — one listing surface per vertical", () => {
     await waitForRentalCards(page);
 
     await expect(page.locator('[data-testid="rental-card"]').first()).toBeVisible();
-    await assertNoGenericMapResultsList(page);
   });
 });

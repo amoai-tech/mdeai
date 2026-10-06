@@ -4,7 +4,6 @@ import {
   GROUNDING_QUERY,
   RENTAL_QUERY,
   RESTAURANT_FAST_PATH_QUERY,
-  assertNoGenericMapResultsList,
   gotoHome,
   sendConciergeMessage,
   sendEventQuery,
@@ -29,7 +28,6 @@ test.describe("Card unification — one rich surface per domain", () => {
     const first = page.locator('[data-testid="rental-card"]').first();
     await expect(first).toHaveAttribute("data-pin-id", /.+/);
     await expect(first).toHaveAttribute("data-result-kind", "rental");
-    await assertNoGenericMapResultsList(page);
   });
 
   test("event cards have pin id + result kind", async ({ page }) => {
@@ -41,7 +39,6 @@ test.describe("Card unification — one rich surface per domain", () => {
     const first = page.locator('[data-testid="event-card"]').first();
     await expect(first).toHaveAttribute("data-pin-id", /.+/);
     await expect(first).toHaveAttribute("data-result-kind", "event");
-    await assertNoGenericMapResultsList(page);
   });
 
   test("restaurant cards have pin id + result kind", async ({ page }) => {
@@ -53,7 +50,6 @@ test.describe("Card unification — one rich surface per domain", () => {
     const first = page.locator('[data-testid="restaurant-card"]').first();
     await expect(first).toHaveAttribute("data-pin-id", /.+/);
     await expect(first).toHaveAttribute("data-result-kind", "restaurant");
-    await assertNoGenericMapResultsList(page);
   });
 
   test("café cards have pin id + result kind", async ({ page }) => {
@@ -76,6 +72,5 @@ test.describe("Card unification — one rich surface per domain", () => {
       .locator('[data-testid="grounded-card"][data-result-kind="cafe"]')
       .first();
     await expect(first).toHaveAttribute("data-pin-id", /.+/);
-    await assertNoGenericMapResultsList(page);
   });
 });

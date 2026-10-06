@@ -4,8 +4,7 @@ import { useCallback, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
-import { useEventFastPath } from "@/components/chat/event-fast-path-context";
-import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import {
@@ -63,8 +62,7 @@ export function useRestaurantSearchFastPath() {
     showExchange,
     clearLocalMessages,
   } = useEventLocalChat();
-  const { setToolResult: setEventToolResult } = useEventFastPath();
-  const { setToolResult: setRentalToolResult, setSearchMeta } = useRentalFastPath();
+  const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useRestaurantFastPath();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
@@ -76,6 +74,7 @@ export function useRestaurantSearchFastPath() {
       chip?: RestaurantFilterChip,
     ) => {
       const envelope = restaurantsToToolEnvelope(cards);
+      clearOthers("restaurant");
       setToolResult(envelope);
       const { pins } = normalizeToolOutput("restaurant", envelope);
       if (pins.length > 0) {
@@ -88,7 +87,7 @@ export function useRestaurantSearchFastPath() {
         lastRestaurantQuery: buildRestaurantMemoryPatch(params, chip),
       });
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, state],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, state],
   );
 
   const runSearch = useCallback(
@@ -100,9 +99,6 @@ export function useRestaurantSearchFastPath() {
       if (busyRef.current) return true;
       busyRef.current = true;
       try {
-        setEventToolResult(null);
-        setRentalToolResult(null);
-        setSearchMeta(null);
         const cards = await fetchRestaurantSearch(params);
         const slots: Record<string, string | number | boolean> = {};
         if (params.neighborhood) slots.neighborhood = params.neighborhood;
@@ -134,9 +130,6 @@ export function useRestaurantSearchFastPath() {
     },
     [
       applySearchResults,
-      setEventToolResult,
-      setRentalToolResult,
-      setSearchMeta,
       setToolResult,
       showExchange,
     ],

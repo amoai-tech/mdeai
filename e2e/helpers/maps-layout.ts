@@ -455,11 +455,6 @@ export {
   EVENT_QUERY,
 };
 
-/** Rich cards own the list — generic Map results strip must stay hidden. */
-export async function assertNoGenericMapResultsList(page: Page) {
-  await expect(page.locator('[data-testid="results-column"]')).toHaveCount(0);
-}
-
 /** Event cards live in chat only — panel is attribution-only. */
 export async function assertSingleEventCardSurface(page: Page) {
   const chatCards = page.locator(

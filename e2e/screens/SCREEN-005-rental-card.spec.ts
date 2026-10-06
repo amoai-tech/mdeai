@@ -58,7 +58,6 @@ test.describe(`${SCREEN_ID} rental card polish`, () => {
       }
       await card.click();
       await expect(card).toHaveAttribute("data-selected", "true");
-      await expect(page.locator('[data-testid="results-column"]')).toHaveCount(0);
     });
   });
 

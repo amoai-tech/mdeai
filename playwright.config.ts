@@ -45,6 +45,8 @@ export default defineConfig({
         // SAN-1357: the probe route only exists when NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT=1,
         // which this project does not set. It runs under `local-chromium` instead.
         "**/chat-virtualization.spec.ts",
+        // SAN-966: needs the deterministic chat, so it runs under `local-chromium`.
+        "**/chat-result-order.spec.ts",
         ...PROD_SPECS,
       ],
       workers: 1,
@@ -56,6 +58,7 @@ export default defineConfig({
         "**/deterministic-critical.spec.ts",
         "**/auth-guard.spec.ts",
         "**/chat-virtualization.spec.ts",
+        "**/chat-result-order.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,

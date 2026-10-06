@@ -33,6 +33,8 @@ type EventLocalChatContextValue = {
     kind: LocalClarifyKind,
   ) => void;
   showExchange: (userText: string, assistantText: string) => void;
+  /** An assistant-only line, for when the renter's own message is already in the transcript. */
+  showNotice: (assistantText: string) => void;
   clearLocalMessages: () => void;
 };
 
@@ -120,6 +122,17 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
     [publishOrQueue],
   );
 
+  const showNotice = useCallback(
+    (assistantText: string) => {
+      const next: EventLocalChatMessage[] = [
+        { id: nextId(), role: "assistant", content: assistantText },
+      ];
+      setMessages((prev) => [...prev, ...next]);
+      publishOrQueue(next);
+    },
+    [publishOrQueue],
+  );
+
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];
     setMessages([]);
@@ -134,6 +147,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       clarifyKind,
       showClarify,
       showExchange,
+      showNotice,
       clearLocalMessages,
     }),
     [
@@ -142,6 +156,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       clarifyKind,
       showClarify,
       showExchange,
+      showNotice,
       clearLocalMessages,
     ],
   );
