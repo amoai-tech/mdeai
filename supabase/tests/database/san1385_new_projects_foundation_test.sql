@@ -5,7 +5,7 @@
 
 begin;
 
-select plan(64);
+select plan(67);
 
 -- ── fixtures (owner/superuser; RLS not yet switched) ─────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -202,6 +202,17 @@ select throws_ok(
          where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'rejected')$$,
   'P0001', null, 'F5 reject after accept is an invalid transition');
 
+select throws_ok(
+  $$select public.advance_developer_registration_stage(
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'not_a_stage')$$,
+  'P0001', null, 'F5a unknown sales stage is rejected');
+select throws_ok(
+  $$select public.advance_developer_registration_stage(
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'deed_closed_won')$$,
+  '23514', null, 'F5b arbitrary stage jump from no stage is rejected');
+
 -- ── booking (3) ──────────────────────────────────────────────────────────────
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000001', true);
 select ok((public.book_new_project_consultation(
@@ -333,6 +344,10 @@ select throws_ok(
   $$insert into public.development_projects (partner_id, ownership_status, source_key, slug, name, publish_state, verified_at)
     values ('f1385000-0000-4000-8000-000000000001', 'unclaimed', 'san1385-invariant', 'san1385-invariant', 'Invariant', 'draft', now())$$,
   '23514', null, 'G4 unclaimed project cannot carry a partner_id');
+select throws_ok(
+  $$insert into public.development_projects (ownership_status, source_key, slug, name, publish_state, verified_at)
+    values ('claimed', 'san1385-claimed-null', 'san1385-claimed-null', 'Claimed Null', 'draft', now())$$,
+  '23514', null, 'G5 claimed project cannot omit partner_id');
 
 select * from finish();
 rollback;

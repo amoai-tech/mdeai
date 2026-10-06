@@ -667,6 +667,17 @@ declare
   v_old_stage text;
   v_target text := nullif(btrim(p_sales_stage), '');
 begin
+  -- Fail fast on unknown stages (clear error). The column CHECK and the
+  -- validate_developer_registration_transition() trigger remain authoritative for
+  -- forward-only ordering; lost/canceled are terminal/off-ramp stages.
+  if v_target is null or v_target not in (
+    'contacted', 'appointment_completed', 'interested', 'reserved',
+    'promesa', 'financing_closing', 'deed_closed_won', 'lost', 'canceled'
+  ) then
+    raise exception 'advance_developer_registration_stage: unknown sales stage %', p_sales_stage
+      using errcode = 'P0001';
+  end if;
+
   select r.* into v_reg
   from public.developer_lead_registrations r
   where r.id = p_registration_id
