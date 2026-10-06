@@ -8,6 +8,17 @@ import {
   validateBrokerOnboardingInput,
 } from "@/lib/rentals/broker-onboarding-validate";
 import { BROKER_LISTINGS_PATH } from "@/lib/rentals/broker-route-gate";
+import {
+  buildBrokerOnboardingApartmentPatch,
+  resolveBrokerOnboardingAddress,
+  withVerifiedPlace,
+  withoutUnverifiedCoordinates,
+} from "@/lib/rentals/broker-onboarding-apartment-patch";
+import { verifyPlaceId } from "@/lib/place-search";
+import {
+  PlacesConfigError,
+  PlacesRequestError,
+} from "@/mastra/lib/google-places-client";
 import { createClient } from "@/lib/supabase/server";
 
 export type { BrokerOnboardingFormInput, BrokerOnboardingSubmitResult };
@@ -41,12 +52,58 @@ export async function submitBrokerOnboarding(
     return { ok: false, message: "Sign in to complete onboarding." };
   }
 
+  // Trust boundary: normalized address and coordinates are persisted only from a
+  // place ID verified server-side against Google Places. Browser-supplied
+  // coordinates without a place ID are discarded — an unknown location stays
+  // unknown rather than becoming a "Google verified" fact.
+  let effectiveInput = input;
+  if (input.placeId.trim()) {
+    let verified;
+    try {
+      verified = await verifyPlaceId(input.placeId);
+    } catch (err) {
+      // Distinguish an operational/config failure from an invalid place, so a
+      // missing key or an unreachable Google is not reported as "pick again".
+      if (err instanceof PlacesConfigError) {
+        return {
+          ok: false,
+          message: "Address verification is temporarily unavailable. Please try again later.",
+        };
+      }
+      if (err instanceof PlacesRequestError) {
+        return {
+          ok: false,
+          message: "We could not reach Google to verify the address. Please try again.",
+        };
+      }
+      // Unexpected provider failure: log for operators and fail closed for the user
+      // rather than surfacing an unhandled server-action error.
+      console.error("submitBrokerOnboarding: unexpected address verification error", err);
+      return {
+        ok: false,
+        message: "Address verification is temporarily unavailable. Please try again later.",
+      };
+    }
+    if (!verified || !verified.formattedAddress) {
+      return {
+        ok: false,
+        message: "We could not verify the selected address with Google. Pick it again.",
+      };
+    }
+    effectiveInput = withVerifiedPlace(input, {
+      formattedAddress: verified.formattedAddress,
+      latitude: verified.latitude,
+      longitude: verified.longitude,
+    });
+  } else if (input.latitude != null || input.longitude != null) {
+    effectiveInput = withoutUnverifiedCoordinates(input);
+  }
+
   const displayName = input.displayName.trim();
   const neighborhoodFields = brokerNeighborhoodProfileFields(input.neighborhoods);
   const primaryNeighborhood = neighborhoodFields.primary_neighborhood;
-  const listingTitle = input.address.trim();
+  const listingTitle = resolveBrokerOnboardingAddress(effectiveInput);
   const whatsapp = input.whatsapp.trim();
-  const photo = input.photoUrl.trim();
 
   const { data: rpcData, error: rpcError } = await supabase.rpc("create_broker_onboarding_draft", {
     p_display_name: displayName,
@@ -80,21 +137,7 @@ export async function submitBrokerOnboarding(
     return { ok: false, message: profileError.message };
   }
 
-  const apartmentPatch: {
-    address: string;
-    bedrooms: number;
-    bathrooms: number;
-    price_monthly: number;
-    currency: string;
-    images?: string[];
-  } = {
-    address: listingTitle,
-    bedrooms: input.bedrooms,
-    bathrooms: input.bathrooms,
-    price_monthly: input.monthlyRentCop,
-    currency: "COP",
-  };
-  if (photo) apartmentPatch.images = [photo];
+  const apartmentPatch = buildBrokerOnboardingApartmentPatch(effectiveInput);
 
   const { error: apartmentError } = await supabase
     .from("apartments")
