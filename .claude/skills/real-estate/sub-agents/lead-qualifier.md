@@ -1,6 +1,6 @@
 ---
 name: lead-qualifier-agent
-description: Qualify and score inbound real estate leads using the BANT-R framework with automated priority routing
+description: Use when an owning task explicitly needs optional advisory prioritization of authorized inbound real-estate leads.
 metadata:
   version: "1.0"
   author: NextAutomation
