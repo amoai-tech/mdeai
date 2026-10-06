@@ -43,6 +43,40 @@ function normalizeDatabaseUrl(): string | undefined {
   return unquoted.trim() || undefined;
 }
 
+/**
+ * Pool size and TLS strategy for the production Postgres path.
+ *
+ * Fluid Compute is ENABLED on the production Vercel project (verified from the project
+ * API: defaultResourceConfig.fluid === true), so Supabase's conventional serverless
+ * `max: 1` is too small for concurrent warm-instance traffic. 3 is the smallest value
+ * that keeps concurrent Mastra storage operations from queueing while staying far below
+ * the Supabase pooler limit. See SAN-1303 evidence.
+ */
+export const POSTGRES_POOL_MAX = 3;
+export const POSTGRES_IDLE_TIMEOUT_MS = 10_000;
+
+/**
+ * Force TLS for the runtime Postgres connection.
+ *
+ * node-postgres lets the connection string's `sslmode`/`ssl` parameters override an
+ * explicit `ssl` option, so a Dashboard-issued URL with `sslmode=disable` would
+ * silently downgrade production traffic to plaintext (measured: the production URL has
+ * no sslmode and connected with client_ssl=none). Removing those parameters makes the
+ * `ssl` object below the single source of truth, so plaintext is impossible regardless
+ * of the URL. Supabase's pooler presents a chain node-postgres does not trust by
+ * default, so encryption is required without CA verification (equivalent to
+ * sslmode=require); `verify-full` is deferred until the Supabase CA is provisioned.
+ */
+export function resolveRuntimeConnectionString(connectionString: string): string {
+  const [base, query] = connectionString.split("?", 2);
+  if (!query) return connectionString;
+  const kept = query.split("&").filter((part) => {
+    const key = part.split("=")[0].toLowerCase();
+    return key !== "sslmode" && key !== "ssl";
+  });
+  return kept.length > 0 ? `${base}?${kept.join("&")}` : base;
+}
+
 /** Next sets this while collecting/building routes; runtime requests never do. */
 export function isNextProductionBuild(): boolean {
   return process.env.NEXT_PHASE === "phase-production-build";
@@ -67,11 +101,18 @@ export function createMastraStorage(id: string) {
   }
   if (shouldUsePostgresStorage()) {
     const connectionString = normalizeDatabaseUrl();
+    // Production runtime only: require TLS and make the URL unable to disable it.
+    // Development against a local Postgres (no TLS) keeps its previous behaviour, and
+    // the disposable-database integration tests construct their own store.
+    const isProductionRuntime = process.env.NODE_ENV === "production";
     return new PostgresStore({
       id,
-      connectionString: connectionString!,
-      max: 3,
-      idleTimeoutMillis: 10_000,
+      connectionString: isProductionRuntime
+        ? resolveRuntimeConnectionString(connectionString!)
+        : connectionString!,
+      ...(isProductionRuntime ? { ssl: { rejectUnauthorized: false } } : {}),
+      max: POSTGRES_POOL_MAX,
+      idleTimeoutMillis: POSTGRES_IDLE_TIMEOUT_MS,
       disableInit: true,
     });
   }
