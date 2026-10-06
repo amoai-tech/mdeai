@@ -117,18 +117,19 @@ function readFallback(result: unknown): string | undefined {
 
 /**
  * Join a row to the Google source that grounded it, by URL only — never by position, and never by
- * building a link ourselves. No matching source means Google did not ground this row.
+ * building a link or a name ourselves. The URL and the name are exactly what Google returned. No
+ * matching source, or one without a name, means Google did not supply a source we can show.
  */
 export function findGroundingSource(
   attribution: GroundedAttributionRow[],
   mapsUrl: string | undefined,
-  fallbackTitle: string,
 ): GroundingSource | undefined {
   if (!mapsUrl) return undefined;
-  const match = attribution.find((a) => typeof a?.placeUri === "string" && a.placeUri === mapsUrl);
-  if (!match?.placeUri) return undefined;
-  const title = match.title ? cleanGroundingAttributionTitle(match.title) : "";
-  return { uri: match.placeUri, title: title || fallbackTitle };
+  const match = attribution.find(
+    (a) => typeof a?.placeUri === "string" && a.placeUri === mapsUrl && typeof a.title === "string" && a.title.trim() !== "",
+  );
+  if (!match?.placeUri || !match.title) return undefined;
+  return { uri: match.placeUri, title: match.title };
 }
 
 function readPhotoAuthorAttributions(
@@ -176,10 +177,9 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
         : typeof row.openNow === "boolean"
           ? row.openNow
           : undefined;
-    const title = resolveGroundedTitle(row, index, attribution, mapsUrl);
     return {
       id: String(row.id ?? `grounded-${index}`),
-      title,
+      title: resolveGroundedTitle(row, index, attribution, mapsUrl),
       mapsUrl,
       directionsUrl:
         typeof row.directionsUrl === "string" ? row.directionsUrl : undefined,
@@ -212,7 +212,7 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
         typeof row.fieldMaskVersion === "string"
           ? row.fieldMaskVersion
           : undefined,
-      groundingSource: findGroundingSource(attribution, mapsUrl, title),
+      groundingSource: findGroundingSource(attribution, mapsUrl),
     };
   });
 

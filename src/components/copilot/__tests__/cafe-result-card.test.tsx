@@ -54,7 +54,8 @@ describe("CafeResultCard", () => {
   describe("SAN-878 · Google Maps source attribution", () => {
     afterEach(() => vi.unstubAllEnvs());
 
-    const grounded = { uri: "https://maps.google.com/?cid=1", title: "Pausa Coffee & Brunch" };
+    // Google's name for the place differs from the card title on purpose: the card must show Google's.
+    const grounded = { uri: "https://maps.google.com/?cid=1", title: "Pausa Coffee y Brunch (Google)" };
     const render = (props: Partial<React.ComponentProps<typeof CafeResultCard>> = {}) =>
       renderToStaticMarkup(
         <CafeResultCard
@@ -80,7 +81,8 @@ describe("CafeResultCard", () => {
       const block = html.slice(source, html.indexOf("</p>", source));
       expect(block).toContain('href="https://maps.google.com/?cid=1"');
       expect(block).toContain("Google Maps");
-      expect(block).toContain("Pausa Coffee &amp; Brunch");
+      expect(block).toContain("Pausa Coffee y Brunch (Google)");
+      expect(block).not.toContain("Pausa Coffee &amp; Brunch");
       expect(block).toContain('translate="no"');
     });
 

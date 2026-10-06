@@ -29,12 +29,11 @@ describe("GroundingAttribution (compact, one source)", () => {
     expect(html).not.toContain("<a ");
   });
 
-  it("strips a trailing '- Google Maps' from the source name so the label is not doubled", () => {
+  it("shows Google's source name exactly as given, without editing it", () => {
     const html = renderToStaticMarkup(
       <GroundingAttribution compact rows={[{ placeUri: "https://maps.google.com/?cid=1", title: "Cafe Euge - Google Maps" }]} />,
     );
-    expect(html.match(/Google Maps/g)).toHaveLength(1);
-    expect(html).toContain("Cafe Euge");
+    expect(html).toContain("Cafe Euge - Google Maps");
   });
 
   it("keeps the words Google Maps on one line, untranslated, in one of Google's allowed colours", () => {

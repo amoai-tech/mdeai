@@ -53,7 +53,7 @@ describe("CafeDetailPanel enrichment fallback", () => {
 });
 
 describe("CafeDetailPanel Google Maps source (SAN-878)", () => {
-  const grounded = { uri: "https://maps.google.com/?cid=5", title: "Test Café" };
+  const grounded = { uri: "https://maps.google.com/?cid=5", title: "Test Cafe by Google" };
 
   it("attributes the summary to its Google source with the place name and URL", () => {
     const withSource = { ...detail, groundingSource: grounded };
@@ -64,7 +64,7 @@ describe("CafeDetailPanel Google Maps source (SAN-878)", () => {
     const block = html.slice(source, html.indexOf("</p>", source));
     expect(block).toContain('href="https://maps.google.com/?cid=5"');
     expect(block).toContain("Google Maps");
-    expect(block).toContain("Test Café");
+    expect(block).toContain("Test Cafe by Google");
   });
 
   it("a curated fallback café is not attributed to Google Maps", () => {

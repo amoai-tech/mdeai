@@ -1,7 +1,5 @@
 "use client";
 
-import { cleanGroundingAttributionTitle } from "@/lib/parse-grounded-tool-result";
-
 type AttributionRow = {
   source?: string;
   placeUri?: string;
@@ -20,10 +18,11 @@ export function GroundingAttribution({
   // SAN-878 — one grounded result: "Source: Google Maps · <place name>", linked to the source URL.
   // Google's grounding rule: show the source name, link to its URL, and write "Google Maps" unchanged —
   // not translated, not on two lines, regular 12px+ text in #5E5E5E (white on dark). Callers pass a row
-  // only for a place Google actually grounded; this component never invents a source for one that wasn't.
+  // only for a place Google actually grounded, with Google's own name and URL; the name is shown as
+  // given, never edited or replaced by ours.
   if (compact && rows.length === 1) {
     const row = rows[0]!;
-    const name = row.title ? cleanGroundingAttributionTitle(row.title) : "";
+    const name = row.title?.trim() ?? "";
     const googleMaps = (
       <span className="whitespace-nowrap font-normal text-[#5e5e5e] dark:text-white" translate="no">
         Google Maps

@@ -161,9 +161,19 @@ describe("grounding source (SAN-878)", () => {
     const parsed = parseGroundedToolResult({
       source: "grounding",
       results: [row()],
-      attribution: [{ source: "google_maps_grounding", placeUri: url, title: "Pausa Coffee & Brunch - Google Maps" }],
+      attribution: [{ source: "google_maps_grounding", placeUri: url, title: "Pausa Coffee & Brunch" }],
     });
     expect(parsed.results[0]?.groundingSource).toEqual({ uri: url, title: "Pausa Coffee & Brunch" });
+  });
+
+  it("keeps Google's source name exactly as returned, even when it differs from the card title", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [row({ title: "Pausa Coffee" })],
+      attribution: [{ placeUri: url, title: "Pausa Coffee y Brunch - Google Maps" }],
+    });
+    expect(parsed.results[0]?.title).toBe("Pausa Coffee");
+    expect(parsed.results[0]?.groundingSource).toEqual({ uri: url, title: "Pausa Coffee y Brunch - Google Maps" });
   });
 
   it("gives a curated fallback row no Google source and says it is a fallback", () => {
@@ -204,12 +214,12 @@ describe("grounding source (SAN-878)", () => {
     expect(parsed.results[0]?.groundingSource).toBeUndefined();
   });
 
-  it("falls back to the card's own name when the source has no title", () => {
+  it("does not borrow the card's name when Google's source has no name", () => {
     const parsed = parseGroundedToolResult({
       source: "grounding",
       results: [row()],
-      attribution: [{ placeUri: url }],
+      attribution: [{ placeUri: url }, { placeUri: url, title: "   " }],
     });
-    expect(parsed.results[0]?.groundingSource).toEqual({ uri: url, title: "Pausa Coffee & Brunch" });
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
   });
 });

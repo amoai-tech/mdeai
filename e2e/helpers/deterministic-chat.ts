@@ -90,6 +90,16 @@ export const groundedPlace = {
   fieldMaskVersion: "places-v1",
 };
 
+/**
+ * Google's own source for `groundedPlace`, as the grounding tool returns it. Its name differs from the
+ * card title on purpose: the card must show Google's name (SAN-878).
+ */
+export const groundedSource = {
+  source: "google_maps_grounding",
+  placeUri: groundedPlace.mapsUrl,
+  title: "Deterministic Coffee Lab & Roastery",
+};
+
 export async function mockFastPaths(page: Page) {
   await page.route("**/api/restaurants/search", async (route) => {
     await route.fulfill({
@@ -118,8 +128,7 @@ export async function mockFastPaths(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({
         results: [groundedPlace],
-        // Google's own source for the place, as the grounding tool returns it (SAN-878).
-        attribution: [{ source: "google_maps_grounding", placeUri: groundedPlace.mapsUrl, title: groundedPlace.title }],
+        attribution: [groundedSource],
         source: "mock",
         metadata: { venueKind: "cafe" },
       }),
