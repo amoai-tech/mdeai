@@ -92,27 +92,28 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
           className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-md"
         >
           {results.map((result) => (
-            <li key={result.placeId}>
-              <button
-                type="button"
-                data-testid="ro-address-option"
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                onClick={() => {
-                  const label = result.formattedAddress ?? result.displayName ?? value;
-                  committedRef.current = label;
-                  onSelect(result);
-                  onTextChange(label);
-                  setOpen(false);
-                  setResults([]);
-                }}
-              >
-                <span className="block truncate">{result.displayName ?? result.formattedAddress}</span>
-                {result.formattedAddress ? (
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {result.formattedAddress}
-                  </span>
-                ) : null}
-              </button>
+            <li
+              key={result.placeId}
+              role="option"
+              aria-selected={false}
+              data-testid="ro-address-option"
+              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                const label = result.formattedAddress ?? result.displayName ?? value;
+                committedRef.current = label;
+                onSelect(result);
+                onTextChange(label);
+                setOpen(false);
+                setResults([]);
+              }}
+            >
+              <span className="block truncate">{result.displayName ?? result.formattedAddress}</span>
+              {result.formattedAddress ? (
+                <span className="block truncate text-xs text-muted-foreground">
+                  {result.formattedAddress}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>

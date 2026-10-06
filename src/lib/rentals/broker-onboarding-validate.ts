@@ -67,8 +67,18 @@ export function validateBrokerOnboardingInput(
     return { ok: false, message: "Confirm you can list this property before saving." };
   }
   const placeId = input.placeId.trim();
-  if (placeId && !/^[A-Za-z0-9_-]{10,}$/.test(placeId)) {
-    return { ok: false, message: "The selected address is invalid. Pick it again." };
+  if (placeId) {
+    // Google does not publish a guaranteed place-ID character set, so accept any
+    // non-whitespace token with a sane length instead of risking a false rejection.
+    if (!/^\S{10,512}$/.test(placeId)) {
+      return { ok: false, message: "The selected address is invalid. Pick it again." };
+    }
+    if (!input.formattedAddress.trim()) {
+      return {
+        ok: false,
+        message: "The selected address is missing its normalized form. Pick it again.",
+      };
+    }
   }
   if ((input.latitude == null) !== (input.longitude == null)) {
     return { ok: false, message: "Location must include both latitude and longitude." };
