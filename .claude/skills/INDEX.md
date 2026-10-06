@@ -39,7 +39,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `maps` | 94 | KEEP + IMPROVE | Add trigger and behavior evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
 | `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
-| `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/Vercel domain owner; review/deploy/performance detail uses progressive-disclosure references |
+| `nextjs` | 98 | KEEP + BENCHMARK | Single Next.js/React/Vercel domain owner; composition, review, deploy, and performance detail use progressive-disclosure references |
 | `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
 | `ponytail` | 93 | KEEP + BENCHMARK | Owner for reuse-before-build, source receipts, and the evidence split; eval pack added — next, measure the diff-size effect with and without the skill |
 | `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
@@ -60,7 +60,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 
 | Candidate | Decision | Reason |
 |---|---|---|
-| former `mde-vercel` + former `nextjs-review` + `nextjs` | Consolidated | `nextjs` is the single domain owner; Vercel, performance, and review invariants load from `nextjs/references/` |
+| former `mde-vercel` + former `nextjs-review` + local `vercel-composition-patterns` + local `vercel-react-best-practices` + `nextjs` | Consolidated | `nextjs` is the single domain owner; React composition/performance plus Vercel and review invariants load from `nextjs/references/` |
 | `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
 | `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |

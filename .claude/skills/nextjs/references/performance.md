@@ -1,6 +1,6 @@
 # React and Next.js performance
 
-Use for RSC/streaming, data-fetching waterfalls, bundle size, ISR/revalidation performance, rendering performance, and Core Web Vitals work.
+Use as the MDE-specific measurement and acceptance layer for RSC/streaming, data-fetching waterfalls, bundle size, ISR/revalidation performance, rendering performance, and Core Web Vitals work. Load `react-best-practices.md` first for the curated React rule set.
 
 ## Priority order
 

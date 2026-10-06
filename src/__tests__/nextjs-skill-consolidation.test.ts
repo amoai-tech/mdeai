@@ -7,18 +7,26 @@ describe("Next.js skill consolidation", () => {
     expect(existsSync(".claude/skills/nextjs-review")).toBe(false);
     expect(existsSync(".claude/skills/mde-vercel")).toBe(false);
     expect(existsSync(".agents/skills/mde-vercel")).toBe(false);
+    expect(existsSync(".claude/skills/vercel-composition-patterns")).toBe(false);
+    expect(existsSync(".claude/skills/vercel-react-best-practices")).toBe(false);
+    expect(existsSync(".agents/skills/vercel-composition-patterns")).toBe(false);
+    expect(existsSync(".agents/skills/vercel-react-best-practices")).toBe(false);
   });
 
   it("preserves specialist guidance through progressive-disclosure references", () => {
     expect(existsSync(".claude/skills/nextjs/references/review.md")).toBe(true);
     expect(existsSync(".claude/skills/nextjs/references/vercel.md")).toBe(true);
     expect(existsSync(".claude/skills/nextjs/references/performance.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/react-best-practices.md")).toBe(true);
+    expect(existsSync(".claude/skills/nextjs/references/composition-patterns.md")).toBe(true);
     expect(existsSync(".claude/skills/nextjs/references/app-router.md")).toBe(true);
     expect(existsSync(".claude/skills/nextjs/references/caching.md")).toBe(true);
     const skill = readFileSync(".claude/skills/nextjs/SKILL.md", "utf8");
     expect(skill).toContain("references/review.md");
     expect(skill).toContain("references/vercel.md");
     expect(skill).toContain("references/performance.md");
+    expect(skill).toContain("references/react-best-practices.md");
+    expect(skill).toContain("references/composition-patterns.md");
   });
 
   it("preserves exact-version review and safe deploy invariants", () => {

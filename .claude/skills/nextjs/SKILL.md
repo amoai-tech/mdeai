@@ -1,7 +1,7 @@
 ---
 name: nextjs
 description: >-
-  Own MDE Next.js and Vercel application-platform work. Use this skill whenever a task changes or diagnoses Next.js App Router pages, layouts, route handlers, Server/Client Component boundaries, Async Request APIs, caching/revalidation, metadata, proxy/middleware behavior, RSC/streaming, bundle or Core Web Vitals performance, or Vercel preview/production deployment, environment, domain, rollback, or runtime configuration. For PR/diff review, root-cause debugging, test strategy, or final production-readiness proof, keep the workflow owner (`code-review`, `systematic-debugging`, `testing`, or `task-verifier`) and load the relevant Next.js reference from this skill.
+  Own MDE Next.js, React architecture, and Vercel application-platform work. Use this skill whenever a task changes or diagnoses Next.js App Router pages, layouts, route handlers, Server/Client Component boundaries, reusable React composition or state ownership, Async Request APIs, caching/revalidation, metadata, proxy/middleware behavior, RSC/streaming, waterfalls, rerenders, bundle or Core Web Vitals performance, or Vercel preview/production deployment, environment, domain, rollback, or runtime configuration. For PR/diff review, root-cause debugging, test strategy, or final production-readiness proof, keep the workflow owner (`code-review`, `systematic-debugging`, `testing`, or `task-verifier`) and load the relevant Next.js reference from this skill.
 metadata:
   verified-package: "next 16.3.5"
   verified-at: "2026-09-28"
@@ -17,7 +17,8 @@ Own the MDE application framework and its Vercel deployment surface. Resolve the
 |---|---|
 | App Router, request APIs, server/client boundaries | `references/app-router.md` |
 | Caching, revalidation, user-scoped data | `references/caching.md` |
-| React/Next.js performance, bundles, RSC, streaming | `references/performance.md` |
+| React component composition, variants, shared state ownership | `references/composition-patterns.md` |
+| React/Next.js waterfalls, bundles, rerenders, rendering performance | `references/react-best-practices.md` + `references/performance.md` for MDE measurement/acceptance |
 | Vercel preview/production, env, domains, rollback | `references/vercel.md` |
 | Reviewing a Next.js/Vercel diff | `references/review.md` with `code-review` |
 

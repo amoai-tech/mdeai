@@ -50,7 +50,25 @@
     {
       "id": 6,
       "prompt": "This Next.js bundle jumped after a component change. Find the narrowest fix and prove the bundle improvement without changing unrelated runtime behavior.",
-      "expected_output": "Loads the performance reference, measures before/after, and prefers a narrow bundle/import boundary fix.",
+      "expected_output": "Loads react-best-practices plus the MDE performance reference, measures before/after, and prefers a narrow bundle/import boundary fix.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "Our rental result component now has nine booleans controlling card modes and two siblings need its selection state. Refactor the React architecture without changing ranking or eligibility behavior.",
+      "expected_output": "Routes to nextjs, loads composition-patterns, chooses one clear state owner and explicit composition/variants, and leaves canonical rental business truth untouched.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "The rentals page feels slow after a React refactor. Profile the likely waterfall, bundle, or rerender regression and make only a measured fix.",
+      "expected_output": "Routes to nextjs, loads react-best-practices and the MDE performance contract, measures before/after, and avoids speculative memoization or caching.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "Change the rental card spacing, typography, photo crop, and color hierarchy to match the approved design. No component API or state architecture changes are needed.",
+      "expected_output": "Treats this as visual-design work rather than triggering nextjs solely because the implementation uses React.",
       "files": []
     }
   ]
