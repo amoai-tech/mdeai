@@ -2,8 +2,10 @@
 -- External rental candidates — operator-run seed (NOT a migration).
 --
 -- Applied to: production project zkwcbyxiwklihegjhuql on 2026-10-05 via psql.
--- This file is intentionally OUTSIDE supabase/migrations/ so `supabase db push`
--- does not auto-replay it. Apply it deliberately to a chosen environment:
+-- This file is not a migration and is not included in MDE's configured seed paths
+-- (supabase/config.toml [db.seed]: enabled = false, sql_paths = ["./seed.sql"]).
+-- Normal `supabase db push` therefore does not apply it; run it only through the
+-- documented operator command below.
 --
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -1 \
 --     -f supabase/seeds/rentals/external-candidates-2026-10-05.sql
@@ -19,9 +21,11 @@
 -- Idempotent: the NOT EXISTS guard is keyed on source_url / source_listing_id, so
 -- re-running inserts 0 rows and never duplicates an existing candidate.
 --
--- Verification (run after applying):
---   select title, neighborhood, price_monthly, currency, status, moderation_status,
---          listing_workflow_status, freshness_status, landlord_id, latitude, longitude,
+-- Verification (run after applying) — covers the full fail-closed contract:
+--   select title, neighborhood, price_monthly, currency,
+--          status, moderation_status, listing_workflow_status, verified, freshness_status,
+--          landlord_id, host_id,
+--          latitude, longitude, location, address, images,
 --          source_listing_id, source_url
 --   from public.apartments
 --   where metadata->>'inventory_kind' = 'external_candidate'

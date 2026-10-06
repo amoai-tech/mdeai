@@ -1,6 +1,6 @@
 # Supabase seed sources
 
-Canonical **source artifacts** (JSON, CSV) for DATA venue seeds. **Runtime SQL** lives in [`../migrations/`](../migrations/) only.
+Canonical **source artifacts** (JSON, CSV) for DATA venue seeds. Deployable database SQL normally lives in [`../migrations/`](../migrations/). The operator-run reconciliation seeds documented below are the explicit exception.
 
 | Task | Source files | Applied migration |
 |------|--------------|-------------------|
@@ -11,8 +11,10 @@ Canonical **source artifacts** (JSON, CSV) for DATA venue seeds. **Runtime SQL**
 
 ## Operator-run reconciliation seeds
 
-These are deliberately **not** migrations, so `supabase db push` does not replay them. They are
-committed as a source artifact plus operator-run SQL and applied manually to the named environment.
+These are deliberately **not** migrations and are not part of MDE's configured seed paths
+(`supabase/config.toml` `[db.seed]`: `enabled = false`, `sql_paths = ["./seed.sql"]`). Normal
+`supabase db push` therefore does not apply them. They are committed as a source artifact plus
+operator-run SQL and applied manually to the named environment.
 
 | Task | Source files | Applied |
 |------|--------------|---------|

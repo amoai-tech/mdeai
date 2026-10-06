@@ -3,8 +3,9 @@
 These are real marketplace listings captured as **fail-closed candidates**, not verified MDE supply.
 They are stored in `public.apartments` with `metadata->>'inventory_kind' = 'external_candidate'`.
 
-They are deliberately **not migrations**: `supabase db push` must not replay production data
-discovery. Apply the SQL on purpose to one chosen environment.
+They are deliberately **not migrations** and are not part of MDE's configured seed paths
+(`supabase/config.toml` `[db.seed]`: `enabled = false`, `sql_paths = ["./seed.sql"]`). Normal
+`supabase db push` therefore does not apply them; run the SQL on purpose to one chosen environment.
 
 ## Files
 
@@ -33,8 +34,10 @@ Promotion happens only through the normal verify → enrich → review → publi
 ## Verify
 
 ```sql
-select title, neighborhood, price_monthly, currency, status, moderation_status,
-       listing_workflow_status, freshness_status, landlord_id, latitude, longitude,
+select title, neighborhood, price_monthly, currency,
+       status, moderation_status, listing_workflow_status, verified, freshness_status,
+       landlord_id, host_id,
+       latitude, longitude, location, address, images,
        source_listing_id, source_url
 from public.apartments
 where metadata->>'inventory_kind' = 'external_candidate'
