@@ -80,13 +80,15 @@ begin
     b := b || 'unverified external candidate'::text;
   end if;
 
-  if p_include_state and r.status <> 'active' then
+  -- Null-safe state checks: a NULL status must be treated as NOT active/approved/
+  -- published, otherwise the missing value would silently skip the blocker.
+  if p_include_state and r.status is distinct from 'active' then
     b := b || 'not active'::text;
   end if;
-  if p_include_state and r.moderation_status <> 'approved' then
+  if p_include_state and r.moderation_status is distinct from 'approved' then
     b := b || 'not approved'::text;
   end if;
-  if p_include_state and r.listing_workflow_status <> 'published' then
+  if p_include_state and r.listing_workflow_status is distinct from 'published' then
     b := b || 'not published'::text;
   end if;
 
@@ -175,7 +177,9 @@ begin
         and r.last_checked_at is not null
         and r.last_checked_at >= now() - interval '30 days';
     end if;
-    if not v_current_freshness then
+    -- Fail closed unless freshness is explicitly true (a NULL denormalized
+    -- freshness_status must not skip the blocker).
+    if v_current_freshness is distinct from true then
       b := b || 'no current active freshness'::text;
     end if;
   end if;
@@ -242,6 +246,11 @@ begin
                         when 'stale' then 1
                         when 'unconfirmed' then 2
                         when 'active' then 3
+                        -- rn=1 is KEPT. Any other status (unreachable: the status
+                        -- CHECK allows only active/unconfirmed/stale) ranks before
+                        -- 'active', so an 'active' row is never kept over a
+                        -- contradictory non-active row. This is fail-closed: the
+                        -- publish gate only accepts 'active'.
                         else 0
                       end asc,
                       f.created_at asc,

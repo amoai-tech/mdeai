@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(24);
+select plan(32);
 
 -- ── 8 approved coordinate pairs (latitude) ───────────────────────────────────
 select is((select latitude from public.apartments where slug='candidate-rentberry-119391131'), 6.2188538::numeric, 'Alizares latitude');
@@ -18,6 +18,16 @@ select is((select latitude from public.apartments where slug='candidate-rentberr
 select is((select latitude from public.apartments where slug='candidate-rentberry-119388617'), 6.2140535::numeric, 'Castropol latitude');
 select is((select latitude from public.apartments where slug='candidate-rentberry-118796331'), 6.2401220::numeric, 'Laureles Carrera 78 latitude');
 select is((select latitude from public.apartments where slug='candidate-rentberry-telaviv-1204'), 6.2462923::numeric, 'Telaviv latitude');
+
+-- ── 8 approved coordinate pairs (longitude, compared to the approved value) ──
+select is((select longitude from public.apartments where slug='candidate-rentberry-119391131'), -75.6034118::numeric, 'Alizares longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-119390518'), -75.5624821::numeric, 'Torres del Arroyo longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-119839712'), -75.5686795::numeric, 'Cantero longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-119839707'), -75.5735020::numeric, 'Plaza del Rio longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-119840596'), -75.5726974::numeric, 'Cioccolato longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-119388617'), -75.5678635::numeric, 'Castropol longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-118796331'), -75.5983370::numeric, 'Laureles Carrera 78 longitude');
+select is((select longitude from public.apartments where slug='candidate-rentberry-telaviv-1204'), -75.5984332::numeric, 'Telaviv longitude');
 
 -- ── PostGIS location derived and consistent ──────────────────────────────────
 select ok((select location is not null

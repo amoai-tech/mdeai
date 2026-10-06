@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(31);
+select plan(33);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -89,6 +89,9 @@ values
    current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-00000000000f', 'SAN1431 P', 'san1431-p', 'Laureles', 'SAN1431 P address',
    'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011', false, 2900000, 'COP',
+   current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
+  ('e1431000-0000-4000-8000-000000000010', 'SAN1431 Q', 'san1431-q', 'Laureles', 'SAN1431 Q address',
+   null, 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011', false, 2900000, 'COP',
    current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb);
 
 -- Granted control/publish/viewing permission for every verified fixture except the
@@ -111,7 +114,9 @@ insert into public.rental_listing_images (listing_id, storage_path, mime_type, r
 select id, 'san1431/' || slug || '.jpg', 'image/jpeg', 'authorized' from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-e','san1431-g',
                 'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m',
-                'san1431-n','san1431-o','san1431-p');
+                'san1431-n','san1431-o','san1431-p','san1431-q');
+-- Q: NULL status (from the insert) and an explicit NULL freshness_status, with no log.
+update public.apartments set freshness_status = null, last_checked_at = null where slug = 'san1431-q';
 insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
 values ('e1431000-0000-4000-8000-000000000006', 'san1431/f.jpg', 'image/jpeg', 'unverified');
 
@@ -190,6 +195,16 @@ select throws_ok(
   $$insert into public.rental_freshness_log (listing_id, checked_at, status)
     values ('e1431000-0000-4000-8000-000000000001', now(), 'stale')$$,
   '23505', null::text, 'T1: a tied (listing, checked_at) freshness row is rejected');
+
+-- ── Null-safe state and freshness (fail closed) ──────────────────────────────
+select ok(
+  (select public.rental_listing_launch_blockers('e1431000-0000-4000-8000-000000000010', true)
+     @> array['not active']::text[]),
+  'Z3: a NULL status is treated as not active');
+select ok(
+  (select public.rental_listing_launch_blockers('e1431000-0000-4000-8000-000000000010', true)
+     @> array['no current active freshness']::text[]),
+  'Z4: a NULL freshness_status fails closed');
 
 -- ── Authorization ────────────────────────────────────────────────────────────
 set local role authenticated;
