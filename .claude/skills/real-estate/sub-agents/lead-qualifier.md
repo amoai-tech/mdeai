@@ -26,9 +26,8 @@ Use only explicitly supplied or verified facts relevant to the task:
 
 - requested stay dates/term;
 - budget **with currency and period**;
-- bedrooms/occupancy;
 - explicit neighborhood/location requirement;
-- pets or accessibility needs when the user voluntarily supplies them for matching;
+- pets, accessibility, occupancy, or similar requirements when the user voluntarily supplies them for **property matching only**; these must never affect lead priority/scoring;
 - furnished/remote-work/amenity requirements;
 - viewing timing/preferences;
 - which verified rental/source the inquiry refers to.
