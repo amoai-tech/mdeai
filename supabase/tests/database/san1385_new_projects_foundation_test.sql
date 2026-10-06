@@ -78,7 +78,9 @@ select ok(exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
   where t.typname = 'booking_type' and e.enumlabel = 'new_project_consultation'), 'A2 booking_type has new_project_consultation');
 select ok((select position('commission' in pg_get_constraintdef(oid)) > 0 from pg_constraint
   where conname = 'revenue_ledger_source_kind_check'), 'A3 revenue_ledger allows commission');
-select ok(exists (select 1 from pg_constraint where conname = 'leads_listing_kind_check'), 'A4 leads listing_kind is constrained');
+select ok(exists (select 1 from pg_constraint
+  where conname = 'leads_listing_kind_check' and convalidated),
+  'A4 leads listing_kind constraint exists and is validated');
 select ok((select is_nullable = 'YES' from information_schema.columns
   where table_schema = 'public' and table_name = 'development_projects' and column_name = 'partner_id'), 'A5 development_projects.partner_id is nullable');
 select ok(to_regprocedure('public.lead_listing_owner_aligned(uuid,text,uuid,uuid)') is not null, 'A6 alignment function exists');
