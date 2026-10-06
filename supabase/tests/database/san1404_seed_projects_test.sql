@@ -55,6 +55,9 @@ select throws_ok(
 
 reset role;
 set local role authenticated;
+-- The JWT subject below is an arbitrary UUID. It is only read via
+-- set_config('request.jwt.claim.sub', ...) by auth.uid(); it does not need a
+-- matching auth.users row. It intentionally has no partner_members row, so RLS denies.
 select set_config('request.jwt.claim.sub', 'e1404000-0000-4000-8000-000000000001', true);
 with u as (
   update public.development_projects set name = name

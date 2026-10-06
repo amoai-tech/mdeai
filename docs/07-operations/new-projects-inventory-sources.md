@@ -59,9 +59,9 @@ construction progress. Unknown never becomes `0`, `false`, `available` or a gues
 
 - Nexus: the `informeinmobiliario.com` page is **410 Gone** and is excluded; identity rests on the
   current Zonario Laureles inventory (Tier B).
-- Amarilo Jardines del Río projects publish the developer sales address; the two surface forms
-  (`Cl. 17 #43F - 122` and `Calle 17 # 43F-122`) are preserved verbatim inside `observed_facts` rather
-  than rewritten. Normalize only the canonical search field if needed.
+- Amarilo Jardines del Río projects publish the developer sales address in two surface forms
+  (`Cl. 17 #43F - 122` and `Calle 17 # 43F-122`); both are preserved verbatim inside `observed_facts`.
+  The canonical `address` column is normalized to `Calle 17 #43F-122` for display/deduplication.
 - No source contradicted another on an accepted fact.
 
 ## Compliance
