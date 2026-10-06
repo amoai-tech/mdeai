@@ -8,6 +8,13 @@ export type BrokerOnboardingFormInput = {
   monthlyRentCop: number;
   photoUrl: string;
   confirmedListingRights: boolean;
+  /** Google Places (New) place id for the selected property; empty when none was picked. */
+  placeId: string;
+  /** Provider-normalized address from the selected place; empty when none was picked. */
+  formattedAddress: string;
+  /** Trusted coordinates from the selected place; both null when unknown. */
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type BrokerOnboardingSubmitResult =
@@ -58,6 +65,21 @@ export function validateBrokerOnboardingInput(
   }
   if (!input.confirmedListingRights) {
     return { ok: false, message: "Confirm you can list this property before saving." };
+  }
+  const placeId = input.placeId.trim();
+  if (placeId && !/^[A-Za-z0-9_-]{10,}$/.test(placeId)) {
+    return { ok: false, message: "The selected address is invalid. Pick it again." };
+  }
+  if ((input.latitude == null) !== (input.longitude == null)) {
+    return { ok: false, message: "Location must include both latitude and longitude." };
+  }
+  if (input.latitude != null && input.longitude != null) {
+    if (!Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90) {
+      return { ok: false, message: "Latitude must be between -90 and 90." };
+    }
+    if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180) {
+      return { ok: false, message: "Longitude must be between -180 and 180." };
+    }
   }
   const photo = trimOrEmpty(input.photoUrl);
   if (photo) {

@@ -8,6 +8,10 @@ import {
   validateBrokerOnboardingInput,
 } from "@/lib/rentals/broker-onboarding-validate";
 import { BROKER_LISTINGS_PATH } from "@/lib/rentals/broker-route-gate";
+import {
+  buildBrokerOnboardingApartmentPatch,
+  resolveBrokerOnboardingAddress,
+} from "@/lib/rentals/broker-onboarding-apartment-patch";
 import { createClient } from "@/lib/supabase/server";
 
 export type { BrokerOnboardingFormInput, BrokerOnboardingSubmitResult };
@@ -44,9 +48,8 @@ export async function submitBrokerOnboarding(
   const displayName = input.displayName.trim();
   const neighborhoodFields = brokerNeighborhoodProfileFields(input.neighborhoods);
   const primaryNeighborhood = neighborhoodFields.primary_neighborhood;
-  const listingTitle = input.address.trim();
+  const listingTitle = resolveBrokerOnboardingAddress(input);
   const whatsapp = input.whatsapp.trim();
-  const photo = input.photoUrl.trim();
 
   const { data: rpcData, error: rpcError } = await supabase.rpc("create_broker_onboarding_draft", {
     p_display_name: displayName,
@@ -80,21 +83,7 @@ export async function submitBrokerOnboarding(
     return { ok: false, message: profileError.message };
   }
 
-  const apartmentPatch: {
-    address: string;
-    bedrooms: number;
-    bathrooms: number;
-    price_monthly: number;
-    currency: string;
-    images?: string[];
-  } = {
-    address: listingTitle,
-    bedrooms: input.bedrooms,
-    bathrooms: input.bathrooms,
-    price_monthly: input.monthlyRentCop,
-    currency: "COP",
-  };
-  if (photo) apartmentPatch.images = [photo];
+  const apartmentPatch = buildBrokerOnboardingApartmentPatch(input);
 
   const { error: apartmentError } = await supabase
     .from("apartments")
