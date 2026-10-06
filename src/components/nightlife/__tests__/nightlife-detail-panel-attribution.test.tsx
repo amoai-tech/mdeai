@@ -37,7 +37,7 @@ const detail: NightlifeVenueDetail = {
 };
 
 describe("NightlifeDetailPanel Google Maps source (SAN-878)", () => {
-  const grounded = { uri: "https://maps.google.com/?cid=7", title: "Rooftop Salsa Bar" };
+  const grounded = { uri: "https://maps.google.com/?cid=7", title: "Rooftop Salsa Bar (Google)" };
 
   it("attributes the summary to its Google source with the place name and URL", () => {
     const withSource = { ...detail, groundingSource: grounded };
@@ -48,7 +48,7 @@ describe("NightlifeDetailPanel Google Maps source (SAN-878)", () => {
     const block = html.slice(source, html.indexOf("</p>", source));
     expect(block).toContain('href="https://maps.google.com/?cid=7"');
     expect(block).toContain("Google Maps");
-    expect(block).toContain("Rooftop Salsa Bar");
+    expect(block).toContain("Rooftop Salsa Bar (Google)");
     expect(block).toContain('translate="no"');
   });
 

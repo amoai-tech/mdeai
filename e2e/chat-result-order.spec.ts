@@ -8,6 +8,7 @@ import {
   event,
   gotoDeterministicChat,
   groundedPlace,
+  groundedSource,
   mockFastPaths,
   rental,
   typeAndSubmit,
@@ -126,9 +127,10 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     const source = page.getByTestId("grounded-card").getByTestId("grounding-attribution");
     await expect(source).toBeVisible();
     await expect(source).toContainText("Google Maps");
-    await expect(source).toContainText(groundedPlace.title);
+    // The name and the link are Google's own annotation, not the card's title or its own URL.
+    await expect(source).toHaveText(`Source: Google Maps · ${groundedSource.title}`);
     await expect(source.locator('[translate="no"]')).toHaveText("Google Maps");
-    await expect(source.getByRole("link")).toHaveAttribute("href", groundedPlace.mapsUrl);
+    await expect(source.getByRole("link")).toHaveAttribute("href", groundedSource.placeUri);
     await expectReadsBefore(
       page.getByTestId("grounded-fast-path-panel"),
       "the grounded-place results",
