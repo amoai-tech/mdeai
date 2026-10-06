@@ -68,9 +68,10 @@ export function validateBrokerOnboardingInput(
   }
   const placeId = input.placeId.trim();
   if (placeId) {
-    // Google does not publish a guaranteed place-ID character set, so accept any
-    // non-whitespace token with a sane length instead of risking a false rejection.
-    if (!/^\S{10,512}$/.test(placeId)) {
+    // Hygiene only: Google publishes no guaranteed length or character set, and no
+    // regex can prove authenticity. The server re-verifies the ID against Google
+    // Places on save (verifyPlaceId); this check only rejects obvious junk.
+    if (!/^\S{1,2048}$/.test(placeId)) {
       return { ok: false, message: "The selected address is invalid. Pick it again." };
     }
     if (!input.formattedAddress.trim()) {
