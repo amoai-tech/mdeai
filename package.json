@@ -49,6 +49,7 @@
     "verify:commerce-env": "node scripts/verify-commerce-env.mjs",
     "verify:task": "node scripts/verify-task.mjs",
     "verify:partner-schema": "node --env-file=.env.local scripts/verify-partner-schema-gate.mjs",
+    "record:rental-certification-evidence": "node --env-file=.env.local scripts/record-rental-certification-evidence.mjs",
     "verify:inventory-quality": "node --env-file=.env.local scripts/verify-rental-inventory-quality.mjs",
     "check:mastra": "node scripts/check-mastra.mjs && node scripts/check-mastra-schema-contract.mjs --strict",
     "check:mastra:schema": "node scripts/check-mastra-schema-contract.mjs",
