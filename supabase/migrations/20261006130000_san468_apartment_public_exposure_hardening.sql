@@ -9,12 +9,12 @@
 --    ('active','inactive','booked','pending'), so 'featured' can never match and
 --    the disjunct is dead. Dropping it is behaviour-neutral.
 --
--- 2. Table grants were reviewed and deliberately NOT changed. RLS has no anon
---    write policy, so anon writes are already filtered to zero rows (INSERT is
---    rejected with 42501). Revoking the table-level grant would change that
---    observable contract to a hard "permission denied" and break the SAN-1054
---    lifecycle probe, so it belongs to a separate reviewed security change, not
---    this inventory task.
+-- 2. Table grants were reviewed and deliberately NOT changed. With no anon write
+--    policy, RLS semantics are: UPDATE and DELETE affect zero rows silently, while
+--    INSERT is rejected with 42501 (new row violates row-level security policy).
+--    Revoking the table-level grant would replace that with a hard "permission
+--    denied" for every write and break the SAN-1054 lifecycle probe, so it
+--    belongs to a separate reviewed security change, not this inventory task.
 --
 -- Deliberately NOT changed here:
 --   * the public predicate stays `status = 'active'`. Tightening it to
