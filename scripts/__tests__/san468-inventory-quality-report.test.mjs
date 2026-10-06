@@ -39,7 +39,10 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
     const idx = verdict.indexOf("as " + flag);
     assert.ok(idx > 0, flag + " must be present");
     const expression = verdict.slice(cursor, idx);
-    assert.ok(expression.includes("not f.is_test_fixture"), flag + " must exclude test fixtures");
+    assert.ok(
+      expression.includes("not f.is_test_fixture and"),
+      flag + " must exclude test fixtures conjunctively",
+    );
     cursor = idx;
   }
 });
