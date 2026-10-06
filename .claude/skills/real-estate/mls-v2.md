@@ -1,89 +1,58 @@
 ---
 name: real-estate-tech
-description: "Use when extending mdeai.co beyond V1 single-listing manual entry into MLS / IDX / multi-source aggregation, geospatial search at scale, or automated property valuation. V1 currently manual; this skill is V2+ prep. Triggers: 'MLS', 'IDX', 'RETS', 'RESO Web API', 'comparable sales', 'AVM', 'PostGIS clustering', 'listing dedup', 'faceted search', 'property valuation'. Source: rohitg00/awesome-claude-code-toolkit (real-estate-tech)."
+description: Use when MDE work explicitly requires MLS, IDX, RETS, RESO Web API, AVM/comparable-sales systems, large-scale listing feeds, or geospatial/search architecture proven to exceed the current rental stack.
 metadata:
   source: https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/specialized-domains/real-estate-tech.md
-  installed: 2026-04-29
-  version: "0.1.0"
-  origin: external + mdeai.co adaptations
-  scope: V2+ (V1 is manual single-listing — see real-estate skill for V1)
+  origin: external + MDE adaptations
+  scope: future MLS/IDX and proven scale work only
 ---
 
-# Real-estate platform engineering — mdeai.co (V2+)
+# Future MLS / IDX Scale
 
-Companion to the V1 `real-estate` skill (which covers manual single-listing flows). This skill is the **V2+ ramp** when we move from "founder onboards 20 landlords" to "platform aggregates from MLS / IDX / multiple sources."
+This is optional future-scale reference material. It is **not** the guide for normal `RENTV2` work.
 
-## When to invoke
+## Load only for an explicit need
 
-- MLS / IDX / RETS / RESO Web API integration
-- Multi-source listing dedup (we'll get duplicate listings from Zillow + Realtor.com + MLS for the same property)
-- Geospatial search at scale (1000+ listings — `MarkerClusterer` client-side breaks)
-- Automated valuation models (AVM) using comparable sales
-- Faceted search API (price + beds + amenities + neighborhood, fast)
-- Property photo media pipeline (transcode, watermark, deliver)
-- Saved-search notification engine (renter saves criteria → daily new-match emails)
+Use this file when the owning task requires one of:
 
-## V1 vs V2 boundary
+- MLS / IDX / RETS / RESO Web API integration;
+- a large external listing-feed architecture;
+- AVM or comparable-sales systems;
+- server-side geospatial/search scale that current measured load cannot support.
 
-**V1 (today, plan §1.1):** landlords manually upload via `/host/listings/new` wizard. ~50 listings target. Client-side `MarkerClusterer`. No external data. Use the `real-estate` skill, not this one.
+A `RENTV2` label, external-discovery fallback, trust/dedupe task, saved search, ordinary PostGIS use, or more than one source does not by itself justify this architecture.
 
-**V2 (post-Day-30 cohort review):** if data shows we need supply at scale, this skill kicks in. Estimated: 1000+ listings via partial scraping, server-side clustering, comparable-sales pricing recommendations.
+For current MDE rental discovery/viewing work, use [rental-mvp.md](rental-mvp.md).
 
-Do NOT invoke this skill for V1 work — it'll over-architect the simple flow.
+## Scale rules
 
-## Architecture pillars (V2)
+1. Measure the current bottleneck before introducing new infrastructure.
+2. Reuse MDE's canonical rental identity, `RentalEligibility`, `RentalResult`, ownership, provenance, and requestability contracts.
+3. Feed ingestion must be idempotent and preserve source identity/provenance/freshness.
+4. External facts remain unknown until verified; aggregation does not make a fact true.
+5. Deduplication must be conservative and auditable; never merge physical properties on an AI guess.
+6. Preserve source licensing/attribution and provider terms.
+7. Prefer Postgres/PostGIS and existing search infrastructure until measured requirements justify another service.
+8. MLS/feed ingestion never grants an external listing MDE ownership or the **Schedule Viewing** action.
 
-### 1. Data ingestion (RETS / RESO Web API)
+## Typical future patterns
 
-- RETS = older REPL-style API; many MLS still serve only this
-- RESO Web API = JSON / OData modern replacement (RESO 2.0 forward)
-- Use a vendor like Spark Platform (Trestle) or RESO's RealHub to abstract per-MLS quirks
-- Stream into Supabase via an edge fn `ingest-listing` with idempotency on `(mls_id, listing_id)`
+### Feed ingestion
 
-### 2. Deduplication
+For a licensed feed, use a stable provider/listing identity and idempotent upsert semantics. Normalize into the same canonical rental contracts consumed by current search/UI rather than creating a parallel marketplace.
 
-- Address normalization first (USPS for US; libpostal for COL/intl)
-- Generate `listing_signature = sha256(addr_normalized + bedrooms + sqm + price)`
-- Same signature within 30 days = same listing — keep the freshest source
-- Cross-source: prefer the MLS source over Zillow / Realtor scrapers
+### Geospatial scale
 
-### 3. PostGIS geospatial at scale
+Use PostGIS spatial types/indexes and bounded server-side queries when real data volume makes client-side rendering/querying inadequate. Choose clustering/search techniques from measured dataset and viewport behavior, not a hard-coded listing-count threshold.
 
-V1 stores lat/lng as `numeric` columns. V2 needs:
-- `apartments.geog GEOGRAPHY(POINT, 4326)` populated by trigger on lat/lng change
-- `GIST` index on `geog`
-- Server-side cluster query: `ST_ClusterDBSCAN(geog, eps_in_meters, minpoints) OVER ()` returns cluster_id per point
-- Bounding-box query: `ST_Within(geog, ST_MakeEnvelope(...))`
+### AVM / comparables
 
-Existing tasks/todo.md item `D1 — Server-side pin clustering` is exactly this.
+Do not ship valuation logic until the product has a concrete use case, legitimate comparable data, an evaluation set, uncertainty handling, and a disclosure/grounding contract. A model-generated number is not evidence of market value.
 
-### 4. Automated valuation (AVM)
+### Search escalation
 
-- Comparable sales: 5+ closed listings within 1 km, ±20% sqm, ±2 beds, last 12 months
-- Naive AVM: median price per sqm × subject sqm
-- Better: GBM regression on (sqm, beds, baths, age, neighborhood, freshness) → trained nightly on `apartments` history
-- Don't ship AVM until cohort data shows landlords WANT pricing recommendations (V1 explicitly defers per plan §1.2)
+Keep deterministic eligibility separate from retrieval/ranking. Only introduce an external search engine when Postgres/current architecture fails a measured correctness/latency/scale requirement and the owning task documents that evidence.
 
-### 5. Faceted search
+## Colombia/MDE grounding
 
-- Postgres GIN on `(neighborhood, bedrooms, price_monthly, amenities)` for filter
-- pg_trgm on `title + description` for full-text
-- For 10k+ listings, escalate to Elasticsearch / Typesense — not before
-
-## V2 task triggers (when to actually invoke)
-
-When `tasks/todo.md` Phase D items get scheduled:
-- **D1 — Server-side pin clustering** → this skill's pillar 3
-- **D6 — Heatmap overlay** → this skill's pillar 5 (geospatial aggregation)
-- Any "AI pricing" feature → this skill's pillar 4
-
-## Companion skills
-
-- `real-estate` (V1 single-listing flows — DO NOT skip even when in V2)
-- `firecrawl-scraper` (already installed — for non-MLS scraping like Airbnb / Booking.com listings)
-- `supabase-postgres-best-practices` (for PostGIS + GIN index advice)
-- `gemini` (AVM / description-quality scoring)
-
-## Source
-
-Adapted from [awesome-claude-code-toolkit / real-estate-tech](https://github.com/rohitg00/awesome-claude-code-toolkit/blob/main/agents/specialized-domains/real-estate-tech.md). The original is platform-generic; this version is anchored to the mdeai.co V1→V2 boundary.
+Generic MLS/US examples are architectural references only. Verify Colombian data rights, brokerage/consumer rules, privacy requirements, local address/measurement conventions, and provider terms from authoritative current sources before turning any generic pattern into a product requirement.
