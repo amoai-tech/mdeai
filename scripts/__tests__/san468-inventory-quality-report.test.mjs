@@ -28,6 +28,25 @@ test("inventory-quality report is read-only", () => {
   assert.match(executable, /json_build_object/i);
 });
 
+test("every readiness flag excludes metadata.is_test_fixture rows", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  const start = executable.indexOf("verdict as (");
+  const end = executable.indexOf("detail as (");
+  assert.ok(start > 0 && end > start, "verdict block must exist");
+  const verdict = executable.slice(start, end);
+  let cursor = 0;
+  for (const flag of ["searchable", "map_ready", "launch_ready", "requestable"]) {
+    const idx = verdict.indexOf("as " + flag);
+    assert.ok(idx > 0, flag + " must be present");
+    const expression = verdict.slice(cursor, idx);
+    assert.ok(
+      /not f\.is_test_fixture\s+and/.test(expression),
+      flag + " must exclude test fixtures conjunctively",
+    );
+    cursor = idx;
+  }
+});
+
 test("inventory-quality npm script is wired", () => {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   assert.match(

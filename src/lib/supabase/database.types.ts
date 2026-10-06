@@ -695,6 +695,108 @@ export type Database = {
           },
         ]
       }
+      commission_claims: {
+        Row: {
+          agreement_id: string | null
+          calculation_basis: string | null
+          claim_state: string
+          commission_cents: number | null
+          created_at: string
+          currency: string
+          due_at: string | null
+          id: string
+          idempotency_key: string
+          invoiced_at: string | null
+          paid_at: string | null
+          partner_id: string
+          project_id: string | null
+          registration_id: string
+          revenue_ledger_id: string | null
+          sale_price_cents: number | null
+          trigger_evidence: Json
+          trigger_reached_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          agreement_id?: string | null
+          calculation_basis?: string | null
+          claim_state?: string
+          commission_cents?: number | null
+          created_at?: string
+          currency?: string
+          due_at?: string | null
+          id?: string
+          idempotency_key: string
+          invoiced_at?: string | null
+          paid_at?: string | null
+          partner_id: string
+          project_id?: string | null
+          registration_id: string
+          revenue_ledger_id?: string | null
+          sale_price_cents?: number | null
+          trigger_evidence?: Json
+          trigger_reached_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agreement_id?: string | null
+          calculation_basis?: string | null
+          claim_state?: string
+          commission_cents?: number | null
+          created_at?: string
+          currency?: string
+          due_at?: string | null
+          id?: string
+          idempotency_key?: string
+          invoiced_at?: string | null
+          paid_at?: string | null
+          partner_id?: string
+          project_id?: string | null
+          registration_id?: string
+          revenue_ledger_id?: string | null
+          sale_price_cents?: number | null
+          trigger_evidence?: Json
+          trigger_reached_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_claims_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "partner_commission_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_claims_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_claims_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "development_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_claims_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: true
+            referencedRelation: "developer_lead_registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_claims_revenue_ledger_id_fkey"
+            columns: ["revenue_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conflict_resolutions: {
         Row: {
           affected_items: Json
@@ -802,6 +904,386 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      developer_lead_registration_stage_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          evidence: Json
+          from_stage: string | null
+          id: string
+          registration_id: string
+          to_stage: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          evidence?: Json
+          from_stage?: string | null
+          id?: string
+          registration_id: string
+          to_stage: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          evidence?: Json
+          from_stage?: string | null
+          id?: string
+          registration_id?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "developer_lead_registration_stage_events_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "developer_lead_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      developer_lead_registrations: {
+        Row: {
+          accepted_at: string | null
+          agreement_id: string | null
+          agreement_snapshot: Json
+          created_at: string
+          developer_reference: string | null
+          id: string
+          idempotency_key: string
+          lead_id: string
+          partner_id: string
+          project_id: string
+          protection_expires_at: string | null
+          registered_at: string
+          rejected_at: string | null
+          rejection_evidence: Json | null
+          rejection_reason: string | null
+          sales_stage: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          agreement_id?: string | null
+          agreement_snapshot?: Json
+          created_at?: string
+          developer_reference?: string | null
+          id?: string
+          idempotency_key: string
+          lead_id: string
+          partner_id: string
+          project_id: string
+          protection_expires_at?: string | null
+          registered_at?: string
+          rejected_at?: string | null
+          rejection_evidence?: Json | null
+          rejection_reason?: string | null
+          sales_stage?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          agreement_id?: string | null
+          agreement_snapshot?: Json
+          created_at?: string
+          developer_reference?: string | null
+          id?: string
+          idempotency_key?: string
+          lead_id?: string
+          partner_id?: string
+          project_id?: string
+          protection_expires_at?: string | null
+          registered_at?: string
+          rejected_at?: string | null
+          rejection_evidence?: Json | null
+          rejection_reason?: string | null
+          sales_stage?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "developer_lead_registrations_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "partner_commission_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "developer_lead_registrations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "developer_lead_registrations_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "developer_lead_registrations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "development_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      development_project_sources: {
+        Row: {
+          checked_at: string | null
+          confidence: string | null
+          created_at: string
+          fact_status: string
+          http_status: number | null
+          id: string
+          notes: string | null
+          observed_facts: Json
+          project_id: string
+          scope: string
+          source_type: string
+          source_updated_at: string | null
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          checked_at?: string | null
+          confidence?: string | null
+          created_at?: string
+          fact_status?: string
+          http_status?: number | null
+          id?: string
+          notes?: string | null
+          observed_facts?: Json
+          project_id: string
+          scope?: string
+          source_type: string
+          source_updated_at?: string | null
+          source_url: string
+          updated_at?: string
+        }
+        Update: {
+          checked_at?: string | null
+          confidence?: string | null
+          created_at?: string
+          fact_status?: string
+          http_status?: number | null
+          id?: string
+          notes?: string | null
+          observed_facts?: Json
+          project_id?: string
+          scope?: string
+          source_type?: string
+          source_updated_at?: string | null
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "development_project_sources_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "development_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      development_projects: {
+        Row: {
+          address: string | null
+          amenities: string[] | null
+          city: string | null
+          construction_progress: number | null
+          created_at: string
+          currency: string
+          delivery_note: string | null
+          expected_delivery_quarter: number | null
+          expected_delivery_year: number | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          neighborhood: string | null
+          notes: string | null
+          ownership_status: string
+          partner_id: string | null
+          payment_plan: string | null
+          price_from_cents: number | null
+          price_to_cents: number | null
+          primary_source_id: string | null
+          project_status: string | null
+          publish_state: string
+          slug: string
+          source_key: string
+          source_kind: string | null
+          source_owner: string | null
+          source_url: string | null
+          updated_at: string
+          verified_at: string | null
+          vis_flag: boolean | null
+        }
+        Insert: {
+          address?: string | null
+          amenities?: string[] | null
+          city?: string | null
+          construction_progress?: number | null
+          created_at?: string
+          currency?: string
+          delivery_note?: string | null
+          expected_delivery_quarter?: number | null
+          expected_delivery_year?: number | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          neighborhood?: string | null
+          notes?: string | null
+          ownership_status?: string
+          partner_id?: string | null
+          payment_plan?: string | null
+          price_from_cents?: number | null
+          price_to_cents?: number | null
+          primary_source_id?: string | null
+          project_status?: string | null
+          publish_state?: string
+          slug: string
+          source_key: string
+          source_kind?: string | null
+          source_owner?: string | null
+          source_url?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          vis_flag?: boolean | null
+        }
+        Update: {
+          address?: string | null
+          amenities?: string[] | null
+          city?: string | null
+          construction_progress?: number | null
+          created_at?: string
+          currency?: string
+          delivery_note?: string | null
+          expected_delivery_quarter?: number | null
+          expected_delivery_year?: number | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          neighborhood?: string | null
+          notes?: string | null
+          ownership_status?: string
+          partner_id?: string | null
+          payment_plan?: string | null
+          price_from_cents?: number | null
+          price_to_cents?: number | null
+          primary_source_id?: string | null
+          project_status?: string | null
+          publish_state?: string
+          slug?: string
+          source_key?: string
+          source_kind?: string | null
+          source_owner?: string | null
+          source_url?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          vis_flag?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "development_projects_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "development_projects_primary_source_id_fkey"
+            columns: ["primary_source_id"]
+            isOneToOne: false
+            referencedRelation: "development_project_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      development_unit_types: {
+        Row: {
+          availability: string | null
+          bathrooms: number | null
+          bedrooms: number | null
+          built_area_m2: number | null
+          created_at: string
+          currency: string
+          floor_plan_url: string | null
+          id: string
+          media_url: string | null
+          name: string
+          price_from_cents: number | null
+          price_to_cents: number | null
+          private_area_m2: number | null
+          project_id: string
+          source_key: string
+          source_kind: string | null
+          source_url: string | null
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          availability?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          built_area_m2?: number | null
+          created_at?: string
+          currency?: string
+          floor_plan_url?: string | null
+          id?: string
+          media_url?: string | null
+          name: string
+          price_from_cents?: number | null
+          price_to_cents?: number | null
+          private_area_m2?: number | null
+          project_id: string
+          source_key: string
+          source_kind?: string | null
+          source_url?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          availability?: string | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          built_area_m2?: number | null
+          created_at?: string
+          currency?: string
+          floor_plan_url?: string | null
+          id?: string
+          media_url?: string | null
+          name?: string
+          price_from_cents?: number | null
+          price_to_cents?: number | null
+          private_area_m2?: number | null
+          project_id?: string
+          source_key?: string
+          source_kind?: string | null
+          source_url?: string | null
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "development_unit_types_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "development_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_outbox: {
         Row: {
@@ -4574,6 +5056,96 @@ export type Database = {
           },
         ]
       }
+      partner_commission_agreements: {
+        Row: {
+          calculation_basis: string | null
+          cancellation_terms: string | null
+          clawback_terms: string | null
+          commission_trigger: string | null
+          commission_type: string
+          commission_value: number
+          created_at: string
+          currency: string
+          effective_from: string | null
+          effective_to: string | null
+          existing_client_rule: string | null
+          id: string
+          notes: string | null
+          partner_id: string
+          payment_delay_days: number | null
+          project_id: string | null
+          protection_days: number | null
+          registration_required: boolean
+          status: string
+          updated_at: string
+          vat_terms: string | null
+          version: number
+        }
+        Insert: {
+          calculation_basis?: string | null
+          cancellation_terms?: string | null
+          clawback_terms?: string | null
+          commission_trigger?: string | null
+          commission_type: string
+          commission_value: number
+          created_at?: string
+          currency?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          existing_client_rule?: string | null
+          id?: string
+          notes?: string | null
+          partner_id: string
+          payment_delay_days?: number | null
+          project_id?: string | null
+          protection_days?: number | null
+          registration_required?: boolean
+          status?: string
+          updated_at?: string
+          vat_terms?: string | null
+          version?: number
+        }
+        Update: {
+          calculation_basis?: string | null
+          cancellation_terms?: string | null
+          clawback_terms?: string | null
+          commission_trigger?: string | null
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          currency?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          existing_client_rule?: string | null
+          id?: string
+          notes?: string | null
+          partner_id?: string
+          payment_delay_days?: number | null
+          project_id?: string | null
+          protection_days?: number | null
+          registration_required?: boolean
+          status?: string
+          updated_at?: string
+          vat_terms?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_commission_agreements_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_commission_agreements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "development_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_drafts: {
         Row: {
           completion_score: number
@@ -7405,6 +7977,14 @@ export type Database = {
             }
             Returns: string
           }
+      advance_developer_registration_stage: {
+        Args: {
+          p_evidence?: Json
+          p_registration_id: string
+          p_sales_stage: string
+        }
+        Returns: Json
+      }
       apartment_save_counts: {
         Args: { apartment_ids: string[] }
         Returns: {
@@ -7419,6 +7999,18 @@ export type Database = {
       assert_listing_workflow_transition: {
         Args: { p_from: string; p_to: string }
         Returns: undefined
+      }
+      book_new_project_consultation: {
+        Args: {
+          p_end_time?: string
+          p_idempotency_key: string
+          p_notes?: string
+          p_project_id: string
+          p_registration_id: string
+          p_start_date: string
+          p_start_time: string
+        }
+        Returns: Json
       }
       broker_owns_apartment: {
         Args: { p_apartment_id: string }
@@ -7452,6 +8044,15 @@ export type Database = {
       decide_approval: {
         Args: { p_decision: string; p_reason?: string; p_request_id: string }
         Returns: undefined
+      }
+      decide_developer_registration: {
+        Args: {
+          p_decision: string
+          p_developer_reference?: string
+          p_reason?: string
+          p_registration_id: string
+        }
+        Returns: Json
       }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
@@ -7775,6 +8376,15 @@ export type Database = {
         Args: { p_channel: string; p_identifier: string }
         Returns: boolean
       }
+      lead_listing_owner_aligned: {
+        Args: {
+          p_apartment_id: string
+          p_listing_id: string
+          p_listing_kind: string
+          p_partner_id: string
+        }
+        Returns: boolean
+      }
       lead_partner_listing_aligned: {
         Args: { p_apartment_id: string; p_partner_id: string }
         Returns: boolean
@@ -7951,6 +8561,15 @@ export type Database = {
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
+      post_new_project_commission: {
+        Args: {
+          p_idempotency_key: string
+          p_registration_id: string
+          p_sale_price_cents: number
+          p_trigger_evidence?: Json
+        }
+        Returns: Json
+      }
       postgis_constraint_dims: {
         Args: { geomcolumn: string; geomschema: string; geomtable: string }
         Returns: number
@@ -8078,6 +8697,17 @@ export type Database = {
         Args: { p_code: string; p_event_id: string; p_ticket_id: string }
         Returns: Json
       }
+      register_new_project_buyer: {
+        Args: {
+          p_email?: string
+          p_idempotency_key: string
+          p_name?: string
+          p_phone?: string
+          p_project_id: string
+          p_qualification?: Json
+        }
+        Returns: Json
+      }
       request_approval: {
         Args: {
           p_action_type: string
@@ -8163,6 +8793,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sales_stage_at_least: {
+        Args: { p_min_stage: string; p_stage: string }
+        Returns: boolean
       }
       semantic_search_events: {
         Args: {
@@ -8991,6 +9625,7 @@ export type Database = {
         | "event"
         | "tour"
         | "showing"
+        | "new_project_consultation"
       conflict_type:
         | "time_overlap"
         | "budget_exceeded"
@@ -9016,6 +9651,7 @@ export type Database = {
         | "vendor"
         | "tour"
         | "creator"
+        | "developer"
       payment_status: "pending" | "paid" | "refunded" | "failed"
       resolution_status:
         | "detected"
@@ -9198,6 +9834,7 @@ export const Constants = {
         "event",
         "tour",
         "showing",
+        "new_project_consultation",
       ],
       conflict_type: [
         "time_overlap",
@@ -9226,6 +9863,7 @@ export const Constants = {
         "vendor",
         "tour",
         "creator",
+        "developer",
       ],
       payment_status: ["pending", "paid", "refunded", "failed"],
       resolution_status: [

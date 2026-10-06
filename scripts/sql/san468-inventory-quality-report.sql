@@ -13,8 +13,8 @@
 --   map_ready    = searchable + valid coordinate pair + PostGIS location consistent
 --   launch_ready = active + approved + published + not fixture + valid price/currency
 --                  + usable image + map_ready + freshness evidence + canonical owner
---   requestable  = active + approved + published + canonical owner + current availability
---                  window — the SAN-1349 predicate, reused unchanged
+--   requestable  = not fixture + active + approved + published + canonical owner
+--                  + current availability window (SAN-1349 predicate plus fixture gate)
 --
 -- This statement is read-only. It never writes.
 
@@ -69,7 +69,7 @@ verdict as (
       and f.valid_price_currency and f.has_usable_image and f.has_coords
       and f.coord_pair_valid and f.postgis_consistent and f.has_freshness_evidence
       and f.has_canonical_owner) as launch_ready,
-    (f.status = 'active' and f.moderation_status = 'approved'
+    (not f.is_test_fixture and f.status = 'active' and f.moderation_status = 'approved'
       and f.listing_workflow_status = 'published' and f.has_canonical_owner
       and (f.available_from is null or f.available_from <= current_date)
       and (f.available_to is null or f.available_to >= current_date)) as requestable

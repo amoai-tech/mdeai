@@ -1,10 +1,12 @@
-import { PARTNER_TYPES, type PartnerType } from "@/lib/partners/partner-types";
+import { PARTNER_TYPES, type PartnerSignupType } from "@/lib/partners/partner-types";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function isPartnerType(value: string | null | undefined): value is PartnerType {
-  return PARTNER_TYPES.includes(value as PartnerType);
+export function isPartnerType(
+  value: string | null | undefined,
+): value is PartnerSignupType {
+  return PARTNER_TYPES.includes(value as PartnerSignupType);
 }
 
 /** Venue subtypes accepted on the signup URL (?type=venue&category=…). */
@@ -65,7 +67,7 @@ export function buildPartnerSignupTypedPath(
   return `/partners/signup?${params.toString()}`;
 }
 
-export const PARTNER_TYPE_LABELS: Record<PartnerType, string> = {
+export const PARTNER_TYPE_LABELS: Record<PartnerSignupType, string> = {
   host: "Event host",
   venue: "Venue",
   broker: "Rental broker",

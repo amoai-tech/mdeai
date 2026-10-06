@@ -93,6 +93,20 @@ test.describe(`${SCREEN_ID} chat nav rail`, () => {
       }
     });
 
+    test("sidebar links navigate without reloading the page", async ({ page }) => {
+      await gotoHome(page);
+      // A value set on `window` survives client-side navigation and is lost on a document reload.
+      await page.evaluate(() => {
+        (window as unknown as { __navSentinel?: boolean }).__navSentinel = true;
+      });
+      await page.locator('[data-testid="nav-saved-link"]').click();
+      await expect(page).toHaveURL(/\/saved/);
+      const survived = await page.evaluate(
+        () => (window as unknown as { __navSentinel?: boolean }).__navSentinel === true,
+      );
+      expect(survived, "the page was reloaded instead of navigated client-side").toBe(true);
+    });
+
     test("a chat without a title shows a dated name, never the word null", async ({ page }) => {
       await page.route("**/api/threads", (route) =>
         route.fulfill({
