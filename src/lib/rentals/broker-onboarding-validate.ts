@@ -80,6 +80,9 @@ export function validateBrokerOnboardingInput(
       };
     }
   }
+  if ((input.latitude != null || input.longitude != null) && !placeId) {
+    return { ok: false, message: "Select a verified address before saving coordinates." };
+  }
   if ((input.latitude == null) !== (input.longitude == null)) {
     return { ok: false, message: "Location must include both latitude and longitude." };
   }

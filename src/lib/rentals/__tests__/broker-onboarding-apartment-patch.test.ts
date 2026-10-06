@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildBrokerOnboardingApartmentPatch,
   resolveBrokerOnboardingAddress,
+  withVerifiedPlace,
+  withoutUnverifiedCoordinates,
 } from "@/lib/rentals/broker-onboarding-apartment-patch";
 import type { BrokerOnboardingFormInput } from "@/lib/rentals/broker-onboarding-validate";
 
@@ -55,6 +57,22 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
       photoUrl: "https://example.com/apt.jpg",
     });
     expect(patch.images).toEqual(["https://example.com/apt.jpg"]);
+  });
+
+  it("withVerifiedPlace overrides browser-supplied facts with the server-verified Google facts", () => {
+    const effective = withVerifiedPlace(
+      { ...base, placeId: "ChIJabc12345", formattedAddress: "browser text", latitude: 1, longitude: 2 },
+      { formattedAddress: "Google canonical address", latitude: 6.2447, longitude: -75.5916 },
+    );
+    expect(effective.formattedAddress).toBe("Google canonical address");
+    expect(effective.latitude).toBe(6.2447);
+    expect(effective.longitude).toBe(-75.5916);
+  });
+
+  it("withoutUnverifiedCoordinates drops coordinates that did not come from Google", () => {
+    const effective = withoutUnverifiedCoordinates({ ...base, latitude: 6.2, longitude: -75.5 });
+    expect(effective.latitude).toBeNull();
+    expect(effective.longitude).toBeNull();
   });
 
   it("resolves the normalized address when present", () => {

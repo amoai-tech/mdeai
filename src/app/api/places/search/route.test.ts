@@ -2,9 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacesConfigError, PlacesRequestError } from "@/mastra/lib/google-places-client";
 import { resetPlacesSearchRateLimitsForTests } from "@/lib/places-search-rate-limit";
 
-const { searchRentalAddresses } = vi.hoisted(() => ({ searchRentalAddresses: vi.fn() }));
+const { searchRentalAddresses, getUser } = vi.hoisted(() => ({
+  searchRentalAddresses: vi.fn(),
+  getUser: vi.fn(),
+}));
 
 vi.mock("@/lib/place-search", () => ({ searchRentalAddresses }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { getUser } }),
+}));
 
 import { GET } from "./route";
 
@@ -14,6 +20,15 @@ describe("GET /api/places/search", () => {
   beforeEach(() => {
     resetPlacesSearchRateLimitsForTests();
     searchRentalAddresses.mockReset();
+    getUser.mockReset();
+    getUser.mockResolvedValue({ data: { user: { id: "broker-1" } } });
+  });
+
+  it("returns 401 for a signed-out caller without spending Places quota", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await GET(new Request(URL_OK));
+    expect(res.status).toBe(401);
+    expect(searchRentalAddresses).not.toHaveBeenCalled();
   });
 
   it("returns 400 for a too-short query", async () => {
@@ -43,7 +58,7 @@ describe("GET /api/places/search", () => {
     expect(res.status).toBe(502);
   });
 
-  it("rate limits after 30 requests from one IP", async () => {
+  it("rate limits after 30 authenticated requests from one IP", async () => {
     searchRentalAddresses.mockResolvedValue([]);
     const req = new Request(URL_OK, { headers: { "x-forwarded-for": "san468-route-test" } });
     for (let i = 0; i < 30; i += 1) {

@@ -200,7 +200,7 @@ export function RentalsOnboardingWizard() {
             />
             {form.placeId ? (
               <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
-                Location verified with Google Places.
+                Address selected. We confirm it with Google when you save.
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -284,7 +284,7 @@ export function RentalsOnboardingWizard() {
             </p>
             {form.placeId ? (
               <p>
-                <span className="font-medium">Location:</span> {form.formattedAddress || form.address} · verified
+                <span className="font-medium">Location:</span> {form.formattedAddress || form.address} · selected (confirmed on save)
               </p>
             ) : null}
             {form.photoUrl ? (

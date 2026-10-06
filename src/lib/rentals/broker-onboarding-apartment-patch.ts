@@ -28,6 +28,26 @@ export function resolveBrokerOnboardingAddress(input: BrokerOnboardingFormInput)
  * Coordinates and place identity are included only when the broker selected a
  * provider place; unknown facts stay absent so the DB default (null) applies.
  */
+/** Override browser-supplied address/coordinates with the server-verified Google facts. */
+export function withVerifiedPlace(
+  input: BrokerOnboardingFormInput,
+  verified: { formattedAddress: string; latitude: number | null; longitude: number | null },
+): BrokerOnboardingFormInput {
+  return {
+    ...input,
+    formattedAddress: verified.formattedAddress,
+    latitude: verified.latitude,
+    longitude: verified.longitude,
+  };
+}
+
+/** Drop unverified coordinates: a free-text address keeps an unknown location. */
+export function withoutUnverifiedCoordinates(
+  input: BrokerOnboardingFormInput,
+): BrokerOnboardingFormInput {
+  return { ...input, latitude: null, longitude: null };
+}
+
 export function buildBrokerOnboardingApartmentPatch(
   input: BrokerOnboardingFormInput,
 ): BrokerOnboardingApartmentPatch {

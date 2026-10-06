@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { searchRentalAddresses } from "@/lib/place-search";
 import {
   PlacesConfigError,
@@ -11,9 +12,23 @@ import {
 
 /**
  * GET /api/places/search?q=… — Places API (New) address candidates for the
- * broker onboarding picker. Server-side only; minimal field mask; rate-limited.
+ * broker onboarding picker. Authenticated brokers only (billable provider),
+ * server-side key, minimal field mask, per-client rate limit.
  */
 export async function GET(req: Request) {
+  // Billable provider: only a signed-in broker may spend Places quota. The
+  // browser sends the session cookie to this same-origin route.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "unauthorized" },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const rateKey = placesSearchRateLimitKey(req);
   if (isPlacesSearchRateLimited(rateKey)) {
     return NextResponse.json(

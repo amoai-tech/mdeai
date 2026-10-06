@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import type { PlaceSearchResult } from "@/lib/place-search";
 
@@ -12,17 +12,23 @@ type Props = {
 };
 
 const MIN_QUERY_LENGTH = 5;
+const LISTBOX_ID = "ro-address-listbox";
+const optionId = (index: number) => `ro-address-option-${index}`;
 
 /**
  * Server-proxied Google Places (New) address picker for broker onboarding.
- * The broker selects a provider-backed address; free text still works and leaves
- * coordinates unknown. The Places key never reaches the browser.
+ *
+ * Follows the WAI-ARIA listbox pattern: the input is a combobox, ArrowUp/ArrowDown
+ * move the active option, Enter selects it, Escape closes the list, and the active
+ * option is exposed through aria-activedescendant. Free text still works and leaves
+ * the location unknown; Google verification happens server-side on save.
  */
 export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSelection }: Props) {
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const committedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +50,7 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
         if (!res.ok) throw new Error(`status ${res.status}`);
         const body = (await res.json()) as { results?: PlaceSearchResult[] };
         setResults(Array.isArray(body.results) ? body.results : []);
+        setActiveIndex(-1);
         setOpen(true);
       } catch (err) {
         if ((err as { name?: string }).name === "AbortError") return;
@@ -61,6 +68,44 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
     };
   }, [value]);
 
+  const selectResult = useCallback(
+    (result: PlaceSearchResult) => {
+      const label = result.formattedAddress ?? result.displayName ?? value;
+      committedRef.current = label;
+      onSelect(result);
+      onTextChange(label);
+      setOpen(false);
+      setResults([]);
+      setActiveIndex(-1);
+    },
+    [onSelect, onTextChange, value],
+  );
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+      return;
+    }
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && results.length > 0) {
+      event.preventDefault();
+      if (!open) setOpen(true);
+      setActiveIndex((prev) => {
+        const start = open ? prev : -1;
+        if (event.key === "ArrowDown") return (start + 1) % results.length;
+        return start <= 0 ? results.length - 1 : start - 1;
+      });
+      return;
+    }
+    if (event.key === "Enter" && open && activeIndex >= 0 && activeIndex < results.length) {
+      event.preventDefault();
+      selectResult(results[activeIndex]);
+    }
+  }
+
+  const showNoResults =
+    open && !loading && results.length === 0 && value.trim().length >= MIN_QUERY_LENGTH;
+
   return (
     <div className="relative" data-testid="ro-address-search">
       <Input
@@ -68,11 +113,17 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
         value={value}
         autoComplete="off"
         placeholder="72 10th Street, Laureles"
+        role="combobox"
+        aria-expanded={open && results.length > 0}
+        aria-controls={LISTBOX_ID}
         aria-autocomplete="list"
+        aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        onKeyDown={handleKeyDown}
         onChange={(e) => {
           committedRef.current = null;
           setResults([]);
           setOpen(false);
+          setActiveIndex(-1);
           setFailed(false);
           onClearSelection();
           onTextChange(e.target.value);
@@ -88,24 +139,24 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
       ) : null}
       {open && results.length > 0 ? (
         <ul
+          id={LISTBOX_ID}
           role="listbox"
           className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-md"
         >
-          {results.map((result) => (
+          {results.map((result, index) => (
             <li
               key={result.placeId}
+              id={optionId(index)}
               role="option"
-              aria-selected={false}
+              aria-selected={index === activeIndex}
               data-testid="ro-address-option"
-              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted"
+              className={`block w-full cursor-pointer px-3 py-2 text-left text-sm ${
+                index === activeIndex ? "bg-muted" : "hover:bg-muted"
+              }`}
+              onMouseEnter={() => setActiveIndex(index)}
               onMouseDown={(event) => {
                 event.preventDefault();
-                const label = result.formattedAddress ?? result.displayName ?? value;
-                committedRef.current = label;
-                onSelect(result);
-                onTextChange(label);
-                setOpen(false);
-                setResults([]);
+                selectResult(result);
               }}
             >
               <span className="block truncate">{result.displayName ?? result.formattedAddress}</span>
@@ -118,7 +169,7 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
           ))}
         </ul>
       ) : null}
-      {open && !loading && results.length === 0 && value.trim().length >= MIN_QUERY_LENGTH ? (
+      {showNoResults ? (
         <p className="mt-1 text-xs text-muted-foreground">No matching address found.</p>
       ) : null}
     </div>
