@@ -50,13 +50,27 @@ export const newProjectCardSchema = z.object({
 
 export type NewProjectCard = z.infer<typeof newProjectCardSchema>;
 
-export interface NewProjectSearchInput {
-  neighborhood?: string;
-  maxPriceCop?: number;
-  minBedrooms?: number;
-  deliveryYear?: number;
-  limit?: number;
-}
+/**
+ * The tool's input contract. The route validates with THIS schema before calling `execute`,
+ * because a direct `execute` call bypasses Mastra's own pre-call validation. `limit` is capped
+ * at 5 to match the concierge instruction ("Max 5 project cards per reply").
+ */
+export const searchNewProjectsInputSchema = z.object({
+  neighborhood: z.string().optional().describe("e.g. Laureles, Ciudad del Río"),
+  maxPriceCop: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Maximum price-from in COP pesos, e.g. 900000000"),
+  minBedrooms: z.number().int().min(1).max(6).optional(),
+  deliveryYear: z.number().int().min(2024).max(2040).optional(),
+  /** True = only projects whose delivery date/note is not published. */
+  deliveryUnknown: z.boolean().optional(),
+  limit: z.number().int().min(1).max(5).default(5),
+});
+
+export type NewProjectSearchInput = z.infer<typeof searchNewProjectsInputSchema>;
 
 function unknownFieldsFor(summary: NewProjectSummary): string[] {
   const unknown: string[] = [];
@@ -155,18 +169,7 @@ export const searchNewProjectsTool = createTool({
   id: "search-new-projects",
   description:
     "Find published Medellín new-construction projects by neighborhood, price-from, bedrooms and expected delivery year. Applies hard filters before ranking and returns grounded project cards with price-from semantics, delivery wording and provenance (source URL + checked date). Unknown facts are returned as explicit text such as 'Not published'; never present them as zero, false, available or inferred. This tool does not register a lead or book a visit.",
-  inputSchema: z.object({
-    neighborhood: z.string().optional().describe("e.g. Laureles, Ciudad del Río"),
-    maxPriceCop: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Maximum price-from in COP pesos, e.g. 900000000"),
-    minBedrooms: z.number().int().min(1).max(6).optional(),
-    deliveryYear: z.number().int().min(2024).max(2040).optional(),
-    limit: z.number().int().min(1).max(10).default(8),
-  }),
+  inputSchema: searchNewProjectsInputSchema,
   outputSchema: z.object({
     results: z.array(newProjectCardSchema),
     totalPublished: z.number(),
@@ -174,13 +177,14 @@ export const searchNewProjectsTool = createTool({
     note: z.string(),
   }),
   execute: async (input: NewProjectSearchInput) => {
-    const { neighborhood, maxPriceCop, minBedrooms, deliveryYear, limit = 8 } = input;
+    const { neighborhood, maxPriceCop, minBedrooms, deliveryYear, deliveryUnknown, limit = 5 } =
+      input;
     const filters: NewProjectFilters = {
       neighborhood: neighborhood ?? null,
       maxPriceCop: maxPriceCop ?? null,
       minBedrooms: minBedrooms ?? null,
       deliveryYear: deliveryYear ?? null,
-      deliveryUnknown: false,
+      deliveryUnknown: deliveryUnknown ?? false,
     };
 
     const supabase = getSupabaseClient();

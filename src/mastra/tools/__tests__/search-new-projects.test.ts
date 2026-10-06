@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildNewProjectCards } from "@/mastra/tools/search-new-projects";
+import {
+  buildNewProjectCards,
+  searchNewProjectsInputSchema,
+} from "@/mastra/tools/search-new-projects";
 import type { NewProjectFilters } from "@/lib/new-projects/types";
 import type {
   DevelopmentProjectRow,
@@ -99,6 +102,20 @@ function filters(overrides: Partial<NewProjectFilters> = {}): NewProjectFilters 
     ...overrides,
   };
 }
+
+describe("searchNewProjectsInputSchema", () => {
+  it("defaults to 5 cards and caps the limit at 5 to match the chat instruction", () => {
+    expect(searchNewProjectsInputSchema.parse({}).limit).toBe(5);
+    expect(searchNewProjectsInputSchema.safeParse({ limit: 6 }).success).toBe(false);
+    expect(searchNewProjectsInputSchema.safeParse({ limit: 5 }).success).toBe(true);
+  });
+
+  it("accepts deliveryUnknown and rejects invalid numbers", () => {
+    expect(searchNewProjectsInputSchema.safeParse({ deliveryUnknown: true }).success).toBe(true);
+    expect(searchNewProjectsInputSchema.safeParse({ maxPriceCop: -1 }).success).toBe(false);
+    expect(searchNewProjectsInputSchema.safeParse({ minBedrooms: 0 }).success).toBe(false);
+  });
+});
 
 describe("buildNewProjectCards — grounded, honest cards", () => {
   it("labels a single price as From and keeps provenance", () => {
