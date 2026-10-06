@@ -9,6 +9,15 @@ Canonical **source artifacts** (JSON, CSV) for DATA venue seeds. **Runtime SQL**
 | DATA-006 | `venues/golden-queries-venues.json` | eval harness (no migration) |
 | DATA-004 | — (verify-only; legacy `20260404044721_restaurants_seed.sql`) | existing migration |
 
+## Operator-run reconciliation seeds
+
+These are deliberately **not** migrations, so `supabase db push` does not replay them. They are
+committed as a source artifact plus operator-run SQL and applied manually to the named environment.
+
+| Task | Source files | Applied |
+|------|--------------|---------|
+| SAN-468 · REAL-002 | `rentals/external-candidates-2026-10-05.json`, `rentals/external-candidates-2026-10-05.sql` | Production `zkwcbyxiwklihegjhuql`, out-of-band 2026-10-05 (no migration) |
+
 Regenerate SQL from curated JSON:
 
 ```bash
