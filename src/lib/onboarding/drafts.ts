@@ -32,9 +32,21 @@ function toDbPartnerType(type: PartnerDraftType): DbPartnerType {
   return type;
 }
 
+/**
+ * Onboarding drafts are only ever landlord or broker. Every query in this adapter
+ * filters on those values, so a row of any other partner_type means a caller
+ * selected without the filter — a programming error. The predicate is exported
+ * for any future query that does not filter; `fromDbPartnerType` then throws
+ * loudly rather than coercing an unrelated type into an onboarding draft.
+ */
+export function isOnboardingPartnerType(
+  type: string,
+): type is PartnerDraftType {
+  return type === "landlord" || type === "broker";
+}
+
 function fromDbPartnerType(type: DbPartnerType): PartnerDraftType {
-  if (type === "broker") return "broker";
-  if (type === "landlord") return "landlord";
+  if (isOnboardingPartnerType(type)) return type;
   throw new Error(`partner_drafts.type "${type}" is not an onboarding type`);
 }
 
