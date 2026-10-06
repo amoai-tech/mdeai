@@ -26,6 +26,12 @@ Useful inputs include:
 
 If a material fact is unsupported, omit it or mark it unknown.
 
+### Dynamic-fact evidence
+
+For a dynamic claim, retain enough evidence to audit what was known and when: the value, source/provider (and URL or stable source identity when available), `retrievedAt`, the source's `observedAt`/as-of time when available, and any derivation/calculation. Retrieval time does not prove observation time.
+
+Use the owning product/source contract for freshness or expiry; do not invent a universal TTL. If a decision depends on a fact being current and the required freshness evidence is missing or expired, revalidate it or mark it unknown rather than upgrading a cited result to "current."
+
 ## Never invent
 
 Do not manufacture:
