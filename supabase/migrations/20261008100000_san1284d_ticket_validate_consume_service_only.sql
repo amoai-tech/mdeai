@@ -1,0 +1,41 @@
+-- SAN-1284 · Batch 0D — the door-scan RPC is for the ticket-validate Edge Function only
+--
+-- THE DEFECT
+-- `public.ticket_validate_consume(text)` is SECURITY DEFINER and marks a ticket's QR as used
+-- (`qr_used_at`). It checks nothing about WHO is calling: the staff-link signature, the
+-- `door_staff` role, the event match, the QR signature and the staff-link revocation are all
+-- checked by the `ticket-validate` Edge Function BEFORE it calls this RPC with the service client.
+-- But the RPC is directly executable by `anon` and `authenticated`, so anyone holding a valid QR
+-- token (for example a ticket buyer's own QR, or one seen over a shoulder) can call it straight
+-- through the Data API and burn the ticket before the real door scan. The legitimate holder is
+-- then turned away with "already used".
+--
+-- WHY `REVOKE ... FROM PUBLIC` IN event_phase1 DID NOT CLOSE IT
+-- Same history as Batch 0B (20260918120900_san1284b_align_money_and_rental_rpc_acls.sql): the old
+-- default ACL stamped explicit `anon` and `authenticated` grants on every function created in
+-- `public`, and `REVOKE ... FROM PUBLIC` removes only the PUBLIC pseudo-grant. The checked-in
+-- baseline (scripts/function-acl-baseline.json) recorded this function as anon=true,
+-- authenticated=true, and the pre-launch checklist (2026-06-06) listed it among the remaining
+-- anon-executable definer functions. Batch 0B covered the ticket payment RPCs but not this one.
+--
+-- AUDITED CALLER
+--   ticket_validate_consume -> the `ticket-validate` Edge Function, via `service.rpc(...)` where
+--                              `service = getServiceClient()` (service_role). There is no browser or
+--                              authenticated-client caller. Note: that function is deployed but is
+--                              not yet in this repository (SAN-1289 / SAN-1427 own bringing it
+--                              under Git); the deployed copy archived on 2026-05-24 uses the
+--                              service client. Confirm the live function still does before applying.
+--
+-- INTENDED CONTRACT
+--   PUBLIC denied · anon denied · authenticated denied · service_role allowed
+--
+-- NO FUNCTION BODY IS CHANGED. This is a privilege correction, not an authorization-logic change.
+--
+-- VERSION NOTE: this version sorts after 20261008090000 on purpose. Earlier migrations already
+-- carry versions ahead of the calendar date, and `supabase db push` rejects a migration that sorts
+-- before one that is already applied.
+--
+-- REVOKE and GRANT are idempotent, so re-running this migration is a no-op.
+
+revoke execute on function public.ticket_validate_consume(text) from public, anon, authenticated;
+grant execute on function public.ticket_validate_consume(text) to service_role;
