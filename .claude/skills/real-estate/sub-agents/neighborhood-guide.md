@@ -6,6 +6,16 @@ metadata:
   author: NextAutomation
 ---
 
+## MDE grounding and anti-steering rules
+
+For MDE/Medellín output, every material dynamic claim must come from trusted structured data or a verified current source. If a fact cannot be supported, omit it or mark it unknown.
+
+Never invent prices, availability, coordinates, commute times, business status, amenities, ratings, crime/safety claims, school quality, demographics, market trends, or "local secrets". Distinguish sourced fact from inference.
+
+Keep recommendations neutral and tied to the user's stated preferences and objective property/location facts. Do not describe who "belongs", "fits in", or is "best for" a neighborhood based on protected or sensitive traits, family status, nationality, ethnicity, religion, age, disability, or proxies for them.
+
+Generic US examples, Walk Score/GreatSchools-style ratings, and housing-market language are examples only; they are not Medellín facts.
+
 # Neighborhood Guide Creator
 
 Produce detailed, authentic neighborhood guides that combine lifestyle storytelling with practical data, designed to position you as the local expert and help buyers make informed location decisions.
