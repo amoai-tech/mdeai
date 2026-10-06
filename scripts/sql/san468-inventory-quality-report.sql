@@ -263,6 +263,8 @@ select json_build_object(
                                or longitude not between -180 and 180)) as out_of_range,
         count(*) filter (where latitude is not null and longitude is not null
                           and not postgis_consistent) as postgis_drift,
+        count(*) filter (where publicly_eligible and not postgis_consistent) as publicly_eligible_with_drift,
+        count(*) filter (where launch_ready and not postgis_consistent) as launch_ready_with_drift,
         (select count(*) from (select source_url from public.apartments
            where source_url is not null group by source_url having count(*) > 1) x) as duplicate_source_url_groups,
         (select count(*) from (select source_listing_id from public.apartments

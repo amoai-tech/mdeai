@@ -126,6 +126,14 @@ test("authorized photo requires recorded publishing rights", () => {
   assert.match(executable, /authorized_image_evidence/);
 });
 
+test("public and launch-ready rows can never carry PostGIS drift", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /publicly_eligible_with_drift/);
+  assert.match(executable, /launch_ready_with_drift/);
+  const runner = readFileSync(runnerPath, "utf8");
+  assert.match(runner, /publicly_eligible_with_drift/);
+  assert.match(runner, /launch_ready_with_drift/);
+});
 test("inventory-quality npm script is wired", () => {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   assert.match(

@@ -113,7 +113,15 @@ const failures = [];
 // its coordinates are trusted, and launch_ready itself requires postgis_consistent, so a
 // launch-ready drift can never occur. half/out-of-range pairs and active external
 // candidates are always wrong.
-for (const key of ["half_coords", "out_of_range", "active_external_candidates"]) {
+// A rental that is publicly visible or launch-ready must never carry inconsistent
+// PostGIS data. These are always-zero invariants, not warnings.
+for (const key of [
+  "half_coords",
+  "out_of_range",
+  "active_external_candidates",
+  "publicly_eligible_with_drift",
+  "launch_ready_with_drift",
+]) {
   if (Number(counts[key]) !== 0) failures.push(`${key}=${counts[key]} (expected 0)`);
 }
 const unexplained = detail.filter(

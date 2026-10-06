@@ -178,7 +178,7 @@
   "overrides": {
     "prismjs": ">=1.30.0",
     "langsmith": ">=0.5.27",
-    "shell-quote": ">=1.8.4"
+    "shell-quote": ">=1.11.0"
   },
   "engines": {
     "node": "24.x"
