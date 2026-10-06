@@ -77,8 +77,9 @@ create table if not exists public.development_projects (
     or price_to_cents is null
     or price_to_cents >= price_from_cents
   ),
-  constraint development_projects_claimed_requires_partner_check check (
-    ownership_status <> 'claimed' or partner_id is not null
+  constraint development_projects_ownership_partner_check check (
+    (ownership_status = 'unclaimed' and partner_id is null)
+    or (ownership_status = 'claimed' and partner_id is not null)
   ),
   constraint development_projects_published_requires_provenance_check check (
     publish_state <> 'published' or verified_at is not null
@@ -153,6 +154,7 @@ create table if not exists public.development_project_sources (
   confidence text
     check (confidence is null or confidence in ('A', 'B', 'C')),
   notes text,
+  observed_facts jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint development_project_sources_url_key unique (project_id, source_url)
@@ -371,16 +373,22 @@ create policy development_project_sources_service_role
   using (true) with check (true);
 
 -- ── grants (object reachability is a separate gate from RLS) ──────────────────
-grant select on table public.development_projects to anon, authenticated;
-grant insert, update, delete on table public.development_projects to authenticated;
+-- Supabase's schema default privileges grant ALL (incl. TRUNCATE/TRIGGER/REFERENCES)
+-- to anon/authenticated on new tables. Revoke first, then grant only what the app
+-- actually exposes. RLS is the row gate; these grants are the object gate.
+revoke all on table public.development_projects from anon, authenticated;
+grant select on table public.development_projects to anon;
+grant select, insert, update, delete on table public.development_projects to authenticated;
 grant all on table public.development_projects to service_role;
 
-grant select on table public.development_unit_types to anon, authenticated;
-grant insert, update, delete on table public.development_unit_types to authenticated;
+revoke all on table public.development_unit_types from anon, authenticated;
+grant select on table public.development_unit_types to anon;
+grant select, insert, update on table public.development_unit_types to authenticated;
 grant all on table public.development_unit_types to service_role;
 
-grant select on table public.development_project_sources to anon, authenticated;
-grant insert, update, delete on table public.development_project_sources to authenticated;
+revoke all on table public.development_project_sources from anon, authenticated;
+grant select on table public.development_project_sources to anon;
+grant select, insert, update on table public.development_project_sources to authenticated;
 grant all on table public.development_project_sources to service_role;
 
 commit;

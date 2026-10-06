@@ -905,6 +905,44 @@ export type Database = {
         }
         Relationships: []
       }
+      developer_lead_registration_stage_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          evidence: Json
+          from_stage: string | null
+          id: string
+          registration_id: string
+          to_stage: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          evidence?: Json
+          from_stage?: string | null
+          id?: string
+          registration_id: string
+          to_stage: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          evidence?: Json
+          from_stage?: string | null
+          id?: string
+          registration_id?: string
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "developer_lead_registration_stage_events_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "developer_lead_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       developer_lead_registrations: {
         Row: {
           accepted_at: string | null
@@ -1006,6 +1044,7 @@ export type Database = {
           http_status: number | null
           id: string
           notes: string | null
+          observed_facts: Json
           project_id: string
           scope: string
           source_type: string
@@ -1021,6 +1060,7 @@ export type Database = {
           http_status?: number | null
           id?: string
           notes?: string | null
+          observed_facts?: Json
           project_id: string
           scope?: string
           source_type: string
@@ -1036,6 +1076,7 @@ export type Database = {
           http_status?: number | null
           id?: string
           notes?: string | null
+          observed_facts?: Json
           project_id?: string
           scope?: string
           source_type?: string
@@ -7936,6 +7977,14 @@ export type Database = {
             }
             Returns: string
           }
+      advance_developer_registration_stage: {
+        Args: {
+          p_evidence?: Json
+          p_registration_id: string
+          p_sales_stage: string
+        }
+        Returns: Json
+      }
       apartment_save_counts: {
         Args: { apartment_ids: string[] }
         Returns: {
@@ -8744,6 +8793,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sales_stage_at_least: {
+        Args: { p_min_stage: string; p_stage: string }
+        Returns: boolean
       }
       semantic_search_events: {
         Args: {

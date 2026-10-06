@@ -4,6 +4,11 @@
     "anon": false,
     "authenticated": true
   },
+  "advance_developer_registration_stage(p_registration_id uuid, p_sales_stage text, p_evidence jsonb)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "apartment_save_counts(apartment_ids uuid[])": {
     "public": false,
     "anon": true,

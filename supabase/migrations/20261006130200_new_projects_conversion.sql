@@ -160,6 +160,26 @@ create index if not exists idx_commission_claims_partner
 create index if not exists idx_commission_claims_registration
   on public.commission_claims (registration_id);
 
+-- ── developer_lead_registration_stage_events (sale-stage audit) ──────────────
+create table if not exists public.developer_lead_registration_stage_events (
+  id uuid primary key default gen_random_uuid(),
+  registration_id uuid not null
+    references public.developer_lead_registrations (id) on delete cascade,
+  from_stage text,
+  to_stage text not null,
+  actor_id uuid,
+  evidence jsonb not null default '{}'::jsonb,
+  -- clock_timestamp(), not now(): now() is constant within a transaction, so two
+  -- stage changes in one transaction would not be orderable.
+  created_at timestamptz not null default clock_timestamp()
+);
+
+comment on table public.developer_lead_registration_stage_events is
+  'SAN-1385: append-only audit of every sale-stage change (actor, from/to stage, evidence). Written by advance_developer_registration_stage().';
+
+create index if not exists idx_stage_events_registration
+  on public.developer_lead_registration_stage_events (registration_id, created_at desc);
+
 drop trigger if exists commission_claims_set_updated_at on public.commission_claims;
 create trigger commission_claims_set_updated_at
   before update on public.commission_claims
@@ -409,7 +429,6 @@ declare
   v_project public.development_projects%rowtype;
   v_lead public.leads%rowtype;
   v_reg public.developer_lead_registrations%rowtype;
-  v_agreement public.partner_commission_agreements%rowtype;
   v_key text := nullif(btrim(p_idempotency_key), '');
 begin
   if v_uid is null then
@@ -452,16 +471,6 @@ begin
       using errcode = 'P0001';
   end if;
 
-  select a.* into v_agreement
-  from public.partner_commission_agreements a
-  where a.partner_id = v_project.partner_id
-    and a.status = 'active'
-    and (a.project_id is null or a.project_id = v_project.id)
-    and (a.effective_from is null or a.effective_from <= current_date)
-    and (a.effective_to is null or a.effective_to >= current_date)
-  order by (a.project_id is not null) desc, a.version desc
-  limit 1;
-
   insert into public.leads (
     user_id, source, email, phone, name, apartment_id,
     listing_kind, listing_id, partner_id, intent, status, pipeline_stage,
@@ -489,14 +498,16 @@ begin
   )
   returning * into v_lead;
 
+  -- The agreement is intentionally resolved at acceptance, not registration: a
+  -- pending registration may legitimately have no commission terms yet.
   insert into public.developer_lead_registrations (
     lead_id, project_id, partner_id, agreement_id, agreement_snapshot, status, idempotency_key
   ) values (
     v_lead.id,
     v_project.id,
     v_project.partner_id,
-    v_agreement.id,
-    case when v_agreement.id is null then '{}'::jsonb else to_jsonb(v_agreement) end,
+    null,
+    '{}'::jsonb,
     'pending',
     v_key
   )
@@ -526,6 +537,7 @@ as $$
 declare
   v_uid uuid := (select auth.uid());
   v_reg public.developer_lead_registrations%rowtype;
+  v_agreement public.partner_commission_agreements%rowtype;
   v_days integer;
   v_target text := nullif(btrim(p_decision), '');
 begin
@@ -553,18 +565,45 @@ begin
     raise exception 'decide_developer_registration: not authorized' using errcode = 'P0001';
   end if;
 
+  -- Retry-safe: an identical repeated decision returns the committed result
+  -- instead of erroring; a different decision on a decided registration is invalid.
   if v_reg.status <> 'pending' then
+    if v_reg.status = v_target then
+      return jsonb_build_object(
+        'registration_id', v_reg.id,
+        'status', v_reg.status,
+        'protection_expires_at', v_reg.protection_expires_at,
+        'idempotent_replay', true
+      );
+    end if;
     raise exception 'decide_developer_registration: registration is not pending' using errcode = 'P0001';
   end if;
 
   if v_target = 'accepted' then
-    select a.protection_days into v_days
+    -- Freeze the exact active agreement at acceptance. A pending registration may
+    -- have had no terms; acceptance resolves and snapshots them exactly once.
+    select a.* into v_agreement
     from public.partner_commission_agreements a
-    where a.id = v_reg.agreement_id;
+    where a.partner_id = v_reg.partner_id
+      and a.status = 'active'
+      and (a.project_id is null or a.project_id = v_reg.project_id)
+      and (a.effective_from is null or a.effective_from <= current_date)
+      and (a.effective_to is null or a.effective_to >= current_date)
+    order by (a.project_id is not null) desc, a.version desc
+    limit 1;
+
+    if v_agreement.id is null then
+      raise exception 'decide_developer_registration: no active commission agreement to freeze'
+        using errcode = 'P0001';
+    end if;
+
+    v_days := v_agreement.protection_days;
 
     update public.developer_lead_registrations
     set status = 'accepted',
         accepted_at = now(),
+        agreement_id = v_agreement.id,
+        agreement_snapshot = to_jsonb(v_agreement),
         developer_reference = coalesce(nullif(btrim(p_developer_reference), ''), developer_reference),
         protection_expires_at = case
           when v_days is not null then now() + make_interval(days => v_days)
@@ -585,7 +624,89 @@ begin
   return jsonb_build_object(
     'registration_id', v_reg.id,
     'status', v_reg.status,
-    'protection_expires_at', v_reg.protection_expires_at
+    'protection_expires_at', v_reg.protection_expires_at,
+    'idempotent_replay', false
+  );
+end;
+$$;
+
+-- ── sales-stage ordering + dedicated progression RPC ─────────────────────────
+create or replace function public.sales_stage_at_least(p_stage text, p_min_stage text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select array_position(
+    array['contacted', 'appointment_completed', 'interested', 'reserved',
+          'promesa', 'financing_closing', 'deed_closed_won'],
+    p_stage
+  ) >= array_position(
+    array['contacted', 'appointment_completed', 'interested', 'reserved',
+          'promesa', 'financing_closing', 'deed_closed_won'],
+    p_min_stage
+  );
+$$;
+
+comment on function public.sales_stage_at_least(text, text) is
+  'SAN-1385: true when p_stage is at or beyond p_min_stage in the canonical sale progression.';
+
+create or replace function public.advance_developer_registration_stage(
+  p_registration_id uuid,
+  p_sales_stage text,
+  p_evidence jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_reg public.developer_lead_registrations%rowtype;
+  v_old_stage text;
+  v_target text := nullif(btrim(p_sales_stage), '');
+begin
+  select r.* into v_reg
+  from public.developer_lead_registrations r
+  where r.id = p_registration_id
+  for update;
+
+  if v_reg.id is null then
+    raise exception 'advance_developer_registration_stage: registration not found' using errcode = 'P0001';
+  end if;
+
+  if not (
+    (select public.is_admin())
+    or exists (
+      select 1 from public.partner_members pm
+      where pm.partner_id = v_reg.partner_id and pm.profile_id = v_uid
+    )
+  ) then
+    raise exception 'advance_developer_registration_stage: not authorized' using errcode = 'P0001';
+  end if;
+
+  if v_reg.status <> 'accepted' then
+    raise exception 'advance_developer_registration_stage: registration is not accepted' using errcode = 'P0001';
+  end if;
+
+  v_old_stage := v_reg.sales_stage;
+
+  update public.developer_lead_registrations
+  set sales_stage = v_target
+  where id = v_reg.id
+  returning * into v_reg;
+
+  insert into public.developer_lead_registration_stage_events (
+    registration_id, from_stage, to_stage, actor_id, evidence
+  ) values (
+    v_reg.id, v_old_stage, v_reg.sales_stage, v_uid, coalesce(p_evidence, '{}'::jsonb)
+  );
+
+  return jsonb_build_object(
+    'registration_id', v_reg.id,
+    'from_stage', v_old_stage,
+    'sales_stage', v_reg.sales_stage
   );
 end;
 $$;
@@ -707,7 +828,6 @@ as $$
 declare
   v_uid uuid := (select auth.uid());
   v_reg public.developer_lead_registrations%rowtype;
-  v_agreement public.partner_commission_agreements%rowtype;
   v_claim public.commission_claims%rowtype;
   v_ledger public.revenue_ledger%rowtype;
   v_key text := nullif(btrim(p_idempotency_key), '');
@@ -715,6 +835,8 @@ declare
   v_value numeric;
   v_currency text;
   v_basis text;
+  v_trigger text;
+  v_min_stage text;
   v_cents bigint;
 begin
   if not (v_uid is null or (select public.is_admin())) then
@@ -754,31 +876,45 @@ begin
     );
   end if;
 
-  if v_reg.agreement_id is not null then
-    select a.* into v_agreement
-    from public.partner_commission_agreements a
-    where a.id = v_reg.agreement_id;
-  end if;
-  if v_agreement.id is null then
-    select a.* into v_agreement
-    from public.partner_commission_agreements a
-    where a.partner_id = v_reg.partner_id
-      and (a.project_id is null or a.project_id = v_reg.project_id)
-      and a.status = 'active'
-    order by (a.project_id is not null) desc, a.version desc
-    limit 1;
-  end if;
-  if v_agreement.id is null then
-    raise exception 'post_new_project_commission: no agreement found for registration' using errcode = 'P0001';
+  -- Frozen terms only: never fall back to today's agreement. An accepted
+  -- registration must carry the exact snapshot frozen by decide_developer_registration.
+  if v_reg.agreement_id is null
+    or v_reg.agreement_snapshot is null
+    or v_reg.agreement_snapshot = '{}'::jsonb then
+    raise exception 'post_new_project_commission: accepted registration has no frozen commission agreement'
+      using errcode = 'P0001';
   end if;
 
-  v_type := coalesce(v_reg.agreement_snapshot ->> 'commission_type', v_agreement.commission_type);
-  v_value := coalesce(
-    nullif(v_reg.agreement_snapshot ->> 'commission_value', '')::numeric,
-    v_agreement.commission_value
-  );
-  v_currency := coalesce(v_reg.agreement_snapshot ->> 'currency', v_agreement.currency);
-  v_basis := coalesce(v_reg.agreement_snapshot ->> 'calculation_basis', v_agreement.calculation_basis);
+  v_type := v_reg.agreement_snapshot ->> 'commission_type';
+  v_value := nullif(v_reg.agreement_snapshot ->> 'commission_value', '')::numeric;
+  v_currency := coalesce(v_reg.agreement_snapshot ->> 'currency', 'COP');
+  v_basis := v_reg.agreement_snapshot ->> 'calculation_basis';
+
+  if v_type is null or v_value is null then
+    raise exception 'post_new_project_commission: frozen agreement is missing commission terms'
+      using errcode = 'P0001';
+  end if;
+
+  -- Enforce the agreement's configured earning trigger against the canonical
+  -- sale stage. Arbitrary JSON evidence is never proof that the trigger happened.
+  v_trigger := lower(coalesce(v_reg.agreement_snapshot ->> 'commission_trigger', ''));
+  v_min_stage := case
+    when v_trigger in ('reservation', 'reserved', 'reserve', 'reserva') then 'reserved'
+    when v_trigger in ('promesa', 'promise') then 'promesa'
+    when v_trigger in ('financing', 'closing', 'financing_closing') then 'financing_closing'
+    when v_trigger in ('deed', 'deed_closed_won', 'escritura', 'closed_won') then 'deed_closed_won'
+    else null
+  end;
+  if v_min_stage is null then
+    raise exception 'post_new_project_commission: frozen agreement has no supported commission_trigger'
+      using errcode = 'P0001';
+  end if;
+  if v_reg.sales_stage is null
+    or not public.sales_stage_at_least(v_reg.sales_stage, v_min_stage) then
+    raise exception 'post_new_project_commission: commission trigger % not reached (stage %)',
+      v_trigger, coalesce(v_reg.sales_stage, '(none)')
+      using errcode = 'P0001';
+  end if;
 
   if v_type = 'percentage' then
     v_cents := round(p_sale_price_cents * v_value / 100)::bigint;
@@ -792,7 +928,7 @@ begin
       sale_price_cents, currency, commission_cents, calculation_basis,
       claim_state, trigger_evidence, trigger_reached_at, idempotency_key
     ) values (
-      v_reg.id, v_agreement.id, v_reg.partner_id, v_reg.project_id,
+      v_reg.id, v_reg.agreement_id, v_reg.partner_id, v_reg.project_id,
       p_sale_price_cents, v_currency, v_cents, v_basis,
       'earned', coalesce(p_trigger_evidence, '{}'::jsonb), now(), v_key
     )
@@ -889,16 +1025,16 @@ create policy developer_lead_registrations_select_partner_member
   on public.developer_lead_registrations for select to authenticated
   using (partner_id in (select public.partner_ids_for_user()));
 
+-- Direct UPDATE is intentionally not exposed. Decisions and sale-stage changes go
+-- through decide_developer_registration() / advance_developer_registration_stage(),
+-- which enforce authorization and write the audit trail. authenticated has SELECT
+-- only, so a forged direct UPDATE is denied at the object gate.
 drop policy if exists developer_lead_registrations_update_partner_member on public.developer_lead_registrations;
-create policy developer_lead_registrations_update_partner_member
-  on public.developer_lead_registrations for update to authenticated
-  using (partner_id in (select public.partner_ids_for_user()))
-  with check (partner_id in (select public.partner_ids_for_user()));
 
 drop policy if exists developer_lead_registrations_admin on public.developer_lead_registrations;
 create policy developer_lead_registrations_admin
-  on public.developer_lead_registrations for all to authenticated
-  using ((select public.is_admin())) with check ((select public.is_admin()));
+  on public.developer_lead_registrations for select to authenticated
+  using ((select public.is_admin()));
 
 drop policy if exists developer_lead_registrations_service_role on public.developer_lead_registrations;
 create policy developer_lead_registrations_service_role
@@ -921,15 +1057,47 @@ create policy commission_claims_service_role
   on public.commission_claims for all to service_role
   using (true) with check (true);
 
+-- stage events: partner members read their own registrations' history; writes only
+-- through advance_developer_registration_stage() (SECURITY DEFINER).
+alter table public.developer_lead_registration_stage_events enable row level security;
+
+drop policy if exists stage_events_select_partner_member on public.developer_lead_registration_stage_events;
+create policy stage_events_select_partner_member
+  on public.developer_lead_registration_stage_events for select to authenticated
+  using (exists (
+    select 1 from public.developer_lead_registrations r
+    where r.id = developer_lead_registration_stage_events.registration_id
+      and r.partner_id in (select public.partner_ids_for_user())
+  ));
+
+drop policy if exists stage_events_admin on public.developer_lead_registration_stage_events;
+create policy stage_events_admin
+  on public.developer_lead_registration_stage_events for select to authenticated
+  using ((select public.is_admin()));
+
+drop policy if exists stage_events_service_role on public.developer_lead_registration_stage_events;
+create policy stage_events_service_role
+  on public.developer_lead_registration_stage_events for all to service_role
+  using (true) with check (true);
+
 -- ── grants ───────────────────────────────────────────────────────────────────
+-- Revoke the broad schema-default privileges first, then grant only what the app
+-- exposes. RLS is the row gate; these grants are the object gate.
+revoke all on table public.partner_commission_agreements from anon, authenticated;
 grant select, insert, update on table public.partner_commission_agreements to authenticated;
 grant all on table public.partner_commission_agreements to service_role;
 
-grant select, update on table public.developer_lead_registrations to authenticated;
+revoke all on table public.developer_lead_registrations from anon, authenticated;
+grant select on table public.developer_lead_registrations to authenticated;
 grant all on table public.developer_lead_registrations to service_role;
 
+revoke all on table public.commission_claims from anon, authenticated;
 grant select on table public.commission_claims to authenticated;
 grant all on table public.commission_claims to service_role;
+
+revoke all on table public.developer_lead_registration_stage_events from anon, authenticated;
+grant select on table public.developer_lead_registration_stage_events to authenticated;
+grant all on table public.developer_lead_registration_stage_events to service_role;
 
 -- ── function ACLs ────────────────────────────────────────────────────────────
 revoke execute on function public.lead_listing_owner_aligned(uuid, text, uuid, uuid) from public;
@@ -951,5 +1119,11 @@ grant execute on function public.book_new_project_consultation(uuid, uuid, date,
 
 revoke execute on function public.post_new_project_commission(uuid, bigint, text, jsonb) from public, anon;
 grant execute on function public.post_new_project_commission(uuid, bigint, text, jsonb) to authenticated, service_role;
+
+revoke execute on function public.sales_stage_at_least(text, text) from public, anon, authenticated;
+grant execute on function public.sales_stage_at_least(text, text) to service_role;
+
+revoke execute on function public.advance_developer_registration_stage(uuid, text, jsonb) from public, anon;
+grant execute on function public.advance_developer_registration_stage(uuid, text, jsonb) to authenticated, service_role;
 
 commit;

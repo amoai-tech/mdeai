@@ -1,12 +1,11 @@
 -- =============================================================================
--- SAN-1385 · New Projects data foundation — RLS, idempotency, integrity
--- =============================================================================
+-- SAN-1385 · New Projects data foundation — RLS, idempotency, integrity, least privilege
 -- Run with: supabase test db
 -- =============================================================================
 
 begin;
 
-select plan(43);
+select plan(64);
 
 -- ── fixtures (owner/superuser; RLS not yet switched) ─────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -54,16 +53,12 @@ values
    'claimed', 'Amarilo', 'san1385-arrayan', 'san1385-arrayan', 'SAN1385 Arrayán', 'Medellín', 'El Poblado',
    'published', 90000000000, 'COP', now(), 'developer', 'https://example.com/arrayan');
 
-insert into public.development_unit_types (id, project_id, source_key, name, bedrooms, price_from_cents)
-values ('b1385000-0000-4000-8000-000000000001', 'a1385000-0000-4000-8000-000000000001',
-        'nexus-2br', '2BR', 2, 78000000000);
-
-insert into public.development_project_sources (id, project_id, source_url, source_type, http_status, checked_at)
+insert into public.development_project_sources (id, project_id, source_url, source_type, http_status, checked_at, observed_facts)
 values
   ('c1385000-0000-4000-8000-000000000001', 'a1385000-0000-4000-8000-000000000001',
-   'https://example.com/nexus', 'developer', 200, now()),
+   'https://example.com/nexus', 'developer', 200, now(), '{"price_from_cop": 750000000}'::jsonb),
   ('c1385000-0000-4000-8000-000000000002', 'a1385000-0000-4000-8000-000000000002',
-   'https://example.com/draft', 'developer', 200, now());
+   'https://example.com/draft', 'developer', 200, now(), '{}'::jsonb);
 
 insert into public.partner_commission_agreements
   (id, partner_id, project_id, version, status, commission_type, commission_value, currency,
@@ -76,7 +71,7 @@ values
    'a1385000-0000-4000-8000-000000000003', 1, 'active', 'percentage', 2.5, 'COP',
    'sale_price', 'deed', 180);
 
--- ── A · catalog contract (12) ────────────────────────────────────────────────
+-- ── A · catalog + least-privilege contract (24) ──────────────────────────────
 select ok(exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
   where t.typname = 'partner_type' and e.enumlabel = 'developer'), 'A1 partner_type has developer');
 select ok(exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
@@ -94,8 +89,21 @@ select is(has_function_privilege('authenticated', 'public.register_new_project_b
 select is(has_function_privilege('anon', 'public.post_new_project_commission(uuid,bigint,text,jsonb)', 'EXECUTE'), false, 'A11 anon cannot execute commission RPC');
 select ok(exists (select 1 from pg_indexes where indexname = 'idx_bookings_idempotency_user_new_project')
   and exists (select 1 from pg_indexes where indexname = 'idx_bookings_idempotency_user'), 'A12 both booking idempotency indexes exist');
+select is(has_table_privilege('anon', 'public.development_projects', 'TRUNCATE'), false, 'A13 anon has no TRUNCATE');
+select is(has_table_privilege('authenticated', 'public.development_projects', 'TRUNCATE'), false, 'A14 authenticated has no TRUNCATE');
+select is(has_table_privilege('anon', 'public.development_projects', 'INSERT'), false, 'A15 anon cannot INSERT');
+select is(has_table_privilege('authenticated', 'public.development_projects', 'SELECT'), true, 'A16 authenticated can SELECT projects');
+select is(has_table_privilege('authenticated', 'public.developer_lead_registrations', 'UPDATE'), false, 'A17 authenticated cannot directly UPDATE registrations');
+select is(has_table_privilege('authenticated', 'public.developer_lead_registrations', 'SELECT'), true, 'A18 authenticated can SELECT registrations');
+select is(has_table_privilege('authenticated', 'public.commission_claims', 'UPDATE'), false, 'A19 authenticated cannot directly UPDATE claims');
+select is(has_table_privilege('anon', 'public.commission_claims', 'SELECT'), false, 'A20 anon cannot read claims');
+select is(has_table_privilege('authenticated', 'public.developer_lead_registration_stage_events', 'SELECT'), true, 'A21 authenticated can read own stage history');
+select ok(exists (select 1 from information_schema.columns where table_schema = 'public'
+  and table_name = 'development_project_sources' and column_name = 'observed_facts'), 'A22 provenance records observed_facts');
+select ok(to_regprocedure('public.advance_developer_registration_stage(uuid,text,jsonb)') is not null, 'A23 stage RPC exists');
+select ok(to_regprocedure('public.sales_stage_at_least(text,text)') is not null, 'A24 stage-order helper exists');
 
--- ── B · anon sees published only (3) ─────────────────────────────────────────
+-- ── B · anon sees published only (4) ─────────────────────────────────────────
 set local role anon;
 select set_config('request.jwt.claim.sub', '', true);
 select is((select count(*)::int from public.development_projects where id = 'a1385000-0000-4000-8000-000000000001'), 1, 'B1 anon reads published project');
@@ -104,9 +112,9 @@ select is((select count(*)::int from public.development_project_sources where pr
 select throws_ok(
   $$insert into public.development_projects (source_key, slug, name, publish_state, verified_at)
     values ('san1385-anon', 'san1385-anon', 'Anon', 'draft', now())$$,
-  '42501', null, 'B4 anon cannot insert even with platform table grants (RLS denies)');
+  '42501', null, 'B4 anon cannot insert');
 
--- ── C/D · buyer + partner isolation (8) ──────────────────────────────────────
+-- ── C/D · buyer + partner isolation and no direct write (9) ──────────────────
 reset role;
 set local role authenticated;
 
@@ -116,12 +124,10 @@ select ok((public.register_new_project_buyer(
   '{"budget_min": 750000000, "purpose": "investment"}'::jsonb,
   'buyer-a@example.com', '+57 300 000 0001', 'Buyer A') ->> 'registration_id') is not null,
   'C0 buyer A registration commits');
-
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000002', true);
 select ok((public.register_new_project_buyer(
   'a1385000-0000-4000-8000-000000000003', 'san1385-reg-b-0001',
-  '{"budget_min": 900000000}'::jsonb,
-  'buyer-b@example.com', null, 'Buyer B') ->> 'registration_id') is not null,
+  '{"budget_min": 900000000}'::jsonb, 'buyer-b@example.com', null, 'Buyer B') ->> 'registration_id') is not null,
   'C0b buyer B registration commits');
 
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000001', true);
@@ -140,13 +146,14 @@ select is((select count(*)::int from public.developer_lead_registrations
   where project_id = 'a1385000-0000-4000-8000-000000000003'), 1, 'C3 partner B sees own registration');
 
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000003', true);
-with u as (
-  update public.developer_lead_registrations set developer_reference = 'forged'
-  where project_id = 'a1385000-0000-4000-8000-000000000003'
-  returning 1
-)
-select set_config('san1385.c4_updated', count(*)::text, true) from u;
-select is(current_setting('san1385.c4_updated')::int, 0, 'C4 partner A update on partner B registration is denied');
+select throws_ok(
+  $$update public.developer_lead_registrations set sales_stage = 'reserved'
+    where project_id = 'a1385000-0000-4000-8000-000000000003'$$,
+  '42501', null, 'C4 partner A cannot directly update partner B registration');
+select throws_ok(
+  $$update public.developer_lead_registrations set sales_stage = 'reserved'
+    where project_id = 'a1385000-0000-4000-8000-000000000001'$$,
+  '42501', null, 'C5 authenticated cannot directly update any registration');
 
 -- ── E · registration idempotency (4) ─────────────────────────────────────────
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000001', true);
@@ -162,81 +169,152 @@ select throws_ok(
   $$select public.register_new_project_buyer('a1385000-0000-4000-8000-000000000003', 'san1385-reg-a-0001')$$,
   'P0001', null, 'E4 idempotency key reused for a different project is rejected');
 
--- ── F · attribution + booking (6) ────────────────────────────────────────────
+-- ── F · frozen terms + retry-safe decision (6) ───────────────────────────────
+select is((select (agreement_id is null and agreement_snapshot = '{}'::jsonb)::text
+  from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+  where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'true',
+  'F0 pending registration carries no frozen terms');
+
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000003', true);
 select throws_ok(
   $$select public.decide_developer_registration(
-      (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'),
-      'accepted')$$,
+      (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'), 'accepted')$$,
   'P0001', null, 'F1 partner A cannot accept partner B registration');
 
 select is((public.decide_developer_registration(
-  (select dr.id from public.developer_lead_registrations dr
-     join public.leads l on l.id = dr.lead_id
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   'accepted', null, 'DEV-REF-1') ->> 'status'), 'accepted', 'F2 partner A accepts its registration');
 
+select is((select (agreement_id is not null and agreement_snapshot ->> 'commission_value' = '3.0000')::text
+  from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+  where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'true',
+  'F3 acceptance freezes the exact active agreement snapshot');
+
+select is((public.decide_developer_registration(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
+  'accepted') ->> 'idempotent_replay')::boolean, true, 'F4 repeated accept is an idempotent replay');
+
 select throws_ok(
   $$select public.decide_developer_registration(
-      (select dr.id from public.developer_lead_registrations dr
-         join public.leads l on l.id = dr.lead_id
-         where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
-      'accepted')$$,
-  'P0001', null, 'F3 re-deciding a non-pending registration is rejected');
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'rejected')$$,
+  'P0001', null, 'F5 reject after accept is an invalid transition');
 
+-- ── booking (3) ──────────────────────────────────────────────────────────────
 select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000001', true);
 select ok((public.book_new_project_consultation(
   'a1385000-0000-4000-8000-000000000001',
-  (select dr.id from public.developer_lead_registrations dr
-     join public.leads l on l.id = dr.lead_id
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   current_date + 3, '14:00'::time, 'san1385-book-a-0001', '15:00'::time, 'site visit') ->> 'booking_id') is not null,
-  'F4 buyer A consultation commits');
+  'F6 buyer A consultation commits');
 select is((public.book_new_project_consultation(
   'a1385000-0000-4000-8000-000000000001',
-  (select dr.id from public.developer_lead_registrations dr
-     join public.leads l on l.id = dr.lead_id
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   current_date + 3, '14:00'::time, 'san1385-book-a-0001', '15:00'::time, 'site visit') ->> 'idempotent_replay')::boolean,
-  true, 'F5 consultation replay is idempotent');
+  true, 'F7 consultation replay is idempotent');
 select is((select count(*)::int from public.bookings
-  where user_id = 'e1385000-0000-4000-8000-000000000001'
-    and booking_type = 'new_project_consultation'), 1, 'F6 one consultation booking for the logical request');
+  where user_id = 'e1385000-0000-4000-8000-000000000001' and booking_type = 'new_project_consultation'), 1,
+  'F8 one consultation booking for the logical request');
 
--- ── F · commission (6) ───────────────────────────────────────────────────────
+-- Freeze the commercial terms before they are used: mutate the live agreement.
+reset role;
+update public.partner_commission_agreements
+  set commission_value = 5.0, commission_trigger = 'reserved'
+  where id = 'd1385000-0000-4000-8000-000000000001';
+
+-- ── commission: authorization, trigger enforcement, atomicity (7) ────────────
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000001', true);
 select throws_ok(
   $$select public.post_new_project_commission(
-      (select dr.id from public.developer_lead_registrations dr
-         join public.leads l on l.id = dr.lead_id
-         where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
-      100000000, 'san1385-claim-0001')$$,
-  'P0001', null, 'F7 buyer cannot post a commission');
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 100000000, 'san1385-claim-0001')$$,
+  'P0001', null, 'F9 buyer cannot post a commission');
 
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select throws_ok(
+  $$select public.post_new_project_commission(
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 100000000, 'san1385-claim-0001')$$,
+  'P0001', null, 'F10 commission trigger not reached (no stage) is rejected');
+
+-- Advance to "interested"; the FROZEN trigger is 'deed', so posting still fails.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000003', true);
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'contacted');
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'appointment_completed');
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'interested');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select throws_ok(
+  $$select public.post_new_project_commission(
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 100000000, 'san1385-claim-0001')$$,
+  'P0001', null, 'F11 frozen deed trigger blocks posting at interested');
+
+-- Advance to deed and post.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000003', true);
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'reserved');
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'promesa');
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'financing_closing');
+select public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'deed_closed_won');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+
 select is((public.post_new_project_commission(
-  (select dr.id from public.developer_lead_registrations dr
-     join public.leads l on l.id = dr.lead_id
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   100000000, 'san1385-claim-0001', '{"trigger": "deed"}'::jsonb) ->> 'claim_state'), 'earned',
-  'F8 service role posts one commission');
+  'F12 service role posts one commission');
 select is((select commission_cents::int from public.commission_claims
-  where idempotency_key = 'san1385-claim-0001'), 3000000, 'F9 commission is 3% of the sale price');
+  where idempotency_key = 'san1385-claim-0001'), 3000000, 'F13 frozen 3% is used, not the mutated 5%');
 select is((public.post_new_project_commission(
-  (select dr.id from public.developer_lead_registrations dr
-     join public.leads l on l.id = dr.lead_id
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   100000000, 'san1385-claim-0001', '{"trigger": "deed"}'::jsonb) ->> 'idempotent_replay')::boolean,
-  true, 'F10 commission replay is idempotent');
+  true, 'F14 commission replay is idempotent');
 select is((select count(*)::int from public.revenue_ledger rl
   join public.commission_claims cc on cc.id = rl.source_id
   where rl.source_kind = 'commission' and cc.idempotency_key = 'san1385-claim-0001'), 1,
-  'F11 exactly one ledger entry for the commission');
-select is((select count(*)::int from public.developer_lead_registrations dr
-  join public.leads l on l.id = dr.lead_id
-  where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 1, 'F12 one registration per logical request');
+  'F15 exactly one ledger entry for the commission');
 
--- ── G · integrity + regression safety (3) ────────────────────────────────────
+-- ── sale-stage audit (3) ─────────────────────────────────────────────────────
+select is((select count(*)::int from public.developer_lead_registration_stage_events se
+  join public.developer_lead_registrations dr on dr.id = se.registration_id
+  join public.leads l on l.id = dr.lead_id
+  where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 7, 'F16 seven stage events were recorded');
+select is((select se.to_stage from public.developer_lead_registration_stage_events se
+  join public.developer_lead_registrations dr on dr.id = se.registration_id
+  join public.leads l on l.id = dr.lead_id
+  where l.user_id = 'e1385000-0000-4000-8000-000000000001'
+  order by se.created_at desc limit 1), 'deed_closed_won', 'F17 latest stage event is deed_closed_won');
+select is((select se.actor_id from public.developer_lead_registration_stage_events se
+  join public.developer_lead_registrations dr on dr.id = se.registration_id
+  join public.leads l on l.id = dr.lead_id
+  where l.user_id = 'e1385000-0000-4000-8000-000000000001'
+  order by se.created_at desc limit 1), 'e1385000-0000-4000-8000-000000000003',
+  'F18 stage events record the acting partner member');
+
+-- ── G · integrity + regression safety (4) ────────────────────────────────────
 select throws_ok(
   $$insert into public.bookings (user_id, booking_type, resource_id, resource_title, status, start_date, partner_id)
     values ('e1385000-0000-4000-8000-000000000001', 'new_project_consultation',
@@ -244,14 +322,17 @@ select throws_ok(
             'f1385000-0000-4000-8000-000000000002')$$,
   'P0001', null, 'G1 mismatched consultation project/partner pair is rejected');
 select throws_ok(
-  $$update public.developer_lead_registrations
-    set project_id = 'a1385000-0000-4000-8000-000000000003'
+  $$update public.developer_lead_registrations set project_id = 'a1385000-0000-4000-8000-000000000003'
     where project_id = 'a1385000-0000-4000-8000-000000000001'$$,
   '23514', null, 'G2 accepted attribution project cannot be reassigned');
 select throws_ok(
   $$insert into public.leads (source, listing_kind, listing_id)
     values ('test', 'event', 'a1385000-0000-4000-8000-000000000001')$$,
   '23514', null, 'G3 unknown listing kind fails closed');
+select throws_ok(
+  $$insert into public.development_projects (partner_id, ownership_status, source_key, slug, name, publish_state, verified_at)
+    values ('f1385000-0000-4000-8000-000000000001', 'unclaimed', 'san1385-invariant', 'san1385-invariant', 'Invariant', 'draft', now())$$,
+  '23514', null, 'G4 unclaimed project cannot carry a partner_id');
 
 select * from finish();
 rollback;
