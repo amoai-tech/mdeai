@@ -180,7 +180,7 @@
       "units": [
         {
           "name": "Desde 31 m² · 1–2 alcobas",
-          "bedrooms": 1,
+          "bedrooms": null,
           "bathrooms": null,
           "built": 31,
           "priv": null,

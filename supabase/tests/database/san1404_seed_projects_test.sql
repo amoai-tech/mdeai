@@ -5,7 +5,7 @@
 
 begin;
 
-select plan(28);
+select plan(29);
 
 -- ── dataset contract ─────────────────────────────────────────────────────────
 select is((select count(*)::int from public.development_projects where source_key = any(array['medellin:new-project:nexus', 'medellin:new-project:distrito-33', 'medellin:new-project:grand-coral', 'medellin:new-project:nutibara-parkway', 'medellin:new-project:vigo', 'medellin:new-project:arrayan', 'medellin:new-project:saman', 'medellin:new-project:guayacanes', 'medellin:new-project:palma', 'medellin:new-project:river-park'])), 10, 'A1 exactly 10 seeded projects');
@@ -26,6 +26,7 @@ select is((select count(*)::int from public.development_projects p where p.sourc
 select is((select count(*)::int from public.development_projects p where p.source_key = any(array['medellin:new-project:nexus', 'medellin:new-project:distrito-33', 'medellin:new-project:grand-coral', 'medellin:new-project:nutibara-parkway', 'medellin:new-project:vigo', 'medellin:new-project:arrayan', 'medellin:new-project:saman', 'medellin:new-project:guayacanes', 'medellin:new-project:palma', 'medellin:new-project:river-park']) and p.primary_source_id is not null and not exists (select 1 from public.development_project_sources s where s.id = p.primary_source_id and s.project_id = p.id)), 0, 'A12 the primary source belongs to its project');
 
 -- ── unit types: scoped to SAN-1404 and correctly attributed ──────────────────
+select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:vigo' and u.bedrooms is null), 1, 'A16a Vigo unit stores no bedroom count (source gives a 1–2 range)');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = any(array['medellin:new-project:nexus', 'medellin:new-project:distrito-33', 'medellin:new-project:grand-coral', 'medellin:new-project:nutibara-parkway', 'medellin:new-project:vigo', 'medellin:new-project:arrayan', 'medellin:new-project:saman', 'medellin:new-project:guayacanes', 'medellin:new-project:palma', 'medellin:new-project:river-park'])), 18, 'A13 the verified unit-type set is present');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:distrito-33' and u.source_kind = 'marketplace'), 1, 'A14 Distrito 33 unit is attributed to a marketplace source');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:vigo' and u.source_kind = 'marketplace'), 1, 'A15 Vigo unit is attributed to a marketplace source');

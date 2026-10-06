@@ -76,7 +76,7 @@ select dp.id, v.unit_key, v.name, v.bedrooms, v.bathrooms, v.built, v.priv,
        'COP', v.source_kind, v.source_url, '2026-10-06T09:21:53Z'::timestamptz
 from (values
   ('medellin:new-project:distrito-33', 'distrito-33-27m-1br', 'Desde 27 m² · 1 alcoba', 1, null, 27, null, 'marketplace', 'https://tulugar.com/en/projects/colombia/distrito-33'),
-  ('medellin:new-project:vigo', 'vigo-31m-1br', 'Desde 31 m² · 1–2 alcobas', 1, null, 31, null, 'marketplace', 'https://tulugar.com/en/projects/colombia/vigo'),
+  ('medellin:new-project:vigo', 'vigo-31m', 'Desde 31 m² · 1–2 alcobas', null, null, 31, null, 'marketplace', 'https://tulugar.com/en/projects/colombia/vigo'),
   ('medellin:new-project:arrayan', 'arrayan-30m-1br', 'Apto 30 m²', 1, 1, 30, 22, 'developer', 'https://amarilo.com.co/proyecto/arrayan'),
   ('medellin:new-project:arrayan', 'arrayan-39m-1br', 'Apto 39 m²', 1, 1, 39, 31, 'developer', 'https://amarilo.com.co/proyecto/arrayan'),
   ('medellin:new-project:arrayan', 'arrayan-45m-1br', 'Apto 45 m²', 1, 1, 45, 35, 'developer', 'https://amarilo.com.co/proyecto/arrayan'),
