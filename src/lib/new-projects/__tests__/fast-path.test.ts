@@ -21,6 +21,20 @@ describe("new-project fast path classifier", () => {
     expect(looksLikeNewProjectQuery("suggest restaurants medellin")).toBe(false);
   });
 
+  it("does not claim adjacent non-real-estate domains", () => {
+    expect(looksLikeNewProjectQuery("new project ideas for my startup")).toBe(false);
+    expect(looksLikeNewProjectQuery("new project management tools")).toBe(false);
+    expect(looksLikeNewProjectQuery("new condo cleaning tips")).toBe(false);
+  });
+
+  it("parses formatted price amounts correctly", () => {
+    // Thousands are stripped, so both separators mean the same magnitude.
+    expect(buildNewProjectFastPathParams("new projects under 1,200 million").maxPriceCop).toBe(1200000000);
+    expect(buildNewProjectFastPathParams("new projects under 1.200 million").maxPriceCop).toBe(1200000000);
+    expect(buildNewProjectFastPathParams("new projects under 1,234,567 million").maxPriceCop).toBe(1234567000000);
+    expect(buildNewProjectFastPathParams("new projects under 1,2 million").maxPriceCop).toBe(1200000);
+  });
+
   it("extracts hard filters and never invents one", () => {
     expect(buildNewProjectFastPathParams("new 2 bedroom projects in Laureles under 900 million")).toEqual({
       limit: 5,

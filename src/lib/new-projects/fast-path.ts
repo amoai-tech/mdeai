@@ -3,8 +3,20 @@
  * It only decides "is this a new-projects request?" and extracts the same hard filters the tool
  * accepts. It never invents a filter the buyer did not express.
  */
-const NEW_PROJECT_RE =
-  /(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bnew\s+(?:construction|development)s?\b)|(\bnew\s+condos?\b)|(\bnew\s+apartments?\b)|(?:proyectos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:apartamentos?\s+nuev\w*)|(?:obra\s+nueva)|(?:condo\s+projects?)/i;
+/** Spanish or unambiguous English new-construction phrases. */
+const NEW_PROJECT_STRONG_RE =
+  /(?:proyectos?\s+nuev\w*)|(?:apartamentos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:obra\s+nueva)|(\bnew\s+construction\b)|(\bnew\s+developments?\b)/i;
+
+/** English "new condo/apartment/projects" needs a real-estate cue to avoid adjacent domains. */
+const NEW_PROJECT_CONDITIONAL_RE =
+  /(\bnew\s+condos?\b)|(\bnew\s+apartments?\b)|(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bcondo\s+projects?\b)/i;
+
+/** Adjacent-domain wording that must never select the new-projects path. */
+const NON_REAL_ESTATE_RE =
+  /\b(tips?|ideas?|management|tools?|software|cleaning|tutorials?|courses?|templates?|checklists?|sprints?|agile|kanban|jira|notion|startups?|business plan)\b/i;
+
+const REAL_ESTATE_CUE_RE =
+  /\b(apartment|apartamentos?|condo|alcoba|habitaci[oó]n|bedroom|torre|torres|constructora|inmobiliaria|medell[ií]n|laureles|poblado|ciudad del r[ií]o|calasanz|estadio|bel[eé]n|envigado|cop|millones?|million|m2|m²|desde|show me|find|looking for|browse|buy|purchase|busco|quiero|comprar)\b/i;
 
 /** Strong rental wording: "new apartments" is new construction, but "new apartments for rent" is not. */
 export const RENTAL_WORD_RE = /\b(for rent|per night|nightly|arriendo|alquiler|airbnb|renta\b)/i;
@@ -15,7 +27,11 @@ const DELIVERY_WORD = /deliver|entrega|entregar|completion|handover/i;
 const NEIGHBORHOODS = ["Laureles", "Ciudad del Río", "El Poblado"] as const;
 
 export function looksLikeNewProjectQuery(text: string): boolean {
-  return NEW_PROJECT_RE.test(text);
+  // Adjacent domains ("new project ideas for my startup", "new condo cleaning tips") must not
+  // win the routing, because New Projects is classified before the other verticals.
+  if (NON_REAL_ESTATE_RE.test(text)) return false;
+  if (NEW_PROJECT_STRONG_RE.test(text)) return true;
+  return NEW_PROJECT_CONDITIONAL_RE.test(text) && REAL_ESTATE_CUE_RE.test(text);
 }
 
 export function buildNewProjectFastPathParams(text: string): Record<string, unknown> {

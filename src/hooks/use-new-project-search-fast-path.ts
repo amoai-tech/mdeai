@@ -8,11 +8,14 @@ import {
   buildNewProjectFastPathParams,
   looksLikeNewProjectQuery,
 } from "@/lib/new-projects/fast-path";
+import {
+  newProjectSearchEnvelopeSchema,
+  type NewProjectSearchEnvelope,
+} from "@/lib/new-projects/search-envelope";
 
 /** A short assistant line for the local transcript; the cards carry the detail. */
-function newProjectSearchSummary(envelope: unknown): string {
-  const results = (envelope as { results?: unknown[] } | null)?.results;
-  const count = Array.isArray(results) ? results.length : 0;
+function newProjectSearchSummary(envelope: NewProjectSearchEnvelope): string {
+  const count = envelope.results.length;
   if (count === 0) return "No published projects matched those filters.";
   return "Found " + count + " new project" + (count === 1 ? "" : "s") + ".";
 }
@@ -46,19 +49,22 @@ export function useNewProjectSearchFastPath() {
       const controller = new AbortController();
       controllerRef.current = controller;
       try {
-        const envelope = await fetchNewProjectSearch(
+        const raw = await fetchNewProjectSearch(
           buildNewProjectFastPathParams(text),
           controller.signal,
         );
         if (controller.signal.aborted) return true;
+        const parsed = newProjectSearchEnvelopeSchema.safeParse(raw);
+        if (!parsed.success) throw new Error("invalid new-project search envelope");
         clearOthers("new_project");
-        setToolResult(envelope);
-        showExchange(text, newProjectSearchSummary(envelope));
+        setToolResult(parsed.data);
+        showExchange(text, newProjectSearchSummary(parsed.data));
         return true;
       } catch {
-        // A superseded request is expected; anything else falls through to the agent, which
-        // already owns the search-new-projects tool (never to an unrelated vertical).
+        // A superseded request is expected; anything else must not leave stale cards on screen.
         if (controller.signal.aborted) return true;
+        clearOthers("new_project");
+        setToolResult(null);
         return false;
       } finally {
         if (controllerRef.current === controller) controllerRef.current = null;

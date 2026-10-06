@@ -25,30 +25,8 @@ const UNIT_COLUMNS =
   "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,product_class,phase_label,source_kind,source_url,verified_at";
 
 /** A grounded project card. Unknown facts are explicit strings, never zero/false/inferred. */
-export const newProjectCardSchema = z.object({
-  slug: z.string(),
-  name: z.string(),
-  neighborhood: z.string().nullable(),
-  sourceOwner: z.string().nullable(),
-  /** "From COP 575,000,000" / "COP 370,406,379 – 834,843,174" / "Not published". */
-  priceLabel: z.string(),
-  priceKnown: z.boolean(),
-  bedroomsLabel: z.string().nullable(),
-  /** "Delivery 2027" / "Delivery: Estimada" / "Delivery date not published". */
-  deliveryLabel: z.string(),
-  statusLabel: z.string().nullable(),
-  visLabel: z.string().nullable(),
-  unitTypeCount: z.number(),
-  /** "Verified 6 Oct 2026" / "Not yet verified". */
-  verifiedLabel: z.string(),
-  detailUrl: z.string(),
-  primarySourceUrl: z.string().nullable(),
-  primarySourceCheckedLabel: z.string().nullable(),
-  /** Facts a source did not publish — the caller must not fill these in. */
-  unknownFields: z.array(z.string()),
-});
-
-export type NewProjectCard = z.infer<typeof newProjectCardSchema>;
+export { newProjectCardSchema, type NewProjectCard } from "@/lib/new-projects/search-envelope";
+import { newProjectCardSchema, type NewProjectCard } from "@/lib/new-projects/search-envelope";
 
 /**
  * The tool's input contract, shared by the Mastra tool and the HTTP route: the route validates
