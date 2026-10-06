@@ -35,7 +35,7 @@ Use this file to jump from a **task or question** to the right **official URL ta
 | Chunking, vectors, retrieval | [RAG](../links.md#rag) | — |
 | HTTP server, client, routes, request context | [Server & client](../links.md#server-client) | [`supabase-auth.md`](supabase-auth.md) for Supabase auth |
 | MCP, MCPClient, MCP apps, workspace skills | [MCP & workspaces](../links.md#mcp-workspaces) | [`workspace.md`](workspace.md), [`workspace-skills.md`](workspace-skills.md) |
-| Mastra docs MCP (`mastraDocs`, embedded search) | [`references/mcp-docs-lookup.md`](mcp-docs-lookup.md) | Always `projectPath` → `mdeapp` |
+| Mastra docs MCP (`mastraDocs`, embedded search) | [`references/mcp-docs-lookup.md`](mcp-docs-lookup.md) | Always `projectPath` → repository root |
 | SSE / streams, tool-call events, AG-UI | [Streaming](../links.md#streaming) · [Reference — streaming](../links.md#reference--streaming) | [`references/streaming.md`](streaming.md) |
 | Logs, traces, evals, datasets, CI | [Observability & evals](../links.md#observability-evals) | — |
 | Inspect/call Mastra server resources from CLI | [Server & client](../links.md#server-client) | [`official/mastra/references/mastra-api.md`](official/mastra/references/mastra-api.md) |

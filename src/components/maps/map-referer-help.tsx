@@ -33,7 +33,7 @@ export function MapsUnavailable({ reason }: { reason: MapsUnavailableReason }) {
           Map unavailable: set{" "}
           <code className="text-xs">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> and{" "}
           <code className="text-xs">NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID</code> in{" "}
-          <code className="text-xs">mdeapp/.env.local</code>.
+          <code className="text-xs">.env.local</code>.
         </p>
       </div>
     );

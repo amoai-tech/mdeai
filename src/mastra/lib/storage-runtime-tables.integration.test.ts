@@ -14,21 +14,23 @@
  *   DATABASE_URL=postgresql://... MASTRA_TABLE_USAGE_INTEGRATION=1 \
  *     npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
  *
- * This is a manual/local proof: it is gated on DATABASE_URL + the flag, so the standard
- * `npm test` / `npm run floor` pipeline skips it. `.github/workflows/floor.yml`'s
- * `mastra-schema-init` job already provisions a postgres:17 service and runs
- * `mastra:init`, so setting the flag on that step would give this assertion CI
- * coverage; that workflow change needs approval first.
+ * This is gated on DATABASE_URL + the flag, so the standard `npm test` / `npm run floor`
+ * pipeline skips it. It runs automatically in `.github/workflows/floor.yml`'s
+ * `mastra-schema-init` job, which provisions a disposable postgres:17 service and runs
+ * `mastra:init`. It refuses a non-loopback DATABASE_URL (see `integration-db-guard.ts`)
+ * so it can never write test rows into a remote production database.
  */
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Memory } from "@mastra/memory";
 import { PostgresStore } from "@mastra/pg";
 import { conciergeWorkingMemorySchema } from "@/mastra/agents/concierge";
+import { assertLoopbackDatabaseUrl } from "./integration-db-guard";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const runIntegration =
-  Boolean(DATABASE_URL) && process.env.MASTRA_TABLE_USAGE_INTEGRATION === "1";
+// Flag on means the proof MUST run. A missing DATABASE_URL fails inside the test (the
+// guard throws) instead of silently skipping to a green build.
+const runIntegration = process.env.MASTRA_TABLE_USAGE_INTEGRATION === "1";
 
 const RUNTIME_WRITE_TABLES = ["mastra_messages", "mastra_threads"];
 const MASTRA_TABLE = /^mastra_[a-z0-9_]+$/;
@@ -55,50 +57,55 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
   it(
     "a thread + messages + working-memory path writes only the required tables",
     async () => {
+      assertLoopbackDatabaseUrl(DATABASE_URL, "MASTRA_TABLE_USAGE_INTEGRATION");
       const client = new Client({ connectionString: DATABASE_URL as string });
-      await client.connect();
-      const store = new PostgresStore({
-        id: "san1338-runtime-tables",
-        connectionString: DATABASE_URL as string,
-        disableInit: true,
-      });
-      const memory = new Memory({
-        storage: store,
-        options: {
-          workingMemory: {
-            enabled: true,
-            scope: "thread",
-            schema: conciergeWorkingMemorySchema,
-          },
-          lastMessages: 20,
-        },
-      });
+      // Identity is created before the try so cleanup can reach it even if construction
+      // fails partway through.
+      const threadId = `san1338-usage-${Date.now()}`;
+      const resourceId = "san1338-usage-user";
+      let store: PostgresStore | undefined;
       try {
+        await client.connect();
+        store = new PostgresStore({
+          id: "san1338-runtime-tables",
+          connectionString: DATABASE_URL as string,
+          disableInit: true,
+        });
+        const memory = new Memory({
+          storage: store,
+          options: {
+            workingMemory: {
+              enabled: true,
+              scope: "thread",
+              schema: conciergeWorkingMemorySchema,
+            },
+            lastMessages: 20,
+          },
+        });
+
         const countsBefore = await tableCounts(client);
-        const threadId = `san1338-usage-${Date.now()}`;
-        const resourceId = "san1338-usage-user";
-        await memory.saveThread({
-          thread: {
-            id: threadId,
-            resourceId,
-            title: "usage",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            metadata: {},
-          } as never,
-        });
-        await memory.saveMessages({
-          messages: [
-            {
-              id: `${threadId}-m1`,
-              role: "user",
-              createdAt: new Date(),
-              threadId,
-              resourceId,
-              content: { format: 2 as const, parts: [{ type: "text" as const, text: "find a rental" }] },
-            } as never,
-          ],
-        });
+        // Build the rows in the real storage types (not `as never`) so a shape or
+        // message-format drift fails typecheck here instead of only at runtime.
+        type StoredThread = Parameters<Memory["saveThread"]>[0]["thread"];
+        type StoredMessage = Parameters<Memory["saveMessages"]>[0]["messages"][number];
+        const thread: StoredThread = {
+          id: threadId,
+          resourceId,
+          title: "usage",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          metadata: {},
+        };
+        const message: StoredMessage = {
+          id: `${threadId}-m1`,
+          role: "user",
+          createdAt: new Date(),
+          threadId,
+          resourceId,
+          content: { format: 2, parts: [{ type: "text", text: "find a rental" }] },
+        };
+        await memory.saveThread({ thread });
+        await memory.saveMessages({ messages: [message] });
         await memory.updateWorkingMemory({
           threadId,
           resourceId,
@@ -112,8 +119,17 @@ describe.runIf(runIntegration)("SAN-1338 runtime table usage", () => {
         );
         expect(changed.sort()).toEqual([...RUNTIME_WRITE_TABLES].sort());
       } finally {
-        await client.end();
-        await store.close();
+        // Close the store first, then remove exactly the rows this proof created, then
+        // disconnect. Every step is guarded so cleanup cannot mask the test result, and a
+        // reusable scratch database is left as it was found.
+        if (store) await store.close().catch(() => undefined);
+        try {
+          await client.query("delete from public.mastra_messages where thread_id = $1", [threadId]);
+          await client.query("delete from public.mastra_threads where id = $1", [threadId]);
+        } catch {
+          // The connection may never have opened; best-effort cleanup only.
+        }
+        await client.end().catch(() => undefined);
       }
     },
     120_000,

@@ -92,7 +92,7 @@ From [streaming/events](https://mastra.ai/docs/streaming/events):
 }
 ```
 
-Package: `@mastra/core` — use `readMastraDocs` with `projectPath: /home/sk/mdeai/mdeapp`.
+Package: `@mastra/core` — use `readMastraDocs` with `projectPath` set to the absolute path of the current checkout root.
 
 ---
 
@@ -100,7 +100,7 @@ Package: `@mastra/core` — use `readMastraDocs` with `projectPath: /home/sk/mde
 
 | Artifact | Path |
 | --- | --- |
-| CopilotKit runtime (AG-UI bridge) | `mdeapp/src/app/api/copilotkit/route.ts` |
+| CopilotKit runtime (AG-UI bridge) | `src/app/api/copilotkit/[[...path]]/route.ts` |
 | CopilotKit integration skill | `copilotkit` → `references/mastra-bridge.md` |
-| Tool definitions (writer hooks) | `mdeapp/src/mastra/tools/**` |
+| Tool definitions (writer hooks) | `src/mastra/tools/**` |
 | AI SDK v5 bridge | `toAISdkV5Stream()` from `@mastra/ai-sdk` — see [overview](https://mastra.ai/docs/streaming/overview) |

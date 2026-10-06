@@ -23,7 +23,7 @@ impact: HIGH
 | Claim | Probe |
 |-------|--------|
 | Gateway up | `curl -sS "$OPENCLAW_GATEWAY_URL/health"` → 200 |
-| No secret in mdeapp client | `rg service.role\|OPENCLAW_GATEWAY_TOKEN mdeapp/src` — token server-side only |
+| No secret in mdeapp client | `rg service.role\|OPENCLAW_GATEWAY_TOKEN src` — token server-side only |
 | Custom skills only | Prod compose / VPS: no `clawhub install` in startup; only `skills/mde-*` |
 | Approval before job | SQL: no `openclaw_jobs` without matching `automation_approvals.approved` |
 | Docs match version | Fetch [llms.txt](https://docs.openclaw.ai/llms.txt) when config flags disagree with spec |

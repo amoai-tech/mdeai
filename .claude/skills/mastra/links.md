@@ -791,10 +791,10 @@ Index: https://mastra.ai/reference/memory/
 
 | Artifact | Path |
 | --- | --- |
-| Runtime app | `mdeapp/` (`src/mastra/**`, `npm run dev:agent` → Studio `:4111`) |
+| Runtime app | repository root (`src/mastra/**`, `npm run dev:agent` → Studio `:4111`) |
 | CopilotKit bridge | `copilotkit-integrations` skill → `references/integrations/mastra.md` |
 | Mastra tasks | `tasks/mastra/` · `tasks/prompts/mastra/` |
 
 ---
 
-*Synced to [mastra.ai/llms.txt](https://mastra.ai/llms.txt) **2026-05-30** (Supatabs agents/memory/workflows/streaming + ACP + multi-user threads). Re-fetch when links 404. **MCP:** `searchMastraDocs` requires `projectPath` (e.g. `/home/sk/mdeai/mdeapp`). **Upstream:** [mastra-ai/mastra issues](https://github.com/mastra-ai/mastra/issues).*
+*Synced to [mastra.ai/llms.txt](https://mastra.ai/llms.txt) **2026-05-30** (Supatabs agents/memory/workflows/streaming + ACP + multi-user threads). Re-fetch when links 404. **MCP:** `searchMastraDocs` requires `projectPath` (the absolute path of the current checkout root). **Upstream:** [mastra-ai/mastra issues](https://github.com/mastra-ai/mastra/issues).*

@@ -23,7 +23,7 @@ Search specifically for a silent skip that exits 0, missing `pipefail` where a p
 
 ## Advisory analyzer false positives
 
-Codacy Static Code Analysis does not gate a merge on this repository (`floor` is the only required check). Read its findings on the merits, but these classes have been verified as false positives and should not be "fixed":
+Codacy Static Code Analysis does not gate a merge on this repository (`floor` and `mastra-schema-init` are the required checks). Read its findings on the merits, but these classes have been verified as false positives and should not be "fixed":
 
 | Finding | Reality |
 | -- | -- |

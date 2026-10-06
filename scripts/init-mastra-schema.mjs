@@ -24,6 +24,8 @@
  */
 import { PostgresStore } from "@mastra/pg";
 import { applyThreadOwnershipGuardTo } from "./lib/mastra-thread-ownership-guard.mjs";
+import { applyMastraStorageLockdownTo } from "./lib/mastra-storage-lockdown.mjs";
+import { applyMastraRetentionTo } from "./lib/mastra-retention.mjs";
 
 const connectionString = process.env.DATABASE_URL?.trim().replace(/^"|"$/g, "").trim();
 
@@ -52,11 +54,24 @@ try {
   console.log(`init-mastra-schema: initializing Mastra schema on ${safeTarget(connectionString)}`);
   await store.init();
 
+  // SAN-1368 — lock every vendor table to the trusted server path. This MUST run here,
+  // after the tables exist: the RLS migration replays before Mastra creates them, so on a
+  // fresh environment it locks nothing and the tables would be reachable by anon/
+  // authenticated through PostgREST.
+  await applyMastraStorageLockdownTo(connectionString);
+
   // SAN-547 — a thread's owner is immutable once claimed. Applied here rather than in
   // `supabase/migrations/**` because this script is what creates the vendor-owned
   // `mastra_*` tables; a fresh `supabase db reset` has no `mastra_threads` to guard.
   await applyThreadOwnershipGuardTo(connectionString);
-  console.log("init-mastra-schema: ok — Mastra schema present, thread ownership guard applied");
+  // Retention functions + the anonymous-thread regression trigger. No cron is
+  // scheduled here: recurring trace retention is an explicit, post-cleanup step,
+  // and the one-time anonymous sweep must never run automatically. SAN-1368's
+  // storage lockdown above is preserved and still runs first.
+  await applyMastraRetentionTo(connectionString);
+  console.log(
+    "init-mastra-schema: ok — schema locked (RLS + FORCE + service_role policy), ownership guard and retention guard applied (no cron scheduled)",
+  );
 } catch (error) {
   console.error(
     `init-mastra-schema: FAILED — ${error instanceof Error ? error.message : String(error)}`,

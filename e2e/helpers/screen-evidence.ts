@@ -5,7 +5,7 @@ import { collectCriticalConsoleErrors } from "./maps-layout";
 
 const SCREENSHOT_ROOT = path.join(process.cwd(), "tmp", "screenshots");
 
-/** Ensures `mdeapp/tmp/screenshots/SCREEN-###/` exists for Done-gate evidence. */
+/** Ensures `tmp/screenshots/SCREEN-###/` exists for Done-gate evidence. */
 export function screenshotDir(screenId: string): string {
   const dir = path.join(SCREENSHOT_ROOT, screenId);
   fs.mkdirSync(dir, { recursive: true });

@@ -1,6 +1,6 @@
 ---
 title: Mastra docs MCP lookup
-description: Load before using Cursor user-mastra MCP tools; set projectPath to mdeapp.
+description: Load before using Cursor user-mastra MCP tools; set projectPath to the repository root.
 parent: mastra
 impact: HIGH
 impactDescription: When to use user-mastra MCP vs embedded vs links.md
@@ -18,11 +18,11 @@ Use **before** guessing APIs from training data. mdeai has **`user-mastra`** MCP
 | Full doc page by path | **`mastraDocs`** | `paths: ["docs/agents/overview"]` | Best for known URLs; returns markdown + related paths |
 | Browse embedded guides | **`readMastraDocs`** | `package`, `projectPath`, optional `topic` | `@mastra/core`, `@mastra/memory`, … |
 | Keyword search in installed docs | **`searchMastraDocs`** | `query`, **`projectPath`** | Often empty if embedded tree sparse — fall back to `mastraDocs` |
-| List installed packages | **`listMastraPackages`** | `projectPath` | mdeapp: core, memory, server, deployer, loggers |
+| List installed packages | **`listMastraPackages`** | `projectPath` | this app: core, memory, server, deployer, loggers |
 | Export / API surface | **`getMastraExports`** | `package`, `projectPath` | Type discovery |
 | v1 migration | **`mastraMigration`** | (see schema) | Breaking changes |
 
-**Always pass:** `projectPath: "/home/sk/mdeai/mdeapp"` (or repo-relative `mdeapp` from workspace root).
+**Always pass:** `projectPath` = the absolute path of the current checkout root (the app lives at the repository root).
 
 ## `mastraDocs` path patterns
 

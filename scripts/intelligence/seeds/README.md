@@ -21,7 +21,7 @@ psql "$DATABASE_URL" -f tasks/data/seeds/data041_venue_signals.sql
 Re-export from production:
 
 ```bash
-cd mdeapp && infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-seed.mjs
+infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-seed.mjs
 ```
 
 ### Rollback
@@ -31,7 +31,7 @@ See `DELETE` comment at top of seed file (30 primary-key ids only).
 ### Verify
 
 ```bash
-cd mdeapp && infisical run --silent --env=dev --path=/ -- npm run verify:mis-phase1
+infisical run --silent --env=dev --path=/ -- npm run verify:mis-phase1
 ```
 
 ## `data041_anchor_evidence.sql`
@@ -52,5 +52,5 @@ psql "$DATABASE_URL" -f tasks/data/seeds/data041_anchor_evidence.sql
 Re-export from production:
 
 ```bash
-cd mdeapp && infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-anchor-evidence.mjs
+infisical run --silent --env=dev --path=/ -- node scripts/intelligence/export-data041-anchor-evidence.mjs
 ```

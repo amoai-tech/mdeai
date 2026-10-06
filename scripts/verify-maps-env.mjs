@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Verify mdeapp maps-related env vars (names + live probes). Never prints secret values.
+ * Verify maps-related env vars (names + live probes). Never prints secret values.
  * Usage: node --env-file=.env.local scripts/verify-maps-env.mjs
  */
 const errors = [];
@@ -134,7 +134,7 @@ async function probePlacesKey() {
 
 // Compare repo root Places key presence (F04 mapping hint)
 async function main() {
-  console.log("Maps env check (mdeapp/.env.local)\n");
+  console.log("Maps env check (.env.local)\n");
   console.log("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:", mask(mapsKey));
   console.log("NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID:", mapId ?? "(missing)");
   console.log("GOOGLE_GENERATIVE_AI_API_KEY:", mask(geminiKey));

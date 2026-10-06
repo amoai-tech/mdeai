@@ -19,7 +19,7 @@ Verified **2026-06-07** on localhost.
 | `packages/api/.env` | Runtime — **must match** commerce Stripe vars |
 
 ```bash
-cd /home/sk/mdeai/mdeapp && node scripts/verify-commerce-env.mjs
+node scripts/verify-commerce-env.mjs  # from the repository root
 ```
 
 Infisical path `/commerce` (project `md-eapp-hn-nz`, env `dev`):
@@ -39,7 +39,7 @@ Docs: `docs/ecommerce/docs/env-commerce.md` · ADR: `docs/ecommerce/adr/001-stan
 ## Boot commands
 
 ```bash
-cd /home/sk/mdeai/mdeapp/commerce/mercur
+cd commerce/mercur  # from the repository root
 
 # deps (once)
 bun install
@@ -86,7 +86,7 @@ bun run dev
 Re-seed seller only:
 
 ```bash
-cd /home/sk/mdeai/mdeapp/commerce/mercur && bun run seed:seller
+cd commerce/mercur  # from the repository root && bun run seed:seller
 ```
 
 ## Publishable API key (dev)
@@ -100,7 +100,7 @@ Linked to **Default Sales Channel** (`sc_01KTHTXENNVK48D4KE5GRBNG4X`).
 ## Catalog seed (ECOM-C-006)
 
 ```bash
-cd /home/sk/mdeai/mdeapp/commerce/mercur
+cd commerce/mercur  # from the repository root
 bun run seed:mdeai-catalog
 ```
 
@@ -142,7 +142,7 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
 ### One-time checkout prep
 
 ```bash
-cd /home/sk/mdeai/mdeapp/commerce/mercur
+cd commerce/mercur  # from the repository root
 bun run seed:checkout-prep   # seller stock location + shipping + Stripe on region
 ```
 
@@ -156,7 +156,7 @@ stripe listen --forward-to localhost:9000/hooks/payment/stripe_stripe
 ### Store API proof (payment session)
 
 ```bash
-source /home/sk/mdeai/mdeapp/commerce/.env
+source commerce/.env  # from the repository root
 PK="$MEDUSA_PUBLISHABLE_KEY"
 REG=reg_01KTHTXVGSPF1F6V33D3KSCQXX
 
@@ -223,4 +223,4 @@ curl -s -X POST -H "x-publishable-api-key: $PK" \
 
 ## Phase 2+ (frozen)
 
-No `mdeapp/src` commerce bridge until ECOM-C-018 exit gate.
+No `src/` commerce bridge until ECOM-C-018 exit gate.

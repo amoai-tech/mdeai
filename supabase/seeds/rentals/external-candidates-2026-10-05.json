@@ -1,0 +1,97 @@
+{
+  "task": "SAN-468 · REAL-002 — Apartment inventory quality",
+  "inventory_kind": "external_candidate",
+  "source_observed_date": "2026-10-05",
+  "application": {
+    "environment": "production",
+    "project_ref": "zkwcbyxiwklihegjhuql",
+    "applied_at": "2026-10-05",
+    "method": "operator-run psql (not a migration)",
+    "companion_sql": "supabase/seeds/rentals/external-candidates-2026-10-05.sql"
+  },
+  "state_contract": {
+    "status": "inactive",
+    "moderation_status": "pending",
+    "listing_workflow_status": "draft",
+    "verified": false,
+    "freshness_status": "unconfirmed",
+    "landlord_id": null,
+    "host_id": null,
+    "latitude": null,
+    "longitude": null,
+    "address": null,
+    "images": []
+  },
+  "candidates": [
+    {
+      "title": "Apartamento en Arriendo 2do Parque Laureles Medellín",
+      "slug": "external-mercadolibre-mco-4491119468",
+      "neighborhood": "Laureles",
+      "city": "Medellín",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "size_sqm": 74,
+      "price_monthly": 3200000,
+      "currency": "COP",
+      "source_name": "Mercado Libre",
+      "source_url": "https://apartamento.mercadolibre.com.co/MCO-4491119468-apartamento-en-arriendo-2do-parque-laureles-medellin-_JM",
+      "source_listing_id": "mercadolibre:MCO-4491119468"
+    },
+    {
+      "title": "Apartamento en Arriendo Laureles 473-23491",
+      "slug": "external-mercadolibre-mco-4487495618",
+      "neighborhood": "Laureles",
+      "city": "Medellín",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "size_sqm": 168,
+      "price_monthly": 4500000,
+      "currency": "COP",
+      "source_name": "Mercado Libre",
+      "source_url": "https://apartamento.mercadolibre.com.co/MCO-4487495618-apartamento-en-arriendo-laureles-473-23491-_JM",
+      "source_listing_id": "mercadolibre:MCO-4487495618"
+    },
+    {
+      "title": "Apartamento en Laureles — Zitios 10131396",
+      "slug": "external-zitios-10131396",
+      "neighborhood": "Laureles",
+      "city": "Medellín",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "size_sqm": 70,
+      "price_monthly": 2500000,
+      "currency": "COP",
+      "source_name": "Zitios",
+      "source_url": "https://zitios.com.co/inmueble/arriendo-apartamento-sector-laureles_10131396",
+      "source_listing_id": "zitios:10131396"
+    },
+    {
+      "title": "Apartamento en Laureles — Zitios 10361973",
+      "slug": "external-zitios-10361973",
+      "neighborhood": "Laureles",
+      "city": "Medellín",
+      "bedrooms": 3,
+      "bathrooms": 3,
+      "size_sqm": 110,
+      "price_monthly": 7000000,
+      "currency": "COP",
+      "source_name": "Zitios",
+      "source_url": "https://zitios.com.co/inmueble/arriendo-apartamento-laureles_10361973",
+      "source_listing_id": "zitios:10361973"
+    },
+    {
+      "title": "Apartamento en Arriendo Las Acacias / Laureles",
+      "slug": "external-ciencuadras-3454339",
+      "neighborhood": "Las Acacias",
+      "city": "Medellín",
+      "bedrooms": 3,
+      "bathrooms": 3,
+      "size_sqm": 130,
+      "price_monthly": 5500000,
+      "currency": "COP",
+      "source_name": "Ciencuadras",
+      "source_url": "https://www.ciencuadras.com/inmueble/apartamento-en-arriendo-en-las-acacias-medellin-3454339",
+      "source_listing_id": "ciencuadras:3454339"
+    }
+  ]
+}
