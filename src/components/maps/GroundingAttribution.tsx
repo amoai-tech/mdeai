@@ -18,17 +18,27 @@ export function GroundingAttribution({
   if (!rows.length) return null;
 
   // SAN-878 — one grounded result: "Source: Google Maps · <place name>", linked to the source URL.
-  // Google's grounding rule asks for the source name, a link to its URL, and the unchanged text
-  // "Google Maps" (never translated). With no URL it still attributes, but never invents a link.
+  // Google's grounding rule: show the source name, link to its URL, and write "Google Maps" unchanged —
+  // not translated, not on two lines, regular 12px+ text in #5E5E5E (white on dark). Callers pass a row
+  // only for a place Google actually grounded; this component never invents a source for one that wasn't.
   if (compact && rows.length === 1) {
     const row = rows[0]!;
     const name = row.title ? cleanGroundingAttributionTitle(row.title) : "";
-    const label = name ? `Google Maps · ${name}` : "Google Maps";
+    const googleMaps = (
+      <span className="whitespace-nowrap font-normal text-[#5e5e5e] dark:text-white" translate="no">
+        Google Maps
+      </span>
+    );
+    const label = (
+      <>
+        {googleMaps}
+        {name ? ` · ${name}` : ""}
+      </>
+    );
     return (
       <p
-        className="mt-1 text-xs text-muted-foreground"
+        className="mt-1 text-xs font-normal text-[#5e5e5e] dark:text-white"
         data-testid="grounding-attribution"
-        translate="no"
       >
         Source:{" "}
         {row.placeUri ? (
@@ -36,7 +46,7 @@ export function GroundingAttribution({
             href={row.placeUri}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary underline"
+            className="underline underline-offset-2"
           >
             {label}
           </a>

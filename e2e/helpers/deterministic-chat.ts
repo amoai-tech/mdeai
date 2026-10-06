@@ -118,7 +118,8 @@ export async function mockFastPaths(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({
         results: [groundedPlace],
-        attribution: [],
+        // Google's own source for the place, as the grounding tool returns it (SAN-878).
+        attribution: [{ source: "google_maps_grounding", placeUri: groundedPlace.mapsUrl, title: groundedPlace.title }],
         source: "mock",
         metadata: { venueKind: "cafe" },
       }),

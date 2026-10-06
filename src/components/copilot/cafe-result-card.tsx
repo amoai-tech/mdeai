@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
-import type { GroundedPhotoAttribution } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
 import { mapsDeepLinksEnabled } from "@/lib/maps-deep-links";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
 import {
@@ -31,6 +31,8 @@ export type CafeResultCardProps = {
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   placeId?: string;
   fieldMaskVersion?: string;
+  /** Google's source for this place. Without it the card says nothing about Google Maps (SAN-878). */
+  groundingSource?: GroundingSource;
   testId?: string;
   detailsTestId?: string;
   bookingTestId?: string;
@@ -107,6 +109,7 @@ export function CafeResultCard({
   photoAuthorAttributions,
   placeId,
   fieldMaskVersion,
+  groundingSource,
   testId = "cafe-result-card",
   detailsTestId = "cafe-details-cta",
   bookingTestId = "cafe-booking-cta",
@@ -280,16 +283,24 @@ export function CafeResultCard({
         </p>
       ) : null}
 
-      {/* SAN-878 — grounded content is followed by its Google Maps source, visible without a tap. */}
-      <div onClick={(e) => e.stopPropagation()}>
-        <GroundingAttribution compact rows={[{ placeUri: mapsUrl, title }]} />
-      </div>
+      {/* SAN-878 — grounded content is followed by the Google source that grounded it, visible without
+          a tap. Curated fallback rows have no such source, so they show none and never claim Google. */}
+      {groundingSource ? (
+        <div onClick={(e) => e.stopPropagation()}>
+          <GroundingAttribution
+            compact
+            rows={[{ placeUri: groundingSource.uri, title: groundingSource.title }]}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
-          <Info className="size-3" aria-hidden />
-          Google-verified candidate
-        </span>
+        {groundingSource ? (
+          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
+            <Info className="size-3" aria-hidden />
+            Google-verified candidate
+          </span>
+        ) : null}
         {placeId ? (
           <span className="rounded bg-muted px-1.5 py-0.5">Place ID</span>
         ) : null}

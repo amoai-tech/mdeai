@@ -20,6 +20,7 @@ describe("CafeResultCard", () => {
         formattedAddress="Laureles, Medellín"
         placeId="places/abc"
         fieldMaskVersion="places-new-v1"
+        groundingSource={{ uri: "https://maps.google.com/?cid=9", title: "Rituales Compañía de Café" }}
       />,
     );
 
@@ -53,6 +54,7 @@ describe("CafeResultCard", () => {
   describe("SAN-878 · Google Maps source attribution", () => {
     afterEach(() => vi.unstubAllEnvs());
 
+    const grounded = { uri: "https://maps.google.com/?cid=1", title: "Pausa Coffee & Brunch" };
     const render = (props: Partial<React.ComponentProps<typeof CafeResultCard>> = {}) =>
       renderToStaticMarkup(
         <CafeResultCard
@@ -64,11 +66,12 @@ describe("CafeResultCard", () => {
           mapsUrl="https://maps.google.com/?cid=1"
           directionsUrl="https://www.google.com/maps/dir/?api=1&destination_place_id=x"
           reviewsUrl="https://search.google.com/local/reviews?placeid=x"
+          groundingSource={grounded}
           {...props}
         />,
       );
 
-    it("shows the Google Maps source with the place name and its URL, right after the generated summary", () => {
+    it("shows the Google source with its name and URL, right after the generated summary", () => {
       const html = render();
       const source = html.indexOf('data-testid="grounding-attribution"');
       expect(source).toBeGreaterThan(-1);
@@ -79,6 +82,25 @@ describe("CafeResultCard", () => {
       expect(block).toContain("Google Maps");
       expect(block).toContain("Pausa Coffee &amp; Brunch");
       expect(block).toContain('translate="no"');
+    });
+
+    it("links to the grounding source's URL, not to the card's own Maps URL", () => {
+      const html = render({ mapsUrl: "https://maps.app.goo.gl/other", groundingSource: grounded });
+      const source = html.indexOf('data-testid="grounding-attribution"');
+      expect(html.slice(source, html.indexOf("</p>", source))).toContain('href="https://maps.google.com/?cid=1"');
+    });
+
+    it("a curated fallback card never claims Google Maps as its source", () => {
+      const html = render({ groundingSource: undefined });
+      expect(html).not.toContain('data-testid="grounding-attribution"');
+      expect(html).not.toContain("Source:");
+      expect(html).not.toContain("Google-verified candidate");
+    });
+
+    it("a fallback card without any Maps URL claims nothing either", () => {
+      const html = render({ groundingSource: undefined, mapsUrl: undefined, directionsUrl: undefined, reviewsUrl: undefined });
+      expect(html).not.toContain("Google Maps");
+      expect(html).not.toContain("Google-verified candidate");
     });
 
     it("keeps the Directions and Reviews links as they were", () => {
@@ -97,15 +119,6 @@ describe("CafeResultCard", () => {
       const html = render();
       expect(html.match(/>Google Maps/g)).toHaveLength(1);
       expect(html).toContain('data-testid="grounding-attribution"');
-    });
-
-    it("without a Maps URL it still attributes to Google Maps and does not invent a link", () => {
-      const html = render({ mapsUrl: undefined, directionsUrl: undefined, reviewsUrl: undefined });
-      const source = html.indexOf('data-testid="grounding-attribution"');
-      expect(source).toBeGreaterThan(-1);
-      const block = html.slice(source, html.indexOf("</p>", source));
-      expect(block).toContain("Google Maps");
-      expect(block).not.toContain("<a ");
     });
   });
 });

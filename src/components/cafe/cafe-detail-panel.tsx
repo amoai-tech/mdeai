@@ -369,10 +369,12 @@ export function CafeDetailPanel({
                     From search summary
                   </p>
                   <p className="mt-1 text-sm leading-relaxed">{detail.summary}</p>
-                  <GroundingAttribution
-                    compact
-                    rows={[{ placeUri: merged.mapsUrl, title: detail.title }]}
-                  />
+                  {detail.groundingSource ? (
+                    <GroundingAttribution
+                      compact
+                      rows={[{ placeUri: detail.groundingSource.uri, title: detail.groundingSource.title }]}
+                    />
+                  ) : null}
                 </div>
               ) : null}
 

@@ -36,4 +36,16 @@ describe("GroundingAttribution (compact, one source)", () => {
     expect(html.match(/Google Maps/g)).toHaveLength(1);
     expect(html).toContain("Cafe Euge");
   });
+
+  it("keeps the words Google Maps on one line, untranslated, in one of Google's allowed colours", () => {
+    const html = renderToStaticMarkup(
+      <GroundingAttribution compact rows={[{ placeUri: "https://maps.google.com/?cid=1", title: "Pausa" }]} />,
+    );
+    const span = html.match(/<span[^>]*>Google Maps<\/span>/)?.[0] ?? "";
+    expect(span).toContain('translate="no"');
+    expect(span).toContain("whitespace-nowrap");
+    expect(span).toContain("font-normal");
+    expect(span).toContain("text-[#5e5e5e]");
+    expect(span).toContain("dark:text-white");
+  });
 });

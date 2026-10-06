@@ -37,8 +37,11 @@ const detail: NightlifeVenueDetail = {
 };
 
 describe("NightlifeDetailPanel Google Maps source (SAN-878)", () => {
-  it("attributes the summary to Google Maps with the place name and URL", () => {
-    const html = renderToStaticMarkup(<NightlifeDetailPanel detail={detail} siblings={[detail]} />);
+  const grounded = { uri: "https://maps.google.com/?cid=7", title: "Rooftop Salsa Bar" };
+
+  it("attributes the summary to its Google source with the place name and URL", () => {
+    const withSource = { ...detail, groundingSource: grounded };
+    const html = renderToStaticMarkup(<NightlifeDetailPanel detail={withSource} siblings={[withSource]} />);
     const source = html.indexOf('data-testid="grounding-attribution"');
     expect(source).toBeGreaterThan(-1);
     expect(html.indexOf("Salsa and cocktails")).toBeLessThan(source);
@@ -47,5 +50,10 @@ describe("NightlifeDetailPanel Google Maps source (SAN-878)", () => {
     expect(block).toContain("Google Maps");
     expect(block).toContain("Rooftop Salsa Bar");
     expect(block).toContain('translate="no"');
+  });
+
+  it("a curated fallback venue is not attributed to Google Maps", () => {
+    const html = renderToStaticMarkup(<NightlifeDetailPanel detail={detail} siblings={[detail]} />);
+    expect(html).not.toContain('data-testid="grounding-attribution"');
   });
 });
