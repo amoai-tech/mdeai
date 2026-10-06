@@ -3,9 +3,7 @@
 import { useCallback, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
-import { useEventFastPath } from "@/components/chat/event-fast-path-context";
-import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
-import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
+import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
 import {
   buildCafeSearchParams,
@@ -33,15 +31,14 @@ async function fetchGroundedSearch(
 export function useGroundedSearchFastPath() {
   const { state, setState } = useConciergeCoAgent();
   const { showExchange, clearLocalMessages } = useEventLocalChat();
-  const { setToolResult: setEventToolResult } = useEventFastPath();
-  const { setToolResult: setRentalToolResult, setSearchMeta } = useRentalFastPath();
-  const { setToolResult: setRestaurantToolResult } = useRestaurantFastPath();
+  const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
+      clearOthers("grounded");
       setToolResult(envelope);
       // UX-033 / J15 — clear prior vertical pins (parity with event fast-path → rental).
       mergePinsByCategory("rental", []);
@@ -63,7 +60,7 @@ export function useGroundedSearchFastPath() {
       });
       return count;
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, state],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, state],
   );
 
   const runSearch = useCallback(
@@ -74,10 +71,6 @@ export function useGroundedSearchFastPath() {
       if (busyRef.current) return true;
       busyRef.current = true;
       try {
-        setEventToolResult(null);
-        setRentalToolResult(null);
-        setSearchMeta(null);
-        setRestaurantToolResult(null);
         const envelope = await fetchGroundedSearch(params);
         const count = applySearchResults(envelope);
         showExchange(
@@ -95,10 +88,6 @@ export function useGroundedSearchFastPath() {
     },
     [
       applySearchResults,
-      setEventToolResult,
-      setRentalToolResult,
-      setRestaurantToolResult,
-      setSearchMeta,
       setToolResult,
       showExchange,
     ],

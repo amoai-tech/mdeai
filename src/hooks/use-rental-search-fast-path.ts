@@ -5,7 +5,7 @@ import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
-import { useEventFastPath } from "@/components/chat/event-fast-path-context";
+import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import { RENTAL_CLARIFY_MESSAGE } from "@/lib/rental-clarify-copy";
 import {
   buildRentalSearchParams,
@@ -64,7 +64,7 @@ export function useRentalSearchFastPath() {
   const { clarifyPending, clarifyKind, showClarify, showExchange, clearLocalMessages } =
     useEventLocalChat();
   const { setToolResult, setSearchMeta } = useRentalFastPath();
-  const { setToolResult: setEventToolResult } = useEventFastPath();
+  const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
 
@@ -75,7 +75,7 @@ export function useRentalSearchFastPath() {
       memory: ConciergeWorkingMemory,
       meta?: { hybridUsed?: boolean; rankExplanation?: Array<{ factor: string; score: number; note: string }> },
     ) => {
-      setEventToolResult(null);
+      clearOthers("rental");
       mergePinsByCategory("event", []);
       const envelope = rentalsToToolEnvelope(cards, meta);
       setToolResult(envelope);
@@ -89,7 +89,7 @@ export function useRentalSearchFastPath() {
         lastRentalResults: rentalsToPanelRows(cards),
       });
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, setEventToolResult],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
   );
 
   const runSearch = useCallback(

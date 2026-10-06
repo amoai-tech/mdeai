@@ -19,7 +19,29 @@ vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotChatView: () => null,
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined }),
+  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: () => {} }),
+}));
+// New Chat (ConciergeSessionProvider) also resets the agent, the map and the rental UI; none of
+// that is under test here, so those collaborators are no-ops.
+vi.mock("@/lib/hooks/use-concierge-chat", () => ({
+  useConciergeChat: () => ({ reset: () => {}, stopActiveRun: () => {} }),
+}));
+vi.mock("@/platform/maps/map-context", () => ({
+  useMapContext: () => ({ clearPins: () => {}, setSelectedPinId: () => {}, clearFocusPinRequest: () => {} }),
+}));
+vi.mock("@/components/chat/rich-card-results-context", () => ({
+  useRichCardResults: () => ({ clearRichCardCounts: () => {} }),
+}));
+vi.mock("@/components/chat/rental-ui-context", () => ({
+  useRentalUi: () => ({
+    closeScheduleViewing: () => {},
+    closeVenueDetail: () => {},
+    closeCafeDetail: () => {},
+    closeCafeBooking: () => {},
+    closeEventVenueOfferings: () => {},
+    closeEventProposalShell: () => {},
+    clearLeadConfirmation: () => {},
+  }),
 }));
 vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({ useConciergeSendHandlers: () => ({}) }));
 vi.mock("@/lib/concierge-send-user-message", () => ({ sendConciergeUserMessage: vi.fn() }));
@@ -38,7 +60,8 @@ import {
   conciergeWelcomeScreen,
 } from "@/components/chat/concierge-copilot-chat-view";
 import { useTranscriptTailHasContent } from "@/components/chat/concierge-transcript-tail";
-import { EventFastPathProvider } from "@/components/chat/event-fast-path-context";
+import { ConciergeSessionProvider, useConciergeSession } from "@/components/chat/concierge-session-context";
+import { EventFastPathProvider, useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { EventSearchResultsProvider, useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { GroundedFastPathProvider, useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
@@ -109,20 +132,22 @@ describe("conciergeWelcomeScreen", () => {
 });
 
 /** Reports the hook's answer, then applies one change so each source can be tried in turn. */
-function HasContent({ change }: { change: "none" | "local" | "rental" | "grounded" | "restaurant" | "citation" }) {
+function HasContent({ change }: { change: "none" | "local" | "rental" | "event" | "grounded" | "restaurant" | "citation" }) {
   const hasContent = useTranscriptTailHasContent();
   const { showExchange } = useEventLocalChat();
   const { setToolResult: setRental } = useRentalFastPath();
+  const { setToolResult: setEvent } = useEventFastPath();
   const { setToolResult: setGrounded } = useGroundedFastPath();
   const { setToolResult: setRestaurant } = useRestaurantFastPath();
   const { setWebCitations } = useEventSearchResults();
   useEffect(() => {
     if (change === "local") showExchange("q", "a");
     if (change === "rental") setRental({ results: [] });
+    if (change === "event") setEvent({ results: [] });
     if (change === "grounded") setGrounded({ results: [] });
     if (change === "restaurant") setRestaurant({ results: [] });
     if (change === "citation") setWebCitations([{ title: "t", url: "https://example.com", snippet: "s" }]);
-  }, [change, showExchange, setRental, setGrounded, setRestaurant, setWebCitations]);
+  }, [change, showExchange, setRental, setEvent, setGrounded, setRestaurant, setWebCitations]);
   return <span data-testid="has-content">{String(hasContent)}</span>;
 }
 
@@ -137,7 +162,7 @@ describe("useTranscriptTailHasContent", () => {
     unmount();
   });
 
-  it.each(["local", "rental", "grounded", "restaurant", "citation"] as const)(
+  it.each(["local", "rental", "event", "grounded", "restaurant", "citation"] as const)(
     "is true once there is a %s source to show",
     (change) => {
       const { container, unmount } = mount(
@@ -187,6 +212,85 @@ describe("the transcript dedupe counts only messages the stock list renders", ()
       unmount();
     },
   );
+});
+
+type Source = "local" | "rental" | "event" | "grounded" | "restaurant" | "citation";
+
+/** Shows what CopilotChatView would be told about the welcome screen, and lets a test drive it. */
+function WelcomeProbe({ source }: { source: Source }) {
+  const hasTailContent = useTranscriptTailHasContent();
+  const welcome = conciergeWelcomeScreen(hasTailContent, "WELCOME");
+  const { startNewChat } = useConciergeSession();
+  const { showExchange } = useEventLocalChat();
+  const { setToolResult: setRental } = useRentalFastPath();
+  const { setToolResult: setEvent } = useEventFastPath();
+  const { setToolResult: setGrounded } = useGroundedFastPath();
+  const { setToolResult: setRestaurant } = useRestaurantFastPath();
+  const { setWebCitations } = useEventSearchResults();
+  const show = () => {
+    if (source === "local") showExchange("q", "a");
+    if (source === "rental") setRental({ results: [] });
+    if (source === "event") setEvent({ results: [] });
+    if (source === "grounded") setGrounded({ results: [] });
+    if (source === "restaurant") setRestaurant({ results: [] });
+    if (source === "citation") setWebCitations([{ title: "t", url: "https://example.com", snippet: "s" }]);
+  };
+  return (
+    <>
+      <span data-testid="welcome">{String(welcome)}</span>
+      <button data-testid="show" onClick={show} />
+      <button data-testid="new-chat" onClick={startNewChat} />
+    </>
+  );
+}
+
+describe("the welcome screen comes back after New Chat", () => {
+  it.each(["local", "rental", "event", "grounded", "restaurant", "citation"] as const)(
+    "%s: allowed when empty, suppressed while a result shows, allowed again after New Chat",
+    (source) => {
+      const { container, unmount } = mount(
+        <Providers>
+          <ConciergeSessionProvider>
+            <WelcomeProbe source={source} />
+          </ConciergeSessionProvider>
+        </Providers>,
+      );
+      const welcome = () => container.querySelector('[data-testid="welcome"]')?.textContent;
+      const click = (id: string) =>
+        act(() => (container.querySelector(`[data-testid="${id}"]`) as HTMLElement).click());
+      expect(welcome()).toBe("WELCOME");
+      click("show");
+      expect(welcome()).toBe("false");
+      click("new-chat");
+      expect(welcome()).toBe("WELCOME");
+      unmount();
+    },
+  );
+});
+
+/** The transcript has ONE message whose id merely contains the local ids joined by "|". */
+function ViewWithPipeInTranscriptId() {
+  const { messages, showExchange } = useEventLocalChat();
+  useEffect(() => {
+    showExchange("Pipe question", "Pipe answer");
+  }, [showExchange]);
+  const transcript =
+    messages.length > 0
+      ? [{ id: messages.map((m) => m.id).join("|"), role: "assistant", content: "unrelated" }]
+      : [];
+  return <ConciergeMessageView messages={transcript as never} />;
+}
+
+describe("the transcript id key cannot be confused by a '|' inside an id", () => {
+  it("keeps local messages whose ids only appear as pieces of one longer transcript id", () => {
+    const { container, unmount } = mount(
+      <Providers>
+        <ViewWithPipeInTranscriptId />
+      </Providers>,
+    );
+    expect(container.textContent).toContain("Pipe answer");
+    unmount();
+  });
 });
 
 function ClarifyKind({ kind, transcriptHasIt }: { kind: "event" | "rental" | "restaurant"; transcriptHasIt: boolean }) {

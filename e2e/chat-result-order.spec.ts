@@ -126,6 +126,78 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     );
   });
 
+  test("a later search of another kind replaces the earlier results (grounded → event → rental)", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+
+    await typeAndSubmit(page, EVENT_QUERY);
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    await expect(page.getByTestId("grounded-fast-path-panel"), "grounded results are stale").toHaveCount(0);
+
+    await typeAndSubmit(page, RENTAL_QUERY);
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await expect(page.getByTestId("event-fast-path-panel"), "event results are stale").toHaveCount(0);
+    await expectReadsBefore(
+      page.getByTestId("rental-fast-path-panel"),
+      "the rental results",
+      composer(page),
+      "the message box",
+    );
+  });
+
+  // The rental matrix above already covers the phone; the other three result types get it too.
+  test.describe("on a 390px phone", () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+    });
+
+    test("event results are above the composer and fit the screen", async ({ page }) => {
+      await gotoDeterministicChat(page);
+      const response = waitForPost(page, "/api/events/search");
+      await typeAndSubmit(page, EVENT_QUERY);
+      expect((await response).ok()).toBe(true);
+      await expect(page.getByTestId("event-card")).toHaveCount(1);
+      await expectReadsBefore(
+        page.getByTestId("event-fast-path-panel"),
+        "the event results",
+        composer(page),
+        "the message box",
+      );
+      await expectNoSidewaysScroll(page);
+    });
+
+    test("grounded-place results are above the composer and fit the screen", async ({ page }) => {
+      await gotoDeterministicChat(page);
+      const response = waitForPost(page, "/api/grounded/search");
+      await typeAndSubmit(page, GROUNDED_QUERY);
+      expect((await response).ok()).toBe(true);
+      await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+      await expectReadsBefore(
+        page.getByTestId("grounded-fast-path-panel"),
+        "the grounded-place results",
+        composer(page),
+        "the message box",
+      );
+      await expectNoSidewaysScroll(page);
+    });
+
+    test("restaurant results are above the composer and fit the screen", async ({ page }) => {
+      await gotoDeterministicChat(page);
+      await typeAndSubmit(page, RESTAURANT_QUERY);
+      await expect(page.getByTestId("restaurant-clarify")).toBeVisible();
+      await chooseRestaurantFilter(page);
+      await expect(page.getByTestId("restaurant-card")).toHaveCount(1);
+      await expectReadsBefore(
+        page.getByTestId("restaurant-fast-path-panel"),
+        "the restaurant results",
+        composer(page),
+        "the message box",
+      );
+      await expectNoSidewaysScroll(page);
+    });
+  });
+
   test("a shortcut question is shown once, in order, with everything above the composer", async ({ page }) => {
     await gotoDeterministicChat(page);
     await typeAndSubmit(page, RESTAURANT_QUERY);

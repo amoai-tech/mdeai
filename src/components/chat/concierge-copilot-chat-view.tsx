@@ -27,16 +27,15 @@ import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handler
  */
 function ConciergeMessageViewInner(props: CopilotChatMessageViewProps) {
   // Only user and assistant messages are rendered by the stock list, so only their ids mean
-  // "the transcript already shows this". The Set is keyed on the joined ids so a streamed token
-  // (a new `messages` array with the same ids) does not re-render the tail and its result panels.
-  const shownIds = (props.messages ?? [])
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message) => message.id)
-    .join("|");
-  const transcriptMessageIds = useMemo(
-    () => new Set(shownIds ? shownIds.split("|") : []),
-    [shownIds],
+  // "the transcript already shows this". The Set is keyed on the serialized id list so a streamed
+  // token (a new `messages` array with the same ids) does not re-render the tail and its result
+  // panels. JSON, not a separator join: an id that contains the separator cannot split in two.
+  const shownIds = JSON.stringify(
+    (props.messages ?? [])
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => message.id),
   );
+  const transcriptMessageIds = useMemo(() => new Set<string>(JSON.parse(shownIds)), [shownIds]);
   return (
     <>
       <CopilotChatMessageView {...props} />
