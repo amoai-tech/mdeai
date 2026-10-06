@@ -10,8 +10,10 @@
 -- 5. Past delivery claims on un-delivered published projects are cleared.
 
 -- ── 1. Unit-type classification ─────────────────────────────────────────────
+-- No default: a future writer that omits the class gets NULL (fail-closed), not an invented
+-- "residential_apartment". Rows whose class is genuinely known are backfilled explicitly below.
 alter table public.development_unit_types
-  add column if not exists product_class text not null default 'residential_apartment';
+  add column if not exists product_class text;
 alter table public.development_unit_types
   add column if not exists phase_label text;
 
@@ -19,7 +21,10 @@ alter table public.development_unit_types
   drop constraint if exists development_unit_types_product_class_check;
 alter table public.development_unit_types
   add constraint development_unit_types_product_class_check
-  check (product_class in ('residential_apartment', 'loft', 'commercial', 'office', 'medical'));
+  check (
+    product_class is null
+    or product_class in ('residential_apartment', 'loft', 'commercial', 'office', 'medical')
+  );
 
 comment on column public.development_unit_types.product_class is
   'Mixed-product guard: a residential-apartment search must not match a loft/commercial/office/medical row.';
@@ -50,13 +55,10 @@ using public.development_projects p
 where p.id = u.project_id
   and p.slug in ('cittadel', 'reserva-serrat-selva', 'crista');
 
-create unique index if not exists development_unit_types_typology_uniq
-  on public.development_unit_types (
-    project_id,
-    coalesce(bedrooms, -1),
-    coalesce(built_area_m2, -1),
-    coalesce(private_area_m2, -1)
-  );
+-- Physical dimensions are not identity: two legitimate towers may both have a 2BR 54 m²
+-- typology. Canonical identity stays (project_id, source_key); duplicate footprints are a
+-- quality test, never a hard constraint.
+drop index if exists public.development_unit_types_typology_uniq;
 
 -- ── 4a. Cittadel — apartment types A–D plus one loft (Ascenso first-party) ──
 insert into public.development_unit_types
@@ -132,7 +134,13 @@ on conflict (project_id, source_key) do update set
   source_url = excluded.source_url,
   verified_at = excluded.verified_at;
 
--- ── 4c. Mixed-product tagging ───────────────────────────────────────────────
+-- ── 4c. Classify the rows whose product type is actually known ──────────────
+-- Every reviewed apartment typology is residential; the loft lines are set explicitly next.
+update public.development_unit_types
+set product_class = 'residential_apartment'
+where product_class is null;
+
+-- ── 4d. Mixed-product tagging ───────────────────────────────────────────────
 -- Olium Park sells a 30 m² loft line beside 64–77 m² homes.
 update public.development_unit_types u
 set product_class = 'loft'
