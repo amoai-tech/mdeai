@@ -170,7 +170,7 @@ select throws_ok(
   'P0001', null, 'E4 idempotency key reused for a different project is rejected');
 
 -- ── F · frozen terms + retry-safe decision (6) ───────────────────────────────
-select is((select (agreement_id is null and agreement_snapshot = '{}'::jsonb)::text
+select is((select (dr.agreement_id is null and dr.agreement_snapshot = '{}'::jsonb)::text
   from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
   where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'true',
   'F0 pending registration carries no frozen terms');
@@ -186,7 +186,7 @@ select is((public.decide_developer_registration(
      where l.user_id = 'e1385000-0000-4000-8000-000000000001'),
   'accepted', null, 'DEV-REF-1') ->> 'status'), 'accepted', 'F2 partner A accepts its registration');
 
-select is((select (agreement_id is not null and agreement_snapshot ->> 'commission_value' = '3.0000')::text
+select is((select (dr.agreement_id is not null and dr.agreement_snapshot ->> 'commission_value' = '3.0000')::text
   from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
   where l.user_id = 'e1385000-0000-4000-8000-000000000001'), 'true',
   'F3 acceptance freezes the exact active agreement snapshot');
