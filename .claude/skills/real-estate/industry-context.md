@@ -1,7 +1,7 @@
 ---
 name: real-estate-expert
 version: 1.0.0
-description: Expert-level real estate systems, property management, MLS integration, CRM, virtual tours, and market analysis
+description: Use when generic real-estate terminology, workflows, or industry background is needed; jurisdiction-specific MDE claims require separate current sources.
 category: domains
 tags: [real-estate, property, mls, crm, proptech, listings]
 allowed-tools:
