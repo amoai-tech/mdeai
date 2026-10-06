@@ -23,8 +23,12 @@ with base as (
     a.status, a.moderation_status, a.listing_workflow_status, a.freshness_status,
     a.price_monthly, a.currency, a.latitude, a.longitude, a.location,
     a.last_checked_at, a.landlord_id, a.source_url, a.source_listing_id,
-    coalesce(array_length(a.images, 1), 0) as image_count,
-    (select count(*) from public.rental_listing_images li where li.listing_id = a.id) as image_evidence,
+    (select count(*) from unnest(a.images) as img
+      where coalesce(trim(img), '') <> '') as image_count,
+    (select count(*) from public.rental_listing_images li
+      where li.listing_id = a.id
+        and (coalesce(trim(li.storage_path), '') <> ''
+             or coalesce(trim(li.source_url), '') <> '')) as image_evidence,
     (select count(*) from public.rental_freshness_log f where f.listing_id = a.id) as freshness_evidence,
     (select count(*) from public.rental_grounding g where g.apartment_id = a.id) as grounding_evidence,
     (select count(*) from public.property_verifications pv where pv.apartment_id = a.id) as verification_evidence
@@ -34,7 +38,8 @@ flags as (
   select b.*,
     (coalesce(lower(b.metadata->>'is_test_fixture'), 'false') = 'true'
       or coalesce(lower(b.metadata->>'inventory_kind'), '') = 'test_fixture') as is_test_fixture,
-    (b.price_monthly is not null and b.price_monthly > 0 and b.currency in ('COP', 'USD')) as valid_price_currency,
+    (b.price_monthly is not null and b.price_monthly > 0
+      and coalesce(b.currency in ('COP', 'USD'), false)) as valid_price_currency,
     (b.image_count >= 1 or b.image_evidence > 0) as has_usable_image,
     (b.latitude is not null and b.longitude is not null) as has_coords,
     ((b.latitude is null and b.longitude is null)
@@ -118,7 +123,7 @@ select json_build_object(
         count(*) filter (where requestable) as requestable,
         count(*) filter (where valid_price_currency) as valid_price_currency,
         count(*) filter (where has_usable_image) as usable_image,
-        count(*) filter (where coord_pair_valid) as valid_coordinate_pairs,
+        count(*) filter (where has_coords and coord_pair_valid) as valid_coordinate_pairs,
         count(*) filter (where postgis_consistent) as postgis_consistent,
         count(*) filter (where has_freshness_evidence) as freshness_evidence,
         count(*) filter (where has_canonical_owner) as canonical_owner,
@@ -133,7 +138,7 @@ select json_build_object(
                           and (latitude not between -90 and 90
                                or longitude not between -180 and 180)) as out_of_range,
         count(*) filter (where latitude is not null and longitude is not null
-                          and location is null) as postgis_drift,
+                          and not postgis_consistent) as postgis_drift,
         (select count(*) from (select source_url from public.apartments
            where source_url is not null group by source_url having count(*) > 1) x) as duplicate_source_url_groups,
         (select count(*) from (select source_listing_id from public.apartments

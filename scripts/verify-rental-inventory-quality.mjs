@@ -52,10 +52,13 @@ const client = new pg.Client({ connectionString: dbUrl });
 try {
   await client.connect();
 } catch (err) {
-  console.log(
-    `SKIP inventory-quality report (no reachable DB): ${err instanceof Error ? err.message : err}`,
+  // A configured database that is unreachable must FAIL, not skip: this runner is
+  // used as an explicit certification gate. Only the no-URL branch above is a
+  // legitimate skip.
+  console.error(
+    `FAIL inventory-quality report (configured DB is unreachable): ${err instanceof Error ? err.message : err}`,
   );
-  process.exit(0);
+  process.exit(1);
 }
 
 const sql = readFileSync(sqlPath, "utf8");
