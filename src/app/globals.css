@@ -171,6 +171,11 @@ html {
   }
 }
 
+/* SAN-1414 — /chat is a one-window-tall workspace at lg+ (see chat-page-client, chat-canvas).
+   Its layout utilities live only in TSX. The first preview build of that change shipped the new
+   class names in JS but a stylesheet byte-identical to main's (no h-dvh / 208px / 240px rules).
+   Touching this file regenerates the stylesheet. */
+
 /* MAP-007B — center CopilotChat fills column */
 .mde-center-copilot-chat.copilotKitChat {
   height: 100%;
