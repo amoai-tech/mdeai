@@ -1,5 +1,7 @@
 import {
   ONBOARDING_STEP_IDS,
+  draftPayloadSchema,
+  type OnboardingDraftPayload,
   type OnboardingStepId,
 } from "./contracts";
 
@@ -119,4 +121,23 @@ export function isOnboardingStepId(
     typeof value === "string" &&
     (ONBOARDING_STEP_IDS as readonly string[]).includes(value)
   );
+}
+
+/**
+ * Parse a draft payload for a write and require it to match the persisted
+ * 1-based step. Rejects an unsupported payload version, unknown keys, an
+ * out-of-range step, and a step/payload mismatch before anything reaches the
+ * database.
+ */
+export function parseDraftWritePayload(
+  step: number,
+  payload: unknown,
+): OnboardingDraftPayload {
+  const parsed = draftPayloadSchema.parse(payload);
+  if (onboardingStepIdAt(step) !== parsed.stepId) {
+    throw new Error(
+      `draft step ${step} does not match payload.stepId "${parsed.stepId}"`,
+    );
+  }
+  return parsed;
 }

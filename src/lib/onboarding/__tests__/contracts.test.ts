@@ -113,6 +113,15 @@ describe("onboarding contracts", () => {
         data: {},
       }).success,
     ).toBe(false);
+    // Only the current version is interpretable; anything else is rejected
+    // rather than silently parsed as if it had this version's shape.
+    expect(
+      draftPayloadSchema.safeParse({
+        payloadVersion: 2,
+        stepId: "identity",
+        data: {},
+      }).success,
+    ).toBe(false);
   });
 
   it("builds an empty payload that satisfies the schema", () => {

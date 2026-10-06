@@ -71,7 +71,7 @@ export const onboardingLifecycleSchema = z.enum(ONBOARDING_LIFECYCLES);
  */
 export const draftPayloadSchema = z
   .object({
-    [PAYLOAD_VERSION_KEY]: z.number().int().positive(),
+    [PAYLOAD_VERSION_KEY]: z.literal(CURRENT_PAYLOAD_VERSION),
     [PAYLOAD_STEP_ID_KEY]: onboardingStepIdSchema,
     [PAYLOAD_DATA_KEY]: z.record(z.string(), z.unknown()).default({}),
   })

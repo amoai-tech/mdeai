@@ -7,6 +7,7 @@ import {
   isOnboardingStepId,
   onboardingStepIdAt,
   onboardingStepIndex,
+  parseDraftWritePayload,
   requiredFieldIdsFor,
 } from "@/lib/onboarding/definitions";
 
@@ -81,5 +82,38 @@ describe("onboarding definitions", () => {
   it("looks up a step definition by id", () => {
     expect(getOnboardingStep("review").label).toBe("Review");
     expect(getOnboardingStep("property").index).toBe(4);
+  });
+
+  describe("parseDraftWritePayload", () => {
+    const validPayload = {
+      payloadVersion: 1,
+      stepId: "photos" as const,
+      data: {},
+    };
+
+    it("accepts a payload whose stepId matches the persisted step", () => {
+      expect(parseDraftWritePayload(6, validPayload)).toEqual(validPayload);
+    });
+
+    it("rejects a step that disagrees with the payload stepId", () => {
+      expect(() => parseDraftWritePayload(1, validPayload)).toThrow(
+        /does not match/,
+      );
+    });
+
+    it("rejects an out-of-range step (the DB allows 9 and 10)", () => {
+      expect(() => parseDraftWritePayload(9, validPayload)).toThrow(
+        /does not match/,
+      );
+    });
+
+    it("rejects an unsupported payload version or unknown keys", () => {
+      expect(() =>
+        parseDraftWritePayload(6, { ...validPayload, payloadVersion: 2 }),
+      ).toThrow();
+      expect(() =>
+        parseDraftWritePayload(6, { ...validPayload, unexpected: true }),
+      ).toThrow();
+    });
   });
 });

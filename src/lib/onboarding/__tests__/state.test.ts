@@ -144,11 +144,17 @@ describe("evaluateOnboarding", () => {
   });
 
   it("ignores false and empty values when computing missing fields", () => {
-    const result = evaluateOnboarding({
+    const emptyArray = evaluateOnboarding({
       step: 6,
       payload: payload({ photoUrls: [] }),
     });
-    expect(result.missingRequiredFieldIds).toEqual(["photoUrls"]);
+    expect(emptyArray.missingRequiredFieldIds).toEqual(["photoUrls"]);
+
+    const blankEntry = evaluateOnboarding({
+      step: 6,
+      payload: payload({ photoUrls: [""] }),
+    });
+    expect(blankEntry.missingRequiredFieldIds).toEqual(["photoUrls"]);
   });
 });
 
@@ -194,12 +200,14 @@ describe("isFieldPresent", () => {
     expect(isFieldPresent(undefined)).toBe(false);
     expect(isFieldPresent(false)).toBe(false);
     expect(isFieldPresent([])).toBe(false);
+    expect(isFieldPresent([""])).toBe(false);
     expect(isFieldPresent({})).toBe(false);
 
     expect(isFieldPresent("Ada")).toBe(true);
     expect(isFieldPresent(0)).toBe(true);
     expect(isFieldPresent(true)).toBe(true);
     expect(isFieldPresent(["a"])).toBe(true);
+    expect(isFieldPresent(["", "a"])).toBe(true);
     expect(isFieldPresent({ a: 1 })).toBe(true);
   });
 });

@@ -50,7 +50,7 @@ export function isFieldPresent(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value === "boolean") return value;
-  if (Array.isArray(value)) return value.length > 0;
+  if (Array.isArray(value)) return value.some(isFieldPresent);
   if (typeof value === "object") return Object.keys(value).length > 0;
   return false;
 }

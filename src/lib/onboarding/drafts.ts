@@ -7,7 +7,7 @@ import {
   draftPayloadSchema,
   emptyDraftPayload,
 } from "./contracts";
-import { onboardingStepIdAt } from "./definitions";
+import { onboardingStepIdAt, parseDraftWritePayload } from "./definitions";
 
 /**
  * SAN-1391 — thin server-only adapter over the EXISTING public.partner_drafts
@@ -116,7 +116,13 @@ export async function upsertDraft(
 ): Promise<PartnerDraft> {
   const supabase = await createClient();
   const dbType = toDbPartnerType(input.type);
-  const payload = input.payload as unknown as Json;
+  // Reject an unsupported payload version, unknown keys, or a step that
+  // disagrees with payload.stepId before anything reaches the database: a
+  // payload that mapRow would reject on the next read must never be written.
+  const payload = parseDraftWritePayload(
+    input.step,
+    input.payload,
+  ) as unknown as Json;
 
   const mutable = {
     step: input.step,
