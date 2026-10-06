@@ -76,7 +76,13 @@ export async function submitBrokerOnboarding(
           message: "We could not reach Google to verify the address. Please try again.",
         };
       }
-      throw err;
+      // Unexpected provider failure: log for operators and fail closed for the user
+      // rather than surfacing an unhandled server-action error.
+      console.error("submitBrokerOnboarding: unexpected address verification error", err);
+      return {
+        ok: false,
+        message: "Address verification is temporarily unavailable. Please try again later.",
+      };
     }
     if (!verified || !verified.formattedAddress) {
       return {

@@ -124,7 +124,7 @@ describe("BrokerAddressSearch", () => {
   });
 
   it("debounces rapid typing into a single request for the final query", async () => {
-    const fetchMock = vi.fn(async (_url: RequestInfo | URL) => jsonResponse({ results: [] }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ results: [] }));
     vi.stubGlobal("fetch", fetchMock);
     await act(async () => {
       root.render(<Harness onSelect={vi.fn()} />);
@@ -151,7 +151,8 @@ describe("BrokerAddressSearch", () => {
 
   it("aborts the superseded request when a new query replaces it", async () => {
     const signals: AbortSignal[] = [];
-    const fetchMock = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation((...args) => {
+      const init = args[1];
       if (init?.signal) signals.push(init.signal as AbortSignal);
       return Promise.resolve(jsonResponse({ results: [RESULT] }));
     });
