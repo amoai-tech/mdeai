@@ -7,26 +7,30 @@
  */
 import { LibSQLStore } from "@mastra/libsql";
 import { PostgresStore } from "@mastra/pg";
-
-const storageGlobalKey = "__mdeaiMastraStorage";
+import { SUPABASE_CA_CERT } from "./supabase-ca";
 
 type StorageSingleton = {
   store: ReturnType<typeof createMastraStorage>;
   modeLogged: boolean;
 };
 
+declare global {
+  // A typed global survives Next dev HMR so exactly one storage instance exists.
+  // A literal property name (not a computed key) also keeps the object-injection rule
+  // satisfied without suppressing it.
+  var __mdeaiMastraStorage: StorageSingleton | undefined;
+}
+
 function getStorageGlobal(): StorageSingleton | undefined {
-  return (globalThis as Record<string, unknown>)[storageGlobalKey] as
-    | StorageSingleton
-    | undefined;
+  return globalThis.__mdeaiMastraStorage;
 }
 
 function setStorageGlobal(value: StorageSingleton | undefined) {
   if (value === undefined) {
-    delete (globalThis as Record<string, unknown>)[storageGlobalKey];
+    delete globalThis.__mdeaiMastraStorage;
     return;
   }
-  (globalThis as Record<string, unknown>)[storageGlobalKey] = value;
+  globalThis.__mdeaiMastraStorage = value;
 }
 
 function normalizeDatabaseUrl(): string | undefined {
@@ -41,6 +45,61 @@ function normalizeDatabaseUrl(): string | undefined {
   // intended "DATABASE_URL is required in production" error.
   const unquoted = raw.trim().replace(/^"|"$/g, "");
   return unquoted.trim() || undefined;
+}
+
+/**
+ * Pool size and TLS strategy for the production Postgres path.
+ *
+ * Fluid Compute is ENABLED on the production Vercel project (verified from the project
+ * API: defaultResourceConfig.fluid === true), so Supabase's conventional serverless
+ * `max: 1` is too small for concurrent warm-instance traffic. 3 is the smallest value
+ * that keeps concurrent Mastra storage operations from queueing while staying far below
+ * the Supabase pooler limit. See SAN-1303 evidence.
+ */
+export const POSTGRES_POOL_MAX = 3;
+export const POSTGRES_IDLE_TIMEOUT_MS = 10_000;
+
+/**
+ * Force TLS for the runtime Postgres connection.
+ *
+ * node-postgres lets the connection string's `sslmode`/`ssl` parameters override an
+ * explicit `ssl` option, so a Dashboard-issued URL with `sslmode=disable` would
+ * silently downgrade production traffic to plaintext (measured: the production URL has
+ * no sslmode and connected with client_ssl=none). Removing those parameters makes the
+ * `ssl` object below the single source of truth, so plaintext is impossible regardless
+ * of the URL. Certificate and hostname verification (verify-full) are performed with
+ * the Supabase CA in supabase-ca.ts, so encryption cannot be silently downgraded and
+ * the server identity is authenticated.
+ */
+/** Loopback/local hosts that legitimately do not offer TLS. Everything else must. */
+export function isLocalDatabaseHost(hostname: string): boolean {
+  const host = hostname.trim().replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  );
+}
+
+/** True unless the connection target is a local host. */
+export function shouldRequireTls(connectionString: string): boolean {
+  try {
+    return !isLocalDatabaseHost(new URL(connectionString).hostname);
+  } catch {
+    return true;
+  }
+}
+
+export function resolveRuntimeConnectionString(connectionString: string): string {
+  const [base, query] = connectionString.split("?", 2);
+  if (!query) return connectionString;
+  const kept = query.split("&").filter((part) => {
+    const key = part.split("=")[0].toLowerCase();
+    return key !== "sslmode" && key !== "ssl";
+  });
+  return kept.length > 0 ? `${base}?${kept.join("&")}` : base;
 }
 
 /** Next sets this while collecting/building routes; runtime requests never do. */
@@ -67,11 +126,21 @@ export function createMastraStorage(id: string) {
   }
   if (shouldUsePostgresStorage()) {
     const connectionString = normalizeDatabaseUrl();
+    // Encrypt every non-local database connection. Production is the Supabase pooler,
+    // so this always applies there; loopback (local dev and the disposable integration
+    // databases) stays plaintext because those servers do not offer TLS. The URL is
+    // passed through resolveRuntimeConnectionString so it cannot disable TLS.
+    const requireTls = shouldRequireTls(connectionString!);
     return new PostgresStore({
       id,
-      connectionString: connectionString!,
-      max: 3,
-      idleTimeoutMillis: 10_000,
+      connectionString: requireTls
+        ? resolveRuntimeConnectionString(connectionString!)
+        : connectionString!,
+      // Full verification: the Supabase CA is trusted AND the hostname is checked.
+      // (verify-full, not just encryption.)
+      ...(requireTls ? { ssl: { ca: SUPABASE_CA_CERT, rejectUnauthorized: true } } : {}),
+      max: POSTGRES_POOL_MAX,
+      idleTimeoutMillis: POSTGRES_IDLE_TIMEOUT_MS,
       disableInit: true,
     });
   }

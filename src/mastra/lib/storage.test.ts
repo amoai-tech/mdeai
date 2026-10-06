@@ -2,9 +2,36 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMastraStorage,
   getMastraStorage,
+  POSTGRES_IDLE_TIMEOUT_MS,
+  POSTGRES_POOL_MAX,
   resetMastraStorageForTests,
+  resolveRuntimeConnectionString,
   shouldUsePostgresStorage,
 } from "./storage";
+
+type PooledStore = { pool: { options: { max: number; idleTimeoutMillis: number; ssl: unknown } } };
+
+describe("resolveRuntimeConnectionString", () => {
+  it("strips sslmode so a URL cannot force plaintext", () => {
+    expect(resolveRuntimeConnectionString("postgresql://u:p@h:6543/db?sslmode=disable")).toBe(
+      "postgresql://u:p@h:6543/db",
+    );
+  });
+
+  it("strips ssl and keeps unrelated parameters", () => {
+    expect(
+      resolveRuntimeConnectionString(
+        "postgresql://u:p@h:6543/db?sslmode=require&application_name=x&ssl=true",
+      ),
+    ).toBe("postgresql://u:p@h:6543/db?application_name=x");
+  });
+
+  it("leaves a URL with no SSL parameters unchanged", () => {
+    expect(resolveRuntimeConnectionString("postgresql://u:p@h:6543/db?application_name=x")).toBe(
+      "postgresql://u:p@h:6543/db?application_name=x",
+    );
+  });
+});
 
 describe("createMastraStorage", () => {
   afterEach(() => {
@@ -35,6 +62,24 @@ describe("createMastraStorage", () => {
     expect(() => createMastraStorage("test-prod-missing-db")).toThrow(
       "DATABASE_URL is required in production",
     );
+  });
+
+  it("encrypts a remote host and ignores sslmode=disable", () => {
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "");
+    vi.stubEnv("DATABASE_URL", "postgresql://u:p@aws-1-us-east-1.pooler.supabase.com:6543/db?sslmode=disable");
+    const store = createMastraStorage("test-tls") as unknown as PooledStore;
+    const ssl = store.pool.options.ssl as { rejectUnauthorized: boolean; ca: string };
+    expect(ssl.rejectUnauthorized).toBe(true);
+    expect(ssl.ca).toContain("BEGIN CERTIFICATE");
+    expect(store.pool.options.max).toBe(POSTGRES_POOL_MAX);
+    expect(store.pool.options.idleTimeoutMillis).toBe(POSTGRES_IDLE_TIMEOUT_MS);
+  });
+
+  it("does not force TLS on a loopback database", () => {
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "");
+    vi.stubEnv("DATABASE_URL", "postgresql://u:p@127.0.0.1:5432/db");
+    const store = createMastraStorage("test-local-pg") as unknown as PooledStore;
+    expect(store.pool.options.ssl).toBeUndefined();
   });
 
   it("fails closed when DATABASE_URL is whitespace-only in production", () => {
