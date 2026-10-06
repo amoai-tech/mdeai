@@ -13,8 +13,8 @@
 --   map_ready    = searchable + valid coordinate pair + PostGIS location consistent
 --   launch_ready = active + approved + published + not fixture + valid price/currency
 --                  + usable image + map_ready + freshness evidence + canonical owner
---   requestable  = active + approved + published + canonical owner + current availability
---                  window — the SAN-1349 predicate, reused unchanged
+--   requestable  = not fixture + active + approved + published + canonical owner
+--                  + current availability window (SAN-1349 predicate plus fixture gate)
 --
 -- This statement is read-only. It never writes.
 
