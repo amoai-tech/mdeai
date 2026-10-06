@@ -52,6 +52,68 @@ begin
 end;
 $spans$;
 
+-- (2a) Dynamic dependency discovery for the one-time sweep. ----------------
+-- Any mastra_* table (other than the two rows this sweep removes, and telemetry
+-- spans) that links to a thread or resource is checked dynamically, so a future
+-- adapter table cannot silently become an unchecked dependency.
+create or replace function public.mastra_anonymous_dependents()
+returns jsonb
+language plpgsql
+security invoker
+set search_path = pg_catalog, public
+as $deps$
+declare
+  r record;
+  v_res text;
+  v_thr text;
+  v_expr text;
+  v_count integer;
+  v_out jsonb := '{}'::jsonb;
+begin
+  if to_regclass('public.mastra_threads') is null then
+    return v_out;
+  end if;
+  for r in
+    select c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and c.relkind = 'r'
+       and starts_with(c.relname, 'mastra_')
+       and c.relname not in ('mastra_threads', 'mastra_messages', 'mastra_ai_spans')
+     order by c.relname
+  loop
+    select
+      max(case when a.attname in ('resourceId', 'resource_id') then quote_ident(a.attname) end),
+      max(case when a.attname in ('threadId', 'thread_id') then quote_ident(a.attname) end)
+      into v_res, v_thr
+      from pg_attribute a
+     where a.attrelid = (quote_ident('public') || '.' || quote_ident(r.relname))::regclass
+       and a.attnum > 0
+       and not a.attisdropped;
+
+    if v_res is null and v_thr is null then
+      continue;
+    end if;
+
+    v_expr := null;
+    if v_res is not null then
+      v_expr := format('t.%s = ''anonymous''', v_res);
+    end if;
+    if v_thr is not null then
+      v_expr := coalesce(v_expr || ' or ', '')
+        || format('t.%s in (select id from public.mastra_threads where "resourceId" = ''anonymous'')', v_thr);
+    end if;
+
+    execute format('select count(*) from public.%I t where %s', r.relname, v_expr) into v_count;
+    if v_count > 0 then
+      v_out := v_out || jsonb_build_object(r.relname, v_count);
+    end if;
+  end loop;
+  return v_out;
+end;
+$deps$;
+
 -- (2) One-time legacy anonymous sweep. NOT scheduled. -----------------------
 -- FAILS CLOSED: if any anonymous-owned dependent record exists that this sweep
 -- does not remove (observational memory, background tasks, workflow snapshots,
@@ -78,24 +140,11 @@ begin
     );
   end if;
 
-  -- Dependents this sweep does NOT remove. Counted BEFORE any delete, so a partial
-  -- cleanup is impossible: either everything expected is removed, or nothing is.
-  if to_regclass('public.mastra_observational_memory') is not null then
-    v_dependents := v_dependents || jsonb_build_object('observationalMemory',
-      (select count(*)::int from public.mastra_observational_memory o join public.mastra_threads t on t.id = o."threadId" where t."resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_background_tasks') is not null then
-    v_dependents := v_dependents || jsonb_build_object('backgroundTasks',
-      (select count(*)::int from public.mastra_background_tasks b join public.mastra_threads t on t.id = b.thread_id where t."resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_workflow_snapshot') is not null then
-    v_dependents := v_dependents || jsonb_build_object('workflowSnapshots',
-      (select count(*)::int from public.mastra_workflow_snapshot where "resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_scorers') is not null then
-    v_dependents := v_dependents || jsonb_build_object('scorers',
-      (select count(*)::int from public.mastra_scorers where "resourceId" = 'anonymous'));
-  end if;
+  -- Dependents this sweep does NOT remove, discovered dynamically from the live
+  -- schema (any mastra_* table with a thread/resource link). Counted BEFORE any
+  -- delete, so a partial cleanup is impossible. Telemetry (mastra_ai_spans) is
+  -- excluded: it is governed by the trace-retention window, not by this sweep.
+  v_dependents := public.mastra_anonymous_dependents();
   select coalesce(sum(value::int), 0) into v_dep_total from jsonb_each_text(v_dependents);
 
   select coalesce(jsonb_agg(id order by id), '[]'::jsonb), count(*)::int
@@ -152,44 +201,27 @@ security invoker
 set search_path = pg_catalog, public
 as $refs$
 declare
-  v jsonb;
+  v_deps jsonb := '{}'::jsonb;
+  v_total integer := 0;
 begin
   if to_regclass('public.mastra_threads') is null then
-    return jsonb_build_object('present', false);
+    return jsonb_build_object(
+      'present', false, 'unexpectedDependents', '{}'::jsonb, 'unexpectedDependentsTotal', 0
+    );
   end if;
-  v := jsonb_build_object(
+  v_deps := public.mastra_anonymous_dependents();
+  select coalesce(sum(value::int), 0) into v_total from jsonb_each_text(v_deps);
+  return jsonb_build_object(
     'present', true,
     'threads', (select count(*)::int from public.mastra_threads where "resourceId" = 'anonymous'),
-    'threadIds', (select coalesce(jsonb_agg(id order by id), '[]'::jsonb) from public.mastra_threads where "resourceId" = 'anonymous')
+    'threadIds', (select coalesce(jsonb_agg(id order by id), '[]'::jsonb) from public.mastra_threads where "resourceId" = 'anonymous'),
+    'messages', case
+      when to_regclass('public.mastra_messages') is null then 0
+      else (select count(*)::int from public.mastra_messages m join public.mastra_threads t on t.id = m.thread_id where t."resourceId" = 'anonymous')
+    end,
+    'unexpectedDependents', v_deps,
+    'unexpectedDependentsTotal', v_total
   );
-  if to_regclass('public.mastra_messages') is not null then
-    v := v || jsonb_build_object('messages',
-      (select count(*)::int from public.mastra_messages m join public.mastra_threads t on t.id = m.thread_id where t."resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_observational_memory') is not null then
-    v := v || jsonb_build_object('observationalMemory',
-      (select count(*)::int from public.mastra_observational_memory o join public.mastra_threads t on t.id = o."threadId" where t."resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_background_tasks') is not null then
-    v := v || jsonb_build_object('backgroundTasks',
-      (select count(*)::int from public.mastra_background_tasks b join public.mastra_threads t on t.id = b.thread_id where t."resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_workflow_snapshot') is not null then
-    v := v || jsonb_build_object('workflowSnapshots',
-      (select count(*)::int from public.mastra_workflow_snapshot where "resourceId" = 'anonymous'));
-  end if;
-  if to_regclass('public.mastra_scorers') is not null then
-    v := v || jsonb_build_object('scorers',
-      (select count(*)::int from public.mastra_scorers where "resourceId" = 'anonymous'));
-  end if;
-  v := v || jsonb_build_object(
-    'unexpectedDependents',
-    coalesce((v->>'observationalMemory')::int, 0)
-    + coalesce((v->>'backgroundTasks')::int, 0)
-    + coalesce((v->>'workflowSnapshots')::int, 0)
-    + coalesce((v->>'scorers')::int, 0)
-  );
-  return v;
 end;
 $refs$;
 
@@ -274,6 +306,7 @@ begin
     'public.mastra_cleanup_spans(integer, boolean)',
     'public.mastra_cleanup_anonymous_threads(boolean)',
     'public.mastra_anonymous_references()',
+    'public.mastra_anonymous_dependents()',
     'public.mastra_anonymous_thread_count()',
     'public.mastra_orphan_message_count()',
     'public.mastra_assert_no_anonymous_threads()',

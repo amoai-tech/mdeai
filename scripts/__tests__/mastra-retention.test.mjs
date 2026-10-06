@@ -44,15 +44,16 @@ test("anonymous cleanup exists as a one-time function, never a scheduled path", 
   assert.match(sql, /ONE-TIME/);
 });
 
-test("anonymous cleanup fails closed on unexpected dependents", () => {
+test("anonymous cleanup discovers dependents dynamically and fails closed", () => {
   const sql = mastraRetentionSql();
+  assert.match(sql, /mastra_anonymous_dependents/);
   assert.match(sql, /unexpectedDependents/);
   assert.match(sql, /refusing to delete anything/);
   assert.match(sql, /No threads or messages were deleted/);
-  assert.match(sql, /observationalMemory/);
-  assert.match(sql, /backgroundTasks/);
-  assert.match(sql, /workflowSnapshots/);
-  assert.match(sql, /scorers/);
+  // dynamic discovery over the live schema, excluding the removed/telemetry tables
+  assert.match(sql, /starts_with\(c\.relname, 'mastra_'\)/);
+  assert.match(sql, /pg_attribute/);
+  assert.match(sql, /mastra_ai_spans/);
 });
 
 test("new anonymous threads are rejected at write time with 42501", () => {

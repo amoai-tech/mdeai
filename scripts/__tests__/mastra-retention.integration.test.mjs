@@ -91,13 +91,20 @@ test("mastra retention behaves safely", { skip: !allowed ? "opt-in: DATABASE_URL
     await insertThread(client, depThread, "anonymous");
     await client.query("alter table public.mastra_threads enable trigger mastra_threads_reject_anonymous");
     await insertMessage(client, run + "-dep-m1", depThread);
+    // mastra_thread_state was NOT in the original hardcoded list; this proves the
+    // dynamic discovery catches an adapter table it did not name.
     await client.query(
-      "insert into public.mastra_workflow_snapshot (workflow_name, run_id, \"resourceId\", snapshot, \"createdAt\", \"updatedAt\") values ($1, $2, 'anonymous', '{}'::jsonb, now() at time zone 'UTC', now() at time zone 'UTC')",
-      [run + "-wf", run + "-wf-run"],
+      "insert into public.mastra_thread_state (\"threadId\", type, value, \"createdAt\", \"updatedAt\") values ($1, 'mrt-test', '{}'::jsonb, now() at time zone 'UTC', now() at time zone 'UTC')",
+      [depThread],
     );
 
     const blockedDry = await one(client, "select public.mastra_cleanup_anonymous_threads(true) as result");
     assert.equal(blockedDry.blocked, true, "dry run reports blocked");
+    assert.equal(
+      blockedDry.unexpectedDependents && blockedDry.unexpectedDependents.mastra_thread_state,
+      1,
+      "dynamic discovery finds the anonymous thread_state row",
+    );
     assert.equal(await threadExists(client, depThread), true, "dry run deletes nothing when blocked");
 
     await assert.rejects(
@@ -108,7 +115,7 @@ test("mastra retention behaves safely", { skip: !allowed ? "opt-in: DATABASE_URL
     assert.equal(await threadExists(client, depThread), true, "blocked execute deleted no thread");
     assert.equal(await messagesFor(client, depThread), 1, "blocked execute deleted no message");
 
-    await client.query("delete from public.mastra_workflow_snapshot where workflow_name = $1", [run + "-wf"]);
+    await client.query("delete from public.mastra_thread_state where \"threadId\" = $1", [depThread]);
     await client.query("alter table public.mastra_threads disable trigger mastra_threads_reject_anonymous");
     await client.query("delete from public.mastra_messages where id like $1", [run + "-dep%"]);
     await client.query("delete from public.mastra_threads where id = $1", [depThread]);
@@ -130,7 +137,7 @@ test("mastra retention behaves safely", { skip: !allowed ? "opt-in: DATABASE_URL
       "the assertion fails when an anonymous thread exists",
     );
   } finally {
-    await client.query("delete from public.mastra_workflow_snapshot where workflow_name like $1", [run + "%"]).catch(() => undefined);
+    await client.query("delete from public.mastra_thread_state where \"threadId\" like $1", [run + "%"]).catch(() => undefined);
     await client.query("delete from public.mastra_ai_spans where \"traceId\" like $1", [run + "%"]).catch(() => undefined);
     await client.query("delete from public.mastra_messages where id like $1", [run + "%"]).catch(() => undefined);
     await client.query("alter table public.mastra_threads disable trigger mastra_threads_reject_anonymous").catch(() => undefined);
