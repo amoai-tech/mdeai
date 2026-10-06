@@ -19,28 +19,28 @@ vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotChatView: () => null,
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: () => {} }),
+  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: vi.fn() }),
 }));
 // New Chat (ConciergeSessionProvider) also resets the agent, the map and the rental UI; none of
 // that is under test here, so those collaborators are no-ops.
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
-  useConciergeChat: () => ({ reset: () => {}, stopActiveRun: () => {} }),
+  useConciergeChat: () => ({ reset: vi.fn(), stopActiveRun: vi.fn() }),
 }));
 vi.mock("@/platform/maps/map-context", () => ({
-  useMapContext: () => ({ clearPins: () => {}, setSelectedPinId: () => {}, clearFocusPinRequest: () => {} }),
+  useMapContext: () => ({ clearPins: vi.fn(), setSelectedPinId: vi.fn(), clearFocusPinRequest: vi.fn() }),
 }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
-  useRichCardResults: () => ({ clearRichCardCounts: () => {} }),
+  useRichCardResults: () => ({ clearRichCardCounts: vi.fn() }),
 }));
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({
-    closeScheduleViewing: () => {},
-    closeVenueDetail: () => {},
-    closeCafeDetail: () => {},
-    closeCafeBooking: () => {},
-    closeEventVenueOfferings: () => {},
-    closeEventProposalShell: () => {},
-    clearLeadConfirmation: () => {},
+    closeScheduleViewing: vi.fn(),
+    closeVenueDetail: vi.fn(),
+    closeCafeDetail: vi.fn(),
+    closeCafeBooking: vi.fn(),
+    closeEventVenueOfferings: vi.fn(),
+    closeEventProposalShell: vi.fn(),
+    clearLeadConfirmation: vi.fn(),
   }),
 }));
 vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({ useConciergeSendHandlers: () => ({}) }));
