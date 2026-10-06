@@ -19,6 +19,7 @@ describe("conciergeAgent", () => {
     expect(toolIds).toEqual(
       expect.arrayContaining([
         "search-rentals",
+        "search-new-projects",
         "search-events",
         "search-restaurants",
         "search-attractions",
@@ -26,7 +27,7 @@ describe("conciergeAgent", () => {
         "search-web-grounded-events",
       ]),
     );
-    expect(toolIds.filter((id) => id.startsWith("search-"))).toHaveLength(6);
+    expect(toolIds.filter((id) => id.startsWith("search-"))).toHaveLength(7);
   });
 
   it("working memory schema accepts concierge state shape", () => {

@@ -107,6 +107,7 @@ describe("mappers", () => {
     expect(summary.minBedrooms).toBe(3);
     expect(summary.maxBedrooms).toBe(3);
     expect(summary.unitTypeCount).toBe(1);
+    expect(summary.bedroomOptions).toEqual([{ bedrooms: 3, priceFromCents: null }]);
   });
 
   it("maps unit types and sources", () => {

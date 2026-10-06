@@ -19,6 +19,32 @@ export function bedroomRange(units: DevelopmentUnitTypeRow[]): {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
+/**
+ * Distinct bedroom counts with the cheapest published price for each, so an exact-bedroom or a
+ * combined budget+bedroom filter can be evaluated against a single real typology rather than the
+ * project's overall price-from.
+ */
+export function bedroomOptions(
+  units: DevelopmentUnitTypeRow[],
+): NewProjectSummary["bedroomOptions"] {
+  const cheapest = new Map<number, number | null>();
+  for (const unit of units) {
+    // development_unit_types.bedrooms is nullable (number | null): a typology with no recorded
+    // bedroom count can never be matched by an exact or minimum bedroom filter.
+    if (unit.bedrooms == null) continue;
+    const current = cheapest.get(unit.bedrooms);
+    const price = unit.price_from_cents;
+    if (current === undefined) {
+      cheapest.set(unit.bedrooms, price);
+    } else if (price != null && (current == null || price < current)) {
+      cheapest.set(unit.bedrooms, price);
+    }
+  }
+  return [...cheapest.entries()]
+    .map(([bedrooms, priceFromCents]) => ({ bedrooms, priceFromCents }))
+    .sort((a, b) => a.bedrooms - b.bedrooms);
+}
+
 export function rowToSummary(
   row: DevelopmentProjectRow,
   units: DevelopmentUnitTypeRow[] = [],
@@ -44,6 +70,7 @@ export function rowToSummary(
     minBedrooms: min,
     maxBedrooms: max,
     unitTypeCount: units.length,
+    bedroomOptions: bedroomOptions(units),
   };
 }
 

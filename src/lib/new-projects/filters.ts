@@ -52,6 +52,7 @@ export function parseProjectFilters(searchParams: ProjectSearchParams): NewProje
     neighborhood: normalizeNeighborhood(searchParams.neighborhood),
     maxPriceCop: maxPrice,
     minBedrooms: beds,
+    bedroomsExact: null,
     deliveryYear,
     deliveryUnknown: searchParams.delivery === "unknown",
   };
@@ -60,6 +61,18 @@ export function parseProjectFilters(searchParams: ProjectSearchParams): NewProje
 /**
  * Hard, deterministic filters. A project missing a fact is excluded when that fact is
  * filtered on — an unknown price is not "affordable", an unknown delivery year is not 2027.
+ *
+ * Bedrooms are matched against real typology options, not the project's maximum:
+ *   - `minBedrooms` means "2+ bedrooms" (any typology with that many or more);
+ *   - `bedroomsExact` means "exactly 2 bedrooms" (a typology with that count).
+ *
+ * Precedence: if BOTH bedroom filters are set, bedroomsExact wins. The HTTP input schema rejects
+ * that combination (superRefine), so this is a defensive rule for direct callers, not a supported
+ * input; a unit test locks the behaviour so it cannot drift.
+ *
+ * When a **budget and a bedroom filter are combined**, a single typology must satisfy BOTH. A
+ * typology with no published price fails closed, so "2BR under 600M" never returns a project
+ * whose only 2BR has an unknown price.
  */
 export function projectMatchesFilters(
   project: NewProjectSummary,
@@ -70,13 +83,35 @@ export function projectMatchesFilters(
       return false;
     }
   }
-  if (filters.maxPriceCop != null) {
-    if (project.priceFromCents == null) return false;
-    if (Math.round(project.priceFromCents / 100) > filters.maxPriceCop) return false;
+
+  const maxPriceCents = filters.maxPriceCop != null ? filters.maxPriceCop * 100 : null;
+  const exact = filters.bedroomsExact;
+  const min = filters.minBedrooms;
+
+  if (exact != null && maxPriceCents != null) {
+    const match = project.bedroomOptions.some(
+      (option) =>
+        option.bedrooms === exact &&
+        option.priceFromCents != null &&
+        option.priceFromCents <= maxPriceCents,
+    );
+    if (!match) return false;
+  } else if (min != null && maxPriceCents != null) {
+    const match = project.bedroomOptions.some(
+      (option) =>
+        option.bedrooms >= min &&
+        option.priceFromCents != null &&
+        option.priceFromCents <= maxPriceCents,
+    );
+    if (!match) return false;
+  } else if (exact != null) {
+    if (!project.bedroomOptions.some((option) => option.bedrooms === exact)) return false;
+  } else if (min != null) {
+    if (!project.bedroomOptions.some((option) => option.bedrooms >= min)) return false;
+  } else if (maxPriceCents != null) {
+    if (project.priceFromCents == null || project.priceFromCents > maxPriceCents) return false;
   }
-  if (filters.minBedrooms != null) {
-    if (project.maxBedrooms == null || project.maxBedrooms < filters.minBedrooms) return false;
-  }
+
   if (filters.deliveryYear != null) {
     if (project.expectedDeliveryYear !== filters.deliveryYear) return false;
   }
@@ -110,7 +145,7 @@ export function countActiveFilters(filters: NewProjectFilters): number {
   return [
     filters.neighborhood != null,
     filters.maxPriceCop != null,
-    filters.minBedrooms != null,
+    filters.minBedrooms != null || filters.bedroomsExact != null,
     filters.deliveryYear != null || filters.deliveryUnknown,
   ].filter(Boolean).length;
 }

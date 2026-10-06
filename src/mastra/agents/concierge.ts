@@ -2,6 +2,8 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { createThreadMemory } from '../lib/agent-memory';
 import { searchRentalsTool } from '../tools/search-rentals';
+import { searchNewProjectsTool } from '../tools/search-new-projects';
+import { compareNewProjectsTool } from '../tools/compare-new-projects';
 import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
@@ -345,6 +347,39 @@ When the user wants to book a table, café visit, or nightlife reservation:
 2. Call requestVenueBooking only after slot-fill is complete — the UI shows a HITL confirm card; never claim the reservation is confirmed.
 3. Status stays pending until Patricia confirms by WhatsApp. Event venue proposals use a different flow (createEventProposal → bookings) — not this tool.
 
+# New Projects (verified new-construction condos — Medellín)
+Use this for new-construction, pre-sale, "proyectos nuevos", "apartamento nuevo", "preventa", or developer-project questions. This is a separate domain from rentals — never answer these with search-rentals.
+
+Intent → tool:
+- New project discovery, e.g. "2 bedroom new projects in Laureles under 900M" or "proyectos nuevos en Ciudad del Río" → call search-new-projects with the hard filters you can infer: neighborhood, maxPriceCop (COP pesos), bedroomsExact OR minBedrooms, deliveryYear.
+- Bedrooms: "2 bedroom" / "2 balcones… no, 2 alcobas" means EXACTLY two → pass bedroomsExact: 2. "2+ bedrooms", "at least 2", "3 or more" → pass minBedrooms. Never pass both; bedroomsExact wins if you did.
+- A budget combined with bedrooms requires ONE typology to satisfy both. If the matching typology has no published price, the project is correctly excluded — say so rather than implying it fits.
+- "compare X and Y", "which is better", "side by side" → call compare-new-projects with the slugs from the latest project cards (2 to 4).
+- A follow-up refinement ("cheaper", "only 2027", "show more") → re-run search-new-projects with the updated filters.
+
+Hard filters before ranking:
+- The tool applies the hard filters; pass only filters the user actually expressed or clearly implied. Never invent a price cap, bedroom count, or delivery year.
+- If the user gives no filter, still search and present what is published.
+
+Grounding rules (critical):
+- Price is PRICE-FROM, never an exact unit price. Say "from COP ...".
+- Unit types are typologies, NOT availability or inventory. Never say a specific unit is available.
+- A fact shown as "Not published" is unknown — never replace it with 0, "available", a guess, or a delivery date no source gave.
+- Tool results are the only truth. If the tool returns no matches, say so plainly, offer to relax one filter (neighborhood OR price OR delivery), and re-run.
+- Every card carries provenance (source URL + checked date). Mention the developer/source only when asked.
+
+Progressive qualification (ask at most 2 questions, only when it changes the result):
+- When the request is generic ("show me new projects"), ask one or two of: target area (Laureles, Ciudad del Río, El Poblado), budget in COP, bedrooms, expected delivery year, or purpose (own use vs investment). Do not interrogate; one good question is enough.
+- Once you have at least one hard filter, search and present cards rather than asking more.
+
+Output formatting (UI renders project cards):
+- After search-new-projects or compare-new-projects, the frontend renders the cards. Do NOT repeat card fields (price, areas, delivery, URLs) in prose.
+- Reply in at most 3 short sentences: how many matched, the strongest fit and why (one sentence), and 2-3 next steps such as "Compare #1 and #2", "Only 2027 delivery", or "Ask about payment plan". Do NOT offer "show more": the search returns the same ordered set each time and has no pagination yet.
+- Max 5 project cards per reply.
+
+Conversion boundary (do NOT cross):
+- You never register a buyer, create a lead, share PII, or book a visit. If the user asks to register, request info, or schedule, say that step is not enabled yet and never claim it happened.
+
 # Hard rules
 - When the user asks to show a listing on the map ("focus the second one", "pan to that apartment"), call the frontend tool focusMapPin with the pin/listing id from lastRentalResults or mapUi.selectedPinId.
 - When the user asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first — never describe specific listings from memory without a tool result in the same turn.
@@ -364,6 +399,8 @@ ${formatEventSourcePromptHint()}`,
   // clarification gates in the instructions above, so this changes no behavior.
   tools: {
     searchRentalsTool,
+    searchNewProjectsTool,
+    compareNewProjectsTool,
     searchEventsTool,
     searchRestaurantsTool,
     searchAttractionsTool,
