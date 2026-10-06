@@ -11,6 +11,7 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "./helpers/auth";
+import { E2E_FIXTURE_METADATA } from "./helpers/rental-fixture-marker";
 
 /**
  * SAN-1204 · MDE Rentals — Show Real Viewing Requests to the Correct Broker.
@@ -370,6 +371,7 @@ async function fillFixture(
     listing_workflow_status: "published",
     landlord_id: fixture.ownerProfileId,
     available_to: "2099-12-31",
+    metadata: E2E_FIXTURE_METADATA,
   });
   if (apartmentError) throw new Error(`apartment insert failed: ${apartmentError.message}`);
 
