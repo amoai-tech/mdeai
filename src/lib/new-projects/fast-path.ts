@@ -4,7 +4,10 @@
  * accepts. It never invents a filter the buyer did not express.
  */
 const NEW_PROJECT_RE =
-  /(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bnew\s+(?:construction|development)s?\b)|(?:proyectos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:apartamentos?\s+nuev\w*)|(?:obra\s+nueva)|(?:condo\s+projects?)/i;
+  /(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bnew\s+(?:construction|development)s?\b)|(\bnew\s+condos?\b)|(?:proyectos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:apartamentos?\s+nuev\w*)|(?:obra\s+nueva)|(?:condo\s+projects?)/i;
+
+/** Delivery wording that must sit next to a year before we treat it as a delivery filter. */
+const DELIVERY_WORD = /deliver|entrega|entregar|completion|handover/i;
 
 const NEIGHBORHOODS = ["Laureles", "Ciudad del Río", "El Poblado"] as const;
 
@@ -19,11 +22,15 @@ export function buildNewProjectFastPathParams(text: string): Record<string, unkn
   const neighborhood = NEIGHBORHOODS.find((n) => lower.includes(n.toLowerCase()));
   if (neighborhood) params.neighborhood = neighborhood;
 
-  const beds = text.match(/(\d)\s*\+?\s*(?:bed(?:room)?s?|habitaci[oó]n(?:es)?|alcoba(?:s)?|br)\b/i);
+  const beds = text.match(/(\d)\s*(\+)?\s*(?:bed(?:room)?s?|habitaci[oó]n(?:es)?|alcoba(?:s)?|br)\b/i);
   if (beds) {
-    const count = Number(beds[1]);
-    if (/\d\s*\+|at least|or more|m[aá]s de/i.test(text)) params.minBedrooms = count;
-    else params.bedroomsExact = count;
+    // Qualify only next to the matched bedroom phrase — an unrelated "3+ cars" must not turn an
+    // exact "2 bedrooms" into "2+".
+    const at = beds.index ?? 0;
+    const local = text.slice(Math.max(0, at - 14), at + beds[0].length + 14).toLowerCase();
+    const qualified = beds[2] === "+" || /at least|or more|m[aá]s de|minimum/.test(local);
+    if (qualified) params.minBedrooms = Number(beds[1]);
+    else params.bedroomsExact = Number(beds[1]);
   }
 
   const price = text.match(/(?:under|below|bajo|menos de)\s*\$?\s*([\d.,]+)\s*(million|millones|m)\b/i);
@@ -34,8 +41,15 @@ export function buildNewProjectFastPathParams(text: string): Record<string, unkn
     }
   }
 
-  const year = text.match(/\b(20[2-9]\d)\b/);
-  if (year) params.deliveryYear = Number(year[1]);
+  // A bare year ("announced in 2025") is not a delivery filter; require delivery wording nearby.
+  for (const year of text.matchAll(/\b(20[2-9]\d)\b/g)) {
+    const at = year.index ?? 0;
+    const window = text.slice(Math.max(0, at - 24), at + year[1].length + 24);
+    if (DELIVERY_WORD.test(window)) {
+      params.deliveryYear = Number(year[1]);
+      break;
+    }
+  }
 
   return params;
 }

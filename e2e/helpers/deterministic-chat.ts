@@ -95,7 +95,7 @@ export const NEW_PROJECT_QUERY = "new 2 bedroom projects in Laureles under 900 m
 export const newProject = {
   slug: "arrayan",
   name: "Arrayán",
-  neighborhood: "Ciudad del Río",
+  neighborhood: "Laureles",
   sourceOwner: "Amarilo",
   priceLabel: "From COP 575,000,000",
   priceKnown: true,
