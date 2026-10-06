@@ -166,14 +166,35 @@ describe.runIf(runIntegration)("SAN-548 rental chat memory durability", () => {
           listMessages: (args: { threadId: string; perPage: number }) => Promise<unknown>;
         };
         const listed = (await memStore.listMessages({ threadId, perPage: 40 })) as {
-          messages?: Array<{ role?: string; content?: unknown }>;
+          messages?: Array<{ id?: string; role?: string; content?: unknown }>;
         };
-        expect(listed.messages?.length).toBe(12);
-        const serialized = JSON.stringify(listed.messages);
+        const textOf = (content: unknown): string => {
+          if (typeof content === "string") return content;
+          const parts = (content as { parts?: Array<{ text?: string }> } | null)?.parts ?? [];
+          return parts.map((part) => part.text ?? "").join("");
+        };
+        // Compare every saved turn by id, role and text, in the order the storage API
+        // returns them. A count or a substring could still pass if a turn were dropped,
+        // reordered, or aliased; this cannot.
+        expect(
+          (listed.messages ?? []).map((message) => ({
+            id: message.id,
+            role: message.role,
+            text: textOf(message.content),
+          })),
+        ).toEqual(
+          messages.map((message) => ({
+            id: message.id,
+            role: message.role,
+            text: textOf(message.content),
+          })),
+        );
         // "furnished" is NOT modeled in working memory — it must survive in history.
-        expect(serialized.toLowerCase()).toContain("furnished");
-        expect(serialized).toContain("Laureles");
-        expect(serialized.toLowerCase()).toContain("4.000.000");
+        expect(
+          (listed.messages ?? []).some((message) =>
+            textOf(message.content).toLowerCase().includes("furnished"),
+          ),
+        ).toBe(true);
 
         // --- 5. Per-user isolation through the REAL auth gate ----------------------
         const requestBody = JSON.stringify({ method: "agent/run", body: { threadId } });
