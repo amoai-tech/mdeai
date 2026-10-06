@@ -5,7 +5,7 @@
 
 begin;
 
-select plan(29);
+select plan(32);
 
 -- ── dataset contract ─────────────────────────────────────────────────────────
 select is((select count(*)::int from public.development_projects where source_key = any(array['medellin:new-project:nexus', 'medellin:new-project:distrito-33', 'medellin:new-project:grand-coral', 'medellin:new-project:nutibara-parkway', 'medellin:new-project:vigo', 'medellin:new-project:arrayan', 'medellin:new-project:saman', 'medellin:new-project:guayacanes', 'medellin:new-project:palma', 'medellin:new-project:river-park'])), 10, 'A1 exactly 10 seeded projects');
@@ -27,6 +27,9 @@ select is((select count(*)::int from public.development_projects p where p.sourc
 
 -- ── unit types: scoped to SAN-1404 and correctly attributed ──────────────────
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:vigo' and u.bedrooms is null), 1, 'A16a Vigo unit stores no bedroom count (source gives a 1–2 range)');
+select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:palma' and u.bathrooms = 3), 3, 'A16b Palma 129/150/166 m² units each have 3 bathrooms');
+select is((select count(*)::int from public.development_projects where source_key = 'medellin:new-project:nexus' and price_from_cents = 158700000000 and price_to_cents = 158700000000 and expected_delivery_year = 2027 and vis_flag is false), 1, 'A16c Nexus carries the Zonario price/range, 2027 delivery and NO VIS');
+select is((select count(*)::int from public.development_projects where source_key = 'medellin:new-project:nutibara-parkway' and price_from_cents = 37040637900 and price_to_cents = 83484317400 and vis_flag is false), 1, 'A16d Nutibara Parkway carries the Zonario price range and NO VIS');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = any(array['medellin:new-project:nexus', 'medellin:new-project:distrito-33', 'medellin:new-project:grand-coral', 'medellin:new-project:nutibara-parkway', 'medellin:new-project:vigo', 'medellin:new-project:arrayan', 'medellin:new-project:saman', 'medellin:new-project:guayacanes', 'medellin:new-project:palma', 'medellin:new-project:river-park'])), 18, 'A13 the verified unit-type set is present');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:distrito-33' and u.source_kind = 'marketplace'), 1, 'A14 Distrito 33 unit is attributed to a marketplace source');
 select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key = 'medellin:new-project:vigo' and u.source_kind = 'marketplace'), 1, 'A15 Vigo unit is attributed to a marketplace source');

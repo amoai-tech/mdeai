@@ -22,9 +22,10 @@ Every source in the JSON carries its own: `http_status`, `checked_at`, `source_u
 | Key | Project | Developer (source owner) | Area | Primary source | Type | HTTP | checked_at | source_updated_at |
 | -- | -- | -- | -- | -- | -- | -- | -- | -- |
 | `medellin:new-project:nexus` | Nexus | G+ Proyectos / Solidus | Laureles | Zonario Laureles | aggregator | 200 | 2026-10-06 | 2026-09-26 |
+| `medellin:new-project:nutibara-parkway` | Nutibara Parkway | BEMSA / Proin | Laureles | Zonario Laureles | aggregator | 200 | 2026-10-06 | 2026-09-26 |
 | `medellin:new-project:distrito-33` | Distrito 33 | Arco Construcciones e Ingeniería SAS | Laureles | TuLugar | marketplace | 200 | 2026-10-06 | — |
 | `medellin:new-project:grand-coral` | Grand Coral | Construcciones Prisma | Laureles | Prisma | developer | 200 | 2026-10-06 | — |
-| `medellin:new-project:nutibara-parkway` | Nutibara Parkway | BEMSA / Proin | Laureles | Zonario Laureles | aggregator | 200 | 2026-10-06 | 2026-09-26 |
+
 | `medellin:new-project:vigo` | Vigo | SR Proyectos Constructivos | Laureles | TuLugar | marketplace | 200 | 2026-10-06 | — |
 | `medellin:new-project:arrayan` | Arrayán | Amarilo | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
 | `medellin:new-project:saman` | Samán | Amarilo / C.A.S.A. | Ciudad del Río | Amarilo | developer | 200 | 2026-10-06 | — |
@@ -37,9 +38,11 @@ Every source in the JSON carries its own: `http_status`, `checked_at`, `source_u
 **Seeded (from the source):** identity, developer/source owner, city + neighborhood, project status
 (Distrito 33 `Pre-Sale`; Vigo `Under Development`; Arrayán/Samán/Guayacanes `Sobre planos`), the Amarilo
 address strings exactly as published, Arrayán's developer coordinates, Arrayán (575,000,000 COP) and
-River Park (650,217,000 COP) price-from, and the developer typology blocks — built, private and balcony
+River Park (650,217,000 COP) price-from, the Zonario Tier-B cards for Nexus (136 m², 1,587,000,000 COP, Entrega 2027, NO VIS) and Nutibara Parkway (19–47 m², 370,406,379–834,843,174 COP, NO VIS), and the developer typology blocks — built, private and balcony
 area, bedrooms and bathrooms where the page shows them (Arrayán 30–100 m², Samán 56/80/89, Guayacanes
 96/110/162, Palma 129/150/166, Distrito 33 from 27 m², Vigo from 31 m², River Park from 47 m²).
+
+**Tier-B promotion rule:** canonical numeric fields (`price_from_cents`, `price_to_cents`, `expected_delivery_year`, `vis_flag`) may be seeded from a Tier-B aggregator card when the value is stated per project. Every such value is also kept in `observed_facts`, and the source row's `confidence` (B) plus `source_updated_at` record its trust level, so downstream can treat Tier-A and Tier-B facts differently. Unknown still stays NULL.
 
 **Unit source attribution:** TuLugar supplies the Distrito 33 and Vigo typologies, so those unit rows
 are `source_kind = 'marketplace'`; the rest are `developer`.

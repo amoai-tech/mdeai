@@ -14,13 +14,13 @@
       "owner": "G+ Proyectos / Solidus",
       "hood": "Laureles",
       "status": null,
-      "priceFrom": null,
-      "delivYear": null,
+      "priceFrom": 1587000000,
+      "delivYear": 2027,
       "delivNote": null,
       "addr": null,
       "lat": null,
       "lng": null,
-      "vis": null,
+      "vis": false,
       "sources": [
         {
           "url": "https://www.zonario.co/proyectos-de-vivienda/medellin/laureles",
@@ -32,11 +32,18 @@
           "source_updated_at": "2026-09-26",
           "facts": {
             "project_name": "Nexus",
-            "listed_in_laureles_inventory": true
+            "listed_in_laureles_inventory": true,
+            "price_from_cop": 1587000000,
+            "price_to_cop": 1587000000,
+            "area_min_m2": 136,
+            "area_max_m2": 136,
+            "delivery_year": 2027,
+            "vis_flag": false
           }
         }
       ],
-      "units": []
+      "units": [],
+      "priceTo": 1587000000
     },
     {
       "key": "medellin:new-project:distrito-33",
@@ -80,7 +87,8 @@
           "kind": "marketplace",
           "url": "https://tulugar.com/en/projects/colombia/distrito-33"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:grand-coral",
@@ -111,7 +119,8 @@
           }
         }
       ],
-      "units": []
+      "units": [],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:nutibara-parkway",
@@ -120,13 +129,13 @@
       "owner": "BEMSA / Proin",
       "hood": "Laureles",
       "status": null,
-      "priceFrom": null,
+      "priceFrom": 370406379,
       "delivYear": null,
       "delivNote": null,
       "addr": null,
       "lat": null,
       "lng": null,
-      "vis": null,
+      "vis": false,
       "sources": [
         {
           "url": "https://www.zonario.co/proyectos-de-vivienda/medellin/laureles",
@@ -138,11 +147,17 @@
           "source_updated_at": "2026-09-26",
           "facts": {
             "project_name": "Nutibara Parkway",
-            "listed_in_laureles_inventory": true
+            "listed_in_laureles_inventory": true,
+            "price_from_cop": 370406379,
+            "price_to_cop": 834843174,
+            "area_min_m2": 19,
+            "area_max_m2": 47,
+            "vis_flag": false
           }
         }
       ],
-      "units": []
+      "units": [],
+      "priceTo": 834843174
     },
     {
       "key": "medellin:new-project:vigo",
@@ -187,7 +202,8 @@
           "kind": "marketplace",
           "url": "https://tulugar.com/en/projects/colombia/vigo"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:arrayan",
@@ -282,7 +298,8 @@
           "kind": "developer",
           "url": "https://amarilo.com.co/proyecto/arrayan"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:saman",
@@ -352,7 +369,8 @@
           "kind": "developer",
           "url": "https://amarilo.com.co/proyecto/saman-jardines-del-rio"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:guayacanes",
@@ -422,7 +440,8 @@
           "kind": "developer",
           "url": "https://amarilo.com.co/proyecto/guayacanes-jardines-del-rio"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:palma",
@@ -430,14 +449,14 @@
       "name": "Palma",
       "owner": "Amarilo",
       "hood": "Ciudad del Río",
-      "status": null,
+      "status": "pre_sale",
       "priceFrom": null,
       "delivYear": 2029,
       "delivNote": "Segundo Semestre 2029 Etapa 1",
       "addr": "Calle 17 #43F-122",
       "lat": null,
       "lng": null,
-      "vis": null,
+      "vis": false,
       "sources": [
         {
           "url": "https://amarilo.com.co/proyecto/palma",
@@ -456,7 +475,9 @@
               129,
               150,
               166
-            ]
+            ],
+            "project_status": "Sobre planos",
+            "vis_flag": false
           }
         }
       ],
@@ -464,7 +485,7 @@
         {
           "name": "Apto 129 m²",
           "bedrooms": 3,
-          "bathrooms": null,
+          "bathrooms": 3,
           "built": 129,
           "priv": 101,
           "kind": "developer",
@@ -473,7 +494,7 @@
         {
           "name": "Apto 150 m²",
           "bedrooms": 3,
-          "bathrooms": null,
+          "bathrooms": 3,
           "built": 150,
           "priv": 118,
           "kind": "developer",
@@ -482,13 +503,14 @@
         {
           "name": "Apto 166 m²",
           "bedrooms": 3,
-          "bathrooms": null,
+          "bathrooms": 3,
           "built": 166,
           "priv": 125,
           "kind": "developer",
           "url": "https://amarilo.com.co/proyecto/palma"
         }
-      ]
+      ],
+      "priceTo": null
     },
     {
       "key": "medellin:new-project:river-park",
@@ -546,7 +568,8 @@
           "kind": "developer",
           "url": "https://londonogomez.com/proyectos-vivienda/medellin/river-park-0"
         }
-      ]
+      ],
+      "priceTo": null
     }
   ]
 }
