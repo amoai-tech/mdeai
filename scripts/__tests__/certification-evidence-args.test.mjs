@@ -73,6 +73,18 @@ test("refuses malformed evidence URLs", () => {
   assert.equal(parseCertificationEvidenceArgs([...BASE, "--source-type=listing", "--source-url=javascript:alert(1)"]).ok, false);
 });
 
+test("requires --verified-by when --verification-status is supplied", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, "--verification-status=verified"]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /verified-by/);
+});
+
+test("refuses notes longer than 2000 characters", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, `--notes=${"x".repeat(2001)}`]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /notes/);
+});
+
 test("does not treat --database-url as a certification argument", () => {
   const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
   assert.equal(parsed.ok, true, parsed.errors.join("; "));

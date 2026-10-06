@@ -78,6 +78,10 @@ export function parseCertificationEvidenceArgs(argv) {
     errors.push("--verification-status must be 1-64 chars of [A-Za-z0-9_-]");
   }
   if (verifiedBy && !UUID_RE.test(verifiedBy)) errors.push("--verified-by must be a UUID");
+  if (verificationStatus && !verifiedBy) {
+    errors.push("--verified-by is required with --verification-status (a verification needs a verifier)");
+  }
+  if (notes && notes.length > 2000) errors.push("--notes must be at most 2000 characters");
 
   return {
     ok: errors.length === 0,

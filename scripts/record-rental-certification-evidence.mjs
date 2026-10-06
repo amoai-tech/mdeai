@@ -49,9 +49,29 @@ function hostOf(url) {
   }
 }
 
-const client = new pg.Client({ connectionString: dbUrl });
+// Supabase requires TLS for non-loopback connections. Honour an explicit `sslmode`
+// in the URL; otherwise default to require-equivalent TLS (encrypt, no CA pin,
+// matching Supabase's `sslmode=require`) so evidence never travels in plaintext.
+function isLoopbackHost(host) {
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+const parsedDb = (() => {
+  try {
+    return new URL(dbUrl);
+  } catch {
+    return null;
+  }
+})();
+const needsTls =
+  parsedDb !== null && !isLoopbackHost(parsedDb.hostname) && !/[?&]sslmode=/.test(dbUrl);
+const client = new pg.Client(
+  needsTls
+    ? { connectionString: dbUrl, ssl: { rejectUnauthorized: false } }
+    : { connectionString: dbUrl },
+);
 await client.connect();
 let failed = false;
+let inTransaction = false;
 try {
   const {
     rows: [apartment],
@@ -75,6 +95,7 @@ try {
   );
 
   await client.query("begin");
+  inTransaction = true;
 
   const freshness = await client.query(
     `insert into public.rental_freshness_log (listing_id, checked_at, status)
@@ -86,12 +107,16 @@ try {
     [v.apartmentId, v.checkedAt, v.freshnessStatus],
   );
 
-  await client.query(
-    `update public.apartments
-        set freshness_status = $2, last_checked_at = $3::timestamptz
-      where id = $1::uuid`,
-    [v.apartmentId, v.freshnessStatus, v.checkedAt],
-  );
+  // Mirror the apartment only when the (listing, checked_at) evidence row was new,
+  // so re-running the same evidence is a true no-op.
+  if ((freshness.rowCount ?? 0) > 0) {
+    await client.query(
+      `update public.apartments
+          set freshness_status = $2, last_checked_at = $3::timestamptz
+        where id = $1::uuid`,
+      [v.apartmentId, v.freshnessStatus, v.checkedAt],
+    );
+  }
 
   let grounding = 0;
   if (v.sourceType && v.sourceUrl) {
@@ -100,7 +125,8 @@ try {
        select $1::uuid, $2, $3, $4::timestamptz
         where not exists (
           select 1 from public.rental_grounding
-           where apartment_id = $1::uuid and source_url = $3 and checked_at = $4::timestamptz)
+           where apartment_id = $1::uuid and source_type = $2
+             and source_url = $3 and checked_at = $4::timestamptz)
        returning id`,
       [v.apartmentId, v.sourceType, v.sourceUrl, v.checkedAt],
     );
@@ -109,12 +135,17 @@ try {
 
   let verification = 0;
   if (v.verificationStatus) {
+    if (!v.verifiedBy) {
+      throw new Error("--verified-by is required with --verification-status");
+    }
+    // property_verifications is UNIQUE(apartment_id): one verification per listing.
+    // Guard on that key so a re-run is a no-op instead of a unique violation.
     const pv = await client.query(
       `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at)
        select $1::uuid, $2::uuid, $3, $4, $5::timestamptz
         where not exists (
           select 1 from public.property_verifications
-           where apartment_id = $1::uuid and verified_at = $5::timestamptz)
+           where apartment_id = $1::uuid)
        returning id`,
       [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt],
     );
@@ -134,6 +165,7 @@ try {
   }
 
   await client.query("commit");
+  inTransaction = false;
 
   const {
     rows: [after],
@@ -151,13 +183,15 @@ try {
     `Wrote: freshness_log+${freshness.rowCount ?? 0} grounding+${grounding} verification+${verification} image+${imageAdded}`,
   );
   console.log(
-    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at.toISOString()} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,
+    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,
   );
 } catch (err) {
-  try {
-    await client.query("rollback");
-  } catch {
-    /* the transaction may already be closed */
+  if (inTransaction) {
+    try {
+      await client.query("rollback");
+    } catch {
+      /* the transaction may already be closed */
+    }
   }
   console.error(`FAIL: ${err instanceof Error ? err.message : err}`);
   failed = true;
