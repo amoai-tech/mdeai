@@ -2,6 +2,7 @@ import type { ActivatePartnerInput } from "@/lib/partners/activate-schema";
 import { assertAllowedSignupSettings } from "@/lib/partners/activate-schema";
 import {
   PARTNER_ACTIVATE_REDIRECT,
+  type PartnerSignupType,
   type PartnerType,
 } from "@/lib/partners/partner-types";
 
@@ -32,7 +33,7 @@ export type ActivatePartnerResult =
     };
 
 export function buildActivatePayload(
-  type: PartnerType,
+  type: PartnerSignupType,
   form: PartnerSignupFormState,
   draftId?: string,
 ): ActivatePartnerInput {
