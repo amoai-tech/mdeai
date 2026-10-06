@@ -79,6 +79,8 @@ create trigger trg_sync_apartment_location
 -- EXECUTE at trigger creation rather than fire time (SAN-1284 batch 0C), so removing
 -- end-user EXECUTE avoids adding a public RPC surface without disabling the trigger.
 revoke execute on function public.sync_apartment_location() from public, anon, authenticated;
+-- SAN-1284 batch 0C contract: app-owned trigger functions keep service_role EXECUTE.
+grant execute on function public.sync_apartment_location() to service_role;
 
 -- §2.3 — fail closed by default ---------------------------------------------
 alter table public.apartments
