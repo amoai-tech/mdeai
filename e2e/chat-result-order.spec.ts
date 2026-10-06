@@ -46,8 +46,8 @@ const composer = (page: Page) => page.getByTestId("copilot-chat-input");
 
 async function box(locator: Locator, label: string) {
   const found = await locator.first().boundingBox();
-  expect(found, `${label} must be on screen`).not.toBeNull();
-  return found!;
+  if (!found) throw new Error(`${label} must be on screen`);
+  return found;
 }
 
 /** `upper` ends at or above where `lower` begins, so it reads first. */

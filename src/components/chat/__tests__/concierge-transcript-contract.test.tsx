@@ -89,11 +89,11 @@ function mount(element: React.ReactElement) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  act(() => root.render(element));
+  act(() => { root.render(element); });
   return {
     container,
     unmount: () => {
-      act(() => root.unmount());
+      act(() => { root.unmount(); });
       container.remove();
     },
   };

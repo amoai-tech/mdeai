@@ -63,11 +63,11 @@ function mount(element: React.ReactElement) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  act(() => root.render(element));
+  act(() => { root.render(element); });
   return {
     container,
     unmount: () => {
-      act(() => root.unmount());
+      act(() => { root.unmount(); });
       container.remove();
     },
   };
@@ -155,7 +155,7 @@ describe("ConciergeTranscriptTail event citations (SAN-966)", () => {
     expect(tail).not.toBeNull();
     expect(panel).not.toBeNull();
     expect(link?.textContent).toBe("Medellín event source");
-    expect(tail!.contains(panel)).toBe(true);
+    expect(tail?.contains(panel)).toBe(true);
     unmount();
   });
 });
@@ -203,7 +203,8 @@ describe("ConciergeMessageView (SAN-966)", () => {
     const tail = container.querySelector('[data-testid="concierge-transcript-tail"]');
     expect(list).not.toBeNull();
     expect(tail).not.toBeNull();
-    expect(list!.compareDocumentPosition(tail!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    if (!list || !tail) throw new Error("Expected stock message list and transcript tail");
+    expect(list.compareDocumentPosition(tail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     unmount();
   });
 
