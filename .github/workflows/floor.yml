@@ -108,6 +108,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: npm run check:mastra:schema:init
 
+      # Proves the retention guards behave on a real database: stale spans expire,
+      # the one-time anonymous sweep is dry-run safe, real user threads survive, and
+      # a NEW anonymous thread is rejected rather than deleted.
+      - name: Prove Mastra retention guards on a disposable database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_RETENTION_INTEGRATION: "1"
+        run: node --test scripts/__tests__/mastra-retention.integration.test.mjs
+
       # SAN-1311 — the gate above proves the adapter provisions the committed schema.
       # These prove the runtime actually uses it, that a conversation written by the
       # previous version is still readable, and that a suspended workflow survives a cold
