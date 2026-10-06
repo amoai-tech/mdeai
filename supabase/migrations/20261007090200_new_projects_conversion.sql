@@ -292,9 +292,17 @@ create trigger validate_commission_claim_transition
   for each row execute function public.validate_commission_claim_transition();
 
 -- ── leads: fail-closed listing kind + New Projects ownership alignment ───────
+-- New Projects narrows leads.listing_kind from a generic discriminator to the kinds
+-- the application actually supports. Evidence: production carried only NULL values
+-- (16/16 rows, verified 2026-10-06) and the app sets only 'apartment'. Any future
+-- kind (event, venue, ...) must be added deliberately with its own ownership rule.
+-- Added NOT VALID then validated so the contract change is auditable and a large
+-- table is never locked for a long scan.
 alter table public.leads drop constraint if exists leads_listing_kind_check;
 alter table public.leads add constraint leads_listing_kind_check
-  check (listing_kind is null or listing_kind in ('apartment', 'development_project'));
+  check (listing_kind is null or listing_kind in ('apartment', 'development_project'))
+  not valid;
+alter table public.leads validate constraint leads_listing_kind_check;
 
 create or replace function public.lead_listing_owner_aligned(
   p_partner_id uuid,
@@ -541,7 +549,7 @@ declare
   v_days integer;
   v_target text := nullif(btrim(p_decision), '');
 begin
-  if v_target not in ('accepted', 'rejected') then
+  if v_target is null or v_target not in ('accepted', 'rejected') then
     raise exception 'decide_developer_registration: decision must be accepted or rejected'
       using errcode = 'P0001';
   end if;
@@ -637,19 +645,24 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select array_position(
-    array['contacted', 'appointment_completed', 'interested', 'reserved',
-          'promesa', 'financing_closing', 'deed_closed_won'],
-    p_stage
-  ) >= array_position(
-    array['contacted', 'appointment_completed', 'interested', 'reserved',
-          'promesa', 'financing_closing', 'deed_closed_won'],
-    p_min_stage
+  -- Strict boolean: lost/canceled (and NULL) are not on the progression, so the
+  -- array_position comparison is NULL. coalesce keeps a NULL from silently passing.
+  select coalesce(
+    array_position(
+      array['contacted', 'appointment_completed', 'interested', 'reserved',
+            'promesa', 'financing_closing', 'deed_closed_won'],
+      p_stage
+    ) >= array_position(
+      array['contacted', 'appointment_completed', 'interested', 'reserved',
+            'promesa', 'financing_closing', 'deed_closed_won'],
+      p_min_stage
+    ),
+    false
   );
 $$;
 
 comment on function public.sales_stage_at_least(text, text) is
-  'SAN-1385: true when p_stage is at or beyond p_min_stage in the canonical sale progression.';
+  'SAN-1385: strict boolean — true when p_stage is at or beyond p_min_stage in the canonical sale progression; false for lost/canceled/NULL.';
 
 create or replace function public.advance_developer_registration_stage(
   p_registration_id uuid,
@@ -921,7 +934,8 @@ begin
       using errcode = 'P0001';
   end if;
   if v_reg.sales_stage is null
-    or not public.sales_stage_at_least(v_reg.sales_stage, v_min_stage) then
+    or v_reg.sales_stage in ('lost', 'canceled')
+    or not coalesce(public.sales_stage_at_least(v_reg.sales_stage, v_min_stage), false) then
     raise exception 'post_new_project_commission: commission trigger % not reached (stage %)',
       v_trigger, coalesce(v_reg.sales_stage, '(none)')
       using errcode = 'P0001';

@@ -9834,6 +9834,7 @@ export const Constants = {
         "event",
         "tour",
         "showing",
+        "new_project_consultation",
       ],
       conflict_type: [
         "time_overlap",
@@ -9862,6 +9863,7 @@ export const Constants = {
         "vendor",
         "tour",
         "creator",
+        "developer",
       ],
       payment_status: ["pending", "paid", "refunded", "failed"],
       resolution_status: [

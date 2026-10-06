@@ -5,7 +5,7 @@
 
 begin;
 
-select plan(67);
+select plan(77);
 
 -- ── fixtures (owner/superuser; RLS not yet switched) ─────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -348,6 +348,64 @@ select throws_ok(
   $$insert into public.development_projects (ownership_status, source_key, slug, name, publish_state, verified_at)
     values ('claimed', 'san1385-claimed-null', 'san1385-claimed-null', 'Claimed Null', 'draft', now())$$,
   '23514', null, 'G5 claimed project cannot omit partner_id');
+
+-- ── H · negative financial cases: blank decision + lost/canceled (10) ────────
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000004', true);
+
+select throws_ok(
+  $$select public.decide_developer_registration(
+      (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'), '')$$,
+  'P0001', null, 'H1 blank decision is rejected');
+select throws_ok(
+  $$select public.decide_developer_registration(
+      (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'), null)$$,
+  'P0001', null, 'H2 NULL decision is rejected');
+select is((select status from public.developer_lead_registrations
+  where project_id = 'a1385000-0000-4000-8000-000000000003'), 'pending',
+  'H3 registration is still pending after invalid decisions');
+
+select is((public.decide_developer_registration(
+  (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'),
+  'accepted', null, 'DEV-REF-B') ->> 'status'), 'accepted', 'H4 partner B accepts its registration');
+select is((public.advance_developer_registration_stage(
+  (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'),
+  'lost') ->> 'sales_stage'), 'lost', 'H5 deal moves to lost');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select throws_ok(
+  $$select public.post_new_project_commission(
+      (select id from public.developer_lead_registrations where project_id = 'a1385000-0000-4000-8000-000000000003'),
+      100000000, 'san1385-claim-lost')$$,
+  'P0001', null, 'H6 lost deal cannot earn commission');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000002', true);
+select ok((public.register_new_project_buyer(
+  'a1385000-0000-4000-8000-000000000001', 'san1385-reg-b-a-0001',
+  '{}'::jsonb, 'buyer-b@example.com', null, 'Buyer B') ->> 'registration_id') is not null,
+  'H7 second buyer registration commits');
+select set_config('request.jwt.claim.sub', 'e1385000-0000-4000-8000-000000000003', true);
+select is((public.decide_developer_registration(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000002'
+       and dr.project_id = 'a1385000-0000-4000-8000-000000000001'),
+  'accepted') ->> 'status'), 'accepted', 'H8 partner A accepts the second registration');
+select is((public.advance_developer_registration_stage(
+  (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+     where l.user_id = 'e1385000-0000-4000-8000-000000000002'
+       and dr.project_id = 'a1385000-0000-4000-8000-000000000001'),
+  'canceled') ->> 'sales_stage'), 'canceled', 'H9 deal moves to canceled');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select throws_ok(
+  $$select public.post_new_project_commission(
+      (select dr.id from public.developer_lead_registrations dr join public.leads l on l.id = dr.lead_id
+         where l.user_id = 'e1385000-0000-4000-8000-000000000002'
+           and dr.project_id = 'a1385000-0000-4000-8000-000000000001'),
+      100000000, 'san1385-claim-canceled')$$,
+  'P0001', null, 'H10 canceled deal cannot earn commission');
 
 select * from finish();
 rollback;
