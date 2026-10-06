@@ -19,6 +19,7 @@
  *     --confirm-write=true [--image-url=…] [--source-type=… --source-url=…] \
  *     [--verification-status=… --verified-by=<uuid> --notes=…]
  */
+import { createHash } from "node:crypto";
 import pg from "pg";
 import { parseCertificationEvidenceArgs } from "./lib/certification-evidence-args.mjs";
 
@@ -197,6 +198,25 @@ try {
     imageAdded = img.rowCount ?? 0;
   }
 
+  // SAN-468 5.4 - authorized photo evidence. The apartment `images` array alone is
+  // not proof of publishing rights, so the recorder writes an explicit
+  // rental_listing_images row carrying the rights state when one is supplied.
+  let imageEvidenceAdded = 0;
+  if (v.imageUrl && v.imageRights) {
+    const storagePath = `external/${createHash("sha1").update(v.imageUrl).digest("hex")}`;
+    const evidence = await client.query(
+      `insert into public.rental_listing_images
+         (listing_id, storage_path, source_url, rights_status, rights_evidence)
+       select $1::uuid, $2, $3, $4, $5
+        where not exists (
+          select 1 from public.rental_listing_images
+           where listing_id = $1::uuid and source_url = $3)
+       returning id`,
+      [v.apartmentId, storagePath, v.imageUrl, v.imageRights, v.notes],
+    );
+    imageEvidenceAdded = evidence.rowCount ?? 0;
+  }
+
   await client.query("commit");
   inTransaction = false;
 
@@ -207,16 +227,17 @@ try {
             coalesce(array_length(images, 1), 0) as image_count,
             (select count(*)::int from public.rental_freshness_log where listing_id = $1::uuid) as freshness_rows,
             (select count(*)::int from public.rental_grounding where apartment_id = $1::uuid) as grounding_rows,
-            (select count(*)::int from public.property_verifications where apartment_id = $1::uuid) as verification_rows
+            (select count(*)::int from public.property_verifications where apartment_id = $1::uuid) as verification_rows,
+            (select count(*)::int from public.rental_listing_images where listing_id = $1::uuid) as image_evidence_rows
        from public.apartments where id = $1::uuid`,
     [v.apartmentId],
   );
 
   console.log(
-    `Wrote: freshness_log+${freshnessRows} grounding+${grounding} verification+${verification} image+${imageAdded}`,
+    `Wrote: freshness_log+${freshnessRows} grounding+${grounding} verification+${verification} image+${imageAdded} image_evidence+${imageEvidenceAdded}`,
   );
   console.log(
-    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,
+    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows} image_evidence_rows=${after.image_evidence_rows}`,
   );
 } catch (err) {
   if (inTransaction) {
