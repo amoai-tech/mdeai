@@ -1,0 +1,34 @@
+[
+  {
+    "query": "Redesign /rentals so the result cards, map, filters and Ask MDE feel like one premium responsive workspace instead of separate widgets.",
+    "should_trigger": true
+  },
+  {
+    "query": "The rental detail page works but looks generic. Improve hierarchy, typography, photo treatment, mobile layout and the sticky viewing CTA without changing business logic.",
+    "should_trigger": true
+  },
+  {
+    "query": "Create the loading, empty, error and unavailable UI states for the renter viewing flow and make the copy and actions consistent.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review this property screen at desktop and mobile widths and propose a stronger visual composition while keeping MDE design tokens.",
+    "should_trigger": true
+  },
+  {
+    "query": "Fix the Supabase RLS policy for viewing_requests so renters can only read their own rows.",
+    "should_trigger": false
+  },
+  {
+    "query": "The rental search workflow converts COP/month into USD/night. Fix the parser and ranking contract.",
+    "should_trigger": false
+  },
+  {
+    "query": "Optimize this Next.js server component data waterfall and reduce the client bundle; the rendered design must stay unchanged.",
+    "should_trigger": false
+  },
+  {
+    "query": "Add a database migration for viewing request idempotency and verify it in Supabase.",
+    "should_trigger": false
+  }
+]

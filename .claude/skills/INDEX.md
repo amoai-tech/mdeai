@@ -34,6 +34,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `code-review` | 98 | KEEP | Universal PR/diff review; CI-specific invariants live in `references/ci-review.md` |
 | `copilotkit` | 97 | KEEP | Maintain version/source verification and v2 entrypoint accuracy |
 | `events` | 91 | KEEP | Add domain references only as event rules grow |
+| `frontend-design` | 94 | KEEP + BENCHMARK | Canonical visual-design owner; MDE UX patterns load progressively from `references/ui-ux-patterns.md` |
 | `gemini` | 96 | KEEP | Maintain current-model/provider evidence |
 | `maps` | 94 | KEEP + IMPROVE | Add trigger and behavior evals |
 | `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
@@ -53,7 +54,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `wireframe` | 91 | KEEP + IMPROVE | Add responsive/AI-HITL design evals |
 | `writing-skills` | 94 | KEEP | Keep aligned with Anthropic eval/benchmark workflow |
 
-**Overall audit score: 92.9/100.**
+**Overall audit score: 94.7/100.**
 
 ## Remove / consolidate decisions
 
@@ -63,6 +64,7 @@ Scores are audit scores, not benchmark pass rates. They combine:
 | `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
 | `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
 | `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
+| `frontend-design` + local `ui-ux-pro-max` | Consolidated | `frontend-design` owns visual direction; MDE-relevant UX patterns load from its reference instead of a competing design owner |
 | former specialist `*-review` skills | Consolidated | Domain-specific invariants live with the domain owner; universal PR/diff review lives in `code-review` |
 ## Task 1 · Highest-priority actions
 
