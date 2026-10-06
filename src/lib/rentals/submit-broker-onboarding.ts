@@ -15,6 +15,10 @@ import {
   withoutUnverifiedCoordinates,
 } from "@/lib/rentals/broker-onboarding-apartment-patch";
 import { verifyPlaceId } from "@/lib/place-search";
+import {
+  PlacesConfigError,
+  PlacesRequestError,
+} from "@/mastra/lib/google-places-client";
 import { createClient } from "@/lib/supabase/server";
 
 export type { BrokerOnboardingFormInput, BrokerOnboardingSubmitResult };
@@ -57,8 +61,22 @@ export async function submitBrokerOnboarding(
     let verified;
     try {
       verified = await verifyPlaceId(input.placeId);
-    } catch {
-      verified = null;
+    } catch (err) {
+      // Distinguish an operational/config failure from an invalid place, so a
+      // missing key or an unreachable Google is not reported as "pick again".
+      if (err instanceof PlacesConfigError) {
+        return {
+          ok: false,
+          message: "Address verification is temporarily unavailable. Please try again later.",
+        };
+      }
+      if (err instanceof PlacesRequestError) {
+        return {
+          ok: false,
+          message: "We could not reach Google to verify the address. Please try again.",
+        };
+      }
+      throw err;
     }
     if (!verified || !verified.formattedAddress) {
       return {

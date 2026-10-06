@@ -82,7 +82,11 @@ export function validateBrokerOnboardingInput(
     }
   }
   if ((input.latitude != null || input.longitude != null) && !placeId) {
-    return { ok: false, message: "Select a verified address before saving coordinates." };
+    return {
+      ok: false,
+      message:
+        "Coordinates can only be saved when a Google Places address is selected. Use the address picker to choose a verified location.",
+    };
   }
   if ((input.latitude == null) !== (input.longitude == null)) {
     return { ok: false, message: "Location must include both latitude and longitude." };

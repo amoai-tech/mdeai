@@ -49,7 +49,13 @@ export function createPlacesRateLimiter(maxPerWindow: number): PlacesRateLimiter
   }
 
   function rateLimitKey(req: Request): string {
-    for (const header of ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]) {
+    // x-vercel-forwarded-for is only trustworthy when Vercel is the edge that sets
+    // it. Behind any other proxy it can be spoofed, so use the standard chain there.
+    const headers =
+      process.env.VERCEL === "1"
+        ? ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"]
+        : ["x-forwarded-for", "x-real-ip"];
+    for (const header of headers) {
       const value = req.headers.get(header);
       if (!value) continue;
       const first = value.split(",")[0]?.trim();

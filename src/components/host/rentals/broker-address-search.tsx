@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import type { PlaceSearchResult } from "@/lib/place-search";
 
@@ -68,18 +68,15 @@ export function BrokerAddressSearch({ value, onTextChange, onSelect, onClearSele
     };
   }, [value]);
 
-  const selectResult = useCallback(
-    (result: PlaceSearchResult) => {
-      const label = result.formattedAddress ?? result.displayName ?? value;
-      committedRef.current = label;
-      onSelect(result);
-      onTextChange(label);
-      setOpen(false);
-      setResults([]);
-      setActiveIndex(-1);
-    },
-    [onSelect, onTextChange, value],
-  );
+  function selectResult(result: PlaceSearchResult) {
+    const label = result.formattedAddress ?? result.displayName ?? value;
+    committedRef.current = label;
+    onSelect(result);
+    onTextChange(label);
+    setOpen(false);
+    setResults([]);
+    setActiveIndex(-1);
+  }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
