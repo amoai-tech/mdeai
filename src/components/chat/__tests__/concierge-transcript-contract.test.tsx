@@ -64,6 +64,7 @@ import { EventFastPathProvider, useEventFastPath } from "@/components/chat/event
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { EventSearchResultsProvider, useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { GroundedFastPathProvider, useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { NewProjectFastPathProvider } from "@/components/chat/new-project-fast-path-context";
 import { RentalFastPathProvider, useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { RestaurantFastPathProvider, useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 
@@ -71,8 +72,9 @@ import { RestaurantFastPathProvider, useRestaurantFastPath } from "@/components/
 
 function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <RentalFastPathProvider>
-      <EventFastPathProvider>
+    <NewProjectFastPathProvider>
+      <RentalFastPathProvider>
+        <EventFastPathProvider>
         <RestaurantFastPathProvider>
           <GroundedFastPathProvider>
             <EventSearchResultsProvider>
@@ -80,8 +82,9 @@ function Providers({ children }: { children: React.ReactNode }) {
             </EventSearchResultsProvider>
           </GroundedFastPathProvider>
         </RestaurantFastPathProvider>
-      </EventFastPathProvider>
-    </RentalFastPathProvider>
+        </EventFastPathProvider>
+      </RentalFastPathProvider>
+    </NewProjectFastPathProvider>
   );
 }
 
