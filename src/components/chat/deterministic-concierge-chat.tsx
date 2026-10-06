@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConciergeTranscriptTail } from "@/components/chat/concierge-transcript-tail";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -18,6 +18,20 @@ export function DeterministicConciergeChat() {
   const hydrated = useHydrated();
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // The real chat sticks to the bottom as results arrive; /chat is now a fixed-height workspace
+  // (SAN-1414), so this stand-in must too, or a tall result list would end below the visible area.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    // The tail renders nothing while empty, so watch the scroller itself for results arriving.
+    const observer = new MutationObserver(() => {
+      scroller.scrollTop = scroller.scrollHeight;
+    });
+    observer.observe(scroller, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
   async function submit() {
     const text = value.trim();
@@ -38,7 +52,7 @@ export function DeterministicConciergeChat() {
       className="flex min-h-0 flex-1 flex-col justify-end"
     >
       {/* The same tail the real transcript renders, above the composer. */}
-      <div className="mx-auto min-h-0 w-full max-w-3xl overflow-y-auto">
+      <div ref={scrollerRef} className="mx-auto min-h-0 w-full max-w-3xl overflow-y-auto">
         <ConciergeTranscriptTail />
       </div>
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">

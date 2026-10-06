@@ -4,6 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* SAN-1414 — /chat is a one-window-tall workspace at lg+ (chat-page-client, geo-chat-shell, chat-canvas).
+   The first preview build of that change shipped these class names in JS but a stylesheet byte-identical
+   to main's, with no rules for them (Vercel had restored an older build cache). Listing them here makes
+   the stylesheet carry them whether or not the scanner re-reads those files. Tailwind v4 scans
+   sources automatically (there is no content list in a tailwind config to extend), so this is a
+   belt-and-braces list: if those layout classes are renamed, update it here too. */
+@source inline("lg:h-dvh lg:min-h-0 lg:h-full lg:overflow-hidden lg:grid-rows-[minmax(0,1fr)] lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]");
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

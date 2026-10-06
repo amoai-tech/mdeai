@@ -61,7 +61,7 @@ export function ChatMapPanel() {
         <ChatMap mapDomId="chat-map" />
         {showEmpty ? (
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/70 p-6"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center p-6"
             data-testid="map-empty-state"
           >
             <EmptyState

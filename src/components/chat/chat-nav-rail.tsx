@@ -104,6 +104,7 @@ export function ChatNavRail({
   const { startNewChat, stopActiveRun } = useConciergeSession();
   const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
+  const hasChats = !loading && !error && threads.length > 0;
 
   // Both stay on /chat, where the concierge lives (D-13). These used to push
   // "/" from before the concierge moved, which dropped Sofia on the marketing
@@ -129,12 +130,13 @@ export function ChatNavRail({
       aria-label="Concierge navigation"
       className="flex h-full min-h-0 flex-col gap-4"
     >
-      <div className="flex items-center gap-2 text-sm font-semibold">
+      <div className="flex items-center gap-2 text-sm font-semibold lg:hidden">
         <Sparkles className="size-4 text-primary" aria-hidden />
         mdeai
       </div>
 
-      <ul className="flex flex-col gap-1 text-sm">
+      {/* SAN-1414: three groups so only the saved chats scroll — New chat and Explore/Library stay on screen. */}
+      <ul className="flex shrink-0 flex-col gap-1 text-sm">
         {/* New chat */}
         <li>
           <button
@@ -147,7 +149,13 @@ export function ChatNavRail({
             New chat
           </button>
         </li>
+      </ul>
 
+      <div
+        data-testid="nav-thread-list"
+        className={cn("overflow-y-auto", hasChats ? "min-h-24 flex-1" : "shrink-0")}
+      >
+        <ul className="flex flex-col gap-1 text-sm">
         {/* Thread list */}
         {loading ? (
           <li className="space-y-1 px-1 pt-1">
@@ -201,7 +209,10 @@ export function ChatNavRail({
             </span>
           </li>
         )}
+        </ul>
+      </div>
 
+      <ul className="flex shrink-0 flex-col gap-1 text-sm">
         {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
         <NavSectionLabel>Explore</NavSectionLabel>
         {EXPLORE_ITEMS.map((item) => (
@@ -215,7 +226,7 @@ export function ChatNavRail({
         ))}
       </ul>
 
-      <p className="mt-auto text-xs text-muted-foreground">
+      <p className="mt-auto shrink-0 text-xs text-muted-foreground">
         Ask for rentals, events, cafés, or map pins in Laureles and Poblado.
       </p>
       <a

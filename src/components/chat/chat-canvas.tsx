@@ -12,11 +12,11 @@ export function ChatCanvas() {
   return (
     <>
       <div
-        className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(360px,420px)]"
+        className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]"
         data-testid="chat-canvas"
       >
         <aside
-          className="hidden min-h-0 border-r border-border p-4 lg:flex lg:flex-col"
+          className="hidden min-h-0 overflow-y-auto border-r border-border p-4 lg:flex lg:flex-col"
           aria-label="Left navigation"
         >
           <ChatNavRail />

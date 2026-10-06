@@ -47,6 +47,8 @@ export default defineConfig({
         "**/chat-virtualization.spec.ts",
         // SAN-966: needs the deterministic chat, so it runs under `local-chromium`.
         "**/chat-result-order.spec.ts",
+        // SAN-1414: same reason.
+        "**/chat-workspace-layout.spec.ts",
         ...PROD_SPECS,
       ],
       workers: 1,
@@ -59,6 +61,7 @@ export default defineConfig({
         "**/auth-guard.spec.ts",
         "**/chat-virtualization.spec.ts",
         "**/chat-result-order.spec.ts",
+        "**/chat-workspace-layout.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,
