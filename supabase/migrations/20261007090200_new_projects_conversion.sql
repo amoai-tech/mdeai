@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261006130200_new_projects_conversion.sql
+-- Migration: 20261007090200_new_projects_conversion.sql
 -- Task:      SAN-1385 · Build the Safe Data Foundation for New Condo Projects,
 --            Leads, and Commissions
 -- =============================================================================
@@ -14,8 +14,8 @@
 --   * generic bookings support for new_project_consultation
 --   * four deterministic, idempotent transactions
 --
--- Depends on: 20261006130000_new_projects_enums.sql (committed),
---             20261006130100_new_projects_core.sql
+-- Depends on: 20261007090000_new_projects_enums.sql (committed),
+--             20261007090100_new_projects_core.sql
 -- Replay-safe: create ... if not exists; create or replace; drop ... if exists.
 -- =============================================================================
 

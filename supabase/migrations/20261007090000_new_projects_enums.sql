@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261006130000_new_projects_enums.sql
+-- Migration: 20261007090000_new_projects_enums.sql
 -- Task:      SAN-1385 · Build the Safe Data Foundation for New Condo Projects,
 --            Leads, and Commissions (decision D4)
 -- =============================================================================

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261006130100_new_projects_core.sql
+-- Migration: 20261007090100_new_projects_core.sql
 -- Task:      SAN-1385 · Build the Safe Data Foundation for New Condo Projects,
 --            Leads, and Commissions
 -- =============================================================================
@@ -14,7 +14,7 @@
 --   * Every exposed table has RLS + explicit grants in this same file.
 --   * No vector/HNSW tables, no exact-unit table, no Edge Function.
 --
--- Depends on: 20261006130000_new_projects_enums.sql (must be committed first)
+-- Depends on: 20261007090000_new_projects_enums.sql (must be committed first)
 -- Replay-safe: create ... if not exists; drop policy/constraint/trigger if exists.
 -- =============================================================================
 
