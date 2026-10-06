@@ -18,6 +18,10 @@ export interface NewProjectUnitType {
   priceToCents: number | null;
   currency: string;
   availability: string | null;
+  /** residential_apartment | loft | commercial | office | medical | null (unknown, fail-closed). */
+  productClass: string | null;
+  /** Tower/phase for phased projects; null when the project has one phase. */
+  phaseLabel: string | null;
   sourceKind: string | null;
   sourceUrl: string | null;
   verifiedAt: string | null;

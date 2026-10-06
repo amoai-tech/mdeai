@@ -14,7 +14,7 @@ import {
   looksLikeNonRentalSearch,
   looksLikeRentalSearch,
 } from "@/lib/rental-query-parser";
-import { looksLikeNewProjectQuery } from "@/lib/new-projects/fast-path";
+import { RENTAL_WORD_RE, looksLikeNewProjectQuery } from "@/lib/new-projects/fast-path";
 import {
   looksLikeCafeSearch,
   looksLikeNightlifeGroundingSearch,
@@ -120,7 +120,6 @@ export const ROUTER_ROUTING_TABLE: Record<
 };
 
 export const ROUTER_HANDLER_ORDER: RouterRoutingTarget[] = [
-  "new_project",
   "rental",
   "event_venue_booking",
   "event",
@@ -157,7 +156,7 @@ export function classifyRouterIntent(text: string): RouterIntentClassification {
     };
   }
 
-  if (looksLikeNewProjectQuery(normalized)) {
+  if (looksLikeNewProjectQuery(normalized) && !RENTAL_WORD_RE.test(normalized)) {
     // New construction is a distinct domain: route it before the rental classifier, which would
     // otherwise claim "apartment" phrasing.
     const confidence = 0.9;
@@ -269,6 +268,10 @@ export function routerHandlerOrderFromClassification(
 ): RouterRoutingTarget[] {
   const primary = classification.routingTarget;
   if (primary === "agent") return [];
+  // New construction is a distinct domain: if it is classified, try only its own handler and
+  // let the agent (which owns the search-new-projects tool) take over on failure. Falling
+  // through to rentals would reintroduce the "apartment wording" hijack this routing fixed.
+  if (primary === "new_project") return [primary];
   return [primary, ...ROUTER_HANDLER_ORDER.filter((t) => t !== primary)];
 }
 

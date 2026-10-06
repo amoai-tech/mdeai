@@ -22,7 +22,7 @@ import type {
 } from "@/lib/new-projects/types";
 
 const UNIT_COLUMNS =
-  "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,source_kind,source_url,verified_at";
+  "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,product_class,phase_label,source_kind,source_url,verified_at";
 
 /** A grounded project card. Unknown facts are explicit strings, never zero/false/inferred. */
 export const newProjectCardSchema = z.object({

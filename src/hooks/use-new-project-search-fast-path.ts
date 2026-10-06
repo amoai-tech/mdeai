@@ -17,11 +17,15 @@ function newProjectSearchSummary(envelope: unknown): string {
   return "Found " + count + " new project" + (count === 1 ? "" : "s") + ".";
 }
 
-async function fetchNewProjectSearch(params: Record<string, unknown>): Promise<unknown> {
+async function fetchNewProjectSearch(
+  params: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<unknown> {
   const res = await fetch("/api/new-projects/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    signal,
   });
   if (!res.ok) throw new Error("new-project search failed: " + res.status);
   return res.json();
@@ -32,28 +36,32 @@ export function useNewProjectSearchFastPath() {
   const { setToolResult } = useNewProjectFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { showExchange } = useEventLocalChat();
-  const busyRef = useRef(false);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const handleUserMessage = useCallback(
     async (text: string) => {
       if (!looksLikeNewProjectQuery(text)) return false;
-      if (busyRef.current) {
-        // A second send while a search is in flight must not vanish: record the question, skip
-        // the duplicate search, and still report the send as handled.
-        showExchange(text, "");
-        return true;
-      }
-      busyRef.current = true;
+      // Latest search wins: cancel the in-flight request instead of dropping this one.
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
       try {
-        const envelope = await fetchNewProjectSearch(buildNewProjectFastPathParams(text));
+        const envelope = await fetchNewProjectSearch(
+          buildNewProjectFastPathParams(text),
+          controller.signal,
+        );
+        if (controller.signal.aborted) return true;
         clearOthers("new_project");
         setToolResult(envelope);
         showExchange(text, newProjectSearchSummary(envelope));
         return true;
       } catch {
+        // A superseded request is expected; anything else falls through to the agent, which
+        // already owns the search-new-projects tool (never to an unrelated vertical).
+        if (controller.signal.aborted) return true;
         return false;
       } finally {
-        busyRef.current = false;
+        if (controllerRef.current === controller) controllerRef.current = null;
       }
     },
     [clearOthers, setToolResult, showExchange],

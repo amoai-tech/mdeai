@@ -4,7 +4,10 @@
  * accepts. It never invents a filter the buyer did not express.
  */
 const NEW_PROJECT_RE =
-  /(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bnew\s+(?:construction|development)s?\b)|(\bnew\s+condos?\b)|(?:proyectos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:apartamentos?\s+nuev\w*)|(?:obra\s+nueva)|(?:condo\s+projects?)/i;
+  /(\bnew\b[\s\w]{0,30}\bprojects?\b)|(\bnew\s+(?:construction|development)s?\b)|(\bnew\s+condos?\b)|(\bnew\s+apartments?\b)|(?:proyectos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:apartamentos?\s+nuev\w*)|(?:obra\s+nueva)|(?:condo\s+projects?)/i;
+
+/** Strong rental wording: "new apartments" is new construction, but "new apartments for rent" is not. */
+export const RENTAL_WORD_RE = /\b(for rent|per night|nightly|arriendo|alquiler|airbnb|renta\b)/i;
 
 /** Delivery wording that must sit next to a year before we treat it as a delivery filter. */
 const DELIVERY_WORD = /deliver|entrega|entregar|completion|handover/i;

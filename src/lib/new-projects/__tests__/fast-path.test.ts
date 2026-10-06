@@ -12,6 +12,7 @@ describe("new-project fast path classifier", () => {
     expect(looksLikeNewProjectQuery("apartamentos nuevos en preventa")).toBe(true);
     expect(looksLikeNewProjectQuery("new condo in Laureles")).toBe(true);
     expect(looksLikeNewProjectQuery("show me new condos")).toBe(true);
+    expect(looksLikeNewProjectQuery("new apartments in Laureles")).toBe(true);
   });
 
   it("does not claim rentals, events or restaurants", () => {
