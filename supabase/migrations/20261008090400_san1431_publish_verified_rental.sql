@@ -23,9 +23,12 @@
 --     p_include_state = true it is the full contract used by the certification
 --     report; with false it returns only the evidence facts that the promotion
 --     itself resolves (used before publishing).
---   * rental_freshness_log UNIQUE (listing_id, checked_at) — a tied latest record
---     becomes impossible; a racing duplicate insert fails closed.
---   * public.publish_verified_rental(uuid, uuid) — locks the row, re-authorizes
+--   * rental_freshness_log UNIQUE (listing_id, checked_at) — pre-existing ties are
+--     first resolved conservatively (keep the least optimistic status), then a tied
+--     latest record becomes impossible and a racing duplicate insert fails closed.
+--   * public.publish_verified_rental(uuid, uuid) — replaces the earlier one-argument
+--     overload (dropped first, so a single-argument call resolves via the default
+--     p_actor_id) and locks the row, re-authorizes
 --     against the locked owner (no read-check-lock TOCTOU), refuses unless the
 --     canonical evidence predicate is empty (verified owner, valid price/currency,
 --     explicit current availability, canonical identity, coordinates, verified
@@ -195,6 +198,38 @@ comment on function public.rental_listing_launch_blockers(uuid, boolean) is
   'SAN-1431: canonical launch-readiness blockers. p_include_state=true is the full certification contract; false returns only the evidence facts a promotion must already satisfy.';
 
 -- ── 2. Fail closed on tied freshness evidence ────────────────────────────────
+-- PostgreSQL cannot add a unique constraint over existing duplicates, so first
+-- resolve any pre-existing (listing_id, checked_at) ties deterministically and
+-- conservatively: keep the LEAST optimistic status (stale < unconfirmed < active),
+-- i.e. a tie can only make a listing fail closed, never pass. This is a bounded
+-- data change (freshness rows only) and is a no-op on a clean table.
+do $$
+declare
+  v_removed integer;
+begin
+  with ranked as (
+    select f.id,
+           row_number() over (
+             partition by f.listing_id, f.checked_at
+             order by case lower(f.status)
+                        when 'stale' then 1
+                        when 'unconfirmed' then 2
+                        when 'active' then 3
+                        else 0
+                      end asc,
+                      f.created_at asc,
+                      f.id asc
+           ) as rn
+      from public.rental_freshness_log f
+  )
+  delete from public.rental_freshness_log f
+   using ranked r
+   where f.id = r.id
+     and r.rn > 1;
+  get diagnostics v_removed = row_count;
+  raise notice 'SAN-1431: removed % conflicting freshness row(s) before adding the uniqueness constraint', v_removed;
+end $$;
+
 alter table public.rental_freshness_log
   drop constraint if exists rental_freshness_log_listing_checked_key;
 alter table public.rental_freshness_log
@@ -205,6 +240,10 @@ comment on constraint rental_freshness_log_listing_checked_key on public.rental_
   'SAN-1431: one freshness status per (listing, checked_at); a tied latest record can no longer make publication depend on the query plan.';
 
 -- ── 3. Gated publish operation ───────────────────────────────────────────────
+-- Remove any earlier one-argument overload so the two-argument signature is the only
+-- one and a single-argument call resolves unambiguously (p_actor_id defaults to null).
+drop function if exists public.publish_verified_rental(uuid);
+
 create or replace function public.publish_verified_rental(
   p_apartment_id uuid,
   p_actor_id uuid default null

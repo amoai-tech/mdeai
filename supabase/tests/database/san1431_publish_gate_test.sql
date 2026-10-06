@@ -12,7 +12,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(27);
+select plan(28);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -155,6 +155,12 @@ select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-800
   '23514', null::text, 'N9: a missing current availability window is refused');
 
 -- ── Tied freshness evidence is impossible at the database ────────────────────
+select ok(
+  exists (select 1 from pg_constraint
+           where conrelid = 'public.rental_freshness_log'::regclass
+             and conname = 'rental_freshness_log_listing_checked_key'
+             and contype = 'u'),
+  'T0: the (listing_id, checked_at) uniqueness constraint exists');
 select throws_ok(
   $$insert into public.rental_freshness_log (listing_id, checked_at, status)
     values ('e1431000-0000-4000-8000-000000000001', now(), 'stale')$$,
