@@ -29,6 +29,8 @@ export function bedroomOptions(
 ): NewProjectSummary["bedroomOptions"] {
   const cheapest = new Map<number, number | null>();
   for (const unit of units) {
+    // development_unit_types.bedrooms is nullable (number | null): a typology with no recorded
+    // bedroom count can never be matched by an exact or minimum bedroom filter.
     if (unit.bedrooms == null) continue;
     const current = cheapest.get(unit.bedrooms);
     const price = unit.price_from_cents;

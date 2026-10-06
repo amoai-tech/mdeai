@@ -66,6 +66,10 @@ export function parseProjectFilters(searchParams: ProjectSearchParams): NewProje
  *   - `minBedrooms` means "2+ bedrooms" (any typology with that many or more);
  *   - `bedroomsExact` means "exactly 2 bedrooms" (a typology with that count).
  *
+ * Precedence: if BOTH bedroom filters are set, bedroomsExact wins. The HTTP input schema rejects
+ * that combination (superRefine), so this is a defensive rule for direct callers, not a supported
+ * input; a unit test locks the behaviour so it cannot drift.
+ *
  * When a **budget and a bedroom filter are combined**, a single typology must satisfy BOTH. A
  * typology with no published price fails closed, so "2BR under 600M" never returns a project
  * whose only 2BR has an unknown price.

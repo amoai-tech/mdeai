@@ -144,6 +144,17 @@ describe("projectMatchesFilters — hard deterministic filters", () => {
     expect(projectMatchesFilters(correlated, exactBudget)).toBe(true);
   });
 
+  it("locks the precedence: bedroomsExact wins when both are set by a direct caller", () => {
+    const both = { ...parseProjectFilters({ beds: "3" }), bedroomsExact: 2 };
+    expect(
+      projectMatchesFilters(project({ bedroomOptions: [{ bedrooms: 2, priceFromCents: 1 }] }), both),
+    ).toBe(true);
+    // A 3BR-only project satisfies minBedrooms: 3, but exact-2 must win and reject it.
+    expect(
+      projectMatchesFilters(project({ bedroomOptions: [{ bedrooms: 3, priceFromCents: 1 }] }), both),
+    ).toBe(false);
+  });
+
   it("matches an exact delivery year and never a project without one", () => {
     const filters = parseProjectFilters({ delivery: "2027" });
     expect(projectMatchesFilters(project({ expectedDeliveryYear: 2027 }), filters)).toBe(true);

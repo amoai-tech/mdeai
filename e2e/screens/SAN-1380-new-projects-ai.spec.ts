@@ -94,6 +94,16 @@ test.describe("SAN-1380 new-projects AI search contract", () => {
     expect(slugs(budgeted.body)).not.toContain("arrayan");
   });
 
+  test("seed precondition: the pilot exposes the typologies the next tests assert", async ({ request }) => {
+    // Arrayán has a 2BR typology; Palma's recorded typologies are all 3BR. If the SAN-1404 seed
+    // changes, this fails by name instead of the behavioural assertions failing confusingly.
+    const exactTwo = await search(request, { bedroomsExact: 2, limit: 5 });
+    const exactThree = await search(request, { bedroomsExact: 3, limit: 5 });
+    expect(slugs(exactTwo.body)).toContain("arrayan");
+    expect(slugs(exactThree.body)).toContain("palma");
+    expect(slugs(exactTwo.body)).not.toContain("palma");
+  });
+
   test("rejects invalid input with 400 and a stable error code", async ({ request }) => {
     const res = await request.post("/api/new-projects/search", { data: { limit: 99 } });
     expect(res.status()).toBe(400);
