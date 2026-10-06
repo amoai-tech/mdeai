@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 
 const sqlPath = fileURLToPath(new URL("../sql/san468-inventory-quality-report.sql", import.meta.url));
 const pkgPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+const migrationPath = fileURLToPath(
+  new URL("../../supabase/migrations/20261008090400_san1431_publish_verified_rental.sql", import.meta.url),
+);
 
 /** Write/DDL keywords that would make the "read-only" report a mutation. */
 const WRITE_KEYWORDS = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create)\b/i;
@@ -35,7 +38,7 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
   assert.ok(start > 0 && end > start, "verdict block must exist");
   const verdict = executable.slice(start, end);
   let cursor = 0;
-  for (const flag of ["searchable", "map_ready", "launch_ready", "requestable"]) {
+  for (const flag of ["searchable", "map_ready", "requestable"]) {
     const idx = verdict.indexOf("as " + flag);
     assert.ok(idx > 0, flag + " must be present");
     const expression = verdict.slice(cursor, idx);
@@ -45,41 +48,33 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
     );
     cursor = idx;
   }
+  // launch_ready delegates to the canonical predicate; that predicate excludes fixtures.
+  assert.match(executable, /rental_listing_launch_blockers/);
+  assert.match(readFileSync(migrationPath, "utf8"), /test fixture/);
 });
 
 test("launch_ready requires verified owner, verified property, current freshness and authorized photo", () => {
   const executable = executableLines(readFileSync(sqlPath, "utf8"));
-  const start = executable.indexOf("verdict as (");
-  const end = executable.indexOf("dedup as (");
-  assert.ok(start > 0 && end > start, "verdict block must exist");
-  const verdict = executable.slice(start, end);
-  const launchStart = verdict.indexOf("as launch_ready");
-  assert.ok(launchStart > 0, "launch_ready flag must be present");
-  const launchExpr = verdict.slice(verdict.lastIndexOf("(", launchStart), launchStart);
+  // The report delegates the whole launch contract to the canonical predicate.
+  assert.match(executable, /cardinality\(public\.rental_listing_launch_blockers\(f\.id\)\) = 0/);
+  const migration = readFileSync(migrationPath, "utf8");
   for (const required of [
-    "is_verified",
-    "has_verified_owner",
-    "has_verified_property",
-    "has_current_freshness",
-    "has_authorized_photo",
-    "has_coords",
-    "coord_pair_valid",
-    "postgis_consistent",
-    "has_canonical_identity",
+    "listing not verified",
+    "no verified owner/agent",
+    "no verified property evidence",
+    "no current active freshness",
+    "no authorized usable photo",
+    "no coordinates",
+    "invalid coordinate pair",
+    "PostGIS location drift",
+    "no canonical property identity",
+    "missing/invalid price or currency",
   ]) {
-    assert.ok(
-      launchExpr.includes(required),
-      "launch_ready must require " + required,
-    );
+    assert.ok(migration.includes(required), "canonical predicate must require " + required);
   }
-  // A bare landlord_id, any image, or any freshness record must never be enough.
   assert.ok(
-    !/has_canonical_owner\s+and\s+f\.has_any_image/.test(launchExpr),
-    "launch_ready must not accept any-image evidence",
-  );
-  assert.ok(
-    !/has_freshness_evidence/.test(launchExpr),
-    "launch_ready must not accept mere freshness-record existence",
+    !/has_freshness_evidence/.test(migration),
+    "the predicate must not accept mere freshness-record existence",
   );
 });
 
@@ -89,7 +84,7 @@ test("every public flag excludes unverified external candidates", () => {
   const end = executable.indexOf("dedup as (");
   const verdict = executable.slice(start, end);
   let cursor = 0;
-  for (const flag of ["publicly_eligible", "searchable", "map_ready", "launch_ready", "requestable"]) {
+  for (const flag of ["publicly_eligible", "searchable", "map_ready", "requestable"]) {
     const idx = verdict.indexOf("as " + flag);
     assert.ok(idx > 0, flag + " must be present");
     const expression = verdict.slice(cursor, idx);
@@ -136,8 +131,10 @@ test("public and launch-ready rows can never carry PostGIS drift", () => {
 });
 test("canonical freshness log takes priority over denormalized fields", () => {
   const executable = executableLines(readFileSync(sqlPath, "utf8"));
-  assert.match(executable, /when lf\.listing_id is not null then/);
   assert.match(executable, /has_freshness_denorm_drift/);
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /order by f\.checked_at desc/);
+  assert.match(migration, /v_latest_status = 'active'/);
 });
 test("inventory-quality npm script is wired", () => {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
