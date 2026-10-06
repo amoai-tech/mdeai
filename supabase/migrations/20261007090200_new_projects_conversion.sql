@@ -296,13 +296,13 @@ create trigger validate_commission_claim_transition
 -- the application actually supports. Evidence: production carried only NULL values
 -- (16/16 rows, verified 2026-10-06) and the app sets only 'apartment'. Any future
 -- kind (event, venue, ...) must be added deliberately with its own ownership rule.
--- Added NOT VALID then validated so the contract change is auditable and a large
--- table is never locked for a long scan.
+-- The constraint is added NOT VALID here and validated in a SEPARATE migration
+-- (20261007090300) so the ACCESS EXCLUSIVE lock from ADD CONSTRAINT is released
+-- before the validating scan, which would otherwise block reads.
 alter table public.leads drop constraint if exists leads_listing_kind_check;
 alter table public.leads add constraint leads_listing_kind_check
   check (listing_kind is null or listing_kind in ('apartment', 'development_project'))
   not valid;
-alter table public.leads validate constraint leads_listing_kind_check;
 
 create or replace function public.lead_listing_owner_aligned(
   p_partner_id uuid,
