@@ -14,6 +14,7 @@ import {
   looksLikeNonRentalSearch,
   looksLikeRentalSearch,
 } from "@/lib/rental-query-parser";
+import { looksLikeNewProjectQuery } from "@/lib/new-projects/fast-path";
 import {
   looksLikeCafeSearch,
   looksLikeNightlifeGroundingSearch,
@@ -40,6 +41,7 @@ export type RouterRoutingTarget =
   | "event"
   | "grounded"
   | "restaurant"
+  | "new_project"
   | "agent";
 
 export type RouterAction = "search_now" | "clarify" | "agent";
@@ -118,6 +120,7 @@ export const ROUTER_ROUTING_TABLE: Record<
 };
 
 export const ROUTER_HANDLER_ORDER: RouterRoutingTarget[] = [
+  "new_project",
   "rental",
   "event_venue_booking",
   "event",
@@ -151,6 +154,19 @@ export function classifyRouterIntent(text: string): RouterIntentClassification {
       reason: "greeting or thanks",
       action: "agent",
       routingTarget: "agent",
+    };
+  }
+
+  if (looksLikeNewProjectQuery(normalized)) {
+    // New construction is a distinct domain: route it before the rental classifier, which would
+    // otherwise claim "apartment" phrasing.
+    const confidence = 0.9;
+    return {
+      intent: "general_concierge",
+      confidence,
+      reason: "new-construction project search",
+      action: "search_now",
+      routingTarget: "new_project",
     };
   }
 
@@ -270,6 +286,8 @@ export function routerIntentForTarget(target: RouterRoutingTarget): RouterIntent
     case "event":
       return "event_discovery";
     case "grounded":
+    case "new_project":
+      return "general_concierge";
     case "restaurant":
       return "restaurant_discovery";
     default:

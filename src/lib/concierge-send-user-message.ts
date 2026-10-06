@@ -14,6 +14,7 @@ import {
 
 export type ConciergeSendHandlers = {
   handleRentalMessage: (text: string) => Promise<boolean>;
+  handleNewProjectMessage: (text: string) => Promise<boolean>;
   /** Wired when SAN-494 · EVT-035 — Restaurant card Event Venue CTA venue fast-path lands; optional until then. */
   handleEventVenueBookingMessage?: (text: string) => Promise<boolean>;
   handleEventMessage: (text: string) => Promise<boolean>;
@@ -34,6 +35,8 @@ async function invokeConciergeHandler(
   switch (target) {
     case "rental":
       return handlers.handleRentalMessage(text);
+    case "new_project":
+      return handlers.handleNewProjectMessage(text);
     case "event_venue_booking":
       return (await handlers.handleEventVenueBookingMessage?.(text)) ?? false;
     case "event":

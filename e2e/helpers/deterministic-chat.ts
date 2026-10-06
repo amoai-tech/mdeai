@@ -90,6 +90,43 @@ export const groundedPlace = {
   fieldMaskVersion: "places-v1",
 };
 
+export const NEW_PROJECT_QUERY = "new 2 bedroom projects in Laureles under 900 million";
+
+export const newProject = {
+  slug: "arrayan",
+  name: "Arrayán",
+  neighborhood: "Ciudad del Río",
+  sourceOwner: "Amarilo",
+  priceLabel: "From COP 575,000,000",
+  priceKnown: true,
+  bedroomsLabel: "2 bedrooms",
+  deliveryLabel: "Delivery date not published",
+  statusLabel: "Pre-sale · on plans",
+  visLabel: "Not VIS",
+  unitTypeCount: 6,
+  verifiedLabel: "Verified 6 Oct 2026",
+  detailUrl: "/new-projects/arrayan",
+  primarySourceUrl: "https://amarilo.com.co/proyecto/arrayan",
+  primarySourceCheckedLabel: "6 Oct 2026",
+  unknownFields: ["delivery date"],
+};
+
+/** Mocks the read-only New Projects search the deterministic chat fast path calls. */
+export async function mockNewProjectFastPath(page: Page) {
+  await page.route("**/api/new-projects/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        results: [newProject],
+        totalPublished: 16,
+        returned: 1,
+        note: "Price is price-from, not an exact unit price. Unit types are not exact unit availability.",
+      }),
+    });
+  });
+}
+
 export async function mockFastPaths(page: Page) {
   await page.route("**/api/restaurants/search", async (route) => {
     await route.fulfill({

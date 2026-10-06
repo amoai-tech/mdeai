@@ -4,6 +4,7 @@ import { sendConciergeUserMessage } from "../concierge-send-user-message";
 function makeHandlers() {
   return {
     handleRentalMessage: vi.fn(async () => false),
+    handleNewProjectMessage: vi.fn(async () => false),
     handleEventVenueBookingMessage: vi.fn(async () => false),
     handleEventMessage: vi.fn(async () => false),
     handleGroundedMessage: vi.fn(async () => false),
