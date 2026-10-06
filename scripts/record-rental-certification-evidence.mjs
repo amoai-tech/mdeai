@@ -62,6 +62,10 @@ const parsedDb = (() => {
     return null;
   }
 })();
+// ponytail: TLS here is encryption-only (require-equivalent). Full certificate
+// verification (verify-full) fails against the Supabase pooler with "self-signed
+// certificate in certificate chain"; the upgrade path is to pin the Supabase CA and
+// set rejectUnauthorized: true once that certificate is available.
 const needsTls =
   parsedDb !== null && !isLoopbackHost(parsedDb.hostname) && !/[?&]sslmode=/.test(dbUrl);
 const client = new pg.Client(
