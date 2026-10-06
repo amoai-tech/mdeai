@@ -380,6 +380,13 @@ async function searchRentalsFromSupabase(
       { count: 'exact' },
     )
     .eq('status', 'active')
+    // SAN-468 §4.2 / SAN-386 canonical public eligibility. status alone is not
+    // enough: a listing must also be approved, published and canonically owned.
+    // RLS enforces this at the database boundary; these filters keep the intent
+    // explicit and protect the query if the policy or client role changes.
+    .eq('moderation_status', 'approved')
+    .eq('listing_workflow_status', 'published')
+    .not('landlord_id', 'is', null)
     .or(rentalPricePredicate(maxNightly))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
     // every nightly-priced row and two different currencies are never meaningfully ordered

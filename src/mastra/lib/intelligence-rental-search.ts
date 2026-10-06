@@ -203,6 +203,11 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
+      // SAN-468 §4.2 / SAN-386 canonical public eligibility, shared with the
+      // structured path. RLS enforces the same contract at the database boundary.
+      .eq("moderation_status", "approved")
+      .eq("listing_workflow_status", "published")
+      .not("landlord_id", "is", null)
       // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
       // which listings are priced or how a nightly budget applies across currencies.
       .or(rentalPricePredicate(
