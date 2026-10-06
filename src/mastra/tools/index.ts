@@ -1,5 +1,6 @@
 export { classifyIntentTool } from "./classify-intent";
 export { searchRentalsTool } from "./search-rentals";
+export { searchNewProjectsTool } from "./search-new-projects";
 export { searchEventsTool } from "./search-events";
 export { searchRestaurantsTool } from "./search-restaurants";
 export { searchAttractionsTool } from "./search-attractions";

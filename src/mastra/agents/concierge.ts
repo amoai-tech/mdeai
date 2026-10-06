@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { createThreadMemory } from '../lib/agent-memory';
 import { searchRentalsTool } from '../tools/search-rentals';
+import { searchNewProjectsTool } from '../tools/search-new-projects';
 import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
@@ -364,6 +365,7 @@ ${formatEventSourcePromptHint()}`,
   // clarification gates in the instructions above, so this changes no behavior.
   tools: {
     searchRentalsTool,
+    searchNewProjectsTool,
     searchEventsTool,
     searchRestaurantsTool,
     searchAttractionsTool,
