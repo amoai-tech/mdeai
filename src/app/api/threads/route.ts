@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeThreadTitle } from "@/lib/chat/thread-label";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 
@@ -8,7 +9,8 @@ export const maxDuration = 10;
 
 export type NavThread = {
   id: string;
-  title: string;
+  /** `null` when the chat has no title yet; the sidebar shows a dated fallback (`threadLabel`). */
+  title: string | null;
   updatedAt: string;
 };
 
@@ -43,7 +45,7 @@ export async function GET() {
   const rows = (data ?? []) as Array<{ id: unknown; title: unknown; updatedAt: unknown }>;
   const threads: NavThread[] = rows.map((row) => ({
     id: String(row.id),
-    title: String(row.title),
+    title: normalizeThreadTitle(row.title),
     updatedAt: String(row.updatedAt),
   }));
 

@@ -80,17 +80,52 @@ test.describe(`${SCREEN_ID} chat nav rail`, () => {
       assertConsoleClean(errors);
     });
 
-    test("saved is a live link and trips is disabled", async ({ page }) => {
+    test("saved and trips are live links", async ({ page }) => {
       await gotoHome(page);
-      // Saved is LIVE per sitemap — not aria-disabled
-      await expect(page.locator('[data-testid="nav-saved-link"]')).toBeAttached();
-      await expect(
-        page.locator('[data-testid="nav-saved-link"][aria-disabled]'),
-      ).not.toBeAttached();
-      // Trips is coming-soon — aria-disabled="true"
-      await expect(
-        page.locator('[data-testid="nav-trips-link"][aria-disabled="true"]'),
-      ).toBeAttached();
+      for (const [slug, href] of [
+        ["saved", "/saved"],
+        ["trips", "/trips"],
+      ] as const) {
+        const link = page.locator(`[data-testid="nav-${slug}-link"]`);
+        await expect(link).toBeAttached();
+        await expect(link).not.toHaveAttribute("aria-disabled", /.*/);
+        await expect(link).toHaveAttribute("href", href);
+      }
+    });
+
+    test("sidebar links navigate without reloading the page", async ({ page }) => {
+      await gotoHome(page);
+      // A value set on `window` survives client-side navigation and is lost on a document reload.
+      await page.evaluate(() => {
+        (window as unknown as { __navSentinel?: boolean }).__navSentinel = true;
+      });
+      await page.locator('[data-testid="nav-saved-link"]').click();
+      await expect(page).toHaveURL(/\/saved/);
+      const survived = await page.evaluate(
+        () => (window as unknown as { __navSentinel?: boolean }).__navSentinel === true,
+      );
+      expect(survived, "the page was reloaded instead of navigated client-side").toBe(true);
+    });
+
+    test("a chat without a title shows a dated name, never the word null", async ({ page }) => {
+      await page.route("**/api/threads", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            threads: [
+              { id: "t-untitled", title: null, updatedAt: "2026-10-02T21:32:00.000Z" },
+              { id: "t-titled", title: "Apartment search in Laureles", updatedAt: "2026-10-02T20:00:00.000Z" },
+            ],
+          }),
+        }),
+      );
+      await gotoHome(page);
+      const items = page.locator('[data-testid="nav-thread-item"]');
+      await expect(items).toHaveCount(2);
+      await expect(items.nth(0)).toHaveText(/^Chat · Oct \d{1,2}, /);
+      await expect(items.nth(0)).not.toHaveText(/null/i);
+      await expect(items.nth(1)).toHaveText("Apartment search in Laureles");
     });
 
     test("unauthenticated session shows empty thread state", async ({ page, context }) => {

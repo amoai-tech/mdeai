@@ -17,7 +17,7 @@ export default async function MyTicketsPage() {
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <h1 className="font-serif text-2xl font-semibold">My tickets</h1>
-        <Link href="/" className="text-sm text-primary hover:underline">
+        <Link href="/chat" className="text-sm text-primary hover:underline">
           Back to chat
         </Link>
       </div>
