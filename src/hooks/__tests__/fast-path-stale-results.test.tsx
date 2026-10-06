@@ -200,3 +200,54 @@ describe("only the latest search's results stay in the tail", () => {
     expect(probe.shown()).toEqual(["rental"]);
   });
 });
+
+// SAN-1422 · Make map results truthful and clear stale pins when results have no coordinates.
+describe("a finished search with no mappable results clears that category's old pins", () => {
+  const URL_BY_VERTICAL = {
+    rental: "/api/rentals/search",
+    event: "/api/events/search",
+    grounded: "/api/grounded/search",
+    restaurant: "/api/restaurants/search",
+  } as const;
+
+  /** Same cards, coordinates removed — the cards stay usable but nothing can be pinned. */
+  function withoutCoordinates(body: unknown): unknown {
+    const { results, ...rest } = body as { results: Array<Record<string, unknown>> };
+    return {
+      ...rest,
+      results: results.map((row) => {
+        const copy = { ...row };
+        delete copy.latitude;
+        delete copy.longitude;
+        return copy;
+      }),
+    };
+  }
+
+  const savedFixtures = new Map(FIXTURE);
+  afterEach(() => {
+    for (const [url, body] of savedFixtures) FIXTURE.set(url, body);
+  });
+
+  for (const vertical of ["rental", "event", "grounded", "restaurant"] as const) {
+    it(`${vertical}: mapped search → same search with no coordinates leaves no ${vertical} pins`, async () => {
+      await search(vertical);
+      expect(map.pins.get(vertical)).toHaveLength(1);
+
+      const url = URL_BY_VERTICAL[vertical];
+      FIXTURE.set(url, withoutCoordinates(FIXTURE_BY_URL[url]));
+      await search(vertical);
+      expect(probe.shown()).toEqual([vertical]);
+      expect(map.pins.get(vertical)).toEqual([]);
+    });
+
+    it(`${vertical}: mapped search → zero results leaves no ${vertical} pins`, async () => {
+      await search(vertical);
+      expect(map.pins.get(vertical)).toHaveLength(1);
+
+      FIXTURE.set(URL_BY_VERTICAL[vertical], { results: [] });
+      await search(vertical);
+      expect(map.pins.get(vertical)).toEqual([]);
+    });
+  }
+});

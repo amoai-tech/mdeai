@@ -30,7 +30,7 @@ function MapSheetBody({ open }: { open: boolean }) {
           <EmptyState
             testId="map-mobile-empty-card"
             title="Map is ready"
-            description="Search in chat — pins will appear here."
+            description="Search in chat to see available map locations."
             icon={<MapPin className="size-6" />}
             className="pointer-events-auto max-w-xs bg-background/95"
           />

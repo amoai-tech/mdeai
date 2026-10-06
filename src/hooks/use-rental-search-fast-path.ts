@@ -87,6 +87,7 @@ export function useRentalSearchFastPath() {
         lastRentalQuery: { ...query, genericAskPending: false },
         lastRentalResults: rentalsToPanelRows(cards),
       });
+      return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
   );
@@ -120,8 +121,8 @@ export function useRentalSearchFastPath() {
           ts: new Date().toISOString(),
         });
         setSearchMeta({ userText, params });
-        applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
-        showExchange(userText, fastPathRentalSummary(cards.length));
+        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
+        showExchange(userText, fastPathRentalSummary(cards.length, pinCount));
         return true;
       } catch (err) {
         console.error("[rental-fast-path]", err);

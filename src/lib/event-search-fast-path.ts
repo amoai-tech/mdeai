@@ -1,3 +1,4 @@
+import { withMapCoverage } from "@/lib/map-result-summary";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import type { EventCard, EventCategory } from "@/mastra/tools/search-events";
 import {
@@ -178,9 +179,9 @@ export function eventCardsToToolEnvelope(
   };
 }
 
-export function fastPathAssistantSummary(count: number): string {
+export function fastPathAssistantSummary(count: number, pinCount: number): string {
   if (count === 0) {
     return "No events matched — try another category, neighborhood, or date.";
   }
-  return `Found ${count} event${count === 1 ? "" : "s"} — see cards below and pins on the map.`;
+  return withMapCoverage(`Found ${count} event${count === 1 ? "" : "s"}`, count, pinCount);
 }

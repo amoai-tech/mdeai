@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -20,6 +20,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
 const CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS = new Set([
@@ -365,6 +366,12 @@ export function EventResults({ result }: { result: unknown }) {
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
   const rankExplanation = envelope.rankExplanation ?? [];
+  // SAN-1422 — an event without trusted coordinates is a usable card with no pin, so it must not
+  // pan, select or highlight a map target that does not exist.
+  const pinnedIds = useMemo(
+    () => new Set(normalizeToolOutput("event", result).pins.map((pin) => pin.id)),
+    [result],
+  );
   const rows = (envelope.results ?? []) as Array<{
     id: string;
     title: string;
@@ -456,9 +463,13 @@ export function EventResults({ result }: { result: unknown }) {
         <div ref={listRef} className="flex flex-col gap-2 py-2">
           {rows.map((e) => {
           const pinId = eventPinId(e.id);
+          const hasPin = pinnedIds.has(pinId);
           const ticketUrl = `/events/${e.id}`;
+          const selectOnMap = () => {
+            if (hasPin) panToPin(pinId);
+          };
           const openDetail = () => {
-            panToPin(pinId);
+            selectOnMap();
             openVenueDetail({
               kind: "event",
               eventId: e.id,
@@ -486,8 +497,8 @@ export function EventResults({ result }: { result: unknown }) {
               imageUrl={e.imageUrl}
               ticketUrl={ticketUrl}
               sourceUrl={e.sourceUrl}
-              selected={selectedPinId === pinId}
-              onSelect={() => panToPin(pinId)}
+              selected={hasPin && selectedPinId === pinId}
+              onSelect={selectOnMap}
               onOpenDetails={openDetail}
             />
           );
