@@ -204,6 +204,18 @@ begin
     b := b || 'PostGIS location drift'::text;
   end if;
 
+  -- A valid, consistent pair is not the same as a VERIFIED pair. Require a
+  -- coordinate receipt on the admin/service-writable verification row; trusting
+  -- apartments.metadata would let a broker self-certify their own pin.
+  if not exists (
+    select 1 from public.property_verifications pv
+     where pv.apartment_id = r.id
+       and pv.status = 'verified'
+       and lower(coalesce(pv.metadata->>'coordinates', pv.metadata->>'coordinates_status', '')) = 'verified'
+  ) then
+    b := b || 'no verified coordinate evidence'::text;
+  end if;
+
   if not (nullif(trim(coalesce(r.address, '')), '') is not null
           or nullif(trim(coalesce(r.source_listing_id, '')), '') is not null
           or coalesce(r.metadata->>'canonical_property_id', '') <> '') then

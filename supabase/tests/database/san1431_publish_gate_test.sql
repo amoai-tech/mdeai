@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(33);
+select plan(34);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -92,6 +92,9 @@ values
    current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
   ('e1431000-0000-4000-8000-000000000010', 'SAN1431 Q', 'san1431-q', 'Laureles', 'SAN1431 Q address',
    null, 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011', false, 2900000, 'COP',
+   current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb),
+  ('e1431000-0000-4000-8000-000000000011', 'SAN1431 R', 'san1431-r', 'Laureles', 'SAN1431 R address',
+   'inactive', 'pending', 'draft', 'd1431000-0000-4000-8000-000000000011', false, 2900000, 'COP',
    current_date - 1, null, 6.2447, -75.5916, '{}'::jsonb);
 
 -- Granted control/publish/viewing permission for every verified fixture except the
@@ -99,10 +102,11 @@ values
 insert into public.property_verifications (apartment_id, status, verified_at, metadata)
 select a.id, 'verified', now(),
        case a.slug
-         when 'san1431-n' then '{"owner_control":"unverified","publish_permission":"granted","viewings_permission":"granted"}'::jsonb
-         when 'san1431-o' then '{"owner_control":"verified","publish_permission":"unverified","viewings_permission":"granted"}'::jsonb
-         when 'san1431-p' then '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"unverified"}'::jsonb
-         else '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted"}'::jsonb
+         when 'san1431-n' then '{"owner_control":"unverified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb
+         when 'san1431-o' then '{"owner_control":"verified","publish_permission":"unverified","viewings_permission":"granted","coordinates":"verified"}'::jsonb
+         when 'san1431-p' then '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"unverified","coordinates":"verified"}'::jsonb
+         when 'san1431-r' then '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"unverified"}'::jsonb
+         else '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb
        end
   from public.apartments a
  where a.slug like 'san1431-%'
@@ -114,7 +118,7 @@ insert into public.rental_listing_images (listing_id, storage_path, mime_type, r
 select id, 'san1431/' || slug || '.jpg', 'image/jpeg', 'authorized' from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-e','san1431-g',
                 'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m',
-                'san1431-n','san1431-o','san1431-p','san1431-q');
+                'san1431-n','san1431-o','san1431-p','san1431-q','san1431-r');
 -- Q: NULL status (from the insert) and an explicit NULL freshness_status, with no log.
 update public.apartments set freshness_status = null, last_checked_at = null where slug = 'san1431-q';
 insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
@@ -124,9 +128,11 @@ insert into public.rental_freshness_log (listing_id, checked_at, status)
 select id, now(), 'active' from public.apartments
  where slug in ('san1431-a','san1431-b','san1431-c','san1431-d','san1431-e','san1431-f',
                 'san1431-h','san1431-i','san1431-j','san1431-k','san1431-m',
-                'san1431-n','san1431-o','san1431-p');
+                'san1431-n','san1431-o','san1431-p','san1431-r');
 insert into public.rental_freshness_log (listing_id, checked_at, status)
 values ('e1431000-0000-4000-8000-000000000007', now(), 'stale');
+-- G's cached mirror says "fresh"; the canonical log says "stale" and must win.
+update public.apartments set freshness_status = 'active', last_checked_at = now() where slug = 'san1431-g';
 
 -- ── Positive + metadata conversion + attribution ─────────────────────────────
 select lives_ok(
@@ -183,6 +189,8 @@ select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-800
   '23514', null::text, 'N11: a missing publish permission is refused');
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-00000000000f', 'd1431000-0000-4000-8000-000000000001')$$,
   '23514', null::text, 'N12: a missing viewing permission is refused');
+select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000011', 'd1431000-0000-4000-8000-000000000001')$$,
+  '23514', null::text, 'N13: valid coordinates without a verification receipt are refused');
 
 -- ── Tied freshness evidence is impossible at the database ────────────────────
 select ok(

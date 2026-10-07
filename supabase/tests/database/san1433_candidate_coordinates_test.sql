@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(32);
+select plan(33);
 
 -- ── 8 approved coordinate pairs (latitude) ───────────────────────────────────
 select is((select latitude from public.apartments where slug='candidate-rentberry-119391131'), 6.2188538::numeric, 'Alizares latitude');
@@ -98,6 +98,17 @@ select is((select count(*)::int from public.property_verifications pv
              join public.apartments a on a.id = pv.apartment_id
             where a.slug like 'candidate-rentberry-%' and pv.status <> 'pending'), 0,
   'no candidate property verification was promoted');
+
+-- The business rule this task feeds: the 8 provided pins must NOT be launch-ready
+-- until their coordinate receipt is verified on the verification row.
+select is((
+  select count(*)::int from public.apartments a
+   where a.slug in ('candidate-rentberry-119391131','candidate-rentberry-119390518',
+                    'candidate-rentberry-119839712','candidate-rentberry-119839707',
+                    'candidate-rentberry-119840596','candidate-rentberry-119388617',
+                    'candidate-rentberry-118796331','candidate-rentberry-telaviv-1204')
+     and public.rental_listing_launch_blockers(a.id, true) @> array['no verified coordinate evidence']::text[]
+), 8, 'all 8 provided pins still block launch readiness pending a coordinate receipt');
 
 select * from finish();
 rollback;

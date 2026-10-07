@@ -122,7 +122,7 @@ test(
         await client.query(
           `insert into public.property_verifications (apartment_id, status, verified_at, metadata)
            values ($1, 'verified', now(),
-                   '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted"}'::jsonb)`,
+                   '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb)`,
           [id],
         );
       }

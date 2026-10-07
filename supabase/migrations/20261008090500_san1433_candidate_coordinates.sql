@@ -3,8 +3,8 @@
 -- Task:      SAN-1433 — Add verified coordinates and essential launch data to
 --            staged rentals (parent SAN-1431)
 -- =============================================================================
--- Adds trusted map pins for 8 of the 10 staged Rentberry candidates and the
--- confirmed Alizares availability date.
+-- Adds provided map coordinates for 8 of the 10 staged Rentberry candidates and
+-- the confirmed Alizares availability date. They are NOT verified yet.
 --
 -- COORDINATE EVIDENCE ONLY. This migration must NOT mark landlord/owner-control,
 -- property, freshness or photo verification, and must not publish anything. It

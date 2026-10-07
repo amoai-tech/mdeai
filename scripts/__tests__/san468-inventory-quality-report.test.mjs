@@ -73,6 +73,7 @@ test("launch_ready requires verified owner, verified property, current freshness
     "no owner-control evidence",
     "no publish permission",
     "no viewing permission",
+    "no verified coordinate evidence",
   ]) {
     assert.ok(migration.includes(required), "canonical predicate must require " + required);
   }
