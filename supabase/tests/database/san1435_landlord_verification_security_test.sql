@@ -1,13 +1,13 @@
 -- SAN-1435 — landlord verification column-privilege proof.
 --
 -- Proves an authenticated landlord can edit only safe columns and cannot grant
--- themselves trusted verification state, while admin/service still can and the
--- onboarding RPC keeps working.
+-- themselves trusted verification state, while the trusted backend (service_role)
+-- still can and the onboarding RPC keeps working.
 --
 -- Run with: supabase test db
 begin;
 
-select plan(20);
+select plan(23);
 
 -- ── Column privileges ────────────────────────────────────────────────────────
 select ok(
@@ -34,6 +34,8 @@ insert into auth.users (id, instance_id, aud, role, email)
 values
   ('d1535000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'san1435-owner@example.com'),
+  ('d1535000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'san1435-other@example.com'),
   ('d1535000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'san1435-fresh@example.com'),
   ('d1535000-0000-4000-8000-000000000004', '00000000-0000-0000-0000-000000000000',
@@ -41,7 +43,9 @@ values
 
 insert into public.landlord_profiles (id, user_id, display_name, verification_status)
 values ('d1535000-0000-4000-8000-000000000011',
-        'd1535000-0000-4000-8000-000000000001', 'Roberto', 'pending');
+        'd1535000-0000-4000-8000-000000000001', 'Roberto', 'pending'),
+       ('d1535000-0000-4000-8000-000000000012',
+        'd1535000-0000-4000-8000-000000000002', 'Beatriz', 'pending');
 
 -- ── A landlord edits their own safe profile ──────────────────────────────────
 set local role authenticated;
@@ -77,6 +81,16 @@ select throws_ok(
      where user_id = 'd1535000-0000-4000-8000-000000000001'$$,
   '42501', null::text, 'landlord cannot edit admin counters');
 
+-- ── Cross-user: grants alone are not enough without the RLS row layer ────────
+select lives_ok(
+  $$update public.landlord_profiles set display_name = 'HACK'
+     where user_id = 'd1535000-0000-4000-8000-000000000002'$$,
+  'user A update against user B''s profile matches zero RLS rows without error');
+select throws_ok(
+  $$insert into public.landlord_profiles (user_id, display_name, kind)
+    values ('d1535000-0000-4000-8000-000000000002', 'HACK', 'agent')$$,
+  '42501', null::text, 'user A cannot insert a profile for user B');
+
 -- ── A fresh landlord cannot insert a self-approved profile ───────────────────
 select set_config('request.jwt.claim.sub', 'd1535000-0000-4000-8000-000000000003', true);
 select throws_ok(
@@ -98,6 +112,11 @@ select lives_ok(
   'broker onboarding RPC still inserts the profile');
 
 reset role;
+
+-- Read as the test role: authenticated user A cannot see user B's row at all.
+select is((select display_name from public.landlord_profiles
+            where user_id = 'd1535000-0000-4000-8000-000000000002'),
+  'Beatriz', 'user B''s profile is unchanged after user A''s update');
 
 -- ── The trusted backend (service_role) can still set trusted verification ────
 select ok(

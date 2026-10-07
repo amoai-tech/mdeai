@@ -12,7 +12,7 @@
 -- Fix (Supabase column-level-security pattern): revoke table-wide write privileges
 -- from anon/authenticated and re-grant only the user-editable columns. Trusted
 -- fields (verification_status, verified_at), identity fields (id, user_id,
--- created_at, updated_at) and admin/statistical counters stay admin/service-only.
+-- created_at, updated_at) and admin/statistical counters stay trusted-backend/service_role-only.
 -- service_role keeps full access.
 --
 -- The only application writer is public.create_broker_onboarding_draft
@@ -55,4 +55,4 @@ on table public.landlord_profiles
 to authenticated;
 
 comment on table public.landlord_profiles is
-  'SAN-1435: end-user INSERT/UPDATE is column-limited; verification_status and verified_at are trusted fields writable only by admin/service_role.';
+  'SAN-1435: end-user INSERT/UPDATE is column-limited; verification_status and verified_at are trusted fields writable only by the trusted backend/service_role.';
