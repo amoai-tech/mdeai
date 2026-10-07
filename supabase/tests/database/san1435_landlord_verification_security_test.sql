@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(19);
+select plan(20);
 
 -- ── Column privileges ────────────────────────────────────────────────────────
 select ok(
@@ -99,15 +99,23 @@ select lives_ok(
 
 reset role;
 
--- ── Admin/service can still set trusted verification ─────────────────────────
+-- ── The trusted backend (service_role) can still set trusted verification ────
+select ok(
+  has_column_privilege('service_role', 'public.landlord_profiles', 'verification_status', 'UPDATE'),
+  'service_role keeps UPDATE on the trusted verification column');
+
+set local role service_role;
+
 select lives_ok(
   $$update public.landlord_profiles
        set verification_status = 'approved', verified_at = now()
      where user_id = 'd1535000-0000-4000-8000-000000000001'$$,
-  'admin/service can set trusted verification');
+  'service_role can set trusted landlord verification');
 select is((select verification_status from public.landlord_profiles
             where user_id = 'd1535000-0000-4000-8000-000000000001'),
-  'approved', 'admin verification persisted');
+  'approved', 'service_role verification persisted');
+
+reset role;
 
 select * from finish();
 rollback;
