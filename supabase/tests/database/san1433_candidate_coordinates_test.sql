@@ -75,8 +75,8 @@ select is((select count(*)::int from public.apartments
                            'candidate-rentberry-119839712','candidate-rentberry-119839707',
                            'candidate-rentberry-119840596','candidate-rentberry-119388617',
                            'candidate-rentberry-118796331','candidate-rentberry-telaviv-1204')
-              and metadata->>'coordinates_status' = 'verified'
-              and metadata->'coordinate_evidence' is not null), 8, '8 candidates carry verified coordinate evidence');
+              and metadata->>'coordinates_status' = 'provided_unverified'
+              and metadata->'coordinate_evidence' is not null), 8, '8 candidates carry provided_unverified coordinate evidence (receipt pending)');
 select is((select count(*)::int from public.apartments
             where slug in ('candidate-rentberry-119839663','candidate-rentberry-el-laurel-201')
               and metadata->>'coordinates_status' = 'missing'), 2, 'held candidates keep coordinates_status=missing');

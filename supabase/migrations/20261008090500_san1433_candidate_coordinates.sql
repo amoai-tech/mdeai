@@ -12,10 +12,13 @@
 -- trg_sync_apartment_location trigger derives location geography(Point,4326) from
 -- the pair, so PostGIS data is never constructed here.
 --
--- PROVENANCE: the coordinates were supplied with SAN-1433, so the evidence records
--- 'provided_by' and 'supplied_at' only. source / checked_at / match_type are left
--- explicitly NULL until the operator confirms them against the real verification —
--- unverified task-supplied values are not asserted as provenance.
+-- PROVENANCE: the coordinates were supplied with SAN-1433 but no verification
+-- receipt (source / check date / match type) was provided with them. The row is
+-- therefore labelled coordinates_status = 'provided_unverified' and the evidence
+-- records only provided_by / supplied_at, with source / checked_at / match_type /
+-- source_reference / verified_by explicitly NULL. A separate confirmation update
+-- may flip coordinates_status to 'verified' once those values exist. Nothing here
+-- claims a stronger state than the evidence supports.
 --
 -- HOLD (intentionally untouched): Pie de Cuesta (candidate-rentberry-119839663,
 -- ambiguous building match) and El Laurel (candidate-rentberry-el-laurel-201,
@@ -42,13 +45,15 @@ update public.apartments a
        longitude = c.longitude,
        metadata = coalesce(a.metadata, '{}'::jsonb)
          || jsonb_build_object(
-              'coordinates_status', 'verified',
+              'coordinates_status', 'provided_unverified',
               'coordinate_evidence', jsonb_build_object(
                 'provided_by', 'san1433',
                 'supplied_at', c.supplied_at,
                 'source', null,
                 'checked_at', null,
-                'match_type', null
+                'match_type', null,
+                'source_reference', null,
+                'verified_by', null
               )
             )
   from coordinates c
