@@ -156,14 +156,8 @@ verdict as (
       and f.listing_workflow_status = 'published' and f.has_canonical_owner
       and f.valid_price_currency and f.has_coords and f.coord_pair_valid
       and f.postgis_consistent) as map_ready,
-    (not f.is_test_fixture and not f.is_external_candidate
-      and f.status = 'active' and f.moderation_status = 'approved'
-      and f.listing_workflow_status = 'published' and f.has_canonical_owner
-      and f.valid_price_currency and f.is_verified
-      and f.has_verified_owner and f.has_verified_property
-      and f.has_current_freshness and f.has_authorized_photo
-      and f.has_coords and f.coord_pair_valid and f.postgis_consistent
-      and f.has_canonical_identity) as launch_ready,
+    -- One canonical predicate: the same contract the publish operation enforces.
+    (cardinality(public.rental_listing_launch_blockers(f.id)) = 0) as launch_ready,
     (not f.is_test_fixture and not f.is_external_candidate
       and f.status = 'active' and f.moderation_status = 'approved'
       and f.listing_workflow_status = 'published' and f.has_canonical_owner
@@ -204,23 +198,7 @@ detail as (
       where lower(d.title) = lower(v.title) and d.neighborhood = v.neighborhood
         and d.price_monthly is not distinct from v.price_monthly
         and d.currency is not distinct from v.currency) as dup_property_identity,
-    (select array_remove(array[
-       case when v.is_test_fixture then 'test fixture' end,
-       case when v.is_external_candidate then 'unverified external candidate' end,
-       case when v.status <> 'active' then 'not active' end,
-       case when v.moderation_status <> 'approved' then 'not approved' end,
-       case when v.listing_workflow_status <> 'published' then 'not published' end,
-       case when not v.valid_price_currency then 'missing/invalid price or currency' end,
-       case when not v.is_verified then 'listing not verified' end,
-       case when not v.has_verified_owner then 'no verified owner/agent' end,
-       case when not v.has_verified_property then 'no verified property evidence' end,
-       case when not v.has_current_freshness then 'no current active freshness' end,
-       case when not v.has_authorized_photo then 'no authorized usable photo' end,
-       case when not v.has_coords then 'no coordinates' end,
-       case when v.has_coords and not v.coord_pair_valid then 'invalid coordinate pair' end,
-       case when v.has_coords and not v.postgis_consistent then 'PostGIS location drift' end,
-       case when not v.has_canonical_identity then 'no canonical property identity' end
-     ], null)) as launch_blockers
+    public.rental_listing_launch_blockers(v.id) as launch_blockers
   from dedup v
 )
 select json_build_object(

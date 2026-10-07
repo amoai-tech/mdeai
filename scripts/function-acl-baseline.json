@@ -184,6 +184,11 @@
     "anon": true,
     "authenticated": true
   },
+  "publish_verified_rental(p_apartment_id uuid, p_actor_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "record_check_in(p_event_id uuid, p_attendee_id uuid, p_qr_token text, p_scanned_by uuid, p_scanner_device text, p_ip_address inet, p_result text, p_details jsonb)": {
     "public": false,
     "anon": false,
@@ -200,6 +205,11 @@
     "authenticated": true
   },
   "rental_listing_is_public(p_status text, p_moderation_status text, p_listing_workflow_status text, p_landlord_id uuid, p_metadata jsonb)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "rental_listing_launch_blockers(p_apartment_id uuid, p_include_state boolean)": {
     "public": false,
     "anon": true,
     "authenticated": true
