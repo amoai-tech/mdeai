@@ -11,6 +11,16 @@ export type GroundedPhotoAttribution = {
   uri?: string;
 };
 
+/**
+ * The Google Maps source Google returned for a grounded place (`groundingChunks[].maps`): its URL and
+ * title. A row has one only when Google actually grounded it, so this is the gate for saying
+ * "Google Maps" on a card (SAN-878). Curated fallback rows never have one.
+ */
+export type GroundingSource = {
+  uri: string;
+  title: string;
+};
+
 export type GroundedToolRow = {
   id: string;
   title: string;
@@ -30,6 +40,7 @@ export type GroundedToolRow = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
+  groundingSource?: GroundingSource;
 };
 
 export type GroundedVenueKind = "cafe" | "nightlife" | "general";
@@ -39,6 +50,8 @@ export type ParsedGroundedToolResult = {
   attribution: GroundedAttributionRow[];
   source?: string;
   venueKind?: GroundedVenueKind;
+  /** Set when the tool degraded to our own saved list instead of Google's grounded answer. */
+  fallback?: string;
 };
 
 const GENERIC_TITLE = /^place$/i;
@@ -95,6 +108,30 @@ function readVenueKind(result: unknown): GroundedVenueKind | undefined {
   return undefined;
 }
 
+function readFallback(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined;
+  const meta = (result as { metadata?: Record<string, unknown> }).metadata;
+  const fallback = meta?.fallback;
+  return typeof fallback === "string" && fallback ? fallback : undefined;
+}
+
+/**
+ * Join a row to the Google source that grounded it, by URL only — never by position, and never by
+ * building a link or a name ourselves. The URL and the name are exactly what Google returned. No
+ * matching source, or one without a name, means Google did not supply a source we can show.
+ */
+export function findGroundingSource(
+  attribution: GroundedAttributionRow[],
+  mapsUrl: string | undefined,
+): GroundingSource | undefined {
+  if (!mapsUrl) return undefined;
+  const match = attribution.find(
+    (a) => typeof a?.placeUri === "string" && a.placeUri === mapsUrl && typeof a.title === "string" && a.title.trim() !== "",
+  );
+  if (!match?.placeUri || !match.title) return undefined;
+  return { uri: match.placeUri, title: match.title };
+}
+
 function readPhotoAuthorAttributions(
   row: Record<string, unknown>,
 ): GroundedPhotoAttribution[] | undefined {
@@ -126,6 +163,7 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
   const attribution = readAttribution(root);
   const source = readSource(root) ?? envelope.source;
   const venueKind = readVenueKind(root);
+  const fallback = readFallback(root);
 
   const rawRows = (envelope.results ?? []) as Array<
     GroundedToolRow & { name?: string; maps_url?: string }
@@ -174,10 +212,11 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
         typeof row.fieldMaskVersion === "string"
           ? row.fieldMaskVersion
           : undefined,
+      groundingSource: findGroundingSource(attribution, mapsUrl),
     };
   });
 
-  return { results, attribution, source, venueKind };
+  return { results, attribution, source, venueKind, fallback };
 }
 
 /** Hide attribution bullets when every card already exposes the same Maps URL. */

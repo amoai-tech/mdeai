@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
-import type { GroundedPhotoAttribution } from "@/lib/parse-grounded-tool-result";
+import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
+import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
 import { mapsDeepLinksEnabled } from "@/lib/maps-deep-links";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
 import {
@@ -10,7 +11,7 @@ import {
   priceLevelToLabel,
   primaryTypeToLabel,
 } from "@/lib/places-display";
-import { CalendarCheck, ExternalLink, Info, MapPin } from "lucide-react";
+import { CalendarCheck, Info, MapPin } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type CafeResultCardProps = {
@@ -30,6 +31,8 @@ export type CafeResultCardProps = {
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   placeId?: string;
   fieldMaskVersion?: string;
+  /** Google's source for this place. Without it the card says nothing about Google Maps (SAN-878). */
+  groundingSource?: GroundingSource;
   testId?: string;
   detailsTestId?: string;
   bookingTestId?: string;
@@ -54,22 +57,9 @@ function CafeMapLinks({
 
   if (!primaryUrl && !reviewsUrl) return null;
 
-  if (!deepLinks) {
-    return mapsUrl ? (
-      <a
-        href={mapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        translate="no"
-        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-primary underline-offset-2 hover:underline"
-        data-testid="cafe-card-maps-link"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ExternalLink className="size-3.5" aria-hidden />
-        Google Maps
-      </a>
-    ) : null;
-  }
+  // MAP-019 rollback: one Maps link only. The "Source: Google Maps" line under the summary (SAN-878)
+  // is that link, so the footer adds none and the card never shows two.
+  if (!deepLinks) return null;
 
   return (
     <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -119,6 +109,7 @@ export function CafeResultCard({
   photoAuthorAttributions,
   placeId,
   fieldMaskVersion,
+  groundingSource,
   testId = "cafe-result-card",
   detailsTestId = "cafe-details-cta",
   bookingTestId = "cafe-booking-cta",
@@ -292,11 +283,24 @@ export function CafeResultCard({
         </p>
       ) : null}
 
+      {/* SAN-878 — grounded content is followed by the Google source that grounded it, visible without
+          a tap. Curated fallback rows have no such source, so they show none and never claim Google. */}
+      {groundingSource ? (
+        <div onClick={(e) => e.stopPropagation()}>
+          <GroundingAttribution
+            compact
+            rows={[{ placeUri: groundingSource.uri, title: groundingSource.title }]}
+          />
+        </div>
+      ) : null}
+
       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
-          <Info className="size-3" aria-hidden />
-          Google-verified candidate
-        </span>
+        {groundingSource ? (
+          <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
+            <Info className="size-3" aria-hidden />
+            Google-verified candidate
+          </span>
+        ) : null}
         {placeId ? (
           <span className="rounded bg-muted px-1.5 py-0.5">Place ID</span>
         ) : null}

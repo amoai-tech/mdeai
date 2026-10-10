@@ -138,6 +138,12 @@ describe("search-grounded-places café quality filter", () => {
     ).toThrow();
   });
 
+  it("keeps Google's own source name when it differs from the card title (SAN-878)", () => {
+    const source = { source: "maps", placeUri: "https://maps.google.com/?cid=1", title: "Pausa Coffee & Brunch" };
+    const [aligned] = alignGroundedAttribution([{ title: "Pausa Coffee", mapsUrl: source.placeUri }], [source]);
+    expect(aligned).toEqual(source);
+  });
+
   it("aligns attribution by placeUri after café filtering drops rows (B1)", () => {
     const adkAttribution = [
       {
@@ -157,11 +163,12 @@ describe("search-grounded-places café quality filter", () => {
         mapsUrl: "https://maps.google.com/?cid=cafe",
       },
     ];
+    // Google's source is passed through untouched: its name is Google's, not the card's (SAN-878).
     expect(alignGroundedAttribution(results, adkAttribution)).toEqual([
       {
         source: "maps",
         placeUri: "https://maps.google.com/?cid=cafe",
-        title: "Gardenia Brunch & Coffee",
+        title: "Stale Café Title",
       },
     ]);
   });

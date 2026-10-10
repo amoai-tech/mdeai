@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { GroundedPhotoAttribution } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
 import type { EventVenueOfferingsPayload } from "@/lib/venues/event-venue-offerings-types";
 
 export type ScheduleViewingTarget = {
@@ -90,6 +90,8 @@ export type CafeVenueDetail = {
   fieldMaskVersion?: string;
   factsCheckedAt?: string;
   rank?: number;
+  /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
+  groundingSource?: GroundingSource;
   /** Reused detail panel for restaurant rows — routes booking to RestaurantBookingSheet. */
   bookingAsRestaurant?: boolean;
 };
@@ -143,6 +145,8 @@ export type NightlifeVenueDetail = {
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
   rank?: number;
+  /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
+  groundingSource?: GroundingSource;
 };
 
 type RentalUiContextValue = {

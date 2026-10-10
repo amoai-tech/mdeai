@@ -8,6 +8,7 @@ import {
   event,
   gotoDeterministicChat,
   groundedPlace,
+  groundedSource,
   mockFastPaths,
   rental,
   typeAndSubmit,
@@ -121,12 +122,44 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await typeAndSubmit(page, GROUNDED_QUERY);
     expect((await response).ok()).toBe(true);
     await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    // SAN-878 — Google's rule for grounded results: the source is shown with the card, named, linked to
+    // its URL, attributed as "Google Maps", and never translated.
+    const source = page.getByTestId("grounded-card").getByTestId("grounding-attribution");
+    await expect(source).toBeVisible();
+    await expect(source).toContainText("Google Maps");
+    // The name and the link are Google's own annotation, not the card's title or its own URL.
+    await expect(source).toHaveText(`Source: Google Maps · ${groundedSource.title}`);
+    await expect(source.locator('[translate="no"]')).toHaveText("Google Maps");
+    await expect(source.getByRole("link")).toHaveAttribute("href", groundedSource.placeUri);
     await expectReadsBefore(
       page.getByTestId("grounded-fast-path-panel"),
       "the grounded-place results",
       composer(page),
       "the message box",
     );
+  });
+
+  test("a curated fallback café never claims Google Maps as its source", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    await page.route("**/api/grounded/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [groundedPlace],
+          attribution: [],
+          source: "grounding",
+          metadata: { venueKind: "cafe", fallback: "curated" },
+        }),
+      });
+    });
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expect(page.getByTestId("grounding-attribution")).toHaveCount(0);
+    await expect(page.getByText("Google-verified candidate")).toHaveCount(0);
   });
 
   test("a later search of another kind replaces the earlier results (grounded → event → rental)", async ({ page }) => {
