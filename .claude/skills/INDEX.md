@@ -25,6 +25,8 @@ Scores are audit scores, not benchmark pass rates. They combine:
 
 ## Current architecture
 
+**Skill entry points:** `AGENTS.md` and `using-mde-skills` select the workflow. Short skills such as `errors`, `praudit`, `linear-task`, `linear-audit`, `implement`, `efficient`, and `tests` provide concise steps; deep/domain skills remain specialist references and security owners. The scorecard below predates this import and covers the previous specialist owners, not every active skill.
+
 `tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain skills remain specialist owners; `code-review` owns universal PR/diff review.
 ## Skill scorecard
 

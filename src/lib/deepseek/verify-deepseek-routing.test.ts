@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import { evaluateCase, runCases } from '../../../scripts/verify-deepseek-routing.mjs';
+import { cases, evaluateCase, runCases } from '../../../scripts/verify-deepseek-routing.mjs';
 
 describe('DeepSeek routing certification', () => {
+  it('probes the short skills without giving away the expected owner or verifier', () => {
+    const names = new Set(cases.map((item: { name: string }) => item.name));
+    for (const name of ['short-praudit', 'short-linear-task', 'short-linear-audit', 'short-efficient', 'short-tests']) {
+      expect(names.has(name)).toBe(true);
+    }
+    for (const probe of cases) {
+      expect(probe.prompt).not.toContain('owner=' + probe.owner);
+      expect(probe.prompt).not.toContain('verifier=' + String(probe.verifier));
+      expect(probe.prompt).toContain('owner=<skill-name>');
+    }
+  });
+
   it('evaluates only the final answer, not echoed prompt diagnostics', () => {
     const probe = { name: 'copilotkit', prompt: 'prompt mentions copilotkit', owner: 'copilotkit', verifier: false };
     const output = 'debug: prompt mentions copilotkit\ndsh: reasoning: wrong owner\nfinal answer: maps';

@@ -16,7 +16,7 @@
   {
     "name": "unknown-failure",
     "input": "The build suddenly fails and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -100,7 +100,7 @@
   {
     "name": "unknown-build-failure-adversarial",
     "input": "The application build is failing and we do not know which subsystem is responsible",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -163,7 +163,7 @@
   {
     "name": "unknown-failure-beats-domain",
     "input": "CopilotKit is failing and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -226,7 +226,7 @@
   {
     "name": "nextjs-debug-workflow-wins",
     "input": "The Next.js production build suddenly fails and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -248,6 +248,132 @@
     "name": "retired-mde-vercel-owner",
     "input": "Route this to mde-vercel",
     "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-praudit",
+    "input": "Audit GitHub PR #258 for merge readiness, security, tests, and remaining blockers",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-linear-task",
+    "input": "Rewrite SAN-1107 into one precise Linear task with implementation steps and acceptance criteria",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-linear-audit",
+    "input": "Check whether SAN-1107 is stale by auditing its existing acceptance criteria and dependencies",
+    "expected_owner": "linear-audit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-efficient",
+    "input": "Find a faster and simpler alternative to building a second rental search engine; reuse existing MDE search",
+    "expected_owner": "efficient",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-tests",
+    "input": "Design a minimal regression test plan for a renter requesting a viewing, covering retries and unauthorized access",
+    "expected_owner": "tests",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-plan",
+    "input": "Write an implementation plan for the next rental release; do not change code",
+    "expected_owner": "plan",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-architect",
+    "input": "Review architecture fit of a proposed second rental-search service",
+    "expected_owner": "architect",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-implement",
+    "input": "Implement a scoped change to an existing event page",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-progress",
+    "input": "Give a progress report of verified launch tasks and what is blocked",
+    "expected_owner": "progress",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-prod",
+    "input": "Run production certification of the deployed rental viewing journey",
+    "expected_owner": "prod",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-merge",
+    "input": "Perform post-merge verification for merged PR #229",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-errors",
+    "input": "@errors diagnose an unexpected rentals crash",
+    "expected_owner": "errors",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-praudit",
+    "input": "@praudit examine current PR head for merge readiness",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-linear",
+    "input": "@linear-task create a new Linear issue for rental onboarding",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-pr-diff",
+    "input": "Review this existing PR diff for coding regressions",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-tests-run",
+    "input": "Run the tests and interpret any failures",
+    "expected_owner": "testing",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-shipping",
+    "input": "Create a worktree for the rentals feature and open a PR",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-renter-domain",
+    "input": "Explain the canonical rental listing eligibility rules",
+    "expected_owner": "real-estate",
     "risk": "S1",
     "requires_independent_verifier": false
   }
