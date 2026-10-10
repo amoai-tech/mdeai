@@ -40,6 +40,12 @@ vi.mock("@/components/chat/rental-fast-path-panel", () => ({ RentalFastPathPanel
 vi.mock("@/components/chat/event-fast-path-panel", () => ({ EventFastPathPanel: () => null }));
 vi.mock("@/components/chat/grounded-fast-path-panel", () => ({ GroundedFastPathPanel: () => null }));
 vi.mock("@/components/chat/restaurant-fast-path-panel", () => ({ RestaurantFastPathPanel: () => null }));
+vi.mock("@/components/chat/new-project-fast-path-panel", () => ({
+  NewProjectFastPathPanel: () => null,
+}));
+vi.mock("@/components/chat/new-project-fast-path-context", () => ({
+  useNewProjectFastPath: () => ({ toolResult: null }),
+}));
 
 vi.mock("@/components/chat/restaurant-filter-chips", () => ({
   RestaurantFilterChips: () => React.createElement("div", { "data-testid": "filter-chips" }),

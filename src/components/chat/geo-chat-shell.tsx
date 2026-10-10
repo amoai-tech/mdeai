@@ -12,6 +12,7 @@ import { EventSearchResultsProvider } from "@/components/chat/event-search-resul
 import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-context";
 import { EventFastPathProvider } from "@/components/chat/event-fast-path-context";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
+import { NewProjectFastPathProvider } from "@/components/chat/new-project-fast-path-context";
 import { RentalFastPathProvider } from "@/components/chat/rental-fast-path-context";
 import { RentalUiProvider } from "@/components/chat/rental-ui-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
@@ -122,7 +123,8 @@ export function GeoChatShell() {
       <ConciergeCoAgentProvider>
         <ChatWorkflowProvider>
           <RentalUiProvider>
-            <RentalFastPathProvider>
+            <NewProjectFastPathProvider>
+              <RentalFastPathProvider>
               <EventFastPathProvider>
                 <RestaurantFastPathProvider>
                   <GroundedFastPathProvider>
@@ -177,7 +179,8 @@ export function GeoChatShell() {
                   </GroundedFastPathProvider>
                 </RestaurantFastPathProvider>
               </EventFastPathProvider>
-            </RentalFastPathProvider>
+              </RentalFastPathProvider>
+            </NewProjectFastPathProvider>
           </RentalUiProvider>
         </ChatWorkflowProvider>
       </ConciergeCoAgentProvider>

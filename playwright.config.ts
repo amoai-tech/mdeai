@@ -62,6 +62,7 @@ export default defineConfig({
         "**/chat-virtualization.spec.ts",
         "**/chat-result-order.spec.ts",
         "**/chat-workspace-layout.spec.ts",
+        "**/SAN-1380-chat-journey.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,

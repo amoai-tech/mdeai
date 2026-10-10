@@ -11,6 +11,7 @@ import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
+import { useNewProjectSearchFastPath } from "@/hooks/use-new-project-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 
 /** Shown in the transcript when the AI runtime cannot take a free-form question. */
@@ -23,6 +24,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { showExchange, showNotice } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
   const { handleUserMessage: handleRentalMessage } = useRentalSearchFastPath();
+  const { handleUserMessage: handleNewProjectMessage } = useNewProjectSearchFastPath();
   const { handleUserMessage: handleEventMessage } = useEventSearchFastPath();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
@@ -60,6 +62,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   return useMemo(
     () => ({
       handleRentalMessage,
+      handleNewProjectMessage,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -69,6 +72,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     }),
     [
       handleRentalMessage,
+      handleNewProjectMessage,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,

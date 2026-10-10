@@ -28,6 +28,8 @@ function unit(overrides: Partial<NewProjectUnitType> = {}): NewProjectUnitType {
     priceToCents: null,
     currency: "COP",
     availability: null,
+    productClass: "residential_apartment",
+    phaseLabel: null,
     sourceKind: "developer",
     sourceUrl: "https://amarilo.com.co/proyecto/arrayan",
     verifiedAt: "2026-10-06T09:21:53Z",

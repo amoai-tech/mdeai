@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { sendConciergeUserMessage } from "../concierge-send-user-message";
+import { routerHandlerOrderFor } from "../router-intent";
 
 function makeHandlers() {
   return {
     handleRentalMessage: vi.fn(async () => false),
+    handleNewProjectMessage: vi.fn(async () => false),
     handleEventVenueBookingMessage: vi.fn(async () => false),
     handleEventMessage: vi.fn(async () => false),
     handleGroundedMessage: vi.fn(async () => false),
@@ -39,6 +41,17 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("a new-project query routes only to its own handler, never to rentals", async () => {
+    expect(routerHandlerOrderFor("new apartments in Laureles")).toEqual(["new_project"]);
+    // "for rent" must still be treated as a rental, not new construction.
+    expect(routerHandlerOrderFor("new apartments for rent in Laureles")).not.toContain("new_project");
+
+    const handlers = makeHandlers();
+    await sendConciergeUserMessage("new apartments in Laureles", handlers);
+    expect(handlers.handleNewProjectMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
   });
 
   it("venue booking still uses event_venue_booking handler", async () => {

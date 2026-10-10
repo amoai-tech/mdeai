@@ -20,6 +20,7 @@ import {
 } from "@/components/chat/event-local-chat-context";
 import { EventSearchResultsProvider } from "@/components/chat/event-search-results-context";
 import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-context";
+import { NewProjectFastPathProvider } from "@/components/chat/new-project-fast-path-context";
 import { RentalFastPathProvider } from "@/components/chat/rental-fast-path-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 
@@ -93,6 +94,7 @@ export function ConciergeProbe({
     <CopilotKitProvider agents__unsafe_dev_only={PROBE_AGENTS}>
       <CopilotChatConfigurationProvider agentId={PROBE_AGENT_ID}>
         <ConciergeCoAgentProvider>
+          <NewProjectFastPathProvider>
           <RentalFastPathProvider>
             <EventFastPathProvider>
               <RestaurantFastPathProvider>
@@ -117,6 +119,7 @@ export function ConciergeProbe({
               </RestaurantFastPathProvider>
             </EventFastPathProvider>
           </RentalFastPathProvider>
+        </NewProjectFastPathProvider>
         </ConciergeCoAgentProvider>
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>

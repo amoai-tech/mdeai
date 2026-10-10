@@ -32,6 +32,7 @@ import {
   useEventSearchResults,
 } from "@/components/chat/event-search-results-context";
 import { GroundedFastPathProvider, useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { NewProjectFastPathProvider } from "@/components/chat/new-project-fast-path-context";
 import { RentalFastPathProvider, useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { RestaurantFastPathProvider, useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
@@ -114,15 +115,17 @@ beforeEach(() => {
     root.render(
       <EventLocalChatProvider>
         <EventSearchResultsProvider>
-          <RentalFastPathProvider>
-            <EventFastPathProvider>
+          <NewProjectFastPathProvider>
+            <RentalFastPathProvider>
+              <EventFastPathProvider>
               <GroundedFastPathProvider>
                 <RestaurantFastPathProvider>
                   <Harness />
                 </RestaurantFastPathProvider>
               </GroundedFastPathProvider>
-            </EventFastPathProvider>
-          </RentalFastPathProvider>
+              </EventFastPathProvider>
+            </RentalFastPathProvider>
+          </NewProjectFastPathProvider>
         </EventSearchResultsProvider>
       </EventLocalChatProvider>,
     ),

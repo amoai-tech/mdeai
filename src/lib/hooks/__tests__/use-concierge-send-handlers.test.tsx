@@ -22,6 +22,9 @@ vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: (
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
 vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => noMatch }));
 vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath: () => noMatch }));
+vi.mock("@/hooks/use-new-project-search-fast-path", () => ({
+  useNewProjectSearchFastPath: () => noMatch,
+}));
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";

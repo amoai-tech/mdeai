@@ -10,6 +10,8 @@ import { EventResultsPanel } from "@/components/chat/event-results-panel";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
 import { GroundedFastPathPanel } from "@/components/chat/grounded-fast-path-panel";
+import { useNewProjectFastPath } from "@/components/chat/new-project-fast-path-context";
+import { NewProjectFastPathPanel } from "@/components/chat/new-project-fast-path-panel";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { RentalFastPathPanel } from "@/components/chat/rental-fast-path-panel";
 import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
@@ -22,9 +24,11 @@ export function useTranscriptTailHasContent(): boolean {
   const event = useEventFastPath();
   const grounded = useGroundedFastPath();
   const restaurant = useRestaurantFastPath();
+  const newProject = useNewProjectFastPath();
   const { webCitations } = useEventSearchResults();
   return (
     messages.length > 0 ||
+    newProject.toolResult != null ||
     rental.toolResult != null ||
     event.toolResult != null ||
     grounded.toolResult != null ||
@@ -54,6 +58,7 @@ export const ConciergeTranscriptTail = memo(function ConciergeTranscriptTail({
     <div data-testid="concierge-transcript-tail" className="flex min-w-0 flex-col">
       <ConciergeLocalChatMessages excludeIds={transcriptMessageIds} />
       <RentalFastPathPanel />
+      <NewProjectFastPathPanel />
       <EventFastPathPanel />
       <GroundedFastPathPanel />
       <RestaurantFastPathPanel />

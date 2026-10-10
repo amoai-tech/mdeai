@@ -24,8 +24,8 @@ function unit(overrides: Partial<DevelopmentUnitTypeRow> = {}): DevelopmentUnitT
   return {
     availability: null, bathrooms: 1, bedrooms: 1, built_area_m2: 30,
     created_at: "2026-10-08T09:00:00Z", currency: "COP", floor_plan_url: null, id: "u1",
-    media_url: null, name: "Apto 30 m²", price_from_cents: null, price_to_cents: null,
-    private_area_m2: 22, project_id: "p1", source_key: "arrayan-30m", source_kind: "developer",
+    media_url: null, name: "Apto 30 m²", phase_label: null, price_from_cents: null, price_to_cents: null,
+    private_area_m2: 22, product_class: "residential_apartment", project_id: "p1", source_key: "arrayan-30m", source_kind: "developer",
     source_url: null, updated_at: "2026-10-08T09:00:00Z", verified_at: "2026-10-06T09:21:53Z",
     ...overrides,
   };
