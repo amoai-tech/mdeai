@@ -21,6 +21,7 @@ on:
     paths:
       - "supabase/**"
       - "scripts/check-function-acl-optin.mjs"
+      - "scripts/verify-san1106-postgrest-role.mjs"
       - "scripts/function-acl-baseline.json"
       - "scripts/lib/local-db-url.mjs"
       - ".github/workflows/supabase-acl.yml"
@@ -36,6 +37,7 @@ on:
     paths:
       - "supabase/**"
       - "scripts/check-function-acl-optin.mjs"
+      - "scripts/verify-san1106-postgrest-role.mjs"
       - "scripts/function-acl-baseline.json"
       - "scripts/lib/local-db-url.mjs"
       - ".github/workflows/supabase-acl.yml"
@@ -114,6 +116,14 @@ jobs:
         run: |
           set -o pipefail
           supabase test db 2>&1 | tee pgtap.log
+
+      # Run the real HTTP path, not just SET ROLE in psql. This checks both
+      # legacy service JWTs and modern sb_secret_ keys through Kong/PostgREST.
+      # The script reads ONLY local CLI credentials and refuses remote targets.
+      - name: SAN-1106 PostgREST service-role HTTP boundary
+        env:
+          LOCAL_SUPABASE_CONFIG_DIR: .
+        run: node scripts/verify-san1106-postgrest-role.mjs
 
       - name: Upload pgTAP log on failure
         if: failure()
