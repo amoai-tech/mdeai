@@ -298,7 +298,9 @@ begin
          listing_workflow_status = 'published',
          published_at = now(),
          published_by = v_actor,
-         workflow_changed_by = v_actor,
+         -- Workflow provenance is the authenticated user, never the service's
+         -- caller-provided p_actor_id. A service-only publish has no auth.uid().
+         workflow_changed_by = v_uid,
          workflow_changed_at = now(),
          metadata = coalesce(a.metadata, '{}'::jsonb)
            || jsonb_build_object(
