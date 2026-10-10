@@ -187,4 +187,100 @@ grant update (
   virtual_tour_url
 ) on table public.apartments to authenticated;
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 5 · #258 compatibility. public.publish_verified_rental writes the trusted
+--     workflow/publication columns step 4 just made RPC-only, so it must run as
+--     SECURITY DEFINER. A definer function bypasses RLS, which would turn the
+--     hidden-draft case into a 42501 existence oracle; the body therefore
+--     explicitly replays the apartments SELECT visibility predicate and still
+--     returns P0002 for a row the caller cannot see. Authorization, the canonical
+--     launch gate, attribution and search_path='' are unchanged. ACL from 20261008090400
+--     is preserved by CREATE OR REPLACE (authenticated/service_role only).
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+create or replace function public.publish_verified_rental(
+  p_apartment_id uuid,
+  p_actor_id uuid default null
+)
+returns public.apartments
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_row public.apartments;
+  v_uid uuid := auth.uid();
+  v_actor uuid;
+  v_missing text[];
+begin
+  select a.* into v_row from public.apartments a where a.id = p_apartment_id;
+  if not found then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+
+  -- SECURITY DEFINER bypasses RLS, so replay the visibility rule of policies
+  -- anyone_can_view_active_apartments / apartments_select_broker_or_catalog:
+  -- a row the caller cannot see stays indistinguishable from a missing id.
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())
+              or public.rental_listing_is_public(
+                   v_row.status, v_row.moderation_status, v_row.listing_workflow_status,
+                   v_row.landlord_id, v_row.metadata)) then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())) then
+    raise exception 'not authorized to publish this listing' using errcode = '42501';
+  end if;
+
+  -- Lock, then re-authorize against the locked owner: closes the read-check-lock race.
+  select a.* into v_row
+    from public.apartments a
+   where a.id = p_apartment_id
+   for update;
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())) then
+    raise exception 'not authorized to publish this listing' using errcode = '42501';
+  end if;
+
+  v_missing := public.rental_listing_launch_blockers(p_apartment_id, false);
+  if array_length(v_missing, 1) > 0 then
+    raise exception 'listing is not launch-ready: missing %', array_to_string(v_missing, ', ')
+      using errcode = 'check_violation';
+  end if;
+
+  v_actor := coalesce(v_uid, p_actor_id);
+  if v_actor is null then
+    raise exception 'publisher attribution required: authenticate or pass p_actor_id'
+      using errcode = '42501';
+  end if;
+
+  update public.apartments a
+     set status = 'active',
+         verified = true,
+         freshness_status = 'active',
+         moderation_status = 'approved',
+         listing_workflow_status = 'published',
+         published_at = now(),
+         published_by = v_actor,
+         metadata = coalesce(a.metadata, '{}'::jsonb)
+           || jsonb_build_object(
+                'inventory_kind', 'mde_controlled',
+                'inventory_type', 'mde_controlled',
+                'allowed_action', 'schedule_viewing',
+                'owner_control_status', 'verified',
+                'availability_status', 'verified',
+                'coordinates_status', 'verified',
+                'photo_rights_status', 'authorized'
+              )
+   where a.id = p_apartment_id
+   returning a.* into v_row;
+
+  return v_row;
+end;
+$$;
+
 commit;
