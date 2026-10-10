@@ -243,10 +243,5 @@
     "public": false,
     "anon": false,
     "authenticated": true
-  },
-  "ticket_validate_consume(p_qr_token text)": {
-    "public": false,
-    "anon": true,
-    "authenticated": true
   }
 }
