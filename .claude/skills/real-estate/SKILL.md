@@ -33,7 +33,7 @@ Load `mls-v2.md` only when the work actually requires MLS, IDX, RETS, RESO, AVM,
 ## Before current rental implementation
 
 1. Read the exact Linear issue and relations.
-2. For journey-wide changes, read **SAN-1315 · SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing**.
+2. For journey-wide changes, read **SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing**.
 3. Inspect current `main`; reuse the existing `RentalSearchEngine`, rental contracts, map state, viewing mutation, and tests.
 4. Inspect live Supabase when schema/RLS/runtime data matters; compare with migrations.
 5. Read root `mvp.md` for launch scope.

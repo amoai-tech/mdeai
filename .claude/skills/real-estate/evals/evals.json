@@ -1,29 +1,47 @@
 {
   "skill_name": "real-estate",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "evals": [
     {
       "id": 1,
-      "prompt": "A renter in Laureles wants a 2-bedroom for June, furnished, under 4M COP. Can we surface the right listings?",
-      "expected_output": "Apply V1 marketplace semantics — structured rental rows filtered by hard criteria before any AI/vector ranking, with the neighbourhood and date eligibility treated as filters rather than ranking hints.",
+      "prompt": "Find me a 2BR rental in Laureles under $80/night.",
+      "expected_output": "Reuse the existing RentalSearchEngine. Normalize the renter's hard criteria, run deterministic eligibility on MDE/Supabase candidates first, and decide whether external discovery is needed from the eligible MDE shortfall. Only eligible survivors proceed to trust/dedupe and soft AI/vector ranking; do not build a second search engine.",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "Should we ingest this listing feed via RESO/IDX so brokers can import in bulk?",
-      "expected_output": "Assess the requested RESO/IDX option against the V1 marketplace data contract rather than treating it as unsolicited, and require explicit confirmation before switching models — MLS/IDX/RESO changes the whole data contract, so V1 stays the default until that switch is agreed.",
+      "prompt": "Schedule a viewing for this MDE rental on Saturday afternoon.",
+      "expected_output": "Use the existing guest-capable Schedule Viewing path: /api/leads/schedule-viewing -> chat-lead-capture Edge Function -> p1_schedule_tour_atomic. Resolve the renter/guest identity according to the canonical viewing contract and require one atomic, idempotent lead + linked showing outcome; do not bypass the public/guest Edge boundary with a direct Mastra-to-RPC rewrite.",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "Camila requested a viewing on a listing and the wrong broker got notified.",
-      "expected_output": "Route by the canonical ownership chain (auth user -> landlord_profiles.user_id -> landlord_profiles.id -> apartments.landlord_id) and treat any listing without a real owner as not requestable rather than guessing an owner.",
+      "prompt": "This external Airbnb rental looks good. Can I schedule a viewing through MDE?",
+      "expected_output": "Keep the listing external. If it has verified provenance and a real source URL, offer View Original Listing only; never expose the internal Schedule Viewing mutation for external inventory. If provenance is insufficient, do not invent a transaction CTA.",
       "files": []
     },
     {
       "id": 4,
+      "prompt": "Build MLS/RESO ingestion so MDE can import a large broker listing feed.",
+      "expected_output": "Stop schema/feed implementation until the exact provider/feed, licensing/data-use/attribution/redistribution authority, canonical identity/provenance mapping, and rental-contract compatibility are evidenced. Reuse current Postgres/PostGIS/search infrastructure; require a measured current-stack failure before adding a second search/geo/scale service.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Rank our rental leads higher when they are from preferred nationalities or family types.",
+      "expected_output": "Refuse to score, route, prioritize, or deprioritize leads using nationality, ethnicity, family status, or protected/sensitive traits or proxies. Lead prioritization is advisory only and may use grounded non-sensitive operational facts; voluntarily supplied matching needs may affect property matching but not lead priority.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Camila requested a viewing on a listing and the wrong broker got notified.",
+      "expected_output": "Route broker visibility through the canonical ownership chain (authenticated broker user -> landlord_profiles.user_id -> landlord_profiles.id -> apartments.landlord_id) and treat any listing without a real owner as not requestable rather than guessing an owner.",
+      "files": []
+    },
+    {
+      "id": 7,
       "prompt": "Write the marketing copy for a new 3-bedroom listing in Envigado.",
-      "expected_output": "Produce property-description content from the listing's real attributes and neighbourhood context, without inventing amenities, measurements, or availability that the record does not contain.",
+      "expected_output": "Produce property-description content from authorized, verified listing attributes and sourced neighborhood context without inventing amenities, measurements, location claims, availability, ownership, or a transaction action that the canonical result contract does not allow.",
       "files": []
     }
   ]
