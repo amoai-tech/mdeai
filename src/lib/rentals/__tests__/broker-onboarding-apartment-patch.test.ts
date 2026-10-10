@@ -24,6 +24,36 @@ const base: BrokerOnboardingFormInput = {
 };
 
 describe("buildBrokerOnboardingApartmentPatch", () => {
+  it("emits only partner-editable apartment fields, never workflow or ownership fields", () => {
+    // Actual SQL GRANT permissions (both allowed and denied) are tested by
+    // san1106_publish_fsm_test.sql F4/F5 against PostgreSQL itself.
+    // Do not parse migration SQL with a regex or duplicate its grant policy here.
+    const allFields = buildBrokerOnboardingApartmentPatch({
+      ...base,
+      photoUrl: "https://example.com/authorized.jpg",
+      placeId: "ChIJabc12345",
+      formattedAddress: "Verified address",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    expect(Object.keys(allFields).sort()).toEqual([
+      "address",
+      "bathrooms",
+      "bedrooms",
+      "currency",
+      "images",
+      "latitude",
+      "longitude",
+      "metadata",
+      "price_monthly",
+    ]);
+    const forbidden = [
+      "status", "moderation_status", "listing_workflow_status", "published_at",
+      "published_by", "workflow_changed_by", "workflow_changed_at", "verified",
+      "landlord_id", "created_by", "host_id", "featured", "slug",
+    ];
+    expect(forbidden.filter((name) => name in allFields)).toEqual([]);
+  });
   it("omits coordinates and metadata for a free-text address", () => {
     const patch = buildBrokerOnboardingApartmentPatch(base);
     expect(patch.address).toBe("72 10th Street, Laureles");

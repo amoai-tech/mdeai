@@ -225,29 +225,24 @@ reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- D · DIRECT TABLE PATH — the bypass a model would take if it ignored the RPCs.
--- RLS filters UPDATE silently, so the proof is "zero rows touched, no error".
--- The data-modifying CTE must be top level; PostgreSQL rejects it nested in a
--- scalar subquery, which is why each write is its own statement.
+-- SAN-1106 removed UPDATE on workflow/ownership columns, so these are now explicit
+-- privilege refusals (42501) rather than rows filtered to zero by RLS.
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1054000-0000-4000-8000-000000000002', true);
 
-with upd as (
-  update public.apartments set listing_workflow_status = 'published'
-  where id = 'a1054000-0000-4000-8000-000000000021'
-  returning 1
-)
-select is((select count(*)::int from upd), 0,
-          'D: Broker B direct UPDATE of workflow touched zero rows (RLS filters silently)');
+select throws_ok(
+  $$update public.apartments set listing_workflow_status = 'published'
+    where id = 'a1054000-0000-4000-8000-000000000021'$$,
+  '42501', null,
+  'D: Broker B direct UPDATE of workflow is denied by column privilege');
 
-with upd as (
-  update public.apartments set landlord_id = 'a1054000-0000-4000-8000-000000000012'
-  where id = 'a1054000-0000-4000-8000-000000000021'
-  returning 1
-)
-select is((select count(*)::int from upd), 0,
-          'D: Broker B cannot seize ownership by direct landlord_id UPDATE');
+select throws_ok(
+  $$update public.apartments set landlord_id = 'a1054000-0000-4000-8000-000000000012'
+    where id = 'a1054000-0000-4000-8000-000000000021'$$,
+  '42501', null,
+  'D: Broker B cannot seize ownership by direct landlord_id UPDATE');
 
 reset role;
 
@@ -264,12 +259,10 @@ select is(
 set local role anon;
 select set_config('request.jwt.claim.sub', '', true);
 
-with upd as (
-  update public.apartments set status = 'active'
-  where id = 'a1054000-0000-4000-8000-000000000021'
-  returning 1
-)
-select is((select count(*)::int from upd), 0, 'D: anon direct UPDATE touched zero rows');
+select throws_ok(
+  $$update public.apartments set status = 'active'
+    where id = 'a1054000-0000-4000-8000-000000000021'$$,
+  '42501', null, 'D: anon direct UPDATE is denied at the privilege level');
 
 reset role;
 

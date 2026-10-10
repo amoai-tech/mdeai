@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(34);
+select plan(42);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -134,6 +134,28 @@ values ('e1431000-0000-4000-8000-000000000007', now(), 'stale');
 -- G's cached mirror says "fresh"; the canonical log says "stale" and must win.
 update public.apartments set freshness_status = 'active', last_checked_at = now() where slug = 'san1431-g';
 
+-- SECURITY DEFINER must not let a caller with no auth.uid() impersonate
+-- a publisher by providing p_actor_id while using the authenticated role.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  '42501', null::text, 'A0: actor ID cannot replace authenticated ownership');
+-- Spoofing request.jwt.claims does not grant the PostgreSQL service_role.
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select throws_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  '42501', null::text, 'A0b: spoofed service JWT claim cannot publish as authenticated');
+reset role;
+
+-- The real database service_role can publish with explicit attribution,
+-- without relying on the JWT claim being present for secret-key clients.
+set local role service_role;
+select set_config('request.jwt.claims', '', true);
+
 -- ── Positive + metadata conversion + attribution ─────────────────────────────
 select lives_ok(
   $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
@@ -159,6 +181,24 @@ select ok(
   'A9: the published listing is publicly eligible');
 select is((select published_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
   'd1431000-0000-4000-8000-000000000001'::uuid, 'A10: attribution records the supplied actor');
+select is((select workflow_changed_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+  null::uuid,
+  'A11: service publish does not mistake the supplied actor for an authenticated user');
+select ok((select workflow_changed_at is not null
+             from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+  'A12: verified publisher stamps workflow_changed_at');
+
+create temporary table san1431_publish_snapshot as
+  select row(published_at, published_by, workflow_changed_at, workflow_changed_by, updated_at, metadata)::text as state
+  from public.apartments where id = 'e1431000-0000-4000-8000-000000000001';
+select lives_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  'A13: a verified same-state publish retry is accepted');
+select is((select row(published_at, published_by, workflow_changed_at, workflow_changed_by, updated_at, metadata)::text
+             from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+          (select state from san1431_publish_snapshot),
+  'A14: published retry does not rewrite publication, audit or metadata');
 
 -- ── Attribution is mandatory for trusted connections ─────────────────────────
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000002')$$,
@@ -214,14 +254,24 @@ select ok(
      @> array['no current active freshness']::text[]),
   'Z4: a NULL freshness_status fails closed');
 
+reset role;
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 -- ── Authorization ────────────────────────────────────────────────────────────
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000002', true);
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
   'P0002', null::text, 'Z0: a non-owner cannot publish a hidden draft (RLS keeps it indistinguishable from missing)');
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000001', true);
-select lives_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
+-- A forged p_actor_id must not override the real authenticated owner.
+select lives_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008',
+  'd1431000-0000-4000-8000-000000000002')$$,
   'Z1: the owning broker can publish its verified listing');
+select is((select workflow_changed_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000008'),
+  'd1431000-0000-4000-8000-000000000001'::uuid,
+  'Z1a: authenticated publishing records the real user, not a supplied actor');
+select is((select published_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000008'),
+  'd1431000-0000-4000-8000-000000000001'::uuid,
+  'Z1b: published_by also prefers the real authenticated actor');
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000002', true);
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000008')$$,
   '42501', null::text, 'Z2: a non-owner cannot publish a listing they can see');
