@@ -213,6 +213,15 @@ declare
   v_actor uuid;
   v_missing text[];
 begin
+  -- SECURITY DEFINER is not an authorization boundary by itself.
+  -- A client without an authenticated user must never bypass owner checks by
+  -- supplying p_actor_id. Only the validated service_role JWT may do that.
+  if v_uid is null
+     and coalesce(auth.jwt() ->> 'role', '') <> 'service_role' then
+    raise exception 'authenticated publisher or trusted service required'
+      using errcode = '42501';
+  end if;
+
   select a.* into v_row from public.apartments a where a.id = p_apartment_id;
   if not found then
     raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
