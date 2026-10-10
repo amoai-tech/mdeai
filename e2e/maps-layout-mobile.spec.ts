@@ -33,7 +33,8 @@ test.describe("MAP-007B mobile layout", () => {
 
     await fab.click();
     await expect(page.locator('[data-testid="map-sheet-content"]')).toBeVisible();
-    await expect(page.locator('[data-testid="chat-map"]')).toHaveCount(1);
+    // The desktop panel keeps an unrendered wrapper in the DOM on a phone; exactly one map is visible.
+    await expect(page.locator('[data-testid="chat-map"]:visible')).toHaveCount(1);
 
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-testid="map-sheet-content"]')).toBeHidden({
@@ -43,6 +44,46 @@ test.describe("MAP-007B mobile layout", () => {
     await expect(input).toBeVisible();
 
     expect(collectCriticalConsoleErrors(errors)).toEqual([]);
+  });
+
+  // SAN-524 — production finding: with focus inside Google Maps the map consumes Escape (it handles
+  // keys on its own container and stops them), so the sheet stayed open although it says "Escape
+  // closes this sheet". The test mock map has no keyboard handling, so this models that behavior:
+  // a focusable element inside the map whose container stops every keydown from bubbling.
+  test("Escape closes the map sheet even when focus is inside the map and the map swallows the key", async ({ page }) => {
+    await gotoHome(page);
+    await ensureChatInputVisible(page);
+
+    const trigger = page.locator('[data-testid="map-sheet-trigger"]');
+    await trigger.click();
+    const sheet = page.locator('[data-testid="map-sheet-content"]');
+    await expect(sheet).toBeVisible();
+
+    await page.evaluate(() => {
+      const map = document.querySelector('[data-testid="map-sheet-content"] [data-testid="chat-map"]');
+      if (!map) throw new Error("no map in the sheet");
+      const inner = document.createElement("div");
+      inner.tabIndex = 0;
+      inner.setAttribute("data-testid", "map-focus-target");
+      map.appendChild(inner);
+      // What Google Maps does with keys: handle them on the map container and stop them there.
+      map.addEventListener("keydown", (event) => event.stopPropagation());
+      inner.focus();
+    });
+    await expect(page.getByTestId("map-focus-target")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden({ timeout: 10_000 });
+    // Focus returns to the control that opened the sheet, so the keyboard user is not stranded.
+    await expect(trigger).toBeFocused();
+  });
+
+  test("Escape does nothing to the map sheet when it is not open", async ({ page }) => {
+    await gotoHome(page);
+    await ensureChatInputVisible(page);
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-testid="map-sheet-content"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="map-sheet-trigger"]')).toBeVisible();
   });
 
   test("rental search shows cards in center chat", async ({ page }) => {
