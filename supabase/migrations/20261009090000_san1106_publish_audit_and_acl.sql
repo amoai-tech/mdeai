@@ -16,9 +16,9 @@
 --   the content columns. The SECURITY DEFINER wrappers update workflow columns as the owner,
 --   so they are unaffected.
 --
--- Timestamp note: the system clock is behind the repository's future-dated migrations, so this
--- file was generated with the CLI and then retimestamped to 20261009... so it sorts after the
--- last applied migration (20261008090000) and applies without --include-all.
+-- Migration-order note: preserve this already-reviewed filename, which is ordered after
+-- 20261008090600. Do not rename an existing migration: repository, CI and production
+-- must agree on one immutable migration identity.
 
 begin;
 
@@ -213,11 +213,12 @@ declare
   v_actor uuid;
   v_missing text[];
 begin
-  -- SECURITY DEFINER is not an authorization boundary by itself.
-  -- A client without an authenticated user must never bypass owner checks by
-  -- supplying p_actor_id. Only the validated service_role JWT may do that.
+  -- SECURITY DEFINER changes current_user to the function owner, so check
+  -- the caller's actual SET ROLE (PostgREST applies a validated database role).
+  -- request.jwt.claims can be emulated in SQL and is NOT sufficient authorization.
+  -- Modern service keys may not present a service_role JWT claim to this function.
   if v_uid is null
-     and coalesce(auth.jwt() ->> 'role', '') <> 'service_role' then
+     and coalesce(current_setting('role', true), '') <> 'service_role' then
     raise exception 'authenticated publisher or trusted service required'
       using errcode = '42501';
   end if;
@@ -249,6 +250,16 @@ begin
     from public.apartments a
    where a.id = p_apartment_id
    for update;
+  -- Repeat visibility after FOR UPDATE: ownership or public state might have
+  -- changed while waiting for the lock. Invisible rows still return P0002.
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())
+              or public.rental_listing_is_public(
+                   v_row.status, v_row.moderation_status, v_row.listing_workflow_status,
+                   v_row.landlord_id, v_row.metadata)) then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
   if v_uid is not null
      and not (public.is_admin()
               or v_row.landlord_id in (select public.acting_landlord_ids())) then
@@ -267,6 +278,18 @@ begin
       using errcode = '42501';
   end if;
 
+  -- A previously published row may be retried only if state is coherent.
+  -- Never rewrite provenance or timestamps for a same-state retry.
+  if v_row.listing_workflow_status = 'published' then
+    if v_row.status = 'active'
+       and v_row.moderation_status = 'approved'
+       and v_row.verified is true then
+      return v_row;
+    end if;
+    raise exception 'published listing has inconsistent state'
+      using errcode = '23514';
+  end if;
+
   update public.apartments a
      set status = 'active',
          verified = true,
@@ -275,6 +298,8 @@ begin
          listing_workflow_status = 'published',
          published_at = now(),
          published_by = v_actor,
+         workflow_changed_by = v_actor,
+         workflow_changed_at = now(),
          metadata = coalesce(a.metadata, '{}'::jsonb)
            || jsonb_build_object(
                 'inventory_kind', 'mde_controlled',

@@ -18,7 +18,7 @@
 
 begin;
 
-select plan(54);
+select plan(59);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — deterministic, transaction-owned, rolled back at the end.
@@ -261,6 +261,7 @@ select throws_ok(
   '42501', null, 'E5: the owner cannot write the audit actor directly');
 
 reset role;
+select is(current_user, session_user, 'E8: role reset restores the test connection identity');
 select is(
   (select listing_workflow_status||'/'||status||'/'||moderation_status
    from public.apartments where id='b1106000-0000-4000-8000-000000000006'),
@@ -273,6 +274,7 @@ select throws_ok(
   $$update public.apartments set listing_workflow_status='published' where id='b1106000-0000-4000-8000-000000000005'$$,
   '42501', null, 'E7: a foreign broker is denied the workflow write too');
 reset role;
+select is(current_user, session_user, 'E9: foreign-broker role reset succeeded');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- F · LEGITIMATE CONTENT EDITING STILL WORKS.
@@ -289,7 +291,20 @@ select lives_ok($$
    where id = 'b1106000-0000-4000-8000-000000000006'
 $$, 'F1: the owner can still edit partner-editable content columns');
 
+select ok(
+  (select bool_and(has_column_privilege('authenticated', 'public.apartments', col, 'UPDATE'))
+   from unnest(array['address','bedrooms','bathrooms','price_monthly','currency',
+                     'images','latitude','longitude','metadata']) as t(col)),
+  'F4: every field in buildBrokerOnboardingApartmentPatch retains UPDATE permission');
+select ok(
+  (select bool_and(not has_column_privilege('authenticated', 'public.apartments', col, 'UPDATE'))
+   from unnest(array['status','moderation_status','listing_workflow_status',
+                     'published_at','published_by','workflow_changed_by','workflow_changed_at',
+                     'verified','landlord_id']) as t(col)),
+  'F5: authenticated callers cannot update trusted workflow or ownership fields');
+
 reset role;
+select is(current_user, session_user, 'F6: content-edit role reset succeeded');
 select is(
   (select address from public.apartments where id='b1106000-0000-4000-8000-000000000006'),
   'Calle 10 #40-20', 'F2: the content edit persisted');

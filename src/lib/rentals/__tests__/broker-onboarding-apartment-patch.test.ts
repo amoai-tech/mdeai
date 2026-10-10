@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildBrokerOnboardingApartmentPatch,
@@ -24,6 +26,25 @@ const base: BrokerOnboardingFormInput = {
 };
 
 describe("buildBrokerOnboardingApartmentPatch", () => {
+  it("keeps every optional onboarding write within the SAN-1106 authenticated SQL UPDATE allowlist", () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), "supabase/migrations/20261009090000_san1106_publish_audit_and_acl.sql"),
+      "utf8",
+    );
+    const grant = migration.match(/grant update\s*\(([\s\S]*?)\)\s*on table public\.apartments to authenticated;/i);
+    expect(grant, "expected canonical authenticated UPDATE allowlist in SAN-1106 migration").not.toBeNull();
+    const grantedColumns = new Set(grant![1].split(",").map((name) => name.trim()));
+
+    const allFields = buildBrokerOnboardingApartmentPatch({
+      ...base,
+      photoUrl: "https://example.com/authorized.jpg",
+      placeId: "ChIJabc12345",
+      formattedAddress: "Verified address",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    expect([...Object.keys(allFields)].filter((name) => !grantedColumns.has(name))).toEqual([]);
+  });
   it("omits coordinates and metadata for a free-text address", () => {
     const patch = buildBrokerOnboardingApartmentPatch(base);
     expect(patch.address).toBe("72 10th Street, Laureles");

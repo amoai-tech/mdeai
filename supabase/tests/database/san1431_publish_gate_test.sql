@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(35);
+select plan(40);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -143,10 +143,18 @@ select throws_ok(
   $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
       'd1431000-0000-4000-8000-000000000001')$$,
   '42501', null::text, 'A0: actor ID cannot replace authenticated ownership');
+-- Spoofing request.jwt.claims does not grant the PostgreSQL service_role.
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select throws_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  '42501', null::text, 'A0b: spoofed service JWT claim cannot publish as authenticated');
 reset role;
 
--- The existing explicit service-actor tests use a validated service-role claim.
-select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+-- The real database service_role can publish with explicit attribution,
+-- without relying on the JWT claim being present for secret-key clients.
+set local role service_role;
+select set_config('request.jwt.claims', '', true);
 
 -- ── Positive + metadata conversion + attribution ─────────────────────────────
 select lives_ok(
@@ -173,6 +181,24 @@ select ok(
   'A9: the published listing is publicly eligible');
 select is((select published_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
   'd1431000-0000-4000-8000-000000000001'::uuid, 'A10: attribution records the supplied actor');
+select is((select workflow_changed_by from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+  'd1431000-0000-4000-8000-000000000001'::uuid,
+  'A11: verified publisher stamps workflow_changed_by');
+select ok((select workflow_changed_at is not null
+             from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+  'A12: verified publisher stamps workflow_changed_at');
+
+create temporary table san1431_publish_snapshot as
+  select row(published_at, published_by, workflow_changed_at, workflow_changed_by, updated_at, metadata)::text as state
+  from public.apartments where id = 'e1431000-0000-4000-8000-000000000001';
+select lives_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  'A13: a verified same-state publish retry is accepted');
+select is((select row(published_at, published_by, workflow_changed_at, workflow_changed_by, updated_at, metadata)::text
+             from public.apartments where id = 'e1431000-0000-4000-8000-000000000001'),
+          (select state from san1431_publish_snapshot),
+  'A14: published retry does not rewrite publication, audit or metadata');
 
 -- ── Attribution is mandatory for trusted connections ─────────────────────────
 select throws_ok($$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000002')$$,
@@ -228,6 +254,7 @@ select ok(
      @> array['no current active freshness']::text[]),
   'Z4: a NULL freshness_status fails closed');
 
+reset role;
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 -- ── Authorization ────────────────────────────────────────────────────────────
 set local role authenticated;
