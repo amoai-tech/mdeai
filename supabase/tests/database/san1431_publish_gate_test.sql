@@ -11,7 +11,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(34);
+select plan(35);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select has_function('public', 'publish_verified_rental', array['uuid', 'uuid'],
@@ -134,6 +134,20 @@ values ('e1431000-0000-4000-8000-000000000007', now(), 'stale');
 -- G's cached mirror says "fresh"; the canonical log says "stale" and must win.
 update public.apartments set freshness_status = 'active', last_checked_at = now() where slug = 'san1431-g';
 
+-- SECURITY DEFINER must not let a caller with no auth.uid() impersonate
+-- a publisher by providing p_actor_id while using the authenticated role.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
+      'd1431000-0000-4000-8000-000000000001')$$,
+  '42501', null::text, 'A0: actor ID cannot replace authenticated ownership');
+reset role;
+
+-- The existing explicit service-actor tests use a validated service-role claim.
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
 -- ── Positive + metadata conversion + attribution ─────────────────────────────
 select lives_ok(
   $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000001',
@@ -214,6 +228,7 @@ select ok(
      @> array['no current active freshness']::text[]),
   'Z4: a NULL freshness_status fails closed');
 
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 -- ── Authorization ────────────────────────────────────────────────────────────
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd1431000-0000-4000-8000-000000000002', true);

@@ -118,13 +118,13 @@ select throws_ok(
     values ('SAN468 anon insert', 'san468-anon-insert', 'Laureles')$$,
   '42501', null::text, 'A7: anon INSERT is denied');
 
-with anon_update as (
-  update public.apartments set title = 'SAN468 anon update'
-    where id = 'b4680000-0000-4000-8000-000000000001'
-  returning 1
-)
-select is((select count(*)::int from anon_update), 0,
-  'A8: anon UPDATE is filtered to zero rows by RLS');
+-- SAN-1106 removed the anon UPDATE privilege entirely, so this is now an explicit refusal
+-- (42501) rather than a row filtered to zero. Strictly stronger than the old assertion.
+select throws_ok(
+  $$update public.apartments set title = 'SAN468 anon update'
+    where id = 'b4680000-0000-4000-8000-000000000001'$$,
+  '42501', null,
+  'A8: anon UPDATE is denied at the privilege level');
 
 with anon_delete as (
   delete from public.apartments where id = 'b4680000-0000-4000-8000-000000000001'

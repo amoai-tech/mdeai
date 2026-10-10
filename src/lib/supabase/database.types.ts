@@ -206,6 +206,8 @@ export type Database = {
           video_url: string | null
           virtual_tour_url: string | null
           wifi_speed: number | null
+          workflow_changed_at: string | null
+          workflow_changed_by: string | null
         }
         Insert: {
           address?: string | null
@@ -270,6 +272,8 @@ export type Database = {
           video_url?: string | null
           virtual_tour_url?: string | null
           wifi_speed?: number | null
+          workflow_changed_at?: string | null
+          workflow_changed_by?: string | null
         }
         Update: {
           address?: string | null
@@ -334,6 +338,8 @@ export type Database = {
           video_url?: string | null
           virtual_tour_url?: string | null
           wifi_speed?: number | null
+          workflow_changed_at?: string | null
+          workflow_changed_by?: string | null
         }
         Relationships: [
           {
