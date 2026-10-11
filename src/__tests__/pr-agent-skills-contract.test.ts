@@ -61,8 +61,12 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).not.toContain('"docs/**"');
     expect(config).not.toContain("glob_patterns");
     expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
-    expect(config).toContain("Failure scenario:");
-    expect(config).toContain("Expected result:");
+    for (const label of ["Technical:", "Plain English:", "Real-world example:", "Fix:", "Verify:"]) {
+      expect(config).toContain(label);
+      expect(read(".claude/skills/code-review/SKILL.md")).toContain(label);
+    }
+    expect(config).toContain("Verification state: VERIFIED or NEEDS VERIFICATION");
+    expect(config).toContain("Status: changes_required or advisory");
     expect(config).toContain("Deterministic CI and human review remain authoritative");
     expect(config).toContain("YAML serialization requirement");
     expect(config).toContain(

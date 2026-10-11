@@ -81,16 +81,20 @@ Do not report style trivia already handled by formatters/linters unless it chang
 
 ## Finding format
 
-For every actionable finding provide:
+For every actionable finding, write for both the engineer fixing it and the product owner deciding whether it matters:
 
 ```text
-Severity: HIGH | MEDIUM | LOW
-Category: correctness | security | data | reliability | architecture | test-gap | maintainability | performance
-Evidence: file:line + exact behavior
-Why it matters: concrete failure/user impact
-Smallest safe fix: bounded recommendation
-Verification: exact test/probe that proves the fix
+Severity: BLOCKER | HIGH | MEDIUM | LOW
+Technical: concrete defect + file:line/evidence + why it is technically incorrect
+Plain English: consequence in 1-2 short sentences with minimal jargon
+Real-world example: one realistic MDE user/operator/developer failure scenario
+Fix: smallest safe bounded change using existing MDE patterns
+Verify: exact deterministic test/probe that proves the fix
+Verification state: VERIFIED | NEEDS VERIFICATION
+Status: changes_required | advisory
 ```
+
+Keep the sections concise and non-repetitive. BLOCKER/HIGH findings must make the reason to delay merge understandable in Plain English.
 
 Use `NOISE` when a reviewer/bot comment is disproven by current-head evidence.
 
