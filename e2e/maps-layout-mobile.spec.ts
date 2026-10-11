@@ -3,6 +3,8 @@ import {
   gotoDeterministicChat,
   mockFastPaths,
   RENTAL_QUERY,
+  RESTAURANT_QUERY,
+  restaurant,
   typeAndSubmit,
   waitForPost,
 } from "./helpers/deterministic-chat";
@@ -17,6 +19,42 @@ async function seedRentalPin(page: Page) {
   await typeAndSubmit(page, RENTAL_QUERY);
   expect((await responsePromise).ok()).toBe(true);
   await expect(page.getByTestId("rental-card")).toHaveCount(1);
+}
+
+async function seedRestaurantPins(page: Page) {
+  await mockFastPaths(page);
+  await page.route("**/api/restaurants/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        results: [
+          restaurant,
+          {
+            ...restaurant,
+            id: "rst_mobile_002",
+            name: "Deterministic Patio",
+            latitude: 6.2476,
+            longitude: -75.585,
+          },
+          {
+            ...restaurant,
+            id: "rst_mobile_003",
+            name: "Deterministic Terrace",
+            latitude: 6.255,
+            longitude: -75.5795,
+          },
+        ],
+        total: 3,
+        source: "mock",
+      }),
+    });
+  });
+  await gotoDeterministicChat(page);
+  const responsePromise = waitForPost(page, "/api/restaurants/search");
+  await typeAndSubmit(page, RESTAURANT_QUERY);
+  expect((await responsePromise).ok()).toBe(true);
+  await expect(page.getByTestId("restaurant-card")).toHaveCount(3);
 }
 
 async function expectTouchContext(page: Page, viewport: { width: number; height: number }) {
@@ -112,6 +150,46 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
       "data-pin-id",
       pinId!,
     );
+  });
+
+  test("touch compatibility hover after close cannot replace the selected pin", async ({
+    page,
+  }) => {
+    await seedRestaurantPins(page);
+    const trigger = page.getByTestId("map-sheet-trigger");
+    await trigger.tap();
+    const sheet = page.getByTestId("map-sheet-content");
+    await expect(sheet).toBeVisible();
+
+    const pins = sheet.getByTestId("map-pin");
+    const selectedPin = pins.nth(1);
+    const selectedPinId = await selectedPin.getAttribute("data-pin-id");
+    expect(selectedPinId).toBeTruthy();
+    await selectedPin.tap();
+
+    const selectedCard = page.locator(
+      `[data-testid="restaurant-card"][data-pin-id="${selectedPinId}"]`,
+    );
+    await expect(selectedCard).toHaveAttribute("data-selected", "true");
+
+    await sheet.getByRole("button", { name: "Close" }).tap();
+    await expect(sheet).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    const otherCard = page
+      .locator('[data-testid="restaurant-card"]')
+      .filter({ hasNot: page.locator(`[data-pin-id="${selectedPinId}"]`) })
+      .first();
+
+    // Mobile browsers can emit compatibility mouse events when a touched modal disappears.
+    // Those events must not replace the map selection underneath the closing sheet.
+    await otherCard.dispatchEvent("mouseover");
+    await expect(selectedCard).toHaveAttribute("data-selected", "true");
+    await expect(otherCard).toHaveAttribute("data-selected", "false");
+
+    // Preserve the desktop contract: a real mouse pointer still previews on hover.
+    await otherCard.dispatchEvent("pointerover", { pointerType: "mouse" });
+    await expect(otherCard).toHaveAttribute("data-selected", "true");
   });
 
   test("Escape still closes before a focused map child can swallow the key", async ({
