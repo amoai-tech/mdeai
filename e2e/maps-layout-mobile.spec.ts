@@ -186,17 +186,17 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
       )
       .first();
 
-    // Touch pointer entry after a touched modal disappears must not replace the
-    // explicit map selection underneath the closing sheet.
-    await otherCard.dispatchEvent("pointerover", { pointerType: "touch" });
+    // Touch browsers can synthesize mouse pointer-entry events when a touched
+    // modal disappears. A no-hover/coarse phone must ignore that compatibility
+    // event so it cannot replace the explicit map selection underneath.
+    expect(
+      await page.evaluate(() =>
+        window.matchMedia("(any-hover: hover) and (any-pointer: fine)").matches,
+      ),
+    ).toBe(false);
+    await otherCard.dispatchEvent("pointerover", { pointerType: "mouse" });
     await expect(selectedCard).toHaveAttribute("data-selected", "true");
     await expect(otherCard).toHaveAttribute("data-selected", "false");
-
-    // Preserve pointing-device preview for desktop mouse and hover-capable stylus.
-    await otherCard.dispatchEvent("pointerover", { pointerType: "mouse" });
-    await expect(otherCard).toHaveAttribute("data-selected", "true");
-    await selectedCard.dispatchEvent("pointerover", { pointerType: "pen" });
-    await expect(selectedCard).toHaveAttribute("data-selected", "true");
   });
 
   test("Escape still closes before a focused map child can swallow the key", async ({
