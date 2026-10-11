@@ -21,6 +21,7 @@ declare
   v_latest_status text;
   v_latest_checked_at timestamptz;
   v_current_freshness boolean;
+  v_neighborhood text;
 begin
   select a.* into r from public.apartments a where a.id = p_apartment_id;
   if not found then
@@ -183,15 +184,18 @@ begin
   end if;
 
 
-  -- SAN-1431 §4.1: a real neighborhood is required. The staging placeholder
-  -- 'Pending verification' and other blank/unknown values must block publication.
+  -- SAN-1431 §4.1: a real neighborhood is required. Normalize ALL surrounding
+  -- whitespace (spaces, tabs, newlines) before testing, so whitespace-only or padded
+  -- values cannot slip through. The staging placeholder 'Pending verification' and
+  -- other blank/unknown values must block publication.
   -- (Ceiling: this rejects placeholders/blanks; a plausible value still depends on
   -- the independent owner/review process, as every other verified fact does.)
-  if not (nullif(btrim(coalesce(r.neighborhood, '')), '') is not null
-          and lower(btrim(coalesce(r.neighborhood, ''))) not in (
-            'pending verification','pending','unknown','tbd','unreviewed',
-            'n/a','na','por verificar','sin verificar'
-          )) then
+  v_neighborhood := lower(btrim(coalesce(r.neighborhood, ''), E' \t\n\r\f'));
+  if v_neighborhood = ''
+     or v_neighborhood in (
+       'pending verification','pending','unknown','tbd','unreviewed',
+       'n/a','na','por verificar','sin verificar'
+     ) then
     b := b || 'no verified neighborhood'::text;
   end if;
   return b;
