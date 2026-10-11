@@ -101,6 +101,17 @@ export function MapMobileSheet() {
           side="bottom"
           className="flex max-h-[calc(85dvh-env(safe-area-inset-bottom,0px))] min-h-[75dvh] flex-col p-0 pb-[env(safe-area-inset-bottom,0px)]"
           data-testid="map-sheet-content"
+          onKeyDownCapture={(event) => {
+            if (
+              event.key !== "Escape" ||
+              event.nativeEvent.isComposing ||
+              !(event.target instanceof Element) ||
+              !event.target.closest('[data-testid="chat-map"]')
+            ) {
+              return;
+            }
+            setUserMapOpen(false);
+          }}
         >
           <SheetHeader className="border-b border-border px-4 py-3 text-left">
             <SheetTitle>Map</SheetTitle>
