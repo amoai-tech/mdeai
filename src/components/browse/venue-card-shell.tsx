@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { ResultKind } from "@/components/cards/card-interaction-props";
 import {
   Card,
@@ -103,12 +103,28 @@ export function VenueCardShell({
         }
       : {};
 
+  const previewFromPointer = onPreview
+    ? (event: ReactPointerEvent<HTMLElement>) => {
+        if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+        // Touch browsers can emit compatibility mouse/pointer-enter events after a tap
+        // when an overlay disappears. Only treat pointer enter as hover when the device
+        // actually advertises hover + fine-pointer capability.
+        if (
+          typeof window.matchMedia === "function" &&
+          !window.matchMedia("(any-hover: hover) and (any-pointer: fine)").matches
+        ) {
+          return;
+        }
+        onPreview();
+      }
+    : undefined;
+
   const sharedDataProps = {
     "data-testid": testId,
     "data-result-kind": resultKind,
     "data-pin-id": pinId,
     "data-selected": selected ? "true" : "false",
-    onMouseEnter: onPreview,
+    onPointerEnter: previewFromPointer,
     onFocus: onPreview,
     "aria-label": ariaLabel,
   };
