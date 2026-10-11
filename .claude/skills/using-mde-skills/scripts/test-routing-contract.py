@@ -149,7 +149,15 @@ def _other_workflow_route(text: str) -> str | None:
         "browser e2e", "playwright journey", "test the browser journey",
     )):
         return "e2e"
-    if any(term in text for term in ("research", "official guidance", "evidence")):
+    # Route an explicit research request, not incidental mentions of research,
+    # evidence, or documentation inside implementation/review/domain tasks.
+    if re.match(
+        r"^(?:(?:please|can you|could you|would you|i need you to)\s+)?"
+        r"(?:research\b|find (?:the )?official guidance\b|"
+        r"look up (?:the )?official guidance\b|"
+        r"gather (?:the )?evidence\b)",
+        text.strip(),
+    ):
         return "research"
     return None
 

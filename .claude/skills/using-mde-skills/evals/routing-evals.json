@@ -670,5 +670,103 @@
     "expected_owner": "direct",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-implement",
+    "input": "Implement the research feature in the existing dashboard",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-please-implement",
+    "input": "Please implement the research UI component",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-explain",
+    "input": "Explain how the research screen works",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-evidence",
+    "input": "Read the evidence from the attached file",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-review-pr",
+    "input": "Review the evidence in PR #260",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-audit-pr",
+    "input": "Audit PR #260 for merge readiness using evidence",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-debug",
+    "input": "Diagnose why the research page crashes",
+    "expected_owner": "errors",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-domain",
+    "input": "Explain the rental listing research fields",
+    "expected_owner": "real-estate",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-implementation",
+    "input": "Implement a scoped UI fix using official guidance",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-domain",
+    "input": "Explain official guidance for rental listing eligibility",
+    "expected_owner": "real-estate",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-direct-command",
+    "input": "Please research current recommended Next.js caching practices",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-command",
+    "input": "Find official guidance on the current Node.js API",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-evidence-command",
+    "input": "Gather evidence about the existing production deployment process",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-question-no-command",
+    "input": "What evidence supports the rental search approach?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

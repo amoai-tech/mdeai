@@ -18,7 +18,7 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
     resolve(root, '.claude/skills/using-mde-skills/evals/routing-evals.json'), 'utf8'
   ));
   assert.equal(Number(totals[1]), expected.length, 'not all configured cases were run');
-  assert.ok(Number(totals[1]) >= 96, 'routing coverage fell below the 96-case baseline');
+  assert.ok(Number(totals[1]) >= 110, 'routing coverage fell below the 110-case baseline');
 
   const instructions = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
   const startup = readFileSync(resolve(root, '.claude/hooks/session-start.mjs'), 'utf8');
