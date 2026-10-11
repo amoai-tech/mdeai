@@ -188,7 +188,7 @@ begin
   -- (Ceiling: this rejects placeholders/blanks; a plausible value still depends on
   -- the independent owner/review process, as every other verified fact does.)
   if not (nullif(btrim(coalesce(r.neighborhood, '')), '') is not null
-          and lower(btrim(r.neighborhood)) not in (
+          and lower(btrim(coalesce(r.neighborhood, ''))) not in (
             'pending verification','pending','unknown','tbd','unreviewed',
             'n/a','na','por verificar','sin verificar'
           )) then
