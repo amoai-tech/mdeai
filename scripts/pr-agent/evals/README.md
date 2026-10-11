@@ -63,8 +63,38 @@ which is the fix" before crediting the finding.
 ### `detectionQuality` — read this before trusting a PASS
 
 Severity and status are only readable when the model emits the structure `.pr_agent.toml` asks for.
-The one captured model output that does contain findings (`pr-163-canary-v045-recorded.md`) returns
-plain prose with **no** `Severity:`, `Status:`, `Evidence:`, or `Failure scenario:` labels at all.
+The required finding contract is `Severity`, `Technical`, `Plain English`, `Real-world example`, `Fix`,
+`Verify`, `Verification state`, and `Status`. The one captured model output that does contain findings
+(`pr-163-canary-v045-recorded.md`) predates that contract and returns plain prose without those labels.
+
+`formatCompliance` checks all eight fields on every active finding. `allCompliant: true` means every
+active finding carries the complete contract; `false` means at least one active finding is missing a
+required field; `null` means the review contains zero active findings, so there is no finding format to
+evaluate. A clean review with no findings is therefore never misreported as format-compliant.
+
+The preferred rendered layout is intentionally easy to scan in a GitHub review: bold labels with one
+blank line between fields. For example:
+
+```markdown
+**Severity:** HIGH
+
+**Technical:** concrete defect and evidence
+
+**Plain English:** what breaks for the user or operator
+
+**Real-world example:** realistic MDE failure scenario
+
+**Fix:** smallest safe change
+
+**Verify:** decisive deterministic proof
+
+**Verification state:** VERIFIED
+
+**Status:** changes_required
+```
+
+The scorer validates the eight-field contract, not cosmetic Markdown, so older unbolded but complete
+findings remain measurable while the prompt and skill enforce the more readable layout going forward.
 
 When a credited finding carries its own `Severity`/`Status`, the score reports
 `detectionQuality: "labelled"` — evidence, severity, and verdict all come from that one finding. When

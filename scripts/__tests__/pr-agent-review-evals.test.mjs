@@ -21,6 +21,7 @@ import { describe, it } from "node:test";
 
 import { CASES, CASES_BY_ID, REQUIRED_PROBE_ANCHORS } from "../pr-agent/evals/cases.mjs";
 import {
+  checkFindingFormat,
   checkGrounding,
   isMaterialFinding,
   matchCase,
@@ -191,6 +192,150 @@ describe("SAN-1312 finding-level extraction", () => {
       '<!-- pr-agent-review-state:v1\n{"findings":[{"body":"Severity: HIGH","state":"RESOLVED"}],"last_run":{"complete":true}}\n-->',
     );
     assert.equal(isMaterialFinding(resolved.findings[0]), false, "a resolved finding is not material");
+  });
+});
+
+describe("MDE dual-audience finding format", () => {
+  it("reports all required readability sections when a finding follows the contract", () => {
+    const parsed = parseFindings(
+      [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    );
+    const format = checkFindingFormat(parsed.findings[0]);
+    assert.equal(format.complete, true);
+    assert.deepEqual(format.missing, []);
+  });
+
+  it("reports Severity as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity"]);
+  });
+
+  it("reports Verification state as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Verification state"]);
+  });
+
+  it("reports Status as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Status"]);
+  });
+
+  it("reports exactly which readability sections are missing", () => {
+    const parsed = parseFindings(
+      [
+        "Severity: MEDIUM",
+        "Technical: a rank fallback silently accepts an unknown source.",
+        "Fix: reject unknown source types.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    );
+    const format = checkFindingFormat(parsed.findings[0]);
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Plain English", "Real-world example", "Verify"]);
+  });
+
+  it("rejects option-template text instead of treating the first option as a chosen value", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: BLOCKER | HIGH | MEDIUM | LOW",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED | NEEDS VERIFICATION",
+        "Status: changes_required | advisory",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity", "Verification state", "Status"]);
+  });
+
+  it("accepts Markdown bold on labels without rewriting finding content", () => {
+    const format = checkFindingFormat({
+      body: [
+        "**Severity:** HIGH",
+        "**Technical:** the migration can write duplicate rows with **one** bad retry.",
+        "**Plain English:** the same rental could appear twice.",
+        "**Real-world example:** a renter sees two cards for one apartment.",
+        "**Fix:** reuse the existing unique key.",
+        "**Verify:** replay the migration twice and assert one row.",
+        "**Verification state:** VERIFIED",
+        "**Status:** changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, true);
+    assert.deepEqual(format.missing, []);
+  });
+
+  it("reports zero findings as not applicable instead of falsely compliant", () => {
+    const result = scoreReview(
+      CASES_BY_ID["docs-only-control"],
+      review("", { recommendation: "Safe to merge", score: 100 }),
+    );
+    assert.equal(result.formatCompliance.findingCount, 0);
+    assert.equal(result.formatCompliance.compliantCount, 0);
+    assert.equal(result.formatCompliance.allCompliant, null);
+  });
+
+  it("includes active-finding format compliance in normal score output", () => {
+    const readable = [
+      "Severity: HIGH",
+      "Technical: EXACT_VERSION accepts 01.2.3 because a core component permits a leading zero.",
+      "Plain English: an invalid dependency version can be accepted as if it were exact.",
+      "Real-world example: CI can approve a malformed pin and give the team a false green check.",
+      "Fix: use a standards-compliant exact SemVer validator.",
+      "Verify: assert that 01.2.3 is rejected.",
+      "Verification state: VERIFIED",
+      "Status: changes_required",
+    ].join("\n");
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], review(readable));
+    assert.equal(result.formatCompliance.findingCount, 1);
+    assert.equal(result.formatCompliance.compliantCount, 1);
+    assert.equal(result.formatCompliance.allCompliant, true);
   });
 });
 
