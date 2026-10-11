@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(13);
+select plan(34);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES — a fully published, verified listing owned by broker A.
@@ -48,6 +48,12 @@ update public.apartments
  where id = 'e1431000-0000-4000-8000-000000000021';
 
 create or replace function pg_temp.restore_published() returns void language sql as $$
+  -- Reset the synthetic fixture to a draft first. A live metadata reset must
+  -- never become an implicit guard bypass in production.
+  update public.apartments
+     set status = 'inactive', moderation_status = 'pending', listing_workflow_status = 'draft',
+         verified = false, published_at = null, published_by = null
+   where id = 'e1431000-0000-4000-8000-000000000021';
   update public.apartments
      set status = 'active', moderation_status = 'approved', listing_workflow_status = 'published',
          verified = true, landlord_id = 'e1431000-0000-4000-8000-000000000011',
@@ -143,6 +149,144 @@ select lives_ok(
   $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000021', 'e1431000-0000-4000-8000-000000000001')$$,
   'A12: an authorized reviewer can republish after the evidence is restored');
 reset role;
+
+-- D · METADATA CLASSIFICATION + COMBINED WORKFLOW UPDATE
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"internal_note":"follow up tomorrow"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'published', 'D1: a known non-authoritative metadata note does not demote');
+
+select pg_temp.restore_published();
+update public.apartments
+   set price_monthly = 3500000, listing_workflow_status = 'paused', status = 'inactive'
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status || '/' || moderation_status || '/' || verified::text
+             from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft/pending/false', 'D2: price + workflow transition cannot skip review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"new_unknown_key":"not trusted"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D3: unknown metadata changes fail closed');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"owner_control_status":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D4: owner_control_status requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"photo_rights_status":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D5: photo_rights_status requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"availability_status":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D6: availability_status requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"coordinates_status":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D7: coordinates_status requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"inventory_kind":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D8: inventory_kind requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments
+   set metadata = metadata || '{"allowed_action":"forged"}'::jsonb
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D9: allowed_action requires re-review');
+
+select pg_temp.restore_published();
+update public.apartments set bedrooms = 4
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'draft', 'D10: bedroom count changes require re-review');
+
+select pg_temp.restore_published();
+update public.apartments set status='inactive', listing_workflow_status='paused'
+ where id = 'e1431000-0000-4000-8000-000000000021';
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'paused', 'D11: legitimate workflow-only pause remains possible');
+
+-- E · PERMISSION BOUNDARY + HONEST AUDIT PROVENANCE
+select pg_temp.restore_published();
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1431000-0000-4000-8000-000000000001', true);
+select throws_ok(
+  $$update public.apartments
+       set price_monthly = 4000000, listing_workflow_status = 'paused'
+      where id = 'e1431000-0000-4000-8000-000000000021'$$,
+  '42501', 'permission denied for table apartments',
+  'E1: owner cannot directly combine workflow and material writes');
+reset role;
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'published', 'E2: rejected broker workflow write leaves listing live and unchanged');
+
+-- A legitimate owner content edit is RLS-authorized, and retains a real UUID.
+select pg_temp.restore_published();
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1431000-0000-4000-8000-000000000001', true);
+update public.apartments set price_monthly=3200000
+ where id='e1431000-0000-4000-8000-000000000021';
+reset role;
+select is((select workflow_changed_by from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+ 'e1431000-0000-4000-8000-000000000001'::uuid,
+ 'E2b: authorized broker material edit records their authenticated UUID');
+select is((select metadata->>'review_actor_kind' from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+ 'authenticated_user', 'E2c: JWT-authenticated author classified as a person');
+
+select pg_temp.restore_published();
+-- Simulate a trusted service operation with no JWT: do not fake a human UUID.
+select set_config('request.jwt.claim.sub', '', true);
+set local role service_role;
+update public.apartments set price_monthly = 3100000
+ where id = 'e1431000-0000-4000-8000-000000000021';
+reset role;
+select is((select workflow_changed_by from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  null::uuid, 'E3: missing JWT does not forge a human actor UUID');
+select is((select metadata->>'review_actor_kind' from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'service_role', 'E4: missing-JWT service writes retain explicit service provenance');
+select is((select metadata->>'review_actor_db_role' from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'service_role', 'E5: service provenance captures the DB role (not a person)');
+
+-- Evidence triggers should keep their precise reason, not generic metadata edit.
+select pg_temp.restore_published();
+update public.property_verifications set metadata = metadata || '{"audit_check":1}'::jsonb
+ where apartment_id = 'e1431000-0000-4000-8000-000000000021';
+select is((select metadata->>'review_required_reason' from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'property verification changed after publication', 'E6: evidence-trigger reason is preserved');
+
+-- An approved publication from a non-live draft remains possible.
+select pg_temp.restore_published();
+update public.apartments set listing_workflow_status='draft',status='inactive',moderation_status='pending',verified=false
+ where id='e1431000-0000-4000-8000-000000000021';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'e1431000-0000-4000-8000-000000000001', true);
+select lives_ok(
+  $$select public.publish_verified_rental('e1431000-0000-4000-8000-000000000021')$$,
+  'E7: existing gated publish RPC works from a draft');
+reset role;
+select is((select listing_workflow_status from public.apartments where id='e1431000-0000-4000-8000-000000000021'),
+  'published', 'E8: legitimate publish leaves a published listing');
 
 select * from finish();
 rollback;

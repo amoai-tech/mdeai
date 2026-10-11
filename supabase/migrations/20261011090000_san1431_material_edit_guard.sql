@@ -9,9 +9,8 @@
 --
 -- This adds a database-level guard: any material change to a live listing fails
 -- closed — it drops to draft/inactive/pending with verified=false, publication is
--- cleared, and the reason + time are recorded for trusted review. Intentional
--- state-machine operations (publish / pause / request / reject) are never
--- intercepted, and harmless copy edits (title/description/amenities) do not
+-- cleared, and the reason + time are recorded for trusted review. Initial publish/re-publish operations from non-live rows are left
+-- intact, while combined workflow + material edits from live rows fail closed. Harmless copy edits (title/description/amenities) do not
 -- disrupt a listing.
 --
 -- Reuses the existing model only: apartments, property_verifications,
@@ -48,7 +47,16 @@ begin
            updated_at = now(),
            metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
              'review_required_reason', p_reason,
-             'review_required_at', now()
+             'review_required_at', now(),
+             -- DB role is diagnostic provenance, NEVER a human UUID.
+             'review_actor_kind', case
+               when auth.uid() is not null then 'authenticated_user'
+               when current_setting('role', true) = 'service_role' then 'service_role'
+               else 'database_operation'
+             end,
+             'review_actor_db_role', coalesce(
+               nullif(current_setting('role', true), ''), current_user
+             )
            )
      where id = p_apartment_id;
   end if;
@@ -68,18 +76,13 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_state_change boolean;
   v_material boolean := false;
+  v_already_safe boolean;
+  v_reason text;
 begin
-  -- An intentional workflow/publish operation owns its own state.
-  v_state_change := (NEW.listing_workflow_status is distinct from OLD.listing_workflow_status)
-                 or (NEW.status is distinct from OLD.status)
-                 or (NEW.moderation_status is distinct from OLD.moderation_status)
-                 or (NEW.verified is distinct from OLD.verified);
-  if v_state_change then
-    return NEW;
-  end if;
-
+  -- Only OLD live rows need re-review. Initial publishing/republishing starts
+  -- from a non-live OLD row, so publish_verified_rental() remains untouched.
+  -- Never skip a material edit merely because the UPDATE also changes workflow.
   if OLD.listing_workflow_status = 'published'
      or (OLD.status = 'active' and OLD.moderation_status = 'approved') then
     v_material :=
@@ -101,27 +104,67 @@ begin
       -- A null owner is left to the SAN-1349 CHECK, which rejects it outright;
       -- a non-null ownership transfer is material and re-enters review.
       or (NEW.landlord_id is distinct from OLD.landlord_id and NEW.landlord_id is not null)
+      or (NEW.bedrooms is distinct from OLD.bedrooms)
+      or (NEW.bathrooms is distinct from OLD.bathrooms)
+      or (NEW.size_sqm is distinct from OLD.size_sqm)
+      or (NEW.floor_number is distinct from OLD.floor_number)
+      or (NEW.total_floors is distinct from OLD.total_floors)
+      or (NEW.wifi_speed is distinct from OLD.wifi_speed)
+      or (NEW.building_amenities is distinct from OLD.building_amenities)
+      or (NEW.video_url is distinct from OLD.video_url)
+      or (NEW.virtual_tour_url is distinct from OLD.virtual_tour_url)
+      or (NEW.source_url is distinct from OLD.source_url)
+      or (NEW.source_listing_id is distinct from OLD.source_listing_id)
       or (NEW.furnished is distinct from OLD.furnished)
       or (NEW.pet_friendly is distinct from OLD.pet_friendly)
       or (NEW.smoking_allowed is distinct from OLD.smoking_allowed)
       or (NEW.parking_included is distinct from OLD.parking_included)
       or (NEW.images is distinct from OLD.images)
-      or (NEW.metadata is distinct from OLD.metadata);
+      -- Explicitly exempt one non-authoritative note key. All other metadata
+      -- changes (including unknown keys) fail closed.
+      or ((coalesce(NEW.metadata, '{}'::jsonb) - 'internal_note')
+          is distinct from (coalesce(OLD.metadata, '{}'::jsonb) - 'internal_note'));
   end if;
 
   if v_material then
+    -- The evidence AFTER triggers intentionally update the parent to a safe
+    -- draft and provide a specific reason. Preserve that reason; do not turn
+    -- it into the generic apartment-edit reason on the nested BEFORE trigger.
+    v_already_safe := NEW.listing_workflow_status = 'draft'
+                  and NEW.status = 'inactive'
+                  and NEW.moderation_status = 'pending'
+                  and NEW.verified = false
+                  and NEW.published_at is null
+                  and NEW.published_by is null;
+    v_reason := case
+      when v_already_safe
+       and nullif(NEW.metadata->>'review_required_reason', '') is distinct from
+           nullif(OLD.metadata->>'review_required_reason', '')
+      then NEW.metadata->>'review_required_reason'
+      else 'material edit after publication'
+    end;
+
     NEW.listing_workflow_status := 'draft';
     NEW.status := 'inactive';
     NEW.moderation_status := 'pending';
     NEW.verified := false;
     NEW.published_at := null;
     NEW.published_by := null;
-    NEW.workflow_changed_by := (select auth.uid());
+    -- A missing JWT must never be replaced by a fabricated human UUID.
+    NEW.workflow_changed_by := auth.uid();
     NEW.workflow_changed_at := now();
     NEW.updated_at := now();
     NEW.metadata := coalesce(NEW.metadata, '{}'::jsonb) || jsonb_build_object(
-      'review_required_reason', 'material edit after publication',
-      'review_required_at', now()
+      'review_required_reason', v_reason,
+      'review_required_at', now(),
+      'review_actor_kind', case
+        when auth.uid() is not null then 'authenticated_user'
+        when current_setting('role', true) = 'service_role' then 'service_role'
+        else 'database_operation'
+      end,
+      'review_actor_db_role', coalesce(
+        nullif(current_setting('role', true), ''), current_user
+      )
     );
   end if;
   return NEW;
@@ -144,11 +187,21 @@ security definer
 set search_path = ''
 as $$
 begin
+  if TG_OP = 'DELETE' then
+    perform public.demote_published_listing_for_review(
+      OLD.listing_id, 'image evidence changed after publication'
+    );
+    return OLD;
+  end if;
   perform public.demote_published_listing_for_review(
-    coalesce(NEW.listing_id, OLD.listing_id),
-    'image evidence changed after publication'
+    NEW.listing_id, 'image evidence changed after publication'
   );
-  return coalesce(NEW, OLD);
+  if TG_OP = 'UPDATE' and OLD.listing_id is distinct from NEW.listing_id then
+    perform public.demote_published_listing_for_review(
+      OLD.listing_id, 'image moved away after publication'
+    );
+  end if;
+  return NEW;
 end;
 $$;
 
@@ -168,11 +221,21 @@ security definer
 set search_path = ''
 as $$
 begin
+  if TG_OP = 'DELETE' then
+    perform public.demote_published_listing_for_review(
+      OLD.apartment_id, 'property verification changed after publication'
+    );
+    return OLD;
+  end if;
   perform public.demote_published_listing_for_review(
-    coalesce(NEW.apartment_id, OLD.apartment_id),
-    'property verification changed after publication'
+    NEW.apartment_id, 'property verification changed after publication'
   );
-  return coalesce(NEW, OLD);
+  if OLD.apartment_id is distinct from NEW.apartment_id then
+    perform public.demote_published_listing_for_review(
+      OLD.apartment_id, 'property verification moved away after publication'
+    );
+  end if;
+  return NEW;
 end;
 $$;
 
