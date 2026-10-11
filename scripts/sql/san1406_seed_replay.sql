@@ -24,6 +24,16 @@ where slug in (
  'los-cambulos','olium-park','reserva-serrat-selva'
 );
 
+-- Simulate the developer source not yet captured for an already claimed project.
+-- Reserva primary is the price-backed aggregator, so removing its supplemental
+-- Monserrate source does not violate the existing primary-source relationship.
+delete from public.development_project_sources s
+using public.development_projects p
+where s.project_id=p.id
+  and p.slug='reserva-serrat-selva'
+  and p.ownership_status='claimed'
+  and s.source_url='https://www.constructoramonserrate.com/projects_types/no-vis/';
+
 create temp table san1406_replay_snapshot as
 select p.id, p.slug, to_jsonb(p) as project_before,
   (select coalesce(jsonb_agg(to_jsonb(u) order by u.id), '[]'::jsonb)
@@ -43,9 +53,11 @@ begin
 end $$;
 
 -- Deliberately replay the seed TWICE to prove ON CONFLICT stability.
--- The integrity migration is not replayed: only the additive seed supports retry.
+-- Reapply the idempotent integrity migration with a claimed Reserva that has
+-- NO Monserrate source; the developer-source insert must skip the claimed row.
 \ir ../../supabase/migrations/20261010120000_san1406_seed_pilot_expansion.sql
 \ir ../../supabase/migrations/20261010120000_san1406_seed_pilot_expansion.sql
+\ir ../../supabase/migrations/20261010120100_san1406_new_projects_integrity.sql
 
 do $$
 declare
@@ -71,6 +83,6 @@ begin
      join san1406_replay_snapshot snap on snap.slug=p.slug) <> 6 then
    raise exception 'FAIL: duplicate/missing captured project after replay';
  end if;
- raise notice 'PASS: all 6 projects, ownership/price, unit and source rows unchanged after two seed runs';
+ raise notice 'PASS: all 6 projects, ownership/price, unit and source rows unchanged after two seed runs and integrity replay';
 end $$;
 rollback;

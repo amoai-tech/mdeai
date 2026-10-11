@@ -221,7 +221,8 @@ join (values
    'Monserrate first-party: Torre 1/2 46–57 m², Torre 3 54 m².',
    '{"bedrooms_min": 2, "bedrooms_max": 2, "area_min_m2": 46, "area_max_m2": 57, "towers": 3}')
 ) as v(slug, url, note, facts) on p.slug = v.slug
-where not exists (
+where p.ownership_status = 'unclaimed'
+  and not exists (
   select 1 from public.development_project_sources s
   where s.project_id = p.id and s.source_url = v.url
 );
