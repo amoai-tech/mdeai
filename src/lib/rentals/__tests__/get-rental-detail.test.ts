@@ -1,18 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { searchRentals } from "@/mastra/tools/search-rentals";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { getRentalDetail, mapApartmentRowToDetail } from "../get-rental-detail";
 
-// Partial mock: the real `isRentalRequestable` must stay live because
-// `mapApartmentRowToDetail` now derives `canScheduleViewing` from it (SAN-1349).
-// Mocking it out would make the requestability tests assert against a stub.
-vi.mock("@/mastra/tools/search-rentals", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/mastra/tools/search-rentals")>()),
-  searchRentals: vi.fn(),
-}));
-
 /**
- * `getRentalDetail` only falls back to the mock catalogue when **no** Supabase
- * credential name resolves. MDE-ENV-002 made the server accept the public names
+ * `getRentalDetail` has no demo catalogue (SAN-1089): when **no** Supabase
+ * credential name resolves it throws instead of inventing a rental. MDE-ENV-002 made the server accept the public names
  * too, so clearing the server-only pair is no longer sufficient — CI sets
  * `NEXT_PUBLIC_SUPABASE_URL`, which would otherwise build a real client.
  */
@@ -33,7 +25,6 @@ beforeEach(() => {
     savedCredentials.set(name, env[name]);
     delete env[name];
   }
-  vi.mocked(searchRentals).mockReset();
 });
 
 afterEach(() => {
@@ -138,34 +129,10 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(rentalDetail.bedrooms).toBeNull();
   });
 
-  it("matches mock rentals by source_url slug and keeps unknown fields null", async () => {
-    vi.mocked(searchRentals).mockResolvedValue({
-      total: 1,
-      source: "mock",
-      results: [
-        {
-          id: "rnt_lau_001",
-          title: "Bright 2BR with Balcony in Laureles",
-          neighborhood: "Laureles",
-          nightly_price: 78,
-          currency: "USD",
-          bedrooms: 2,
-          wifi: true,
-          amenities: ["wifi"],
-          image: "",
-          source_url: "https://mdeai.co/rentals/laureles-2br-balcony",
-          can_schedule_viewing: true,
-          schedule_viewing_url: "https://mdeai.co/rentals/laureles-2br-balcony/schedule-viewing",
-          host_name: "Andrés Restrepo",
-          availability: "Available now",
-          tags: [],
-        },
-      ],
-    });
-
-    const rentalDetail = await getRentalDetail("laureles-2br-balcony");
-
-    expect(rentalDetail?.id).toBe("rnt_lau_001");
-    expect(rentalDetail?.priceMonthly).toBeNull();
+  it("throws RentalSearchUnavailableError — never a demo rental — when no Supabase credentials resolve", async () => {
+    await expect(getRentalDetail("rnt_lau_001")).rejects.toBeInstanceOf(RentalSearchUnavailableError);
+    await expect(getRentalDetail("laureles-2br-balcony")).rejects.toBeInstanceOf(
+      RentalSearchUnavailableError,
+    );
   });
 });

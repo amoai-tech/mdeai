@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { RentalSearchUnavailableError } from "./rental-search-unavailable";
 import {
   embedQueryTextDetailed,
   vectorLiteral,
@@ -116,7 +117,7 @@ export async function searchRentalsIntelligent(
 ): Promise<{
   results: IntelligenceRentalResult[];
   total: number;
-  source: "supabase" | "mock";
+  source: "supabase";
   hybridUsed: boolean;
   embedStatus: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -132,15 +133,9 @@ export async function searchRentalsIntelligent(
   const client = getAnonClient();
 
   if (!client) {
-    return {
-      results: [],
-      total: 0,
-      source: "mock",
-      hybridUsed: false,
-      embedStatus: "skipped",
-      rankExplanation,
-      slots,
-    };
+    // SAN-1089: a missing client is an outage, not an empty marketplace. It used to return
+    // `source: "mock"` with zero rows, which every caller treated as a successful search.
+    throw new RentalSearchUnavailableError("client_unavailable");
   }
 
   let hybridRows: HybridListingRow[] = [];

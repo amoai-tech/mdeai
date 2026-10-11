@@ -10,7 +10,7 @@ vi.mock("@/mastra/tools/search-rentals", () => ({
     Promise.resolve({
       results: [{ id: "r1" }],
       total: 1,
-      source: "mock" as const,
+      source: "supabase" as const,
     }),
   ),
 }));

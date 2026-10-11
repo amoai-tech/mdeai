@@ -22,12 +22,10 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 function buildRetryHref(filters: {
   neighborhood?: string | null;
   beds?: string | null;
-  maxPrice?: string | null;
 }): string {
   const p = new URLSearchParams();
   if (filters.neighborhood) p.set("neighborhood", filters.neighborhood);
   if (filters.beds) p.set("beds", filters.beds);
-  if (filters.maxPrice) p.set("maxPrice", filters.maxPrice);
   const q = p.toString();
   return q ? `/rentals?${q}` : "/rentals";
 }
@@ -45,7 +43,6 @@ export type RentalBrowseViewProps = {
   error: string | null;
   neighborhood: string | null;
   beds: string | null;
-  maxPrice: string | null;
 };
 
 function RentalBrowseViewInner({
@@ -54,13 +51,12 @@ function RentalBrowseViewInner({
   error,
   neighborhood,
   beds,
-  maxPrice,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
-  const retryHref = buildRetryHref({ neighborhood, beds, maxPrice });
+  const retryHref = buildRetryHref({ neighborhood, beds });
 
   const pins = useMemo(
     () =>
@@ -74,20 +70,20 @@ function RentalBrowseViewInner({
   useBrowseMapSync(pins, "rental");
   useBrowseCardScroll();
 
-  const countLabel = formatCountSubtitle(total, results.length);
+  // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
+  // curated or available now — only that listed rentals are verified and published.
+  const subtitle = error
+    ? "Long-stay apartments in Medellín"
+    : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
 
   return (
     <>
       <BrowseLayout
         testId="rentals-browse"
         title="Rentals in Medellín"
-        subtitle={`Curated long-stay apartments — ${countLabel}`}
+        subtitle={subtitle}
         filterBar={
-          <RentalBrowseFilters
-            neighborhood={neighborhood}
-            beds={beds}
-            maxPrice={maxPrice}
-          />
+          <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
         }
         mapSlot={<BrowseMapPanel />}
       >
@@ -112,8 +108,8 @@ function RentalBrowseViewInner({
           {!error && results.length === 0 ? (
             <EmptyState
               testId="rentals-empty"
-              title="No rentals matched"
-              description="Try another neighborhood or price range, or ask the concierge on chat."
+              title="No verified rentals currently match these filters"
+              description="Try another neighborhood or bedroom count, or ask MDE in chat."
               icon={<Building2 className="size-8" aria-hidden />}
             />
           ) : null}
