@@ -4,7 +4,7 @@
 -- so the duplicate gate is phase-aware and is a quality test, not a hard constraint.
 begin;
 
-select plan(20);
+select plan(24);
 
 select is(
   (select count(*)::int from public.development_projects
@@ -20,10 +20,65 @@ select is(
      join public.development_project_sources s on s.id = p.primary_source_id
     where p.publish_state = 'published'
       and p.price_from_cents is not null
-      and s.source_type <> 'developer'
       and coalesce((s.observed_facts ->> 'price_from_cop')::numeric * 100, -1) <> p.price_from_cents),
   0,
-  'gate 2: the primary source supports the canonical price-from');
+  'gate 2: ALL primary sources, including developer, support canonical price');
+
+select is(
+  (select count(*)::integer from public.development_projects
+   where slug in ('faroverde','reserva-serrat-selva','crista')
+     and publish_state='published' and ownership_status='unclaimed'
+     and expected_delivery_year is null),
+  3, 'only the three reviewed historical delivery dates are cleared');
+
+-- Mutate a developer primary source in this rolled-back test transaction:
+-- the same all-source predicate must catch the unsupported canonical price.
+savepoint san1406_bad_developer_price;
+update public.development_project_sources s
+set observed_facts = jsonb_set(s.observed_facts, '{price_from_cop}', '1'::jsonb)
+from public.development_projects p
+where p.slug = 'arrayan' and p.primary_source_id = s.id
+  and s.source_type = 'developer';
+select is(
+  (select count(*)::int from public.development_projects p
+     join public.development_project_sources s on s.id=p.primary_source_id
+     where p.publish_state='published' and p.price_from_cents is not null
+       and coalesce((s.observed_facts->>'price_from_cop')::numeric*100,-1)
+         <> p.price_from_cents),
+  1, 'a mismatched developer-primary source fails the universal price gate');
+rollback to savepoint san1406_bad_developer_price;
+
+-- A previously unreviewed 2021 delivery year must remain untouched.
+savepoint san1406_unrelated_delivery;
+update public.development_projects set expected_delivery_year=2021
+where slug='nexus';
+-- Exact replay of the migration's historical correction predicate.
+update public.development_projects
+set expected_delivery_year=null,
+    delivery_note=coalesce(delivery_note,
+      'Delivery year not reported by a current published source')
+where slug in ('faroverde','reserva-serrat-selva','crista')
+  and publish_state='published'
+  and expected_delivery_year<2026
+  and ownership_status='unclaimed'
+  and coalesce(project_status,'') not in ('delivered','sold_out');
+select is((select expected_delivery_year from public.development_projects
+   where slug='nexus'),2021::smallint,
+   'the delivery cleanup does not change unrelated projects');
+rollback to savepoint san1406_unrelated_delivery;
+
+-- Match each of the six captured projects independently; the total alone
+-- could miss one missing project and a duplicate elsewhere.
+select is(
+ (select jsonb_object_agg(slug, unit_count)
+  from (select p.slug,count(u.id)::integer as unit_count
+        from public.development_projects p
+        left join public.development_unit_types u on u.project_id=p.id
+        where p.slug in ('cittadel','crista','faroverde',
+           'los-cambulos','olium-park','reserva-serrat-selva')
+        group by p.slug) counts),
+ '{"cittadel":5,"crista":1,"faroverde":3,"los-cambulos":4,"olium-park":5,"reserva-serrat-selva":3}'::jsonb,
+ 'all six production-captured projects have their exact normalized unit counts');
 
 select is(
   (select count(*)::int from (

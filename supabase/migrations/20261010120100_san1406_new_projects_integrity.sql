@@ -236,10 +236,13 @@ where s.project_id = p.id
   and (s.observed_facts ->> 'price_from_cop')::numeric * 100 = p.price_from_cents
   and p.ownership_status = 'unclaimed';
 
--- ── 5. Freeze correction to original 2026 review year (replay deterministic) ─
+-- ── 5. Clear only the three reviewed, unsupported old delivery years ────
+-- This is a historical 2026 correction, not a blanket catalog cleanup.
 update public.development_projects
 set expected_delivery_year = null,
     delivery_note = coalesce(delivery_note, 'Delivery year not reported by a current published source')
-where expected_delivery_year < 2026
+where slug in ('faroverde', 'reserva-serrat-selva', 'crista')
+  and publish_state = 'published'
+  and expected_delivery_year < 2026
   and ownership_status = 'unclaimed'
   and coalesce(project_status, '') not in ('delivered', 'sold_out');
