@@ -26,6 +26,7 @@ import {
 import { CategoryMapMarker } from "@/components/maps/markers/CategoryMapMarker";
 import { ClusteredCategoryMarkers } from "@/components/maps/ClusteredCategoryMarkers";
 import { MapPinInfoWindow } from "@/components/maps/MapPinInfoWindow";
+import { SelectedPlaceOverlayCard } from "@/components/maps/SelectedPlaceOverlayCard";
 import { shouldClusterMapPins } from "@/lib/map-clustering";
 
 export function ChatMap({
@@ -65,19 +66,33 @@ export function ChatMap({
         data-map-clustering="false"
         data-e2e-mock-map="true"
       >
-        {renderablePins.map((pin) => (
-          <button
-            key={pin.id}
-            type="button"
-            data-testid="map-pin"
-            data-pin-id={pin.id}
-            data-pin-category={pin.category}
-            aria-label={`${pin.category}: ${pin.title}`}
-            onClick={() => panToPin(pin.id)}
-          >
-            {pin.title}
-          </button>
-        ))}
+        {renderablePins.map((pin) => {
+          const selected = selectedPinId === pin.id;
+          const dimmed = isPinDimmed(pin, activeMapCategory);
+          return (
+            <button
+              key={pin.id}
+              type="button"
+              className="m-2 rounded-full"
+              aria-label={`${pin.category}: ${pin.title}`}
+              onClick={() => panToPin(pin.id)}
+            >
+              <CategoryMapMarker
+                pinId={pin.id}
+                category={pin.category}
+                title={pin.title}
+                selected={selected}
+                dimmed={dimmed}
+                meta={pin.meta}
+              />
+            </button>
+          );
+        })}
+        {selectedPin ? (
+          <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+            <SelectedPlaceOverlayCard pin={selectedPin} />
+          </div>
+        ) : null}
       </div>
     );
   }
