@@ -38,8 +38,7 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def route(prompt: str) -> str:
-    text = prompt.lower()
+def _priority_route(text: str) -> str | None:
     if any(retired in text for retired in RETIRED):
         return "__INVALID__"
     # Explicit local invocation is the narrowest intent. S4 still requires the
@@ -93,6 +92,10 @@ def route(prompt: str) -> str:
         return "merge"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
         return "code-review"
+    return None
+
+
+def _task_route(text: str) -> str | None:
     if any(term in text for term in (
         "audit san-", "audit linear", "audit an existing linear",
         "check whether san-", "existing acceptance criteria and dependencies",
@@ -124,6 +127,10 @@ def route(prompt: str) -> str:
         "plan the work",
     )):
         return "plan"
+    return None
+
+
+def _other_workflow_route(text: str) -> str | None:
     if any(term in text for term in (
         "architecture fit", "architectural fit", "architecture review",
         "architecture decision",
@@ -144,6 +151,10 @@ def route(prompt: str) -> str:
         return "e2e"
     if any(term in text for term in ("research", "official guidance", "evidence")):
         return "research"
+    return None
+
+
+def _domain_or_implementation_route(text: str) -> str:
     direct = {
         "real-estate": ("rental listing", "rental eligibility", "broker viewing"),
         "events": ("event ticket", "event checkout"),
@@ -188,6 +199,14 @@ def route(prompt: str) -> str:
         return "tasks"
     return "direct"
 
+
+def route(prompt: str) -> str:
+    text = prompt.lower()
+    for select in (_priority_route, _task_route, _other_workflow_route):
+        owner = select(text)
+        if owner is not None:
+            return owner
+    return _domain_or_implementation_route(text)
 
 require(SKILL.exists(), "router SKILL.md is missing")
 for skill in SHORT_SKILLS:
