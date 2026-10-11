@@ -40,14 +40,15 @@ set search_path = ''
 as $$
   select case p_source_type
     when 'developer' then 1
-    when 'marketplace' then 2
-    when 'aggregator' then 3
-    else 4
+    when 'government' then 2
+    when 'marketplace' then 3
+    when 'aggregator' then 4
+    else 5
   end
 $$;
 
 comment on function public.development_source_rank(text) is
-  'Trust rank for a New Projects source: developer first, aggregator last (discovery-only).';
+  'Trust rank for a New Projects source: developer, government, marketplace, aggregator, unknown last (discovery-only).';
 
 -- ── 3. One row per genuine typology ─────────────────────────────────────────
 delete from public.development_unit_types u
@@ -138,33 +139,56 @@ on conflict (project_id, source_key) do update set
   source_url = excluded.source_url,
   verified_at = excluded.verified_at;
 
--- ── 4c. Classify the rows whose product type is actually known ──────────────
--- Only the named pilot rows were reviewed. Never classify future developer, commercial
--- or imported typologies merely because their product_class is NULL.
--- Known Olium loft is corrected explicitly below.
+-- ── 4c. Curated unit identities only, never a broad project-wide assumption ──
+-- Future/unreviewed source keys stay NULL until their product is evidenced.
+-- Cittadel, Crista and Reserva are classified by their explicit INSERT data.
 update public.development_unit_types u
 set product_class = 'residential_apartment'
 from public.development_projects p
-where u.project_id = p.id
+where p.id = u.project_id
+  and p.ownership_status = 'unclaimed'
   and u.product_class is null
-  and p.slug in (
-    'arrayan', 'cittadel', 'crista', 'distrito-33', 'faroverde',
-    'grand-coral', 'guayacanes', 'los-cambulos', 'nexus',
-    'nutibara-parkway', 'olium-park', 'palma',
-    'reserva-serrat-selva', 'river-park', 'saman', 'vigo'
-  )
-  and u.source_key not like 'gate-test:%'
-  and p.ownership_status = 'unclaimed';
+  and (p.slug, u.source_key) in (values
+    ('arrayan', 'arrayan-100m-3br'),
+    ('arrayan', 'arrayan-30m-1br'),
+    ('arrayan', 'arrayan-39m-1br'),
+    ('arrayan', 'arrayan-45m-1br'),
+    ('arrayan', 'arrayan-64m-2br'),
+    ('arrayan', 'arrayan-83m-3br'),
+    ('distrito-33', 'distrito-33-27m-1br'),
+    ('distrito-33', 'zonario-26m-1br-291500000'),
+    ('distrito-33', 'zonario-53m-1br-572400000'),
+    ('faroverde', 'zonario-61-5m-2br-416162000'),
+    ('faroverde', 'zonario-65-5m-2br-436993000'),
+    ('faroverde', 'zonario-65m-2br-484000000'),
+    ('guayacanes', 'guayacanes-110m'),
+    ('guayacanes', 'guayacanes-162m'),
+    ('guayacanes', 'guayacanes-96m'),
+    ('los-cambulos', 'zonario-35-2m-1br-295000000'),
+    ('los-cambulos', 'zonario-36m-1br-322000000'),
+    ('los-cambulos', 'zonario-46-7m-2br-356000000'),
+    ('los-cambulos', 'zonario-46m-2br-391000000'),
+    ('olium-park', 'zonario-64-2m-2br-698568000'),
+    ('olium-park', 'zonario-64-9m-2br-709631800'),
+    ('olium-park', 'zonario-72-7m-3br-748059900'),
+    ('olium-park', 'zonario-76-6m-3br-830319700'),
+    ('palma', 'palma-129m-3br'),
+    ('palma', 'palma-150m-3br'),
+    ('palma', 'palma-166m-3br'),
+    ('river-park', 'river-park-47m'),
+    ('saman', 'saman-56m'),
+    ('saman', 'saman-80m'),
+    ('saman', 'saman-89m'),
+    ('vigo', 'vigo-31m')
+  );
 
--- ── 4d. Mixed-product tagging ───────────────────────────────────────────────
--- Olium Park sells a 30 m² loft line beside 64–77 m² homes.
+-- Exact observed Olium loft source identity. Never classify based on size/bedrooms.
 update public.development_unit_types u
 set product_class = 'loft'
 from public.development_projects p
 where p.id = u.project_id
   and p.slug = 'olium-park'
-  and u.bedrooms = 1
-  and u.built_area_m2 <= 40
+  and u.source_key = 'zonario-30m-1br-390000000'
   and p.ownership_status = 'unclaimed';
 
 -- ── 4d. Distrito provenance — the source that supports the canonical price ──
@@ -178,9 +202,11 @@ where p.slug = 'distrito-33'
   and p.ownership_status = 'unclaimed'
   and s.project_id = p.id
   and p.price_from_cents is not null
+  and s.source_url = 'https://www.zonario.co/proyecto/medellin/distrito-33'
   and (s.observed_facts ->> 'price_from_cop')::numeric * 100 = p.price_from_cents;
 
--- ── 4e. Developer sources + primary for Cittadel and Reserva ────────────────
+-- ── 4e. Developer sources; only price-backed developer primary ───────────
+-- Reserva has no developer price evidence: keep Zonario as price-backed primary.
 insert into public.development_project_sources
   (project_id, source_url, source_type, scope, http_status, checked_at,
    fact_status, confidence, notes, observed_facts)
@@ -205,13 +231,14 @@ set primary_source_id = s.id, source_url = s.source_url, verified_at = s.checked
 from public.development_project_sources s
 where s.project_id = p.id
   and s.source_type = 'developer'
-  and p.slug in ('cittadel', 'reserva-serrat-selva')
+  and p.slug = 'cittadel'
+  and (s.observed_facts ->> 'price_from_cop')::numeric * 100 = p.price_from_cents
   and p.ownership_status = 'unclaimed';
 
--- ── 5. Never present an unverified past delivery as current ─────────────────
+-- ── 5. Freeze correction to original 2026 review year (replay deterministic) ─
 update public.development_projects
 set expected_delivery_year = null,
     delivery_note = coalesce(delivery_note, 'Delivery year not reported by a current published source')
-where expected_delivery_year < extract(year from now())::integer
+where expected_delivery_year < 2026
   and ownership_status = 'unclaimed'
   and coalesce(project_status, '') not in ('delivered', 'sold_out');

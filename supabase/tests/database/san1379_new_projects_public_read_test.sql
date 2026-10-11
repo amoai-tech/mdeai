@@ -1,5 +1,5 @@
 -- =============================================================================
--- SAN-1379 · Public New Projects read contract against the SAN-1404 seed
+-- SAN-1379 · Exact pilot public-read contract after SAN-1406 integrity migration
 -- Run with: supabase test db
 --
 -- SAN-1385 owns the schema and the two-partner isolation negatives. This file proves the
@@ -9,14 +9,17 @@
 
 begin;
 
+-- Count only the canonical pilot namespace (16 projects, 41 typologies,
+-- 20 price/layout sources after both ordered SAN-1406 migrations).
+-- Do not weaken to lower bounds: a seed duplication or RLS leak must fail.
 select plan(10);
 
 -- ── anon public read ─────────────────────────────────────────────────────────
 set local role anon;
 select set_config('request.jwt.claim.sub', '', true);
-select ok((select count(*)::int from public.development_projects where source_key like 'medellin:new-project:%') >= 10, 'P1 anon reads at least the 10 seeded projects');
-select ok((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key like 'medellin:new-project:%') >= 18, 'P2 anon reads at least the seeded unit types');
-select ok((select count(*)::int from public.development_project_sources s join public.development_projects p on p.id = s.project_id where p.source_key like 'medellin:new-project:%') >= 11, 'P3 anon reads at least the seeded provenance');
+select is((select count(*)::int from public.development_projects where source_key like 'medellin:new-project:%'), 16, 'P1 anon sees exactly 16 catalog pilot projects');
+select is((select count(*)::int from public.development_unit_types u join public.development_projects p on p.id = u.project_id where p.source_key like 'medellin:new-project:%'), 41, 'P2 anon sees exactly 41 post-integrity unit types');
+select is((select count(*)::int from public.development_project_sources s join public.development_projects p on p.id = s.project_id where p.source_key like 'medellin:new-project:%'), 20, 'P3 anon sees exactly 20 pilot provenance rows');
 select throws_ok(
   $$insert into public.development_projects (source_key, slug, name, publish_state)
     values ('san1379-anon', 'san1379-anon', 'Anon', 'draft')$$,
@@ -37,7 +40,7 @@ reset role;
 -- ── an authenticated non-member gets the same published-only view ────────────
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'e1379000-0000-4000-8000-000000000001', true);
-select ok((select count(*)::int from public.development_projects where source_key like 'medellin:new-project:%') >= 10, 'P6 authenticated non-member reads at least the same seeded projects');
+select is((select count(*)::int from public.development_projects where source_key like 'medellin:new-project:%'), 16, 'P6 non-member sees exactly 16 published pilot projects');
 select is((select count(*)::int from public.development_projects where id = 'a1379000-0000-4000-8000-000000000001'), 0, 'P7 authenticated non-member cannot read a draft project');
 select throws_ok(
   $$insert into public.development_projects (source_key, slug, name, publish_state)
