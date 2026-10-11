@@ -8,6 +8,7 @@ import {
   typeAndSubmit,
   waitForPost,
 } from "./helpers/deterministic-chat";
+import { sendConciergeMessage } from "./helpers/maps-layout";
 
 const PHONE_390 = { width: 390, height: 844 };
 const PHONE_360 = { width: 360, height: 800 };
@@ -51,10 +52,13 @@ async function seedRestaurantPins(page: Page) {
     });
   });
   await gotoDeterministicChat(page);
-  const responsePromise = waitForPost(page, "/api/restaurants/search");
-  await typeAndSubmit(page, RESTAURANT_QUERY);
-  expect((await responsePromise).ok()).toBe(true);
-  await expect(page.getByTestId("restaurant-card")).toHaveCount(3);
+  // Reuse the canonical accepted-submit retry contract. A first submit can be
+  // discarded before the app issues any request; the helper retries only in
+  // that case and never double-submits an accepted request.
+  await sendConciergeMessage(page, RESTAURANT_QUERY);
+  await expect(page.getByTestId("restaurant-card")).toHaveCount(3, {
+    timeout: 20_000,
+  });
 }
 
 async function expectTouchContext(page: Page, viewport: { width: number; height: number }) {
@@ -181,15 +185,17 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
       .filter({ hasNot: page.locator(`[data-pin-id="${selectedPinId}"]`) })
       .first();
 
-    // Mobile browsers can emit compatibility mouse events when a touched modal disappears.
-    // Those events must not replace the map selection underneath the closing sheet.
-    await otherCard.dispatchEvent("mouseover");
+    // Touch pointer entry after a touched modal disappears must not replace the
+    // explicit map selection underneath the closing sheet.
+    await otherCard.dispatchEvent("pointerover", { pointerType: "touch" });
     await expect(selectedCard).toHaveAttribute("data-selected", "true");
     await expect(otherCard).toHaveAttribute("data-selected", "false");
 
-    // Preserve the desktop contract: a real mouse pointer still previews on hover.
+    // Preserve pointing-device preview for desktop mouse and hover-capable stylus.
     await otherCard.dispatchEvent("pointerover", { pointerType: "mouse" });
     await expect(otherCard).toHaveAttribute("data-selected", "true");
+    await selectedCard.dispatchEvent("pointerover", { pointerType: "pen" });
+    await expect(selectedCard).toHaveAttribute("data-selected", "true");
   });
 
   test("Escape still closes before a focused map child can swallow the key", async ({

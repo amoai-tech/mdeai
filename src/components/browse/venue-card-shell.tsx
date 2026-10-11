@@ -105,7 +105,7 @@ export function VenueCardShell({
 
   const previewFromPointer = onPreview
     ? (event: ReactPointerEvent<HTMLElement>) => {
-        if (event.pointerType === "mouse") onPreview();
+        if (event.pointerType === "mouse" || event.pointerType === "pen") onPreview();
       }
     : undefined;
 
