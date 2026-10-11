@@ -14,7 +14,11 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
   const totals = result.match(/routing contract: PASS \((\d+)\/(\d+) cases\)/);
   assert.ok(totals, 'routing contract did not report passing cases');
   assert.equal(totals[1], totals[2], 'not all routing cases passed');
-  assert.ok(Number(totals[1]) >= 54, 'baseline routing coverage shrank');
+  const expected = JSON.parse(readFileSync(
+    resolve(root, '.claude/skills/using-mde-skills/evals/routing-evals.json'), 'utf8'
+  ));
+  assert.equal(Number(totals[1]), expected.length, 'not all configured cases were run');
+  assert.ok(Number(totals[1]) >= 80, 'routing coverage fell below the 80-case baseline');
 
   const instructions = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
   const startup = readFileSync(resolve(root, '.claude/hooks/session-start.mjs'), 'utf8');

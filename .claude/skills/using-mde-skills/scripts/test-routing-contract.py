@@ -70,7 +70,13 @@ def route(prompt: str) -> str:
         "audit the pull request", "merge readiness", "merge-readiness",
     )):
         return "praudit"
-    if any(term in text for term in ("verify after merge", "post-merge verification", "verify merged pr", "post-merge", "merged pr #")):
+    if (any(term in text for term in (
+        "verify after merge", "post-merge verification", "verify merged pr",
+        "post-merge", "merged pr #",
+    )) or (re.search(r"\bverify\b", text) and any(term in text for term in (
+        "after it lands", "once it lands", "after the merge",
+        "after merge", "after merging", "once merged",
+    )))):
         return "merge"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
         return "code-review"
@@ -139,10 +145,20 @@ def route(prompt: str) -> str:
     for owner, terms in direct.items():
         if any(term in text for term in terms):
             return owner
-    # Route explicit, scoped coding instructions; explanatory questions about
-    # how something could be implemented are not instructions to change code.
-    if (re.match(r"^(?:(?:please|can you|could you|i need you to)\s+)?implement\b", text)
-            and not any(term in text for term in ("across the repo", "remaining san"))):
+    # Recognize actionable coding requests, including natural task statements,
+    # without treating explanatory "how to implement?" questions as commands.
+    implement_request = re.match(
+        r"^(?:(?:please\s+)?implement|"
+        r"(?:can|could|would)\s+you\s+(?:please\s+)?implement|"
+        r"(?:i\s+(?:need|want)\s+you\s+to|the\s+task\s+is\s+to|"
+        r"we\s+should|let(?:'s|\s+us)|(?:please\s+)?go\s+ahead\s+and)"
+        r"\s+implement)\b",
+        text,
+    )
+    if (implement_request and not any(term in text for term in (
+        "across the repo", "remaining san", "do not implement",
+        "don't implement", "do not change code", "without coding",
+    ))):
         return "implement"
     if any(term in text for term in (
         "across the repo", "remaining san work", "outstanding linear task",

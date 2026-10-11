@@ -467,5 +467,96 @@
     "expected_owner": "e2e",
     "risk": "S2",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-task-statement",
+    "input": "The task is to implement the feature",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-team-statement",
+    "input": "We should implement this fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-first-person",
+    "input": "I want you to implement the feature",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-go-ahead",
+    "input": "Please go ahead and implement the scoped UI change",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-how-to-not-action",
+    "input": "How can we implement OAuth safely?",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-should-we-not-action",
+    "input": "Should we implement a new search engine?",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-negated-action",
+    "input": "We should implement this fix, but do not implement yet",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-lands",
+    "input": "Verify the merge after it lands",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-verify-pr-after-lands",
+    "input": "Verify PR #260 after it lands on main",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-merging",
+    "input": "Verify the release after merging",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-once-merged",
+    "input": "Verify the user flow once merged",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pre-merge-verify-pr",
+    "input": "Verify PR #260 before merging",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pre-merge-verify-code",
+    "input": "Verify the merge plan before it lands",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
   }
 ]
