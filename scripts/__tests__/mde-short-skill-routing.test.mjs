@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cases, evaluateCase } from '../verify-deepseek-routing.mjs';
 
@@ -18,13 +18,27 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
     resolve(root, '.claude/skills/using-mde-skills/evals/routing-evals.json'), 'utf8'
   ));
   assert.equal(Number(totals[1]), expected.length, 'not all configured cases were run');
-  assert.ok(Number(totals[1]) >= 80, 'routing coverage fell below the 80-case baseline');
+  assert.ok(Number(totals[1]) >= 96, 'routing coverage fell below the 96-case baseline');
 
   const instructions = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
   const startup = readFileSync(resolve(root, '.claude/hooks/session-start.mjs'), 'utf8');
   for (const name of ['errors', 'praudit', 'linear-task', 'linear-audit', 'implement', 'efficient', 'tests']) {
     assert.ok(instructions.includes('\\`'+name+'\\`') || instructions.includes('`'+name+'`'), 'missing routing owner '+name);
     assert.ok(startup.includes(name), 'missing startup owner '+name);
+  }
+  // The Python contract checks these too; guard their exact exposure shape
+  // in the CI-facing JS test so PR reviewers can see every intended owner.
+  for (const name of [
+    'linear-task', 'linear-audit', 'praudit', 'errors', 'efficient', 'tests',
+    'plan', 'architect', 'implement', 'progress', 'prod', 'merge', 'e2e',
+  ]) {
+    const exposed = resolve(root, '.agents/skills', name, 'SKILL.md');
+    assert.ok(lstatSync(exposed).isSymbolicLink(), name + ': missing mirror symlink');
+    assert.equal(
+      readFileSync(exposed, 'utf8'),
+      readFileSync(resolve(root, '.claude/skills', name, 'SKILL.md'), 'utf8'),
+      name + ': mirror does not resolve to canonical skill',
+    );
   }
   assert.match(instructions, /S4 verification stays independent/);
   for (const name of ['architect', 'e2e']) {

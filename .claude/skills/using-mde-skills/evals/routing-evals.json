@@ -558,5 +558,117 @@
     "expected_owner": "direct",
     "risk": "S2",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-rental",
+    "input": "For the rental feature, please implement the new UI",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-bug",
+    "input": "Regarding the bug, can you implement a fix?",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-team",
+    "input": "For the booking journey, we should implement the fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-indent",
+    "input": "  Please implement the scoped page fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-howto",
+    "input": "For the rental feature, how should we implement search?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-negated",
+    "input": "Regarding the bug, please do not implement the fix",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-asking",
+    "input": "For rental listings, should we implement a new engine?",
+    "expected_owner": "real-estate",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-explain",
+    "input": "Please explain how to implement the rental UI",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-completes",
+    "input": "Verify the deployment works after merge completes",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-the-merge",
+    "input": "Verify the production journey after the merge",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-two-stages",
+    "input": "Verify PR #260 before merge and later verify the deployment after merge completes",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-post-plan",
+    "input": "Verify PR #260 before merging; document post-merge checks",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-summary",
+    "input": "Review PR #260 before it lands, then verify after merge",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-merger",
+    "input": "Verify the corporate merger paperwork",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-mergeable",
+    "input": "Verify the mergeable state before merging PR #260",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-lands",
+    "input": "Verify that the plane lands on time",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
   }
 ]

@@ -70,13 +70,26 @@ def route(prompt: str) -> str:
         "audit the pull request", "merge readiness", "merge-readiness",
     )):
         return "praudit"
-    if (any(term in text for term in (
-        "verify after merge", "post-merge verification", "verify merged pr",
-        "post-merge", "merged pr #",
-    )) or (re.search(r"\bverify\b", text) and any(term in text for term in (
-        "after it lands", "once it lands", "after the merge",
-        "after merge", "after merging", "once merged",
-    )))):
+    # A pre-merge review wins when a request mentions both before/after
+    # stages. Match whole merge phrases so "merger"/"mergeable" cannot trigger.
+    pre_merge = re.search(
+        r"\b(?:before (?:the )?merge|before merging|before (?:it|the pr) lands|"
+        r"pre[- ]merge|not yet merged)\b",
+        text,
+    )
+    post_merge = re.search(
+        r"\b(?:post[- ]merge|merged pr\s*#\s*\d+|"
+        r"after (?:the )?merg(?:e(?:d|s)?|ing)|once merged)\b",
+        text,
+    )
+    landed_merge = (
+        re.search(r"\b(?:after it lands|once it lands)\b", text)
+        and re.search(r"\b(?:pr|pull request|merge|merged|main|release)\b", text)
+    )
+    if not pre_merge and (
+        post_merge
+        or (re.search(r"\b(?:verify|check|validate)\b", text) and landed_merge)
+    ):
         return "merge"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
         return "code-review"
@@ -147,13 +160,22 @@ def route(prompt: str) -> str:
             return owner
     # Recognize actionable coding requests, including natural task statements,
     # without treating explanatory "how to implement?" questions as commands.
+    actionable_text = text.strip()
+    # Allow a short scope preface without interpreting how-to questions
+    # or arbitrary mid-sentence mentions as instructions to write code.
+    context_prefix = re.match(
+        r"^(?:for|regarding|about|concerning)\s+[^,\n]{1,120},\s*",
+        actionable_text,
+    )
+    if context_prefix:
+        actionable_text = actionable_text[context_prefix.end():]
     implement_request = re.match(
         r"^(?:(?:please\s+)?implement|"
         r"(?:can|could|would)\s+you\s+(?:please\s+)?implement|"
         r"(?:i\s+(?:need|want)\s+you\s+to|the\s+task\s+is\s+to|"
         r"we\s+should|let(?:'s|\s+us)|(?:please\s+)?go\s+ahead\s+and)"
         r"\s+implement)\b",
-        text,
+        actionable_text,
     )
     if (implement_request and not any(term in text for term in (
         "across the repo", "remaining san", "do not implement",
