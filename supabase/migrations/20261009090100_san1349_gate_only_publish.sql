@@ -66,12 +66,12 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  -- Publication never reaches this UPDATE (refused above), so there are no
+  -- published_at/published_by/status/moderation branches for a published target.
   update public.apartments
   set
     listing_workflow_status = p_target_status,
     ready_for_review_at = case when p_target_status = 'ready_for_review' then now() else ready_for_review_at end,
-    published_at = case when p_target_status = 'published' then now() else published_at end,
-    published_by = case when p_target_status = 'published' then v_uid else published_by end,
     paused_at = case when p_target_status = 'paused' then now() else paused_at end,
     rejection_reason = case
       when p_target_status = 'rejected' then p_rejection_reason
@@ -79,12 +79,10 @@ begin
       else rejection_reason
     end,
     status = case
-      when p_target_status = 'published' then 'active'
       when p_target_status = 'paused' then 'inactive'
       else status
     end,
     moderation_status = case
-      when p_target_status = 'published' then 'approved'
       when v_row.listing_workflow_status = 'rejected' and p_target_status = 'draft' then 'pending'
       else moderation_status
     end,
@@ -125,6 +123,11 @@ begin
   end if;
 
   -- SAN-1349: the canonical, evidence-gated publication path.
+  --
+  -- auth.uid() reads request.jwt.claim.sub (the caller's JWT), NOT current_user, so
+  -- this SECURITY DEFINER wrapper still stamps the calling broker as published_by.
+  -- The ownership check above is the authorization boundary; this argument is
+  -- attribution, and publish_verified_rental re-checks the actor against the owner.
   return public.publish_verified_rental(p_apartment_id, auth.uid());
 end;
 $$;

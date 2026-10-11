@@ -99,9 +99,11 @@ select is(
   (select listing_workflow_status || '/' || status || '/' || moderation_status
      from public.apartments where id='b1349000-0000-4000-8000-000000000002'),
   'published/active/approved', 'B4: the evidenced listing is live');
+-- auth.uid() reads request.jwt.claim.sub, so a SECURITY DEFINER stamp must equal the
+-- caller, not the function owner (postgres has no uuid, so this is the exact proof).
 select is(
   (select published_by from public.apartments where id='b1349000-0000-4000-8000-000000000002'),
-  'a1349000-0000-4000-8000-000000000001'::uuid, 'B5: publication records the trusted actor');
+  (select auth.uid()), 'B5: published_by equals auth.uid() (the caller), not the definer owner');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- C · refusals and remaining wrappers
