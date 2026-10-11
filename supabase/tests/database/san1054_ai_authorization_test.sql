@@ -60,12 +60,12 @@ values
    'authenticated', 'authenticated', 'san1054-broker-b@example.com',
    extensions.crypt('san1054-fixture', extensions.gen_salt('bf')), now(), now(), now());
 
-insert into public.landlord_profiles (id, user_id, display_name, verification_status)
+insert into public.landlord_profiles (id, user_id, display_name, verification_status, verified_at)
 values
   ('a1054000-0000-4000-8000-000000000011', 'a1054000-0000-4000-8000-000000000001',
-   'SAN1054 Broker A', 'approved'),
+   'SAN1054 Broker A', 'approved', now()),
   ('a1054000-0000-4000-8000-000000000012', 'a1054000-0000-4000-8000-000000000002',
-   'SAN1054 Broker B', 'approved');
+   'SAN1054 Broker B', 'approved', now());
 
 insert into public.apartments (id, title, slug, neighborhood, status, moderation_status,
                                landlord_id, listing_workflow_status, available_to)
@@ -85,6 +85,22 @@ values
   -- assert that a broker resolves no landlord id for an unowned listing.
   ('a1054000-0000-4000-8000-000000000024', 'SAN1054 unowned active', 'san1054-unowned', 'Laureles',
    'active', 'pending', null, 'published', '2099-12-31');
+
+-- SAN-1349: ...0021 is published through publish_listing; give it the full launch contract.
+update public.apartments
+   set price_monthly = 2900000, currency = 'COP',
+       available_from = current_date - 1,
+       address = 'SAN1054 A address',
+       latitude = 6.2447, longitude = -75.5916
+ where id = 'a1054000-0000-4000-8000-000000000021';
+insert into public.property_verifications (apartment_id, status, verified_at, metadata)
+values ('a1054000-0000-4000-8000-000000000021', 'verified', now(),
+        '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb);
+insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
+values ('a1054000-0000-4000-8000-000000000021', 'san1054/a.jpg', 'image/jpeg', 'authorized');
+insert into public.rental_freshness_log (listing_id, checked_at, status)
+values ('a1054000-0000-4000-8000-000000000021', now(), 'active');
+
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · CONTRACT — the ACL shape that makes the behavioural results meaningful.

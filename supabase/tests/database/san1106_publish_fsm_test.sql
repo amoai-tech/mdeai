@@ -34,12 +34,12 @@ values
    'authenticated', 'authenticated', 'san1106-broker-b@example.com',
    extensions.crypt('san1106-fixture', extensions.gen_salt('bf')), now(), now(), now());
 
-insert into public.landlord_profiles (id, user_id, display_name, verification_status)
+insert into public.landlord_profiles (id, user_id, display_name, verification_status, verified_at)
 values
   ('a1106000-0000-4000-8000-000000000011', 'a1106000-0000-4000-8000-000000000001',
-   'SAN1106 Broker A', 'approved'),
+   'SAN1106 Broker A', 'approved', now()),
   ('a1106000-0000-4000-8000-000000000012', 'a1106000-0000-4000-8000-000000000002',
-   'SAN1106 Broker B', 'approved');
+   'SAN1106 Broker B', 'approved', now());
 
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
@@ -63,6 +63,22 @@ values
   ('b1106000-0000-4000-8000-000000000006', 'SAN1106 A bypass', 'san1106-a-bypass',
    'Laureles', 'inactive', 'pending', 'draft',
    'a1106000-0000-4000-8000-000000000011', '2099-12-31');
+
+-- SAN-1349: B1 is the publishable fixture — give it the full canonical launch contract.
+update public.apartments
+   set price_monthly = 2900000, currency = 'COP',
+       available_from = current_date - 1,
+       address = 'SAN1106 A address',
+       latitude = 6.2447, longitude = -75.5916
+ where id = 'b1106000-0000-4000-8000-000000000001';
+insert into public.property_verifications (apartment_id, status, verified_at, metadata)
+values ('b1106000-0000-4000-8000-000000000001', 'verified', now(),
+        '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb);
+insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
+values ('b1106000-0000-4000-8000-000000000001', 'san1106/a.jpg', 'image/jpeg', 'authorized');
+insert into public.rental_freshness_log (listing_id, checked_at, status)
+values ('b1106000-0000-4000-8000-000000000001', now(), 'active');
+
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · CONTRACT — FSM entry point, authenticated-only wrappers, audit columns.
@@ -211,7 +227,7 @@ select is(
 
 select throws_ok(
   $$select public.transition_listing_workflow('b1106000-0000-4000-8000-000000000003'::uuid,'published')$$,
-  '23514', null, 'D1: draft → published raises check_violation');
+  '42501', null, 'D1: draft → published is reserved for publish_verified_rental (42501)');
 select throws_ok(
   $$select public.transition_listing_workflow('b1106000-0000-4000-8000-000000000004'::uuid,'draft')$$,
   '23514', null, 'D2: published → draft raises check_violation');
