@@ -105,7 +105,9 @@ as $$
 declare
   v_row public.apartments;
 begin
-  select * into v_row from public.apartments where id = p_apartment_id;
+  -- Lock before ownership and same-state checks, so both decisions use the
+  -- same row version. The delegated canonical publisher retains its own lock.
+  select * into v_row from public.apartments where id = p_apartment_id for update;
   if not found then
     raise exception 'apartment not found' using errcode = 'P0002';
   end if;
