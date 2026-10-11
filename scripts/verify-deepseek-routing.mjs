@@ -5,14 +5,29 @@ import { pathToFileURL } from 'node:url';
 
 export const DSH_VERSION = '0.1.5-rc.2';
 
+// Do not include expected owner or verifier values in a probe prompt.
+// Otherwise a model can simply echo the answer without discovering skills.
+const outputFormat = 'Reply with exactly one line in this format: owner=<skill-name> verifier=<true|false>. Pick the most appropriate skill from the project skill catalog. Do not edit files.';
+
 export const cases = [
-  { name: 'copilotkit', prompt: 'Fix a CopilotKit generative UI rendering bug. Return exactly one line: owner=copilotkit verifier=false', owner: 'copilotkit', verifier: false },
-  { name: 'systematic-debugging', prompt: 'The application build is failing and we do not know which subsystem is responsible. Return exactly one line: owner=systematic-debugging verifier=false', owner: 'systematic-debugging', verifier: false },
-  { name: 'supabase-s4', prompt: 'Change Supabase RLS tenant access rules in production. Return exactly one line: owner=supabase verifier=true', owner: 'supabase', verifier: true },
-  { name: 'mastra', prompt: 'Fix a known Mastra workflow suspend/resume bug. Return exactly one line: owner=mastra verifier=false', owner: 'mastra', verifier: false },
-  { name: 'gemini', prompt: 'Fix a known Gemini model/provider configuration bug. Return exactly one line: owner=gemini verifier=false', owner: 'gemini', verifier: false },
-  { name: 'stripe-s4', prompt: 'Fix a production Stripe payment retry that could duplicate a charge. Return exactly one line: owner=stripe verifier=true', owner: 'stripe', verifier: true },
-];
+  { name: 'copilotkit', prompt: 'Fix a known CopilotKit generative UI rendering bug.', owner: 'copilotkit', verifier: false },
+  { name: 'unknown-build-failure', prompt: 'The application build suddenly fails and nobody knows the cause. Diagnose the root cause.', owner: 'errors', verifier: false },
+  { name: 'supabase-s4', prompt: 'Change Supabase RLS tenant access rules in production.', owner: 'supabase', verifier: true },
+  { name: 'mastra', prompt: 'Fix a known Mastra workflow suspend/resume bug.', owner: 'mastra', verifier: false },
+  { name: 'gemini', prompt: 'Fix a known Gemini model/provider configuration bug.', owner: 'gemini', verifier: false },
+  { name: 'stripe-s4', prompt: 'Fix a production Stripe payment retry that could duplicate a charge.', owner: 'stripe', verifier: true },
+  { name: 'short-praudit', prompt: 'Audit GitHub PR #258 for merge readiness, review comments, security and remaining blockers.', owner: 'praudit', verifier: false },
+  { name: 'short-linear-task', prompt: 'Rewrite SAN-1107 as a precise Linear task with ordered implementation steps and acceptance criteria.', owner: 'linear-task', verifier: false },
+  { name: 'short-linear-audit', prompt: 'Check whether SAN-1107 is stale by auditing its existing acceptance criteria and dependencies. Do not rewrite it.', owner: 'linear-audit', verifier: false },
+  { name: 'short-efficient', prompt: 'Find a faster and simpler alternative to adding a second rental search engine by reusing MDE search.', owner: 'efficient', verifier: false },
+  { name: 'short-tests', prompt: 'Design a regression test plan for renter viewing requests, including retries and unauthorized access.', owner: 'tests', verifier: false },
+  { name: 'short-plan', prompt: 'Write an implementation plan for the next rental release. Do not modify code.', owner: 'plan', verifier: false },
+  { name: 'short-implement', prompt: 'Implement a previously scoped, small event-page UI change.', owner: 'implement', verifier: false },
+  { name: 'short-progress', prompt: 'Report verified project progress and what remains blocked.', owner: 'progress', verifier: false },
+  { name: 'review-near-miss', prompt: 'Review this existing PR diff for coding regressions; do not assess merge readiness.', owner: 'code-review', verifier: false },
+  { name: 'testing-near-miss', prompt: 'Run the existing tests and interpret test failures, without designing a new plan.', owner: 'testing', verifier: false },
+].map((item) => ({ ...item, prompt: item.prompt + ' ' + outputFormat }));
+
 
 export function extractFinalAnswer(output) {
   const lines = String(output).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

@@ -9,18 +9,22 @@ Use this skill only when ownership is ambiguous and the request is non-trivial. 
 
 ## Routing contract
 
-The router chooses one owner and stops.
+The router chooses one owner and stops. **Specific requested outcome beats a broad domain or lifecycle label**; use the short skill for its scoped job, and read a deep/domain skill only for necessary rules.
 
-- ambiguous substantial implementation → `tasks`
-- task lifecycle, worktree/branch setup, implementation/test-loop selection, PR shipping, or post-merge cleanup → `tasks`
-- unknown failure → `systematic-debugging`
-- test strategy/TDD, regression proof, test execution, or test interpretation → `testing`
-- research/evidence → `research`
-- existing PR/diff → `code-review`
-- Done/merge/production proof → `task-verifier`
-- obvious domain/vendor request → invoke the matching canonical skill directly
+- create/rewrite one Linear issue → `linear-task`; read-only task audit → `linear-audit`
+- PR merge-readiness audit → `praudit`; existing PR/diff code review → `code-review`
+- bug/root-cause diagnosis, unknown failure → `errors`; deep methodology → `systematic-debugging`
+- design regression coverage → `tests`; test strategy/TDD/execution → `testing`; browser E2E → `e2e`
+- request a faster reuse-first option → `efficient`; detailed reuse/source discipline → `ponytail`
+- design a plan without modifying code → `plan`; architectural fit → `architect`
+- implement scoped work → `implement`
+- ambiguous substantial implementation, worktree/PR lifecycle and shipping → `tasks`
+- post-merge outcome verification → `merge`; merged worktree cleanup → `tasks`
+- independently prove Done/merge/production safety → `task-verifier`; deployed release certification → `prod`
+- research/evidence → `research`; domain-specific factual work → matching canonical domain owner
+- explicit short-skill invocation → requested short skill within its permitted scope
 
-Do not plan implementation steps, choose support arrays, manage parallelization, manage Linear handoff, or duplicate domain/vendor instructions here.
+Use `tasks`, `systematic-debugging`, `testing`, `code-review`, and specialist skills for deeper guidance, not as automatic substitutes for a matching short workflow. Keep independent S4 verification and the repo's domain security rules. Do not duplicate any workflow implementation in this router.
 
 ## S4 safety
 

@@ -1,0 +1,1 @@
+../../../.claude/skills/mermaid/SKILL.md

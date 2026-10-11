@@ -52,8 +52,11 @@ ${log || "(no commits)"}
 - Simple task → use the directly relevant skill.
 - Ambiguous/multi-system task → \`using-mde-skills\` only when ownership is genuinely unclear.
 - Task lifecycle, worktree/PR shipping, and post-merge execution → \`tasks\`.
-- Failure with unknown cause → \`systematic-debugging\`.
-- Existing diff/PR review → \`code-review\`.
+- Diagnose unknown failure → \`errors\` (deep reference: \`systematic-debugging\`).
+- PR merge-readiness audit → \`praudit\`; code/diff review → \`code-review\`.
+- Create/clean one Linear issue → \`linear-task\`; audit an existing issue → \`linear-audit\`.
+- Implement scoped changes → \`implement\`; find simpler reuse-first approach → \`efficient\`.
+- Design tests → \`tests\`; run/tests-first work → \`testing\`.
 - Independent Done/merge/production proof → \`task-verifier\`.
 - \`lean-dev-flow\`, \`mde-worktree-pr-flow\`, and \`mde-task-lifecycle\` are retired.
 `;

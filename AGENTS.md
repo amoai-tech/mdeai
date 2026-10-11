@@ -56,23 +56,33 @@ If a detailed rule already lives in a canonical skill, link to it here rather th
 
 ## Skill routing
 
-Use the narrowest owner directly. When ownership is ambiguous, use `using-mde-skills` to choose exactly one canonical execution owner, then stop routing. **Known domain beats generic workflow**: if the request names a canonical domain skill, route there even when it says bug, broken, failing, or debug. Use `systematic-debugging` only when the responsible root cause is genuinely unknown.
+**Choose the user's requested outcome, not just the technical noun.** Project skills live in `.claude/skills/<name>/SKILL.md` and are discoverable to compatible harnesses from `.agents/skills/<name>/SKILL.md`. When a request matches a narrow short skill, use it as the workflow entry point; load the established domain/deep skill **as a reference when relevant**, without starting a second competing workflow. An explicit short-skill invocation wins within its safe scope. When ownership remains ambiguous, `using-mde-skills` selects one owner and stops. Simple factual S0 questions need no skill.
 
-- Simple domain/stack work → the relevant specialist skill.
-- Reuse-before-build and evidence receipts → `ponytail` (runs *before* implementation ownership; never replaces the domain owner).
-- Substantial or ambiguous implementation, PR creation, review handling → `tasks`.
-- Unknown failure/root cause → `systematic-debugging`.
-- Test strategy, test-first work, regression proof → `testing`.
-- Existing diff/PR review → `code-review`; when Codacy is available, layer `codacy-code-review` on top rather than replacing the review owner.
-- Codacy PR loop → local `codacy-analysis` preflight first; after fixes/tests and push, run `codacy pull-request <PR> --reanalyze-and-wait`, then `--diff`. Cloud reanalysis is separate from Codacy AI Reviewer; request AI Reviewer only on the final pushed HEAD when its review comments are wanted.
-- Research needing primary sources → `research`.
-- Done, merge, or production claims → `task-verifier`.
-- UI state/interaction design → `wireframe`.
-- Architecture/state/dependency visualization → `mermaid-diagrams`.
+| Request intent | Primary skill | Boundary / optional deeper reference |
+| --- | --- | --- |
+| Diagnose an unknown bug/crash/regression | `errors` | `systematic-debugging`; domain skill for specialist facts |
+| Audit whether an existing PR is merge-ready | `praudit` | `code-review` for deep diff review; `task-verifier` for independent proof |
+| Review code/diff without a merge decision | `code-review` | Domain skill for subsystem rules |
+| Create or rewrite **one** Linear issue | `linear-task` | `tasks` for subsequent implementation lifecycle |
+| Audit an existing Linear issue (read-only) | `linear-audit` | `task-verifier` for independently proving Done |
+| Implement an already scoped change | `implement` | `tasks` for worktrees, PR, review and shipping; domain skill for specifics |
+| Plan implementation without changing code | `plan` | `architect` for architecture boundaries |
+| Evaluate architecture and service boundaries | `architect` | Relevant domain skill for technical contracts |
+| Find a faster/simpler/reused solution | `efficient` | `ponytail` retains reusable proof and source-receipt rules |
+| Design tests, cases, or coverage | `tests` | `testing` for executing tests/TDD; `e2e` for browser journeys |
+| Validate a real browser/user journey | `e2e` | `testing` for execution and regression proof |
+| Verify after a merge | `merge` | `tasks` for worktree cleanup; `task-verifier` for independent Done |
+| Certify a deployed production release | `prod` | `task-verifier` independently challenges readiness claims |
+| Report evidence-based work status | `progress` | Linear and GitHub remain sources of truth |
+| Research current technical behavior | `research` | Canonical single `research` owner, short workflow in references |
+| Work on Supabase/RLS/migration specifics | `supabase` | Canonical security owner; short workflow in references |
+| Known domain implementation or question | Matching domain skill | E.g., `real-estate`, `events`, `copilotkit`, `mastra`, `stripe` |
 
-**S4 work needs independent verification before Done:** payments or financial side effects; auth, RLS, or tenant boundaries; secrets and security controls; destructive or irreversible production-data changes; duplicate- or retry-sensitive irreversible external side effects. S4 applies even when ownership is obvious and the router was bypassed. Ordinary domain bugs and implementation work are not S4.
+**Higher-priority exceptions:** explicit lifecycle worktree/PR shipping belongs to `tasks`; test execution and test-first work to `testing`; independent Done/exact-head release claims to `task-verifier`; security-sensitive domain operations retain their domain safety rules. Do not let an `errors` or `implement` entry point bypass Supabase RLS, Stripe payment, or other S4 controls. For Codacy PR findings, use `codacy` as the concise loop and `codacy-code-review` for deep reviewer guidance. Perform Codacy local analysis before cloud reanalysis; request AI Reviewer only on the final pushed HEAD.
 
-Do not restore retired lifecycle owners (`mde-task-lifecycle`, `lean-dev-flow`, `mde-worktree-pr-flow`) or the old PR #45 routing machinery.
+**ChatGPT working through Desktop Commander / GitHub:** ChatGPT does not automatically install repository skills into ChatGPT. For a substantive MDE task, read this file, identify the narrowest matching skill in `.claude/skills/<name>/SKILL.md` (same content exposed in `.agents/skills/`), read it through the connected Desktop Commander or source connector, then follow it. Load deeper references only as needed. Never claim a skill was loaded without reading it.
+
+**S4 verification stays independent:** payment side effects; auth/RLS/tenant boundaries; secrets/security controls; destructive production data; duplicate/retry-sensitive irreversible actions. The execution skill must hand independent proof to `task-verifier`. No self-certification. Never restore retired lifecycle skills (`mde-task-lifecycle`, `lean-dev-flow`, `mde-worktree-pr-flow`).
 
 ## Shared invariants
 
