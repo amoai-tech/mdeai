@@ -181,8 +181,9 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     await expect(trigger).toBeFocused();
 
     const otherCard = page
-      .locator('[data-testid="restaurant-card"]')
-      .filter({ hasNot: page.locator(`[data-pin-id="${selectedPinId}"]`) })
+      .locator(
+        `[data-testid="restaurant-card"]:not([data-pin-id="${selectedPinId}"])`,
+      )
       .first();
 
     // Touch pointer entry after a touched modal disappears must not replace the
