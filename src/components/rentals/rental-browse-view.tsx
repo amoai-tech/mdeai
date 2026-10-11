@@ -56,7 +56,7 @@ function RentalBrowseViewInner({
   beds,
   maxPrice,
 }: RentalBrowseViewProps) {
-  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
@@ -72,6 +72,7 @@ function RentalBrowseViewInner({
   );
 
   useBrowseMapSync(pins, "rental");
+  const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
   const countLabel = formatCountSubtitle(total, results.length);
@@ -131,8 +132,9 @@ function RentalBrowseViewInner({
                     key={r.id}
                     rental={r}
                     testId={`rental-card-${r.id}`}
-                    selected={selectedPinId === pinId}
-                    onSelect={() => setSelectedPinId(pinId)}
+                    selected={mappedIds.has(pinId) && selectedPinId === pinId}
+                    onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+                    onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={() =>
                       openScheduleViewing({
                         listingId: r.id,

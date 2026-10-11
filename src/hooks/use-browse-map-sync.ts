@@ -8,16 +8,23 @@ export function useBrowseMapSync(
   pins: MapPin[],
   category: MapPinCategory,
 ) {
-  const { mergePinsByCategory, requestFitBounds } = useMapContext();
+  const { mergePinsByCategory, requestFitBounds, selectedPinId, setSelectedPinId } = useMapContext();
   const prevKeyRef = useRef("");
 
   useEffect(() => {
-    const key = pins.map((p) => `${p.id}:${p.lat}:${p.lng}`).join(",");
+    const key = `${category}:${pins
+      .map((p) => `${p.id}:${p.lat}:${p.lng}:${p.title}:${p.subtitle ?? ""}`)
+      .sort()
+      .join("|")}`;
     if (key === prevKeyRef.current) return;
     prevKeyRef.current = key;
     mergePinsByCategory(category, pins);
+    // Search/filter changes must not leave an old rental highlighted after its pin disappears.
+    if (selectedPinId?.startsWith(`${category}-`) && !pins.some((pin) => pin.id === selectedPinId)) {
+      setSelectedPinId(null);
+    }
     if (pins.length >= 2) {
       requestFitBounds();
     }
-  }, [pins, category, mergePinsByCategory, requestFitBounds]);
+  }, [pins, category, mergePinsByCategory, requestFitBounds, selectedPinId, setSelectedPinId]);
 }

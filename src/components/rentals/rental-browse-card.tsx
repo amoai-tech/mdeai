@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 import { formatRentalPrices } from "@/lib/rental-display";
+import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -57,6 +58,8 @@ type RentalBrowseCardProps = {
   testId?: string;
   selected?: boolean;
   onSelect?: () => void;
+  /** Hover/focus highlights the pin without moving the map camera. */
+  onPreview?: () => void;
   /**
    * SAN-478 — opens the shared viewing modal in place.
    *
@@ -117,6 +120,7 @@ export function RentalBrowseCard({
   testId,
   selected,
   onSelect,
+  onPreview,
   onSchedule,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
@@ -127,14 +131,14 @@ export function RentalBrowseCard({
   );
   const chips = topAmenities(rental.amenities);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
-  const pinId = `rental-${rental.id}`;
+  const pinId = rentalToMapPin(rental)?.id;
   // SAN-1349: the viewing action requires the explicit requestability proof.
   // SAN-478: it also requires somewhere to send the click. A listing with no canonical
   // owner stays browseable but can never expose a viewing CTA, so the UI cannot advertise
   // an action the database will reject — and with no handler there is nothing to open.
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
-  const preview = () => onSelect?.();
-  const interactive = Boolean(onSelect);
+  const preview = () => (onPreview ?? onSelect)?.();
+  const interactive = Boolean(onSelect && pinId);
 
   const handleBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -155,7 +159,7 @@ export function RentalBrowseCard({
       onPreview={interactive ? preview : undefined}
       bodyRole={interactive ? "button" : undefined}
       bodyTabIndex={interactive ? 0 : undefined}
-      bodyAriaLabel={`Select ${rental.title} on map`}
+      bodyAriaLabel={interactive ? `Select ${rental.title} on map` : undefined}
       onBodyClick={interactive ? () => onSelect?.() : undefined}
       onBodyKeyDown={interactive ? handleBodyKeyDown : undefined}
       media={
