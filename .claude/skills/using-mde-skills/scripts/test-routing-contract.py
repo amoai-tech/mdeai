@@ -27,6 +27,10 @@ RETIRED = {
 }
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED
 WORKFLOW = {"tasks", "systematic-debugging", "testing", "research", "code-review", "task-verifier"}
+SHORT_SKILLS = (
+    "linear-task", "linear-audit", "praudit", "errors", "efficient", "tests",
+    "plan", "architect", "implement", "progress", "prod", "merge", "e2e",
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -40,11 +44,7 @@ def route(prompt: str) -> str:
         return "__INVALID__"
     # Explicit local invocation is the narrowest intent. S4 still requires the
     # independent verifier; this classifier chooses only the workflow owner.
-    short_skills = (
-        "linear-task", "linear-audit", "praudit", "errors", "efficient", "tests",
-        "plan", "architect", "implement", "progress", "prod", "merge", "e2e",
-    )
-    for skill in short_skills:
+    for skill in SHORT_SKILLS:
         if re.search(r"(?<![a-z0-9])[@$]" + re.escape(skill) + r"(?![a-z0-9-])", text):
             return skill
 
@@ -120,11 +120,6 @@ def route(prompt: str) -> str:
     )):
         return "prod"
     if any(term in text for term in (
-        "verify after merge", "post-merge verification",
-        "verify merged pr", "verify pr #",
-    )):
-        return "merge"
-    if any(term in text for term in (
         "browser e2e", "playwright journey", "test the browser journey",
     )):
         return "e2e"
@@ -144,7 +139,10 @@ def route(prompt: str) -> str:
     for owner, terms in direct.items():
         if any(term in text for term in terms):
             return owner
-    if "implement" in text and "across the repo" not in text and "remaining san" not in text:
+    # Route explicit, scoped coding instructions; explanatory questions about
+    # how something could be implemented are not instructions to change code.
+    if (re.match(r"^(?:(?:please|can you|could you|i need you to)\s+)?implement\b", text)
+            and not any(term in text for term in ("across the repo", "remaining san"))):
         return "implement"
     if any(term in text for term in (
         "across the repo", "remaining san work", "outstanding linear task",
@@ -154,6 +152,10 @@ def route(prompt: str) -> str:
 
 
 require(SKILL.exists(), "router SKILL.md is missing")
+for skill in SHORT_SKILLS:
+    require(skill in CANONICAL, f"routing refers to missing short skill: {skill}")
+    require((ROOT / ".agents/skills" / skill / "SKILL.md").is_file(),
+            f"short skill not exposed to agents: {skill}")
 for retired in RETIRED:
     require(not (ROOT / ".claude/skills" / retired).exists(), f"retired skill still exists: {retired}")
 text = SKILL.read_text()

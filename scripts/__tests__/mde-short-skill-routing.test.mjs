@@ -11,7 +11,10 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
   const result = execFileSync('python3', [
     '.claude/skills/using-mde-skills/scripts/test-routing-contract.py',
   ], { cwd: root, encoding: 'utf8' });
-  assert.match(result, /routing contract: PASS \(54\/54 cases\)/);
+  const totals = result.match(/routing contract: PASS \((\d+)\/(\d+) cases\)/);
+  assert.ok(totals, 'routing contract did not report passing cases');
+  assert.equal(totals[1], totals[2], 'not all routing cases passed');
+  assert.ok(Number(totals[1]) >= 54, 'baseline routing coverage shrank');
 
   const instructions = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
   const startup = readFileSync(resolve(root, '.claude/hooks/session-start.mjs'), 'utf8');
@@ -20,6 +23,9 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
     assert.ok(startup.includes(name), 'missing startup owner '+name);
   }
   assert.match(instructions, /S4 verification stays independent/);
+  for (const name of ['architect', 'e2e']) {
+    assert.ok(instructions.includes('`' + name + '`'), 'missing short skill documentation: ' + name);
+  }
 });
 
 test('DeepSeek routing probes exercise short skills without echoing their answers', () => {

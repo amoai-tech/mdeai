@@ -67,8 +67,10 @@ If a detailed rule already lives in a canonical skill, link to it here rather th
 | Audit an existing Linear issue (read-only) | `linear-audit` | `task-verifier` for independently proving Done |
 | Implement an already scoped change | `implement` | `tasks` for worktrees, PR, review and shipping; domain skill for specifics |
 | Plan implementation without changing code | `plan` | `architect` for architecture boundaries |
+| Evaluate architecture and service boundaries | `architect` | Relevant domain skill for technical contracts |
 | Find a faster/simpler/reused solution | `efficient` | `ponytail` retains reusable proof and source-receipt rules |
 | Design tests, cases, or coverage | `tests` | `testing` for executing tests/TDD; `e2e` for browser journeys |
+| Validate a real browser/user journey | `e2e` | `testing` for execution and regression proof |
 | Verify after a merge | `merge` | `tasks` for worktree cleanup; `task-verifier` for independent Done |
 | Certify a deployed production release | `prod` | `task-verifier` independently challenges readiness claims |
 | Report evidence-based work status | `progress` | Linear and GitHub remain sources of truth |

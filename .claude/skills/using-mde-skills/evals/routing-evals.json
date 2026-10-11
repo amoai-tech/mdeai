@@ -376,5 +376,96 @@
     "expected_owner": "real-estate",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-punctuation",
+    "input": "@linear-task, prepare the onboarding issue",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-audit-dollar",
+    "input": "$linear-audit: check the existing issue",
+    "expected_owner": "linear-audit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-space",
+    "input": "@linear-task create an onboarding issue",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-suffix-negative",
+    "input": "@linear-task-extra is not a valid skill command",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-how-to-question",
+    "input": "How to implement OAuth for a web application?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-concept-question",
+    "input": "What does it mean to implement caching?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-substring-negative",
+    "input": "How should implementing an OAuth flow work?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-please-action",
+    "input": "Please implement the scoped login page correction",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-request-action",
+    "input": "Can you implement the already scoped event page change?",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-broad-lifecycle",
+    "input": "Implement changes across the repo as an overall delivery task",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pr-verify-not-merged",
+    "input": "Verify PR #260 before merging",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-verified",
+    "input": "Verify merged PR #229 after it lands on main",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "e2e-browser-workflow",
+    "input": "Test the browser journey for rental viewing requests",
+    "expected_owner": "e2e",
+    "risk": "S2",
+    "requires_independent_verifier": false
   }
 ]
