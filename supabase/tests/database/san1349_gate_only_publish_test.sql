@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(14);
+select plan(17);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES
@@ -51,6 +51,24 @@ insert into public.rental_listing_images (listing_id, storage_path, mime_type, r
 values ('b1349000-0000-4000-8000-000000000002', 'san1349/y.jpg', 'image/jpeg', 'authorized');
 insert into public.rental_freshness_log (listing_id, checked_at, status)
 values ('b1349000-0000-4000-8000-000000000002', now(), 'active');
+
+-- Z: owned by A, REJECTED, and fully evidenced — the rejected guard must still block it.
+insert into public.apartments
+  (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
+   landlord_id, available_to, rejection_reason, price_monthly, currency, available_from,
+   latitude, longitude)
+values
+  ('b1349000-0000-4000-8000-000000000003', 'SAN1349 rejected', 'san1349-z', 'Laureles',
+   'SAN1349 Z address', 'inactive', 'pending', 'rejected',
+   'a1349000-0000-4000-8000-000000000011', '2099-12-31', 'previous rejection',
+   2900000, 'COP', current_date - 1, 6.2447, -75.5916);
+insert into public.property_verifications (apartment_id, status, verified_at, metadata)
+values ('b1349000-0000-4000-8000-000000000003', 'verified', now(),
+        '{"owner_control":"verified","publish_permission":"granted","viewings_permission":"granted","coordinates":"verified"}'::jsonb);
+insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
+values ('b1349000-0000-4000-8000-000000000003', 'san1349/z.jpg', 'image/jpeg', 'authorized');
+insert into public.rental_freshness_log (listing_id, checked_at, status)
+values ('b1349000-0000-4000-8000-000000000003', now(), 'active');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · THE WORKFLOW FSM CANNOT REACH 'published'
@@ -104,6 +122,22 @@ select is(
 select is(
   (select published_by from public.apartments where id='b1349000-0000-4000-8000-000000000002'),
   (select auth.uid()), 'B5: published_by equals auth.uid() (the caller), not the definer owner');
+
+-- B6/B7: a rejected listing cannot be published through either entry point, even
+-- though it carries the full evidence set.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1349000-0000-4000-8000-000000000001', true);
+select throws_ok(
+  $$select public.publish_listing('b1349000-0000-4000-8000-000000000003'::uuid)$$,
+  '23514', null, 'B6: publish_listing refuses a rejected listing');
+select throws_ok(
+  $$select public.publish_verified_rental('b1349000-0000-4000-8000-000000000003'::uuid, 'a1349000-0000-4000-8000-000000000001'::uuid)$$,
+  '23514', null, 'B7: the canonical gate refuses a rejected listing directly');
+reset role;
+select is(
+  (select listing_workflow_status || '/' || status || '/' || moderation_status
+     from public.apartments where id='b1349000-0000-4000-8000-000000000003'),
+  'rejected/inactive/pending', 'B8: the rejected listing is untouched');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- C · refusals and remaining wrappers
