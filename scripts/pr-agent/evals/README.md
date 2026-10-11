@@ -72,6 +72,30 @@ active finding carries the complete contract; `false` means at least one active 
 required field; `null` means the review contains zero active findings, so there is no finding format to
 evaluate. A clean review with no findings is therefore never misreported as format-compliant.
 
+The preferred rendered layout is intentionally easy to scan in a GitHub review: bold labels with one
+blank line between fields. For example:
+
+```markdown
+**Severity:** HIGH
+
+**Technical:** concrete defect and evidence
+
+**Plain English:** what breaks for the user or operator
+
+**Real-world example:** realistic MDE failure scenario
+
+**Fix:** smallest safe change
+
+**Verify:** decisive deterministic proof
+
+**Verification state:** VERIFIED
+
+**Status:** changes_required
+```
+
+The scorer validates the eight-field contract, not cosmetic Markdown, so older unbolded but complete
+findings remain measurable while the prompt and skill enforce the more readable layout going forward.
+
 When a credited finding carries its own `Severity`/`Status`, the score reports
 `detectionQuality: "labelled"` — evidence, severity, and verdict all come from that one finding. When
 it does not, the score reports `"unlabelled"`: the evidence still came from one finding, but the

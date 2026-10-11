@@ -74,12 +74,12 @@ describe("SAN-1312 PR-Agent review contract", () => {
       expect(config).toContain(label);
       expect(codeReviewSkill).toContain(label);
     }
-    expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
-    expect(config).toContain("Verification state: VERIFIED or NEEDS VERIFICATION");
-    expect(config).toContain("Status: changes_required or advisory");
-    expect(codeReviewSkill).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
-    expect(codeReviewSkill).toContain("Verification state: VERIFIED | NEEDS VERIFICATION");
-    expect(codeReviewSkill).toContain("Status: changes_required | advisory");
+    expect(config).toContain("**Severity:** HIGH\n\n**Technical:**");
+    expect(codeReviewSkill).toContain("**Severity:** HIGH\n\n**Technical:**");
+    expect(config).toContain("Choose exactly one allowed value for Severity, Verification state, and Status");
+    expect(codeReviewSkill).toContain("Severity = BLOCKER/HIGH/MEDIUM/LOW");
+    expect(codeReviewSkill).toContain("Verification state = VERIFIED/NEEDS VERIFICATION");
+    expect(codeReviewSkill).toContain("Status = changes_required/advisory");
     expect(config).toContain("Deterministic CI and human review remain authoritative");
     expect(config).toContain("YAML serialization requirement");
     expect(config).toContain(

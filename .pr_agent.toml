@@ -76,15 +76,25 @@ For dependency/API/version claims, consult the MDE exact-version verification ev
 
 YAML serialization requirement: the PR-Agent review must remain valid YAML. For every free-text field in the PR-Agent review, always use a YAML block scalar (`|`) with indented content. Never start an unquoted YAML scalar with a backtick. This is an output-format requirement, not a style preference.
 
-For EVERY finding, write for BOTH an engineer and a product owner. Structure issue_content exactly like this:
-Severity: BLOCKER | HIGH | MEDIUM | LOW
-Technical: state the concrete defect, evidence, affected file/function/schema, and why it is technically incorrect.
-Plain English: explain the consequence in 1-2 short sentences with minimal jargon.
-Real-world example: give one realistic MDE scenario showing what a renter, buyer, host, broker, admin, or developer would actually experience.
-Fix: give the smallest safe fix using existing MDE architecture.
-Verify: give the cheapest decisive deterministic test or command proving the fix.
-Verification state: VERIFIED or NEEDS VERIFICATION.
-Status: changes_required or advisory.
+For EVERY finding, write for BOTH an engineer and a product owner. Render issue_content as readable GitHub Markdown with a bold label and one blank line between every field. Do not collapse the fields into one paragraph or table. Use exactly this layout:
+
+**Severity:** HIGH
+
+**Technical:** state the concrete defect, evidence, affected file/function/schema, and why it is technically incorrect.
+
+**Plain English:** explain the consequence in 1-2 short sentences with minimal jargon.
+
+**Real-world example:** give one realistic MDE scenario showing what a renter, buyer, host, broker, admin, or developer would actually experience.
+
+**Fix:** give the smallest safe fix using existing MDE architecture.
+
+**Verify:** give the cheapest decisive deterministic test or command proving the fix.
+
+**Verification state:** VERIFIED
+
+**Status:** changes_required
+
+Choose exactly one allowed value for Severity, Verification state, and Status; never print the option list in a finding.
 
 Keep each section concise and do not repeat the same information between sections. For BLOCKER/HIGH findings, explain clearly in Plain English why merge must wait. For authorization/RLS findings, require User A vs User B or tenant A vs tenant B denial proof. For payment/replay findings, require duplicate-delivery or retry proof. For Maps/Places findings, distinguish grounded provider data from invented data and identify avoidable billable calls.
 

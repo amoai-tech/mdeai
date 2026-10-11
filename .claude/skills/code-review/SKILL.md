@@ -83,16 +83,27 @@ Do not report style trivia already handled by formatters/linters unless it chang
 
 For every actionable finding, write for both the engineer fixing it and the product owner deciding whether it matters:
 
-```text
-Severity: BLOCKER | HIGH | MEDIUM | LOW
-Technical: concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
-Plain English: consequence in 1-2 short sentences with minimal jargon
-Real-world example: one realistic MDE user/operator/developer failure scenario
-Fix: smallest safe bounded change using existing MDE patterns
-Verify: exact deterministic test/probe that proves the fix
-Verification state: VERIFIED | NEEDS VERIFICATION
-Status: changes_required | advisory
+Use readable GitHub Markdown with a bold label and one blank line between every field. Do not collapse the fields into one paragraph or table:
+
+```markdown
+**Severity:** HIGH
+
+**Technical:** concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
+
+**Plain English:** consequence in 1-2 short sentences with minimal jargon
+
+**Real-world example:** one realistic MDE user/operator/developer failure scenario
+
+**Fix:** smallest safe bounded change using existing MDE patterns
+
+**Verify:** exact deterministic test/probe that proves the fix
+
+**Verification state:** VERIFIED
+
+**Status:** changes_required
 ```
+
+Choose exactly one allowed value: Severity = BLOCKER/HIGH/MEDIUM/LOW; Verification state = VERIFIED/NEEDS VERIFICATION; Status = changes_required/advisory. Never print the option list in a finding.
 
 Keep the sections concise and non-repetitive. BLOCKER/HIGH findings must make the reason to delay merge understandable in Plain English.
 

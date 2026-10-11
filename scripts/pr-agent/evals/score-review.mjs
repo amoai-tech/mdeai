@@ -138,24 +138,31 @@ function toFinding(rawBody, meta = {}) {
 }
 
 const FINDING_FORMAT_FIELDS = [
-  ["Severity", /(?:^|\n)[ \t>*-]*Severity\s*:\s*(?:BLOCKER|HIGH|MEDIUM|LOW)\b/i],
-  ["Technical", /(?:^|\n)[ \t>*-]*Technical\s*:/i],
-  ["Plain English", /(?:^|\n)[ \t>*-]*Plain English\s*:/i],
-  ["Real-world example", /(?:^|\n)[ \t>*-]*Real-world example\s*:/i],
-  ["Fix", /(?:^|\n)[ \t>*-]*Fix\s*:/i],
-  ["Verify", /(?:^|\n)[ \t>*-]*Verify\s*:/i],
+  [
+    "Severity",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Severity(?:\*\*)?\s*:(?:\*\*)?\s*(?:BLOCKER|HIGH|MEDIUM|LOW)(?:\*\*)?\s*$/im,
+  ],
+  ["Technical", /(?:^|\n)[ \t>*-]*(?:\*\*)?Technical(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Plain English", /(?:^|\n)[ \t>*-]*(?:\*\*)?Plain English(?:\*\*)?\s*:(?:\*\*)?/i],
+  [
+    "Real-world example",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Real-world example(?:\*\*)?\s*:(?:\*\*)?/i,
+  ],
+  ["Fix", /(?:^|\n)[ \t>*-]*(?:\*\*)?Fix(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Verify", /(?:^|\n)[ \t>*-]*(?:\*\*)?Verify(?:\*\*)?\s*:(?:\*\*)?/i],
   [
     "Verification state",
-    /(?:^|\n)[ \t>*-]*Verification state\s*:\s*(?:VERIFIED|NEEDS VERIFICATION)\b/i,
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Verification state(?:\*\*)?\s*:(?:\*\*)?\s*(?:VERIFIED|NEEDS VERIFICATION)(?:\*\*)?\s*$/im,
   ],
-  ["Status", /(?:^|\n)[ \t>*-]*Status\s*:\s*(?:changes_required|advisory)\b/i],
+  [
+    "Status",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Status(?:\*\*)?\s*:(?:\*\*)?\s*(?:changes_required|advisory)(?:\*\*)?\s*$/im,
+  ],
 ];
 
 /** Report whether one finding follows MDE's complete eight-field dual-audience review format. */
 export function checkFindingFormat(finding) {
-  // Rendered review comments may bold labels as Markdown. Formatting emphasis must not change whether
-  // the underlying contract is considered present.
-  const body = String(finding?.body ?? "").replaceAll("**", "");
+  const body = String(finding?.body ?? "");
   const present = FINDING_FORMAT_FIELDS.filter(([, pattern]) => pattern.test(body)).map(([name]) => name);
   const missing = FINDING_FORMAT_FIELDS.map(([name]) => name).filter((name) => !present.includes(name));
   return {
