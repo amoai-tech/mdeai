@@ -161,26 +161,17 @@ begin
       using errcode = '42501';
   end if;
 
-  select a.* into v_row from public.apartments a where a.id = p_apartment_id;
+  -- Lock first and authorize against the locked row only. There is no separate
+  -- pre-lock decision to reason about, so no stale-read race and no dead branch.
+  select a.* into v_row from public.apartments a where a.id = p_apartment_id for update;
   if not found then
     raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
   end if;
 
-  if v_uid is not null
-     and not (public.is_admin()
-              or v_row.landlord_id in (select public.acting_landlord_ids())
-              or public.rental_listing_is_public(
-                   v_row.status, v_row.moderation_status, v_row.listing_workflow_status,
-                   v_row.landlord_id, v_row.metadata)) then
-    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
-  end if;
-  if v_uid is not null
-     and not (public.is_admin()
-              or v_row.landlord_id in (select public.acting_landlord_ids())) then
-    raise exception 'not authorized to publish this listing' using errcode = '42501';
-  end if;
-
-  select a.* into v_row from public.apartments a where a.id = p_apartment_id for update;
+  -- rental_listing_is_public() is a READ-path predicate. Here it only chooses which
+  -- exception a non-owner sees: a publicly visible row yields 42501, a hidden row
+  -- stays indistinguishable from a missing id (P0002). It is never sufficient to
+  -- publish — the next check requires admin or the owning landlord.
   if v_uid is not null
      and not (public.is_admin()
               or v_row.landlord_id in (select public.acting_landlord_ids())
@@ -231,6 +222,9 @@ begin
          listing_workflow_status = 'published',
          published_at = now(),
          published_by = v_actor,
+         -- Deliberate (gate test A11): workflow_changed_by is the AUTHENTICATED user
+         -- only. A trusted service publish records published_by but leaves this NULL
+         -- rather than attributing the workflow to a caller-supplied id.
          workflow_changed_by = v_uid,
          workflow_changed_at = now(),
          metadata = coalesce(a.metadata, '{}'::jsonb)
