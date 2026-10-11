@@ -85,7 +85,7 @@ For every actionable finding, write for both the engineer fixing it and the prod
 
 ```text
 Severity: BLOCKER | HIGH | MEDIUM | LOW
-Technical: concrete defect + file:line/evidence + why it is technically incorrect
+Technical: concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
 Plain English: consequence in 1-2 short sentences with minimal jargon
 Real-world example: one realistic MDE user/operator/developer failure scenario
 Fix: smallest safe bounded change using existing MDE patterns

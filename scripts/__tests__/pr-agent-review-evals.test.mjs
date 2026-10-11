@@ -214,6 +214,54 @@ describe("MDE dual-audience finding format", () => {
     assert.deepEqual(format.missing, []);
   });
 
+  it("reports Severity as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity"]);
+  });
+
+  it("reports Verification state as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Verification state"]);
+  });
+
+  it("reports Status as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Status"]);
+  });
+
   it("reports exactly which readability sections are missing", () => {
     const parsed = parseFindings(
       [
@@ -227,6 +275,16 @@ describe("MDE dual-audience finding format", () => {
     const format = checkFindingFormat(parsed.findings[0]);
     assert.equal(format.complete, false);
     assert.deepEqual(format.missing, ["Plain English", "Real-world example", "Verify"]);
+  });
+
+  it("reports zero findings as not applicable instead of falsely compliant", () => {
+    const result = scoreReview(
+      CASES_BY_ID["docs-only-control"],
+      review("", { recommendation: "Safe to merge", score: 100 }),
+    );
+    assert.equal(result.formatCompliance.findingCount, 0);
+    assert.equal(result.formatCompliance.compliantCount, 0);
+    assert.equal(result.formatCompliance.allCompliant, null);
   });
 
   it("includes active-finding format compliance in normal score output", () => {

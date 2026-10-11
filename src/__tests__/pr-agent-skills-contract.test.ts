@@ -60,13 +60,26 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain('"package-lock.json"');
     expect(config).not.toContain('"docs/**"');
     expect(config).not.toContain("glob_patterns");
-    expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
-    for (const label of ["Technical:", "Plain English:", "Real-world example:", "Fix:", "Verify:"]) {
+    const codeReviewSkill = read(".claude/skills/code-review/SKILL.md");
+    for (const label of [
+      "Severity:",
+      "Technical:",
+      "Plain English:",
+      "Real-world example:",
+      "Fix:",
+      "Verify:",
+      "Verification state:",
+      "Status:",
+    ]) {
       expect(config).toContain(label);
-      expect(read(".claude/skills/code-review/SKILL.md")).toContain(label);
+      expect(codeReviewSkill).toContain(label);
     }
+    expect(config).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
     expect(config).toContain("Verification state: VERIFIED or NEEDS VERIFICATION");
     expect(config).toContain("Status: changes_required or advisory");
+    expect(codeReviewSkill).toContain("Severity: BLOCKER | HIGH | MEDIUM | LOW");
+    expect(codeReviewSkill).toContain("Verification state: VERIFIED | NEEDS VERIFICATION");
+    expect(codeReviewSkill).toContain("Status: changes_required | advisory");
     expect(config).toContain("Deterministic CI and human review remain authoritative");
     expect(config).toContain("YAML serialization requirement");
     expect(config).toContain(

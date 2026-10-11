@@ -138,16 +138,24 @@ function toFinding(rawBody, meta = {}) {
 }
 
 const FINDING_FORMAT_FIELDS = [
-  ["Technical", /(?:^|\n)[ \t>*-]*(?:\*\*)?Technical(?:\*\*)?\s*:/i],
-  ["Plain English", /(?:^|\n)[ \t>*-]*(?:\*\*)?Plain English(?:\*\*)?\s*:/i],
-  ["Real-world example", /(?:^|\n)[ \t>*-]*(?:\*\*)?Real-world example(?:\*\*)?\s*:/i],
-  ["Fix", /(?:^|\n)[ \t>*-]*(?:\*\*)?Fix(?:\*\*)?\s*:/i],
-  ["Verify", /(?:^|\n)[ \t>*-]*(?:\*\*)?Verify(?:\*\*)?\s*:/i],
+  ["Severity", /(?:^|\n)[ \t>*-]*Severity\s*:\s*(?:BLOCKER|HIGH|MEDIUM|LOW)\b/i],
+  ["Technical", /(?:^|\n)[ \t>*-]*Technical\s*:/i],
+  ["Plain English", /(?:^|\n)[ \t>*-]*Plain English\s*:/i],
+  ["Real-world example", /(?:^|\n)[ \t>*-]*Real-world example\s*:/i],
+  ["Fix", /(?:^|\n)[ \t>*-]*Fix\s*:/i],
+  ["Verify", /(?:^|\n)[ \t>*-]*Verify\s*:/i],
+  [
+    "Verification state",
+    /(?:^|\n)[ \t>*-]*Verification state\s*:\s*(?:VERIFIED|NEEDS VERIFICATION)\b/i,
+  ],
+  ["Status", /(?:^|\n)[ \t>*-]*Status\s*:\s*(?:changes_required|advisory)\b/i],
 ];
 
-/** Report whether one finding follows MDE's dual-audience review format. */
+/** Report whether one finding follows MDE's complete eight-field dual-audience review format. */
 export function checkFindingFormat(finding) {
-  const body = String(finding?.body ?? "");
+  // Rendered review comments may bold labels as Markdown. Formatting emphasis must not change whether
+  // the underlying contract is considered present.
+  const body = String(finding?.body ?? "").replaceAll("**", "");
   const present = FINDING_FORMAT_FIELDS.filter(([, pattern]) => pattern.test(body)).map(([name]) => name);
   const missing = FINDING_FORMAT_FIELDS.map(([name]) => name).filter((name) => !present.includes(name));
   return {
@@ -421,7 +429,8 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
     formatCompliance: {
       findingCount: formatChecks.length,
       compliantCount: formatChecks.filter((entry) => entry.complete).length,
-      allCompliant: formatChecks.every((entry) => entry.complete),
+      // Zero findings means there is no finding format to evaluate. Never report that as a pass.
+      allCompliant: formatChecks.length === 0 ? null : formatChecks.every((entry) => entry.complete),
       findings: formatChecks,
     },
     findingSource: parsed.source,
