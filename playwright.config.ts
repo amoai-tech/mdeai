@@ -49,6 +49,8 @@ export default defineConfig({
         "**/chat-result-order.spec.ts",
         // SAN-1414: same reason.
         "**/chat-workspace-layout.spec.ts",
+        // SAN-524: touch/mobile map journey runs hermetically with the deterministic chat + Maps seam.
+        "**/maps-layout-mobile.spec.ts",
         ...PROD_SPECS,
       ],
       workers: 1,
@@ -62,6 +64,7 @@ export default defineConfig({
         "**/chat-virtualization.spec.ts",
         "**/chat-result-order.spec.ts",
         "**/chat-workspace-layout.spec.ts",
+        "**/maps-layout-mobile.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,

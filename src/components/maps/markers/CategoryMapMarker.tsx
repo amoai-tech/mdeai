@@ -50,36 +50,42 @@ export function CategoryMapMarker({
       role="img"
       aria-label={`${category}: ${title}`}
       className={[
-        "relative flex size-10 cursor-pointer items-center justify-center rounded-full border-[3px] font-semibold text-white transition-[transform,box-shadow,opacity]",
-        selected
-          ? "z-10 border-white ring-4 ring-primary/50 shadow-xl"
-          : "border-white shadow-lg",
-        closed && !selected ? "border-slate-200" : "",
+        "relative flex size-11 cursor-pointer items-center justify-center",
+        selected ? "z-10" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={{
-        backgroundColor,
-        transform: selected ? "scale(1.28)" : "scale(1.08)",
-        opacity: dimmed ? 0.4 : closed ? 0.92 : 1,
-        boxShadow: selected
-          ? "0 4px 14px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.9)"
-          : "0 3px 10px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.85)",
-      }}
     >
-      <span
+      <div
         aria-hidden
-        className="text-lg leading-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]"
+        className={[
+          "relative flex size-10 items-center justify-center rounded-full border-[3px] font-semibold text-white transition-[transform,box-shadow,opacity]",
+          selected
+            ? "border-white ring-4 ring-primary/50 shadow-xl"
+            : "border-white shadow-lg",
+          closed && !selected ? "border-slate-200" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        style={{
+          backgroundColor,
+          transform: selected ? "scale(1.1)" : "scale(1)",
+          opacity: dimmed ? 0.4 : closed ? 0.92 : 1,
+          boxShadow: selected
+            ? "0 4px 14px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.9)"
+            : "0 3px 10px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.85)",
+        }}
       >
-        {glyph}
-      </span>
-      {closed ? (
-        <span
-          aria-hidden
-          className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-white bg-slate-300"
-          data-testid="map-pin-closed-dot"
-        />
-      ) : null}
+        <span className="text-lg leading-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
+          {glyph}
+        </span>
+        {closed ? (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-white bg-slate-300"
+            data-testid="map-pin-closed-dot"
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
