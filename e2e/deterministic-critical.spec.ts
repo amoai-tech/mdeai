@@ -102,4 +102,40 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(page.getByTestId("rental-card")).toHaveCount(1);
     await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(0);
   });
+
+  test("mobile map sheet closes on Escape before the focused map can swallow it", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoDeterministicChat(page);
+
+    const trigger = page.getByTestId("map-sheet-trigger");
+    await trigger.click();
+
+    const sheet = page.getByTestId("map-sheet-content");
+    await expect(sheet).toBeVisible();
+
+    await page.evaluate(() => {
+      const map = document.querySelector(
+        '[data-testid="map-sheet-content"] [data-testid="chat-map"]',
+      );
+      if (!map) throw new Error("no map in the sheet");
+
+      const focusTarget = document.createElement("div");
+      focusTarget.tabIndex = 0;
+      focusTarget.setAttribute("data-testid", "map-focus-target");
+      map.appendChild(focusTarget);
+
+      // Model Google Maps consuming keyboard events on its own container.
+      map.addEventListener("keydown", (event) => event.stopPropagation());
+      focusTarget.focus();
+    });
+
+    await expect(page.getByTestId("map-focus-target")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+
+    await expect(sheet).toBeHidden({ timeout: 10_000 });
+    await expect(trigger).toBeFocused();
+  });
 });

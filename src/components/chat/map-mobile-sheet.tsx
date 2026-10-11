@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Map, MapPin } from "lucide-react";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -74,24 +74,6 @@ export function MapMobileSheet() {
 
   const sheetOpen = !isLgUp && userMapOpen;
 
-  // SAN-524 — Google Maps handles keys on its own container and stops them there, so with focus inside
-  // the map the sheet's Escape handling never saw the key and the sheet stayed open although it says
-  // "Escape closes this sheet". Listen in the capture phase, before the map does. Only for a key pressed
-  // inside the sheet: a dialog opened on top of it keeps handling its own Escape.
-  useEffect(() => {
-    if (!sheetOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const content = document.getElementById("map-sheet-content");
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (content && !content.contains(target) && target !== document.body) return;
-      setUserMapOpen(false);
-    };
-    document.addEventListener("keydown", closeOnEscape, true);
-    return () => document.removeEventListener("keydown", closeOnEscape, true);
-  }, [sheetOpen]);
-
   return (
     <div
       data-testid="map-mobile-controls"
@@ -119,6 +101,17 @@ export function MapMobileSheet() {
           side="bottom"
           className="flex max-h-[calc(85dvh-env(safe-area-inset-bottom,0px))] min-h-[75dvh] flex-col p-0 pb-[env(safe-area-inset-bottom,0px)]"
           data-testid="map-sheet-content"
+          onKeyDownCapture={(event) => {
+            if (
+              event.key !== "Escape" ||
+              event.nativeEvent.isComposing ||
+              !(event.target instanceof Element) ||
+              !event.target.closest('[data-testid="chat-map"]')
+            ) {
+              return;
+            }
+            setUserMapOpen(false);
+          }}
         >
           <SheetHeader className="border-b border-border px-4 py-3 text-left">
             <SheetTitle>Map</SheetTitle>
