@@ -69,7 +69,7 @@ export function CategoryMapMarker({
           .join(" ")}
         style={{
           backgroundColor,
-          transform: selected ? "scale(1.28)" : "scale(1.08)",
+          transform: selected ? "scale(1.1)" : "scale(1.08)",
           opacity: dimmed ? 0.4 : closed ? 0.92 : 1,
           boxShadow: selected
             ? "0 4px 14px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.9)"
