@@ -2,8 +2,9 @@
 --
 -- These rows were added directly to production and were NOT reproducible from Git, so a fresh
 -- supabase db reset did not contain them and the integrity corrections could not be tested.
--- Append-only; makes production reproducible. The integrity migration that follows corrects the
--- seven flagged listings on top of it. on conflict (id) keeps re-runs safe.
+-- Append-only, targeted by stable IDs; replay must never overwrite claimed ownership.
+-- The integrity migration that follows corrects the seven flagged listings.
+-- ON CONFLICT DO NOTHING keeps the inserts safe to rerun.
 -- Projects are inserted with a null primary source (sources do not exist yet); the original
 -- primary is restored after the sources are seeded. Distrito exists from SAN-1404 with a
 -- generated id, so its extra source is mapped by slug.
@@ -44,6 +45,7 @@ set price_from_cents = ((s.observed_facts ->> 'price_from_cop')::numeric * 100):
     verified_at = s.checked_at
 from public.development_project_sources s
 where p.slug = 'distrito-33'
+  and p.ownership_status = 'unclaimed'
   and s.project_id = p.id
   and s.observed_facts ? 'price_from_cop';
 
@@ -60,4 +62,6 @@ from (values
   ('crista'::text, 'a9567e50-36e2-4798-9665-cd0f48ce9393'::uuid)
 ) as v(slug, primary_source_id)
 join public.development_project_sources s on s.id = v.primary_source_id
-where p.slug = v.slug;
+where p.slug = v.slug
+  and p.ownership_status = 'unclaimed'
+  and p.primary_source_id is null;

@@ -53,7 +53,8 @@ comment on function public.development_source_rank(text) is
 delete from public.development_unit_types u
 using public.development_projects p
 where p.id = u.project_id
-  and p.slug in ('cittadel', 'reserva-serrat-selva', 'crista');
+  and p.slug in ('cittadel', 'reserva-serrat-selva', 'crista')
+  and p.ownership_status = 'unclaimed';
 
 -- Physical dimensions are not identity: two legitimate towers may both have a 2BR 54 m²
 -- typology. Canonical identity stays (project_id, source_key); duplicate footprints are a
@@ -76,6 +77,7 @@ cross join (values
   ('medellin:new-project:cittadel:unit:loft-28', 'Loft · 28 m²', null::smallint, 28.00::numeric, null::numeric, 40623625400::bigint, 'loft')
 ) as v(source_key, name, bedrooms, built, priv, pf, product_class)
 where p.slug = 'cittadel'
+  and p.ownership_status = 'unclaimed'
 on conflict (project_id, source_key) do update set
   name = excluded.name,
   bedrooms = excluded.bedrooms,
@@ -102,6 +104,7 @@ cross join (values
   ('medellin:new-project:reserva-serrat-selva:unit:torre-3', 'Torre 3 · 2 alcobas · 54 m²', 54.00::numeric, 43470000000::bigint, 43850000000::bigint, 'Torre 3')
 ) as v(source_key, name, built, pf, pt, phase)
 where p.slug = 'reserva-serrat-selva'
+  and p.ownership_status = 'unclaimed'
 on conflict (project_id, source_key) do update set
   name = excluded.name,
   built_area_m2 = excluded.built_area_m2,
@@ -123,6 +126,7 @@ select p.id, 'medellin:new-project:crista:unit:3-75', '3 alcobas · 75 m²', 3::
        timestamptz '2026-10-06T13:54:16Z'
 from public.development_projects p
 where p.slug = 'crista'
+  and p.ownership_status = 'unclaimed'
 on conflict (project_id, source_key) do update set
   name = excluded.name,
   bedrooms = excluded.bedrooms,
@@ -135,10 +139,22 @@ on conflict (project_id, source_key) do update set
   verified_at = excluded.verified_at;
 
 -- ── 4c. Classify the rows whose product type is actually known ──────────────
--- Every reviewed apartment typology is residential; the loft lines are set explicitly next.
-update public.development_unit_types
+-- Only the named pilot rows were reviewed. Never classify future developer, commercial
+-- or imported typologies merely because their product_class is NULL.
+-- Known Olium loft is corrected explicitly below.
+update public.development_unit_types u
 set product_class = 'residential_apartment'
-where product_class is null;
+from public.development_projects p
+where u.project_id = p.id
+  and u.product_class is null
+  and p.slug in (
+    'arrayan', 'cittadel', 'crista', 'distrito-33', 'faroverde',
+    'grand-coral', 'guayacanes', 'los-cambulos', 'nexus',
+    'nutibara-parkway', 'olium-park', 'palma',
+    'reserva-serrat-selva', 'river-park', 'saman', 'vigo'
+  )
+  and u.source_key not like 'gate-test:%'
+  and p.ownership_status = 'unclaimed';
 
 -- ── 4d. Mixed-product tagging ───────────────────────────────────────────────
 -- Olium Park sells a 30 m² loft line beside 64–77 m² homes.
@@ -148,7 +164,8 @@ from public.development_projects p
 where p.id = u.project_id
   and p.slug = 'olium-park'
   and u.bedrooms = 1
-  and u.built_area_m2 <= 40;
+  and u.built_area_m2 <= 40
+  and p.ownership_status = 'unclaimed';
 
 -- ── 4d. Distrito provenance — the source that supports the canonical price ──
 -- Zonario observes the canonical address/price; TuLugar is the 26 vs 27 m² disagreement.
@@ -158,6 +175,7 @@ set primary_source_id = s.id,
     verified_at = s.checked_at
 from public.development_project_sources s
 where p.slug = 'distrito-33'
+  and p.ownership_status = 'unclaimed'
   and s.project_id = p.id
   and p.price_from_cents is not null
   and (s.observed_facts ->> 'price_from_cop')::numeric * 100 = p.price_from_cents;
@@ -187,11 +205,13 @@ set primary_source_id = s.id, source_url = s.source_url, verified_at = s.checked
 from public.development_project_sources s
 where s.project_id = p.id
   and s.source_type = 'developer'
-  and p.slug in ('cittadel', 'reserva-serrat-selva');
+  and p.slug in ('cittadel', 'reserva-serrat-selva')
+  and p.ownership_status = 'unclaimed';
 
 -- ── 5. Never present an unverified past delivery as current ─────────────────
 update public.development_projects
 set expected_delivery_year = null,
     delivery_note = coalesce(delivery_note, 'Delivery year not reported by a current published source')
 where expected_delivery_year < extract(year from now())::integer
+  and ownership_status = 'unclaimed'
   and coalesce(project_status, '') not in ('delivered', 'sold_out');

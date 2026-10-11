@@ -4,7 +4,7 @@
 -- so the duplicate gate is phase-aware and is a quality test, not a hard constraint.
 begin;
 
-select plan(12);
+select plan(14);
 
 select is(
   (select count(*)::int from public.development_projects
@@ -43,9 +43,17 @@ select is(
   'product_class has no default, so an omitted class is NULL (fail-closed)');
 
 select is(
-  (select count(*)::int from public.development_unit_types where product_class is null),
+  (select count(*)::int
+     from public.development_unit_types u
+     join public.development_projects p on p.id = u.project_id
+    where p.slug in (
+      'arrayan','cittadel','crista','distrito-33','faroverde',
+      'grand-coral','guayacanes','los-cambulos','nexus',
+      'nutibara-parkway','olium-park','palma',
+      'reserva-serrat-selva','river-park','saman','vigo'
+    ) and u.product_class is null),
   0,
-  'every reviewed typology is explicitly classified');
+  'every known pilot typology is classified');
 
 select is(
   (select count(*)::int
@@ -55,6 +63,21 @@ select is(
       and u.product_class <> 'loft'),
   0,
   'mixed-product: the Olium 30 m² 1BR loft is tagged loft');
+
+-- Future imports must remain unknown until evidence establishes the product type.
+insert into public.development_unit_types (project_id, source_key, name, bedrooms)
+select id, 'gate-test:unreviewed', 'Unknown future product', 2
+from public.development_projects where slug = 'arrayan';
+select is(
+ (select product_class from public.development_unit_types
+   where source_key = 'gate-test:unreviewed'), null::text,
+ 'new unreviewed typology stays unclassified (not assumed apartment)');
+
+-- A legitimate claimed owner must not be overwritten by the seed's captured NULL owner.
+select ok(
+ exists (select 1 from public.development_projects where slug='cittadel'
+   and ownership_status='unclaimed' and partner_id is null),
+ 'pilot seed leaves unclaimed ownership explicit; replay tests must preserve future claims');
 
 select is(public.development_source_rank('developer'), 1, 'rank: developer is first');
 select is(public.development_source_rank('aggregator'), 3, 'rank: aggregator is last');
