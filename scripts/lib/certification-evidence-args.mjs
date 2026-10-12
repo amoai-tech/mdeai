@@ -10,6 +10,22 @@ export const FRESHNESS_STATUSES = ["active", "unconfirmed", "stale"];
 export const VERIFICATION_STATUSES = ["pending", "verified", "rejected", "revoked"];
 /** SAN-468 §5.4: matches the live rental_listing_images.rights_status contract. */
 export const IMAGE_RIGHTS_STATUSES = ["unverified", "authorized", "revoked"];
+/** SAN-1431 §4.2: matches property_verifications.metadata owner_control / coordinates. */
+export const CONTROL_VALUES = ["verified", "unverified"];
+/** SAN-1431 §4.2: matches property_verifications.metadata publish/viewings permissions. */
+export const PERMISSION_VALUES = ["granted", "not_granted"];
+/** Neighborhood placeholders the canonical launch gate rejects (keep in sync). */
+export const NEIGHBORHOOD_PLACEHOLDERS = [
+  "pending verification",
+  "pending",
+  "unknown",
+  "tbd",
+  "unreviewed",
+  "n/a",
+  "na",
+  "por verificar",
+  "sin verificar",
+];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Provider/evidence tokens: bounded, no whitespace or shell/path characters. */
@@ -73,6 +89,12 @@ export function parseCertificationEvidenceArgs(argv) {
   const verificationStatus = (args["verification-status"] ?? "").trim() || null;
   const verifiedBy = (args["verified-by"] ?? "").trim() || null;
   const notes = (args.notes ?? "").trim() || null;
+  const ownerControl = (args["owner-control"] ?? "").trim() || null;
+  const publishPermission = (args["publish-permission"] ?? "").trim() || null;
+  const viewingsPermission = (args["viewings-permission"] ?? "").trim() || null;
+  const coordinateReceipt = (args["coordinate-receipt"] ?? "").trim() || null;
+  const neighborhood = (args["neighborhood"] ?? "").trim() || null;
+  const updateVerification = args["update-verification"] === "true";
 
   if (imageUrl && !isHttpUrl(imageUrl)) errors.push("--image-url must be an http(s) URL");
   if (imageRights && !IMAGE_RIGHTS_STATUSES.includes(imageRights)) {
@@ -97,6 +119,33 @@ export function parseCertificationEvidenceArgs(argv) {
   }
   if (notes && notes.length > 2000) errors.push("--notes must be at most 2000 characters");
 
+  if (ownerControl && !CONTROL_VALUES.includes(ownerControl)) {
+    errors.push(`--owner-control must be one of ${CONTROL_VALUES.join("|")}`);
+  }
+  if (coordinateReceipt && !CONTROL_VALUES.includes(coordinateReceipt)) {
+    errors.push(`--coordinate-receipt must be one of ${CONTROL_VALUES.join("|")}`);
+  }
+  if (publishPermission && !PERMISSION_VALUES.includes(publishPermission)) {
+    errors.push(`--publish-permission must be one of ${PERMISSION_VALUES.join("|")}`);
+  }
+  if (viewingsPermission && !PERMISSION_VALUES.includes(viewingsPermission)) {
+    errors.push(`--viewings-permission must be one of ${PERMISSION_VALUES.join("|")}`);
+  }
+  const hasListingApproval = Boolean(
+    ownerControl || publishPermission || viewingsPermission || coordinateReceipt,
+  );
+  if (hasListingApproval && verificationStatus !== "verified") {
+    errors.push(
+      "--owner-control/--publish-permission/--viewings-permission/--coordinate-receipt require --verification-status=verified (they are listing-specific approvals)",
+    );
+  }
+  if (neighborhood) {
+    if (neighborhood.length > 120) errors.push("--neighborhood must be at most 120 characters");
+    if (NEIGHBORHOOD_PLACEHOLDERS.includes(neighborhood.toLowerCase())) {
+      errors.push("--neighborhood must be a real neighborhood, not a placeholder");
+    }
+  }
+
   return {
     ok: errors.length === 0,
     errors,
@@ -111,6 +160,12 @@ export function parseCertificationEvidenceArgs(argv) {
       verificationStatus,
       verifiedBy,
       notes,
+      ownerControl,
+      publishPermission,
+      viewingsPermission,
+      coordinateReceipt,
+      neighborhood,
+      updateVerification,
     },
   };
 }

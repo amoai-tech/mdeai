@@ -118,6 +118,48 @@ test("parses and validates photo publishing rights", () => {
   );
   assert.equal(parseCertificationEvidenceArgs([...BASE, "--image-rights=authorized"]).ok, false);
 });
+const VERIFIED = [
+  ...BASE,
+  "--verification-status=verified",
+  "--verified-by=750e8400-e29b-41d4-a716-446655440002",
+];
+
+test("parses the listing-specific approvals the launch gate reads", () => {
+  const parsed = parseCertificationEvidenceArgs([
+    ...VERIFIED,
+    "--owner-control=verified",
+    "--publish-permission=granted",
+    "--viewings-permission=granted",
+    "--coordinate-receipt=verified",
+    "--neighborhood=Laureles",
+  ]);
+  assert.equal(parsed.ok, true, parsed.errors.join("; "));
+  assert.equal(parsed.value.ownerControl, "verified");
+  assert.equal(parsed.value.publishPermission, "granted");
+  assert.equal(parsed.value.viewingsPermission, "granted");
+  assert.equal(parsed.value.coordinateReceipt, "verified");
+  assert.equal(parsed.value.neighborhood, "Laureles");
+});
+
+test("refuses listing approvals without a verified property status", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, "--owner-control=verified"]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /verification-status=verified/);
+});
+
+test("refuses permission and control values outside the live contract", () => {
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--publish-permission=yes"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--viewings-permission=maybe"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--owner-control=approved"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--coordinate-receipt=yes"]).ok, false);
+});
+
+test("refuses placeholder neighborhoods and accepts a real one", () => {
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=Pending verification"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=unknown"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=El Poblado"]).ok, true);
+});
+
 test("does not treat --database-url as a certification argument", () => {
   const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
   assert.equal(parsed.ok, true, parsed.errors.join("; "));
