@@ -1,3 +1,8 @@
+/** Shared projection for browse, detail, and concierge search. Keep the
+ * database classification fields present so non-residential units fail closed. */
+export const NEW_PROJECT_UNIT_COLUMNS =
+  "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,product_class,phase_label,source_kind,source_url,verified_at" as const;
+
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 /** Generated Supabase row shapes for the New Projects tables (SAN-1385 contract). */

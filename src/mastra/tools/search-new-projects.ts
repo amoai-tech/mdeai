@@ -1,3 +1,4 @@
+import { NEW_PROJECT_UNIT_COLUMNS } from "@/lib/new-projects/types";
 import { createTool } from "@mastra/core/tools";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -20,9 +21,6 @@ import type {
   NewProjectFilters,
   NewProjectSummary,
 } from "@/lib/new-projects/types";
-
-const UNIT_COLUMNS =
-  "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,product_class,phase_label,source_kind,source_url,verified_at";
 
 /** A grounded project card. Unknown facts are explicit strings, never zero/false/inferred. */
 export { newProjectCardSchema, type NewProjectCard } from "@/lib/new-projects/search-envelope";
@@ -207,7 +205,7 @@ export async function searchNewProjects(
   let sources: DevelopmentProjectSourceRow[] = [];
   if (ids.length > 0) {
     const [unitsResult, sourcesResult] = await Promise.all([
-      supabase.from("development_unit_types").select(UNIT_COLUMNS).in("project_id", ids),
+      supabase.from("development_unit_types").select(NEW_PROJECT_UNIT_COLUMNS).in("project_id", ids),
       supabase.from("development_project_sources").select("*").in("project_id", ids),
     ]);
     if (unitsResult.error) {
