@@ -14,6 +14,7 @@ import {
   looksLikeNonRentalSearch,
   looksLikeRentalSearch,
 } from "@/lib/rental-query-parser";
+import { RENTAL_WORD_RE, looksLikeNewProjectQuery } from "@/lib/new-projects/fast-path";
 import {
   looksLikeCafeSearch,
   looksLikeNightlifeGroundingSearch,
@@ -40,6 +41,7 @@ export type RouterRoutingTarget =
   | "event"
   | "grounded"
   | "restaurant"
+  | "new_project"
   | "agent";
 
 export type RouterAction = "search_now" | "clarify" | "agent";
@@ -154,6 +156,19 @@ export function classifyRouterIntent(text: string): RouterIntentClassification {
     };
   }
 
+  if (looksLikeNewProjectQuery(normalized) && !RENTAL_WORD_RE.test(normalized)) {
+    // New construction is a distinct domain: route it before the rental classifier, which would
+    // otherwise claim "apartment" phrasing.
+    const confidence = 0.9;
+    return {
+      intent: "general_concierge",
+      confidence,
+      reason: "new-construction project search",
+      action: "search_now",
+      routingTarget: "new_project",
+    };
+  }
+
   if (looksLikeRentalSearch(normalized) && !looksLikeNonRentalSearch(normalized)) {
     const confidence = 0.88;
     return {
@@ -253,6 +268,10 @@ export function routerHandlerOrderFromClassification(
 ): RouterRoutingTarget[] {
   const primary = classification.routingTarget;
   if (primary === "agent") return [];
+  // New construction is a distinct domain: if it is classified, try only its own handler and
+  // let the agent (which owns the search-new-projects tool) take over on failure. Falling
+  // through to rentals would reintroduce the "apartment wording" hijack this routing fixed.
+  if (primary === "new_project") return [primary];
   return [primary, ...ROUTER_HANDLER_ORDER.filter((t) => t !== primary)];
 }
 
@@ -270,6 +289,8 @@ export function routerIntentForTarget(target: RouterRoutingTarget): RouterIntent
     case "event":
       return "event_discovery";
     case "grounded":
+    case "new_project":
+      return "general_concierge";
     case "restaurant":
       return "restaurant_discovery";
     default:

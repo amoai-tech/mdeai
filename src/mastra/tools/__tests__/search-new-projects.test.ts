@@ -59,9 +59,11 @@ function unit(overrides: Partial<DevelopmentUnitTypeRow> = {}): DevelopmentUnitT
     id: "u1",
     media_url: null,
     name: "Apto 30 m²",
+    phase_label: null,
     price_from_cents: null,
     price_to_cents: null,
     private_area_m2: 22,
+    product_class: "residential_apartment",
     project_id: "p1",
     source_key: "arrayan-30m",
     source_kind: "developer",
@@ -226,6 +228,29 @@ describe("buildNewProjectCards — grounded, honest cards", () => {
     expect(
       buildNewProjectCards([row], priced, [], filters({ bedroomsExact: 2, maxPriceCop: 600000000 }), 5),
     ).toHaveLength(1);
+  });
+
+  it("a loft cannot satisfy a residential bedroom + budget search", () => {
+    const row = project({ id: "p1", slug: "olium-park", name: "Olium Park", price_from_cents: 39000000000 });
+    const units = [
+      unit({ id: "loft", project_id: "p1", bedrooms: 1, built_area_m2: 30, price_from_cents: 39000000000, product_class: "loft" }),
+      unit({ id: "home", project_id: "p1", bedrooms: 2, built_area_m2: 64, price_from_cents: 69856800000, product_class: "residential_apartment" }),
+    ];
+    // "1 bedroom under 450M" must NOT return Olium: its only 1BR is a loft.
+    expect(
+      buildNewProjectCards([row], units, [], filters({ bedroomsExact: 1, maxPriceCop: 450000000 }), 5),
+    ).toHaveLength(0);
+    expect(
+      buildNewProjectCards([row], units, [], filters({ bedroomsExact: 2, maxPriceCop: 700000000 }), 5),
+    ).toHaveLength(1);
+  });
+
+  it("an unclassified (NULL) unit fails closed", () => {
+    const row = project({ id: "p1", slug: "unknown", name: "Unknown", price_from_cents: 40000000000 });
+    const units = [unit({ id: "u1", project_id: "p1", bedrooms: 2, built_area_m2: 60, price_from_cents: 40000000000, product_class: null })];
+    expect(
+      buildNewProjectCards([row], units, [], filters({ bedroomsExact: 2, maxPriceCop: 450000000 }), 5),
+    ).toHaveLength(0);
   });
 
   it("sorts deterministically by name and respects the limit", () => {

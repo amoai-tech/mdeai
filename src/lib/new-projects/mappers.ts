@@ -13,6 +13,7 @@ export function bedroomRange(units: DevelopmentUnitTypeRow[]): {
   max: number | null;
 } {
   const values = units
+    .filter((unit) => unit.product_class === "residential_apartment")
     .map((unit) => unit.bedrooms)
     .filter((value): value is number => value != null);
   if (values.length === 0) return { min: null, max: null };
@@ -29,6 +30,9 @@ export function bedroomOptions(
 ): NewProjectSummary["bedroomOptions"] {
   const cheapest = new Map<number, number | null>();
   for (const unit of units) {
+    // Buyer-facing bedroom options are residential only: a loft, office or an unclassified row
+    // must never satisfy a "condo" question.
+    if (unit.product_class !== "residential_apartment") continue;
     // development_unit_types.bedrooms is nullable (number | null): a typology with no recorded
     // bedroom count can never be matched by an exact or minimum bedroom filter.
     if (unit.bedrooms == null) continue;
@@ -87,6 +91,8 @@ export function rowToUnitType(row: DevelopmentUnitTypeRow): NewProjectUnitType {
     priceToCents: row.price_to_cents,
     currency: row.currency,
     availability: row.availability,
+    productClass: row.product_class,
+    phaseLabel: row.phase_label,
     sourceKind: row.source_kind,
     sourceUrl: row.source_url,
     verifiedAt: row.verified_at,

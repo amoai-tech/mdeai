@@ -82,7 +82,11 @@ export function buildProjectComparison(
       missing.push(slug);
       continue;
     }
-    const projectUnits = unitsByProject.get(row.id) ?? [];
+    // A condo comparison shows residential typologies only; a loft/office must not appear as a
+    // comparable home even though it belongs to the project.
+    const projectUnits = (unitsByProject.get(row.id) ?? []).filter(
+      (unit) => unit.product_class === "residential_apartment",
+    );
     const primary = row.primary_source_id ? sourceById.get(row.primary_source_id) : undefined;
     compared.push({
       slug: row.slug,

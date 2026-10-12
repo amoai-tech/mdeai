@@ -1,3 +1,4 @@
+import { NEW_PROJECT_UNIT_COLUMNS } from "./types";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectFilters } from "./filters";
 import { buildDetail, rowToSummary } from "./mappers";
@@ -9,9 +10,6 @@ import type {
   NewProjectFilters,
   NewProjectSummary,
 } from "./types";
-
-const UNIT_COLUMNS =
-  "id,project_id,source_key,name,bedrooms,bathrooms,built_area_m2,private_area_m2,price_from_cents,price_to_cents,currency,availability,source_kind,source_url,verified_at";
 
 /**
  * Public browse query. Runs through the request-scoped anon/authenticated Supabase client, so
@@ -45,7 +43,7 @@ export async function listNewProjects(
   if (projectIds.length > 0) {
     const { data: unitData, error: unitError } = await supabase
       .from("development_unit_types")
-      .select(UNIT_COLUMNS)
+      .select(NEW_PROJECT_UNIT_COLUMNS)
       .in("project_id", projectIds);
     if (unitError) {
       throw new Error(`Failed to load project unit types: ${unitError.message}`);
@@ -86,7 +84,7 @@ export async function getNewProjectBySlug(slug: string): Promise<NewProjectDetai
 
   const row = project as DevelopmentProjectRow;
   const [unitsResult, sourcesResult] = await Promise.all([
-    supabase.from("development_unit_types").select(UNIT_COLUMNS).eq("project_id", row.id),
+    supabase.from("development_unit_types").select(NEW_PROJECT_UNIT_COLUMNS).eq("project_id", row.id),
     supabase
       .from("development_project_sources")
       .select("*")

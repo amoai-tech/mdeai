@@ -1229,9 +1229,11 @@ export type Database = {
           id: string
           media_url: string | null
           name: string
+          phase_label: string | null
           price_from_cents: number | null
           price_to_cents: number | null
           private_area_m2: number | null
+          product_class: string | null
           project_id: string
           source_key: string
           source_kind: string | null
@@ -1250,9 +1252,11 @@ export type Database = {
           id?: string
           media_url?: string | null
           name: string
+          phase_label?: string | null
           price_from_cents?: number | null
           price_to_cents?: number | null
           private_area_m2?: number | null
+          product_class?: string | null
           project_id: string
           source_key: string
           source_kind?: string | null
@@ -1271,9 +1275,11 @@ export type Database = {
           id?: string
           media_url?: string | null
           name?: string
+          phase_label?: string | null
           price_from_cents?: number | null
           price_to_cents?: number | null
           private_area_m2?: number | null
+          product_class?: string | null
           project_id?: string
           source_key?: string
           source_kind?: string | null

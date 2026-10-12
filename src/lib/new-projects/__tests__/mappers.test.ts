@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { NEW_PROJECT_UNIT_COLUMNS } from "@/lib/new-projects/types";
 import { bedroomRange, buildDetail, rowToSource, rowToSummary, rowToUnitType } from "@/lib/new-projects/mappers";
 import type {
   DevelopmentProjectRow,
   DevelopmentProjectSourceRow,
   DevelopmentUnitTypeRow,
 } from "@/lib/new-projects/types";
+
+it("fetches product classification consistently in browse and concierge", () => {
+  const columns = NEW_PROJECT_UNIT_COLUMNS.split(",");
+  expect(columns).toContain("product_class");
+  expect(columns).toContain("phase_label");
+  expect(new Set(columns).size).toBe(columns.length);
+});
 
 function projectRow(overrides: Partial<DevelopmentProjectRow> = {}): DevelopmentProjectRow {
   return {
@@ -55,9 +63,11 @@ function unitRow(overrides: Partial<DevelopmentUnitTypeRow> = {}): DevelopmentUn
     id: "u1",
     media_url: null,
     name: "Apto 129 m²",
+    phase_label: null,
     price_from_cents: null,
     price_to_cents: null,
     private_area_m2: 101,
+    product_class: "residential_apartment",
     project_id: "p1",
     source_key: "unit-fixture-a",
     source_kind: "developer",

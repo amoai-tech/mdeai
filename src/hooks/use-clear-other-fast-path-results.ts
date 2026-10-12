@@ -5,12 +5,13 @@ import { useCallback } from "react";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { useNewProjectFastPath } from "@/components/chat/new-project-fast-path-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 import { useMapContext } from "@/platform/maps/map-context";
 
-export type FastPathVertical = "rental" | "event" | "restaurant" | "grounded";
-const KINDS: readonly FastPathVertical[] = ["rental", "event", "restaurant", "grounded"];
+export type FastPathVertical = "rental" | "event" | "restaurant" | "grounded" | "new_project";
+const KINDS: readonly FastPathVertical[] = ["rental", "event", "restaurant", "grounded", "new_project"];
 
 /**
  * SAN-966 — one place that removes every OTHER vertical's result panel (and the event source
@@ -30,6 +31,7 @@ export function useClearOtherFastPathResults() {
   const { setToolResult: setEvent } = useEventFastPath();
   const { setToolResult: setRestaurant } = useRestaurantFastPath();
   const { setToolResult: setGrounded } = useGroundedFastPath();
+  const { setToolResult: setNewProject } = useNewProjectFastPath();
   const { clearWebCitations } = useEventSearchResults();
   const { mergePinsByCategory } = useMapContext();
 
@@ -45,10 +47,23 @@ export function useClearOtherFastPathResults() {
       }
       if (keep !== "restaurant") setRestaurant(null);
       if (keep !== "grounded") setGrounded(null);
+      if (keep !== "new_project") setNewProject(null);
       if (clearOtherPins) {
-        for (const kind of KINDS) if (kind !== keep) mergePinsByCategory(kind, []);
+        // New Projects has no map pins, so it is never passed to the pin merger.
+      for (const kind of KINDS) {
+        if (kind !== keep && kind !== "new_project") mergePinsByCategory(kind, []);
+      }
       }
     },
-    [setRental, setRentalSearchMeta, setEvent, setRestaurant, setGrounded, clearWebCitations, mergePinsByCategory],
+    [
+      setRental,
+      setRentalSearchMeta,
+      setEvent,
+      setRestaurant,
+      setGrounded,
+      setNewProject,
+      clearWebCitations,
+      mergePinsByCategory,
+    ],
   );
 }
