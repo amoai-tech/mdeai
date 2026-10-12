@@ -48,6 +48,9 @@ export function useNewProjectSearchFastPath() {
       controllerRef.current?.abort();
       const controller = new AbortController();
       controllerRef.current = controller;
+      // The previous cards belong to the previous request, not this search.
+      clearOthers("new_project");
+      setToolResult(null);
       try {
         const raw = await fetchNewProjectSearch(
           buildNewProjectFastPathParams(text),
@@ -60,12 +63,18 @@ export function useNewProjectSearchFastPath() {
         setToolResult(parsed.data);
         showExchange(text, newProjectSearchSummary(parsed.data));
         return true;
-      } catch {
-        // A superseded request is expected; anything else must not leave stale cards on screen.
+      } catch (error) {
+        // A superseded search is owned by the newer request: no stale result and no agent retry.
         if (controller.signal.aborted) return true;
-        clearOthers("new_project");
         setToolResult(null);
-        return false;
+        const message =
+          error instanceof Error && /^(New Projects search supports|New Projects currently covers|I couldn't interpret that price)/.test(error.message)
+            ? error.message
+            : "I couldn't search new projects right now. Please try again.";
+        showExchange(text, message);
+        // The error has a visible local answer; returning false would duplicate the request
+        // through the AI tool (and could produce another misleading set of cards).
+        return true;
       } finally {
         if (controllerRef.current === controller) controllerRef.current = null;
       }

@@ -25,6 +25,8 @@ describe("new-project fast path classifier", () => {
     expect(looksLikeNewProjectQuery("new project ideas for my startup")).toBe(false);
     expect(looksLikeNewProjectQuery("new project management tools")).toBe(false);
     expect(looksLikeNewProjectQuery("new condo cleaning tips")).toBe(false);
+    expect(looksLikeNewProjectQuery("proyectos nuevos de investigación")).toBe(false);
+    expect(looksLikeNewProjectQuery("proyectos nuevos en Laureles")).toBe(true);
   });
 
   it("parses formatted price amounts correctly", () => {
@@ -33,6 +35,29 @@ describe("new-project fast path classifier", () => {
     expect(buildNewProjectFastPathParams("new projects under 1.200 million").maxPriceCop).toBe(1200000000);
     expect(buildNewProjectFastPathParams("new projects under 1,234,567 million").maxPriceCop).toBe(1234567000000);
     expect(buildNewProjectFastPathParams("new projects under 1,2 million").maxPriceCop).toBe(1200000);
+  });
+
+  it("distinguishes one/two/three decimal digits from grouped thousands", () => {
+    expect(buildNewProjectFastPathParams("new projects under 1,23 million").maxPriceCop).toBe(1230000);
+    expect(buildNewProjectFastPathParams("new projects under 1,234 million").maxPriceCop).toBe(1234000000);
+    expect(buildNewProjectFastPathParams("new projects under 1.234,50 million").maxPriceCop).toBe(1234500000);
+    expect(buildNewProjectFastPathParams("new projects under 1,234.50 million").maxPriceCop).toBe(1234500000);
+    expect(buildNewProjectFastPathParams("new projects under 1.234.567 million").maxPriceCop).toBe(1234567000000);
+    expect(() => buildNewProjectFastPathParams("new projects under 1,23,4 million")).toThrow("couldn't interpret");
+    expect(() => buildNewProjectFastPathParams("new projects under 1.234,567 million")).toThrow("couldn't interpret");
+  });
+
+  it("never misreads a multi-digit bedroom count as a single bedroom", () => {
+    expect(() => buildNewProjectFastPathParams("new 10 bedroom projects")).toThrow("1 to 6 bedrooms");
+    expect(() => buildNewProjectFastPathParams("new 0 bedroom projects")).toThrow("1 to 6 bedrooms");
+    expect(buildNewProjectFastPathParams("new 6 bedroom projects")).toEqual({limit: 5, bedroomsExact: 6});
+  });
+
+  it("does not silently widen a buyer's location outside the supported pilot", () => {
+    for (const query of ["new projects in Envigado", "show me new condos in Bogotá", "new condos in Belén"]) {
+      expect(() => buildNewProjectFastPathParams(query)).toThrow("currently covers Laureles");
+    }
+    expect(buildNewProjectFastPathParams("new projects in Ciudad del Rio").neighborhood).toBe("Ciudad del Río");
   });
 
   it("extracts hard filters and never invents one", () => {

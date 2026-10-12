@@ -5,7 +5,7 @@
  */
 /** Spanish or unambiguous English new-construction phrases. */
 const NEW_PROJECT_STRONG_RE =
-  /(?:proyectos?\s+nuev\w*)|(?:apartamentos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:obra\s+nueva)|(\bnew\s+construction\b)|(\bnew\s+developments?\b)/i;
+  /(?:apartamentos?\s+nuev\w*)|(?:preventa|pre-venta)|(?:obra\s+nueva)|(\bnew\s+construction\b)|(\bnew\s+developments?\b)/i;
 
 /** English "new condo/apartment/projects" needs a real-estate cue to avoid adjacent domains. */
 const NEW_PROJECT_CONDITIONAL_RE =
@@ -25,24 +25,63 @@ export const RENTAL_WORD_RE = /\b(for rent|per night|nightly|arriendo|alquiler|a
 const DELIVERY_WORD = /deliver|entrega|entregar|completion|handover/i;
 
 const NEIGHBORHOODS = ["Laureles", "Ciudad del Río", "El Poblado"] as const;
+/** Geographies outside the current published pilot must not silently lose their location filter. */
+const UNSUPPORTED_AREA_RE = /\b(envigado|belen|bel[eé]n|calasanz|sabaneta|bogota|bogot[aá]|rionegro|itagui|itag[uü][ií])\b/i;
+
+function unaccent(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+
+/**
+ * A price in millions: 1,200 / 1.200 mean 1200, whereas 1,2 / 1.23 mean decimals.
+ * Reject malformed or mixed/ambiguous grouping rather than silently widening a budget.
+ */
+function parseMillionsAmount(raw: string): number | null {
+  let normalized: string;
+  if (/^\d{1,3}(?:,\d{3})+\.\d{1,2}$/.test(raw)) {
+    normalized = raw.replaceAll(",", "");
+  } else if (/^\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(raw)) {
+    normalized = raw.replaceAll(".", "").replace(",", ".");
+  } else if (/^\d{1,3}([.,])\d{3}(?:\1\d{3})*$/.test(raw)) {
+    normalized = raw.replace(/[.,]/g, "");
+  } else if (/^\d+(?:[.,]\d{1,2})?$/.test(raw)) {
+    normalized = raw.replace(",", ".");
+  } else {
+    return null;
+  }
+  const millions = Number(normalized);
+  return Number.isFinite(millions) && millions > 0 &&
+    Number.isSafeInteger(Math.round(millions * 1_000_000))
+    ? millions : null;
+}
 
 export function looksLikeNewProjectQuery(text: string): boolean {
   // Adjacent domains ("new project ideas for my startup", "new condo cleaning tips") must not
   // win the routing, because New Projects is classified before the other verticals.
   if (NON_REAL_ESTATE_RE.test(text)) return false;
   if (NEW_PROJECT_STRONG_RE.test(text)) return true;
-  return NEW_PROJECT_CONDITIONAL_RE.test(text) && REAL_ESTATE_CUE_RE.test(text);
+  // Generic Spanish "new projects" can refer to any domain, not just real estate.
+  return (NEW_PROJECT_CONDITIONAL_RE.test(text) ||
+    /\bproyectos?\s+nuev\w*\b/i.test(text)) && REAL_ESTATE_CUE_RE.test(text);
 }
 
 export function buildNewProjectFastPathParams(text: string): Record<string, unknown> {
   const params: Record<string, unknown> = { limit: 5 };
-  const lower = text.toLowerCase();
+  const lower = unaccent(text);
+  if (UNSUPPORTED_AREA_RE.test(lower)) {
+    throw new Error("New Projects currently covers Laureles, Ciudad del Río and El Poblado in Medellín. Please choose one of these areas.");
+  }
 
-  const neighborhood = NEIGHBORHOODS.find((n) => lower.includes(n.toLowerCase()));
+  const neighborhood = NEIGHBORHOODS.find((n) => lower.includes(unaccent(n)));
   if (neighborhood) params.neighborhood = neighborhood;
 
-  const beds = text.match(/(\d)\s*(\+)?\s*(?:bed(?:room)?s?|habitaci[oó]n(?:es)?|alcoba(?:s)?|br)\b/i);
+  const beds = text.match(/(\d+)\s*(\+)?\s*(?:bed(?:room)?s?|habitaci[oó]n(?:es)?|alcoba(?:s)?|br)\b/i);
   if (beds) {
+    const count = Number(beds[1]);
+    if (!Number.isInteger(count) || count < 1 || count > 6) {
+      throw new Error("New Projects search supports 1 to 6 bedrooms. Please adjust the number.");
+    }
     // Qualify only next to the matched bedroom phrase — an unrelated "3+ cars" must not turn an
     // exact "2 bedrooms" into "2+".
     const at = beds.index ?? 0;
@@ -54,10 +93,11 @@ export function buildNewProjectFastPathParams(text: string): Record<string, unkn
 
   const price = text.match(/(?:under|below|bajo|menos de)\s*\$?\s*([\d.,]+)\s*(million|millones|m)\b/i);
   if (price) {
-    const millions = Number(price[1].replace(/[.,](?=\d{3}\b)/g, "").replace(",", "."));
-    if (Number.isFinite(millions) && millions > 0) {
-      params.maxPriceCop = Math.round(millions * 1_000_000);
+    const millions = parseMillionsAmount(price[1]);
+    if (millions == null) {
+      throw new Error("I couldn't interpret that price. Try 'under 900 million' or 'under 1,200 million'.");
     }
+    params.maxPriceCop = Math.round(millions * 1_000_000);
   }
 
   // A bare year ("announced in 2025") is not a delivery filter; require delivery wording nearby.
