@@ -114,12 +114,19 @@ export const MAX_RENTAL_TEXT_CHARS = 1000;
  * after a semicolon ("; drop by later", "; select few") is not caught. Every repeat is bounded
  * ({1,5}, {0,40}) so there is no unbounded backtracking even without the length cap.
  */
-const INJECTION_MARKERS_RE =
-  /\b(?:drop|truncate|alter)\s{1,5}(?:table|database|schema)\b|\bdelete\s{1,5}from\s{1,5}[a-z_.]{1,40}\s{0,5}(?:where\b|;|$)|\binsert\s{1,5}into\s{1,5}[a-z_.]{1,40}\b|\bunion\s{1,5}(?:all\s{1,5})?select\b|\bselect\s{1,5}\*\s{1,5}from\b|\bignore\s{1,5}(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s{1,5}prompt\b/i;
+const INJECTION_PATTERNS: readonly RegExp[] = [
+  /\b(?:drop|truncate|alter)\s{1,5}(?:table|database|schema)\b/i,
+  /\bdelete\s{1,5}from\s{1,5}[a-z_.]{1,40}\s{0,5}(?:where\b|;|$)/i,
+  /\binsert\s{1,5}into\s{1,5}[a-z_.]{1,40}\b/i,
+  /\bunion\s{1,5}(?:all\s{1,5})?select\b/i,
+  /\bselect\s{1,5}\*\s{1,5}from\b/i,
+  /\bignore\s{1,5}(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b/i,
+  /\bsystem\s{1,5}prompt\b/i,
+];
 
 /** True when the text carries SQL or instruction-override markers. Exported for tests. */
 export function looksLikeInjection(text: string): boolean {
-  return INJECTION_MARKERS_RE.test(text);
+  return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 const MONTH_IDX: Record<string, number> = {
@@ -309,25 +316,22 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
  * chat does not tell the renter a budget "wasn't applied" when they never gave one. Explicit
  * nightly USD caps are enforced by the search; the caller checks whether a cap was actually sent.
  */
-const EXPLICIT_BUDGET_RE = new RegExp(
-  [
-    // currency word or symbol directly followed by an amount: "COP 4M", "$2000", "pesos 3.500.000"
-    String.raw`(?:\b(?:cop|pesos?|usd|dollars?)\b|[$€])\s{0,3}\d`,
-    // amount followed by a currency word: "3.500.000 pesos", "80 dollars"
-    String.raw`\d[\d.,]{0,15}\s{0,3}(?:m|k|million|millones|mil)?\s{0,3}(?:cop|pesos?|usd|dollars?)\b`,
-    // amount with a magnitude AND a period: "4M/month", "4 million a month", "2k per night"
-    String.raw`\b\d[\d.,]{0,15}\s{0,2}(?:m|k|million|millones)\b\s{0,3}(?:/|per\s|a\s|al\s)?\s{0,3}(?:month|mes|night|noche)\b`,
-    // "budget" followed closely by a number
-    String.raw`\bbudget\b\D{0,20}\d`,
-    // limit word followed by a money-looking amount (not "under 2 bedrooms", "up to 3 people")
-    String.raw`\b(?:under|below|max|up to|hasta|menos de)\s{0,3}(?:(?:cop|usd|\$)\s{0,3}\d|\d[\d.,]{2,15}|\d\s{0,2}(?:m|k|million|millones)\b)`,
-  ].join("|"),
-  "i",
-);
+const EXPLICIT_BUDGET_PATTERNS: readonly RegExp[] = [
+  // currency word or symbol directly followed by an amount: "COP 4M", "$2000", "pesos 3.500.000"
+  /(?:\b(?:cop|pesos?|usd|dollars?)\b|[$€])\s{0,3}\d/i,
+  // amount followed by a currency word: "3.500.000 pesos", "80 dollars"
+  /\d[\d.,]{0,15}\s{0,3}(?:m|k|million|millones|mil)?\s{0,3}(?:cop|pesos?|usd|dollars?)\b/i,
+  // amount with a magnitude AND a period: "4M/month", "4 million a month", "2k per night"
+  /\b\d[\d.,]{0,15}\s{0,2}(?:m|k|million|millones)\b\s{0,3}(?:\/|per\s|a\s|al\s)?\s{0,3}(?:month|mes|night|noche)\b/i,
+  // "budget" followed closely by a number
+  /\bbudget\b\D{0,20}\d/i,
+  // limit word followed by a money-looking amount (not "under 2 bedrooms", "up to 3 people")
+  /\b(?:under|below|max|up to|hasta|menos de)\s{0,3}(?:(?:cop|usd|\$)\s{0,3}\d|\d[\d.,]{2,15}|\d\s{0,2}(?:m|k|million|millones)\b)/i,
+];
 
 export function statesBudget(text: string): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
-  return EXPLICIT_BUDGET_RE.test(text);
+  return EXPLICIT_BUDGET_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 const FAST_PATH_LIMIT = 8;
