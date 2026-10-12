@@ -4,6 +4,11 @@ import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
+import {
+  RentalSearchUnavailableError,
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from '../lib/rental-search-unavailable';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
 
@@ -69,7 +74,8 @@ export type RentalQuery = {
 export type RentalSearchResult = {
   results: Rental[];
   total: number;
-  source: 'supabase' | 'mock';
+  /** SAN-1089: only the real database. A search that cannot read it throws instead. */
+  source: 'supabase';
   hybridUsed?: boolean;
   embedStatus?: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -364,7 +370,7 @@ async function searchRentalsFromSupabase(
 ): Promise<{ results: Rental[]; total: number; source: 'supabase' }> {
   const client = getSupabaseClient();
   if (!client) {
-    throw new Error('Supabase client unavailable');
+    throw new RentalSearchUnavailableError('client_unavailable');
   }
 
   const limit = query.limit ?? 8;
@@ -417,7 +423,8 @@ async function searchRentalsFromSupabase(
 
   const { data, error, count } = await q;
   if (error) {
-    throw new Error(error.message);
+    // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
+    throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
   }
 
   let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
@@ -425,165 +432,6 @@ async function searchRentalsFromSupabase(
     results = sortForMonthlyStay(results);
   }
   return { results, total: count ?? results.length, source: 'supabase' };
-}
-
-// Fallback mock kept for offline/test environments.
-// SAN-1349: these fixtures carry no ownership proof, so every mock is deliberately NOT
-// requestable (`can_schedule_viewing: false`, `schedule_viewing_url: null`). A mock must never
-// advertise a viewing action that the database would reject.
-const MOCK_RENTALS: Rental[] = [
-  {
-    id: 'rnt_lau_001',
-    title: 'Bright 2BR with Balcony in Laureles',
-    neighborhood: 'Laureles',
-    nightly_price: 78,
-    currency: 'USD',
-    bedrooms: 2,
-    wifi: true,
-    amenities: ['wifi', 'workspace', 'kitchen', 'balcony', 'washer'],
-    image: 'https://images.unsplash.com/photo-rental-lau-001',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Andrés Restrepo',
-    availability: 'Available May 15 – Aug 30, 2026',
-    tags: ['long-stay', 'remote-work', 'walkable'],
-    latitude: 6.2530,
-    longitude: -75.5910,
-  },
-  {
-    id: 'rnt_lau_002',
-    title: 'Modern 1BR Loft near Primer Parque',
-    neighborhood: 'Laureles',
-    nightly_price: 64,
-    currency: 'USD',
-    bedrooms: 1,
-    wifi: true,
-    amenities: ['wifi', 'workspace', 'kitchen', 'gym', 'rooftop'],
-    image: 'https://images.unsplash.com/photo-rental-lau-002',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_002',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Sofía Vélez',
-    availability: 'Available now – Jul 10, 2026',
-    tags: ['solo-traveler', 'remote-work', 'pet-friendly'],
-    latitude: 6.2515,
-    longitude: -75.5922,
-  },
-  {
-    id: 'rnt_lau_003',
-    title: 'Quiet Studio off Avenida Nutibara',
-    neighborhood: 'Laureles',
-    nightly_price: 42,
-    currency: 'USD',
-    bedrooms: 0,
-    wifi: true,
-    amenities: ['wifi', 'kitchen', 'workspace'],
-    image: 'https://images.unsplash.com/photo-rental-lau-003',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_003',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Camila Ortiz',
-    availability: 'Available Jun 1 – Dec 31, 2026',
-    tags: ['budget', 'long-stay', 'quiet'],
-    latitude: 6.2525,
-    longitude: -75.5932,
-  },
-  {
-    id: 'rnt_lau_004',
-    title: 'Spacious 3BR Penthouse · Segundo Parque',
-    neighborhood: 'Laureles',
-    nightly_price: 110,
-    currency: 'USD',
-    bedrooms: 3,
-    wifi: true,
-    amenities: ['wifi', 'pool', 'workspace', 'kitchen', 'washer', 'balcony'],
-    image: 'https://images.unsplash.com/photo-rental-lau-004',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_004',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Miguel Arango',
-    availability: 'Available Jul 1 – Oct 31, 2026',
-    tags: ['family', 'premium', 'long-stay'],
-    latitude: 6.2510,
-    longitude: -75.5905,
-  },
-  {
-    id: 'rnt_lau_005',
-    title: 'Cozy 1BR near La Setenta',
-    neighborhood: 'Laureles',
-    nightly_price: 55,
-    currency: 'USD',
-    bedrooms: 1,
-    wifi: true,
-    amenities: ['wifi', 'kitchen', 'workspace', 'smart-tv'],
-    image: 'https://images.unsplash.com/photo-rental-lau-005',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_005',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Laura Gómez',
-    availability: 'Available now – Sep 30, 2026',
-    tags: ['nightlife', 'walkable', 'solo-traveler'],
-    latitude: 6.2535,
-    longitude: -75.5917,
-  },
-  {
-    id: 'rnt_pob_001',
-    title: 'Sunny 2BR in El Poblado',
-    neighborhood: 'El Poblado',
-    nightly_price: 95,
-    currency: 'USD',
-    bedrooms: 2,
-    wifi: true,
-    amenities: ['wifi', 'pool', 'gym', 'kitchen', 'concierge'],
-    image: 'https://images.unsplash.com/photo-rental-pob-001',
-    source_url: 'https://mdeai.co/rentals/rnt_pob_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Patricia Lopera',
-    availability: 'Available Jun 1 – Aug 31, 2026',
-    tags: ['nightlife', 'walkable', 'gym'],
-    latitude: 6.2090,
-    longitude: -75.5655,
-  },
-  {
-    id: 'rnt_env_001',
-    title: 'Cozy Studio in Envigado',
-    neighborhood: 'Envigado',
-    nightly_price: 38,
-    currency: 'USD',
-    bedrooms: 0,
-    wifi: true,
-    amenities: ['wifi', 'kitchen'],
-    image: 'https://images.unsplash.com/photo-rental-env-001',
-    source_url: 'https://mdeai.co/rentals/rnt_env_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Juliana Mejía',
-    availability: 'Available now – Aug 15, 2026',
-    tags: ['budget', 'quiet', 'long-stay'],
-    latitude: 6.1750,
-    longitude: -75.5908,
-  },
-];
-
-// skipcq: JS-0067 - module-local helper; not browser global scope
-function searchRentalsFromMock(query: RentalQuery): { results: Rental[]; total: number; source: 'mock' } {
-  let results = MOCK_RENTALS.slice();
-  if (query.neighborhood) {
-    const q = query.neighborhood.toLowerCase();
-    results = results.filter((r) => r.neighborhood.toLowerCase().includes(q));
-  }
-  if (typeof query.minBedrooms === 'number') {
-    const minBedrooms = query.minBedrooms;
-    results = results.filter((r) => r.bedrooms >= minBedrooms);
-  }
-  if (typeof query.maxPricePerNight === 'number') {
-    const maxPricePerNight = query.maxPricePerNight;
-    results = results.filter((r) => r.nightly_price <= maxPricePerNight);
-  }
-  const total = results.length;
-  return { results: results.slice(0, query.limit ?? 8), total, source: 'mock' };
 }
 
 // Named export for direct workflow calls (sync signature kept for compatibility;
@@ -624,7 +472,7 @@ export async function searchRentals(
     } catch (err) {
       console.warn(
         '[search-rentals] intelligent search failed, falling back to structured search:',
-        (err as Error).message,
+        describeRentalSearchError(err),
       );
     }
   }
@@ -633,18 +481,20 @@ export async function searchRentals(
     const { results, total, source } = await searchRentalsFromSupabase(query);
     return { results, total, source };
   } catch (err) {
-    console.warn(
-      '[search-rentals] Supabase query failed, falling back to mock:',
-      (err as Error).message,
-    );
+    // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
+    // a different answer from a healthy query that matched nothing. Log only a stable reason
+    // code (or the error class name) — never the driver message, which can carry hostnames,
+    // ports or connection details.
+    const reason = describeRentalSearchError(err);
+    console.error('[search-rentals] rental search unavailable:', reason);
+    throw isRentalSearchUnavailable(err) ? err : new RentalSearchUnavailableError(reason);
   }
-  return searchRentalsFromMock(query);
 }
 
 export const searchRentalsTool = createTool({
   id: 'search-rentals',
   description:
-    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries live Supabase apartments table; falls back to demo data if DB is unavailable. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
+    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries the live Supabase apartments table and returns only publicly eligible listings; if the database cannot be read the call fails and you must tell the user search is temporarily unavailable — never invent listings. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
@@ -662,7 +512,7 @@ export const searchRentalsTool = createTool({
         evidenceText: z.string().nullable().optional(),
       }),
     ),
-    source: z.enum(['supabase', 'mock']),
+    source: z.literal('supabase'),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
