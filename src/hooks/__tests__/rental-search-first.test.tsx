@@ -162,4 +162,59 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(body.minBedrooms).toBe(2);
     expect(body.maxPricePerNight).toBeUndefined();
   });
+
+  it("a 4xx is a request problem, not an outage: it is not called 'temporarily unavailable'", async () => {
+    respond(400, { error: "invalid body" });
+    const handled = await send("Search apartments Medellín");
+    // false = let the concierge handle it; retrying the same request would not help.
+    expect(handled).toBe(false);
+    expect(assistantText()).not.toMatch(/temporarily unavailable/i);
+  });
+
+  it.each([500, 502, 503, 429])("HTTP %i is reported as temporarily unavailable", async (status) => {
+    respond(status, { error: "x" });
+    const handled = await send("Search apartments Medellín");
+    expect(handled).toBe(true);
+    expect(assistantText()).toMatch(/temporarily unavailable/i);
+  });
+
+  it("a message sent while a search is running is queued and answered afterwards, not dropped", async () => {
+    let releaseFirst: (response: Response) => void = () => undefined;
+    fetchMock.mockImplementationOnce(
+      () => new Promise<Response>((resolve) => { releaseFirst = resolve; }),
+    );
+    respond(200, { results: [] });
+    // mockImplementationOnce above wins for the first call; later calls use `respond`.
+    fetchMock.mockImplementationOnce(
+      () => new Promise<Response>((resolve) => { releaseFirst = resolve; }),
+    );
+
+    let first: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      first = probe.send("Search apartments Medellín");
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The renter refines while the first search is still in flight.
+    let secondHandled = false;
+    await act(async () => {
+      secondHandled = await probe.send("Actually only apartments in Laureles");
+    });
+    expect(secondHandled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      releaseFirst(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+      await first;
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(secondBody.neighborhood).toBe("Laureles");
+    expect(secondBody.queryText).toBe("Actually only apartments in Laureles");
+  });
 });
+

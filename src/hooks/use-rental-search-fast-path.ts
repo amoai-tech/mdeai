@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
@@ -44,6 +44,24 @@ type RentalSearchResponse = {
   rankExplanation?: Array<{ factor: string; score: number; note: string }>;
 };
 
+/** A non-2xx answer from the search API, with its status so callers can tell 4xx from 5xx. */
+class RentalSearchHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`rental search failed: ${status}`);
+    this.name = "RentalSearchHttpError";
+  }
+}
+
+/**
+ * "Temporarily unavailable" is only true for a network failure, a 5xx, a timeout or a rate limit.
+ * A 400/401/403/404 is a problem with the request itself: retrying cannot help, so it must not be
+ * presented as an outage.
+ */
+function isTemporaryOutage(err: unknown): boolean {
+  if (!(err instanceof RentalSearchHttpError)) return true; // fetch itself failed (offline, DNS…)
+  return err.status >= 500 || err.status === 429 || err.status === 408;
+}
+
 async function fetchRentalSearch(
   params: RentalSearchApiParams,
 ): Promise<RentalSearchResponse> {
@@ -53,7 +71,7 @@ async function fetchRentalSearch(
     body: JSON.stringify(params),
   });
   if (!res.ok) {
-    throw new Error(`rental search failed: ${res.status}`);
+    throw new RentalSearchHttpError(res.status);
   }
   return (await res.json()) as RentalSearchResponse;
 }
@@ -66,6 +84,10 @@ export function useRentalSearchFastPath() {
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
+  // A message sent while a search is running is kept (latest wins) and answered when it ends,
+  // instead of being reported "handled" and silently dropped.
+  const pendingRef = useRef<string | null>(null);
+  const handleRef = useRef<((text: string) => Promise<boolean>) | null>(null);
 
   const applySearchResults = useCallback(
     (
@@ -104,12 +126,15 @@ export function useRentalSearchFastPath() {
         try {
           response = await fetchRentalSearch(params);
         } catch (err) {
-          // SAN-407: an outage is its own answer. Returning false here used to hand the same
-          // message to the agent, which then gave a second, conflicting reply. Retrying is just
-          // sending the message again; no write happens on this path.
-          console.error("[rental-fast-path] search unavailable", err);
+          console.error("[rental-fast-path] search failed", err);
           setToolResult(null);
           setSearchMeta(null);
+          // A request problem (4xx) is not an outage and retrying cannot fix it: hand the message
+          // to the concierge instead of telling the renter to try again.
+          if (!isTemporaryOutage(err)) return false;
+          // SAN-407: a real outage is its own answer. Returning false here used to hand the same
+          // message to the agent, which then gave a second, conflicting reply. Retrying is just
+          // sending the message again; no write happens on this path.
           showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
@@ -150,6 +175,9 @@ export function useRentalSearchFastPath() {
         return false;
       } finally {
         busyRef.current = false;
+        const next = pendingRef.current;
+        pendingRef.current = null;
+        if (next) void handleRef.current?.(next);
       }
     },
     [applySearchResults, showExchange, setSearchMeta, setToolResult],
@@ -170,6 +198,11 @@ export function useRentalSearchFastPath() {
       const params = buildRentalSearchParams(trimmed, memory);
       if (!params) return false;
 
+      if (busyRef.current) {
+        pendingRef.current = trimmed;
+        return true;
+      }
+
       clearLocalMessages();
       return runSearch(trimmed, params, memory);
     },
@@ -181,6 +214,10 @@ export function useRentalSearchFastPath() {
       state,
     ],
   );
+
+  useEffect(() => {
+    handleRef.current = handleUserMessage;
+  }, [handleUserMessage]);
 
   return { handleUserMessage };
 }

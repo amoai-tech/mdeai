@@ -101,9 +101,26 @@ const MONTHLY_RE = /\b(month|monthly|per month|\/month|mes)\b/i;
 const TRIP_RE = /\b(for the trip|total|10 days|two weeks|\d+\s+days)\b/i;
 const MEDELLIN_CITY_RE = /\bmedell[ií]n\b/i;
 
-/** SQL statements and prompt-override phrases (SAN-1054). Deliberately narrow and conservative. */
+/**
+ * Longest message the rental fast path will read. A rental request is a sentence or two; anything
+ * longer goes to the concierge, which has its own limits. Bounding the input keeps every regex
+ * in this module O(n) on a small n regardless of what a client sends (Codacy regex-dos).
+ */
+export const MAX_RENTAL_TEXT_CHARS = 1000;
+
+/**
+ * SQL statements and prompt-override phrases (SAN-1054). Deliberately narrow: each SQL alternative
+ * needs SQL *structure* ("drop table", "delete from <name>", "union select"), so ordinary English
+ * after a semicolon ("; drop by later", "; select few") is not caught. Every repeat is bounded
+ * ({1,5}, {0,40}) so there is no unbounded backtracking even without the length cap.
+ */
 const INJECTION_MARKERS_RE =
-  /;\s*(?:drop|truncate|alter|delete|insert|update|select|union)\b|\b(?:drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|\bignore\s+(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s+prompt\b/i;
+  /\b(?:drop|truncate|alter)\s{1,5}(?:table|database|schema)\b|\bdelete\s{1,5}from\s{1,5}[a-z_.]{1,40}\s{0,5}(?:where\b|;|$)|\binsert\s{1,5}into\s{1,5}[a-z_.]{1,40}\b|\bunion\s{1,5}(?:all\s{1,5})?select\b|\bselect\s{1,5}\*\s{1,5}from\b|\bignore\s{1,5}(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s{1,5}prompt\b/i;
+
+/** True when the text carries SQL or instruction-override markers. Exported for tests. */
+export function looksLikeInjection(text: string): boolean {
+  return INJECTION_MARKERS_RE.test(text);
+}
 
 const MONTH_IDX: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
@@ -202,7 +219,7 @@ function parseBedrooms(text: string): number | undefined {
 /** User message is clearly about rentals, not events or cafés. */
 export function looksLikeRentalSearch(text: string): boolean {
   const t = text.trim();
-  if (!t) return false;
+  if (!t || t.length > MAX_RENTAL_TEXT_CHARS) return false;
   if (EVENT_INTENT_RE.test(t) && !RENTAL_INTENT_RE.test(t)) return false;
   return RENTAL_INTENT_RE.test(t) || BEDROOM_RE.test(t) || /\/night|per night/i.test(t);
 }
@@ -286,15 +303,31 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
 }
 
 /**
- * True when the renter named a budget in words the search cannot yet enforce (monthly, COP,
- * "cheap"…). The chat says so instead of implying the results were limited by price. Explicit
- * nightly USD caps are enforced by the search and are not reported here — the caller checks
- * whether a cap was actually sent.
+ * True when the renter stated an explicit budget the search cannot yet enforce (an amount with a
+ * currency or period — "under COP 4M/month", "$2000 per month", "up to 3.500.000 pesos").
+ * Vague preferences ("cheap", "affordable", "budget apartments") are NOT a stated budget, so the
+ * chat does not tell the renter a budget "wasn't applied" when they never gave one. Explicit
+ * nightly USD caps are enforced by the search; the caller checks whether a cap was actually sent.
  */
+const EXPLICIT_BUDGET_RE = new RegExp(
+  [
+    // currency word or symbol directly followed by an amount: "COP 4M", "$2000", "pesos 3.500.000"
+    String.raw`(?:\b(?:cop|pesos?|usd|dollars?)\b|[$€])\s{0,3}\d`,
+    // amount followed by a currency word: "3.500.000 pesos", "80 dollars"
+    String.raw`\d[\d.,]{0,15}\s{0,3}(?:m|k|million|millones|mil)?\s{0,3}(?:cop|pesos?|usd|dollars?)\b`,
+    // amount with a magnitude AND a period: "4M/month", "4 million a month", "2k per night"
+    String.raw`\b\d[\d.,]{0,15}\s{0,2}(?:m|k|million|millones)\b\s{0,3}(?:/|per\s|a\s|al\s)?\s{0,3}(?:month|mes|night|noche)\b`,
+    // "budget" followed closely by a number
+    String.raw`\bbudget\b\D{0,20}\d`,
+    // limit word followed by a money-looking amount (not "under 2 bedrooms", "up to 3 people")
+    String.raw`\b(?:under|below|max|up to|hasta|menos de)\s{0,3}(?:(?:cop|usd|\$)\s{0,3}\d|\d[\d.,]{2,15}|\d\s{0,2}(?:m|k|million|millones)\b)`,
+  ].join("|"),
+  "i",
+);
+
 export function statesBudget(text: string): boolean {
-  return /\b(cop|pesos?|usd|dollars?|cheap|budget|affordable)\b|[$€]\s*\d|\d\s?(?:m|k|million|millones)\b|\b(?:under|below|max|up to)\s+\d/i.test(
-    text,
-  );
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  return EXPLICIT_BUDGET_RE.test(text);
 }
 
 const FAST_PATH_LIMIT = 8;
@@ -307,6 +340,11 @@ export function buildRentalSearchParams(
   text: string,
   memory: ConciergeWorkingMemory,
 ): RentalSearchApiParams | null {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return null;
+  // SAN-1054 / RE-SEC-001: text that carries SQL or instruction-override markers is never
+  // promoted to an automatic search, whatever else it says ("rentals in Laureles; DROP TABLE…").
+  // It keeps its old route (clarify / concierge), where the agent's own guardrails apply.
+  if (looksLikeInjection(text)) return null;
   if (looksLikeNonRentalSearch(text)) return null;
 
   const s = scoreRentalQuery(text);
@@ -399,11 +437,6 @@ export function buildRentalSearchParams(
     );
   }
 
-  // SAN-1054 / RE-SEC-001: text that carries SQL or instruction-override markers is never
-  // promoted to an automatic search just because it also says "rentals". It keeps its old
-  // route (clarify / concierge), where the agent's own guardrails apply.
-  if (INJECTION_MARKERS_RE.test(text)) return null;
-
   // SAN-407: recognised rental-search intent with no optional slots ("Search apartments
   // Medellín") is still a search. It goes out with the renter's own words and nothing invented;
   // any refinement question comes after the answer.
@@ -414,6 +447,7 @@ export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,
 ): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
   if (looksLikeNonRentalSearch(text)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
