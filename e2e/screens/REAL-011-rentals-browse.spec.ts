@@ -52,7 +52,9 @@ test.describe("REAL-011 /rentals browse", () => {
     await page.goto("/rentals?maxPrice=100");
     await expect(page.getByTestId("rentals-browse")).toBeVisible();
     await expect(page.getByRole("group", { name: "Price filters" })).toHaveCount(0);
-    await expect(page.getByText(/\/\s*night/i)).toHaveCount(0);
+    // Only the retired price FILTERS are asserted gone. Card prices are SAN-1229's surface.
+    await expect(page.getByText("Max price / night")).toHaveCount(0);
+    await expect(page.locator('[data-testid^="rentals-filter-price"]')).toHaveCount(0);
     // Filter links must not carry the retired param forward.
     const hrefs = await page
       .getByRole("group", { name: "Neighborhood filters" })
