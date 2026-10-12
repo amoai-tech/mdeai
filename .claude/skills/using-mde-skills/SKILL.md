@@ -24,7 +24,7 @@ The router chooses one owner and stops. **Specific requested outcome beats a bro
 - research/evidence → `research`; domain-specific factual work → matching canonical domain owner
 - explicit short-skill invocation → requested short skill within its permitted scope
 
-Use `tasks`, `systematic-debugging`, `testing`, `code-review`, and specialist skills for deeper guidance, not as automatic substitutes for a matching short workflow. Keep independent S4 verification and the repo's domain security rules. Do not duplicate any workflow implementation in this router.
+Use `tasks`, `systematic-debugging`, `testing`, `code-review`, and specialist skills for deeper guidance, not as automatic substitutes for a matching short workflow. Keep independent S4 verification and the repo's domain security rules. Do not plan implementation steps, choose support arrays, manage parallelization, manage Linear handoff, or duplicate domain/vendor instructions here.
 
 ## S4 safety
 

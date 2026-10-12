@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const sqlPath = fileURLToPath(new URL("../sql/san468-inventory-quality-report.sql", import.meta.url));
 const pkgPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+// The canonical predicate is redefined by later migrations; point at the newest
+// definition so the required-blocker contract tracks the live function.
 const migrationPath = fileURLToPath(
-  new URL("../../supabase/migrations/20261008090400_san1431_publish_verified_rental.sql", import.meta.url),
+  new URL("../../supabase/migrations/20261009090300_san1431_neighborhood_gate.sql", import.meta.url),
 );
 
 /** Write/DDL keywords that would make the "read-only" report a mutation. */
@@ -74,6 +76,7 @@ test("launch_ready requires verified owner, verified property, current freshness
     "no publish permission",
     "no viewing permission",
     "no verified coordinate evidence",
+    "no verified neighborhood",
   ]) {
     assert.ok(migration.includes(required), "canonical predicate must require " + required);
   }

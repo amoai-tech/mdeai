@@ -137,6 +137,41 @@ function toFinding(rawBody, meta = {}) {
   };
 }
 
+const FINDING_FORMAT_FIELDS = [
+  [
+    "Severity",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Severity(?:\*\*)?\s*:(?:\*\*)?\s*(?:BLOCKER|HIGH|MEDIUM|LOW)(?:\*\*)?\s*$/im,
+  ],
+  ["Technical", /(?:^|\n)[ \t>*-]*(?:\*\*)?Technical(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Plain English", /(?:^|\n)[ \t>*-]*(?:\*\*)?Plain English(?:\*\*)?\s*:(?:\*\*)?/i],
+  [
+    "Real-world example",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Real-world example(?:\*\*)?\s*:(?:\*\*)?/i,
+  ],
+  ["Fix", /(?:^|\n)[ \t>*-]*(?:\*\*)?Fix(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Verify", /(?:^|\n)[ \t>*-]*(?:\*\*)?Verify(?:\*\*)?\s*:(?:\*\*)?/i],
+  [
+    "Verification state",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Verification state(?:\*\*)?\s*:(?:\*\*)?\s*(?:VERIFIED|NEEDS VERIFICATION)(?:\*\*)?\s*$/im,
+  ],
+  [
+    "Status",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Status(?:\*\*)?\s*:(?:\*\*)?\s*(?:changes_required|advisory)(?:\*\*)?\s*$/im,
+  ],
+];
+
+/** Report whether one finding follows MDE's complete eight-field dual-audience review format. */
+export function checkFindingFormat(finding) {
+  const body = String(finding?.body ?? "");
+  const present = FINDING_FORMAT_FIELDS.filter(([, pattern]) => pattern.test(body)).map(([name]) => name);
+  const missing = FINDING_FORMAT_FIELDS.map(([name]) => name).filter((name) => !present.includes(name));
+  return {
+    complete: missing.length === 0,
+    present,
+    missing,
+  };
+}
+
 /** Rendered `<details>` findings, excluding the agent-run-details block. */
 function renderedFindings(body) {
   const found = [];
@@ -387,6 +422,10 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
   const activeFindings = findings.filter((finding) => finding.state !== "RESOLVED");
   const blocking = blockingVerdict(signals, findings);
   const materialFindings = findings.filter(isMaterialFinding);
+  const formatChecks = activeFindings.map((finding) => ({
+    finding: finding.title,
+    ...checkFindingFormat(finding),
+  }));
 
   const base = {
     id: caseDef.id,
@@ -394,6 +433,13 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
     findings,
     findingCount: findings.length,
     materialFindings: materialFindings.map((finding) => finding.title),
+    formatCompliance: {
+      findingCount: formatChecks.length,
+      compliantCount: formatChecks.filter((entry) => entry.complete).length,
+      // Zero findings means there is no finding format to evaluate. Never report that as a pass.
+      allCompliant: formatChecks.length === 0 ? null : formatChecks.every((entry) => entry.complete),
+      findings: formatChecks,
+    },
     findingSource: parsed.source,
     stateValid: parsed.stateValid,
     stateError: parsed.stateError,
