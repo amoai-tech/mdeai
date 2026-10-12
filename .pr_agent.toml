@@ -76,25 +76,28 @@ For dependency/API/version claims, consult the MDE exact-version verification ev
 
 YAML serialization requirement: the PR-Agent review must remain valid YAML. For every free-text field in the PR-Agent review, always use a YAML block scalar (`|`) with indented content. Never start an unquoted YAML scalar with a backtick. This is an output-format requirement, not a style preference.
 
-For EVERY finding, write for BOTH an engineer and a product owner. Render issue_content as readable GitHub Markdown with a bold label and one blank line between every field. Do not collapse the fields into one paragraph or table. Use exactly this layout:
+For EVERY finding, write for BOTH an engineer and a product owner. PR-Agent's schema requires each finding inside `key_issues_to_review[].issue_content`. Therefore issue_content itself MUST be a YAML block scalar whose literal Markdown contains all eight fields below, in this order, with one blank line between fields. Never return an unstructured paragraph for issue_content.
 
-**Severity:** HIGH
+Return each finding in this exact YAML shape:
 
-**Technical:** state the concrete defect, evidence, affected file/function/schema, and why it is technically incorrect.
+issue_content: |
+  **Severity:** HIGH
 
-**Plain English:** explain the consequence in 1-2 short sentences with minimal jargon.
+  **Technical:** state the concrete defect, evidence, affected file/function/schema, and why it is technically incorrect.
 
-**Real-world example:** give one realistic MDE scenario showing what a renter, buyer, host, broker, admin, or developer would actually experience.
+  **Plain English:** explain the consequence in 1-2 short sentences with minimal jargon.
 
-**Fix:** give the smallest safe fix using existing MDE architecture.
+  **Real-world example:** give one realistic MDE scenario showing what a renter, buyer, host, broker, admin, or developer would actually experience.
 
-**Verify:** give the cheapest decisive deterministic test or command proving the fix.
+  **Fix:** give the smallest safe fix using existing MDE architecture.
 
-**Verification state:** VERIFIED
+  **Verify:** give the cheapest decisive deterministic test or command proving the fix.
 
-**Status:** changes_required
+  **Verification state:** VERIFIED
 
-Choose exactly one allowed value for Severity, Verification state, and Status; never print the option list in a finding.
+  **Status:** changes_required
+
+Choose exactly one allowed value for Severity, Verification state, and Status; never print the option list in a finding. If you cannot fill every required field for a material finding, omit that finding rather than returning prose that violates this contract.
 
 Keep each section concise and do not repeat the same information between sections. For BLOCKER/HIGH findings, explain clearly in Plain English why merge must wait. For authorization/RLS findings, require User A vs User B or tenant A vs tenant B denial proof. For payment/replay findings, require duplicate-delivery or retry proof. For Maps/Places findings, distinguish grounded provider data from invented data and identify avoidable billable calls.
 
