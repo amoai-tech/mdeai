@@ -115,6 +115,7 @@ function RentalBrowseCardMedia({
 }
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
+/** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
   testId,

@@ -28,6 +28,7 @@ export function restaurantToMapPin(r: Restaurant): MapPin | null {
   };
 }
 
+/** Return a canonical rental pin only when its coordinates satisfy mapPinSchema. */
 export function rentalToMapPin(r: Rental): MapPin | null {
   if (r.latitude == null || r.longitude == null) return null;
   // Validate exactly like tool/map pins: a non-null pair can still be invalid.

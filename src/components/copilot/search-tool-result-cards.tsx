@@ -227,6 +227,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   );
 }
 
+/** Render rental tool results with map actions only for their validated pins. */
 export function RentalResults({
   result,
   searchMeta,

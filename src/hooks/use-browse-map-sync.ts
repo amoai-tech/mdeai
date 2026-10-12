@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { MapPin, MapPinCategory } from "@/platform/contracts/map-pin";
 import { useMapContext } from "@/platform/maps/map-context";
 
+/** Replace pins for the active category and clear obsolete selections after searches. */
 export function useBrowseMapSync(
   pins: MapPin[],
   category: MapPinCategory,

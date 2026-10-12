@@ -42,6 +42,7 @@ export type RentalCardProps = RentalResultRow & {
   resultKind?: ResultKind;
 };
 
+/** Display a rental search result without inventing map identity or viewing rights. */
 export function RentalCard({
   id,
   title,

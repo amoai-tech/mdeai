@@ -48,6 +48,7 @@ export type RentalBrowseViewProps = {
   maxPrice: string | null;
 };
 
+/** Keep the visible rental list and its valid map markers on the same selection state. */
 function RentalBrowseViewInner({
   results,
   total,
@@ -155,6 +156,7 @@ function RentalBrowseViewInner({
   );
 }
 
+/** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>

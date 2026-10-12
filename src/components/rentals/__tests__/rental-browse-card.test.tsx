@@ -212,7 +212,12 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
     });
     const card = container.querySelector('[data-testid="rental-card-rnt_lau_001"]')!;
     act(() => {
-      card.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      // Explicitly enter from outside the React root. A bare mouseover with no
+      // relatedTarget is intermittent under Vitest's parallel jsdom workers.
+      card.dispatchEvent(new MouseEvent("mouseover", {
+        bubbles: true,
+        relatedTarget: document.body,
+      }));
     });
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
