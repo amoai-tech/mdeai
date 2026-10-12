@@ -155,7 +155,10 @@ export function fastPathRentalSummary(
   options: FastPathRentalSummaryOptions = {},
 ): string {
   if (count === 0) {
-    return "No verified rentals are available right now. Want to try a neighborhood like Laureles?";
+    const budgetNote = options.budgetNotApplied
+      ? " Your budget was not applied to this search."
+      : "";
+    return `No verified rentals are available right now.${budgetNote} Want to try a neighborhood like Laureles?`;
   }
   let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
   if (options.budgetNotApplied) {

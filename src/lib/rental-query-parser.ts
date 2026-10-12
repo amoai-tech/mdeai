@@ -103,7 +103,7 @@ const MEDELLIN_CITY_RE = /\bmedell[ií]n\b/i;
 
 /** SQL statements and prompt-override phrases (SAN-1054). Deliberately narrow and conservative. */
 const INJECTION_MARKERS_RE =
-  /;\s*\S|\b(?:drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|--\s|\bignore\s+(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s+prompt\b/i;
+  /;\s*(?:drop|truncate|alter|delete|insert|update|select|union)\b|\b(?:drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|\bignore\s+(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s+prompt\b/i;
 
 const MONTH_IDX: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,

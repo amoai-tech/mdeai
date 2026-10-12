@@ -33,6 +33,14 @@ describe("rental-search-fast-path", () => {
     expect(buildRentalSearchParams("Show me apartments in Medellín, please.", {})).not.toBeNull();
   });
 
+  it.each([
+    "Apartments in Medellín; pet friendly",
+    "Apartments in Medellín -- please",
+  ])("ordinary punctuation must not block %j", (prompt) => {
+    expect(canFastPathRentalSearch(prompt, {})).toBe(true);
+    expect(buildRentalSearchParams(prompt, {})?.queryText).toBe(prompt);
+  });
+
   it("SAN-407: the module no longer exposes an instant-clarify gate", async () => {
     const mod = await import("@/lib/rental-search-fast-path");
     expect("shouldInstantRentalClarify" in mod).toBe(false);

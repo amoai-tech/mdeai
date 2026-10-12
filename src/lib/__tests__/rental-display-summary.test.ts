@@ -34,6 +34,8 @@ describe("fastPathRentalSummary", () => {
   it("budget note also accompanies an empty answer without implying budget caused it", () => {
     const text = fastPathRentalSummary(0, 0, { budgetNotApplied: true });
     expect(text).toMatch(/no verified rentals/i);
+    expect(text).toMatch(/budget/i);
+    expect(text).toMatch(/not (yet )?(applied|filtered)|isn.t (applied|filtered)/i);
     expect(text).not.toMatch(/wider budget/i);
   });
 });
