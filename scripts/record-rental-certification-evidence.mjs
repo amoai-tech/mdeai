@@ -66,15 +66,6 @@ function isLoopbackHost(host) {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
-/** Key-order-independent JSON stringify, so metadata equality is stable. */
-function stableStringify(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`)
-    .join(",")}}`;
-}
 const parsedDb = (() => {
   try {
     return new URL(dbUrl);
@@ -216,11 +207,14 @@ try {
       verification = pv.rowCount ?? 0;
     } else {
       const prior = priorVerification[0];
+      const priorMetadata = prior.metadata ?? {};
       const identical =
         prior.status === v.verificationStatus &&
         prior.verified_by === v.verifiedBy &&
         (prior.notes ?? "") === (v.notes ?? "") &&
-        stableStringify(prior.metadata ?? {}) === stableStringify(verifyMetadata);
+        // The update path merges supplied keys, so equality is subset semantics:
+        // a rerun that supplies a subset of matching approvals is still a no-op.
+        Object.entries(verifyMetadata).every(([key, value]) => priorMetadata[key] === value);
       if (!identical) {
         if (!v.updateVerification) {
           throw new Error(

@@ -125,6 +125,19 @@ test(
       assert.match(second.stdout, /verification\+0/);
       assert.match(second.stdout, /image\+0/);
 
+      // 4b. A rerun supplying only a subset of the matching approvals is still a
+      // no-op (the update path merges keys, so equality is subset semantics).
+      const subsetRerun = runRecorder(
+        baseArgs.filter(
+          (a) =>
+            !a.startsWith("--publish-permission") &&
+            !a.startsWith("--viewings-permission") &&
+            !a.startsWith("--coordinate-receipt"),
+        ),
+      );
+      assert.equal(subsetRerun.status, 0, subsetRerun.stderr);
+      assert.match(subsetRerun.stdout, /verification\+0/);
+
       // 5. Same timestamp, different freshness status → conflict, not silence.
       const freshnessConflict = runRecorder(
         baseArgs.map((a) => (a.startsWith("--freshness-status") ? "--freshness-status=stale" : a)),
