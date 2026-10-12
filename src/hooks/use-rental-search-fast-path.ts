@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
@@ -76,7 +76,16 @@ async function fetchRentalSearch(
   return (await res.json()) as RentalSearchResponse;
 }
 
-export function useRentalSearchFastPath() {
+export type RentalSearchFastPathOptions = {
+  /**
+   * Called with a queued message whose replay the rental fast path could not answer (for example
+   * the search API rejected it with a 4xx). The caller sends it to the concierge, exactly as it
+   * does for any other message the fast path declines.
+   */
+  onUnhandled?: (text: string) => Promise<boolean> | boolean;
+};
+
+export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOptions = {}) {
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showExchange, clearLocalMessages } =
     useEventLocalChat();
@@ -87,7 +96,12 @@ export function useRentalSearchFastPath() {
   // A message sent while a search is running is kept (latest wins) and answered when it ends,
   // instead of being reported "handled" and silently dropped.
   const pendingRef = useRef<string | null>(null);
-  const handleRef = useRef<((text: string) => Promise<boolean>) | null>(null);
+  // The working memory the last successful search wrote. React has not re-rendered yet when a
+  // search ends, so `state` is still the pre-search value at that moment; the replay of a queued
+  // message starts from this instead, so a refinement keeps the first search's filters.
+  const latestMemoryRef = useRef<ConciergeWorkingMemory | null>(null);
+  // Bumped when a search ends with a message waiting; the replay effect runs after the next render.
+  const [replayTick, setReplayTick] = useState(0);
 
   const applySearchResults = useCallback(
     (
@@ -102,12 +116,14 @@ export function useRentalSearchFastPath() {
       const { pins } = normalizeToolOutput("rental", envelope);
       mergePinsByCategory("rental", pins);
       if (pins.length >= 2) requestFitBounds();
-      setState({
+      const nextMemory: ConciergeWorkingMemory = {
         ...memory,
         lastIntent: "rental_search",
         lastRentalQuery: { ...query, genericAskPending: false },
         lastRentalResults: rentalsToPanelRows(cards),
-      });
+      };
+      latestMemoryRef.current = nextMemory;
+      setState(nextMemory);
       return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
@@ -175,23 +191,23 @@ export function useRentalSearchFastPath() {
         return false;
       } finally {
         busyRef.current = false;
-        const next = pendingRef.current;
-        pendingRef.current = null;
-        if (next) void handleRef.current?.(next);
+        // Replay a queued message only after React has re-rendered (see the effect below), never
+        // synchronously here: the handler in scope still holds the pre-search state.
+        if (pendingRef.current) setReplayTick((tick) => tick + 1);
       }
     },
     [applySearchResults, showExchange, setSearchMeta, setToolResult],
   );
 
-  const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+  const dispatchMessage = useCallback(
+    async (text: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
 
       if (clarifyPending && clarifyKind === "event") return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
 
-      const memory: ConciergeWorkingMemory = { ...(state ?? {}) };
+      const memory: ConciergeWorkingMemory = { ...(baseMemory ?? state ?? {}) };
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
@@ -215,9 +231,25 @@ export function useRentalSearchFastPath() {
     ],
   );
 
+  const handleUserMessage = useCallback(
+    (text: string): Promise<boolean> => dispatchMessage(text),
+    [dispatchMessage],
+  );
+
+  // Replay the message that arrived while a search was running. It runs after the render that
+  // follows the search, with the memory that search wrote. If the fast path cannot answer it
+  // (returns false) it goes to the concierge — it was already reported "handled" to the sender,
+  // so dropping it here would leave the renter's message unanswered.
   useEffect(() => {
-    handleRef.current = handleUserMessage;
-  }, [handleUserMessage]);
+    if (replayTick === 0 || busyRef.current) return;
+    const next = pendingRef.current;
+    if (!next) return;
+    pendingRef.current = null;
+    void (async () => {
+      const handled = await dispatchMessage(next, latestMemoryRef.current);
+      if (!handled) await onUnhandled?.(next);
+    })();
+  }, [replayTick, dispatchMessage, onUnhandled]);
 
   return { handleUserMessage };
 }

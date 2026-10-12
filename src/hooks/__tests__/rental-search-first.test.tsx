@@ -39,9 +39,16 @@ type Probe = {
   hasResult: () => boolean;
 };
 let probe: Probe;
+/** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
+const unhandled: string[] = [];
 
 function Harness() {
-  const { handleUserMessage } = useRentalSearchFastPath();
+  const { handleUserMessage } = useRentalSearchFastPath({
+    onUnhandled: (text) => {
+      unhandled.push(text);
+      return true;
+    },
+  });
   const local = useEventLocalChat();
   const rental = useRentalFastPath();
   useEffect(() => {
@@ -67,6 +74,7 @@ function respond(status: number, body: unknown) {
 
 beforeEach(() => {
   map.merges.length = 0;
+  unhandled.length = 0;
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -178,24 +186,38 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(assistantText()).toMatch(/temporarily unavailable/i);
   });
 
-  it("a message sent while a search is running is queued and answered afterwards, not dropped", async () => {
-    let releaseFirst: (response: Response) => void = () => undefined;
+  /** Start a first search that stays in flight until `release()` is called. */
+  async function startSlowFirstSearch(prompt: string, firstBody: unknown) {
+    let release: () => void = () => undefined;
     fetchMock.mockImplementationOnce(
-      () => new Promise<Response>((resolve) => { releaseFirst = resolve; }),
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response(JSON.stringify(firstBody), { status: 200 }));
+        }),
     );
-    respond(200, { results: [] });
-    // mockImplementationOnce above wins for the first call; later calls use `respond`.
-    fetchMock.mockImplementationOnce(
-      () => new Promise<Response>((resolve) => { releaseFirst = resolve; }),
-    );
-
     let first: Promise<boolean> = Promise.resolve(false);
     await act(async () => {
-      first = probe.send("Search apartments Medellín");
+      first = probe.send(prompt);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    return {
+      finish: async () => {
+        await act(async () => {
+          release();
+          await first;
+        });
+        // the replay runs after the render that follows the search
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+      },
+    };
+  }
 
-    // The renter refines while the first search is still in flight.
+  it("a message sent while a search is running is queued and answered afterwards, not dropped", async () => {
+    respond(200, { results: [] });
+    const search = await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+
     let secondHandled = false;
     await act(async () => {
       secondHandled = await probe.send("Actually only apartments in Laureles");
@@ -203,18 +225,55 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(secondHandled).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      releaseFirst(new Response(JSON.stringify({ results: [] }), { status: 200 }));
-      await first;
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await search.finish();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
     expect(secondBody.neighborhood).toBe("Laureles");
     expect(secondBody.queryText).toBe("Actually only apartments in Laureles");
+    expect(unhandled).toEqual([]);
+  });
+
+  it("the replay builds on the first search's filters, not on stale pre-search state", async () => {
+    respond(200, { results: [] });
+    const search = await startSlowFirstSearch("2BR apartments in Laureles", { results: [] });
+
+    await act(async () => {
+      await probe.send("only under $80 per night");
+    });
+    await search.finish();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    // Both come from the FIRST search; the stubbed co-agent state is always empty, so only the
+    // memory the first search just wrote can supply them.
+    expect(secondBody.neighborhood).toBe("Laureles");
+    expect(secondBody.minBedrooms).toBe(2);
+    expect(secondBody.maxPricePerNight).toBe(80);
+  });
+
+  it("a queued message the fast path cannot answer is handed to the concierge, not lost", async () => {
+    respond(400, { error: "invalid body" });
+    const search = await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+
+    let handled = false;
+    await act(async () => {
+      handled = await probe.send("Actually only apartments in Laureles");
+    });
+    expect(handled).toBe(true); // reported handled to the sender while queued
+    await search.finish();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2); // the replay tried the search...
+    expect(unhandled).toEqual(["Actually only apartments in Laureles"]); // ...and gave it back
+  });
+
+  it("a replay that is answered is not also sent to the concierge", async () => {
+    respond(200, { results: [] });
+    const search = await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+    await act(async () => {
+      await probe.send("Actually only apartments in Laureles");
+    });
+    await search.finish();
+    expect(unhandled).toEqual([]);
   });
 });
-
