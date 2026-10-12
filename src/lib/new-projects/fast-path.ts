@@ -24,9 +24,13 @@ export const RENTAL_WORD_RE = /\b(for rent|per night|nightly|arriendo|alquiler|a
 /** Delivery wording that must sit next to a year before we treat it as a delivery filter. */
 const DELIVERY_WORD = /deliver|entrega|entregar|completion|handover/i;
 
-const NEIGHBORHOODS = ["Laureles", "Ciudad del Río", "El Poblado"] as const;
+// Curated from the published Medellín project catalog (read-only production audit, Oct 2026).
+// Existing browse pilot options plus neighborhoods with verified published projects.
+const NEIGHBORHOODS = [
+  "Laureles", "Ciudad del Río", "El Poblado", "Calasanz", "Cuarta Brigada", "El Estadio",
+] as const;
 /** Geographies outside the current published pilot must not silently lose their location filter. */
-const UNSUPPORTED_AREA_RE = /\b(envigado|belen|bel[eé]n|calasanz|sabaneta|bogota|bogot[aá]|rionegro|itagui|itag[uü][ií])\b/i;
+const UNSUPPORTED_AREA_RE = /\b(envigado|belen|bel[eé]n|sabaneta|bogota|bogot[aá]|rionegro|itagui|itag[uü][ií])\b/i;
 
 function unaccent(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();

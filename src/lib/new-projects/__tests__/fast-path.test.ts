@@ -58,6 +58,9 @@ describe("new-project fast path classifier", () => {
       expect(() => buildNewProjectFastPathParams(query)).toThrow("currently covers Laureles");
     }
     expect(buildNewProjectFastPathParams("new projects in Ciudad del Rio").neighborhood).toBe("Ciudad del Río");
+    expect(buildNewProjectFastPathParams("new condos in Calasanz").neighborhood).toBe("Calasanz");
+    expect(buildNewProjectFastPathParams("new condos in Cuarta Brigada").neighborhood).toBe("Cuarta Brigada");
+    expect(buildNewProjectFastPathParams("new condos in El Estadio").neighborhood).toBe("El Estadio");
   });
 
   it("extracts hard filters and never invents one", () => {

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import React from "react";
+import React, { useEffect } from "react";
 
 const effects = vi.hoisted(() => ({
   setToolResult: vi.fn(),
@@ -38,7 +38,8 @@ let root: Root;
 let el: HTMLDivElement;
 
 function Harness() {
-  send = useNewProjectSearchFastPath().handleUserMessage;
+  const { handleUserMessage } = useNewProjectSearchFastPath();
+  useEffect(() => { send = handleUserMessage; }, [handleUserMessage]);
   return null;
 }
 
