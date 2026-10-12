@@ -104,6 +104,20 @@ test("requires --source-type and --source-url together", () => {
   );
 });
 
+test("parses and validates photo publishing rights", () => {
+  const ok = parseCertificationEvidenceArgs([
+    ...BASE,
+    "--image-url=https://example.com/a.jpg",
+    "--image-rights=authorized",
+  ]);
+  assert.equal(ok.ok, true, ok.errors.join("; "));
+  assert.equal(ok.value.imageRights, "authorized");
+  assert.equal(
+    parseCertificationEvidenceArgs([...BASE, "--image-url=https://example.com/a.jpg", "--image-rights=maybe"]).ok,
+    false,
+  );
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--image-rights=authorized"]).ok, false);
+});
 test("does not treat --database-url as a certification argument", () => {
   const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
   assert.equal(parsed.ok, true, parsed.errors.join("; "));

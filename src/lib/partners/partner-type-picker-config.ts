@@ -83,9 +83,9 @@ export const PARTNER_SIGNUP_FAQ = [
   },
   {
     id: "live-types",
-    question: "Which types are live today?",
+    question: "Which partner programs can I join?",
     answer:
-      "All eight partner types activate via POST /api/partners/activate. Dashboard redirect is deferred.",
+      "You can create a draft account in eight partner categories. Publishing and operating tools depend on your program and its verification requirements.",
   },
 ] as const;
 
@@ -97,12 +97,12 @@ export const PARTNER_SIGNUP_STEPS = [
   },
   {
     id: "activate",
-    title: "Sign in and activate",
+    title: "Start with a draft partner profile",
     description: "Business profile creates your draft partner account.",
   },
   {
     id: "live",
-    title: "Go live on concierge",
-    description: "Cards and map pins when your dashboard launches.",
+    title: "Publish when eligible",
+    description: "Signing up does not publish a listing or event. Each program has its own review and publication checks.",
   },
 ] as const;

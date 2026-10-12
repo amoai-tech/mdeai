@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type ConsoleMessage, type Page, type Request } from "@playwright/test";
 import {
   ensureChatInputVisible,
   hideCopilotWebInspector,
@@ -192,13 +192,48 @@ export async function chooseRestaurantFilter(page: Page) {
 }
 
 export async function gotoDeterministicChat(page: Page) {
-  const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
-  expect(response?.ok()).toBe(true);
-  await hideCopilotWebInspector(page);
-  const chat = page.getByTestId("concierge-chat-view-mounted");
-  await expect(chat).toBeVisible({ timeout: 20_000 });
-  await expect(chat).toHaveAttribute("data-hydrated", "true", {
-    timeout: 30_000,
-  });
-  await ensureChatInputVisible(page);
+  // Only emit diagnostics when the navigation/hydration assertion fails; keep
+  // passing runs quiet and preserve the original error as the cause.
+  const failures: string[] = [];
+  const record = (label: string, detail: string) => {
+    if (failures.length < 15) failures.push(`${label}: ${detail.slice(0, 220)}`);
+  };
+  const onPageError = (error: Error) => record("pageerror", error.message);
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === "error") record("console", message.text());
+  };
+  const onRequestFailed = (request: Request) => {
+    const path = new URL(request.url()).pathname;
+    record("requestfailed", `${request.method()} ${path} ${request.failure()?.errorText ?? ""}`);
+  };
+  page.on("pageerror", onPageError);
+  page.on("console", onConsole);
+  page.on("requestfailed", onRequestFailed);
+  try {
+    const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    expect(response?.ok()).toBe(true);
+    await hideCopilotWebInspector(page);
+    const chat = page.getByTestId("concierge-chat-view-mounted");
+    await expect(chat).toBeVisible({ timeout: 20_000 });
+    await expect(chat).toHaveAttribute("data-hydrated", "true", {
+      timeout: 30_000,
+    });
+    await ensureChatInputVisible(page);
+  } catch (error) {
+    const snapshot = await page.evaluate(() => ({
+      readyState: document.readyState,
+      chatHydrated: document.querySelector('[data-testid="concierge-chat-view-mounted"]')
+        ?.getAttribute("data-hydrated") ?? "missing",
+      chatCount: document.querySelectorAll('[data-testid="concierge-chat-view-mounted"]').length,
+    })).catch(() => ({ readyState: "unavailable", chatHydrated: "unavailable", chatCount: -1 }));
+    throw new Error(
+      `Deterministic chat did not initialize: ${JSON.stringify(snapshot)}; ` +
+      `browser errors: ${JSON.stringify(failures)}`,
+      { cause: error },
+    );
+  } finally {
+    page.off("pageerror", onPageError);
+    page.off("console", onConsole);
+    page.off("requestfailed", onRequestFailed);
+  }
 }

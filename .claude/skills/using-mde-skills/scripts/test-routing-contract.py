@@ -27,6 +27,10 @@ RETIRED = {
 }
 CANONICAL = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")} - RETIRED
 WORKFLOW = {"tasks", "systematic-debugging", "testing", "research", "code-review", "task-verifier"}
+SHORT_SKILLS = (
+    "linear-task", "linear-audit", "praudit", "errors", "efficient", "tests",
+    "plan", "architect", "implement", "progress", "prod", "merge", "e2e",
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -34,54 +38,189 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def route(prompt: str) -> str:
-    text = prompt.lower()
+def _priority_route(text: str) -> str | None:
     if any(retired in text for retired in RETIRED):
         return "__INVALID__"
-    # Workflow intent outranks domain words when a prompt contains both.
-    # Example: "create a worktree for CopilotKit" is lifecycle execution → tasks.
-    lifecycle_terms = (
-        "start a worktree",
-        "create a worktree",
-        "open a pr",
-        "ship this change",
-        "fast dev loop",
-        "clean up merged worktrees",
-    )
-    if any(term in text for term in lifecycle_terms):
+    # Explicit local invocation is the narrowest intent. S4 still requires the
+    # independent verifier; this classifier chooses only the workflow owner.
+    for skill in SHORT_SKILLS:
+        if re.search(r"(?<![a-z0-9])[@$]" + re.escape(skill) + r"(?![a-z0-9-])", text):
+            return skill
+
+    # A worktree or full shipping lifecycle is broader than one short workflow.
+    if any(term in text for term in (
+        "start a worktree", "create a worktree", "open a pr",
+        "ship this change", "fast dev loop", "clean up merged worktrees",
+    )):
         return "tasks"
-    if any(term in text for term in ("failing regression test first", "red green refactor", "red → green → refactor", "which test seam", "which tests should i run", "run the tests", "interpret the test failure")):
+    if any(term in text for term in (
+        "failing regression test first", "red green refactor",
+        "red → green → refactor", "which test seam", "which tests should i run",
+        "run the tests", "interpret the test failure",
+    )):
         return "testing"
-    if any(term in text for term in ("ready to merge", "verify this exact head", "production proof", "production ready", "production-ready", "done proof")):
+    if any(term in text for term in (
+        "verify this exact head", "ready to merge", "production proof",
+        "production ready", "production-ready", "done proof",
+    )):
         return "task-verifier"
+    if any(term in text for term in (
+        "audit github pr", "audit pr #", "audit this pr", "pr audit",
+        "audit the pull request", "merge readiness", "merge-readiness",
+    )):
+        return "praudit"
+    # A pre-merge review wins when a request mentions both before/after
+    # stages. Match whole merge phrases so "merger"/"mergeable" cannot trigger.
+    pre_merge = re.search(
+        r"\b(?:before (?:the )?merge|before merging|before (?:it|the pr) lands|"
+        r"pre[- ]merge|not yet merged)\b",
+        text,
+    )
+    post_merge = re.search(
+        r"\b(?:post[- ]merge|merged pr\s*#\s*\d+|"
+        r"after (?:the )?merg(?:e(?:d|s)?|ing)|once merged)\b",
+        text,
+    )
+    landed_merge = (
+        re.search(r"\b(?:after it lands|once it lands)\b", text)
+        and re.search(r"\b(?:pr|pull request|merge|merged|main|release)\b", text)
+    )
+    if not pre_merge and (
+        post_merge
+        or (re.search(r"\b(?:verify|check|validate)\b", text) and landed_merge)
+    ):
+        return "merge"
     if "pull request" in text or re.search(r"\bpr\b", text) or "diff" in text:
         return "code-review"
-    if any(term in text for term in ("do not know why", "do not know which subsystem", "unknown failure", "suddenly fails", "root cause")):
-        return "systematic-debugging"
-    if any(term in text for term in ("research", "official guidance", "evidence")):
+    return None
+
+
+def _task_route(text: str) -> str | None:
+    if any(term in text for term in (
+        "audit san-", "audit linear", "audit an existing linear",
+        "check whether san-", "existing acceptance criteria and dependencies",
+    )):
+        return "linear-audit"
+    if any(term in text for term in (
+        "rewrite san-", "create a linear task", "rewrite linear",
+        "create a linear issue", "improve a linear task",
+        "rewrite the linear", "clean up the linear task",
+    )):
+        return "linear-task"
+    if any(term in text for term in (
+        "do not know why", "do not know which subsystem", "unknown failure",
+        "suddenly fails", "root cause", "diagnose", "crashes", "crashing",
+    )):
+        return "errors"
+    if any(term in text for term in (
+        "design a regression test plan", "design a minimal regression test plan",
+        "design tests", "test plan", "test cases", "regression coverage",
+    )):
+        return "tests"
+    if any(term in text for term in (
+        "faster and simpler", "faster alternative", "simpler alternative",
+        "reuse existing", "simplify this implementation",
+    )):
+        return "efficient"
+    if any(term in text for term in (
+        "implementation plan", "plan implementation", "plan how to",
+        "plan the work",
+    )):
+        return "plan"
+    return None
+
+
+def _other_workflow_route(text: str) -> str | None:
+    if any(term in text for term in (
+        "architecture fit", "architectural fit", "architecture review",
+        "architecture decision",
+    )):
+        return "architect"
+    if any(term in text for term in (
+        "status report", "progress report", "project progress",
+        "what is blocked",
+    )):
+        return "progress"
+    if any(term in text for term in (
+        "certify the deployed", "production certification", "certify production",
+    )):
+        return "prod"
+    if any(term in text for term in (
+        "browser e2e", "playwright journey", "test the browser journey",
+    )):
+        return "e2e"
+    # Route an explicit research request, not incidental mentions of research,
+    # evidence, or documentation inside implementation/review/domain tasks.
+    if re.match(
+        r"^(?:(?:please|can you|could you|would you|i need you to)\s+)?"
+        r"(?:research\b|find (?:the )?official guidance\b|"
+        r"look up (?:the )?official guidance\b|"
+        r"gather (?:the )?evidence\b)",
+        text.strip(),
+    ):
         return "research"
+    return None
+
+
+def _domain_or_implementation_route(text: str) -> str:
     direct = {
+        "real-estate": ("rental listing", "rental eligibility", "broker viewing"),
+        "events": ("event ticket", "event checkout"),
         "copilotkit": ("copilotkit",),
         "mastra": ("mastra",),
         "supabase": ("supabase", "rls", "tenant access"),
         "gemini": ("gemini",),
         "stripe": ("stripe", "payment"),
-        "nextjs": ("next.js", "nextjs", "vercel", "app router", "server component", "rsc", "revalidation", "core web vitals"),
+        "nextjs": ("next.js", "nextjs", "vercel", "app router",
+                   "server component", "rsc", "revalidation", "core web vitals"),
     }
     for owner, terms in direct.items():
         if any(term in text for term in terms):
             return owner
+    # Recognize actionable coding requests, including natural task statements,
+    # without treating explanatory "how to implement?" questions as commands.
+    actionable_text = text.strip()
+    # Allow a short scope preface without interpreting how-to questions
+    # or arbitrary mid-sentence mentions as instructions to write code.
+    context_prefix = re.match(
+        r"^(?:for|regarding|about|concerning)\s+[^,\n]{1,120},\s*",
+        actionable_text,
+    )
+    if context_prefix:
+        actionable_text = actionable_text[context_prefix.end():]
+    implement_request = re.match(
+        r"^(?:(?:please\s+)?implement|"
+        r"(?:can|could|would)\s+you\s+(?:please\s+)?implement|"
+        r"(?:i\s+(?:need|want)\s+you\s+to|the\s+task\s+is\s+to|"
+        r"we\s+should|let(?:'s|\s+us)|(?:please\s+)?go\s+ahead\s+and)"
+        r"\s+implement)\b",
+        actionable_text,
+    )
+    if (implement_request and not any(term in text for term in (
+        "across the repo", "remaining san", "do not implement",
+        "don't implement", "do not change code", "without coding",
+    ))):
+        return "implement"
     if any(term in text for term in (
-        "implement",
-        "across the repo",
-        "remaining san work",
-        "outstanding linear task",
+        "across the repo", "remaining san work", "outstanding linear task",
     )):
         return "tasks"
     return "direct"
 
 
+def route(prompt: str) -> str:
+    text = prompt.lower()
+    for select in (_priority_route, _task_route, _other_workflow_route):
+        owner = select(text)
+        if owner is not None:
+            return owner
+    return _domain_or_implementation_route(text)
+
 require(SKILL.exists(), "router SKILL.md is missing")
+for skill in SHORT_SKILLS:
+    require(skill in CANONICAL, f"routing refers to missing short skill: {skill}")
+    require((ROOT / ".agents/skills" / skill / "SKILL.md").is_file(),
+            f"short skill not exposed to agents: {skill}")
 for retired in RETIRED:
     require(not (ROOT / ".claude/skills" / retired).exists(), f"retired skill still exists: {retired}")
 text = SKILL.read_text()
@@ -95,11 +234,14 @@ require("Do not recreate its implementation process" in verifier_text, "task-ver
 
 required_rules = {
     "tasks": "ambiguous substantial",
-    "systematic-debugging": "unknown failure",
+    "errors": "unknown failure",
+    "linear-task": "linear-task",
+    "praudit": "praudit",
+    "tests": "test",
     "testing": "test strategy/TDD",
     "research": "research/evidence",
     "code-review": "existing PR/diff",
-    "task-verifier": "Done/merge/production proof",
+    "task-verifier": "independently prove Done/merge/production safety",
 }
 for owner, phrase in required_rules.items():
     require(owner in text and phrase in text, f"missing rule for {owner}: {phrase}")

@@ -16,7 +16,7 @@
   {
     "name": "unknown-failure",
     "input": "The build suddenly fails and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -100,7 +100,7 @@
   {
     "name": "unknown-build-failure-adversarial",
     "input": "The application build is failing and we do not know which subsystem is responsible",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -163,7 +163,7 @@
   {
     "name": "unknown-failure-beats-domain",
     "input": "CopilotKit is failing and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -226,7 +226,7 @@
   {
     "name": "nextjs-debug-workflow-wins",
     "input": "The Next.js production build suddenly fails and we do not know why",
-    "expected_owner": "systematic-debugging",
+    "expected_owner": "errors",
     "risk": "S2",
     "requires_independent_verifier": false
   },
@@ -248,6 +248,524 @@
     "name": "retired-mde-vercel-owner",
     "input": "Route this to mde-vercel",
     "expected_owner": "__INVALID__",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-praudit",
+    "input": "Audit GitHub PR #258 for merge readiness, security, tests, and remaining blockers",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-linear-task",
+    "input": "Rewrite SAN-1107 into one precise Linear task with implementation steps and acceptance criteria",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-linear-audit",
+    "input": "Check whether SAN-1107 is stale by auditing its existing acceptance criteria and dependencies",
+    "expected_owner": "linear-audit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-efficient",
+    "input": "Find a faster and simpler alternative to building a second rental search engine; reuse existing MDE search",
+    "expected_owner": "efficient",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-tests",
+    "input": "Design a minimal regression test plan for a renter requesting a viewing, covering retries and unauthorized access",
+    "expected_owner": "tests",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-plan",
+    "input": "Write an implementation plan for the next rental release; do not change code",
+    "expected_owner": "plan",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-architect",
+    "input": "Review architecture fit of a proposed second rental-search service",
+    "expected_owner": "architect",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-implement",
+    "input": "Implement a scoped change to an existing event page",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-progress",
+    "input": "Give a progress report of verified launch tasks and what is blocked",
+    "expected_owner": "progress",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-prod",
+    "input": "Run production certification of the deployed rental viewing journey",
+    "expected_owner": "prod",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-merge",
+    "input": "Perform post-merge verification for merged PR #229",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-errors",
+    "input": "@errors diagnose an unexpected rentals crash",
+    "expected_owner": "errors",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-praudit",
+    "input": "@praudit examine current PR head for merge readiness",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "short-explicit-linear",
+    "input": "@linear-task create a new Linear issue for rental onboarding",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-pr-diff",
+    "input": "Review this existing PR diff for coding regressions",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-tests-run",
+    "input": "Run the tests and interpret any failures",
+    "expected_owner": "testing",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-shipping",
+    "input": "Create a worktree for the rentals feature and open a PR",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "negative-renter-domain",
+    "input": "Explain the canonical rental listing eligibility rules",
+    "expected_owner": "real-estate",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-punctuation",
+    "input": "@linear-task, prepare the onboarding issue",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-audit-dollar",
+    "input": "$linear-audit: check the existing issue",
+    "expected_owner": "linear-audit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-space",
+    "input": "@linear-task create an onboarding issue",
+    "expected_owner": "linear-task",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explicit-linear-task-suffix-negative",
+    "input": "@linear-task-extra is not a valid skill command",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-how-to-question",
+    "input": "How to implement OAuth for a web application?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-concept-question",
+    "input": "What does it mean to implement caching?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-substring-negative",
+    "input": "How should implementing an OAuth flow work?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-please-action",
+    "input": "Please implement the scoped login page correction",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-request-action",
+    "input": "Can you implement the already scoped event page change?",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-broad-lifecycle",
+    "input": "Implement changes across the repo as an overall delivery task",
+    "expected_owner": "tasks",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pr-verify-not-merged",
+    "input": "Verify PR #260 before merging",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-verified",
+    "input": "Verify merged PR #229 after it lands on main",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "e2e-browser-workflow",
+    "input": "Test the browser journey for rental viewing requests",
+    "expected_owner": "e2e",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-task-statement",
+    "input": "The task is to implement the feature",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-team-statement",
+    "input": "We should implement this fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-first-person",
+    "input": "I want you to implement the feature",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-go-ahead",
+    "input": "Please go ahead and implement the scoped UI change",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-how-to-not-action",
+    "input": "How can we implement OAuth safely?",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-should-we-not-action",
+    "input": "Should we implement a new search engine?",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-negated-action",
+    "input": "We should implement this fix, but do not implement yet",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-lands",
+    "input": "Verify the merge after it lands",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-verify-pr-after-lands",
+    "input": "Verify PR #260 after it lands on main",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-merging",
+    "input": "Verify the release after merging",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-once-merged",
+    "input": "Verify the user flow once merged",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pre-merge-verify-pr",
+    "input": "Verify PR #260 before merging",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "pre-merge-verify-code",
+    "input": "Verify the merge plan before it lands",
+    "expected_owner": "direct",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-rental",
+    "input": "For the rental feature, please implement the new UI",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-bug",
+    "input": "Regarding the bug, can you implement a fix?",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-team",
+    "input": "For the booking journey, we should implement the fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-indent",
+    "input": "  Please implement the scoped page fix",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-howto",
+    "input": "For the rental feature, how should we implement search?",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-negated",
+    "input": "Regarding the bug, please do not implement the fix",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-asking",
+    "input": "For rental listings, should we implement a new engine?",
+    "expected_owner": "real-estate",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "implement-context-explain",
+    "input": "Please explain how to implement the rental UI",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-completes",
+    "input": "Verify the deployment works after merge completes",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-after-the-merge",
+    "input": "Verify the production journey after the merge",
+    "expected_owner": "merge",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-two-stages",
+    "input": "Verify PR #260 before merge and later verify the deployment after merge completes",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-post-plan",
+    "input": "Verify PR #260 before merging; document post-merge checks",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-precedence-summary",
+    "input": "Review PR #260 before it lands, then verify after merge",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-merger",
+    "input": "Verify the corporate merger paperwork",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-mergeable",
+    "input": "Verify the mergeable state before merging PR #260",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "merge-false-positive-lands",
+    "input": "Verify that the plane lands on time",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-implement",
+    "input": "Implement the research feature in the existing dashboard",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-please-implement",
+    "input": "Please implement the research UI component",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-explain",
+    "input": "Explain how the research screen works",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-evidence",
+    "input": "Read the evidence from the attached file",
+    "expected_owner": "direct",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-review-pr",
+    "input": "Review the evidence in PR #260",
+    "expected_owner": "code-review",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-audit-pr",
+    "input": "Audit PR #260 for merge readiness using evidence",
+    "expected_owner": "praudit",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-debug",
+    "input": "Diagnose why the research page crashes",
+    "expected_owner": "errors",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-word-domain",
+    "input": "Explain the rental listing research fields",
+    "expected_owner": "real-estate",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-implementation",
+    "input": "Implement a scoped UI fix using official guidance",
+    "expected_owner": "implement",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-domain",
+    "input": "Explain official guidance for rental listing eligibility",
+    "expected_owner": "real-estate",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-direct-command",
+    "input": "Please research current recommended Next.js caching practices",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-guidance-command",
+    "input": "Find official guidance on the current Node.js API",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-evidence-command",
+    "input": "Gather evidence about the existing production deployment process",
+    "expected_owner": "research",
+    "risk": "S2",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "research-question-no-command",
+    "input": "What evidence supports the rental search approach?",
+    "expected_owner": "direct",
     "risk": "S1",
     "requires_independent_verifier": false
   }

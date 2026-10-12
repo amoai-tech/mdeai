@@ -86,6 +86,18 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await mockFastPaths(page);
   });
 
+  test("deterministic chat does not connect the live CopilotKit transport", async ({ page }) => {
+    const copilotkitRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/copilotkit") {
+        copilotkitRequests.push(request.method());
+      }
+    });
+    await gotoDeterministicChat(page);
+    expect(copilotkitRequests, "local fast-path tests must not start the live AI transport")
+      .toEqual([]);
+  });
+
   for (const viewport of VIEWPORTS) {
     test(`rental results are above the composer at ${viewport.width}px (${viewport.name})`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });

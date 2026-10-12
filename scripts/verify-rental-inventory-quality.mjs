@@ -87,17 +87,17 @@ const counts = report.counts;
 console.log(`Inventory-quality report — ${hostOf(dbUrl)}`);
 console.log("");
 for (const row of detail) {
-  const mark = row.launch_ready ? "✅" : "❌";
+  const mark = row.is_canonical_launch_ready ? "✅" : row.launch_ready ? "➡️" : "❌";
   const coord =
     !row.has_coords ? "none" : row.coord_pair_valid ? (row.postgis_consistent ? "valid" : "drift") : "invalid";
   const dup =
     row.dup_source_url > 1 || row.dup_source_listing_id > 1 || row.dup_property_identity > 1 ? " DUP" : "";
   console.log(`${mark} ${row.title}`);
   console.log(
-    `    ${row.status}/${row.moderation_status}/${row.listing_workflow_status} · ${row.price_monthly ?? "?"} ${row.currency ?? "?"} · images=${row.has_usable_image ? "yes" : "no"} · coords=${coord} · freshness=${row.has_freshness_evidence ? "yes" : "no"} · owner=${row.has_canonical_owner ? "yes" : "no"}`,
+    `    ${row.status}/${row.moderation_status}/${row.listing_workflow_status} · ${row.price_monthly ?? "?"} ${row.currency ?? "?"} · image=${row.has_authorized_photo ? "authorized" : row.has_any_image ? "rights-unverified" : "none"} · coords=${coord} · freshness=${row.has_current_freshness ? "current" : "missing/stale"} · owner=${row.has_verified_owner ? "verified" : row.has_canonical_owner ? "unverified" : "none"} · property=${row.has_verified_property ? "verified" : "none"}`,
   );
   console.log(
-    `    searchable=${row.searchable} map_ready=${row.map_ready} launch_ready=${row.launch_ready} requestable=${row.requestable}${dup}`,
+    `    public=${row.publicly_eligible} searchable=${row.searchable} map_ready=${row.map_ready} launch_ready=${row.launch_ready} canonical=${row.is_canonical_launch_ready} requestable=${row.requestable}${dup}`,
   );
   console.log(
     `    why: ${row.launch_ready ? "launch-ready" : (row.launch_blockers ?? []).join(", ")}`,
@@ -113,7 +113,15 @@ const failures = [];
 // its coordinates are trusted, and launch_ready itself requires postgis_consistent, so a
 // launch-ready drift can never occur. half/out-of-range pairs and active external
 // candidates are always wrong.
-for (const key of ["half_coords", "out_of_range", "active_external_candidates"]) {
+// A rental that is publicly visible or launch-ready must never carry inconsistent
+// PostGIS data. These are always-zero invariants, not warnings.
+for (const key of [
+  "half_coords",
+  "out_of_range",
+  "active_external_candidates",
+  "publicly_eligible_with_drift",
+  "launch_ready_with_drift",
+]) {
   if (Number(counts[key]) !== 0) failures.push(`${key}=${counts[key]} (expected 0)`);
 }
 const unexplained = detail.filter(
@@ -122,8 +130,17 @@ const unexplained = detail.filter(
 if (unexplained.length) {
   failures.push(`${unexplained.length} non-launch-ready row(s) without a deterministic reason`);
 }
-if (minLaunchReady !== null && Number(counts.launch_ready) < minLaunchReady) {
-  failures.push(`launch_ready=${counts.launch_ready} < --min-launch-ready=${minLaunchReady}`);
+// The gate counts DISTINCT canonical physical properties, never rows. Two database
+// rows for the same address must not satisfy a >= 3 launch requirement.
+if (minLaunchReady !== null && Number(counts.launch_ready_distinct) < minLaunchReady) {
+  failures.push(
+    `launch_ready_distinct=${counts.launch_ready_distinct} < --min-launch-ready=${minLaunchReady}`,
+  );
+}
+if (Number(counts.duplicate_launch_ready_rows) > 0) {
+  console.warn(
+    `WARN duplicate launch-ready rows collapsed by canonical identity: ${counts.duplicate_launch_ready_rows}`,
+  );
 }
 
 if (failures.length) {
@@ -132,5 +149,5 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `PASS inventory-quality report (launch_ready=${counts.launch_ready}, searchable=${counts.searchable}, map_ready=${counts.map_ready}, active_external_candidates=${counts.active_external_candidates}, half_coords=${counts.half_coords}, out_of_range=${counts.out_of_range}, postgis_drift=${counts.postgis_drift})`,
+  `PASS inventory-quality report (launch_ready=${counts.launch_ready}, launch_ready_distinct=${counts.launch_ready_distinct}, duplicate_launch_ready_rows=${counts.duplicate_launch_ready_rows}, searchable=${counts.searchable}, map_ready=${counts.map_ready}, active_external_candidates=${counts.active_external_candidates}, half_coords=${counts.half_coords}, out_of_range=${counts.out_of_range}, postgis_drift=${counts.postgis_drift})`,
 );

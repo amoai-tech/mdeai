@@ -32,6 +32,13 @@ describe("PartnerSignupTypePicker", () => {
     expect(html).toContain("Choose your partner type");
   });
 
+  it("says signup creates a draft and never promises instant publication", () => {
+    expect(html).toContain("Start with a draft partner profile");
+    expect(html).toContain("Signing up does not publish a listing or event");
+    expect(html).not.toContain("Go live on concierge");
+    expect(html).not.toContain("Which types are live today?");
+  });
+
   it("links every partner type to typed signup", () => {
     for (const partnerType of PARTNER_TYPES) {
       expect(html).toContain(`href="/partners/signup?type=${partnerType}"`);

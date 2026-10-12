@@ -19,11 +19,6 @@
     "anon": false,
     "authenticated": true
   },
-  "assert_listing_workflow_transition(p_from text, p_to text)": {
-    "public": false,
-    "anon": true,
-    "authenticated": true
-  },
   "book_new_project_consultation(p_project_id uuid, p_registration_id uuid, p_start_date date, p_start_time time without time zone, p_idempotency_key text, p_end_time time without time zone, p_notes text)": {
     "public": false,
     "anon": false,
@@ -171,7 +166,7 @@
   },
   "pause_listing(p_apartment_id uuid)": {
     "public": false,
-    "anon": true,
+    "anon": false,
     "authenticated": true
   },
   "post_new_project_commission(p_registration_id uuid, p_sale_price_cents bigint, p_idempotency_key text, p_trigger_evidence jsonb)": {
@@ -181,7 +176,12 @@
   },
   "publish_listing(p_apartment_id uuid)": {
     "public": false,
-    "anon": true,
+    "anon": false,
+    "authenticated": true
+  },
+  "publish_verified_rental(p_apartment_id uuid, p_actor_id uuid)": {
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "record_check_in(p_event_id uuid, p_attendee_id uuid, p_qr_token text, p_scanned_by uuid, p_scanner_device text, p_ip_address inet, p_result text, p_details jsonb)": {
@@ -199,9 +199,19 @@
     "anon": false,
     "authenticated": true
   },
-  "request_listing_publish(p_apartment_id uuid)": {
+  "rental_listing_is_public(p_status text, p_moderation_status text, p_listing_workflow_status text, p_landlord_id uuid, p_metadata jsonb)": {
     "public": false,
     "anon": true,
+    "authenticated": true
+  },
+  "rental_listing_launch_blockers(p_apartment_id uuid, p_include_state boolean)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "request_listing_publish(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "semantic_search_events(query_embedding vector, similarity_threshold double precision, match_count integer)": {

@@ -187,7 +187,7 @@ function SavedThreadHistory({
  * `useThreadNav` is the single source of truth; nothing here calls the
  * configuration provider's imperative setters.
  */
-export function ChatProvider({ children }: { children: ReactNode }) {
+function LiveChatProvider({ children }: { children: ReactNode }) {
   const { activeThreadId, newChatCount } = useThreadNav();
 
   // React's "adjust state when a prop changes" pattern: a new id the moment
@@ -219,4 +219,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
   );
+}
+
+/**
+ * Deterministic E2E renders its own chat and coagent stand-ins. Do not mount
+ * the live CopilotKit provider: it can initiate agent/connection requests
+ * while the browser is hydrating a test that exercises only local fast paths.
+ * The production path remains the unchanged LiveChatProvider.
+ */
+export function ChatProvider({ children }: { children: ReactNode }) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <LiveChatProvider>{children}</LiveChatProvider>;
 }
