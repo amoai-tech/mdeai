@@ -44,7 +44,7 @@ test(
     const client = new Client({ connectionString });
     await client.connect();
     const { rows } = await client.query(
-      "select a.id, a.freshness_status, a.last_checked_at, a.images from public.apartments a where a.metadata->>'is_test_fixture' is null and not exists (select 1 from public.property_verifications pv where pv.apartment_id = a.id) order by a.created_at asc limit 1",
+      "select a.id, a.freshness_status, a.last_checked_at, a.images, a.neighborhood from public.apartments a where a.metadata->>'is_test_fixture' is null and not exists (select 1 from public.property_verifications pv where pv.apartment_id = a.id) order by a.created_at asc limit 1",
     );
     if (rows.length === 0) {
       await client.end();
@@ -71,6 +71,11 @@ test(
       "--verification-status=verified",
       `--verified-by=${verifiedBy}`,
       "--notes=san468 integration",
+      "--owner-control=verified",
+      "--publish-permission=granted",
+      "--viewings-permission=granted",
+      "--coordinate-receipt=verified",
+      "--neighborhood=SAN1431 Integration",
     ];
     try {
       // 1. Parser guard: verification needs a verifier.
@@ -95,6 +100,22 @@ test(
       assert.match(first.stdout, /grounding\+1/);
       assert.match(first.stdout, /verification\+1/);
       assert.match(first.stdout, /image\+1/);
+      assert.match(first.stdout, /neighborhood=1/);
+
+      // 3b. The listing-specific approvals land in the metadata the gate reads.
+      const { rows: [verifyRow] } = await client.query(
+        "select metadata from public.property_verifications where apartment_id = $1",
+        [apt.id],
+      );
+      assert.equal(verifyRow.metadata.owner_control, "verified");
+      assert.equal(verifyRow.metadata.publish_permission, "granted");
+      assert.equal(verifyRow.metadata.viewings_permission, "granted");
+      assert.equal(verifyRow.metadata.coordinates, "verified");
+      const { rows: [aptRow] } = await client.query(
+        "select neighborhood from public.apartments where id = $1",
+        [apt.id],
+      );
+      assert.equal(aptRow.neighborhood, "SAN1431 Integration");
 
       // 4. Re-running the same evidence is a no-op.
       const second = runRecorder(baseArgs);
@@ -113,17 +134,42 @@ test(
 
       // 6. Changed verification evidence → conflict, not a silent skip.
       const verificationConflict = runRecorder(
-        baseArgs.map((a) => (a.startsWith("--verification-status") ? "--verification-status=rejected" : a)),
+        baseArgs
+          .filter(
+            (a) =>
+              !a.startsWith("--owner-control") &&
+              !a.startsWith("--publish-permission") &&
+              !a.startsWith("--viewings-permission") &&
+              !a.startsWith("--coordinate-receipt"),
+          )
+          .map((a) => (a.startsWith("--verification-status") ? "--verification-status=rejected" : a)),
       );
       assert.equal(verificationConflict.status, 1, verificationConflict.stderr);
       assert.match(verificationConflict.stderr, /already has a "verified" verification/i);
+
+      // 7. A changed approval is refused silently, but accepted with the explicit flag.
+      const metadataConflict = runRecorder(
+        baseArgs.map((a) => (a.startsWith("--owner-control") ? "--owner-control=unverified" : a)),
+      );
+      assert.equal(metadataConflict.status, 1, metadataConflict.stderr);
+      assert.match(metadataConflict.stderr, /update-verification=true/);
+      const reviewedChange = runRecorder([
+        ...baseArgs.map((a) => (a.startsWith("--owner-control") ? "--owner-control=unverified" : a)),
+        "--update-verification=true",
+      ]);
+      assert.equal(reviewedChange.status, 0, reviewedChange.stderr);
+      const { rows: [updatedRow] } = await client.query(
+        "select metadata from public.property_verifications where apartment_id = $1",
+        [apt.id],
+      );
+      assert.equal(updatedRow.metadata.owner_control, "unverified");
     } finally {
       await client.query("delete from public.rental_freshness_log where listing_id = $1 and checked_at = $2::timestamptz", [apt.id, checkedAt]);
       await client.query("delete from public.rental_grounding where apartment_id = $1 and checked_at = $2::timestamptz", [apt.id, checkedAt]);
       await client.query("delete from public.property_verifications where apartment_id = $1 and verified_at = $2::timestamptz", [apt.id, checkedAt]);
       await client.query(
-        "update public.apartments set freshness_status = $2, last_checked_at = $3, images = $4 where id = $1",
-        [apt.id, apt.freshness_status, apt.last_checked_at, apt.images],
+        "update public.apartments set freshness_status = $2, last_checked_at = $3, images = $4, neighborhood = $5 where id = $1",
+        [apt.id, apt.freshness_status, apt.last_checked_at, apt.images, apt.neighborhood],
       );
       const { rows: left } = await client.query(
         "select (select count(*) from public.rental_freshness_log where listing_id = $1 and checked_at = $2::timestamptz) + (select count(*) from public.rental_grounding where apartment_id = $1 and checked_at = $2::timestamptz) + (select count(*) from public.property_verifications where apartment_id = $1 and verified_at = $2::timestamptz) as n",
