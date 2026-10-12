@@ -130,7 +130,8 @@ export async function getRentalDetail(idOrSlug: string): Promise<RentalDetail | 
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {
-    throw new Error(`[get-rental-detail] supabase error: ${error.message}`);
+    // Only the stable code travels; the driver message can carry hostnames and ports (SAN-1089).
+    throw new RentalSearchUnavailableError(`detail_query_failed${error.code ? `:${error.code}` : ""}`);
   }
   return data ? mapApartmentRowToDetail(data as Record<string, unknown>) : null;
 }
