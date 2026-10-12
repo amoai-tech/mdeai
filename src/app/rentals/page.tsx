@@ -1,5 +1,5 @@
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
-import { isRentalSearchUnavailable } from "@/mastra/lib/rental-search-unavailable";
+import { describeRentalSearchError } from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals, type Rental } from "@/mastra/tools/search-rentals";
 
 interface Props {
@@ -41,10 +41,7 @@ export default async function RentalsPage({ searchParams }: Props) {
   } catch (err) {
     // An unreadable database and an empty marketplace are different answers (SAN-1089).
     error = SEARCH_UNAVAILABLE_MESSAGE;
-    console.error(
-      "[/rentals] searchRentals failed:",
-      isRentalSearchUnavailable(err) ? err.reason : (err as Error).message,
-    );
+    console.error("[/rentals] searchRentals failed:", describeRentalSearchError(err));
   }
 
   return (

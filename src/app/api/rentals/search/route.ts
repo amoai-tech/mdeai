@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
-import { isRentalSearchUnavailable } from "@/mastra/lib/rental-search-unavailable";
+import {
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals } from "@/mastra/tools/search-rentals";
 
 export const runtime = "nodejs";
@@ -83,7 +86,7 @@ export async function POST(req: Request) {
         { status: 503, headers: { "Retry-After": "5" } },
       );
     }
-    console.error("[api/rentals/search]", error);
+    console.error("[api/rentals/search]", describeRentalSearchError(error));
     return NextResponse.json(
       {
         error: "rental_search_failed",

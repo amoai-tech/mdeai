@@ -91,6 +91,35 @@ describe("SAN-1089 · searchRentals never invents apartments", () => {
   });
 });
 
+describe("SAN-1089 · logs never carry driver messages", () => {
+  const SECRET = "connection refused to db.prod.internal:5432";
+
+  function loggedText() {
+    return [...vi.mocked(console.error).mock.calls, ...vi.mocked(console.warn).mock.calls]
+      .flat()
+      .map((value) => (value instanceof Error ? `${value.name}: ${value.message}` : String(value)))
+      .join(" | ");
+  }
+
+  it("a failing query logs a stable code, not the driver message", async () => {
+    queryResult = { data: null, error: { message: SECRET, code: "08006" } as never, count: null };
+    const { searchRentals } = await load();
+    await searchRentals({ limit: 8 }).catch(() => undefined);
+    const logged = loggedText();
+    expect(logged).toContain("rental search unavailable");
+    expect(logged).toContain("08006");
+    expect(logged).not.toContain("db.prod.internal");
+    expect(logged).not.toContain(SECRET);
+  });
+
+  it("the error thrown to callers carries the sanitized reason only", async () => {
+    queryResult = { data: null, error: { message: SECRET, code: "08006" } as never, count: null };
+    const { searchRentals } = await load();
+    const failure = (await searchRentals({ limit: 8 }).catch((error: unknown) => error)) as Error;
+    expect(failure.message).not.toContain("db.prod.internal");
+  });
+});
+
 describe("SAN-1089 · the Mastra tool surfaces an outage as an error", () => {
   it("does not describe or promise demo data to the agent", async () => {
     const { searchRentalsTool } = await load();

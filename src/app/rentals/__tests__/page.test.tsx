@@ -61,4 +61,13 @@ describe("/rentals page", () => {
     expect(props.error).toBeNull();
     expect(props.total).toBe(0);
   });
+
+  it("does not write a raw driver message to the server log", async () => {
+    searchRentals.mockRejectedValue(new Error("connection refused to db.prod.internal:5432"));
+    const props = await render({});
+    expect(props.error).toMatch(/temporarily unavailable/i);
+    const logged = vi.mocked(console.error).mock.calls.flat().map(String).join(" | ");
+    expect(logged).not.toContain("db.prod.internal");
+  });
 });
+

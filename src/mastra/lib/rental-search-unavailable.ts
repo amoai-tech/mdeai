@@ -26,3 +26,13 @@ export class RentalSearchUnavailableError extends Error {
 export function isRentalSearchUnavailable(error: unknown): error is RentalSearchUnavailableError {
   return error instanceof RentalSearchUnavailableError;
 }
+
+/**
+ * A log-safe description of any thrown value: the sanitized reason for our own error, otherwise
+ * only the error class name. Driver and network messages can carry hostnames, ports and
+ * connection details, so they are never written to logs.
+ */
+export function describeRentalSearchError(error: unknown): string {
+  if (isRentalSearchUnavailable(error)) return error.reason;
+  return error instanceof Error ? error.name : typeof error;
+}

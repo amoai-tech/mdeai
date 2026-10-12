@@ -6,6 +6,7 @@ import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
 import {
   RentalSearchUnavailableError,
+  describeRentalSearchError,
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
@@ -422,7 +423,8 @@ async function searchRentalsFromSupabase(
 
   const { data, error, count } = await q;
   if (error) {
-    throw new Error(error.message);
+    // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
+    throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
   }
 
   let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
@@ -470,7 +472,7 @@ export async function searchRentals(
     } catch (err) {
       console.warn(
         '[search-rentals] intelligent search failed, falling back to structured search:',
-        (err as Error).message,
+        describeRentalSearchError(err),
       );
     }
   }
@@ -480,10 +482,11 @@ export async function searchRentals(
     return { results, total, source };
   } catch (err) {
     // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
-    // a different answer from a healthy query that matched nothing. Log a stable code and the
-    // driver message only (no credentials, no user text, no row data are in either).
-    const reason = isRentalSearchUnavailable(err) ? err.reason : 'query_failed';
-    console.error('[search-rentals] rental search unavailable:', reason, (err as Error).message);
+    // a different answer from a healthy query that matched nothing. Log only a stable reason
+    // code (or the error class name) — never the driver message, which can carry hostnames,
+    // ports or connection details.
+    const reason = describeRentalSearchError(err);
+    console.error('[search-rentals] rental search unavailable:', reason);
     throw isRentalSearchUnavailable(err) ? err : new RentalSearchUnavailableError(reason);
   }
 }

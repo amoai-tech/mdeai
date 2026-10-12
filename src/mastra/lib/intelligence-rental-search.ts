@@ -222,7 +222,9 @@ export async function searchRentalsIntelligent(
     }
     const { data, error } = await q;
     if (error) {
-      throw new Error(`keyword fallback query failed: ${error.message}`);
+      throw new RentalSearchUnavailableError(
+        `keyword_query_failed${error.code ? `:${error.code}` : ""}`,
+      );
     }
     const apartments = data ?? [];
     hybridRows = apartments.map((r: Record<string, unknown>) => ({
@@ -265,7 +267,9 @@ export async function searchRentalsIntelligent(
     }
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {
-      throw new Error(`apartment detail query failed: ${aptError.message}`);
+      throw new RentalSearchUnavailableError(
+        `detail_query_failed${aptError.code ? `:${aptError.code}` : ""}`,
+      );
     }
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
