@@ -9,7 +9,7 @@ export function ChatPageClient() {
       id="main-content"
       className="min-h-screen bg-background text-foreground lg:h-dvh lg:min-h-0 lg:overflow-hidden"
     >
-      <MapContextProvider>
+      <MapContextProvider seedMockPin={false}>
         <GeoChatShell />
       </MapContextProvider>
     </main>
