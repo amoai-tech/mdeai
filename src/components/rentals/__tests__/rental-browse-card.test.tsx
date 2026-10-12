@@ -212,12 +212,21 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
     });
     const card = container.querySelector('[data-testid="rental-card-rnt_lau_001"]')!;
     act(() => {
-      // Explicitly enter from outside the React root. A bare mouseover with no
-      // relatedTarget is intermittent under Vitest's parallel jsdom workers.
-      card.dispatchEvent(new MouseEvent("mouseover", {
-        bubbles: true,
-        relatedTarget: document.body,
-      }));
+      // The shared card on current main uses pointer enter (not mouse enter) so
+      // touch taps cannot accidentally preview a map marker on mobile.
+      const touch = new MouseEvent("pointerover", {
+        bubbles: true, relatedTarget: document.body,
+      });
+      Object.defineProperty(touch, "pointerType", { value: "touch" });
+      card.dispatchEvent(touch);
+    });
+    expect(onPreview).not.toHaveBeenCalled();
+    act(() => {
+      const hover = new MouseEvent("pointerover", {
+        bubbles: true, relatedTarget: document.body,
+      });
+      Object.defineProperty(hover, "pointerType", { value: "mouse" });
+      card.dispatchEvent(hover);
     });
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
