@@ -33,18 +33,28 @@ async function gotoComposer(page: Page) {
 }
 
 async function expectInsideViewport(page: Page, locator: Locator, label: string) {
-  const box = await locator.boundingBox();
   const viewport = page.viewportSize();
-  expect(box, `${label} must have a rendered box`).not.toBeNull();
   expect(viewport, "viewport must exist").not.toBeNull();
-  expect(box!.x, `${label} left edge`).toBeGreaterThanOrEqual(0);
-  expect(box!.y, `${label} top edge`).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width, `${label} right edge`).toBeLessThanOrEqual(
-    viewport!.width + 1,
-  );
-  expect(box!.y + box!.height, `${label} bottom edge`).toBeLessThanOrEqual(
-    viewport!.height + 1,
-  );
+  // A viewport/keyboard resize is asynchronous; poll until the element settles
+  // inside the visible viewport instead of sleeping a fixed time.
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        if (!box) return false;
+        return (
+          box.x >= -1 &&
+          box.y >= -1 &&
+          box.x + box.width <= viewport!.width + 1 &&
+          box.y + box.height <= viewport!.height + 1
+        );
+      },
+      {
+        timeout: 5_000,
+        message: `${label} must settle inside the ${viewport!.width}×${viewport!.height} viewport`,
+      },
+    )
+    .toBe(true);
 }
 
 async function expectMinimumTouchTarget(locator: Locator, label: string) {
@@ -105,7 +115,6 @@ async function typeDraft(
     await input.click();
     await input.fill("");
     await input.pressSequentially(text, { delay: 2 });
-    await page.waitForTimeout(300);
     await expect(input).toHaveValue(text, { timeout: 1_500 });
     await expect(send).toBeEnabled({ timeout: 1_500 });
   }).toPass({ timeout: 45_000, intervals: [500, 1_000] });
@@ -157,7 +166,6 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
         width: viewport.width,
         height: KEYBOARD_PROXY_HEIGHT,
       });
-      await page.waitForTimeout(250);
 
       await expect(input).toBeFocused();
       await expect(input).toHaveValue(LONG_MESSAGE);
@@ -167,7 +175,6 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
       await expectNoHorizontalOverflow(page);
 
       await page.setViewportSize(viewport);
-      await page.waitForTimeout(250);
       await expect(input).toHaveValue(LONG_MESSAGE);
       await expectInsideViewport(page, input, "composer after keyboard closes");
       await expectInsideViewport(page, send, "Send after keyboard closes");
@@ -182,13 +189,11 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await input.focus();
 
     await page.setViewportSize({ width: 844, height: 390 });
-    await page.waitForTimeout(250);
     await expectInsideViewport(page, input, "composer in landscape");
     await expectInsideViewport(page, send, "Send in landscape");
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize(PHONE_390);
-    await page.waitForTimeout(250);
     await expectInsideViewport(page, input, "composer after portrait restore");
     await expectInsideViewport(page, send, "Send after portrait restore");
   });
@@ -267,7 +272,6 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
       width: PHONE_390.width,
       height: KEYBOARD_PROXY_HEIGHT,
     });
-    await page.waitForTimeout(250);
     await input.focus();
     await expectInsideViewport(page, input, "composer after agent reply");
     await expectInsideViewport(page, send, "Send after agent reply");
