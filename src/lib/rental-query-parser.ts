@@ -28,6 +28,13 @@ function attachQueryText(
     ...(s.checkOut && { checkOut: s.checkOut }),
     ...(s.budgetType && { stayType: s.budgetType }),
   };
+  // SAN-407: a monthly or whole-trip budget is not a nightly cap. `parseBudget` still derives a
+  // per-night figure for display and routing signals, but sending it as a search filter would
+  // present a guess ("4,000,000 / 30") as exact eligibility. The validated amount + currency +
+  // period contract belongs to SAN-386; until then the stay type travels and the cap does not.
+  if (s.budgetType === "monthly" || s.budgetType === "total_trip") {
+    delete dated.maxPricePerNight;
+  }
   if (s.confidence >= 0.6 || s.hasNomad || s.hasCafeOrGym || s.hasVibeOrUseCase) {
     return { ...dated, queryText: text.trim() };
   }
@@ -94,6 +101,10 @@ const MONTHLY_RE = /\b(month|monthly|per month|\/month|mes)\b/i;
 const TRIP_RE = /\b(for the trip|total|10 days|two weeks|\d+\s+days)\b/i;
 const MEDELLIN_CITY_RE = /\bmedell[ií]n\b/i;
 
+/** SQL statements and prompt-override phrases (SAN-1054). Deliberately narrow and conservative. */
+const INJECTION_MARKERS_RE =
+  /;\s*\S|\b(?:drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\binsert\s+into\b|\bunion\s+select\b|--\s|\bignore\s+(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b|\bsystem\s+prompt\b/i;
+
 const MONTH_IDX: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
@@ -151,9 +162,8 @@ function parseBudget(text: string): {
   const plainMatch = text.match(/\$\s*([\d,.]+)/);
   const amountStr = underMatch?.[1] ?? plainMatch?.[1];
   if (!amountStr) {
-    if (/\b(cheap|budget|affordable)\b/i.test(text)) {
-      return { maxPricePerNight: 60, budgetType: "nightly" };
-    }
+    // "cheap" / "affordable" is a preference, not a number. It used to become a hard
+    // $60/night cap that no renter had stated (SAN-407).
     return {};
   }
 
@@ -275,24 +285,16 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
   };
 }
 
-/** Generic = rental intent but no budget, bedrooms, or vibe. */
-export function isGenericRentalQuery(text: string): boolean {
-  if (!looksLikeRentalSearch(text)) return false;
-  const s = scoreRentalQuery(text);
-  if (s.confidence >= 0.6) return false;
-  return s.confidence < 0.6;
-}
-
-export function shouldInstantRentalClarify(
-  text: string,
-  memory: ConciergeWorkingMemory,
-): boolean {
-  if (!looksLikeRentalSearch(text)) return false;
-  if (memory.lastRentalQuery && !memory.lastRentalQuery.genericAskPending) {
-    return false;
-  }
-  if (memory.lastRentalQuery?.genericAskPending === true) return false;
-  return isGenericRentalQuery(text);
+/**
+ * True when the renter named a budget in words the search cannot yet enforce (monthly, COP,
+ * "cheap"…). The chat says so instead of implying the results were limited by price. Explicit
+ * nightly USD caps are enforced by the search and are not reported here — the caller checks
+ * whether a cap was actually sent.
+ */
+export function statesBudget(text: string): boolean {
+  return /\b(cop|pesos?|usd|dollars?|cheap|budget|affordable)\b|[$€]\s*\d|\d\s?(?:m|k|million|millones)\b|\b(?:under|below|max|up to)\s+\d/i.test(
+    text,
+  );
 }
 
 const FAST_PATH_LIMIT = 8;
@@ -397,7 +399,15 @@ export function buildRentalSearchParams(
     );
   }
 
-  return null;
+  // SAN-1054 / RE-SEC-001: text that carries SQL or instruction-override markers is never
+  // promoted to an automatic search just because it also says "rentals". It keeps its old
+  // route (clarify / concierge), where the agent's own guardrails apply.
+  if (INJECTION_MARKERS_RE.test(text)) return null;
+
+  // SAN-407: recognised rental-search intent with no optional slots ("Search apartments
+  // Medellín") is still a search. It goes out with the renter's own words and nothing invented;
+  // any refinement question comes after the answer.
+  return { ...attachQueryText({ limit }, text, s), queryText: text.trim() };
 }
 
 export function canFastPathRentalSearch(
@@ -405,7 +415,6 @@ export function canFastPathRentalSearch(
   memory: ConciergeWorkingMemory,
 ): boolean {
   if (looksLikeNonRentalSearch(text)) return false;
-  if (shouldInstantRentalClarify(text, memory)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
   }

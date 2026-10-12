@@ -6,18 +6,17 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
-import { RENTAL_CLARIFY_MESSAGE } from "@/lib/rental-clarify-copy";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
   fastPathRentalSummary,
   rentalsToPanelRows,
   rentalsToToolEnvelope,
-  shouldInstantRentalClarify,
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { scoreRentalQuery } from "@/lib/rental-query-parser";
+import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
+import { RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -61,7 +60,7 @@ async function fetchRentalSearch(
 
 export function useRentalSearchFastPath() {
   const { state, setState } = useConciergeCoAgent();
-  const { clarifyPending, clarifyKind, showClarify, showExchange, clearLocalMessages } =
+  const { clarifyPending, clarifyKind, showExchange, clearLocalMessages } =
     useEventLocalChat();
   const { setToolResult, setSearchMeta } = useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
@@ -101,7 +100,20 @@ export function useRentalSearchFastPath() {
       if (busyRef.current) return true;
       busyRef.current = true;
       try {
-        const { results: cards, hybridUsed, rankExplanation } = await fetchRentalSearch(params);
+        let response: RentalSearchResponse;
+        try {
+          response = await fetchRentalSearch(params);
+        } catch (err) {
+          // SAN-407: an outage is its own answer. Returning false here used to hand the same
+          // message to the agent, which then gave a second, conflicting reply. Retrying is just
+          // sending the message again; no write happens on this path.
+          console.error("[rental-fast-path] search unavailable", err);
+          setToolResult(null);
+          setSearchMeta(null);
+          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
+          return true;
+        }
+        const { results: cards, hybridUsed, rankExplanation } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
@@ -122,7 +134,15 @@ export function useRentalSearchFastPath() {
         });
         setSearchMeta({ userText, params });
         const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
-        showExchange(userText, fastPathRentalSummary(cards.length, pinCount));
+        showExchange(
+          userText,
+          fastPathRentalSummary(cards.length, pinCount, {
+            generic:
+              !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
+              !sig.hasVibeOrUseCase,
+            budgetNotApplied: params.maxPricePerNight == null && statesBudget(userText),
+          }),
+        );
         return true;
       } catch (err) {
         console.error("[rental-fast-path]", err);
@@ -143,43 +163,7 @@ export function useRentalSearchFastPath() {
       if (clarifyPending && clarifyKind === "event") return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
 
-      const memory: ConciergeWorkingMemory = {
-        ...(state ?? {}),
-        lastRentalQuery:
-          clarifyPending && clarifyKind === "rental"
-            ? {
-                ...(state?.lastRentalQuery ?? {}),
-                genericAskPending: true,
-              }
-            : state?.lastRentalQuery,
-      };
-
-      if (shouldInstantRentalClarify(trimmed, memory)) {
-        if (busyRef.current) return true;
-        busyRef.current = true;
-        try {
-          const sig = scoreRentalQuery(trimmed);
-          logRoutingDecision({
-            intent: "rental_search",
-            slots: buildRentalSlots(sig),
-            confidence: sig.confidence,
-            action: "clarify",
-            source: "clarify-branch",
-            ts: new Date().toISOString(),
-          });
-          setToolResult(null);
-          setSearchMeta(null);
-          showClarify(trimmed, RENTAL_CLARIFY_MESSAGE, "rental");
-          setState({
-            ...memory,
-            lastIntent: "rental_search",
-            lastRentalQuery: { genericAskPending: true },
-          });
-          return true;
-        } finally {
-          busyRef.current = false;
-        }
-      }
+      const memory: ConciergeWorkingMemory = { ...(state ?? {}) };
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
@@ -194,10 +178,6 @@ export function useRentalSearchFastPath() {
       clarifyPending,
       clearLocalMessages,
       runSearch,
-      showClarify,
-      setState,
-      setSearchMeta,
-      setToolResult,
       state,
     ],
   );
