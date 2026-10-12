@@ -7,7 +7,7 @@ export function ChatPageClient() {
   return (
     <main
       id="main-content"
-      className="min-h-screen bg-background text-foreground lg:h-dvh lg:min-h-0 lg:overflow-hidden"
+      className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
     >
       <MapContextProvider>
         <GeoChatShell />
