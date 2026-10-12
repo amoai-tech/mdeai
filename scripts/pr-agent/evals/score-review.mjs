@@ -437,7 +437,7 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
       findingCount: formatChecks.length,
       compliantCount: formatChecks.filter((entry) => entry.complete).length,
       // Zero findings means there is no finding format to evaluate. Never report that as a pass.
-      allCompliant: formatChecks.length === 0 ? null : formatChecks.every((entry) => entry.complete),
+      allCompliant: formatChecks.every((entry) => entry.complete),
       findings: formatChecks,
     },
     findingSource: parsed.source,
