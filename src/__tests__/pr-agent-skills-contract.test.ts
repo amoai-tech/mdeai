@@ -74,8 +74,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
       expect(config).toContain(label);
       expect(codeReviewSkill).toContain(label);
     }
-    expect(config).toContain("**Severity:** HIGH\n\n**Technical:**");
-    expect(codeReviewSkill).toContain("**Severity:** HIGH\n\n**Technical:**");
+    expect(config).toContain("issue_content: |\n  **Severity:** HIGH\n\n  **Technical:**");
+    expect(codeReviewSkill).toContain("issue_content: |\n  **Severity:** HIGH\n\n  **Technical:**");
+    expect(config).toContain("Never return an unstructured paragraph for issue_content");
+    expect(codeReviewSkill).toContain("Do not return one prose paragraph");
     expect(config).toContain("Choose exactly one allowed value for Severity, Verification state, and Status");
     expect(codeReviewSkill).toContain("Severity = BLOCKER/HIGH/MEDIUM/LOW");
     expect(codeReviewSkill).toContain("Verification state = VERIFIED/NEEDS VERIFICATION");
