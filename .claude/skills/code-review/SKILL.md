@@ -83,27 +83,30 @@ Do not report style trivia already handled by formatters/linters unless it chang
 
 For every actionable finding, write for both the engineer fixing it and the product owner deciding whether it matters:
 
-Use readable GitHub Markdown with a bold label and one blank line between every field. Do not collapse the fields into one paragraph or table:
+When PR-Agent uses this skill, every finding lives in `key_issues_to_review[].issue_content`. Make that block itself the readable review. Do not return one prose paragraph.
 
-```markdown
-**Severity:** HIGH
+Use this exact YAML shape:
 
-**Technical:** concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
+```yaml
+issue_content: |
+  **Severity:** HIGH
 
-**Plain English:** consequence in 1-2 short sentences with minimal jargon
+  **Technical:** concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
 
-**Real-world example:** one realistic MDE user/operator/developer failure scenario
+  **Plain English:** consequence in 1-2 short sentences with minimal jargon
 
-**Fix:** smallest safe bounded change using existing MDE patterns
+  **Real-world example:** one realistic MDE user/operator/developer failure scenario
 
-**Verify:** exact deterministic test/probe that proves the fix
+  **Fix:** smallest safe bounded change using existing MDE patterns
 
-**Verification state:** VERIFIED
+  **Verify:** exact deterministic test/probe that proves the fix
 
-**Status:** changes_required
+  **Verification state:** VERIFIED
+
+  **Status:** changes_required
 ```
 
-Choose exactly one allowed value: Severity = BLOCKER/HIGH/MEDIUM/LOW; Verification state = VERIFIED/NEEDS VERIFICATION; Status = changes_required/advisory. Never print the option list in a finding.
+Choose exactly one allowed value: Severity = BLOCKER/HIGH/MEDIUM/LOW; Verification state = VERIFIED/NEEDS VERIFICATION; Status = changes_required/advisory. Never print the option list in a finding. If every field cannot be filled, omit the finding instead of returning an unstructured paragraph.
 
 Keep the sections concise and non-repetitive. BLOCKER/HIGH findings must make the reason to delay merge understandable in Plain English.
 
