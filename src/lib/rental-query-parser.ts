@@ -120,6 +120,7 @@ const INJECTION_PATTERNS: readonly RegExp[] = [
   /\b(?:drop|truncate|alter)\s{1,5}(?:table|database|schema)\b/i,
   /\bdelete\s{1,5}from\s{1,5}[a-z_.]{1,40}\s{0,5}(?:where\b|;|$)/i,
   /\binsert\s{1,5}into\s{1,5}[a-z_.]{1,40}\b/i,
+  /\bupdate\s{1,5}[a-z_.]{1,40}\s{1,5}set\b/i,
   /\bunion\s{1,5}(?:all\s{1,5})?select\b/i,
   /\bselect\s{1,5}\*\s{1,5}from\b/i,
   /\bignore\s{1,5}(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b/i,
@@ -128,7 +129,9 @@ const INJECTION_PATTERNS: readonly RegExp[] = [
 
 /** True when the text carries SQL or instruction-override markers. Exported for tests. */
 export function looksLikeInjection(text: string): boolean {
-  return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
+  // Bounded like every other rental-text check: scan at most MAX_RENTAL_TEXT_CHARS.
+  const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  return INJECTION_PATTERNS.some((pattern) => pattern.test(bounded));
 }
 
 const MONTH_IDX: Record<string, number> = {

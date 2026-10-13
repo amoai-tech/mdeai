@@ -41,11 +41,14 @@ type Probe = {
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
 const unhandled: string[] = [];
+/** When set, the hand-off to the concierge throws, as a failed network call would. */
+let handoffThrows = false;
 
 function Harness() {
   const { handleUserMessage } = useRentalSearchFastPath({
     onUnhandled: (text) => {
       unhandled.push(text);
+      if (handoffThrows) throw new Error("concierge unreachable");
       return true;
     },
   });
@@ -75,6 +78,7 @@ function respond(status: number, body: unknown) {
 beforeEach(() => {
   map.merges.length = 0;
   unhandled.length = 0;
+  handoffThrows = false;
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -177,6 +181,32 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     // false = let the concierge handle it; retrying the same request would not help.
     expect(handled).toBe(false);
     expect(assistantText()).not.toMatch(/temporarily unavailable/i);
+  });
+
+  it("a malformed answer (bad JSON) is a bug, not an outage: it goes to the concierge", async () => {
+    fetchMock.mockImplementation(async () => new Response("{not json", { status: 200 }));
+    const handled = await send("Search apartments Medellín");
+    expect(handled).toBe(false);
+    expect(assistantText()).not.toMatch(/temporarily unavailable/i);
+  });
+
+  it("a failed hand-off of a queued message does not stall the messages behind it", async () => {
+    handoffThrows = true;
+    const search = await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: "x" }), { status: 400 }));
+    for (const text of ["Only apartments in Laureles", "apartments in Envigado instead"]) {
+      await act(async () => {
+        await probe.send(text);
+      });
+    }
+    await search.finish();
+    for (let i = 0; i < 6; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    // Both were tried and handed back even though the first hand-off threw.
+    expect(unhandled).toEqual(["Only apartments in Laureles", "apartments in Envigado instead"]);
   });
 
   it.each([500, 502, 503, 429])("HTTP %i is reported as temporarily unavailable", async (status) => {

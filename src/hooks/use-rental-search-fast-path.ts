@@ -54,12 +54,18 @@ class RentalSearchHttpError extends Error {
 
 /**
  * "Temporarily unavailable" is only true for a network failure, a 5xx, a timeout or a rate limit.
- * A 400/401/403/404 is a problem with the request itself: retrying cannot help, so it must not be
- * presented as an outage.
+ * A 400/401/403/404 is a problem with the request itself, and a malformed answer (bad JSON, an
+ * unexpected exception) is a bug: retrying cannot help either, so neither may be presented to the
+ * renter as an outage. Those go to the concierge and are logged.
  */
 function isTemporaryOutage(err: unknown): boolean {
-  if (!(err instanceof RentalSearchHttpError)) return true; // fetch itself failed (offline, DNS…)
-  return err.status >= 500 || err.status === 429 || err.status === 408;
+  if (err instanceof RentalSearchHttpError) {
+    return err.status >= 500 || err.status === 429 || err.status === 408;
+  }
+  // fetch() rejects with a TypeError when the network fails (offline, DNS…); a timeout aborts it.
+  if (err instanceof TypeError) return true;
+  const name = (err as { name?: string } | null)?.name;
+  return name === "AbortError" || name === "TimeoutError";
 }
 
 async function fetchRentalSearch(
@@ -253,8 +259,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     if (!next) return;
     void (async () => {
       try {
-        const handled = await dispatchMessage(next, latestMemoryRef.current);
+        let handled = false;
+        try {
+          handled = await dispatchMessage(next, latestMemoryRef.current);
+        } catch (err) {
+          console.error("[rental-fast-path] replay failed", err);
+        }
         if (!handled) await onUnhandled?.(next);
+      } catch (err) {
+        // The concierge hand-off itself failed. Log it and keep draining the queue rather than
+        // leaving an unhandled rejection that stalls the messages behind this one.
+        console.error("[rental-fast-path] hand-off to the concierge failed", err);
       } finally {
         // A replay that never reached a search (declined) leaves no search to schedule the next
         // one, so continue the chain here.
