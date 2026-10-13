@@ -88,7 +88,9 @@ function parseExplicitLimit(text: string): number | undefined {
 }
 
 const BEDROOM_RE =
-  /\b(\d+)\s?(?:br|bed(?:room)?s?)\b|\b(studio|one bedroom|1 bedroom|2 bedroom|3 bedroom)\b/i;
+  /\b(\d+|one|two|three|four)[\s-]?(?:br|bed(?:room)?s?)\b|\b(studio)\b/i;
+
+const BEDROOM_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4 };
 
 const VIBE_RE =
   /\b(remote work|remote-work|digital nomad|nomad|nightlife|family|quiet|long[- ]term|monthly|workspace|pet[- ]friendly|wifi|cowork)\b/i;
@@ -214,13 +216,10 @@ function parseBudget(text: string): {
 function parseBedrooms(text: string): number | undefined {
   const m = text.match(BEDROOM_RE);
   if (!m) return undefined;
-  if (/studio/i.test(m[0])) return 0;
-  const n = Number(m[1]);
-  if (Number.isFinite(n)) return n;
-  if (/one bedroom|1 bedroom/i.test(m[0])) return 1;
-  if (/2 bedroom/i.test(m[0])) return 2;
-  if (/3 bedroom/i.test(m[0])) return 3;
-  return undefined;
+  if (m[2]) return 0; // studio
+  const raw = m[1].toLowerCase();
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : BEDROOM_WORDS[raw];
 }
 
 /** User message is clearly about rentals, not events or cafés. */
@@ -444,7 +443,21 @@ export function buildRentalSearchParams(
   // SAN-407: recognised rental-search intent with no optional slots ("Search apartments
   // Medellín") is still a search. It goes out with the renter's own words and nothing invented;
   // any refinement question comes after the answer.
-  return { ...attachQueryText({ limit }, text, s), queryText: text.trim() };
+  // Whatever the renter did state (neighborhood, size, budget) still travels as a filter; only
+  // what they did not say is left out.
+  return {
+    ...attachQueryText(
+      {
+        limit,
+        neighborhood: s.neighborhood,
+        minBedrooms: s.minBedrooms,
+        maxPricePerNight: s.maxPricePerNight,
+      },
+      text,
+      s,
+    ),
+    queryText: text.trim(),
+  };
 }
 
 export function canFastPathRentalSearch(

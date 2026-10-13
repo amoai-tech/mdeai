@@ -238,5 +238,31 @@ describe("rental-search-fast-path", () => {
       expect(statesBudget(prompt)).toBe(false);
     });
   });
+
+  describe("bedroom wording — the renter's stated size is never dropped", () => {
+    it.each([
+      ["Find a 2-bedroom apartment in Envigado", 2],
+      ["Find a 2 bedroom apartment in Envigado", 2],
+      ["a two-bedroom apartment in Laureles", 2],
+      ["two bedroom apartments in Laureles", 2],
+      ["one-bedroom apartment in Belén", 1],
+      ["three bedroom apartment in El Poblado", 3],
+      ["2-br apartment in Envigado", 2],
+      ["2BR apartment in Envigado", 2],
+      ["3 beds apartment in El Poblado", 3],
+      ["studio apartment in Centro", 0],
+    ])("%j -> minBedrooms %i", (prompt, expected) => {
+      expect(buildRentalSearchParams(prompt, {})?.minBedrooms).toBe(expected);
+    });
+
+    it.each([
+      "apartment 100 m from the metro",
+      "apartments for 2 people in Laureles",
+      "apartments near a bedside cafe in Laureles",
+      "someone's apartment in Laureles",
+    ])("no bedroom filter is invented for %j", (prompt) => {
+      expect(buildRentalSearchParams(prompt, {})?.minBedrooms).toBeUndefined();
+    });
+  });
 });
 
