@@ -1,13 +1,15 @@
 -- SAN-486 · a verified future move-in date publishes, and can still be viewed.
 --
 -- Positive: a fully evidenced apartment whose available_from is in the future passes
--- the launch gate and can be toured before move-in.
--- Negative: an expired or missing availability window still fails closed.
+-- the launch gate and can be toured before move-in, by UUID and by slug.
+-- Negative: an expired, missing or reversed window still fails closed, and the viewing
+-- RPC refuses a listing with no usable window.
 --
--- Run with: supabase test db
+-- Dates are relative so the test cannot silently rot once the clock passes a hardcoded
+-- appointment. Run with: supabase test db
 begin;
 
-select plan(6);
+select plan(9);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values ('f4860000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
@@ -16,20 +18,34 @@ insert into public.landlord_profiles (id, user_id, display_name, verification_st
 values ('f4860000-0000-4000-8000-000000000011', 'f4860000-0000-4000-8000-000000000001',
         'SAN486 Owner', 'approved', now());
 
--- Future move-in, fully evidenced.
 insert into public.apartments
   (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
    landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude)
 values
+  -- Future move-in, fully evidenced; created draft so the image guard does not demote it.
   ('f4860000-0000-4000-8000-000000000021', 'SAN486 future', 'san486-future', 'Laureles',
    'SAN486 future address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', '2099-11-01', null, 6.2447, -75.5916),
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date + 30, null, 6.2447, -75.5916),
+  -- Expired window.
   ('f4860000-0000-4000-8000-000000000022', 'SAN486 expired', 'san486-expired', 'Laureles',
    'SAN486 expired address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', '2000-01-01', '2000-01-31', 6.2447, -75.5916),
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date - 60, current_date - 1, 6.2447, -75.5916),
+  -- Missing window.
   ('f4860000-0000-4000-8000-000000000023', 'SAN486 missing', 'san486-missing', 'Laureles',
    'SAN486 missing address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', null, null, 6.2447, -75.5916);
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', null, null, 6.2447, -75.5916),
+  -- Reversed window: ends before it starts.
+  ('f4860000-0000-4000-8000-000000000024', 'SAN486 reversed', 'san486-reversed', 'Laureles',
+   'SAN486 reversed address', 'inactive', 'pending', 'draft',
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date + 30, current_date + 10, 6.2447, -75.5916),
+  -- Published but no move-in date: the viewing RPC must refuse it.
+  ('f4860000-0000-4000-8000-000000000025', 'SAN486 no-from', 'san486-no-from', 'Laureles',
+   'SAN486 no-from address', 'active', 'approved', 'published',
+   'f4860000-0000-4000-8000-000000000011', true, 2900000, 'COP', null, null, 6.2447, -75.5916),
+  -- Published but reversed: the viewing RPC must refuse it.
+  ('f4860000-0000-4000-8000-000000000026', 'SAN486 reversed-pub', 'san486-reversed-pub', 'Laureles',
+   'SAN486 reversed-pub address', 'active', 'approved', 'published',
+   'f4860000-0000-4000-8000-000000000011', true, 2900000, 'COP', current_date + 30, current_date + 10, 6.2447, -75.5916);
 
 insert into public.property_verifications (apartment_id, status, verified_at, metadata)
 select id, 'verified', now(),
@@ -58,26 +74,58 @@ select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-0000000
 select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-000000000023', false) @> array['no current availability evidence']::text[],
   true, 'A3: a missing availability window still blocks');
 
--- A4 · the viewing RPC no longer couples a viewing to the move-in date.
-select is(
-  position('available_from <= (p_scheduled_at' in
-    pg_get_functiondef('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)'::regprocedure)) > 0,
-  false, 'A4: the viewing RPC does not require available_from <= viewing date');
+-- A4 · a reversed window (ends before it starts) fails closed.
+select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-000000000024', false) @> array['no current availability evidence']::text[],
+  true, 'A4: a reversed availability window still blocks');
 
--- A5 · an October viewing of a November move-in succeeds.
+-- A5 · an October viewing of a November move-in succeeds when resolved by UUID.
 set local role service_role;
 select lives_ok($q$
   select public.p1_schedule_tour_atomic(
-    'san486-future', null::uuid, 'san486-viewing-key-1', 'form',
+    'f4860000-0000-4000-8000-000000000021'::text, null::uuid, 'san486-viewing-key-uuid', 'form',
     'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
-    '2099-10-20 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
+    (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'A5: a viewing before the move-in date is accepted');
+$q$, 'A5: a viewing before the move-in date is accepted by UUID');
+
+-- A6 · the same viewing, resolved by slug.
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san486-future', null::uuid, 'san486-viewing-key-slug', 'form',
+    'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
+    (now() + interval '2 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'A6: a viewing before the move-in date is accepted by slug');
 reset role;
 
--- A6 · it persisted exactly one lead.
-select is((select count(*)::int from public.leads where idempotency_key = 'san486-viewing-key-1'), 1,
-  'A6: the early viewing created exactly one lead');
+-- A7 · the early viewing persisted exactly one lead and one showing.
+select is(
+  (select count(*)::int from public.showings s join public.leads l on l.id = s.lead_id
+    where l.idempotency_key = 'san486-viewing-key-uuid'
+      and s.apartment_id = 'f4860000-0000-4000-8000-000000000021'),
+  1, 'A7: the early viewing created exactly one showing');
+
+-- A8 · a missing move-in date keeps the established "available now" meaning; it is not
+-- turned into a rejection by SAN-486.
+set local role service_role;
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san486-no-from', null::uuid, 'san486-viewing-key-nofrom', 'form',
+    'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
+    (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'A8: a listing with no move-in date stays requestable (available now)');
+
+-- A9 · the RPC refuses a published listing with a reversed window.
+select throws_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'san486-reversed-pub', null::uuid, 'san486-viewing-key-reversed', 'form',
+    'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
+    (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+  'A9: a listing with a reversed window cannot be requested');
+reset role;
 
 select * from finish();
 rollback;

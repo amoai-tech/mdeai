@@ -68,7 +68,9 @@ begin
   -- an already-expired available_to fails closed. A recent freshness check does not
   -- prove the unit is still offered.
   if not (r.available_from is not null
-          and (r.available_to is null or r.available_to >= current_date)) then
+          and (r.available_to is null or r.available_to >= current_date)
+          -- A window that ends before it starts can never accommodate a stay.
+          and (r.available_to is null or r.available_from <= r.available_to)) then
     b := b || 'no current availability evidence'::text;
   end if;
 
@@ -316,9 +318,13 @@ BEGIN
       AND a.moderation_status = 'approved'
       AND a.listing_workflow_status = 'published'
       AND a.landlord_id IS NOT NULL
-      -- SAN-486: viewing eligibility is independent of the move-in date; only an
-      -- expired availability window blocks a viewing.
-      AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date);
+      -- SAN-486: viewing eligibility is independent of the move-in date. A missing
+      -- move-in date keeps the established "available now" meaning; only an expired or
+      -- reversed window blocks a viewing. The row is locked so a concurrent withdrawal
+      -- serializes with the lead/showing inserts below.
+      AND (a.available_from IS NULL OR a.available_to IS NULL OR a.available_from <= a.available_to)
+      AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
+    FOR UPDATE;
   ELSE
     SELECT a.* INTO v_apartment
     FROM public.apartments AS a
@@ -327,9 +333,13 @@ BEGIN
       AND a.moderation_status = 'approved'
       AND a.listing_workflow_status = 'published'
       AND a.landlord_id IS NOT NULL
-      -- SAN-486: viewing eligibility is independent of the move-in date; only an
-      -- expired availability window blocks a viewing.
-      AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date);
+      -- SAN-486: viewing eligibility is independent of the move-in date. A missing
+      -- move-in date keeps the established "available now" meaning; only an expired or
+      -- reversed window blocks a viewing. The row is locked so a concurrent withdrawal
+      -- serializes with the lead/showing inserts below.
+      AND (a.available_from IS NULL OR a.available_to IS NULL OR a.available_from <= a.available_to)
+      AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
+    FOR UPDATE;
   END IF;
 
   IF v_apartment.id IS NULL THEN

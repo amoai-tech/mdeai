@@ -222,8 +222,11 @@ export async function searchRentalsIntelligent(
     const today = rentalAvailabilityDate();
     const checkInDate = query.checkIn ?? today;
     q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-    if (query.checkOut) {
-      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    // The listing must start on or before the requested stay (SAN-486); checking only
+    // when a check-out was supplied let a future move-in match an earlier stay.
+    const stayStart = query.checkIn ?? query.checkOut;
+    if (stayStart) {
+      q = q.or(`available_from.is.null,available_from.lte.${stayStart}`);
     }
     const { data, error } = await q;
     if (error) {
@@ -265,8 +268,10 @@ export async function searchRentalsIntelligent(
     const today = rentalAvailabilityDate();
     const checkInDate = query.checkIn ?? today;
     aptQ = aptQ.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-    if (query.checkOut) {
-      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+    // The listing must start on or before the requested stay (SAN-486).
+    const aptStayStart = query.checkIn ?? query.checkOut;
+    if (aptStayStart) {
+      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${aptStayStart}`);
     }
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {
@@ -412,7 +417,9 @@ export async function searchRentalsIntelligent(
       can_schedule_viewing: false,
       schedule_viewing_url: null,
       host_name: "Host",
-      availability: "Available now",
+      // No canonical row survived the availability filter, so ownership is unproven and
+      // this row is never requestable. Do not claim a stay date we cannot verify.
+      availability: "Availability unconfirmed",
       tags: [],
       rankScore,
       signalSource: sig?.source ?? undefined,

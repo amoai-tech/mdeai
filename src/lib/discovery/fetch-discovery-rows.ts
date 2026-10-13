@@ -47,7 +47,32 @@ type ApartmentRow = {
   pet_friendly: boolean | null;
   images: string[] | null;
   rating: number | null;
+  available_from: string | null;
 };
+
+// DATE values are plain calendar dates; anchor at UTC so a UTC-negative viewer still
+// sees the stored move-in day. "Today" is read in the availability timezone.
+const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatMoveInDate(d: string): string {
+  return dateOnlyFormatter.format(new Date(`${d}T00:00:00Z`));
+}
+
+function isFutureMoveIn(d: string | null): boolean {
+  if (!d) return false;
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return d > today;
+}
 
 function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   const price = row.price_monthly
@@ -60,10 +85,14 @@ function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   if (row.wifi_speed && row.wifi_speed >= 50) hints.push("fast Wi-Fi");
   if (row.utilities_included) hints.push("bills included");
   if (row.pet_friendly) hints.push("pet-friendly");
+  // A future move-in listing must never be described as available now (SAN-486).
+  const futureMoveIn = isFutureMoveIn(row.available_from);
   const why =
     hints.length > 1
       ? `${hints.join(" · ")}.`
-      : `Available now in ${row.neighborhood}.`;
+      : futureMoveIn && row.available_from
+        ? `Available from ${formatMoveInDate(row.available_from)} in ${row.neighborhood}.`
+        : `Available now in ${row.neighborhood}.`;
 
   return {
     id: row.id,
@@ -83,7 +112,7 @@ export async function fetchLiveRentals(
   const { data, error } = await supabase
     .from("apartments")
     .select(
-      "id, title, neighborhood, price_monthly, bedrooms, wifi_speed, utilities_included, pet_friendly, images, rating",
+      "id, title, neighborhood, price_monthly, bedrooms, wifi_speed, utilities_included, pet_friendly, images, rating, available_from",
     )
     .eq("moderation_status", "approved")
     .not("images", "is", null)

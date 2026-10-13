@@ -144,9 +144,10 @@ export type RentalRequestabilityInput = {
 
 /**
  * The timezone the database uses for its availability calendar. `p1_schedule_tour_atomic`
- * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_from` /
- * `available_to`, so the application must read "today" in the same zone or it will disagree
- * with the database for five hours out of every day.
+ * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_to`
+ * only — SAN-486 made viewing eligibility independent of the move-in date — so the
+ * application must read "today" in the same zone or it will disagree with the database
+ * for five hours out of every day.
  */
 export const RENTAL_AVAILABILITY_TIME_ZONE = 'America/Bogota';
 
@@ -310,12 +311,24 @@ export function rowToRental(r: ApartmentRow): Rental {
   });
 }
 
+// Postgres DATE values are plain calendar dates. Parsing them with `new Date('YYYY-MM-DD')`
+// anchors them at UTC midnight, so rendering them in any UTC-negative zone (all of the
+// Americas) shows the previous day. Anchor at UTC and format in UTC to keep the date.
+const dateOnlyFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+function formatDateOnly(d: string): string {
+  return dateOnlyFormatter.format(new Date(`${d}T00:00:00Z`));
+}
+
 function formatAvailability(from: string | null, to: string | null): string {
   if (!from && !to) return 'Available now';
-  const fmt = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (from && to) return `Available ${fmt(from)} – ${fmt(to)}`;
-  if (from) return `Available from ${fmt(from)}`;
+  if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  if (from) return `Available from ${formatDateOnly(from)}`;
   return 'Available now';
 }
 
@@ -412,9 +425,11 @@ async function searchRentalsFromSupabase(
   const today = rentalAvailabilityDate();
   const checkInDate = query.checkIn ?? today;
   q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-  if (query.checkOut) {
-    // available_from IS NULL (available now) OR available_from <= checkOut
-    q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+  // The listing must start on or before the requested stay. Filtering only when a
+  // check-out was supplied let a future move-in match an earlier stay (SAN-486).
+  const stayStart = query.checkIn ?? query.checkOut;
+  if (stayStart) {
+    q = q.or(`available_from.is.null,available_from.lte.${stayStart}`);
   }
 
   const { data, error, count } = await q;
