@@ -115,14 +115,36 @@ describe("rental detail page — viewing confirmation", () => {
     expect(banner!.getAttribute("data-showing-id")).toBe("66666666-7777-8888-9999-000000000000");
   });
 
-  it("scrolls the confirmation into view, because the renter is lower down the page", async () => {
-    vi.mocked(submitScheduleViewing).mockResolvedValue({
-      leadId: "11111111-2222-3333-4444-555555555555",
-      showingId: "66666666-7777-8888-9999-000000000000",
-      message: "Viewing request received — awaiting host confirmation.",
-    });
+  const saved = {
+    leadId: "11111111-2222-3333-4444-555555555555",
+    showingId: "66666666-7777-8888-9999-000000000000",
+    message: "Viewing request received — awaiting host confirmation.",
+  };
+
+  it("scrolls the confirmation itself into view, because the renter is lower down the page", async () => {
+    vi.mocked(submitScheduleViewing).mockResolvedValue(saved);
     await requestViewing();
+    const banner = document.querySelector('[data-testid="lead-confirmation-card"]');
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(banner); // the banner, not some other element
+    expect(scrollIntoView.mock.calls[0][0]).toMatchObject({ behavior: "smooth" });
+  });
+
+  it("moves keyboard focus to the confirmation, not back to the button below it", async () => {
+    vi.mocked(submitScheduleViewing).mockResolvedValue(saved);
+    await requestViewing();
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="lead-confirmation-card"]'));
+  });
+
+  it("does not animate the scroll for renters who asked for reduced motion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: /reduce/.test(query), media: query }));
+    try {
+      vi.mocked(submitScheduleViewing).mockResolvedValue(saved);
+      await requestViewing();
+      expect(scrollIntoView.mock.calls[0][0]).toMatchObject({ behavior: "auto" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("shows NO confirmation when the request failed, and keeps the form open", async () => {
