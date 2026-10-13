@@ -9,6 +9,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -88,6 +89,8 @@ function RentalBrowseViewInner({
         mapSlot={<BrowseMapPanel />}
       >
         <section className="mt-6" aria-label="Rental listings">
+          {/* A saved viewing request must be visible where it was made, not only in the chat. */}
+          <LeadConfirmationBanner />
           {error ? (
             <div
               className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
