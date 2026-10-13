@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { rowToRental, type ApartmentRow } from "@/mastra/tools/search-rentals";
+import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,7 +116,7 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   });
 
   it("forwards map sync props to VenueCardShell", () => {
-    const html = renderCard({}, { selected: true });
+    const html = renderCard({ latitude: 6.244, longitude: -75.592 }, { selected: true });
     expect(html).toContain('data-pin-id="rental-rnt_lau_001"');
     expect(html).toContain('data-selected="true"');
     expect(html).toContain('role="button"');
@@ -172,5 +173,68 @@ describe("RentalBrowseCard — SAN-478 CTA opens the shared modal", () => {
       root.render(<RentalBrowseCard rental={rowToRental(apartmentRow())} />);
     });
     expect(container.querySelector('[data-testid="rental-schedule-cta"]')).toBeNull();
+  });
+});
+
+
+describe("SAN-472: only mapped rentals have map selection", () => {
+  it("does not expose a phantom pin or map-select button for an unmapped rental", () => {
+    const html = renderCard();
+    expect(html).not.toContain('data-pin-id="rental-rnt_lau_001"');
+    expect(html).not.toContain('role="button"');
+    expect(html).toContain('href="/rentals/rnt_lau_001"');
+  });
+  it("rejects invalid/out-of-range coordinates instead of adding map pins", () => {
+    const good = rowToRental(apartmentRow({ latitude: 6.244, longitude: -75.592 }));
+    expect(rentalToMapPin(good)?.id).toBe("rental-rnt_lau_001");
+    expect(rentalToMapPin({ ...good, latitude: 99 })).toBeNull();
+    expect(rentalToMapPin({ ...good, longitude: Number.POSITIVE_INFINITY })).toBeNull();
+    expect(rentalToMapPin({ ...good, latitude: undefined })).toBeNull();
+  });
+});
+
+
+describe("SAN-472: hover highlights while clicking requests map focus", () => {
+  it("uses a separate preview callback rather than panning on every hover", () => {
+    const onPreview = vi.fn();
+    const onSelect = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <RentalBrowseCard
+          rental={rowToRental(apartmentRow({ latitude: 6.244, longitude: -75.592 }))}
+          onPreview={onPreview}
+          onSelect={onSelect}
+        />,
+      );
+    });
+    const card = container.querySelector('[data-testid="rental-card-rnt_lau_001"]')!;
+    act(() => {
+      // The shared card on current main uses pointer enter (not mouse enter) so
+      // touch taps cannot accidentally preview a map marker on mobile.
+      const touch = new MouseEvent("pointerover", {
+        bubbles: true, relatedTarget: document.body,
+      });
+      Object.defineProperty(touch, "pointerType", { value: "touch" });
+      card.dispatchEvent(touch);
+    });
+    expect(onPreview).not.toHaveBeenCalled();
+    act(() => {
+      const hover = new MouseEvent("pointerover", {
+        bubbles: true, relatedTarget: document.body,
+      });
+      Object.defineProperty(hover, "pointerType", { value: "mouse" });
+      card.dispatchEvent(hover);
+    });
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    act(() => {
+      (card.querySelector('[role="button"]') as HTMLElement).click();
+    });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+    container.remove();
   });
 });

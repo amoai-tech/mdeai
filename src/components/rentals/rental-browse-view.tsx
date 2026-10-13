@@ -45,6 +45,7 @@ export type RentalBrowseViewProps = {
   beds: string | null;
 };
 
+/** Keep the visible rental list and its valid map markers on the same selection state. */
 function RentalBrowseViewInner({
   results,
   total,
@@ -52,7 +53,7 @@ function RentalBrowseViewInner({
   neighborhood,
   beds,
 }: RentalBrowseViewProps) {
-  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
@@ -68,6 +69,7 @@ function RentalBrowseViewInner({
   );
 
   useBrowseMapSync(pins, "rental");
+  const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
   // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
@@ -127,8 +129,9 @@ function RentalBrowseViewInner({
                     key={r.id}
                     rental={r}
                     testId={`rental-card-${r.id}`}
-                    selected={selectedPinId === pinId}
-                    onSelect={() => setSelectedPinId(pinId)}
+                    selected={mappedIds.has(pinId) && selectedPinId === pinId}
+                    onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+                    onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={() =>
                       openScheduleViewing({
                         listingId: r.id,
@@ -149,6 +152,7 @@ function RentalBrowseViewInner({
   );
 }
 
+/** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>
