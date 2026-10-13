@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { formatDateOnly } from '@/lib/rentals/date-only';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
@@ -311,20 +312,6 @@ export function rowToRental(r: ApartmentRow): Rental {
   });
 }
 
-// Postgres DATE values are plain calendar dates. Parsing them with `new Date('YYYY-MM-DD')`
-// anchors them at UTC midnight, so rendering them in any UTC-negative zone (all of the
-// Americas) shows the previous day. Anchor at UTC and format in UTC to keep the date.
-const dateOnlyFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-function formatDateOnly(d: string): string {
-  return dateOnlyFormatter.format(new Date(`${d}T00:00:00Z`));
-}
-
 function formatAvailability(from: string | null, to: string | null): string {
   if (!from && !to) return 'Available now';
   if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
@@ -360,8 +347,13 @@ export function isAvailableForStay(
   checkOut?: string,
 ): boolean {
   if (!checkIn && !checkOut) return true;
-  if (checkOut && row.available_from && row.available_from > checkOut) return false;
-  if (checkIn && row.available_to && row.available_to < checkIn) return false;
+  // SAN-486: full-stay coverage. The listing must begin on or before the first day of
+  // the requested stay and remain open through its last day. Partial overlap does not
+  // qualify: a renter asking Nov 1–30 cannot use a listing ending Nov 15.
+  const stayStart = checkIn ?? checkOut;
+  const stayEnd = checkOut ?? checkIn;
+  if (stayStart && row.available_from && row.available_from > stayStart) return false;
+  if (stayEnd && row.available_to && row.available_to < stayEnd) return false;
   return true;
 }
 
@@ -423,13 +415,24 @@ async function searchRentalsFromSupabase(
   // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
   // so the query window and isRentalRequestable() cannot disagree near local midnight.
   const today = rentalAvailabilityDate();
-  const checkInDate = query.checkIn ?? today;
-  q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-  // The listing must start on or before the requested stay. Filtering only when a
-  // check-out was supplied let a future move-in match an earlier stay (SAN-486).
-  const stayStart = query.checkIn ?? query.checkOut;
-  if (stayStart) {
+  if (query.checkIn || query.checkOut) {
+    // SAN-486: full-stay coverage — start on or before the first day, open through the
+    // last day. With no dates, a future move-in is still discoverable, so only the
+    // expired check applies.
+    const stayStart = query.checkIn ?? query.checkOut!;
+    const stayEnd = query.checkOut ?? query.checkIn!;
     q = q.or(`available_from.is.null,available_from.lte.${stayStart}`);
+    q = q.or(`available_to.is.null,available_to.gte.${stayEnd}`);
+    if (query.checkIn && query.checkOut) {
+      // SAN-486: the requested stay length must satisfy the listing's own term limits.
+      const nights = Math.round((Date.parse(query.checkOut) - Date.parse(query.checkIn)) / 86_400_000);
+      if (nights > 0) {
+        q = q.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${nights}`);
+        q = q.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${nights}`);
+      }
+    }
+  } else {
+    q = q.or(`available_to.is.null,available_to.gte.${today}`);
   }
 
   const { data, error, count } = await q;

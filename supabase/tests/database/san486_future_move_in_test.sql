@@ -9,7 +9,7 @@
 -- appointment. Run with: supabase test db
 begin;
 
-select plan(9);
+select plan(12);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values ('f4860000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
@@ -105,16 +105,16 @@ select is(
       and s.apartment_id = 'f4860000-0000-4000-8000-000000000021'),
   1, 'A7: the early viewing created exactly one showing');
 
--- A8 · a missing move-in date keeps the established "available now" meaning; it is not
--- turned into a rejection by SAN-486.
+-- A8 · the viewing contract mirrors publication: a listing with no move-in date is refused.
 set local role service_role;
-select lives_ok($q$
+select throws_ok($q$
   select public.p1_schedule_tour_atomic(
     'san486-no-from', null::uuid, 'san486-viewing-key-nofrom', 'form',
     'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
     (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'A8: a listing with no move-in date stays requestable (available now)');
+$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+  'A8: a listing with no available_from cannot be requested');
 
 -- A9 · the RPC refuses a published listing with a reversed window.
 select throws_ok($q$
@@ -126,6 +126,30 @@ select throws_ok($q$
 $q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
   'A9: a listing with a reversed window cannot be requested');
 reset role;
+
+-- A10 · a replay under the same idempotency key succeeds and never duplicates.
+set local role service_role;
+select lives_ok($q$
+  select public.p1_schedule_tour_atomic(
+    'f4860000-0000-4000-8000-000000000021'::text, null::uuid, 'san486-viewing-key-uuid', 'form',
+    'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
+    (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
+  )
+$q$, 'A10: a replay of the same viewing key succeeds');
+reset role;
+
+-- A11 · the replay left exactly one lead and one showing.
+select is(
+  (select count(*)::int from public.leads where idempotency_key = 'san486-viewing-key-uuid')
+  + (select count(*)::int from public.showings s join public.leads l on l.id = s.lead_id
+       where l.idempotency_key = 'san486-viewing-key-uuid'),
+  2, 'A11: retry never duplicates the lead or the showing');
+
+-- A12 · the lookup locks the apartment row so a withdrawal cannot interleave.
+select is(
+  position('FOR UPDATE' in
+    pg_get_functiondef('public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamp with time zone,jsonb,jsonb)'::regprocedure)) > 0,
+  true, 'A12: the viewing RPC locks the apartment row');
 
 select * from finish();
 rollback;

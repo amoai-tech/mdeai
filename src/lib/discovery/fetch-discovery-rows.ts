@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listPublishedEvents } from "@/lib/events/list-published-events";
 import type { PlaceCardData } from "@/components/home/home-discovery-rows";
+import { formatDateOnly, isFutureDate } from "@/lib/rentals/date-only";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,30 +51,6 @@ type ApartmentRow = {
   available_from: string | null;
 };
 
-// DATE values are plain calendar dates; anchor at UTC so a UTC-negative viewer still
-// sees the stored move-in day. "Today" is read in the availability timezone.
-const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function formatMoveInDate(d: string): string {
-  return dateOnlyFormatter.format(new Date(`${d}T00:00:00Z`));
-}
-
-function isFutureMoveIn(d: string | null): boolean {
-  if (!d) return false;
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-  return d > today;
-}
-
 function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   const price = row.price_monthly
     ? `From $${Math.round(Number(row.price_monthly)).toLocaleString()} / mo`
@@ -86,19 +63,20 @@ function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   if (row.utilities_included) hints.push("bills included");
   if (row.pet_friendly) hints.push("pet-friendly");
   // A future move-in listing must never be described as available now (SAN-486).
-  const futureMoveIn = isFutureMoveIn(row.available_from);
+  const futureMoveIn = isFutureDate(row.available_from);
   const why =
     hints.length > 1
       ? `${hints.join(" · ")}.`
       : futureMoveIn && row.available_from
-        ? `Available from ${formatMoveInDate(row.available_from)} in ${row.neighborhood}.`
+        ? `Available from ${formatDateOnly(row.available_from)} in ${row.neighborhood}.`
         : `Available now in ${row.neighborhood}.`;
 
   return {
     id: row.id,
     name: row.title,
     kind: "Rental",
-    rating: Number(row.rating) || 4.5,
+    // Never invent a rating: an unrated property stays unrated.
+    rating: row.rating == null || !Number.isFinite(Number(row.rating)) ? null : Number(row.rating),
     meta: price,
     why,
     image: row.images?.[0] ?? "",
@@ -146,7 +124,8 @@ function mapRestaurantToCard(row: RestaurantRow): PlaceCardData {
     id: row.id,
     name: row.name,
     kind,
-    rating: Number(row.rating) || 4.5,
+    // Never invent a rating: an unrated restaurant stays unrated.
+    rating: row.rating == null || !Number.isFinite(Number(row.rating)) ? null : Number(row.rating),
     meta,
     why: row.ai_summary ?? `Highly rated in ${row.neighborhood ?? "Medellín"}.`,
     image: row.primary_image_url ?? "",

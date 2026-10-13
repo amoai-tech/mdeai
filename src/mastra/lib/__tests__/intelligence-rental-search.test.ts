@@ -60,26 +60,29 @@ describe("isAvailableForStay", () => {
     )).toBe(false);
   });
 
-  it("passes a listing that overlaps the stay window", () => {
-    // available Jun 15–Aug 31, stay Jun 1–30 → overlaps
+  // SAN-486: full-stay coverage replaces partial overlap.
+  it("excludes a listing that only partially covers the stay", () => {
+    // available Jun 15–Aug 31 cannot cover a stay starting Jun 1.
     expect(isAvailableForStay(
       { available_from: "2026-06-15", available_to: "2026-08-31" },
       "2026-06-01", "2026-06-30",
-    )).toBe(true);
+    )).toBe(false);
   });
 
-  it("passes boundary: available_from equals checkOut", () => {
+  it("excludes boundary: available_from equals the last day of the stay", () => {
+    // The listing would only open on the stay's final day.
     expect(isAvailableForStay(
       { available_from: "2026-06-30", available_to: null },
       "2026-06-01", "2026-06-30",
-    )).toBe(true);
+    )).toBe(false);
   });
 
-  it("passes boundary: available_to equals checkIn", () => {
+  it("excludes boundary: available_to equals the first day of the stay", () => {
+    // The listing closes on the day the stay begins.
     expect(isAvailableForStay(
       { available_from: null, available_to: "2026-06-01" },
       "2026-06-01", "2026-06-30",
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it("respects checkIn-only (no checkOut)", () => {

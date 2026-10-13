@@ -318,11 +318,12 @@ BEGIN
       AND a.moderation_status = 'approved'
       AND a.listing_workflow_status = 'published'
       AND a.landlord_id IS NOT NULL
-      -- SAN-486: viewing eligibility is independent of the move-in date. A missing
-      -- move-in date keeps the established "available now" meaning; only an expired or
-      -- reversed window blocks a viewing. The row is locked so a concurrent withdrawal
-      -- serializes with the lead/showing inserts below.
-      AND (a.available_from IS NULL OR a.available_to IS NULL OR a.available_from <= a.available_to)
+      -- SAN-486: viewing eligibility mirrors the publication contract — a known
+      -- move-in date, not an expired or reversed window. It is independent of the
+      -- move-in date itself, so a tour can be booked before move-in. The row is locked
+      -- so a concurrent withdrawal serializes with the lead/showing inserts below.
+      AND a.available_from IS NOT NULL
+      AND (a.available_to IS NULL OR a.available_from <= a.available_to)
       AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
     FOR UPDATE;
   ELSE
@@ -333,11 +334,12 @@ BEGIN
       AND a.moderation_status = 'approved'
       AND a.listing_workflow_status = 'published'
       AND a.landlord_id IS NOT NULL
-      -- SAN-486: viewing eligibility is independent of the move-in date. A missing
-      -- move-in date keeps the established "available now" meaning; only an expired or
-      -- reversed window blocks a viewing. The row is locked so a concurrent withdrawal
-      -- serializes with the lead/showing inserts below.
-      AND (a.available_from IS NULL OR a.available_to IS NULL OR a.available_from <= a.available_to)
+      -- SAN-486: viewing eligibility mirrors the publication contract — a known
+      -- move-in date, not an expired or reversed window. It is independent of the
+      -- move-in date itself, so a tour can be booked before move-in. The row is locked
+      -- so a concurrent withdrawal serializes with the lead/showing inserts below.
+      AND a.available_from IS NOT NULL
+      AND (a.available_to IS NULL OR a.available_from <= a.available_to)
       AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
     FOR UPDATE;
   END IF;

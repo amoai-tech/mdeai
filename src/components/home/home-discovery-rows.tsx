@@ -18,7 +18,7 @@ export interface PlaceCardData {
   id: string;
   name: string;
   kind: string;
-  rating: number;
+  rating: number | null;
   meta: string;
   why: string;
   image: string;
@@ -293,7 +293,9 @@ function PlaceCard({
             {name}
           </p>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-accent">★ {rating}</span>
+            {rating != null && (
+              <span className="text-xs font-bold text-accent">★ {rating}</span>
+            )}
             <span className="text-xs text-muted-foreground">{meta}</span>
           </div>
           {/* Why line — concierge insight */}
