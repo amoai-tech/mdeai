@@ -185,8 +185,9 @@ export function rentalAvailabilityDate(at: Date = new Date()): string {
  * It fails CLOSED on missing proof. Every predicate is an allow-list, so an absent, null or
  * unexpected value is rejected rather than skipped — the helper can only ever under-claim
  * requestability, never over-claim it. It proves what the UI can actually know: canonical
- * owner, active, approved, published, and the listing's current-date availability window. It
- * cannot know the eventual viewing timestamp, so it must not claim more than that.
+ * owner, active, approved, published, and an unexpired availability window. A future
+ * move-in date stays requestable for a viewing (SAN-486). It cannot know the eventual
+ * viewing timestamp, so it must not claim more than that.
  */
 export function isRentalRequestable(
   row: RentalRequestabilityInput,
@@ -198,7 +199,8 @@ export function isRentalRequestable(
   if (row.moderation_status !== 'approved') return false;
   if (row.listing_workflow_status !== 'published') return false;
   const isoToday = rentalAvailabilityDate(today);
-  if (row.available_from && row.available_from > isoToday) return false;
+  // SAN-486: a future move-in date does not block requesting a *viewing* — a renter
+  // can tour an apartment before it becomes available. Only an expired window blocks.
   if (row.available_to && row.available_to < isoToday) return false;
   return true;
 }

@@ -146,8 +146,10 @@ describe("isRentalRequestable", () => {
     expect(isRentalRequestable({ ...owned, available_to: "2026-01-01" }, today)).toBe(false);
   });
 
-  it("refuses a listing that is not available yet", () => {
-    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(false);
+  // SAN-486: a future move-in date does not block requesting a *viewing*. A renter can
+  // tour an apartment before it becomes available; only an expired window blocks.
+  it("allows requesting a viewing before the move-in date", () => {
+    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(true);
   });
 
   it("allows a listing whose availability window is currently open", () => {
@@ -217,11 +219,12 @@ describe("isRentalRequestable", () => {
     ).toBe(false);
   });
 
-  it("does not open a listing before its Bogota available_from day", () => {
-    // 2026-09-28T02:00:00Z is still 2026-09-27 local, so a listing starting 2026-09-28 is closed.
+  it("keeps a future-dated listing requestable across the Bogota date boundary", () => {
+    // 2026-09-28T02:00:00Z is still 2026-09-27 local. A listing starting 2026-09-28 is
+    // upcoming, not closed: SAN-486 allows a viewing to be requested before move-in.
     expect(
       isRentalRequestable({ ...owned, available_from: "2026-09-28" }, new Date("2026-09-28T02:00:00Z")),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
