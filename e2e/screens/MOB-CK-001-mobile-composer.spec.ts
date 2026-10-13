@@ -169,6 +169,7 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
 
       await expect(input).toBeFocused();
       await expect(input).toHaveValue(LONG_MESSAGE);
+      await expect(send).toBeEnabled();
       await expectInsideViewport(page, input, "composer with keyboard proxy");
       await expectInsideViewport(page, send, "Send with keyboard proxy");
       await expectInsideViewport(page, center, "center panel");
@@ -176,6 +177,7 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
 
       await page.setViewportSize(viewport);
       await expect(input).toHaveValue(LONG_MESSAGE);
+      await expect(send).toBeEnabled();
       await expectInsideViewport(page, input, "composer after keyboard closes");
       await expectInsideViewport(page, send, "Send after keyboard closes");
       await expectNoHorizontalOverflow(page);
@@ -196,6 +198,62 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await page.setViewportSize(PHONE_390);
     await expectInsideViewport(page, input, "composer after portrait restore");
     await expectInsideViewport(page, send, "Send after portrait restore");
+  });
+
+  test("keeps the composer clear of a keyboard that overlays the layout viewport", async ({
+    page,
+  }) => {
+    // iOS keeps the layout viewport at full height and overlays the keyboard, so
+    // the page-viewport resize above does not model it. Shrink only the visual
+    // viewport and prove the composer still clears the covered strip.
+    await page.addInitScript(() => {
+      const KEYBOARD_HEIGHT = 320;
+      const listeners = new Set<EventListener>();
+      const fake = {
+        get width() {
+          return window.innerWidth;
+        },
+        get height() {
+          return window.innerHeight - KEYBOARD_HEIGHT;
+        },
+        offsetTop: 0,
+        offsetLeft: 0,
+        pageTop: 0,
+        pageLeft: 0,
+        scale: 1,
+        addEventListener: (_type: string, listener: EventListener) => {
+          listeners.add(listener);
+        },
+        removeEventListener: (_type: string, listener: EventListener) => {
+          listeners.delete(listener);
+        },
+        dispatchEvent: () => true,
+      };
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        get: () => fake,
+      });
+    });
+
+    const { input, send } = await gotoComposer(page);
+    await typeDraft(page, input, send, LONG_MESSAGE);
+
+    const visualBottom = await page.evaluate(
+      () => window.visualViewport?.height ?? window.innerHeight,
+    );
+    await expect
+      .poll(
+        async () => {
+          const box = await send.boundingBox();
+          return box ? Math.round(box.y + box.height) : Number.POSITIVE_INFINITY;
+        },
+        { timeout: 5_000, message: "composer above the overlaying keyboard" },
+      )
+      .toBeLessThanOrEqual(Math.round(visualBottom) + 1);
+
+    await expect(send).toBeEnabled();
+    await expect(input).toHaveValue(LONG_MESSAGE);
+    await expectNoHorizontalOverflow(page);
   });
 
   test("reduced motion disables the send-control transition", async ({ page }) => {
@@ -262,9 +320,9 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await expect
       .poll(() => replies.count(), {
         timeout: 120_000,
-        message: "one new concierge assistant reply",
+        message: "exactly one new concierge assistant reply",
       })
-      .toBeGreaterThan(replyCountBefore);
+      .toBe(replyCountBefore + 1);
 
     expect(runRequests.length - runCountBefore, "agent/run request count").toBe(1);
 

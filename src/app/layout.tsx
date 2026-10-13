@@ -20,6 +20,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // MOB-CK-001: let the on-screen keyboard resize the layout viewport where the
+  // platform supports it, so the /chat shell (100dvh) shrinks with the keyboard.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

@@ -10,7 +10,7 @@
    the stylesheet carry them whether or not the scanner re-reads those files. Tailwind v4 scans
    sources automatically (there is no content list in a tailwind config to extend), so this is a
    belt-and-braces list: if those layout classes are renamed, update it here too. */
-@source inline("h-dvh h-full min-h-0 overflow-hidden lg:h-dvh lg:min-h-0 lg:h-full lg:overflow-hidden lg:grid-rows-[minmax(0,1fr)] lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]");
+@source inline("lg:h-dvh lg:min-h-0 lg:h-full lg:overflow-hidden lg:grid-rows-[minmax(0,1fr)] lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]");
 
 @theme inline {
   --color-background: var(--background);
@@ -234,17 +234,29 @@ html {
   overscroll-behavior-y: contain;
 }
 
-/* MOB-CK-001 — on an empty thread the composer lives in CopilotKit's centred
-   welcome screen. When the keyboard shrinks the viewport and a long draft grows
-   the composer, centring pushes Send below the fold. On short (keyboard-open)
-   viewports bottom-align the welcome content and let it scroll, so the composer
-   stays reachable; taller viewports keep the centred greeting. */
+/* MOB-CK-001 — /chat must fit the visible phone screen while the on-screen
+   keyboard is open. Scoped to .mde-chat-viewport so the host chat shells, which
+   also carry .mde-center-copilot-chat, keep their own welcome-screen behavior.
+
+   `100vh` is the fallback for browsers without `dvh`; `100dvh` tracks the
+   dynamic viewport where supported. On iOS the keyboard overlays the layout
+   viewport, so `dvh` does not shrink: `--mde-keyboard-height` (published by
+   useChatKeyboardHeight) lifts the welcome-screen composer clear of it. */
+.mde-chat-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.mde-chat-viewport [data-testid="copilot-welcome-screen"] {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: var(--mde-keyboard-height, 0px);
+}
+
 @media (max-height: 700px) {
-  .mde-center-copilot-chat [data-testid="copilot-welcome-screen"] {
-    min-height: 0;
+  .mde-chat-viewport [data-testid="copilot-welcome-screen"] {
     justify-content: flex-end;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
   }
 }
 @media (prefers-reduced-motion: reduce) {
