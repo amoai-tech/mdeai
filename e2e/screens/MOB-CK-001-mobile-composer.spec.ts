@@ -34,7 +34,7 @@ async function gotoComposer(page: Page) {
 
 async function expectInsideViewport(page: Page, locator: Locator, label: string) {
   const viewport = page.viewportSize();
-  expect(viewport, "viewport must exist").not.toBeNull();
+  if (!viewport) throw new Error("viewport must exist");
   // A viewport/keyboard resize is asynchronous; poll until the element settles
   // inside the visible viewport instead of sleeping a fixed time.
   await expect
@@ -45,13 +45,13 @@ async function expectInsideViewport(page: Page, locator: Locator, label: string)
         return (
           box.x >= -1 &&
           box.y >= -1 &&
-          box.x + box.width <= viewport!.width + 1 &&
-          box.y + box.height <= viewport!.height + 1
+          box.x + box.width <= viewport.width + 1 &&
+          box.y + box.height <= viewport.height + 1
         );
       },
       {
         timeout: 5_000,
-        message: `${label} must settle inside the ${viewport!.width}×${viewport!.height} viewport`,
+        message: `${label} must settle inside the ${viewport.width}×${viewport.height} viewport`,
       },
     )
     .toBe(true);
@@ -59,40 +59,29 @@ async function expectInsideViewport(page: Page, locator: Locator, label: string)
 
 async function expectMinimumTouchTarget(locator: Locator, label: string) {
   const box = await locator.boundingBox();
-  expect(box, `${label} must have a rendered box`).not.toBeNull();
-  expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44);
-  expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44);
+  if (!box) throw new Error(`${label} must have a rendered box`);
+  expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
+  expect(box.height, `${label} height`).toBeGreaterThanOrEqual(44);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
-  const measurements = await page.evaluate(() => {
+  // Compare inside the page and return booleans, so no DOM measurement crosses
+  // the boundary and none of them needs a non-null assertion.
+  const fits = await page.evaluate(() => {
+    const fitsElement = (element: Element | null) =>
+      element ? element.scrollWidth <= element.clientWidth + 1 : null;
     const center = document.querySelector('[data-testid="center-chat-panel"]');
     const region = document.querySelector('[data-testid="copilot-chat-region"]');
-    const metric = (element: Element | null) =>
-      element
-        ? {
-            clientWidth: (element as HTMLElement).clientWidth,
-            scrollWidth: (element as HTMLElement).scrollWidth,
-          }
-        : null;
-
     return {
-      document: {
-        clientWidth: document.documentElement.clientWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-      },
-      center: metric(center),
-      region: metric(region),
+      document: fitsElement(document.documentElement),
+      center: fitsElement(center),
+      region: fitsElement(region),
     };
   });
 
-  for (const [name, metric] of Object.entries(measurements)) {
-    expect(metric, `${name} measurement`).not.toBeNull();
-    expect(
-      metric!.scrollWidth,
-      `${name} horizontal overflow`,
-    ).toBeLessThanOrEqual(metric!.clientWidth + 1);
-  }
+  expect(fits.document, "document horizontal overflow").toBe(true);
+  expect(fits.center, "center panel present and free of horizontal overflow").toBe(true);
+  expect(fits.region, "chat region present and free of horizontal overflow").toBe(true);
 }
 
 /**
