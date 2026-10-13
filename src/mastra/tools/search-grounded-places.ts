@@ -286,14 +286,17 @@ async function curatedFallback(
   return [];
 }
 
-/** Join ADK attribution to filtered rows by mapsUrl — never index-zip (audit B1). */
+/**
+ * Join ADK attribution to filtered rows by mapsUrl — never index-zip (audit B1). Google's source is
+ * passed through unchanged: its name and URL are Google's, so the card never rewrites them (SAN-878).
+ */
 export function alignGroundedAttribution(
   results: Array<{ title: string; mapsUrl?: string }>,
   adkAttribution: GroundedAttributionSource[],
 ): GroundedAttributionSource[] {
   return results.flatMap((row) => {
     const source = adkAttribution.find((a) => a.placeUri === row.mapsUrl);
-    return source ? [{ ...source, title: row.title }] : [];
+    return source ? [source] : [];
   });
 }
 
