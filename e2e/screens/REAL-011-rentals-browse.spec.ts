@@ -1,12 +1,25 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("REAL-011 /rentals browse", () => {
-  test("loads rentals page with grid", async ({ page }) => {
+  test("loads rentals page and shows exactly one truthful state", async ({ page }) => {
     await page.goto("/rentals");
     await expect(page.getByTestId("rentals-browse")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Rentals" })).toBeVisible();
-    await expect(page.getByTestId("rentals-grid")).toBeVisible();
-    await expect(page.locator('[data-testid^="rental-card-"]').first()).toBeVisible();
+    // SAN-1089: the page never fabricates demo cards. Depending on real inventory and database
+    // health it shows real cards, an honest empty state, or an "unavailable + Retry" state —
+    // and only one of them.
+    const states = [
+      page.getByTestId("rentals-grid"),
+      page.getByTestId("rentals-empty"),
+      page.getByTestId("rentals-error"),
+    ];
+    await expect
+      .poll(async () => {
+        let visible = 0;
+        for (const state of states) visible += (await state.count()) > 0 ? 1 : 0;
+        return visible;
+      })
+      .toBe(1);
   });
 
   test("neighborhood filter chip sets URL param and shows active state", async ({
@@ -33,14 +46,22 @@ test.describe("REAL-011 /rentals browse", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("price filter chip sets URL param", async ({ page }) => {
-    await page.goto("/rentals");
-    const priceGroup = page.getByRole("group", { name: "Price filters" });
-    await priceGroup.getByRole("link", { name: /≤ \$100/ }).click();
-    await expect(page).toHaveURL(/maxPrice=100/, { timeout: 15_000 });
-    await expect(
-      priceGroup.getByRole("link", { name: /≤ \$100/ }),
-    ).toHaveAttribute("aria-pressed", "true");
+  test("renders no nightly price chips and ignores a stale ?maxPrice= bookmark", async ({
+    page,
+  }) => {
+    await page.goto("/rentals?maxPrice=100");
+    await expect(page.getByTestId("rentals-browse")).toBeVisible();
+    await expect(page.getByRole("group", { name: "Price filters" })).toHaveCount(0);
+    // Only the retired price FILTERS are asserted gone. Card prices are SAN-1229's surface.
+    await expect(page.getByText("Max price / night")).toHaveCount(0);
+    await expect(page.locator('[data-testid^="rentals-filter-price"]')).toHaveCount(0);
+    // Filter links must not carry the retired param forward.
+    const hrefs = await page
+      .getByRole("group", { name: "Neighborhood filters" })
+      .getByRole("link")
+      .evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""));
+    expect(hrefs.length).toBeGreaterThan(0);
+    expect(hrefs.some((href) => href.includes("maxPrice"))).toBe(false);
   });
 
   test("direct URL with filters pre-selects chips", async ({ page }) => {

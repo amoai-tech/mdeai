@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRentalDetail } from "@/lib/rentals/get-rental-detail";
+import {
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from "@/mastra/lib/rental-search-unavailable";
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
 
 interface Props {
@@ -28,16 +32,30 @@ export default async function RentalDetailPage({ params }: Props) {
   try {
     detail = await getRentalDetail(id);
   } catch (err) {
-    console.error("[/rentals/[id]] load failed:", (err as Error).message);
+    console.error("[/rentals/[id]] load failed:", describeRentalSearchError(err));
+    const unavailable = isRentalSearchUnavailable(err);
     return (
       <main
         data-testid="rental-detail-error"
         className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 py-24 text-center"
       >
-        <h1 className="font-serif text-xl font-semibold">Couldn’t load this rental</h1>
+        <h1 className="font-serif text-xl font-semibold">
+          {unavailable ? "Rental details are temporarily unavailable" : "Couldn’t load this rental"}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Something went wrong on our side. Please try again.
+          {unavailable
+            ? "We can’t reach our listings right now. Please try again in a moment."
+            : "Something went wrong on our side. Please try again."}
         </p>
+        {unavailable ? (
+          <Link
+            href={`/rentals/${encodeURIComponent(id)}`}
+            className="text-sm font-medium text-primary hover:underline"
+            data-testid="rental-detail-error-retry"
+          >
+            Retry
+          </Link>
+        ) : null}
         <Link
           href="/rentals"
           className="text-sm text-primary hover:underline"
