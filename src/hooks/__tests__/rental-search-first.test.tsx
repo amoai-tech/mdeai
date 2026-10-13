@@ -276,4 +276,50 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     await search.finish();
     expect(unhandled).toEqual([]);
   });
+
+  it("several messages sent while a search runs are ALL answered, in the order they were sent", async () => {
+    respond(200, { results: [] });
+    const search = await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+
+    for (const text of ["Only apartments in Laureles", "apartments in Envigado instead", "apartments in Belén then"]) {
+      let handled = false;
+      await act(async () => {
+        handled = await probe.send(text);
+      });
+      expect(handled).toBe(true);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1); // nothing runs concurrently
+
+    await search.finish();
+    // each replay runs after the previous search ends; give the chain time to drain
+    for (let i = 0; i < 6; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const texts = fetchMock.mock.calls
+      .slice(1)
+      .map((call) => JSON.parse(String(call[1]?.body)).queryText);
+    expect(texts).toEqual(["Only apartments in Laureles", "apartments in Envigado instead", "apartments in Belén then"]);
+    expect(unhandled).toEqual([]);
+  });
+
+  it("a full waiting queue hands the overflow message to the concierge instead of dropping it", async () => {
+    respond(200, { results: [] });
+    await startSlowFirstSearch("Search apartments Medellín", { results: [] });
+
+    const results: boolean[] = [];
+    for (let i = 1; i <= 12; i += 1) {
+      await act(async () => {
+        results.push(await probe.send(`apartments in Laureles number ${i}`));
+      });
+    }
+    // 10 are kept (handled=true); the rest are declined (false) so the sender routes them to the
+    // concierge — none is silently lost.
+    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(results.filter((value) => !value)).toHaveLength(2);
+  });
 });
+

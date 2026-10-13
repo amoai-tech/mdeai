@@ -76,6 +76,9 @@ async function fetchRentalSearch(
   return (await res.json()) as RentalSearchResponse;
 }
 
+/** How many messages may wait behind a running search before extra ones go to the concierge. */
+const MAX_WAITING_MESSAGES = 10;
+
 export type RentalSearchFastPathOptions = {
   /**
    * Called with a queued message whose replay the rental fast path could not answer (for example
@@ -93,9 +96,9 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
-  // A message sent while a search is running is kept (latest wins) and answered when it ends,
-  // instead of being reported "handled" and silently dropped.
-  const pendingRef = useRef<string | null>(null);
+  // Messages sent while a search is running wait here and are answered one at a time, in the
+  // order they were sent, as each search ends — instead of being reported "handled" and dropped.
+  const pendingRef = useRef<string[]>([]);
   // The working memory the last successful search wrote. React has not re-rendered yet when a
   // search ends, so `state` is still the pre-search value at that moment; the replay of a queued
   // message starts from this instead, so a refinement keeps the first search's filters.
@@ -193,7 +196,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         busyRef.current = false;
         // Replay a queued message only after React has re-rendered (see the effect below), never
         // synchronously here: the handler in scope still holds the pre-search state.
-        if (pendingRef.current) setReplayTick((tick) => tick + 1);
+        if (pendingRef.current.length > 0) setReplayTick((tick) => tick + 1);
       }
     },
     [applySearchResults, showExchange, setSearchMeta, setToolResult],
@@ -215,7 +218,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (!params) return false;
 
       if (busyRef.current) {
-        pendingRef.current = trimmed;
+        // A full queue declines the message (false), so the sender routes it to the concierge
+        // rather than it being lost.
+        if (pendingRef.current.length >= MAX_WAITING_MESSAGES) return false;
+        pendingRef.current.push(trimmed);
         return true;
       }
 
@@ -236,18 +242,24 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     [dispatchMessage],
   );
 
-  // Replay the message that arrived while a search was running. It runs after the render that
-  // follows the search, with the memory that search wrote. If the fast path cannot answer it
-  // (returns false) it goes to the concierge — it was already reported "handled" to the sender,
-  // so dropping it here would leave the renter's message unanswered.
+  // Replay the messages that arrived while a search was running, one per search, in order. Each
+  // replay runs after the render that follows the previous search, starting from the memory that
+  // search wrote. If the fast path cannot answer a message (returns false) it goes to the
+  // concierge — it was already reported "handled" to the sender, so dropping it here would leave
+  // the renter's message unanswered.
   useEffect(() => {
     if (replayTick === 0 || busyRef.current) return;
-    const next = pendingRef.current;
+    const next = pendingRef.current.shift();
     if (!next) return;
-    pendingRef.current = null;
     void (async () => {
-      const handled = await dispatchMessage(next, latestMemoryRef.current);
-      if (!handled) await onUnhandled?.(next);
+      try {
+        const handled = await dispatchMessage(next, latestMemoryRef.current);
+        if (!handled) await onUnhandled?.(next);
+      } finally {
+        // A replay that never reached a search (declined) leaves no search to schedule the next
+        // one, so continue the chain here.
+        if (pendingRef.current.length > 0 && !busyRef.current) setReplayTick((tick) => tick + 1);
+      }
     })();
   }, [replayTick, dispatchMessage, onUnhandled]);
 
