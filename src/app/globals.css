@@ -210,28 +210,58 @@ html {
   }
 }
 
-/* MOB-CK-001 — CopilotKit mobile best practices.
-   globals.css is imported before CopilotKit styles, so !important is used only
-   on properties the library already sets. */
-.copilotKitInput > textarea {
-  /* iOS Safari auto-zooms inputs < 16px on focus; CK ships 0.875rem (14px). */
+/* MOB-CK-001 — CopilotKit mobile composer contract.
+   Keep the legacy class hooks for older surfaces, but target the current v2
+   test IDs on /chat so these rules cannot silently miss the real DOM. */
+.copilotKitInput > textarea,
+.mde-center-copilot-chat [data-testid="copilot-chat-textarea"] {
+  /* iOS Safari auto-zooms textareas below 16px. */
   font-size: 1rem !important;
 }
-.copilotKitInputControlButton {
-  /* WCAG 2.5.5 touch target; CK ships 24x24px. */
+.copilotKitInputControlButton,
+.mde-center-copilot-chat [data-testid="copilot-send-button"] {
+  /* MDE mobile interaction contract: minimum 44×44 touch target. */
   min-width: 44px;
   min-height: 44px;
 }
-.copilotKitInputContainer {
-  /* Keep the composer above the iOS home indicator; preserve CK's 15px floor. */
+.copilotKitInputContainer,
+.mde-center-copilot-chat [data-testid="copilot-input-overlay"] {
+  /* Keep a bottom-anchored composer above the iOS home indicator. */
   padding-bottom: max(15px, env(safe-area-inset-bottom)) !important;
 }
 .copilotKitMessages {
-  /* Stop the page pull-to-refresh from firing while scrolling messages. */
+  /* Stop page scroll chaining while the transcript owns vertical scrolling. */
   overscroll-behavior-y: contain;
+}
+
+/* MOB-CK-001 — /chat must fit the visible phone screen while the on-screen
+   keyboard is open. Scoped to .mde-chat-viewport so the host chat shells, which
+   also carry .mde-center-copilot-chat, keep their own welcome-screen behavior.
+
+   `100vh` is the fallback for browsers without `dvh`; `100dvh` tracks the
+   dynamic viewport where supported. On iOS the keyboard overlays the layout
+   viewport, so `dvh` does not shrink: `--mde-keyboard-height` (published by
+   useChatKeyboardHeight) lifts the welcome-screen composer clear of it. */
+.mde-chat-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.mde-chat-viewport [data-testid="copilot-welcome-screen"] {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: var(--mde-keyboard-height, 0px);
+}
+
+@media (max-height: 700px) {
+  .mde-chat-viewport [data-testid="copilot-welcome-screen"] {
+    justify-content: flex-end;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .copilotKitInputControlButton,
+  .mde-center-copilot-chat [data-testid="copilot-send-button"],
   .copilotKitActivityDot1,
   .copilotKitActivityDot2,
   .copilotKitActivityDot3 {

@@ -9,6 +9,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -22,12 +23,10 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 function buildRetryHref(filters: {
   neighborhood?: string | null;
   beds?: string | null;
-  maxPrice?: string | null;
 }): string {
   const p = new URLSearchParams();
   if (filters.neighborhood) p.set("neighborhood", filters.neighborhood);
   if (filters.beds) p.set("beds", filters.beds);
-  if (filters.maxPrice) p.set("maxPrice", filters.maxPrice);
   const q = p.toString();
   return q ? `/rentals?${q}` : "/rentals";
 }
@@ -45,22 +44,21 @@ export type RentalBrowseViewProps = {
   error: string | null;
   neighborhood: string | null;
   beds: string | null;
-  maxPrice: string | null;
 };
 
+/** Keep the visible rental list and its valid map markers on the same selection state. */
 function RentalBrowseViewInner({
   results,
   total,
   error,
   neighborhood,
   beds,
-  maxPrice,
 }: RentalBrowseViewProps) {
-  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
-  const retryHref = buildRetryHref({ neighborhood, beds, maxPrice });
+  const retryHref = buildRetryHref({ neighborhood, beds });
 
   const pins = useMemo(
     () =>
@@ -72,26 +70,29 @@ function RentalBrowseViewInner({
   );
 
   useBrowseMapSync(pins, "rental");
+  const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
-  const countLabel = formatCountSubtitle(total, results.length);
+  // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
+  // curated or available now — only that listed rentals are verified and published.
+  const subtitle = error
+    ? "Long-stay apartments in Medellín"
+    : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
 
   return (
     <>
       <BrowseLayout
         testId="rentals-browse"
         title="Rentals in Medellín"
-        subtitle={`Curated long-stay apartments — ${countLabel}`}
+        subtitle={subtitle}
         filterBar={
-          <RentalBrowseFilters
-            neighborhood={neighborhood}
-            beds={beds}
-            maxPrice={maxPrice}
-          />
+          <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
         }
         mapSlot={<BrowseMapPanel />}
       >
         <section className="mt-6" aria-label="Rental listings">
+          {/* A saved viewing request must be visible where it was made, not only in the chat. */}
+          <LeadConfirmationBanner />
           {error ? (
             <div
               className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -112,8 +113,8 @@ function RentalBrowseViewInner({
           {!error && results.length === 0 ? (
             <EmptyState
               testId="rentals-empty"
-              title="No rentals matched"
-              description="Try another neighborhood or price range, or ask the concierge on chat."
+              title="No verified rentals currently match these filters"
+              description="Try another neighborhood or bedroom count, or ask MDE in chat."
               icon={<Building2 className="size-8" aria-hidden />}
             />
           ) : null}
@@ -131,8 +132,9 @@ function RentalBrowseViewInner({
                     key={r.id}
                     rental={r}
                     testId={`rental-card-${r.id}`}
-                    selected={selectedPinId === pinId}
-                    onSelect={() => setSelectedPinId(pinId)}
+                    selected={mappedIds.has(pinId) && selectedPinId === pinId}
+                    onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+                    onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={() =>
                       openScheduleViewing({
                         listingId: r.id,
@@ -153,6 +155,7 @@ function RentalBrowseViewInner({
   );
 }
 
+/** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>

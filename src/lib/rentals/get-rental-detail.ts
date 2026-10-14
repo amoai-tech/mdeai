@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
-import { isRentalRequestable, searchRentals } from "@/mastra/tools/search-rentals";
+import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
+import { isRentalRequestable } from "@/mastra/tools/search-rentals";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -70,15 +71,6 @@ const str = (value: unknown): string | null => {
   return typeof value === "string" && value.trim() ? value : null;
 };
 
-// skipcq: JS-0067 - module-local helper; not browser global scope
-const rentalSlugFromSourceUrl = (sourceUrl: string): string | null => {
-  try {
-    return new URL(sourceUrl).pathname.split("/").filter(Boolean).pop() ?? null;
-  } catch {
-    return sourceUrl.split("?")[0].split("/").filter(Boolean).pop() ?? null;
-  }
-};
-
 /** Map a raw `apartments` row to the detail view-model. Exported for unit tests. */
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDetail {
@@ -123,58 +115,23 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
 
 /**
  * Load one published rental by id or slug. Returns null for missing/unpublished
- * (RLS scopes anon reads to active listings). No Supabase env → dev/mock fallback
- * via the search tool's mock list (so the page renders locally without a DB).
+ * (RLS scopes anon reads to active listings). No Supabase env → throws
+ * RentalSearchUnavailableError; there are no demo detail pages (SAN-1089).
  */
 // skipcq: JS-0067, JS-R1005 - ES module export; intentional db-path + mock-fallback branching, not a bug
 export async function getRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
   const client = getClient();
   if (!client) {
-    return getMockRentalDetail(idOrSlug);
+    // SAN-1089: no demo detail pages. The page renders its "couldn't load" state for this.
+    throw new RentalSearchUnavailableError("client_unavailable");
   }
 
   const apartmentsQuery = client.from("apartments").select("*").eq("status", "active").limit(1);
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {
-    throw new Error(`[get-rental-detail] supabase error: ${error.message}`);
+    // Only the stable code travels; the driver message can carry hostnames and ports (SAN-1089).
+    throw new RentalSearchUnavailableError(`detail_query_failed${error.code ? `:${error.code}` : ""}`);
   }
   return data ? mapApartmentRowToDetail(data as Record<string, unknown>) : null;
-}
-
-// skipcq: JS-0067 - ES module export; testable mock fallback helper
-export async function getMockRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
-  const { results } = await searchRentals({ limit: 24 });
-  const hit = results.find((rental) => rental.id === idOrSlug || rentalSlugFromSourceUrl(rental.source_url) === idOrSlug);
-  if (!hit) return null;
-
-  return {
-    id: hit.id,
-    slug: null,
-    title: hit.title,
-    neighborhood: hit.neighborhood,
-    address: null,
-    bedrooms: hit.bedrooms,
-    bathrooms: null,
-    maxGuests: null,
-    priceNightly: hit.nightly_price,
-    priceMonthly: null,
-    currency: hit.currency,
-    deposit: null,
-    amenities: hit.amenities,
-    buildingAmenities: [],
-    images: hit.image ? [hit.image] : [],
-    description: null,
-    houseRules: null,
-    hostName: hit.host_name,
-    availableFrom: null,
-    availableTo: null,
-    minimumStayDays: null,
-    maximumStayDays: null,
-    latitude: hit.latitude ?? null,
-    longitude: hit.longitude ?? null,
-    status: "active",
-    // Mock rentals carry no ownership proof, so they are never requestable (SAN-1349).
-    canScheduleViewing: hit.can_schedule_viewing && hit.schedule_viewing_url != null,
-  };
 }

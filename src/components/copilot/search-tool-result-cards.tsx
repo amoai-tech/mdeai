@@ -70,6 +70,7 @@ function groundedRowToBase(row: GroundedRow, rank: number) {
     photoName: row.photoName,
     photoAuthorAttributions: row.photoAuthorAttributions,
     fieldMaskVersion: row.fieldMaskVersion,
+    groundingSource: row.groundingSource,
     rank,
   };
 }
@@ -158,6 +159,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               photoAuthorAttributions={detail.photoAuthorAttributions}
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
+              groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
               onSelect={() => panToPin(detail.pinId)}
               onOpenDetails={() =>
@@ -215,6 +217,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               photoAuthorAttributions={detail.photoAuthorAttributions}
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
+              groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
               onSelect={() => panToPin(detail.pinId)}
               onOpenDetails={() => openCafeDetail(detail, cafeRows)}
@@ -227,6 +230,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   );
 }
 
+/** Render rental tool results with map actions only for their validated pins. */
 export function RentalResults({
   result,
   searchMeta,
@@ -262,6 +266,11 @@ export function RentalResults({
     envelope.rankExplanation ?? [],
   );
   const searchParams = searchMeta?.params;
+  // Use the same validated tool pins that the map receives; never select a phantom pin.
+  const mappedRentalIds = useMemo(
+    () => new Set(normalizeToolOutput("rental", result).pins.map((pin) => pin.id)),
+    [result],
+  );
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -304,8 +313,9 @@ export function RentalResults({
         <div ref={listRef} className="flex flex-col gap-2 py-2">
           {rows.map((r, index) => {
           const pinId = rentalPinId(r.id);
+          const hasPin = mappedRentalIds.has(pinId);
           const openDetail = () => {
-            panToPin(pinId);
+            if (hasPin) panToPin(pinId);
             openVenueDetail({
               kind: "rental",
               listingId: r.id,
@@ -325,6 +335,7 @@ export function RentalResults({
             <RentalCard
               key={r.id}
               id={pinId}
+              pinId={hasPin ? pinId : null}
               listingId={r.id}
               title={r.title}
               neighborhood={r.neighborhood}
@@ -339,8 +350,8 @@ export function RentalResults({
               availability={r.availability}
               featured={index === 0}
               searchParams={searchParams}
-              selected={selectedPinId === pinId}
-              onSelect={() => panToPin(pinId)}
+              selected={hasPin && selectedPinId === pinId}
+              onSelect={hasPin ? () => panToPin(pinId) : undefined}
               onOpenDetails={openDetail}
               canScheduleViewing={r.can_schedule_viewing === true}
               onSchedule={() =>

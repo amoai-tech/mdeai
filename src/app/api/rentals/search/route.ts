@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
+import {
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals } from "@/mastra/tools/search-rentals";
 
 export const runtime = "nodejs";
@@ -70,7 +74,19 @@ export async function POST(req: Request) {
       rankExplanation,
     });
   } catch (error) {
-    console.error("[api/rentals/search]", error);
+    // SAN-1089: an unreadable database is 503, never `200 + results: []`. The chat fast path
+    // and /rentals key off the status to tell "search unavailable" from "no rentals match".
+    if (isRentalSearchUnavailable(error)) {
+      console.error("[api/rentals/search] unavailable:", error.reason);
+      return NextResponse.json(
+        {
+          error: "rental_search_unavailable",
+          message: "Rental search is temporarily unavailable. Please try again.",
+        },
+        { status: 503, headers: { "Retry-After": "5" } },
+      );
+    }
+    console.error("[api/rentals/search]", describeRentalSearchError(error));
     return NextResponse.json(
       {
         error: "rental_search_failed",

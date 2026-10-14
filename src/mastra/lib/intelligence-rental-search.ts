@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { RentalSearchUnavailableError } from "./rental-search-unavailable";
 import {
   embedQueryTextDetailed,
   vectorLiteral,
@@ -116,7 +117,7 @@ export async function searchRentalsIntelligent(
 ): Promise<{
   results: IntelligenceRentalResult[];
   total: number;
-  source: "supabase" | "mock";
+  source: "supabase";
   hybridUsed: boolean;
   embedStatus: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -132,15 +133,9 @@ export async function searchRentalsIntelligent(
   const client = getAnonClient();
 
   if (!client) {
-    return {
-      results: [],
-      total: 0,
-      source: "mock",
-      hybridUsed: false,
-      embedStatus: "skipped",
-      rankExplanation,
-      slots,
-    };
+    // SAN-1089: a missing client is an outage, not an empty marketplace. It used to return
+    // `source: "mock"` with zero rows, which every caller treated as a successful search.
+    throw new RentalSearchUnavailableError("client_unavailable");
   }
 
   let hybridRows: HybridListingRow[] = [];
@@ -239,7 +234,9 @@ export async function searchRentalsIntelligent(
     }
     const { data, error } = await q;
     if (error) {
-      throw new Error(`keyword fallback query failed: ${error.message}`);
+      throw new RentalSearchUnavailableError(
+        `keyword_query_failed${error.code ? `:${error.code}` : ""}`,
+      );
     }
     const apartments = data ?? [];
     hybridRows = apartments.map((r: Record<string, unknown>) => ({
@@ -293,7 +290,9 @@ export async function searchRentalsIntelligent(
     }
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {
-      throw new Error(`apartment detail query failed: ${aptError.message}`);
+      throw new RentalSearchUnavailableError(
+        `detail_query_failed${aptError.code ? `:${aptError.code}` : ""}`,
+      );
     }
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
