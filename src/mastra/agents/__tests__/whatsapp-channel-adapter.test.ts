@@ -8,6 +8,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
+import { FLASH_MODEL } from "@/mastra/lib/models";
 
 // Keep the adapter's initialization away from the public Graph API in tests.
 process.env.WHATSAPP_API_URL = "http://127.0.0.1:1/";
@@ -91,7 +92,8 @@ describe("Mastra in-process channel mount", () => {
       id: "wa-mount-agent",
       name: "WA Mount Agent",
       instructions: "test",
-      model: "google/gemini-2.0-flash",
+      model: FLASH_MODEL,
+
       channels: { adapters: { whatsapp: createWhatsAppAdapter(creds) } },
     });
     const channels = agent.getChannels();
