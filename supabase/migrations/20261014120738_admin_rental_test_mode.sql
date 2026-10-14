@@ -54,17 +54,18 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  v_landlord := p_landlord_id;
+  -- Internal test inventory must belong to the requesting administrator.
+  -- A caller-provided profile ID must not attach synthetic inventory to
+  -- another landlord, where it could contaminate their dashboard/workflows.
+  select lp.id into v_landlord
+    from public.landlord_profiles lp
+   where lp.user_id = v_uid
+     and (p_landlord_id is null or lp.id = p_landlord_id)
+   order by lp.created_at
+   limit 1;
   if v_landlord is null then
-    select lp.id into v_landlord
-      from public.landlord_profiles lp
-     where lp.user_id = v_uid
-     order by lp.created_at
-     limit 1;
-  end if;
-  if v_landlord is null then
-    raise exception 'no landlord profile for this administrator; pass p_landlord_id'
-      using errcode = 'check_violation';
+    raise exception 'test landlord profile must belong to the administrator'
+      using errcode = '42501';
   end if;
 
   insert into public.apartments (

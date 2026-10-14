@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(40);
+select plan(42);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -19,6 +19,26 @@ select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-0000000
 select throws_ok(
   $q$select public.admin_create_test_rental('T', 'Laureles', 'Calle 10', 2400000, 'COP', (now() at time zone 'America/Bogota')::date + 5, 'https://example.com/a.jpg')$q$,
   '42501', 'administrator required', 'A1: non-admin cannot create a test rental');
+reset role;
+
+-- A41/A42: administrator cannot write synthetic inventory under another
+-- landlord's profile even through the optional RPC argument.
+insert into public.landlord_profiles (id, user_id, display_name)
+values ('f1460000-0000-4000-8000-000000000012', 'f1460000-0000-4000-8000-000000000002', 'Other User Landlord');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_create_test_rental('Wrong owner', 'Laureles', 'Calle 10',
+    2400000, 'COP', (now() at time zone 'America/Bogota')::date + 5,
+    'https://example.com/test.jpg', 'f1460000-0000-4000-8000-000000000012')$q$,
+  '42501', 'test landlord profile must belong to the administrator',
+  'A41: administrator cannot attach test inventory to another tenant');
+select is(
+  (public.admin_create_test_rental('Owned test', 'Laureles', 'Calle 10',
+    2400000, 'COP', (now() at time zone 'America/Bogota')::date + 5,
+    'https://example.com/test.jpg', 'f1460000-0000-4000-8000-000000000011')).landlord_id::text,
+  'f1460000-0000-4000-8000-000000000011',
+  'A42: explicit own landlord profile remains supported');
 reset role;
 
 -- A2: an admin creates a test-marked draft (not verified, not published).
