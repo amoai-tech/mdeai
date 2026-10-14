@@ -7657,9 +7657,11 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          delivery_status_at: string | null
           direction: string
           external_id: string | null
           id: string
+          inbound_message_id: string | null
           message_type: string | null
           phone_number: string
           raw_payload: Json | null
@@ -7670,9 +7672,11 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          delivery_status_at?: string | null
           direction: string
           external_id?: string | null
           id?: string
+          inbound_message_id?: string | null
           message_type?: string | null
           phone_number: string
           raw_payload?: Json | null
@@ -7683,9 +7687,11 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          delivery_status_at?: string | null
           direction?: string
           external_id?: string | null
           id?: string
+          inbound_message_id?: string | null
           message_type?: string | null
           phone_number?: string
           raw_payload?: Json | null
@@ -10059,6 +10065,23 @@ export type Database = {
           table_name: string
         }
         Returns: string
+      }
+      whatsapp_complete_inbound_with_sends: {
+        Args: { p_claim_token: string; p_message_id: string; p_sends: Json }
+        Returns: number
+      }
+      whatsapp_record_delivery_status: {
+        Args: {
+          p_error: string
+          p_external_id: string
+          p_status: string
+          p_status_at: string
+        }
+        Returns: number
+      }
+      whatsapp_status_rank: {
+        Args: { p_status: string }
+        Returns: number
       }
     }
     Enums: {

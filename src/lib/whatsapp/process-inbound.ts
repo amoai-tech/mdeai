@@ -15,13 +15,14 @@
  */
 import {
   claimInbound,
-  completeInbound,
+  completeInboundWithSends,
   deadLetterInbound,
   failInbound,
+  recordPartialSends,
   type ClaimedRow,
   type InboundRpcClient,
 } from "./inbound-store";
-import { runWithOutboundTracking } from "./outbound-tracker";
+import { confirmedSends, runWithOutboundTracking, sendOutcome } from "./outbound-tracker";
 
 export type AdapterWebhook = (
   request: Request,
@@ -46,6 +47,8 @@ export type ProcessSummary = {
   claimed: number;
   processed: number;
   failed: number;
+  /** Replies where only some physical sends succeeded (terminal, operator-visible). */
+  partial: number;
   stale: number;
   deadLettered: number;
 };
@@ -78,6 +81,7 @@ export async function processDueInbound(deps: ProcessDeps): Promise<ProcessSumma
     claimed: 0,
     processed: 0,
     failed: 0,
+    partial: 0,
     stale: 0,
     deadLettered: await deadLetterInbound(deps.client, maxAttempts, leaseSeconds),
   };
@@ -143,23 +147,51 @@ async function processRow(
       await withTimeout(registered, executionTimeoutMs, "agent run");
     });
 
-    // Completing requires a CONFIRMED outbound send, not just a settled task.
-    const confirmed = sends.find((send) => send.success === true);
-    if (!confirmed || confirmed.success !== true) {
-      const attempt = sends.find((send) => send.success === false);
+    // Completing requires EVERY physical send to succeed with a provider id, recorded in the SAME
+    // transaction as the completion. A partial reply (some chunks sent, some failed) must never
+    // look like a complete answer, and a missing wamid must never be a false success.
+    const outcome = sendOutcome(sends);
+    if (outcome === "partial") {
+      // Persist what DID go out, then dead-letter: the customer received a partial reply and an
+      // operator must see it. Blind retry would duplicate the chunks that already sent.
+      const failure = sends.find((send) => send.success === false);
+      const reason =
+        "partial outbound send: " +
+        (failure && failure.success === false ? failure.error : "some messages failed");
+      const recordedPartial = await recordPartialSends(
+        deps.client,
+        row.id,
+        row.claim_token,
+        confirmedSends(sends),
+        reason,
+      );
+      summary.partial += 1;
+      console.error("[whatsapp] partial outbound send recorded", {
+        externalId: row.external_id,
+        sendsRecorded: recordedPartial,
+      });
+      return;
+    }
+    if (outcome === "failed") {
+      const failure = sends.find((send) => send.success === false);
       throw new Error(
-        attempt && attempt.success === false
-          ? "no confirmed outbound send: " + attempt.error
-          : "no confirmed outbound send: the agent produced no reply",
+        "no confirmed outbound send: " +
+          (failure && failure.success === false ? failure.error : "the agent produced no reply"),
       );
     }
+    const sendsToRecord = confirmedSends(sends);
 
-    const completed = await completeInbound(deps.client, row.id, row.claim_token);
-    if (completed) {
+    const recorded = await completeInboundWithSends(
+      deps.client,
+      row.id,
+      row.claim_token,
+      sendsToRecord,
+    );
+    if (recorded > 0) {
       summary.processed += 1;
       console.info("[whatsapp] inbound processed", {
         externalId: row.external_id,
-        providerMessageId: confirmed.providerMessageId,
+        providerMessageIds: sendsToRecord.map((send) => send.wamid),
       });
     } else {
       summary.stale += 1;

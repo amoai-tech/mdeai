@@ -117,14 +117,19 @@ describe("WhatsApp webhook route", () => {
     expect((await POST(request)).status).toBe(413);
   });
 
-  it("acknowledges a status-only payload without recording work", async () => {
+  it("persists a delivery status callback without recording inbound work", async () => {
     configure();
-    mocks.createServiceRoleClient.mockReturnValue(rpcReturning({ data: null, error: null }));
+    const rpc = vi.fn<(fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: null }>>(
+      async () => ({ data: 1, error: null }),
+    );
+    mocks.createServiceRoleClient.mockReturnValue({ rpc });
     const statusOnly = JSON.stringify({
       object: "whatsapp_business_account",
-      entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "1" }, statuses: [{ id: "wamid.1", status: "read" }] } }] }],
+      entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "1" }, statuses: [{ id: "wamid.1", status: "read", timestamp: "1700000000" }] } }] }],
     });
     const res = await POST(signedRequest(statusOnly));
-    expect(await res.json()).toEqual({ received: 0, duplicates: 0 });
+    expect(await res.json()).toEqual({ statuses: 1, received: 0, duplicates: 0 });
+    expect(rpc.mock.calls.some((c) => c[0] === "whatsapp_record_delivery_status")).toBe(true);
+    expect(rpc.mock.calls.some((c) => c[0] === "whatsapp_record_inbound")).toBe(false);
   });
 });
