@@ -14,7 +14,17 @@ const h = vi.hoisted(() => {
     storage_path: `partner-assets/source-review/fincaraiz/apt-1/${sort_order + 1}-hash.webp`,
     mime_type: "image/webp",
   }));
-  const state = { available: true, apartmentId: "apt-1", images: defaultImages };
+  const state = {
+    available: true,
+    apartmentId: "apt-1",
+    images: defaultImages,
+    apartment: {
+      available_from: null as string | null,
+      latitude: null as number | null,
+      longitude: null as number | null,
+      metadata: {} as Record<string, unknown>,
+    },
+  };
   return {
     bytesFor,
     defaultImages,
@@ -39,7 +49,7 @@ vi.mock("@/lib/supabase/service", () => ({
             select: () => ({
               eq: (_column: string, value: string) => ({
                 maybeSingle: async () => ({
-                  data: value === h.knownSlug ? { id: h.state.apartmentId } : null,
+                  data: value === h.knownSlug ? { id: h.state.apartmentId, ...h.state.apartment } : null,
                   error: null,
                 }),
               }),
@@ -103,6 +113,7 @@ beforeEach(async () => {
   h.state.available = true;
   h.state.apartmentId = "apt-1";
   h.state.images = h.defaultImages;
+  h.state.apartment = { available_from: null, latitude: null, longitude: null, metadata: {} };
   h.download.mockClear();
   resetLocalPreviewImageCache();
   warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -185,6 +196,48 @@ describe("local rental preview (no publishing bypass)", () => {
       status: "development-preview",
       images: [photoUrl(0), photoUrl(1), photoUrl(2), photoUrl(3)],
     });
+  });
+
+  it("shows user-attested Supabase availability and Google rooftop map pins only with receipts", async () => {
+    h.state.apartment = {
+      available_from: "2026-10-14",
+      latitude: 6.2422222,
+      longitude: -75.5864818,
+      metadata: {
+        development_availability_attestation: { available_from: "2026-10-14" },
+        map_geocoding: { provider: "google_geocoding_api", location_type: "ROOFTOP" },
+      },
+    };
+    resetLocalPreviewImageCache();
+    const [rental] = await getLocalPreviewRentals();
+    expect(rental.availability).toBe("Available from 2026-10-14 (user-reported) · Development preview");
+    expect(rental.latitude).toBe(6.2422222);
+    expect(rental.longitude).toBe(-75.5864818);
+    expect(rental.can_schedule_viewing).toBe(false);
+    const detail = await getLocalPreviewDetail(candidate.slug);
+    expect(detail).toMatchObject({
+      availableFrom: "2026-10-14",
+      latitude: 6.2422222,
+      longitude: -75.5864818,
+      canScheduleViewing: false,
+    });
+
+    // A street-interpolated coordinate is not evidence of a real building pin.
+    h.state.apartment.metadata = {
+      development_availability_attestation: { available_from: "2026-10-14" },
+      map_geocoding: { provider: "google_geocoding_api", location_type: "RANGE_INTERPOLATED" },
+    };
+    resetLocalPreviewImageCache();
+    const [approximate] = await getLocalPreviewRentals();
+    expect(approximate.latitude).toBeUndefined();
+    expect(approximate.longitude).toBeUndefined();
+    expect((await getLocalPreviewDetail(candidate.slug))?.latitude).toBeNull();
+
+    // Unknown availability remains unknown even when a date appears in a stale record.
+    h.state.apartment.metadata = {};
+    resetLocalPreviewImageCache();
+    const [unconfirmed] = await getLocalPreviewRentals();
+    expect(unconfirmed.availability).toBe("Availability unconfirmed · Development preview");
   });
 
   it("addresses photos by explicit sort_order, not array position", async () => {

@@ -57,3 +57,12 @@ verified.
 
 Existing production gates remain mandatory when promoting to real public, searchable and requestable
 rentals; do not mistake the preview for completed SAN-1431.
+
+
+The user has reported that the nine candidates are available starting **2026-10-14**.
+The preview reads this user-attested date directly from the live `apartments` row (not
+from the local research fixture), and shows the seven mapped Google rooftop-address
+positions already stored in Supabase. Two unresolved pins remain absent. The date
+and map receipts are for **development staging**, not independent publication rights
+or permission to create real customer viewings. Do not label these external sources
+as MDE-controlled stock without completing the existing publishing workflow.

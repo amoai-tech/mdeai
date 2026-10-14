@@ -169,7 +169,13 @@ type ListingImageRow = {
   mime_type: string | null;
 };
 
-type ListingImages = { apartmentId: string; rows: ListingImageRow[] };
+type ListingImages = {
+  apartmentId: string;
+  rows: ListingImageRow[];
+  availableFrom: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
 
 const IMAGE_CACHE_TTL_MS = 30_000;
 const imageCache = new Map<string, { at: number; value: ListingImages | null }>();
@@ -202,7 +208,7 @@ async function listingImages(slug: string): Promise<ListingImages | null> {
   }
   const { data: apartment, error: apartmentError } = await client
     .from("apartments")
-    .select("id")
+    .select("id, available_from, latitude, longitude, metadata")
     .eq("slug", slug)
     .maybeSingle();
   if (apartmentError) warn(`apartment lookup failed for ${slug}: ${apartmentError.message}`);
@@ -216,9 +222,29 @@ async function listingImages(slug: string): Promise<ListingImages | null> {
     .eq("listing_id", apartment.id)
     .order("sort_order", { ascending: true });
   if (error) warn(`image lookup failed for ${slug}: ${error.message}`);
+  // Development-only facts come from the live apartment row, not stale local
+  // research fixtures. Only the user's dated availability attestation and
+  // Google's rooftop-address receipt can create a preview date or pin.
+  const metadata = (apartment.metadata ?? {}) as Record<string, unknown>;
+  const availabilityEvidence = (metadata.development_availability_attestation ?? {}) as Record<string, unknown>;
+  const mapEvidence = (metadata.map_geocoding ?? {}) as Record<string, unknown>;
+  const availableFrom = typeof apartment.available_from === "string"
+    && availabilityEvidence.available_from === apartment.available_from
+    ? apartment.available_from : null;
+  const latitude = apartment.latitude == null ? null : Number(apartment.latitude);
+  const longitude = apartment.longitude == null ? null : Number(apartment.longitude);
+  const mapped = mapEvidence.provider === "google_geocoding_api"
+    && mapEvidence.location_type === "ROOFTOP"
+    && latitude !== null && longitude !== null
+    && Number.isFinite(latitude) && Number.isFinite(longitude)
+    && latitude >= -90 && latitude <= 90
+    && longitude >= -180 && longitude <= 180;
   const value: ListingImages = {
     apartmentId: apartment.id,
     rows: error || !data ? [] : (data as ListingImageRow[]),
+    availableFrom,
+    latitude: mapped ? latitude : null,
+    longitude: mapped ? longitude : null,
   };
   imageCache.set(slug, { at: Date.now(), value });
   return value;
@@ -287,6 +313,7 @@ export async function getLocalPreviewPhoto(
 export async function getLocalPreviewRentals(): Promise<Rental[]> {
   const list = await candidates();
   return Promise.all(list.map(async (c): Promise<Rental> => {
+    const listing = await listingImages(c.slug);
     const image = (await photos(c.slug))[0] ?? "";
     return {
       id: c.slug,
@@ -307,9 +334,13 @@ export async function getLocalPreviewRentals(): Promise<Rental[]> {
       can_schedule_viewing: false,
       schedule_viewing_url: null,
       host_name: "External advertiser — unverified",
-      availability: "Availability unconfirmed · Development preview",
+      availability: listing?.availableFrom
+        ? `Available from ${listing.availableFrom} (user-reported) · Development preview`
+        : "Availability unconfirmed · Development preview",
       tags: ["dev-preview"],
-      // No verified coordinates means no map pin.
+      // Only Google rooftop-address coordinates with a stored receipt become pins.
+      latitude: listing?.latitude ?? undefined,
+      longitude: listing?.longitude ?? undefined,
     };
   }));
 }
@@ -318,6 +349,7 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
   if (!isLocalRentalPreviewEnabled() || !isCandidateSlug(id)) return null;
   const c = (await candidates()).find((row) => row.slug === id);
   if (!c) return null;
+  const listing = await listingImages(id);
   return {
     id: c.slug,
     slug: c.slug,
@@ -337,12 +369,12 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
     description: c.description,
     houseRules: null,
     hostName: null,
-    availableFrom: null,
+    availableFrom: listing?.availableFrom ?? null,
     availableTo: null,
     minimumStayDays: null,
     maximumStayDays: null,
-    latitude: null,
-    longitude: null,
+    latitude: listing?.latitude ?? null,
+    longitude: listing?.longitude ?? null,
     status: "development-preview",
     canScheduleViewing: false,
   };
