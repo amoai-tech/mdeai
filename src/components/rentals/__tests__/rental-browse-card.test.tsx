@@ -174,6 +174,26 @@ describe("RentalBrowseCard — SAN-478 CTA opens the shared modal", () => {
     });
     expect(container.querySelector('[data-testid="rental-schedule-cta"]')).toBeNull();
   });
+
+  it("falls back to the placeholder when the cover image fails", () => {
+    act(() => {
+      root.render(<RentalBrowseCard rental={rowToRental(apartmentRow())} />);
+    });
+    const image = container.querySelector<HTMLImageElement>(
+      '[data-testid="rental-browse-card-photo"]',
+    );
+    if (!image) throw new Error("the listing must expose its cover image first");
+
+    act(() => {
+      image.dispatchEvent(new Event("error"));
+    });
+
+    expect(
+      container.querySelector('[data-testid="rental-browse-card-photo-placeholder"]'),
+      "a failed Storage image must render the shared placeholder, not a broken image",
+    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="rental-browse-card-photo"]')).toBeNull();
+  });
 });
 
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bed, Bath, Users, Building2, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { cn } from "@/lib/utils";
+import { GalleryImage } from "@/components/rentals/gallery-image";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
@@ -24,45 +23,6 @@ const PENDING = "Data pending";
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const Pending = () => <span className="text-muted-foreground">{PENDING}</span>;
-
-// skipcq: JS-0067 - React component (ES module); not browser global scope
-const GalleryImage = ({
-  src,
-  alt,
-  className,
-  loading,
-  testId,
-}: {
-  src: string;
-  alt: string;
-  className: string;
-  loading: "eager" | "lazy";
-  testId?: string;
-}) => {
-  // A missing or failed Storage photo must stay an explicit placeholder.
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <div
-        data-testid={testId ? `${testId}-unavailable` : undefined}
-        className={cn("flex items-center justify-center bg-muted text-xs text-muted-foreground", className)}
-      >
-        <Building2 className="mr-1 size-4" aria-hidden /> Photo unavailable
-      </div>
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      loading={loading}
-      data-testid={testId}
-      onError={() => setFailed(true)}
-    />
-  );
-};
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
 const specLabel = (count: number | null, one: string, many: string): React.ReactNode => {
