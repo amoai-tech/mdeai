@@ -19,6 +19,19 @@ beforeAll(() => {
         headers: { "content-type": "application/json" },
       });
     }
+    // Real Meta answers receipts and typing indicators with { success: true } and no id.
+    let parsed: { typing_indicator?: unknown; status?: unknown } = {};
+    try {
+      parsed = JSON.parse(body) as typeof parsed;
+    } catch {
+      parsed = {};
+    }
+    if (parsed.typing_indicator !== undefined || parsed.status !== undefined) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
     index += 1;
     return new Response(JSON.stringify({ messages: [{ id: "wamid." + index }] }), {
       status: 200,
@@ -31,7 +44,7 @@ beforeAll(() => {
 const metaSend = (text: string, method = "POST") =>
   fetch("https://graph.facebook.com/v25.0/123456/messages", {
     method,
-    body: JSON.stringify({ messaging_product: "whatsapp", text: { body: text } }),
+    body: JSON.stringify({ messaging_product: "whatsapp", type: "text", text: { body: text } }),
   });
 
 describe("outbound tracker", () => {
@@ -85,6 +98,15 @@ describe("outbound tracker", () => {
       await fetch("https://example.com/not-meta", { method: "POST", body: "{}" });
       // Right endpoint, wrong method (a status read must never look like a send).
       await metaSend("status read", "GET");
+      // Typing indicators and read receipts share the endpoint; Meta answers them with no id.
+      await fetch("https://graph.facebook.com/v25.0/123456/messages", {
+        method: "POST",
+        body: JSON.stringify({ messaging_product: "whatsapp", typing_indicator: { type: "text" } }),
+      });
+      await fetch("https://graph.facebook.com/v25.0/123456/messages", {
+        method: "POST",
+        body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: "wamid.in" }),
+      });
     });
 
     expect(sends).toHaveLength(3);
