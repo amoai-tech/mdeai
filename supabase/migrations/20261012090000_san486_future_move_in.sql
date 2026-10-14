@@ -11,6 +11,7 @@
 --      before move-in.
 -- Both are corrected here; every ownership, permission, photo, location and
 -- freshness requirement is unchanged. Viewing date and move-in date are distinct.
+-- A future move-in date additionally needs a reviewed, date-specific receipt (below).
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.rental_listing_launch_blockers(p_apartment_id uuid, p_include_state boolean DEFAULT true)
@@ -72,6 +73,33 @@ begin
           -- A window that ends before it starts can never accommodate a stay.
           and (r.available_to is null or r.available_from <= r.available_to)) then
     b := b || 'no current availability evidence'::text;
+  end if;
+
+  -- SAN-486: a FUTURE move-in date is a claim about a unit that is not available yet, so a
+  -- declared date alone is not enough. It needs a reviewed receipt on the existing
+  -- property_verifications row (insert/update is admin or service_role only, never the
+  -- owner) that names THIS exact date, a reviewer who is not the listing owner, a review
+  -- timestamp and the evidence that was reviewed. Because the receipt names the date, a
+  -- receipt for an earlier date cannot authorize a different one; moving available_from
+  -- is also a material edit, which already demotes the live listing for re-review.
+  -- "Future" is the America/Bogota calendar date, the same zone the viewing RPC uses.
+  -- No new table, approval flow or availability engine.
+  if r.available_from is not null
+     and r.available_from > (now() at time zone 'America/Bogota')::date
+     and not exists (
+       select 1
+         from public.property_verifications pv
+        where pv.apartment_id = r.id
+          and pv.status = 'verified'
+          and pv.verified_at is not null
+          and pv.verified_by is not null
+          and pv.verified_by is distinct from (
+                select lp.user_id from public.landlord_profiles lp where lp.id = r.landlord_id)
+          -- Text equality on purpose: no cast that a malformed receipt could make fail.
+          and pv.metadata->>'move_in_verified_for' = to_char(r.available_from, 'YYYY-MM-DD')
+          and nullif(btrim(coalesce(pv.metadata->>'move_in_evidence', '')), '') is not null
+     ) then
+    b := b || 'no verified move-in date'::text;
   end if;
 
   if p_include_state and coalesce(r.verified, false) is not true then

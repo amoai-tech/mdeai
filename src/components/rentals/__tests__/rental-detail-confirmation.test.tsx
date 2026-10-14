@@ -45,6 +45,8 @@ const detail = mapApartmentRowToDetail({
   moderation_status: "approved",
   listing_workflow_status: "published",
   landlord_id: "landlord-1",
+  // A known move-in date, as the viewing RPC requires (SAN-486); without one the page offers no viewing.
+  available_from: "2000-01-01",
 });
 
 const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
@@ -155,5 +157,31 @@ describe("rental detail page — viewing confirmation", () => {
     expect(document.querySelector('[data-testid="schedule-viewing-modal"]')).toBeTruthy();
     expect(document.querySelector('[data-testid="schedule-viewing-error"]')).toBeTruthy();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe("rental detail page — a listing with no move-in date", () => {
+  it("offers no 'Request viewing' action, matching the viewing RPC", async () => {
+    const undated = mapApartmentRowToDetail({
+      id: "d1000000-0000-4000-a000-000000000009",
+      title: "Undated Listing",
+      neighborhood: "Laureles",
+      bedrooms: 1,
+      price_monthly: 1200,
+      currency: "USD",
+      status: "active",
+      moderation_status: "approved",
+      listing_workflow_status: "published",
+      landlord_id: "landlord-1",
+      available_from: null,
+    });
+    expect(undated.canScheduleViewing).toBe(false);
+    await act(async () => {
+      root.render(<RentalDetailView detail={undated} />);
+    });
+    const open = Array.from(document.querySelectorAll("button")).find((b) =>
+      /request viewing/i.test(b.textContent ?? ""),
+    );
+    expect(open).toBeUndefined();
   });
 });
