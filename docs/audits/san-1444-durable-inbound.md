@@ -116,3 +116,12 @@ select now() - min(coalesce(next_attempt_at, created_at)) as oldest_due,
 from public.whatsapp_messages where direction = 'inbound';
 ```
 Alert when `oldest_due` exceeds the retry SLA or `dead > 0`.
+
+## 13. Pre-enablement gates (before any customer traffic)
+These do not block merging the durable foundation; they block turning the channel on.
+1. **Recovery schedule.** Live has zero WhatsApp cron jobs. Provision the Vault secrets and apply §7, then prove restart recovery by claiming a row, killing the worker, and watching the sweeper complete it.
+2. **Same-sender ordering across serverless instances.** Distinct messages are distinct rows, so nothing is processed twice, but two messages from one customer can run concurrently and out of order. Add sender-level serialization (or a supported shared pub/sub) and test two rapid messages from one number.
+3. **Agent-run cancellation.** The 120s wait is bounded and fencing prevents stale writes, but the underlying promise can outlive the wait. Thread an AbortSignal through the adapter before enabling traffic.
+4. **Delivery truth.** Awaited agent work does not prove the reply reached the device. Store the outbound provider id and persist `sent`/`delivered`/`read`/`failed` statuses.
+5. **Authorization.** Prove a WhatsApp user without an MDE account cannot read private data or trigger consequential actions (viewings, bookings).
+6. **Real device round trip.** One signed inbound message ⇒ one durable row ⇒ one grounded reply ⇒ valid `wamid` ⇒ receipt, with no fabricated prices, availability, or coordinates.
