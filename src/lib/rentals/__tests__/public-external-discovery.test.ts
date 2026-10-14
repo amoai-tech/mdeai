@@ -122,12 +122,12 @@ describe("public external source cards", () => {
     expect(ad?.source_url).toBe(base.source_url);
   });
 
-  it("renders the placeholder while republication is unapproved, even for approved or foreign URLs", () => {
+  it("displays a public listing-photo URL in development, not arbitrary or private Storage media", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
       const photo = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-01.webp";
-      expect(publicExternalRentalCard({ ...base, images: [photo] })?.image).toBe("");
+      expect(publicExternalRentalCard({ ...base, images: [photo] })?.image).toBe(photo);
       expect(publicExternalRentalCard({ ...base, images: ["https://example.net/other.webp"] })?.image).toBe("");
       expect(publicExternalRentalCard({ ...base, images: ["https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/partner-assets/foo.webp"] })?.image).toBe("");
     } finally {
@@ -136,22 +136,22 @@ describe("public external source cards", () => {
     }
   });
 
-  it("does not serve the approved photos while republication is unapproved (SAN-1416 fallback)", () => {
+  it("returns up to five approved photos in stored order, with `image` as the first (SAN-1416)", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
       const dir = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988";
       const approved = [1, 2, 3, 4, 5, 6].map((n) => `${dir}/photo-0${n}.webp`);
       const ad = publicExternalRentalCard({ ...base, images: approved });
-      expect(ad?.images).toEqual([]);
-      expect(ad?.image).toBe("");
+      expect(ad?.images).toEqual(approved.slice(0, 5)); // capped at five, order preserved
+      expect(ad?.image).toBe(approved[0]);
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
     }
   });
 
-  it("serves no public photos while republication is unapproved, even when a valid URL is stored", () => {
+  it("drops every photo that is not an approved public object, without hiding the ones that are", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
@@ -169,11 +169,33 @@ describe("public external source cards", () => {
           good,
         ],
       });
-      expect(ad?.images).toEqual([]);
-      expect(ad?.image).toBe("");
+      expect(ad?.images).toEqual([good]);
+      expect(ad?.image).toBe(good);
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
+  it("hides public photos only in public production until rights are approved", () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      const origin = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object";
+      const good = origin + "/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-02.webp";
+      const row = { ...base, images: [good] };
+      vi.stubEnv("VERCEL_ENV", "production");
+      vi.stubEnv("MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED", "");
+      expect(publicExternalRentalCard(row)?.images).toEqual([]);
+      vi.stubEnv("MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED", "1");
+      expect(publicExternalRentalCard(row)?.images).toEqual([good]);
+      vi.stubEnv("VERCEL_ENV", "preview");
+      vi.stubEnv("MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED", "");
+      expect(publicExternalRentalCard(row)?.images).toEqual([good]);
+    } finally {
+      vi.unstubAllEnvs();
+      if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
     }
   });
 

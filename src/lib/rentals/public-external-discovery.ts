@@ -40,16 +40,21 @@ type ExternalListing = {
 const MAX_PUBLIC_PHOTOS = 5;
 
 /**
- * Public republication of the external-discovery photographs is NOT approved.
+ * Whether source-linked external photographs may be displayed.
  *
- * The only recorded basis is `rental_listing_images.rights_evidence`:
- * "User attests permission for development testing, 2026-10-13; not independently
- * certified for public publishing." Until valid republication permission is documented,
- * source-linked cards render the existing placeholder instead of the public photo URLs.
- * Flip only after permission is recorded; see
- * docs/07-operations/rental-photo-rights-remediation.md.
+ * Development and access-protected previews stay fully usable for testing cards, carousels,
+ * maps and chat. Public production uses the existing placeholder until publication rights are
+ * documented, because the only recorded basis is development-testing permission:
+ * "User attests permission for development testing, 2026-10-13; not independently certified
+ * for public publishing." The launch gate sets MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED=1
+ * once permission is established. See docs/07-operations/rental-photo-rights-remediation.md.
+ *
+ * Exported for unit tests.
  */
-const PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED = false;
+export function publicExternalPhotosApproved(): boolean {
+  return process.env.VERCEL_ENV !== "production"
+    || process.env.MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED === "1";
+}
 
 /**
  * Only public, scoped object URLs from the expected Supabase listing-photo bucket, in stored
@@ -120,7 +125,7 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
     && Number(row.latitude) >= -90 && Number(row.latitude) <= 90
     && Number(row.longitude) >= -180 && Number(row.longitude) <= 180;
   const approvedPhotos = publicRentalPhotos(row);
-  const images = PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED ? approvedPhotos : [];
+  const images = publicExternalPhotosApproved() ? approvedPhotos : [];
   return {
     id: row.slug, title: row.title, neighborhood: row.neighborhood ?? "",
     nightly_price: 0, price_monthly: Number(row.price_monthly), currency: "COP",

@@ -55,13 +55,16 @@ so re-running after a partial deletion completes the rest without a manual reset
 - Anonymous GET of a private `partner-assets/source-review/...` object returns 403.
 - `/rentals` still returns 200; external cards still render; "View original listing" links resolve.
 
-## External-discovery photos (36) — separate decision
+## External-discovery photos (36) — development vs public production
 Recorded evidence: `rental_listing_images.rights_evidence` = "User attests permission for
-development testing, 2026-10-13; **not independently certified for public publishing."** Public
-republication is therefore **not approved**. The card fallback is
-`PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED = false` in
-`src/lib/rentals/public-external-discovery.ts`, which renders the existing placeholder while
-keeping listing details and "View original listing".
+development testing, 2026-10-13; **not independently certified for public publishing."**
+
+Display is environment-differentiated. `publicExternalPhotosApproved()` in
+`src/lib/rentals/public-external-discovery.ts` returns true for local development and
+access-protected previews (full photo experience for testing cards, carousels, maps and chat),
+and false in public production until publication rights are documented. The launch gate sets
+`MDE_EXTERNAL_PHOTO_PUBLIC_RIGHTS_APPROVED=1` only after permission is established. Hiding a
+photo on a card does not make the object private: the public bucket is directly downloadable.
 
 Withdrawing the 36 public copies is a **separate, explicitly approved** action: extend the
 allowlist only after permission is documented or the decision to withdraw is recorded, run the
