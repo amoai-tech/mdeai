@@ -18,6 +18,7 @@ import {
   recordInboundMessage,
   type InboundRpcClient,
 } from "@/lib/whatsapp/inbound-store";
+import { reportInboundProcessingFailure } from "@/lib/whatsapp/monitoring";
 import { processDueInbound } from "@/lib/whatsapp/process-inbound";
 import {
   MAX_WEBHOOK_BYTES,
@@ -100,14 +101,18 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Could not durably record the message", { status: 500 });
   }
 
+  const workerId = "webhook:" + crypto.randomUUID();
   after(() =>
     processDueInbound({
       client: rpcClient,
       webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
       sign: (body) => signWebhookBody(body, env.appSecret),
       adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
-      workerId: "webhook:" + crypto.randomUUID(),
-    }).catch((error) => console.error("[whatsapp] inbound processing failed", error)),
+      workerId,
+    }).catch((error) => {
+      // The response is already sent, so surface the failure instead of swallowing it.
+      reportInboundProcessingFailure(error, { workerId, stage: "webhook_after" });
+    }),
   );
 
   return NextResponse.json({ received, duplicates });

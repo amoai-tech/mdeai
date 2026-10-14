@@ -87,7 +87,7 @@ async function processRow(
   summary: ProcessSummary,
   maxAttempts: number,
 ): Promise<void> {
-  if (!row.raw_payload) {
+  if (row.raw_payload === null || row.raw_payload === undefined) {
     const failed = await failInbound(deps.client, row.id, row.claim_token, "missing raw_payload", maxAttempts);
     if (failed) summary.failed += 1;
     else summary.stale += 1;

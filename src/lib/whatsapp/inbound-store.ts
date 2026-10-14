@@ -119,7 +119,7 @@ export async function recordInboundMessage(
   if (!row || typeof row.message_id !== "string") {
     throw new Error("whatsapp_record_inbound returned no message id");
   }
-  return { messageId: row.message_id, isNew: row.is_new === true };
+  return { messageId: row.message_id, isNew: Boolean(row.is_new) };
 }
 
 export async function claimInbound(

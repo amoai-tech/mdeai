@@ -9,6 +9,7 @@ import { mastra } from "@/mastra";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
 import type { InboundRpcClient } from "@/lib/whatsapp/inbound-store";
+import { reportInboundProcessingFailure } from "@/lib/whatsapp/monitoring";
 import { processDueInbound } from "@/lib/whatsapp/process-inbound";
 import { constantTimeEqual, signWebhookBody } from "@/lib/whatsapp/webhook-security";
 
@@ -32,12 +33,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "channel unavailable" }, { status: 503 });
   }
 
-  const summary = await processDueInbound({
-    client: client as unknown as InboundRpcClient,
-    webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
-    sign: (body) => signWebhookBody(body, env.appSecret),
-    adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
-    workerId: "sweeper:" + crypto.randomUUID(),
-  });
-  return NextResponse.json(summary);
+  const workerId = "sweeper:" + crypto.randomUUID();
+  try {
+    const summary = await processDueInbound({
+      client: client as unknown as InboundRpcClient,
+      webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
+      sign: (body) => signWebhookBody(body, env.appSecret),
+      adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
+      workerId,
+    });
+    return NextResponse.json(summary);
+  } catch (error) {
+    // 500 so pg_net / the scheduler records a failed recovery run.
+    reportInboundProcessingFailure(error, { workerId, stage: "sweeper" });
+    return NextResponse.json({ error: "processing failed" }, { status: 500 });
+  }
 }
