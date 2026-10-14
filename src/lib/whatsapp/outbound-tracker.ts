@@ -1,18 +1,18 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 /**
- * SAN-1444 — capture EVERY physical WhatsApp send for the message a worker is processing.
+ * SAN-1444 — capture EVERY physical WhatsApp send for the message a worker is processing, and
+ * hold the run's reply text so the customer gets one message.
  *
  * Two facts drive this design:
  *  1. The Chat SDK resolves the `waitUntil` task even when the agent or the outbound send fails,
  *     so "the task settled" is not proof of delivery.
- *  2. The installed WhatsApp adapter splits long text (and multi-attachment messages) into
- *     SEVERAL Meta API calls and only returns the LAST id, so wrapping `postMessage` would miss
- *     every earlier chunk.
+ *  2. The adapter splits long text (and multi-attachment messages) into SEVERAL Meta API calls
+ *     and returns only the LAST id, so wrapping `postMessage` would miss earlier chunks.
  *
- * The adapter sends through the global `fetch`, so a per-message tracking scope records each
- * physical `/messages` response (success id or failure). Completion then requires that no send
- * failed and at least one carried a provider id.
+ * The adapter sends through the global `fetch`, so a per-message scope records each physical
+ * `/messages` payload (success id or failure). Reply text is buffered during the run and flushed
+ * INSIDE the same scope, so every chunk of the final answer is still observed.
  */
 export type OutboundSend =
   | { success: true; providerMessageId: string | null; content: string }
@@ -23,7 +23,10 @@ export type SendOutcome = "full" | "partial" | "failed";
 /** A send Meta accepted, with the provider id needed to track delivery later. */
 export type ConfirmedSend = { wamid: string; content: string };
 
-type Scope = { sends: OutboundSend[] };
+type BufferedText = { threadId: string; text: string };
+type BufferedFlusher = (threadId: string, text: string) => Promise<string | null>;
+
+type Scope = { sends: OutboundSend[]; buffered: BufferedText[]; flusher: BufferedFlusher | null };
 
 const storage = new AsyncLocalStorage<Scope>();
 
@@ -36,10 +39,35 @@ export function recordOutboundSend(send: OutboundSend): void {
   storage.getStore()?.sends.push(send);
 }
 
+/** Hold reply text until the whole run finishes (Mastra's static driver flushes per step). */
+export function bufferOutboundText(threadId: string, text: string): void {
+  const scope = storage.getStore();
+  if (scope && text.trim() !== "") scope.buffered.push({ threadId, text });
+}
+
 /**
- * Every accepted send with a provider id — not just the last. Streaming replies and chunked text
- * produce several WhatsApp messages, and each one needs its own delivery tracking.
+ * Register how the buffered reply should be sent. The wrapper binds this to the SPECIFIC adapter
+ * instance that produced the text, so concurrent runs cannot route a reply through another
+ * sender (no process-global adapter reference).
  */
+export function setBufferedFlusher(flusher: BufferedFlusher): void {
+  const scope = storage.getStore();
+  if (scope) scope.flusher = flusher;
+}
+
+/**
+ * Send the run's final reply exactly once. MUST be called inside the tracking scope so the
+ * resulting physical sends (the adapter may split a long answer) are recorded, not just the last.
+ */
+export async function flushBufferedReply(): Promise<string | null> {
+  const scope = storage.getStore();
+  if (!scope || !scope.flusher) return null;
+  const last = scope.buffered.at(-1);
+  if (!last) return null;
+  return scope.flusher(last.threadId, last.text);
+}
+
+/** Every accepted send with a provider id — not just the last. */
 export function confirmedSends(sends: OutboundSend[]): ConfirmedSend[] {
   const confirmed: ConfirmedSend[] = [];
   for (const send of sends) {
@@ -50,10 +78,7 @@ export function confirmedSends(sends: OutboundSend[]): ConfirmedSend[] {
   return confirmed;
 }
 
-/**
- * A reply is only "full" when every physical send Meta accepted carried an id and none failed.
- * "partial" means the customer received some but not all of it, which must never look complete.
- */
+/** A reply is only "full" when every physical send carried an id and none failed. */
 export function sendOutcome(sends: OutboundSend[]): SendOutcome {
   const confirmed = confirmedSends(sends);
   const failures = sends.filter((send) => send.success === false);
@@ -64,7 +89,7 @@ export function sendOutcome(sends: OutboundSend[]): SendOutcome {
 export async function runWithOutboundTracking<T>(
   fn: () => Promise<T>,
 ): Promise<{ result: T; sends: OutboundSend[] }> {
-  const scope: Scope = { sends: [] };
+  const scope: Scope = { sends: [], buffered: [], flusher: null };
   const result = await storage.run(scope, fn);
   return { result, sends: scope.sends };
 }

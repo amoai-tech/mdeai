@@ -1,11 +1,14 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  bufferOutboundText,
   confirmedSends,
+  flushBufferedReply,
   installWhatsAppSendInterceptor,
   isTrackingOutbound,
   recordOutboundSend,
   runWithOutboundTracking,
   sendOutcome,
+  setBufferedFlusher,
 } from "../outbound-tracker";
 
 // Install once, over a body-driven mock: the interceptor captures global fetch at install time.
@@ -125,6 +128,35 @@ describe("outbound tracker", () => {
     expect(b.sends).toHaveLength(3);
     expect(a.sends.every((s) => s.success === true && s.content.startsWith("A-"))).toBe(true);
     expect(b.sends.every((s) => s.success === true && s.content.startsWith("B-"))).toBe(true);
+  });
+
+  it("records every physical chunk when the flush runs inside the scope", async () => {
+    const { sends } = await runWithOutboundTracking(async () => {
+      bufferOutboundText("thread", "x".repeat(5000));
+      setBufferedFlusher(async () => {
+        // The real adapter splits a long reply into several Meta calls and returns the last id.
+        await metaSend("chunk one");
+        await metaSend("chunk two");
+        return "wamid.last";
+      });
+      await flushBufferedReply();
+    });
+    expect(confirmedSends(sends)).toHaveLength(2);
+    expect(sendOutcome(sends)).toBe("full");
+  });
+
+  it("treats a failed chunk of a split reply as partial, never full", async () => {
+    const { sends } = await runWithOutboundTracking(async () => {
+      bufferOutboundText("thread", "x".repeat(5000));
+      setBufferedFlusher(async () => {
+        await metaSend("chunk one");
+        await metaSend("fail chunk");
+        return "wamid.last";
+      });
+      await flushBufferedReply();
+    });
+    expect(sendOutcome(sends)).toBe("partial");
+    expect(confirmedSends(sends)).toHaveLength(1);
   });
 
   it("does not leak sends between scopes", async () => {
