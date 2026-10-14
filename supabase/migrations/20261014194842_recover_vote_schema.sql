@@ -18,6 +18,51 @@
 
 set check_function_bodies = false;
 set search_path = public, extensions;
+
+-- ── Preflight: verify an existing vote schema matches the recovered baseline ──────
+-- On a fresh database the schema is absent, so this returns early and the objects are
+-- created below. On production (or anywhere vote already exists) it validates every
+-- table's columns and types, the three helpers and both triggers, and raises with a
+-- precise message on drift instead of silently skipping or overwriting. vector types
+-- are compared without their schema prefix (public vs extensions drift).
+do $$
+declare
+  expected jsonb := '{"votes": ["contest_id:uuid", "country:text", "created_at:timestamp with time zone", "device_hash:text", "entity_id:uuid", "fraud_score:numeric(4,3)", "fraud_status:text", "id:uuid", "idempotency_key:text", "ip_hash:text", "source:text", "user_agent:text", "voter_anon_id:text", "voter_user_id:uuid", "weight:numeric(6,3)"], "judges": ["contest_id:uuid", "invited_at:timestamp with time zone", "user_id:uuid", "weight:numeric(4,2)"], "contests": ["cover_url:text", "created_at:timestamp with time zone", "description:text", "ends_at:timestamp with time zone", "event_id:uuid", "free_votes_per_user_per_day:integer", "id:uuid", "judge_weight_pct:integer", "kind:text", "org_id:uuid", "paid_votes_enabled:boolean", "scoring_formula:jsonb", "slug:text", "starts_at:timestamp with time zone", "status:text", "title:text", "updated_at:timestamp with time zone"], "entities": ["ai_flag_override_by:uuid", "ai_flag_override_note:text", "ai_moderation_at:timestamp with time zone", "ai_moderation_categories:text[]", "ai_moderation_status:text", "approved:boolean", "bio:text", "category_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "created_by_user_id:uuid", "display_name:text", "embedding:vector(768)", "hero_url:text", "id:uuid", "id_back_url:text", "id_front_url:text", "identity_verified_at:timestamp with time zone", "media:jsonb", "rejection_reason:text", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "slug:text", "socials:jsonb", "submitted_at:timestamp with time zone", "updated_at:timestamp with time zone", "waiver_url:text"], "categories": ["contest_id:uuid", "id:uuid", "position:integer", "slug:text", "title:text"], "entity_tally": ["audience_votes:bigint", "contest_id:uuid", "entity_id:uuid", "judge_score:numeric(8,3)", "paid_votes:bigint", "rank:integer", "trend_24h:numeric(8,3)", "updated_at:timestamp with time zone", "weighted_total:numeric(12,3)"], "judge_scores": ["ai_assist_score:numeric(5,2)", "comment:text", "contest_id:uuid", "created_at:timestamp with time zone", "criterion_id:uuid", "entity_id:uuid", "judge_id:uuid", "score:numeric(5,2)", "updated_at:timestamp with time zone"], "fraud_signals": ["ai_label:text", "ai_reason:text", "created_at:timestamp with time zone", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "rules_hit:text[]", "vote_id:uuid"], "paid_vote_orders": ["amount_cents:integer", "buyer_user_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "currency:text", "entity_id:uuid", "id:uuid", "status:text", "stripe_session_id:text", "updated_at:timestamp with time zone", "votes_credited:integer", "votes_purchased:integer"], "scoring_criteria": ["contest_id:uuid", "id:uuid", "key:text", "label:text", "max_score:integer", "weight_pct:integer"]}'::jsonb;
+  k text;
+  v jsonb;
+  actual jsonb;
+begin
+  if to_regclass('vote.contests') is null then
+    return;
+  end if;
+
+  for k, v in select key, value from jsonb_each(expected) loop
+    if to_regclass('vote.' || k) is null then
+      raise exception 'SAN-1482 preflight: vote.% is missing while the vote schema exists', k;
+    end if;
+    select jsonb_agg(a.attname || ':' || replace(replace(format_type(a.atttypid, a.atttypmod), 'extensions.', ''), 'public.', '') order by a.attname)
+      into actual
+      from pg_attribute a
+     where a.attrelid = ('vote.' || k)::regclass and a.attnum > 0 and not a.attisdropped;
+    if not (v @> actual and actual @> v) then
+      raise exception 'SAN-1482 preflight: vote.% columns/types differ from the recovered baseline. expected=%, found=%', k, v, actual;
+    end if;
+  end loop;
+
+  if to_regprocedure('vote.recompute_entity_tally(uuid)') is null
+     or to_regprocedure('vote.trigger_recompute_on_vote()') is null
+     or to_regprocedure('vote.trigger_recompute_on_judge_score()') is null then
+    raise exception 'SAN-1482 preflight: one or more vote helpers are missing while the vote schema exists';
+  end if;
+  if (select count(*) from pg_proc p where p.pronamespace = 'vote'::regnamespace and p.prosecdef) < 3 then
+    raise exception 'SAN-1482 preflight: expected three SECURITY DEFINER helpers in vote';
+  end if;
+  if (select count(*) from pg_trigger tg where not tg.tgisinternal
+        and tg.tgfoid in (to_regprocedure('vote.trigger_recompute_on_vote()'), to_regprocedure('vote.trigger_recompute_on_judge_score()'))) < 2 then
+    raise exception 'SAN-1482 preflight: the two tally triggers are not both bound';
+  end if;
+end $$;
+
 CREATE SCHEMA IF NOT EXISTS "vote";
 
 
