@@ -1,18 +1,30 @@
 /**
  * Meta WhatsApp Cloud API webhook (SAN-1444).
  *
- * The installed Mastra WhatsApp adapter owns the GET verification challenge and POST
- * X-Hub-Signature-256 check. MDE runs Mastra in-process (see src/app/api/copilotkit), so this
- * route is the actual reachable ingress; it delegates to the adapter rather than reimplementing
- * transport. The MDE-side signature check runs first so future durable work is never recorded
- * from an unverified payload.
+ * GET  — the adapter owns the hub.challenge handshake.
+ * POST — verify the raw-body signature, then DURABLY RECORD every inbound message before
+ *        acknowledging. If the record fails we return 500 and let Meta retry, so an
+ *        acknowledged message is always recoverable. Processing is claimed atomically and
+ *        runs after the response; a crash leaves the row pending for the sweeper.
  *
  * Unconfigured (no WHATSAPP_* env) returns 503 and constructs nothing.
  */
 import { after, NextResponse, type NextRequest } from "next/server";
 import { mastra } from "@/mastra";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
-import { MAX_WEBHOOK_BYTES, readBodyWithLimit, verifyMetaSignature } from "@/lib/whatsapp/webhook-security";
+import {
+  extractInboundMessages,
+  recordInboundMessage,
+  type InboundRpcClient,
+} from "@/lib/whatsapp/inbound-store";
+import { processDueInbound } from "@/lib/whatsapp/process-inbound";
+import {
+  MAX_WEBHOOK_BYTES,
+  readBodyWithLimit,
+  signWebhookBody,
+  verifyMetaSignature,
+} from "@/lib/whatsapp/webhook-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,10 +38,7 @@ function whatsappChannels() {
 }
 
 function unavailable() {
-  return NextResponse.json(
-    { error: "WhatsApp channel is not configured" },
-    { status: 503 },
-  );
+  return NextResponse.json({ error: "WhatsApp channel is not configured" }, { status: 503 });
 }
 
 export async function GET(request: NextRequest) {
@@ -48,6 +57,7 @@ export async function POST(request: NextRequest) {
   if (!env) return unavailable();
   const channels = whatsappChannels();
   if (!channels) return unavailable();
+
   const limited = await readBodyWithLimit(request.clone(), MAX_WEBHOOK_BYTES);
   if (!limited.ok) {
     const tooLarge = limited.reason === "too_large";
@@ -58,9 +68,47 @@ export async function POST(request: NextRequest) {
   if (!verifyMetaSignature(limited.body, request.headers.get("x-hub-signature-256"), env.appSecret)) {
     return new NextResponse("Invalid signature", { status: 401 });
   }
-  return await channels.handleWebhookEvent("whatsapp", request, {
-    waitUntil: (promise) => {
-      after(() => promise);
-    },
-  });
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(limited.body);
+  } catch {
+    return new NextResponse("Invalid JSON", { status: 400 });
+  }
+
+  const messages = extractInboundMessages(parsed);
+  if (messages.length === 0) {
+    // Nothing actionable (e.g. a status-only payload): acknowledge so Meta stops retrying.
+    return NextResponse.json({ received: 0, duplicates: 0 });
+  }
+
+  const client = createServiceRoleClient();
+  if (!client) return unavailable();
+  const rpcClient = client as unknown as InboundRpcClient;
+
+  let received = 0;
+  let duplicates = 0;
+  try {
+    for (const message of messages) {
+      const result = await recordInboundMessage(rpcClient, message);
+      if (result.isNew) received += 1;
+      else duplicates += 1;
+    }
+  } catch (error) {
+    // The message is NOT durably recorded: do not acknowledge, let Meta retry.
+    console.error("[whatsapp] durable inbound record failed", error);
+    return new NextResponse("Could not durably record the message", { status: 500 });
+  }
+
+  after(() =>
+    processDueInbound({
+      client: rpcClient,
+      webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
+      sign: (body) => signWebhookBody(body, env.appSecret),
+      adapterWebhook: (req) => channels.handleWebhookEvent("whatsapp", req),
+      workerId: "webhook:" + crypto.randomUUID(),
+    }).catch((error) => console.error("[whatsapp] inbound processing failed", error)),
+  );
+
+  return NextResponse.json({ received, duplicates });
 }

@@ -25,6 +25,14 @@ export function verifyMetaSignature(
   return timingSafeEqual(given, want);
 }
 
+/**
+ * Sign a body with the Meta app secret. Used only to replay an ALREADY-verified stored message
+ * back through the adapter; never to accept an untrusted request.
+ */
+export function signWebhookBody(rawBody: string, appSecret: string): string {
+  return "sha256=" + createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
+}
+
 /** Meta's one-time GET handshake. Returns the challenge to echo, or null to refuse. */
 export function resolveVerificationChallenge(url: URL, verifyToken: string): string | null {
   if (url.searchParams.get("hub.mode") !== "subscribe") return null;
