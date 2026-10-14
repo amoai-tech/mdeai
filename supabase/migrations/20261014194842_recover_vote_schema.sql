@@ -44,7 +44,7 @@ begin
     if to_regclass('vote.' || k) is null then
       raise exception 'SAN-1482 preflight: vote.% is missing while the vote schema exists', k;
     end if;
-    select jsonb_agg(a.attname || ':' || replace(replace(format_type(a.atttypid, a.atttypmod), 'extensions.', ''), 'public.', ''))
+    select jsonb_agg(a.attname || ':' || replace(replace(format_type(a.atttypid, a.atttypmod), 'extensions.', ''), 'public.', '') order by a.attname)
       into actual
       from pg_attribute a
      where a.attrelid = ('vote.' || k)::regclass and a.attnum > 0 and not a.attisdropped;
