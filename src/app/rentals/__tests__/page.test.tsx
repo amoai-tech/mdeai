@@ -24,6 +24,9 @@ type ViewProps = {
   error: string | null;
   neighborhood: string | null;
   beds: string | null;
+  from?: string | null;
+  through?: string | null;
+  dateError?: string | null;
   maxPrice?: unknown;
 };
 
@@ -68,6 +71,34 @@ describe("/rentals page", () => {
     expect(props.error).toMatch(/temporarily unavailable/i);
     const logged = vi.mocked(console.error).mock.calls.flat().map(String).join(" | ");
     expect(logged).not.toContain("db.prod.internal");
+  });
+
+  describe("From/Through dates in the URL (SAN-486)", () => {
+    it("forwards a real stay to the search as checkIn/checkOut and echoes it to the view", async () => {
+      searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+      const props = await render({ from: "2026-11-01", through: "2026-11-30", neighborhood: "Laureles" });
+      expect(searchRentals).toHaveBeenCalledWith(expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30", neighborhood: "Laureles" }));
+      expect(props).toMatchObject({ from: "2026-11-01", through: "2026-11-30", dateError: null });
+    });
+
+    it.each([
+      ["an impossible date", { from: "2026-02-31" }],
+      ["a reversed stay", { from: "2026-11-30", through: "2026-11-01" }],
+    ])("fails closed on %s: shows the message and runs no search", async (_why, params) => {
+      const props = await render(params);
+      expect(searchRentals).not.toHaveBeenCalled();
+      expect(props.dateError).toMatch(/./);
+      expect(props.results).toEqual([]);
+      expect(props.error).toBeNull(); // a date problem is not an outage
+    });
+
+    it("without dates the search carries no date filter", async () => {
+      searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+      await render({ neighborhood: "Envigado" });
+      const call = searchRentals.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(call.checkIn).toBeUndefined();
+      expect(call.checkOut).toBeUndefined();
+    });
   });
 });
 

@@ -216,10 +216,10 @@ const mapsHrefFor = (detail: RentalDetail): string | null => {
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function RentalDetailView({ detail }: { detail: RentalDetail }) {
+export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
   return (
     <RentalUiProvider>
-      <RentalDetailInner detail={detail} />
+      <RentalDetailInner detail={detail} backHref={backHref} />
       <ScheduleViewingModal />
     </RentalUiProvider>
   );
@@ -257,7 +257,7 @@ function RentalDescription({ description }: { description?: string | null }) {
 }
 
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
-function RentalDetailInner({ detail }: { detail: RentalDetail }) {
+function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
   const { openScheduleViewing } = useRentalUi();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
@@ -270,7 +270,7 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
       {/* A saved viewing request must be visible where it was made, not only in the chat. */}
       <LeadConfirmationBanner />
       <Link
-        href={detail.status === "development-preview" ? "/dev/rentals" : "/rentals"}
+        href={detail.status === "development-preview" ? "/dev/rentals" : backHref}
         data-testid="rental-detail-back"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
