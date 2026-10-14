@@ -77,7 +77,8 @@ function requestUrl(input: RequestInfo | URL): string {
 
 /** A physical outbound message: the Meta messages endpoint with a WhatsApp payload. */
 function isWhatsAppSend(url: string, body: string): boolean {
-  return /\/messages(\?|$)/.test(url) && body.includes("messaging_product");
+  const path = url.split("?")[0];
+  return path.endsWith("/messages") && body.includes("messaging_product");
 }
 
 function replyText(body: string): string {
