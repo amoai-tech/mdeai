@@ -15,6 +15,8 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
 import {
   extractInboundMessages,
+  extractWhatsAppStatuses,
+  recordDeliveryStatus,
   recordInboundMessage,
   type InboundRpcClient,
 } from "@/lib/whatsapp/inbound-store";
@@ -78,15 +80,27 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Invalid JSON", { status: 400 });
   }
 
-  const messages = extractInboundMessages(parsed);
-  if (messages.length === 0) {
-    // Nothing actionable (e.g. a status-only payload): acknowledge so Meta stops retrying.
-    return NextResponse.json({ received: 0, duplicates: 0 });
-  }
-
   const client = createServiceRoleClient();
   if (!client) return unavailable();
   const rpcClient = client as unknown as InboundRpcClient;
+
+  // Delivery callbacks are receipts, not messages: persist them before acknowledging and never
+  // run the agent for a status-only webhook.
+  const statuses = extractWhatsAppStatuses(parsed);
+  if (statuses.length > 0) {
+    try {
+      for (const event of statuses) await recordDeliveryStatus(rpcClient, event);
+    } catch (error) {
+      console.error("[whatsapp] delivery status persist failed", error);
+      return new NextResponse("Could not persist delivery status", { status: 500 });
+    }
+  }
+
+  const messages = extractInboundMessages(parsed);
+  if (messages.length === 0) {
+    // Nothing actionable (e.g. a status-only payload): acknowledge so Meta stops retrying.
+    return NextResponse.json({ statuses: statuses.length, received: 0, duplicates: 0 });
+  }
 
   let received = 0;
   let duplicates = 0;

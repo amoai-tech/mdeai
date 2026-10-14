@@ -125,3 +125,14 @@ These do not block merging the durable foundation; they block turning the channe
 4. **Delivery truth.** Completion is now gated on a confirmed send (the provider message id is captured in-process). Remaining: **persist** the outbound provider id and the `sent`/`delivered`/`read`/`failed` statuses so delivery is auditable.
 5. **Authorization.** Prove a WhatsApp user without an MDE account cannot read private data or trigger consequential actions (viewings, bookings).
 6. **Real device round trip.** One signed inbound message ⇒ one durable row ⇒ one grounded reply ⇒ valid `wamid` ⇒ receipt, with no fabricated prices, availability, or coordinates.
+
+## 14. Outbound sends and delivery status (delivery tracking)
+Reuses `public.whatsapp_messages`: the outbound `wamid` is the existing unique `external_id`, and the existing status check already allows `pending/sent/delivered/read/failed`. Two columns were added: `inbound_message_id` (links an outbound row to its inbound message) and `delivery_status_at`.
+
+- **One transaction for send + completion.** `whatsapp_complete_inbound_with_sends(p_message_id, p_claim_token, p_sends)` is fenced on the claim token, inserts one outbound row per confirmed send (status `sent`, linked to the inbound row), and marks the inbound row `processed` in the same transaction. It returns the number of sends recorded; `0` means the claim was fenced or nothing was sent, so the caller must not treat the message as answered.
+- **Status is monotonic.** `whatsapp_record_delivery_status(p_external_id, p_status, p_status_at, p_error)` upserts by wamid and never regresses (`read → delivered`/`sent` is ignored). Duplicates are idempotent; a `failed` status keeps its diagnostic.
+- **Early callbacks are not discarded.** A status callback that arrives before the outbound row exists creates a placeholder row keyed by the wamid; the send RPC later enriches it (phone, content, inbound link) without downgrading its status.
+- **The webhook never runs the agent for a receipt.** After signature verification, `extractWhatsAppStatuses` persists every `statuses[]` event (across all entries/changes) and a status-only payload is acknowledged without processing. A payload carrying both statuses and messages persists the statuses first, then records the messages.
+- **Privileges.** All three RPCs and the `whatsapp_status_rank` helper have EXECUTE revoked from `public`/`anon`/`authenticated` and granted to `service_role`; the helper pins `search_path = ''` (required by the SAN-1331 advisor gate).
+
+Verified: `supabase db reset --local` clean replay; pgTAP `Result: PASS` (40 files / 1175 tests) including a 24-assertion delivery suite; two-connection concurrency PASS.
