@@ -25,6 +25,10 @@ describe.each([
     expect(text).not.toMatch(/ask first/i);
     expect(text).not.toMatch(/What dates, budget, and setup are you looking for/i);
     expect(text).not.toMatch(/send exactly ONE grouped clarification, then search/i);
+    // No rule may route a rental message to a clarification before the search.
+    expect(text).not.toMatch(/grouped clarification/i);
+    expect(text).not.toMatch(/clarification (?:before|first)/i);
+    expect(text).not.toMatch(/ask (?:the user|them|one|a) [^.\n]{0,60}before (?:you )?(?:call|search)/i);
   });
 
   it("searches with the renter's own words, then offers one optional refinement after the results", async () => {
@@ -32,6 +36,6 @@ describe.each([
     expect(text).toMatch(/still call search-rentals immediately/i);
     expect(text).toMatch(/nothing they did not say/i);
     expect(text).toMatch(/only AFTER the results/i);
-    expect(text).toMatch(/Never ask before searching|Never block a search/i);
+    expect(text).toMatch(/Never ask before searching/i); // exact rule, not an alternative that a contradictory prompt could also satisfy
   });
 });
