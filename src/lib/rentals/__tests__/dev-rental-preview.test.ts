@@ -150,6 +150,7 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-host": "preview.example.com" }))).toBe(false);
     expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-real-ip": "203.0.113.9" }))).toBe(false);
     expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "cf-connecting-ip": "203.0.113.9" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "cf-ray": "8a1b2c3d4e5f6a7b-SJC" }))).toBe(false);
     expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ forwarded: "for=203.0.113.9" }))).toBe(false);
     // A non-local Host is refused with or without forwarding headers.
     expect(isLocalPreviewRequest("evil.example.com", headerLookup({}))).toBe(false);

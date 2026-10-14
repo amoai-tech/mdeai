@@ -97,7 +97,7 @@ const formatStep = createStep({
       id: r.id,
       headline: r.title,
       subline: `${r.neighborhood} · ${
-        r.bedrooms == null ? 'bedrooms unknown' : r.bedrooms === 0 ? 'studio' : `${r.bedrooms}BR`
+        r.bedrooms == null ? 'Bedrooms unknown' : r.bedrooms === 0 ? 'studio' : `${r.bedrooms}BR`
       } · host ${r.host_name}`,
       priceLabel: `$${r.nightly_price}/night`,
       imageUrl: r.image,

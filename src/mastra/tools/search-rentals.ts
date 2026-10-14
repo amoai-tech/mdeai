@@ -289,8 +289,9 @@ export function rowToRental(r: ApartmentRow): Rental {
     neighborhood: r.neighborhood,
     nightly_price: nightlyPrice,
     currency: (r.currency ?? 'USD').toUpperCase(),
-    // Preserve an unknown bedroom count as null: 0 would render as a false "Studio".
-    bedrooms: r.bedrooms ?? null,
+    // Production keeps its existing contract (unknown -> 0). Only the dev preview
+    // opts into null so it can say "Bedrooms unknown" instead of a false "Studio".
+    bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
     image: (r.images ?? [])[0] ?? '',

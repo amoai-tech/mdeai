@@ -39,9 +39,11 @@ The preview serves unverified research photos, so it is guarded in depth and fai
 1. The flag is server-only and **requires** `NODE_ENV=development`; `production` builds cannot enable
    it even if the flag is set.
 2. The `Host` header must be loopback (`127.0.0.1`, `localhost`, `::1`).
-3. A request that carries proxy/tunnel forwarding headers (`x-forwarded-for`, `x-forwarded-host`,
-   `x-forwarded-proto`, `x-real-ip`, `forwarded`, `cf-connecting-ip`, `cf-ray`) is refused even when
-   its `Host` looks local.
+3. The proxy/tunnel forwarding values `x-forwarded-for`, `x-forwarded-host`, `x-real-ip`,
+   `forwarded`, `cf-connecting-ip` and `cf-ray` must all resolve to loopback. Next dev fills
+   `x-forwarded-*` with the loopback peer, so local use passes; a tunnel that forwards the real
+   client address or public host is refused even when its `Host` looks local. (`x-forwarded-proto`
+   is not used as a signal: Next dev sets it to `http` on every request.)
 
 That combination blocks LAN access and tunnels, but it is deliberately a development boundary, not
 authentication. Never expose the server on a publicly accessible dev host, and do not treat it as a

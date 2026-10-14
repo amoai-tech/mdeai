@@ -91,9 +91,14 @@ const FORWARDING_HEADERS = [
   "x-real-ip",
   "forwarded",
   "cf-connecting-ip",
+  "cf-ray",
 ] as const;
 
-type HeaderLookup = { get(name: string): string | null };
+/**
+ * Only the standard `get` is needed, so this stays framework-agnostic and mockable
+ * while still matching Next's `ReadonlyHeaders`.
+ */
+type HeaderLookup = Pick<Headers, "get">;
 
 const LOOPBACK_NAMES = new Set(["127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1", "[::1]"]);
 
