@@ -19,19 +19,28 @@ function selfAttestedPublishFailure(
   message: string,
   code?: string,
 ): Extract<RunSelfAttestedPublishResult, { ok: false }> {
-  if (code === "42501" || /authentication required|not authorized to publish/i.test(message)) {
+  // Literal substring checks, not regexes. Codacy flags a regex over an untrusted
+  // message as a possible ReDoS; these markers need no pattern matching.
+  const text = message.toLowerCase();
+  if (
+    code === "42501" ||
+    text.includes("authentication required") ||
+    text.includes("not authorized to publish")
+  ) {
     return { ok: false, message, status: 403 };
   }
-  if (code === "P0002" || /apartment .* not found/i.test(message)) {
+  if (code === "P0002" || (text.includes("apartment") && text.includes("not found"))) {
     return { ok: false, message, status: 404 };
   }
   if (
     code === "check_violation" ||
-    /self-attestation required|not self-attestation-ready|rejected listings/i.test(message)
+    text.includes("self-attestation required") ||
+    text.includes("not self-attestation-ready") ||
+    text.includes("rejected listings")
   ) {
     return { ok: false, message, status: 400 };
   }
-  if (/unexpected payload|Failed to map publish transition/i.test(message)) {
+  if (text.includes("unexpected payload") || text.includes("failed to map publish transition")) {
     return { ok: false, message, status: 500 };
   }
   return { ok: false, message, status: 500 };
