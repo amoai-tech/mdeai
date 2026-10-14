@@ -282,6 +282,26 @@ test("fails when a retired skill reappears", () => {
   }
 });
 
+test("the canonical Codacy skill and its Codex mirror remain usable", () => {
+  // Literal repository paths avoid introducing another dynamic-path scanner
+  // finding. The generic checker additionally validates every mirrored entry.
+  const skill = fs.readFileSync(".claude/skills/codacy/SKILL.md", "utf8");
+  assert.match(skill, /^name: codacy$/m);
+  assert.match(skill, /\]\(references\/operations\.md\)/);
+
+  const operations = fs.readFileSync(".claude/skills/codacy/references/operations.md", "utf8");
+  assert.match(operations, /^# Codacy on-demand operations$/m);
+
+  assert.equal(
+    fs.readlinkSync(".agents/skills/codacy/SKILL.md"),
+    "../../../.claude/skills/codacy/SKILL.md",
+  );
+  assert.equal(
+    fs.readlinkSync(".agents/skills/codacy/references"),
+    "../../../.claude/skills/codacy/references",
+  );
+});
+
 test("the committed repository passes", () => {
   const result = runChecker(REPO_ROOT);
   assert.equal(
