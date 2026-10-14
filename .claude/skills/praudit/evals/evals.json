@@ -1,0 +1,42 @@
+{
+  "skill_name": "praudit",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit the exact current head of PR #258 before merge. Read comments, linked Linear scope, failing checks, security and retries. Do not change code.",
+      "expected_output": "Reports exact head and base; classifies reviewed defects with evidence and states a merge/block verdict without editing.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Reports exact head and base; classifies reviewed defects with evidence and states a merge/block verdict without editing."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The PR modifies Supabase ownership rules. Verify whether it is merge-ready without trusting existing resolved comments.",
+      "expected_output": "Checks RLS and unauthorized cases, unresolved reviews, exact CI head and avoids self-certification.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Checks RLS and unauthorized cases, unresolved reviews, exact CI head and avoids self-certification."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review this payments webhook PR for merging today; include replay/idempotency and production config parity.",
+      "expected_output": "Rejects merge until critical payment security and replay proofs are shown.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Rejects merge until critical payment security and replay proofs are shown."
+      ]
+    }
+  ]
+}

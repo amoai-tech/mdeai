@@ -1,0 +1,38 @@
+[
+  {
+    "id": "implement-1",
+    "prompt": "Implement the agreed bug fix in the existing chat component and run focused tests.",
+    "should_trigger": true,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "implement-2",
+    "prompt": "Build the approved search improvement reusing existing rental filters.",
+    "should_trigger": true,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "implement-3",
+    "prompt": "Please complete this small scoped UI fix now and verify it.",
+    "should_trigger": true,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "implement-4",
+    "prompt": "Design an implementation plan without changing files.",
+    "should_trigger": false,
+    "expected_owner": "plan"
+  },
+  {
+    "id": "implement-5",
+    "prompt": "Explain the existing code without editing it.",
+    "should_trigger": false,
+    "expected_owner": "direct"
+  },
+  {
+    "id": "implement-6",
+    "prompt": "Find why our build is failing; root cause is unknown.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  }
+]
