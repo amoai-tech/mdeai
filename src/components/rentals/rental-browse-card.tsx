@@ -145,7 +145,7 @@ export function RentalBrowseCard({
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
   const externalSourceUrl =
-    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") && /^https:\/\/www\.fincaraiz\.com\.co\//i.test(rental.source_url)
+    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
       ? rental.source_url
       : null;
   const preview = () => (onPreview ?? onSelect)?.();

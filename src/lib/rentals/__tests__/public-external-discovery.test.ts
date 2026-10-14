@@ -1,5 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { publicExternalRentalCard } from "../public-external-discovery";
+import { describe, expect, it, vi } from "vitest";
+const searchMock = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceRoleClient: () => ({
+    from: () => {
+      const result = { data: searchMock.rows, error: null };
+      const query = {
+        select: () => query,
+        in: () => query,
+        eq: () => query,
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
+      };
+      return query;
+    },
+  }),
+}));
+
+import { publicExternalRentalCard, searchPublicExternalRentals } from "../public-external-discovery";
 
 const base = {
   landlord_id: "a4da05ae-347e-4250-8ae0-83812ccc7703",
@@ -15,6 +31,7 @@ const base = {
   longitude: -75.5864818,
   available_from: "2026-10-14",
   available_to: null,
+  images: [],
   metadata: {
     inventory_kind: "external_candidate",
     allowed_action: "view_original_listing",
@@ -43,6 +60,25 @@ describe("public external source cards", () => {
     expect(publicExternalRentalCard({ ...base, landlord_id: "another-profile" })).toBeNull();
   });
 
+  it("displays a public listing-photo URL, not arbitrary or private Storage media", () => {
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      const photo = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-01.webp";
+      expect(publicExternalRentalCard({ ...base, images: [photo] })?.image).toBe(photo);
+      expect(publicExternalRentalCard({ ...base, images: ["https://example.net/other.webp"] })?.image).toBe("");
+      expect(publicExternalRentalCard({ ...base, images: ["https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/partner-assets/foo.webp"] })?.image).toBe("");
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
+  it("accepts Fincaraíz source links without the www subdomain", () => {
+    const result = publicExternalRentalCard({ ...base, source_url: "https://fincaraiz.com.co/apartamento/193916988" });
+    expect(result?.source_url).toContain("https://fincaraiz.com.co/");
+  });
+
   it("omits uncertain and street-interpolated map pins", () => {
     const approximate = publicExternalRentalCard({
       ...base,
@@ -57,5 +93,22 @@ describe("public external source cards", () => {
   it("rejects invalid prices without defaulting to a fake rental price", () => {
     expect(publicExternalRentalCard({ ...base, price_monthly: null })).toBeNull();
     expect(publicExternalRentalCard({ ...base, currency: "USD" })).toBeNull();
+  });
+});
+
+describe("public external rental search date filtering", () => {
+  it("filters using the native DATE column, not a sliced display label", async () => {
+    searchMock.rows = [{ ...base }];
+    const tooEarly = await searchPublicExternalRentals({ checkOut: "2026-10-13", limit: 9 });
+    expect(tooEarly).toHaveLength(0);
+    const eligible = await searchPublicExternalRentals({ checkOut: "2026-10-15", limit: 9 });
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]?.availability).toContain("Available from 2026-10-14");
+  });
+
+  it("does not claim past dates when a source end date is recorded", async () => {
+    searchMock.rows = [{ ...base, available_to: "2026-10-31" }];
+    expect(await searchPublicExternalRentals({ checkIn: "2026-11-01", limit: 9 })).toHaveLength(0);
+    expect(await searchPublicExternalRentals({ checkIn: "2026-10-30", limit: 9 })).toHaveLength(1);
   });
 });

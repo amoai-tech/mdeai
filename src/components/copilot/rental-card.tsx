@@ -227,7 +227,7 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
-        {tags?.includes("external-source") && source_url?.startsWith("https://www.fincaraiz.com.co/") ? (
+        {tags?.includes("external-source") && source_url && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(source_url) ? (
           <a
             href={source_url}
             target="_blank"
