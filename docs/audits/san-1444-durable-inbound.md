@@ -76,7 +76,15 @@ Adding this schedule changes the cron manifest that `san1313b_pg_cron_schedule_r
 
 ## 8. Rollback
 - The route returns 503 when `WHATSAPP_*` is absent, so removing the env vars disables the channel without a deploy.
-- To drop the schema change: `drop function` the four RPCs, then `alter table public.whatsapp_messages drop column` the processing columns. Do this only after confirming no rows are in `processing`/`failed`.
+- If an approved schema rollback is necessary, first stop inbound processing and the recovery schedule, reconcile or preserve any unprocessed rows (`pending`/`processing`/`failed`/`dead`), and back up needed processing history. Drop **all five RPCs** using their exact signatures, before removing the processing columns:
+```sql
+drop function if exists public.whatsapp_record_inbound(text, text, text, text, jsonb);
+drop function if exists public.whatsapp_claim_inbound(text, integer, integer, integer);
+drop function if exists public.whatsapp_dead_letter_inbound(integer, integer);
+drop function if exists public.whatsapp_complete_inbound(uuid, uuid);
+drop function if exists public.whatsapp_fail_inbound(uuid, uuid, text, integer, integer);
+```
+- Only then, in a separately reviewed rollback migration, remove the eight processing columns (`processing_status`, `attempts`, `claimed_at`, `claimed_by`, `claim_token`, `next_attempt_at`, `processed_at`, `last_error`) and their associated index/constraint. Do not use `CASCADE` to bypass unexpected dependencies.
 - Never run `supabase db reset --linked` or `db push` against production as a rollback.
 
 ## 9. Production verification checklist
