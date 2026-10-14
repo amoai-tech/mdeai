@@ -75,7 +75,7 @@ export async function GET() {
     const { data: fixtures, error: fixtureError } = await supabase
       .from("apartments")
       .select(columns)
-      .contains("metadata", { is_test_fixture: true })
+      .eq("metadata->>is_test_fixture", "true")
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
     if (fixtureError) return NextResponse.json({ error: fixtureError.message }, { status: 500 });
@@ -89,10 +89,14 @@ export async function GET() {
   for (const id of testIds) counts[id] = { leads: 0, showings: 0 };
 
   if (testIds.length) {
-    const [{ data: leads }, { data: showings }] = await Promise.all([
+    const [{ data: leads, error: leadsError }, { data: showings, error: showingsError }] = await Promise.all([
       supabase.from("leads").select("apartment_id").in("apartment_id", testIds),
       supabase.from("showings").select("apartment_id").in("apartment_id", testIds),
     ]);
+    if (leadsError || showingsError) {
+      // Never show fabricated zero counts when the database is unavailable.
+      return NextResponse.json({ error: "Could not load test viewing counts." }, { status: 500 });
+    }
     for (const row of leads ?? []) {
       const id = row.apartment_id as string | null;
       if (id && counts[id]) counts[id].leads += 1;

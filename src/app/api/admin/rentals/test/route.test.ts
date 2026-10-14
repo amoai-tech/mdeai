@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   rpc: vi.fn(),
   rows: [] as Array<Record<string, unknown>>,
   ranges: [] as Array<[number, number]>,
+  countErrorTable: null as string | null,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -17,6 +18,17 @@ vi.mock("@/lib/supabase/server", () => ({
         select: () => query,
         order: () => query,
         limit: (count: number) => { rows = rows.slice(0, count); return query; },
+        eq: (field: string, value: string) => {
+          if (field === "metadata->>is_test_fixture") {
+            rows = rows.filter((row) => {
+              const metadata = row.metadata as Record<string, unknown> | null;
+              return String(metadata?.is_test_fixture ?? "") === value;
+            });
+          } else {
+            rows = rows.filter((row) => String(row[field] ?? "") === value);
+          }
+          return query;
+        },
         contains: (_field: string, expected: Record<string, unknown>) => {
           rows = rows.filter((row) => {
             const metadata = row.metadata as Record<string, unknown> | null;
@@ -30,8 +42,10 @@ vi.mock("@/lib/supabase/server", () => ({
           return query;
         },
         in: () => query,
-        then: (resolve: (result: { data: typeof rows; error: null }) => unknown) =>
-          Promise.resolve({ data: rows, error: null }).then(resolve),
+        then: (resolve: (result: { data: typeof rows | null; error: { message: string } | null }) => unknown) =>
+          Promise.resolve(h.countErrorTable === table
+            ? { data: null, error: { message: "database unavailable" } }
+            : { data: rows, error: null }).then(resolve),
       };
       return query;
     },
@@ -56,6 +70,7 @@ beforeEach(() => {
     : { data: { id: "new-test-rental" }, error: null });
   h.rows = [];
   h.ranges = [];
+  h.countErrorTable = null;
 });
 
 describe("GET /api/admin/rentals/test", () => {
@@ -69,7 +84,7 @@ describe("GET /api/admin/rentals/test", () => {
   it("keeps all old test fixtures beyond the newest 100 with deduped rows and counts", async () => {
     h.rows = [
       ...Array.from({ length: 120 }, (_, i) => ({ id: `normal-${i}`, metadata: {} })),
-      ...Array.from({ length: 125 }, (_, i) => ({ id: `fixture-${i}`, metadata: { is_test_fixture: true } })),
+      ...Array.from({ length: 125 }, (_, i) => ({ id: `fixture-${i}`, metadata: { is_test_fixture: i % 2 === 0 ? "true" : true } })),
     ];
     const response = await GET();
     expect(response.status).toBe(200);
@@ -83,6 +98,14 @@ describe("GET /api/admin/rentals/test", () => {
     expect(Object.keys(body.counts)).toHaveLength(125);
     expect(body.counts["fixture-124"]).toEqual({ leads: 0, showings: 0 });
     expect(h.ranges).toEqual([[0, 99], [100, 199]]);
+  });
+
+  it.each(["leads", "showings"])("returns a server error when %s counts cannot be retrieved", async (table) => {
+    h.rows = [{ id: "test-row", metadata: { is_test_fixture: "true" } }];
+    h.countErrorTable = table;
+    const response = await GET();
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toMatch(/could not load .* counts/i);
   });
 
   it("does not duplicate test listings appearing among the newest 100", async () => {
