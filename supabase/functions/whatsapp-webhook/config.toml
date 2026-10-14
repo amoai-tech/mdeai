@@ -1,5 +1,0 @@
-# SAN-1443 containment — deny-by-default replacement for the retired Infobip webhook (v39).
-#
-# verify_jwt=false: the handler itself is the gate and answers 403 for every request. The
-# platform JWT check would return 401 and hide the intent. No privileged work runs here.
-verify_jwt = false
