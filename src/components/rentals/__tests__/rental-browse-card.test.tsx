@@ -70,6 +70,11 @@ function renderCard(
 }
 
 describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
+  it("treats inherited object keys as ordinary amenity text, not object properties", () => {
+    const html = renderCard({ amenities: ["constructor"] });
+    expect(html).toContain("Constructor");
+  });
+
   it("shows the schedule CTA for a fully owned, approved, published, available listing", () => {
     const html = renderCard();
     expect(html).toContain('data-testid="rental-schedule-cta"');

@@ -47,8 +47,14 @@ export function parseBrowseFilters(params: RentalBrowseSearchParams): {
   const rawFrom = first(params.from);
   const rawThrough = first(params.through);
 
-  if ((rawFrom && !isRealCalendarDate(rawFrom)) || (rawThrough && !isRealCalendarDate(rawThrough))) {
-    return { filters: { neighborhood, beds, from: null, through: null }, dateError: DATE_ERROR_NOT_REAL };
+  // Preserve the valid endpoint for correction; never run a search when either date is invalid.
+  const fromValid = !rawFrom || isRealCalendarDate(rawFrom);
+  const throughValid = !rawThrough || isRealCalendarDate(rawThrough);
+  if (!fromValid || !throughValid) {
+    return {
+      filters: { neighborhood, beds, from: fromValid ? rawFrom : null, through: throughValid ? rawThrough : null },
+      dateError: DATE_ERROR_NOT_REAL,
+    };
   }
   if (!isOrderedStay(rawFrom ?? undefined, rawThrough ?? undefined)) {
     return { filters: { neighborhood, beds, from: rawFrom, through: rawThrough }, dateError: DATE_ERROR_REVERSED };

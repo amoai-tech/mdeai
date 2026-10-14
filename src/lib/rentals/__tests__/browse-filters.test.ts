@@ -22,13 +22,29 @@ describe("parseBrowseFilters (SAN-486)", () => {
     expect(parseBrowseFilters({ from: "2026-11-01", through: "2026-11-01" }).dateError).toBeNull();
   });
 
-  it.each(["2026-02-31", "2026-13-01", "tomorrow", "2026-1-5"])("refuses the impossible date %j and keeps no dates", (bad) => {
-    for (const params of [{ from: bad }, { through: bad }, { from: "2026-11-01", through: bad }]) {
+  it.each(["2026-02-31", "2026-13-01", "tomorrow", "2026-1-5"])("refuses the impossible date %j without running search", (bad) => {
+    for (const params of [{ from: bad }, { through: bad }]) {
       const { filters, dateError } = parseBrowseFilters(params);
       expect(dateError).toBe(DATE_ERROR_NOT_REAL);
       expect(filters.from).toBeNull();
       expect(filters.through).toBeNull();
     }
+  });
+
+  it("keeps a valid Through date if From is invalid so only the bad field needs correction", () => {
+    const { filters, dateError } = parseBrowseFilters({
+      from: "2026-02-31", through: "2026-11-30", neighborhood: "Laureles",
+    });
+    expect(dateError).toBe(DATE_ERROR_NOT_REAL);
+    expect(filters).toMatchObject({ from: null, through: "2026-11-30", neighborhood: "Laureles" });
+  });
+
+  it("keeps a valid From date if Through is invalid so only the bad field needs correction", () => {
+    const { filters, dateError } = parseBrowseFilters({
+      from: "2026-11-01", through: "2026-02-31", beds: "2",
+    });
+    expect(dateError).toBe(DATE_ERROR_NOT_REAL);
+    expect(filters).toMatchObject({ from: "2026-11-01", through: null, beds: "2" });
   });
 
   it("refuses a reversed stay but keeps the typed dates so the form can show them", () => {

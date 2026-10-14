@@ -19,7 +19,7 @@ function bedroomLabel(bedrooms: number | null): string {
 
 const FEATURED_AMENITIES = ["wifi", "workspace", "kitchen", "gym", "pool", "balcony", "parking"];
 
-const AMENITY_LABELS: Record<string, string> = {
+const AMENITY_LABELS = new Map(Object.entries({
   wifi: "WiFi",
   workspace: "Workspace",
   kitchen: "Kitchen",
@@ -37,11 +37,11 @@ const AMENITY_LABELS: Record<string, string> = {
   rooftop: "Rooftop",
   concierge: "Concierge",
   "long-stay": "Long-stay",
-};
+}));
 
 function amenityLabel(raw: string): string {
   const key = raw.toLowerCase().trim();
-  return AMENITY_LABELS[key] ?? raw.charAt(0).toUpperCase() + raw.slice(1);
+  return AMENITY_LABELS.get(key) ?? raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 function topAmenities(amenities: string[] | null, limit = 3): string[] {

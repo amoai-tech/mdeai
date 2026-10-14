@@ -12,7 +12,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 const visible = (page: Page, testId: string) => page.locator(`[data-testid="${testId}"]:visible`);
 const dateInput = (page: Page, label: "From" | "Through") =>
-  page.locator("label:visible").filter({ hasText: new RegExp(`^${label}`) }).locator("input");
+  page.locator("label:visible").filter({ hasText: label }).locator("input");
 
 async function open(page: Page, query = "") {
   await page.goto(`/rentals${query}`, { waitUntil: "domcontentloaded" });
@@ -58,8 +58,10 @@ test.describe("SAN-486 /rentals stay dates", () => {
     await open(page, "?from=2026-11-01&through=2026-11-30");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
     for (const control of [dateInput(page, "From"), dateInput(page, "Through"), visible(page, "rentals-dates-apply")]) {
-      const box = await control.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+      await expect(control).toBeVisible();
+      // Route hydration can replace the input between locator resolution and layout.
+      // Poll the actual rendered target rather than dereferencing a transient null bounding box.
+      await expect.poll(async () => (await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
   });
 });
