@@ -63,6 +63,11 @@ export function RentalsListingsDrawer({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoadedFor, setDetailLoadedFor] = useState<string | null>(null);
 
+  // The two attestation flags intentionally live in this component. The shell renders
+  // <RentalsListingsDrawer key={selectedId} ...>, so selecting another apartment remounts
+  // this drawer and both flags start cleared. Do not lift them to a parent without also
+  // resetting on selection, or one apartment's attestation could leak into the next.
+
   const loadDetail = useCallback(async (apartmentId: string): Promise<boolean> => {
     setDetailLoading(true);
     setDetailError(null);

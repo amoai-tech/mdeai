@@ -196,7 +196,7 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
       // SAN-468 §4.2 / SAN-386 canonical public eligibility, shared with the
@@ -254,7 +254,7 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
