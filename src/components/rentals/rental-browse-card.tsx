@@ -1,8 +1,8 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -12,8 +12,10 @@ import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
-function bedroomLabel(bedrooms: number | null): string {
-  if (bedrooms == null || bedrooms === 0) return "Studio";
+function bedroomLabel(bedrooms: number, bedroomsUnknown = false): string {
+  // The caller flags an unknown source count; a real 0 still means "Studio".
+  if (bedroomsUnknown) return "Bedrooms unknown";
+  if (bedrooms === 0) return "Studio";
   return `${bedrooms} BR`;
 }
 
@@ -84,9 +86,11 @@ function RentalBrowseCardMedia({
   neighborhood: string;
   nightlyLabel: string | null;
 }) {
+  // A failed Storage request must fall back to the normal placeholder, not a broken image.
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
-      {imageUrl ? (
+      {imageUrl && !imageFailed ? (
         <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -95,6 +99,7 @@ function RentalBrowseCardMedia({
             className="size-full object-cover"
             loading="lazy"
             data-testid="rental-browse-card-photo"
+            onError={() => setImageFailed(true)}
           />
         </div>
       ) : (
@@ -126,7 +131,7 @@ export function RentalBrowseCard({
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    rental.nightly_price,
+    rental.tags.includes("dev-preview") ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
@@ -138,6 +143,11 @@ export function RentalBrowseCard({
   // owner stays browseable but can never expose a viewing CTA, so the UI cannot advertise
   // an action the database will reject — and with no handler there is nothing to open.
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
+  // The useful next action for an unrequestable external candidate is its source advert.
+  const externalSourceUrl =
+    rental.tags.includes("dev-preview") && /^https?:\/\//i.test(rental.source_url)
+      ? rental.source_url
+      : null;
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
 
@@ -189,6 +199,19 @@ export function RentalBrowseCard({
               Schedule viewing
             </Button>
           ) : null}
+          {externalSourceUrl ? (
+            <a
+              href={externalSourceUrl}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              data-testid={`rental-card-source-${rental.id}`}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink data-icon="inline-start" aria-hidden />
+              View original listing
+            </a>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
@@ -217,7 +240,7 @@ export function RentalBrowseCard({
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Badge variant="secondary" className="gap-1 font-normal">
           <Bed className="size-3" aria-hidden />
-          {bedroomLabel(rental.bedrooms)}
+          {bedroomLabel(rental.bedrooms, rental.bedrooms_unknown)}
         </Badge>
         {hasWifi ? (
           <Badge variant="outline" className="gap-1 font-normal">

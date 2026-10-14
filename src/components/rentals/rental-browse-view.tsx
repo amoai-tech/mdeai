@@ -18,18 +18,8 @@ import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
+import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
-
-function buildRetryHref(filters: {
-  neighborhood?: string | null;
-  beds?: string | null;
-}): string {
-  const p = new URLSearchParams();
-  if (filters.neighborhood) p.set("neighborhood", filters.neighborhood);
-  if (filters.beds) p.set("beds", filters.beds);
-  const q = p.toString();
-  return q ? `/rentals?${q}` : "/rentals";
-}
 
 function formatCountSubtitle(total: number, shown: number): string {
   if (total === 0) return "0 apartments";
@@ -44,6 +34,8 @@ export type RentalBrowseViewProps = {
   error: string | null;
   neighborhood: string | null;
   beds: string | null;
+  /** Only for local previews, never changes actual rental eligibility. */
+  previewMode?: boolean;
 };
 
 /** Keep the visible rental list and its valid map markers on the same selection state. */
@@ -53,12 +45,14 @@ function RentalBrowseViewInner({
   error,
   neighborhood,
   beds,
+  previewMode = false,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
-  const retryHref = buildRetryHref({ neighborhood, beds });
+  // A preview fixture failure must retry the preview, not send the user to the public browse.
+  const retryHref = buildRetryHref({ neighborhood, beds }, previewMode);
 
   const pins = useMemo(
     () =>
@@ -75,9 +69,11 @@ function RentalBrowseViewInner({
 
   // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
   // curated or available now — only that listed rentals are verified and published.
-  const subtitle = error
-    ? "Long-stay apartments in Medellín"
-    : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
+  const subtitle = previewMode
+    ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
+    : error
+      ? "Long-stay apartments in Medellín"
+      : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
 
   return (
     <>
@@ -86,7 +82,7 @@ function RentalBrowseViewInner({
         title="Rentals in Medellín"
         subtitle={subtitle}
         filterBar={
-          <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
+          previewMode ? <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p> : <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
         }
         mapSlot={<BrowseMapPanel />}
       >

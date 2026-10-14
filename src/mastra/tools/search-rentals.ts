@@ -24,6 +24,8 @@ export const rentalSchema = z.object({
    */
   currency: z.string(),
   bedrooms: z.number(),
+  /** Dev-preview only: the source advert had no bedroom count, so `bedrooms` stays 0. */
+  bedrooms_unknown: z.boolean().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
@@ -289,6 +291,8 @@ export function rowToRental(r: ApartmentRow): Rental {
     neighborhood: r.neighborhood,
     nightly_price: nightlyPrice,
     currency: (r.currency ?? 'USD').toUpperCase(),
+    // Production keeps its existing contract (unknown -> 0). Only the dev preview
+    // opts into null so it can say "Bedrooms unknown" instead of a false "Studio".
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],

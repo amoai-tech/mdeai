@@ -111,6 +111,24 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
   });
 
+  it("keeps production bedrooms numeric and never flags them unknown", () => {
+    const unknownRow = rowToRental(apartmentRow({ bedrooms: null }));
+    expect(unknownRow.bedrooms).toBe(0);
+    expect(unknownRow.bedrooms_unknown).toBeUndefined();
+    expect(renderCard({ bedrooms: 0 })).toContain("Studio");
+    expect(renderCard({ bedrooms: 0 })).not.toContain("Bedrooms unknown");
+  });
+
+  it("renders 'Bedrooms unknown' only when the dev-preview flag is set", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={{ ...rowToRental(apartmentRow()), bedrooms_unknown: true }}
+      />,
+    );
+    expect(html).toContain("Bedrooms unknown");
+    expect(html).not.toContain("Studio");
+  });
+
   it("defaults testId to rental-card-{id} for browse Playwright contract", () => {
     expect(renderCard()).toContain('data-testid="rental-card-rnt_lau_001"');
   });
@@ -173,6 +191,26 @@ describe("RentalBrowseCard — SAN-478 CTA opens the shared modal", () => {
       root.render(<RentalBrowseCard rental={rowToRental(apartmentRow())} />);
     });
     expect(container.querySelector('[data-testid="rental-schedule-cta"]')).toBeNull();
+  });
+
+  it("falls back to the placeholder when the cover image fails", () => {
+    act(() => {
+      root.render(<RentalBrowseCard rental={rowToRental(apartmentRow())} />);
+    });
+    const image = container.querySelector<HTMLImageElement>(
+      '[data-testid="rental-browse-card-photo"]',
+    );
+    if (!image) throw new Error("the listing must expose its cover image first");
+
+    act(() => {
+      image.dispatchEvent(new Event("error"));
+    });
+
+    expect(
+      container.querySelector('[data-testid="rental-browse-card-photo-placeholder"]'),
+      "a failed Storage image must render the shared placeholder, not a broken image",
+    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="rental-browse-card-photo"]')).toBeNull();
   });
 });
 
