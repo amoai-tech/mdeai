@@ -11,6 +11,17 @@ describe("fastPathRentalSummary", () => {
     expect(text.match(/\?/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 
+  it("a broad search with nothing to show says there is nothing available", () => {
+    expect(fastPathRentalSummary(0, 0, { generic: true })).toMatch(/no verified rentals are available right now/i);
+  });
+
+  it("a specific search with no match does not imply the whole marketplace is empty", () => {
+    const text = fastPathRentalSummary(0, 0, { generic: false });
+    expect(text).toMatch(/no verified rentals match that search/i);
+    expect(text).not.toMatch(/available right now/i);
+    expect(text.match(/\?/g)?.length ?? 0).toBeLessThanOrEqual(1);
+  });
+
   it("never claims pins or cards for zero results", () => {
     expect(fastPathRentalSummary(0, 0)).not.toMatch(/pins on the map|see cards below/i);
   });

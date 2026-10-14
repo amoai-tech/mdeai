@@ -134,11 +134,11 @@ export function fastPathRentalNarrative(count: number): string {
   return "";
 }
 
-/** Shown when the search itself could not run — never confused with "no rentals match". */
 /** Shown when a queued message could not be passed to the concierge (already acknowledged). */
 export const RENTAL_HANDOFF_FAILED_SUMMARY =
   "I couldn't pass that message along just now. Please send it again.";
 
+/** Shown when the search itself could not run — never confused with "no rentals match". */
 export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
   "Rental search is temporarily unavailable. Please try again in a moment.";
 
@@ -162,7 +162,11 @@ export function fastPathRentalSummary(
     const budgetNote = options.budgetNotApplied
       ? " Your budget was not applied to this search."
       : "";
-    return `No verified rentals are available right now.${budgetNote} Want to try a neighborhood like Laureles?`;
+    // A broad search that finds nothing means there is nothing to show at all. A specific search
+    // that finds nothing only says that THIS search matched nothing — other listings may exist.
+    return options.generic
+      ? `No verified rentals are available right now.${budgetNote} Want to try a neighborhood like Laureles?`
+      : `No verified rentals match that search right now.${budgetNote} Want to try another neighborhood or size?`;
   }
   let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
   if (options.budgetNotApplied) {
