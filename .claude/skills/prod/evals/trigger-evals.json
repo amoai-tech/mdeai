@@ -1,0 +1,38 @@
+[
+  {
+    "id": "prod-1",
+    "prompt": "Certify the deployed candidate for live launch using real user flows and authorization checks.",
+    "should_trigger": true,
+    "expected_owner": "prod"
+  },
+  {
+    "id": "prod-2",
+    "prompt": "Production certification: prove the exact deployed release after payment webhook rollout.",
+    "should_trigger": true,
+    "expected_owner": "prod"
+  },
+  {
+    "id": "prod-3",
+    "prompt": "Is this live release truly production-ready? Verify deployment, DB and provider parity.",
+    "should_trigger": true,
+    "expected_owner": "prod"
+  },
+  {
+    "id": "prod-4",
+    "prompt": "Create a launch backlog showing which features we can defer.",
+    "should_trigger": false,
+    "expected_owner": "launch"
+  },
+  {
+    "id": "prod-5",
+    "prompt": "Is the currently open PR ready to merge?",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "prod-6",
+    "prompt": "Review code style in this component; no deployment involved.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  }
+]

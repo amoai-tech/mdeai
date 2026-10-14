@@ -148,6 +148,100 @@ def frontmatter_name(path: Path) -> str | None:
     return None
 
 
+def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
+    """Validate required Agent Skills metadata without adding a YAML dependency.
+
+    Only the required name/description and permission-sensitive scalar keys are
+    interpreted here; other vendor extension fields remain allowed. This is not
+    a general-purpose YAML parser.
+    """
+    lines = path.read_text(encoding='utf-8').splitlines()
+    if not lines or lines[0].strip() != '---':
+        return [f'missing skill YAML frontmatter: {path}']
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == '---'), None)
+    if end is None:
+        return [f'unclosed skill YAML frontmatter: {path}']
+    header = lines[1:end]
+    keys: dict[str, tuple[int, str]] = {}
+    problems: list[str] = []
+    for i, line in enumerate(header):
+        if not line or line.startswith((' ', '\t', '#')):
+            continue
+        match = re.fullmatch(r'([a-zA-Z][\w-]*):[ \t]*(.*)', line)
+        if not match:
+            problems.append(f'invalid top-level skill metadata at {path}:{i + 2}: {line!r}')
+            continue
+        key, raw = match.groups()
+        if key in keys:
+            problems.append(f'duplicate skill metadata key in {path}: {key}')
+        keys[key] = (i, raw)
+
+    if frontmatter_name(path) != expected_name or len(expected_name) > 64:
+        problems.append(f'frontmatter name mismatch: {path} declares '
+                        f'{frontmatter_name(path)!r}, expected {expected_name!r}')
+    if 'description' not in keys:
+        problems.append(f'missing skill description: {path}')
+    else:
+        i, raw = keys['description']
+        if raw in ('', '>', '>-', '>+', '|', '|-', '|+'):
+            following = header[i + 1:]
+            # Stop at the next top-level key, rather than capturing other fields.
+            parts = []
+            for line in following:
+                if line and not line.startswith((' ', '\t', '#')):
+                    break
+                if line.strip() and not line.lstrip().startswith('#'):
+                    parts.append(line.strip())
+            value = ' '.join(parts)
+        else:
+            value = raw.strip()
+            if value[:1] in ('"', "'"):
+                if len(value) < 2 or value[-1] != value[0]:
+                    problems.append(f'unbalanced description quotes: {path}')
+                else:
+                    value = value[1:-1]
+        if not value or len(value) > 1024:
+            problems.append(f'skill description must contain 1-1024 characters: {path}')
+
+    for key in ('user-invocable', 'disable-model-invocation'):
+        if key in keys and keys[key][1] not in ('true', 'false'):
+            problems.append(f'{path}: {key} must be true or false')
+    if 'allowed-tools' in keys:
+        permission = keys['allowed-tools'][1]
+        if re.search(r'Bash\((?:npm|npx|pnpm|bun|bash|sh):\*\)|Bash\(\*\)', permission):
+            problems.append(f'{path}: broad shell preapproval prohibited in allowed-tools')
+
+    return problems
+
+
+def eval_coverage(canonical: Path, skills: list[str]) -> str:
+    """Inventory test definitions, not claimed pass rates from model behavior."""
+    with_behavior = with_triggers = behavior_cases = trigger_cases = 0
+    for name in skills:
+        eval_dir = canonical / name / 'evals'
+        behavior = eval_dir / 'evals.json'
+        triggers = eval_dir / 'trigger-evals.json'
+        if behavior.is_file():
+            import json
+            with_behavior += 1
+            try:
+                data = json.loads(behavior.read_text(encoding='utf-8'))
+                behavior_cases += len(data.get('evals', []))
+            except (ValueError, OSError, AttributeError, TypeError):
+                pass  # Existing Node conformance suite reports malformed evals.
+        if triggers.is_file():
+            import json
+            with_triggers += 1
+            try:
+                data = json.loads(triggers.read_text(encoding='utf-8'))
+                trigger_cases += len(data) if isinstance(data, list) else 0
+            except (ValueError, OSError):
+                pass
+    return (f'SKILL_EVAL_DEFINITIONS behavior={with_behavior}/{len(skills)} '
+            f'trigger={with_triggers}/{len(skills)} '
+            f'cases={behavior_cases + trigger_cases} (not executed)')
+
+
 def retired_errors(canonical: Path, exposure: Path) -> list[str]:
     return [
         f'retired skill/discovery entry exists: {name}'
@@ -241,11 +335,7 @@ def skill_errors(canonical: Path, exposure: Path, name: str) -> list[str]:
         return [f'canonical skill missing SKILL.md: {name}']
 
     errors: list[str] = []
-    declared = frontmatter_name(source)
-    if declared != name:
-        errors.append(
-            f'frontmatter name mismatch: {source} declares {declared!r}, expected {name!r}'
-        )
+    errors.extend(frontmatter_metadata_errors(source, name))
 
     if not exposure_dir.is_dir() or exposure_dir.is_symlink():
         errors.append(f'Codex exposure directory is not a real directory: {exposure_dir}')
@@ -304,6 +394,8 @@ def main() -> int:
         return 1
 
     print(f'SKILL_LAYOUT_PASS active={active}')
+    canonical = root / '.claude' / 'skills'
+    print(eval_coverage(canonical, sorted(p.name for p in canonical.iterdir() if p.is_dir())))
     return 0
 
 

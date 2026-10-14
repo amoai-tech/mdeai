@@ -277,3 +277,31 @@ test("the committed repository passes", () => {
   );
   assert.match(result.stdout, /SKILL_LAYOUT_PASS active=\d+/);
 });
+
+test("rejects absent or empty skill descriptions", () => {
+  for (const description of ["", "description: ", "description: ''"]) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\n${description}\n---\n\n# Alpha\n`,
+    });
+    assert.match(failing(root), /missing skill description|skill description must contain/);
+  }
+});
+
+test("rejects malformed duplicate frontmatter and broad shell preapproval", () => {
+  const fixture = (lines) => writeSkill(tmpRepo(), "alpha", {
+    body: `---\nname: alpha\ndescription: Use when auditing skills.\n${lines}\n---\n# Skill\n`,
+  });
+  assert.match(failing(fixture("name: alpha")), /duplicate skill metadata key/);
+  assert.match(failing(fixture("user-invocable: sometimes")), /must be true or false/);
+  assert.match(failing(fixture("allowed-tools: Bash(npm:*)")), /broad shell preapproval/);
+  assert.match(failing(fixture("allowed-tools: Bash(npx:*)")), /broad shell preapproval/);
+});
+
+test("accepts folded description and reports evaluation definitions as unexecuted", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body: "---\nname: alpha\ndescription: >-\n  Use when verifying a skill.\n  Do not change production.\nmetadata:\n  version: 1.0\n---\n# Skill\n",
+  });
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /SKILL_EVAL_DEFINITIONS behavior=0\/1 trigger=0\/1 cases=0 \(not executed\)/);
+});

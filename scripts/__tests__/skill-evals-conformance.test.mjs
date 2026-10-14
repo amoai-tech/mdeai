@@ -104,3 +104,23 @@ test("the two most consequential workflow skills keep evals", () => {
     );
   }
 });
+
+test("short execution skills cover routing positives, negatives, and behavior", () => {
+  for (const skill of ["errors", "praudit", "linear-task", "implement", "prod"]) {
+    const base = path.join(SKILLS, skill, "evals");
+    const behavior = JSON.parse(fs.readFileSync(path.join(base, "evals.json"), "utf8"));
+    const triggers = JSON.parse(fs.readFileSync(path.join(base, "trigger-evals.json"), "utf8"));
+    assert.ok(behavior.evals.length >= 3, `${skill}: missing behavior cases`);
+    assert.ok(triggers.length >= 6, `${skill}: missing routing cases`);
+    assert.ok(triggers.filter((c) => c.should_trigger === true).length >= 3);
+    assert.ok(triggers.filter((c) => c.should_trigger === false).length >= 3);
+    assert.equal(new Set(triggers.map((c) => c.id)).size, triggers.length);
+    for (const c of triggers) {
+      assert.equal(typeof c.prompt, "string", `${skill}: prompt missing`);
+      assert.ok(c.prompt.length >= 20, `${skill}: unrealistically brief probe`);
+      assert.equal(typeof c.should_trigger, "boolean");
+      assert.equal(typeof c.expected_owner, "string");
+      assert.equal(c.expected_owner === skill, c.should_trigger, `${skill}: conflicting owner`);
+    }
+  }
+});

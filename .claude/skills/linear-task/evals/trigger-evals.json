@@ -1,0 +1,38 @@
+[
+  {
+    "id": "linear-task-1",
+    "prompt": "Improve the existing Linear issue for broker request isolation without duplicating it.",
+    "should_trigger": true,
+    "expected_owner": "linear-task"
+  },
+  {
+    "id": "linear-task-2",
+    "prompt": "Create a Linear task to verify the first production rental lead end to end.",
+    "should_trigger": true,
+    "expected_owner": "linear-task"
+  },
+  {
+    "id": "linear-task-3",
+    "prompt": "Rewrite the Linear acceptance criteria into ordered implementation and verification steps.",
+    "should_trigger": true,
+    "expected_owner": "linear-task"
+  },
+  {
+    "id": "linear-task-4",
+    "prompt": "Audit the accuracy of an existing Linear task, but make no updates.",
+    "should_trigger": false,
+    "expected_owner": "linear-audit"
+  },
+  {
+    "id": "linear-task-5",
+    "prompt": "Implement the scoped rental lead fix in the repository.",
+    "should_trigger": false,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "linear-task-6",
+    "prompt": "Give a status report across all MDE Linear tasks.",
+    "should_trigger": false,
+    "expected_owner": "progress"
+  }
+]
