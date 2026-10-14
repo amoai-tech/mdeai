@@ -465,3 +465,32 @@ test.describe("SAN-1422 map pins match the results", { tag: ["@critical", "@dete
     await expectNoSidewaysScroll(page);
   });
 });
+
+/**
+ * SAN-407 · the message box must not accept input before the page can act on it.
+ *
+ * The composer is server-rendered, so it appears before the page's JavaScript attaches. Typing or
+ * pressing Enter in that gap did nothing and the typed text was wiped on load (3 of 6 early sends
+ * lost on production). With JavaScript switched off the page is exactly what a renter sees in that
+ * gap: the box must be disabled, and it must work once the page is live.
+ */
+test.describe("SAN-407 the message box is not usable before the page can send", { tag: ["@critical", "@deterministic"] }, () => {
+  test.describe("server-rendered page, JavaScript not yet running", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("the textarea is disabled so a first message cannot be typed into nothing", async ({ page }) => {
+      await page.goto("/chat", { waitUntil: "domcontentloaded" });
+      const input = page.getByPlaceholder(/type a message/i).first();
+      await expect(input).toBeVisible({ timeout: 30_000 });
+      await expect(input).toBeDisabled();
+    });
+  });
+
+  test("once the page is live the box is enabled and a first message is sent, not lost", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const input = page.getByPlaceholder(/type a message/i).first();
+    await expect(input).toBeEnabled({ timeout: 30_000 });
+    await typeAndSubmit(page, "Search apartments Medellín");
+    await expect(page.getByText("Search apartments Medellín", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+  });
+});
