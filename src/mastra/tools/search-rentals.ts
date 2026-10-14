@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
+import { isSelfAttested } from '@/lib/rentals/provenance';
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -144,17 +145,6 @@ export interface ApartmentRow {
   moderation_status: string;
   listing_workflow_status: string;
   status: string;
-}
-
-/**
- * SAN-1449: true when the row was published through the self-attested path. The label is
- * derived from the row's own provenance, never from a client flag.
- */
-function isSelfAttestedRow(row: ApartmentRow): boolean {
-  const m = row.metadata;
-  if (!m || typeof m !== 'object') return false;
-  const meta = m as Record<string, unknown>;
-  return meta.inventory_kind === 'self_attested' || meta.provenance === 'self_attested';
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -336,7 +326,7 @@ export function rowToRental(r: ApartmentRow): Rental {
         wifi_speed: r.wifi_speed,
         price_daily: nightlyPrice,
       });
-      if (isSelfAttestedRow(r)) tags.push('self-attested');
+      if (isSelfAttested(r.metadata)) tags.push('self-attested');
       return tags;
     })(),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,

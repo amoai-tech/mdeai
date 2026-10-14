@@ -46,6 +46,18 @@ describe("runSelfAttestedPublishRpc", () => {
     expect(res).toMatchObject({ ok: false, status: 403 });
   });
 
+  it("maps an internal inconsistent published state to 500", async () => {
+    const supabase = client({
+      data: null,
+      error: { message: "published listing has inconsistent state", code: "23514" },
+    });
+    const res = await runSelfAttestedPublishRpc(supabase, "a1", {
+      advertisingAuthority: true,
+      photoRights: true,
+    });
+    expect(res).toMatchObject({ ok: false, status: 500 });
+  });
+
   it("maps a missing self-attestation to 400", async () => {
     const supabase = client({
       data: null,

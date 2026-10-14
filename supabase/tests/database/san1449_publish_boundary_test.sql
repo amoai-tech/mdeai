@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(6);
+select plan(7);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values ('f1450000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'san1449b-owner@example.com');
@@ -14,16 +14,21 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1450000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 insert into public.apartments
   (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
-   landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude)
+   landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude, metadata)
 values ('f1450000-0000-4000-8000-000000000021', 'Bypass', 'san1449b-bypass', 'Laureles', 'Calle 9 #1-1',
    'active', 'approved', 'published', 'f1450000-0000-4000-8000-000000000011', true, 2500000, 'COP',
-   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916);
+   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{"custom_key":"kept"}'::jsonb);
 reset role;
 select is(
   (select status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
      from public.apartments where id = 'f1450000-0000-4000-8000-000000000021'),
   'inactive/pending/draft/false',
   'A1: a direct client INSERT cannot create a published or verified listing');
+-- A7: the clamp only touches workflow/trust columns; operator metadata is preserved.
+select is(
+  (select metadata->>'custom_key' from public.apartments where id = 'f1450000-0000-4000-8000-000000000021'),
+  'kept',
+  'A7: custom metadata survives a direct INSERT (the RPC overwrites provenance on publish)');
 
 -- Trusted rows for the provenance checks.
 insert into public.apartments

@@ -24,6 +24,20 @@
 -- metadata.provenance = 'self_attested' is the truthful label.
 -- =============================================================================
 
+-- Dependency: public.acting_landlord_ids() and public.is_admin() are pre-existing.
+-- acting_landlord_ids() returns the set of landlord_profiles.id values the
+-- authenticated caller acts for; it is the ownership contract both RPCs and the
+-- provenance trigger rely on. Fail the migration loudly if either is missing.
+do $$
+begin
+  perform public.acting_landlord_ids();
+  perform public.is_admin();
+exception
+  when undefined_function then
+    raise exception 'SAN-1449 requires public.acting_landlord_ids() and public.is_admin()';
+end
+$$;
+
 -- -----------------------------------------------------------------------------
 -- 1 · Reduced launch gate for a self-attested listing.
 --     Retains the real, landlord-supplied facts (ownership is checked by the

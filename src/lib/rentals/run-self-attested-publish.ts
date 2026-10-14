@@ -32,6 +32,11 @@ function selfAttestedPublishFailure(
   if (code === "P0002" || (text.includes("apartment") && text.includes("not found"))) {
     return { ok: false, message, status: 404 };
   }
+  if (text.includes("published listing has inconsistent state")) {
+    // The row is published but its status/moderation values disagree. The client
+    // cannot fix this by changing the request: it is server-side data integrity.
+    return { ok: false, message, status: 500 };
+  }
   if (
     code === "check_violation" ||
     text.includes("self-attestation required") ||

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { isRentalRequestable } from "@/mastra/tools/search-rentals";
+import { isSelfAttested } from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -47,13 +48,6 @@ export type RentalDetail = {
    * detail page shows "Not independently verified" rather than implying a review.
    */
   isSelfAttested: boolean;
-};
-
-/** SAN-1449 — the row's own provenance decides the "not independently verified" label. */
-const isSelfAttestedMetadata = (value: unknown): boolean => {
-  if (!value || typeof value !== "object") return false;
-  const meta = value as Record<string, unknown>;
-  return meta.inventory_kind === "self_attested" || meta.provenance === "self_attested";
 };
 
 const UUID_RE =
@@ -125,7 +119,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
       available_from: str(row.available_from),
       available_to: str(row.available_to),
     }),
-    isSelfAttested: isSelfAttestedMetadata(row.metadata),
+    isSelfAttested: isSelfAttested(row.metadata),
   };
 }
 
