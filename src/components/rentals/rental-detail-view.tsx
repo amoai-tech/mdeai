@@ -115,6 +115,15 @@ const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
       <Users className="size-3.5" aria-hidden />{" "}
       {detail.maxGuests != null ? `${detail.maxGuests} guests` : <Pending />}
     </Badge>
+    {detail.isSelfAttested ? (
+      <Badge
+        variant="outline"
+        className="font-normal"
+        data-testid="rental-self-attested-label"
+      >
+        Not independently verified
+      </Badge>
+    ) : null}
   </div>
 );
 

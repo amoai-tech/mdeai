@@ -198,6 +198,18 @@ export function RentalCard({
         {matchReason}
       </p>
 
+      {tags?.includes("self-attested") ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal"
+            data-testid="rental-self-attested-label"
+          >
+            Not independently verified
+          </Badge>
+        </div>
+      ) : null}
+
       {benefits.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">
           {benefits.map((b) => (

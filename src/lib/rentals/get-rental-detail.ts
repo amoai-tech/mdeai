@@ -42,6 +42,18 @@ export type RentalDetail = {
    * surface reads this instead of assuming a detail page is requestable.
    */
   canScheduleViewing: boolean;
+  /**
+   * SAN-1449 — true when the landlord published through the self-attested path. The
+   * detail page shows "Not independently verified" rather than implying a review.
+   */
+  isSelfAttested: boolean;
+};
+
+/** SAN-1449 — the row's own provenance decides the "not independently verified" label. */
+const isSelfAttestedMetadata = (value: unknown): boolean => {
+  if (!value || typeof value !== "object") return false;
+  const meta = value as Record<string, unknown>;
+  return meta.inventory_kind === "self_attested" || meta.provenance === "self_attested";
 };
 
 const UUID_RE =
@@ -113,6 +125,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
       available_from: str(row.available_from),
       available_to: str(row.available_to),
     }),
+    isSelfAttested: isSelfAttestedMetadata(row.metadata),
   };
 }
 
