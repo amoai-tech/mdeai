@@ -179,6 +179,11 @@
     "anon": false,
     "authenticated": true
   },
+  "publish_self_attested_rental(p_apartment_id uuid, p_advertising_authority boolean, p_photo_rights boolean)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "publish_verified_rental(p_apartment_id uuid, p_actor_id uuid)": {
     "public": false,
     "anon": false,

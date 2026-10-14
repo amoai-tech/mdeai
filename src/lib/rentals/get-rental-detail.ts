@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { isRentalRequestable } from "@/mastra/tools/search-rentals";
+import { isSelfAttested } from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -42,6 +43,11 @@ export type RentalDetail = {
    * surface reads this instead of assuming a detail page is requestable.
    */
   canScheduleViewing: boolean;
+  /**
+   * SAN-1449 — true when the landlord published through the self-attested path. The
+   * detail page shows "Not independently verified" rather than implying a review.
+   */
+  isSelfAttested: boolean;
 };
 
 const UUID_RE =
@@ -113,6 +119,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
       available_from: str(row.available_from),
       available_to: str(row.available_to),
     }),
+    isSelfAttested: isSelfAttested(row.metadata),
   };
 }
 

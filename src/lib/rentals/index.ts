@@ -58,6 +58,11 @@ export {
 } from "./resolve-publish-rpc";
 export { runPublishRpc, type RunPublishRpcResult } from "./run-publish-rpc";
 export {
+  runSelfAttestedPublishRpc,
+  type RentalSelfAttestation,
+  type RunSelfAttestedPublishResult,
+} from "./run-self-attested-publish";
+export {
   BROKER_DASHBOARD_PATH,
   BROKER_HOME_PATH,
   BROKER_LISTINGS_PATH,
