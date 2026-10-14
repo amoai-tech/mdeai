@@ -10,7 +10,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
 import type { InboundRpcClient } from "@/lib/whatsapp/inbound-store";
 import { processDueInbound } from "@/lib/whatsapp/process-inbound";
-import { signWebhookBody } from "@/lib/whatsapp/webhook-security";
+import { constantTimeEqual, signWebhookBody } from "@/lib/whatsapp/webhook-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const secret = process.env.WHATSAPP_PROCESS_SECRET;
   if (!secret) return NextResponse.json({ error: "sweeper disabled" }, { status: 503 });
-  if (request.headers.get("x-whatsapp-process-secret") !== secret) {
+  if (!constantTimeEqual(request.headers.get("x-whatsapp-process-secret"), secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

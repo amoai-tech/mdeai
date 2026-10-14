@@ -51,10 +51,12 @@ describe("buildSingleMessageEnvelope", () => {
   });
 });
 
-function fakeClient(handlers: Record<string, (args: Record<string, unknown> | undefined) => { data: unknown; error: { message: string } | null }>): InboundRpcClient {
+type RpcHandler = (args: Record<string, unknown> | undefined) => { data: unknown; error: { message: string } | null };
+
+function fakeClient(handlers: Map<string, RpcHandler>): InboundRpcClient {
   return {
     rpc: vi.fn((fn: string, args?: Record<string, unknown>) => {
-      const handler = handlers[fn];
+      const handler = handlers.get(fn);
       if (!handler) return Promise.resolve({ data: null, error: { message: "unexpected " + fn } });
       return Promise.resolve(handler(args));
     }),
@@ -65,17 +67,17 @@ describe("recordInboundMessage", () => {
   const message = { providerMessageId: "wamid.1", from: "57300", messageType: "text", content: "hi", payload: {} };
 
   it("returns the id and is_new flag", async () => {
-    const client = fakeClient({ whatsapp_record_inbound: () => ({ data: [{ message_id: "m1", is_new: true }], error: null }) });
+    const client = fakeClient(new Map([["whatsapp_record_inbound", () => ({ data: [{ message_id: "m1", is_new: true }], error: null })]]));
     await expect(recordInboundMessage(client, message)).resolves.toEqual({ messageId: "m1", isNew: true });
   });
 
   it("reports a duplicate delivery as is_new=false", async () => {
-    const client = fakeClient({ whatsapp_record_inbound: () => ({ data: [{ message_id: "m1", is_new: false }], error: null }) });
+    const client = fakeClient(new Map([["whatsapp_record_inbound", () => ({ data: [{ message_id: "m1", is_new: false }], error: null })]]));
     await expect(recordInboundMessage(client, message)).resolves.toEqual({ messageId: "m1", isNew: false });
   });
 
   it("throws on a database error so the route does not acknowledge", async () => {
-    const client = fakeClient({ whatsapp_record_inbound: () => ({ data: null, error: { message: "boom" } }) });
+    const client = fakeClient(new Map([["whatsapp_record_inbound", () => ({ data: null, error: { message: "boom" } })]]));
     await expect(recordInboundMessage(client, message)).rejects.toThrow("whatsapp_record_inbound failed");
   });
 });
@@ -83,10 +85,10 @@ describe("recordInboundMessage", () => {
 describe("claim/complete/fail", () => {
   it("maps claim rows and surfaces errors", async () => {
     const rows = [{ id: "m1", external_id: "wamid.1", phone_number: "57300", raw_payload: {}, attempts: 1 }];
-    const client = fakeClient({ whatsapp_claim_inbound: () => ({ data: rows, error: null }) });
+    const client = fakeClient(new Map([["whatsapp_claim_inbound", () => ({ data: rows, error: null })]]));
     await expect(claimInbound(client, "w1", 5, 120)).resolves.toEqual(rows);
 
-    const failing = fakeClient({ whatsapp_claim_inbound: () => ({ data: null, error: { message: "nope" } }) });
+    const failing = fakeClient(new Map([["whatsapp_claim_inbound", () => ({ data: null, error: { message: "nope" } })]]));
     await expect(claimInbound(failing, "w1")).rejects.toThrow("whatsapp_claim_inbound failed");
   });
 

@@ -25,6 +25,15 @@ export function verifyMetaSignature(
   return timingSafeEqual(given, want);
 }
 
+/** Constant-time string comparison for shared secrets (avoids timing side channels). */
+export function constantTimeEqual(a: string | null, b: string): boolean {
+  if (!a || !b) return false;
+  const left = Buffer.from(a, "utf8");
+  const right = Buffer.from(b, "utf8");
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
 /**
  * Sign a body with the Meta app secret. Used only to replay an ALREADY-verified stored message
  * back through the adapter; never to accept an untrusted request.
