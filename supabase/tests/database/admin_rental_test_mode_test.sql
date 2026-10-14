@@ -165,8 +165,8 @@ select is(
 
 -- A20: development-scoped approvals and original source reference recorded.
 select is(
-  (select metadata->>'admin_test_approval' || '/' || metadata->>'admin_test_verification'
-       || '/' || metadata->>'admin_test_photo_rights'
+  (select (metadata->>'admin_test_approval') || '/' || (metadata->>'admin_test_verification')
+       || '/' || (metadata->>'admin_test_photo_rights')
    from public.apartments where id = current_setting('mde.clone_test_id')::uuid),
   'approved_for_testing/verified_for_testing/test_image_only',
   'A20: approvals are scoped to development fixture only');

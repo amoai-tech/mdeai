@@ -1,6 +1,7 @@
 /**
  * Explicit public discovery of source-linked third-party advertisements.
- * This does NOT publish these drafts as verified MDE inventory or enable viewing.
+ * This preserves source links and never certifies real viewing availability.
+ * Source ads can be published internally without becoming managed MDE inventory.
  * Only safe, already-advertised fields leave this server-side module.
  */
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -55,11 +56,18 @@ function publicRentalPhoto(row: ExternalListing): string {
 
 export function publicExternalRentalCard(row: ExternalListing): Rental | null {
   const metadata = row.metadata ?? {};
+  // Publication status is not proof of independent verification or viewing rights.
+  // The nine allowlisted source-linked ads can transition from legacy draft to
+  // active/approved/published without disappearing from public discovery.
+  const sourcePublished = row.status === "active"
+    && row.moderation_status === "approved"
+    && row.listing_workflow_status === "published";
+  const legacySourceDraft = row.status === "inactive"
+    && row.moderation_status === "pending"
+    && row.listing_workflow_status === "draft"
+    && row.verified === false;
   if (row.landlord_id !== AUTHORIZED_LANDLORD_PROFILE
-      || row.verified !== false
-      || row.status !== "inactive"
-      || row.listing_workflow_status !== "draft"
-      || row.moderation_status !== "pending"
+      || !(sourcePublished || legacySourceDraft)
       || !PUBLIC_SOURCE_SLUGS.includes(row.slug as typeof PUBLIC_SOURCE_SLUGS[number])
       || metadata.inventory_kind !== "external_candidate"
       || metadata.allowed_action !== "view_original_listing"
@@ -92,7 +100,7 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
   };
 }
 
-/** Search only the approved nine external source ads, not private broker inventory. */
+/** Search only the allowlisted source-linked advertisements, not private broker inventory. */
 export async function searchPublicExternalRentals(query: RentalQuery): Promise<Rental[]> {
   // Emergency disable without database writes or weakening RLS.
   if (process.env.MDE_EXTERNAL_DISCOVERY_DISABLED === "1") return [];
@@ -104,10 +112,6 @@ export async function searchPublicExternalRentals(query: RentalQuery): Promise<R
     .select("landlord_id,verified,status,listing_workflow_status,moderation_status,slug,title,neighborhood,source_url,price_monthly,currency,bedrooms,amenities,images,latitude,longitude,available_from,available_to,metadata")
     .in("slug", [...PUBLIC_SOURCE_SLUGS])
     .eq("landlord_id", AUTHORIZED_LANDLORD_PROFILE)
-    .eq("status", "inactive")
-    .eq("listing_workflow_status", "draft")
-    .eq("moderation_status", "pending")
-    .eq("verified", false)
     .contains("metadata", {
       external_discovery_publication: "user_authorized_2026-10-14",
       public_photo_republication_permission: "user_attested_2026-10-14",
