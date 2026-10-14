@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitUntilInteractive } from "./helpers/rental-journey-steps";
 
 /**
  * SAN-524: the shared browse map sheet currently serves rentals and restaurants.
@@ -9,7 +10,8 @@ test("mobile rentals map Close button is a 44×44px rendered target and dismisse
   await page.goto("/rentals", { waitUntil: "domcontentloaded" });
 
   const trigger = page.getByTestId("browse-map-fab");
-  await expect(trigger).toBeVisible();
+  // The server-rendered Map button is visible before React attaches its click handler.
+  await waitUntilInteractive(trigger, "the Map button");
   await trigger.click();
 
   const close = page.getByTestId("browse-map-close");
