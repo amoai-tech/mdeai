@@ -247,3 +247,54 @@ describe("POST /api/admin/rentals/test clone validation", () => {
     }));
   });
 });
+
+
+describe.each([
+  { action: "assign-test-operator", rpc: "admin_assign_rental_test_operator", extra: { enabled: false }, args: { p_apartment_id: "fixture-id", p_enabled: false } },
+  { action: "publish", rpc: "admin_publish_test_rental", extra: {}, args: { p_apartment_id: "fixture-id" } },
+  { action: "cleanup", rpc: "admin_cleanup_test_rental", extra: {}, args: { p_apartment_id: "fixture-id" } },
+])("POST /api/admin/rentals/test $action", ({ action, rpc, extra, args }) => {
+  const payload = { action, apartmentId: "fixture-id", ...extra };
+
+  it("rejects signed-out and non-admin users before the write RPC", async () => {
+    h.getUser.mockResolvedValueOnce({ data: { user: null } });
+    expect((await POST(request(payload))).status).toBe(401);
+    h.rpc.mockResolvedValueOnce({ data: false, error: null });
+    expect((await POST(request(payload))).status).toBe(403);
+    expect(h.rpc).not.toHaveBeenCalledWith(rpc, expect.anything());
+  });
+
+  it("rejects missing apartmentId before the write RPC", async () => {
+    const response = await POST(request({ action, ...extra }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/apartmentId is required/i);
+    expect(h.rpc).not.toHaveBeenCalledWith(rpc, expect.anything());
+  });
+
+  it("returns a clear RPC error rather than claiming success", async () => {
+    h.rpc.mockImplementation(async (name: string) => name === "is_admin"
+      ? { data: true, error: null } : { data: null, error: { message: "database refused write" } });
+    const response = await POST(request(payload));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("database refused write");
+    expect(h.rpc).toHaveBeenCalledWith(rpc, args);
+  });
+
+  it("calls only the expected RPC and preserves the returned rental", async () => {
+    const response = await POST(request(payload));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ rental: { id: "new-test-rental" } });
+    expect(h.rpc).toHaveBeenCalledWith(rpc, args);
+  });
+});
+
+describe("POST /api/admin/rentals/test operator flag validation", () => {
+  it("rejects non-boolean enabled values", async () => {
+    for (const enabled of ["true", 1, null, undefined]) {
+      const res = await POST(request({ action: "assign-test-operator", apartmentId: "fixture-id", enabled }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/enabled must be boolean/i);
+    }
+    expect(h.rpc).not.toHaveBeenCalledWith("admin_assign_rental_test_operator", expect.anything());
+  });
+});

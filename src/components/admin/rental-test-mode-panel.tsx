@@ -27,6 +27,7 @@ type LoadResult =
   | { ok: false; message: string };
 
 const isTest = (row: AdminRentalRow) => String(row.metadata?.is_test_fixture ?? "") === "true";
+const hasTestOperator = (row: AdminRentalRow) => String(row.metadata?.admin_test_operator_active ?? "") === "true";
 
 async function fetchRentals(): Promise<LoadResult> {
   try {
@@ -315,10 +316,10 @@ export function RentalTestModePanel() {
                         disabled={busy !== null}
                         onClick={() => void assignTestOperator(
                           row.id,
-                          row.metadata?.admin_test_operator_active !== true,
+                          !hasTestOperator(row),
                         )}
                       >
-                        {row.metadata?.admin_test_operator_active === true
+                        {hasTestOperator(row)
                           ? "Clear MDE test operator" : "Assign MDE test operator"}
                         </Button>
                       </div>
