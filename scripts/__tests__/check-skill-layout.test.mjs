@@ -305,3 +305,37 @@ test("accepts folded description and reports evaluation definitions as unexecute
   assert.equal(result.status, 0, result.stdout);
   assert.match(result.stdout, /SKILL_EVAL_DEFINITIONS behavior=0\/1 trigger=0\/1 cases=0 \(not executed\)/);
 });
+
+test("rejects YAML block scalars hiding dangerous shell preapprovals", () => {
+  const cases = [
+    "allowed-tools: >\n  Bash(npm:*)\n  Bash(npx:*)",
+    "allowed-tools: |\n  Bash(pnpm:*)\n  Bash(bun:*)",
+    "allowed-tools: >-\n  Bash(sh:*)",
+    "allowed-tools: |+ # multiline shell tools\n  Bash(*)",
+    "allowed-tools: >2-\n    Bash(npx:*)",
+    "allowed-tools:\n  - Bash(npm:*)",
+  ];
+  for (const allowed of cases) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\ndescription: Use when checking shell approvals.\n${allowed}\n---\n# Alpha\n`,
+    });
+    assert.match(failing(root), /allowed-tools.*single-line|broad shell preapproval/, allowed);
+  }
+});
+
+test("allows safe single-line tool permissions and rejects encoded or aliased values", () => {
+  const safe = writeSkill(tmpRepo(), "alpha", {
+    body: "---\nname: alpha\ndescription: Use when checking safe metadata.\nallowed-tools: Read Glob Bash(git:status)\n---\n# Alpha\n",
+  });
+  assert.equal(runChecker(safe).status, 0);
+  for (const allowed of [
+    String.raw`allowed-tools: "Bash(n\u0070m:*)"`,
+    "allowed-tools: *broadPermissions",
+    "allowed-tools: Bash",
+  ]) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\ndescription: Use when checking shell permissions.\n${allowed}\n---\n# Alpha\n`,
+    });
+    assert.match(failing(root), /allowed-tools.*single-line|broad shell preapproval/, allowed);
+  }
+});

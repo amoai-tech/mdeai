@@ -194,6 +194,37 @@ def description_errors(
     return problems
 
 
+def allowed_tools_errors(
+    header: list[str], keys: dict[str, tuple[int, str]], path: Path,
+) -> list[str]:
+    """Fail closed on YAML syntaxes this lightweight security checker cannot parse.
+
+    An allowed-tools value must be one plain-text line of tool names/specs.
+    Block scalars, aliases, quoted escapes, sequences and continuations could
+    otherwise hide permissions from our shell preapproval guard.
+    """
+    if 'allowed-tools' not in keys:
+        return []
+    i, raw = keys['allowed-tools']
+    # Stop at another top-level key; ignore blank/comment-only lines.
+    for line in header[i + 1:]:
+        if line and not line.startswith((' ', '\t', '#')):
+            break
+        if line.strip() and not line.lstrip().startswith('#'):
+            return [f'{path}: allowed-tools must be a single-line plain scalar']
+
+    tool_spec = r'[A-Za-z][A-Za-z0-9_-]*(?:\([^()\n\t]*\))?'
+    if not re.fullmatch(rf'{tool_spec}(?: +{tool_spec})*', raw):
+        return [f'{path}: allowed-tools must be a single-line plain scalar']
+    if re.search(
+        r'(?:^| )Bash(?: |$)|Bash\((?:npm|npx|pnpm|bun|bash|sh):\*\)|'
+        r'Bash\(\*\)|Bash\(:\*\)',
+        raw,
+    ):
+        return [f'{path}: broad shell preapproval prohibited in allowed-tools']
+    return []
+
+
 def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
     """Validate required Agent Skills metadata without an additional YAML dependency.
 
@@ -219,10 +250,7 @@ def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
     for key in ('user-invocable', 'disable-model-invocation'):
         if key in keys and keys[key][1] not in ('true', 'false'):
             problems.append(f'{path}: {key} must be true or false')
-    if 'allowed-tools' in keys:
-        permission = keys['allowed-tools'][1]
-        if re.search(r'Bash\((?:npm|npx|pnpm|bun|bash|sh):\*\)|Bash\(\*\)', permission):
-            problems.append(f'{path}: broad shell preapproval prohibited in allowed-tools')
+    problems.extend(allowed_tools_errors(header, keys, path))
     return problems
 
 
