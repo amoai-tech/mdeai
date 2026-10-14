@@ -166,6 +166,11 @@
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
     },
     {
+      "file": "src/components/chat/__tests__/concierge-composer-ready.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 CopilotChatView with a plain textarea so the REAL ConciergeChatView wrapper can be rendered: proves the composer is disabled in the server HTML and enabled after hydration."
+    },
+    {
       "file": "src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only."
