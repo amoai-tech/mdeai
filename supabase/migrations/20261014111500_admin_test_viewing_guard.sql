@@ -24,6 +24,9 @@ end;
 $function$;
 
 revoke all on function public.block_nonadmin_test_viewing() from public, anon, authenticated;
+-- The existing trigger-internal ACL gate requires service_role EXECUTE.
+-- This does not make the trigger function directly callable as a normal RPC.
+grant execute on function public.block_nonadmin_test_viewing() to service_role;
 
 drop trigger if exists block_nonadmin_test_lead on public.leads;
 create trigger block_nonadmin_test_lead
