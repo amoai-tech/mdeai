@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Bed, Bath, Users, Building2, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { RentalAvailabilityCalendar } from "@/components/rentals/rental-availability-calendar";
@@ -220,6 +221,8 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
   return (
     // skipcq: JS-0415 - detailed sectioned layout is intentional for readability and stable test selectors
     <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
+      {/* A saved viewing request must be visible where it was made, not only in the chat. */}
+      <LeadConfirmationBanner />
       <Link
         href="/rentals"
         data-testid="rental-detail-back"
