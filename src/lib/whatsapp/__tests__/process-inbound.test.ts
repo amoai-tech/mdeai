@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaimedRow, InboundRpcClient } from "../inbound-store";
-import { bufferOutboundText, recordOutboundSend } from "../outbound-tracker";
+import { bufferOutboundText, recordOutboundSend, setBufferedFlusher } from "../outbound-tracker";
 import { processDueInbound } from "../process-inbound";
 
 function row(id: string, overrides: Partial<ClaimedRow> = {}): ClaimedRow {
@@ -139,19 +139,21 @@ describe("processDueInbound", () => {
 
   it("posts one consolidated reply for the whole run", async () => {
     const { client, calls } = trackingClient([[row("m1")]]);
-    const flushReply = vi.fn(async () => "wamid.final");
+    const flusher = vi.fn(async () => {
+      // The real flush goes through the adapter INSIDE the scope, so the interceptor records it.
+      recordOutboundSend({ success: true, providerMessageId: "wamid.final", content: "Found 3" });
+      return "wamid.final";
+    });
     const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
-      bufferOutboundText("I'll check those apartments");
-      bufferOutboundText("Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+      bufferOutboundText("thread", "I'll check those apartments");
+      bufferOutboundText("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+      setBufferedFlusher(flusher);
       waitUntil(Promise.resolve());
       return Promise.resolve(new Response("ok", { status: 200 }));
     });
-    const summary = await processDueInbound({ ...base, client, adapterWebhook, flushReply, phoneNumberId: "123456" });
-    expect(flushReply).toHaveBeenCalledTimes(1);
-    expect(flushReply).toHaveBeenCalledWith("whatsapp:123456:57300", [
-      "I'll check those apartments",
-      "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M",
-    ]);
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(flusher).toHaveBeenCalledTimes(1);
+    expect(flusher).toHaveBeenCalledWith("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
     expect(summary).toMatchObject({ processed: 1 });
     expect(calls.some((c) => c.fn === "whatsapp_complete_inbound_with_sends")).toBe(true);
   });

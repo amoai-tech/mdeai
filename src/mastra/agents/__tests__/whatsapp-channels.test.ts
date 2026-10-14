@@ -6,8 +6,8 @@ vi.mock("@chat-adapter/whatsapp", () => ({
   createWhatsAppAdapter: mocks.createWhatsAppAdapter,
 }));
 
-import { buildConciergeChannels, flushBufferedReply } from "../whatsapp-channels";
-import { runWithOutboundTracking } from "@/lib/whatsapp/outbound-tracker";
+import { flushBufferedReply, runWithOutboundTracking } from "@/lib/whatsapp/outbound-tracker";
+import { buildConciergeChannels } from "../whatsapp-channels";
 
 function configure(): void {
   vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "token");
@@ -53,17 +53,46 @@ describe("buildConciergeChannels", () => {
       postMessage: (threadId: string, message: unknown) => Promise<unknown>;
     };
 
-    const { buffered } = await runWithOutboundTracking(async () => {
+    await runWithOutboundTracking(async () => {
       await wrapped.postMessage("thread", "I'll check those apartments");
       await wrapped.postMessage("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+      // Nothing physical yet: the run has buffered both pieces.
+      expect(postMessage).not.toHaveBeenCalled();
+      // The single flush happens INSIDE the scope.
+      expect(await flushBufferedReply()).toBe("wamid.sent");
     });
-    expect(postMessage).not.toHaveBeenCalled();
-    expect(buffered).toHaveLength(2);
-
-    const wamid = await flushBufferedReply("thread", buffered);
-    expect(wamid).toBe("wamid.sent");
     expect(postMessage).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+  });
+
+  it("routes concurrent runs through their own adapter, never another sender", async () => {
+    configure();
+    // attachWholeRunBuffer replaces adapter.postMessage, so keep the original spies.
+    const sendA = vi.fn(async () => ({ id: "wamid.A" }));
+    const sendB = vi.fn(async () => ({ id: "wamid.B" }));
+    mocks.createWhatsAppAdapter
+      .mockReturnValueOnce({ postMessage: sendA })
+      .mockReturnValueOnce({ postMessage: sendB });
+    const wrapAdapter = (adapter: unknown) =>
+      adapter as { postMessage: (threadId: string, message: unknown) => Promise<unknown> };
+    const channelsA = buildConciergeChannels();
+    const channelsB = buildConciergeChannels();
+
+    await Promise.all([
+      runWithOutboundTracking(async () => {
+        await wrapAdapter(channelsA!.adapters.whatsapp.adapter).postMessage("tA", "reply A");
+        await flushBufferedReply();
+      }),
+      runWithOutboundTracking(async () => {
+        await wrapAdapter(channelsB!.adapters.whatsapp.adapter).postMessage("tB", "reply B");
+        await flushBufferedReply();
+      }),
+    ]);
+
+    expect(sendA).toHaveBeenCalledTimes(1);
+    expect(sendA).toHaveBeenCalledWith("tA", "reply A");
+    expect(sendB).toHaveBeenCalledTimes(1);
+    expect(sendB).toHaveBeenCalledWith("tB", "reply B");
   });
 
   it("disables the channel on a configuration (ValidationError)", () => {

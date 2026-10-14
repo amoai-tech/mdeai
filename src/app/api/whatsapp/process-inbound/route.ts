@@ -10,7 +10,6 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
 import type { InboundRpcClient } from "@/lib/whatsapp/inbound-store";
 import { reportInboundProcessingFailure } from "@/lib/whatsapp/monitoring";
-import { flushBufferedReply } from "@/mastra/agents/whatsapp-channels";
 import { processDueInbound } from "@/lib/whatsapp/process-inbound";
 import { constantTimeEqual, signWebhookBody } from "@/lib/whatsapp/webhook-security";
 
@@ -43,8 +42,6 @@ export async function POST(request: NextRequest) {
       sign: (body) => signWebhookBody(body, env.appSecret),
       adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
       workerId,
-      phoneNumberId: env.phoneNumberId,
-      flushReply: flushBufferedReply,
     });
     return NextResponse.json(summary);
   } catch (error) {
