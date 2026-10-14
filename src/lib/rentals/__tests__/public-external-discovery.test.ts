@@ -183,6 +183,26 @@ describe("public external source cards", () => {
     expect(ad?.image).toBe("");
   });
 
+  it("warns (slug and count only) when every stored photo is rejected, and stays quiet otherwise", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      publicExternalRentalCard({ ...base, images: ["https://example.net/a.webp", "not a url"] });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain(base.slug);
+      expect(warn.mock.calls[0][0]).toContain("2 stored photo(s)");
+      expect(warn.mock.calls[0][0]).not.toContain("example.net");
+      warn.mockClear();
+      publicExternalRentalCard({ ...base, images: [] }); // nothing stored: nothing to report
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
   it("accepts Fincaraíz source links without the www subdomain", () => {
     const result = publicExternalRentalCard({ ...base, source_url: "https://fincaraiz.com.co/apartamento/193916988" });
     expect(result?.source_url).toContain("https://fincaraiz.com.co/");

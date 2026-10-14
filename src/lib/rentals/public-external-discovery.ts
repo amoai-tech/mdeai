@@ -64,6 +64,11 @@ function publicRentalPhotos(row: ExternalListing): string[] {
     }
     if (photos.length === MAX_PUBLIC_PHOTOS) break;
   }
+  // Stored photos that all fail the check usually mean the photo pipeline or storage URL format
+  // changed. Keep hiding them, but leave a trace (slug and count only, no URLs) for operators.
+  if (photos.length === 0 && (row.images?.length ?? 0) > 0) {
+    console.warn(`[external-discovery] ${row.slug}: ${row.images?.length} stored photo(s), none approved for display`);
+  }
   return photos;
 }
 

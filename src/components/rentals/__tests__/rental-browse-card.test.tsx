@@ -282,6 +282,22 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
   });
 });
 
+describe("External rental viewing CTA fails closed (SAN-1416)", () => {
+  it("offers no schedule button for an external ad even if its data wrongly says it is requestable", () => {
+    const rental = {
+      ...rowToRental(apartmentRow()),
+      id: "candidate-fincaraiz-193916988",
+      tags: ["external-source"],
+      source_url: "https://fincaraiz.com.co/apartment/193916988",
+      can_schedule_viewing: true, // mis-flagged
+      schedule_viewing_url: "https://mdeai.co/rentals/candidate-fincaraiz-193916988",
+    };
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain("View original listing");
+  });
+});
+
 describe("External rental title navigation", () => {
   it("opens the original advertisement instead of a non-public MDE detail URL", () => {
     const rental = {

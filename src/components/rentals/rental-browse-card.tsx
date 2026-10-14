@@ -164,7 +164,9 @@ export function RentalBrowseCard({
   // SAN-478: it also requires somewhere to send the click. A listing with no canonical
   // owner stays browseable but can never expose a viewing CTA, so the UI cannot advertise
   // an action the database will reject — and with no handler there is nothing to open.
-  const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
+  // Fail closed like the Details panel: an advertiser's listing is never requestable on MDE,
+  // whatever its flag says.
+  const showScheduleCta = !isExternalAd(rental) && rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
   const externalSourceUrl = externalSourceUrlFor(rental);
   const preview = () => (onPreview ?? onSelect)?.();
