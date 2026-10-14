@@ -23,8 +23,8 @@ export function BrowseMapSheet() {
         Map
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        {/* The default close button is 28px; a phone tap target must be at least 44px (SAN-524),
-            the same size the chat map sheet already uses. */}
+        {/* The default close button is 28px; rentals and restaurants use this shared
+            browse map sheet, with a 44px phone target (SAN-524). */}
         <SheetContent side="bottom" className="h-[70vh] p-0" showCloseButton={false}>
           <SheetClose
             render={

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The phone map sheet on the browse pages (rentals, events, restaurants, cafés) must have a
+ * The phone map sheet on rentals and restaurants (the two current callers) must have a
  * Close control a thumb can hit: 44×44 (SAN-524). The default sheet close is 28px.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -28,6 +28,8 @@ describe("BrowseMapSheet close control", () => {
     await act(async () => {
       (document.querySelector('[data-testid="browse-map-fab"]') as HTMLButtonElement).click();
     });
+    // The sheet must actually render the map before closing it; otherwise the test is vacuous.
+    expect(document.querySelector('[data-testid="chat-map-stub"]')).not.toBeNull();
     const closers = document.querySelectorAll('button[aria-label="Close"]');
     expect(closers).toHaveLength(1); // not the 28px default plus a second one
     const close = closers[0] as HTMLButtonElement;
