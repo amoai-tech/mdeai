@@ -67,13 +67,13 @@ function RentalBrowseViewInner({
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
-  // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
-  // curated or available now — only that listed rentals are verified and published.
+  // Public browse includes source-linked external ads alongside verified inventory.
+  // Do not claim every result is verified or available for MDE viewing requests.
   const subtitle = previewMode
     ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
     : error
       ? "Long-stay apartments in Medellín"
-      : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
+      : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}`;
 
   return (
     <>
@@ -109,7 +109,7 @@ function RentalBrowseViewInner({
           {!error && results.length === 0 ? (
             <EmptyState
               testId="rentals-empty"
-              title="No verified rentals currently match these filters"
+              title="No rentals currently match these filters"
               description="Try another neighborhood or bedroom count, or ask MDE in chat."
               icon={<Building2 className="size-8" aria-hidden />}
             />
