@@ -85,7 +85,17 @@ callback URL. None verified. Owned by SAN-1444.
 1. **Contain (this PR).** Ship a deny-by-default `whatsapp-webhook`: every request is 403, no body parse,
    no env read, no database client, no outbound fetch. Deploy is the gated action.
 2. **Deny.** Deploy the deny-by-default revision first, so the endpoint can neither write nor send
-   while the review below runs.
+   while the review below runs. The function's `verify_jwt = false` is declared in the root
+   `supabase/config.toml` under `[functions.whatsapp-webhook]` (Supabase's documented location).
+
+   ```bash
+   supabase functions deploy whatsapp-webhook --project-ref zkwcbyxiwklihegjhuql
+   ```
+
+   Note: four older functions (`approval-commit`, `chat-lead-capture`, `ticket-checkout`,
+   `ticket-payment-webhook`) still carry a function-local `config.toml`, which is not the
+   documented location. Migrating them is a separate follow-up; this task only moved
+   `whatsapp-webhook`.
 3. **Drain/verify.** Extend the traffic window; confirm no legitimate caller.
 4. **Revoke.** After the extended window confirms inactivity, unregister the Infobip callback and revoke
    Infobip/OpenClaw/Twilio credentials and secrets. Do not revoke on 24h evidence alone.
