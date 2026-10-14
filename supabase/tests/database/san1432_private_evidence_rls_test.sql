@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(36);
+select plan(38);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES
@@ -176,6 +176,12 @@ select ok(
 select ok(
   not has_table_privilege('anon', 'public.property_verifications', 'SELECT'),
   'F3: anon has no SELECT grant on property_verifications');
+select ok(
+  not has_table_privilege('anon', 'public.property_verifications', 'TRUNCATE'),
+  'F3a: anonymous users cannot TRUNCATE verification evidence');
+select ok(
+  not has_table_privilege('authenticated', 'public.property_verifications', 'TRUNCATE'),
+  'F3b: authenticated users cannot TRUNCATE verification evidence');
 
 set local role anon;
 select set_config('request.jwt.claim.sub', '', true);
