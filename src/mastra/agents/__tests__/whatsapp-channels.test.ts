@@ -9,24 +9,19 @@ vi.mock("@chat-adapter/whatsapp", () => ({
 import { buildConciergeChannels } from "../whatsapp-channels";
 
 function configure(): void {
-  process.env.WHATSAPP_ACCESS_TOKEN = "token";
-  process.env.WHATSAPP_APP_SECRET = "secret";
-  process.env.WHATSAPP_PHONE_NUMBER_ID = "123456";
-  process.env.WHATSAPP_VERIFY_TOKEN = "verify";
-}
-
-function clearEnv(): void {
-  delete process.env.WHATSAPP_ACCESS_TOKEN;
-  delete process.env.WHATSAPP_APP_SECRET;
-  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
-  delete process.env.WHATSAPP_VERIFY_TOKEN;
+  vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "token");
+  vi.stubEnv("WHATSAPP_APP_SECRET", "secret");
+  vi.stubEnv("WHATSAPP_PHONE_NUMBER_ID", "123456");
+  vi.stubEnv("WHATSAPP_VERIFY_TOKEN", "verify");
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clearEnv();
+  vi.unstubAllEnvs();
 });
-afterEach(clearEnv);
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("buildConciergeChannels", () => {
   it("constructs nothing when the channel is unconfigured", () => {

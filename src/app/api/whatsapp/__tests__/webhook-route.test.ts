@@ -24,24 +24,19 @@ import { GET, POST } from "../webhook/route";
 const URL = "https://x.test/api/whatsapp/webhook";
 
 function configure(): void {
-  process.env.WHATSAPP_ACCESS_TOKEN = "test-token";
-  process.env.WHATSAPP_APP_SECRET = TEST_APP_SECRET;
-  process.env.WHATSAPP_PHONE_NUMBER_ID = "123456";
-  process.env.WHATSAPP_VERIFY_TOKEN = "verify";
-}
-
-function clearEnv(): void {
-  delete process.env.WHATSAPP_ACCESS_TOKEN;
-  delete process.env.WHATSAPP_APP_SECRET;
-  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
-  delete process.env.WHATSAPP_VERIFY_TOKEN;
+  vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "test-token");
+  vi.stubEnv("WHATSAPP_APP_SECRET", TEST_APP_SECRET);
+  vi.stubEnv("WHATSAPP_PHONE_NUMBER_ID", "123456");
+  vi.stubEnv("WHATSAPP_VERIFY_TOKEN", "verify");
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clearEnv();
+  vi.unstubAllEnvs();
 });
-afterEach(clearEnv);
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("WhatsApp webhook route", () => {
   it("returns 503 and constructs nothing when the channel is unconfigured", async () => {
