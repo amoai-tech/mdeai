@@ -21,7 +21,7 @@ function whatsappChannels() {
   // Mastra registers agents by registry key ("conciergeAgent"), not by the agent's own id.
   const agent = mastra.getAgent("conciergeAgent");
   const channels = agent?.getChannels?.() ?? null;
-  if (!channels || !channels.hasAdapter("whatsapp")) return null;
+  if (!channels?.hasAdapter("whatsapp")) return null;
   return channels;
 }
 
@@ -36,8 +36,10 @@ export async function GET(request: NextRequest) {
   if (!readWhatsAppChannelEnv()) return unavailable();
   const channels = whatsappChannels();
   if (!channels) return unavailable();
-  return channels.handleWebhookEvent("whatsapp", request, {
-    waitUntil: (promise) => after(() => promise),
+  return await channels.handleWebhookEvent("whatsapp", request, {
+    waitUntil: (promise) => {
+      after(() => promise);
+    },
   });
 }
 
@@ -50,7 +52,9 @@ export async function POST(request: NextRequest) {
   if (!verifyMetaSignature(raw, request.headers.get("x-hub-signature-256"), env.appSecret)) {
     return new NextResponse("Invalid signature", { status: 401 });
   }
-  return channels.handleWebhookEvent("whatsapp", request, {
-    waitUntil: (promise) => after(() => promise),
+  return await channels.handleWebhookEvent("whatsapp", request, {
+    waitUntil: (promise) => {
+      after(() => promise);
+    },
   });
 }

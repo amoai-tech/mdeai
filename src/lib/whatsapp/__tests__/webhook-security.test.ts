@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   extractInboundEvents,
@@ -6,33 +5,29 @@ import {
   resolveVerificationChallenge,
   verifyMetaSignature,
 } from "../webhook-security";
-
-const SECRET = "app-secret";
-const sign = (body: string, secret = SECRET) =>
-  "sha256=" + createHmac("sha256", secret).update(body, "utf8").digest("hex");
+import { signMetaBody, TEST_APP_SECRET } from "./test-signing";
 
 describe("verifyMetaSignature", () => {
   it("accepts a correctly signed raw body", () => {
     const body = JSON.stringify({ hello: "wörld é" });
-    expect(verifyMetaSignature(body, sign(body), SECRET)).toBe(true);
+    expect(verifyMetaSignature(body, signMetaBody(body), TEST_APP_SECRET)).toBe(true);
   });
 
   it("rejects forged secrets, missing headers, wrong algorithms and length mismatches", () => {
     const body = "{}";
-    expect(verifyMetaSignature(body, sign(body, "other"), SECRET)).toBe(false);
-    expect(verifyMetaSignature(body, null, SECRET)).toBe(false);
-    expect(verifyMetaSignature(body, "md5=" + sign(body).slice(5), SECRET)).toBe(false);
-    expect(verifyMetaSignature(body, "sha256=deadbeef", SECRET)).toBe(false);
-    expect(verifyMetaSignature(body, "sha256=", SECRET)).toBe(false);
-    expect(verifyMetaSignature(body, sign(body), "")).toBe(false);
+    expect(verifyMetaSignature(body, signMetaBody(body, "other-secret"), TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, null, TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, "md5=" + signMetaBody(body).slice(5), TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, "sha256=deadbeef", TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, "sha256=", TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, signMetaBody(body), "")).toBe(false);
   });
 
   it("fails when a byte changes after signing (raw-body requirement)", () => {
     const body = JSON.stringify({ text: "café" });
-    const signature = sign(body);
-    expect(verifyMetaSignature(body + " ", signature, SECRET)).toBe(false);
-    // Re-serialising parsed JSON would escape the non-ASCII char and change the digest.
-    expect(verifyMetaSignature(body, signature, SECRET)).toBe(true);
+    const signature = signMetaBody(body);
+    expect(verifyMetaSignature(body + " ", signature, TEST_APP_SECRET)).toBe(false);
+    expect(verifyMetaSignature(body, signature, TEST_APP_SECRET)).toBe(true);
   });
 });
 

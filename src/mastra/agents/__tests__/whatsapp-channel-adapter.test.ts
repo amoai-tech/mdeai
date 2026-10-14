@@ -5,24 +5,22 @@
  * The adapter is the transport owner; this test pins the contract MDE relies on at the
  * version actually installed (4.41.1), so an upgrade that changes it fails here first.
  */
-import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
 import { FLASH_MODEL } from "@/mastra/lib/models";
+import { signMetaBody, TEST_APP_SECRET } from "@/lib/whatsapp/__tests__/test-signing";
 
 // Keep the adapter's initialization away from the public Graph API in tests.
 process.env.WHATSAPP_API_URL = "http://127.0.0.1:1/";
 
 const creds = {
   accessToken: "test-token",
-  appSecret: "test-secret",
+  appSecret: TEST_APP_SECRET,
   phoneNumberId: "123456",
   verifyToken: "verify-me",
   userName: "mde",
 };
 const BASE = "https://x.test/api/whatsapp/webhook";
-const sign = (body: string, secret = "test-secret") =>
-  "sha256=" + createHmac("sha256", secret).update(body, "utf8").digest("hex");
 
 const statusPayload = JSON.stringify({
   object: "whatsapp_business_account",
@@ -57,7 +55,7 @@ describe("@chat-adapter/whatsapp ingress contract", () => {
   });
 
   it("POST accepts a valid X-Hub-Signature-256 over the raw body", async () => {
-    const res = await post(adapter, statusPayload, sign(statusPayload));
+    const res = await post(adapter, statusPayload, signMetaBody(statusPayload));
     expect(res.status).toBe(200);
   });
 
@@ -65,18 +63,18 @@ describe("@chat-adapter/whatsapp ingress contract", () => {
     const body = JSON.stringify({ object: "whatsapp_business_account", entry: [{ id: "W", changes: [{ field: "messages", value: {
       metadata: { phone_number_id: "123456" }, statuses: [{ id: "wamid.é", status: "read" }],
     } }] }] });
-    const res = await post(adapter, body, sign(body));
+    const res = await post(adapter, body, signMetaBody(body));
     expect(res.status).toBe(200);
   });
 
   it("POST rejects forged and missing signatures", async () => {
-    expect((await post(adapter, statusPayload, sign(statusPayload, "wrong-secret"))).status).toBe(401);
+    expect((await post(adapter, statusPayload, signMetaBody(statusPayload, "wrong-secret"))).status).toBe(401);
     expect((await post(adapter, statusPayload, null)).status).toBe(401);
   });
 
   it("POST rejects malformed JSON even with a valid signature", async () => {
     const body = "{oops";
-    expect((await post(adapter, body, sign(body))).status).toBe(400);
+    expect((await post(adapter, body, signMetaBody(body))).status).toBe(400);
   });
 
   it("refuses to construct without the full credential set", () => {
@@ -93,17 +91,16 @@ describe("Mastra in-process channel mount", () => {
       name: "WA Mount Agent",
       instructions: "test",
       model: FLASH_MODEL,
-
       channels: { adapters: { whatsapp: createWhatsAppAdapter(creds) } },
     });
     const channels = agent.getChannels();
     expect(channels?.hasAdapter("whatsapp")).toBe(true);
     new Mastra({ agents: { waMountAgent: agent } });
-    const res = await channels!.handleWebhookEvent(
+    const res = await channels?.handleWebhookEvent(
       "whatsapp",
       new Request(BASE + "?hub.mode=subscribe&hub.verify_token=verify-me&hub.challenge=mnt456"),
     );
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("mnt456");
+    expect(res?.status).toBe(200);
+    expect(await res?.text()).toBe("mnt456");
   });
 });
