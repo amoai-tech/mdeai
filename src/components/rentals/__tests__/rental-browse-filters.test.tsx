@@ -45,7 +45,18 @@ describe("RentalBrowseFilters — stay dates (SAN-486)", () => {
   });
 
   it("neighborhood and bedroom chips keep the chosen dates", () => {
-    const href = (testId: string) => withDates.match(new RegExp(`<a [^>]*data-testid="${testId}"[^>]*href="([^"]*)"`))?.[1] ?? "";
+    // Parse the rendered anchor by locating its test id, then extract href from that tag.
+    // Uses a literal regex (no RegExp constructor from a variable) and is independent of
+    // the attribute order Next.js Link emits.
+    const href = (testId: string) => {
+      const marker = 'data-testid="' + testId + '"';
+      const at = withDates.indexOf(marker);
+      if (at < 0) return "";
+      const start = withDates.lastIndexOf("<a ", at);
+      const end = withDates.indexOf(">", at);
+      if (start < 0 || end < 0) return "";
+      return withDates.slice(start, end).match(/href="([^"]*)"/)?.[1] ?? "";
+    };
     expect(href("rentals-filter-neighborhood-envigado")).toContain("from=2026-11-01");
     expect(href("rentals-filter-neighborhood-envigado")).toContain("through=2026-11-30");
     expect(href("rentals-filter-beds-1")).toContain("from=2026-11-01");
