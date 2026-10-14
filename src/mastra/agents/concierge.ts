@@ -15,28 +15,7 @@ import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
-import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
-import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
-
-/**
- * SAN-1444 — attach the WhatsApp channel to the SHARED concierge only when the complete
- * Meta credential set is present. The adapter throws eagerly on missing credentials, so an
- * unconditional attach would break web chat in every environment without WhatsApp configured.
- * Absence of credentials means "channel disabled", never "channel open".
- *
- * ponytail: the adapter owns the GET challenge and POST signature check; MDE does not
- * reimplement transport. Replace with a provider-managed adapter if Mastra Connect is adopted.
- */
-function buildConciergeChannels() {
-  const env = readWhatsAppChannelEnv();
-  if (!env) return undefined;
-  try {
-    return { adapters: { whatsapp: createWhatsAppAdapter(env) } };
-  } catch (error) {
-    console.error("[whatsapp] channel adapter disabled — initialization failed", error);
-    return undefined;
-  }
-}
+import { buildConciergeChannels } from "./whatsapp-channels";
 
 export const conciergeWorkingMemorySchema = z.object({
   lastIntent: z

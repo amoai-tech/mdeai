@@ -32,6 +32,50 @@ export function resolveVerificationChallenge(url: URL, verifyToken: string): str
   return url.searchParams.get("hub.challenge") ?? null;
 }
 
+export type LimitedBody =
+  | { ok: true; body: string }
+  | { ok: false; reason: "too_large" | "unreadable" };
+
+/**
+ * Read a request body without buffering more than maxBytes. The declared content-length is a
+ * cheap first barrier but can be spoofed/absent, so the stream itself is also capped.
+ * Reads a clone, leaving the original request body intact for the adapter.
+ */
+export async function readBodyWithLimit(
+  request: Request,
+  maxBytes: number = MAX_WEBHOOK_BYTES,
+): Promise<LimitedBody> {
+  const declared = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, reason: "too_large" };
+  const stream = request.body;
+  if (!stream) return { ok: true, body: "" };
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false, reason: "too_large" };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, reason: "unreadable" };
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, body: new TextDecoder().decode(merged) };
+}
+
 export type WhatsAppInboundEvent = {
   kind: "message" | "status";
   providerEventId: string | null;

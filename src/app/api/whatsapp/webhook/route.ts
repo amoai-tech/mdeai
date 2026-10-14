@@ -12,7 +12,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { mastra } from "@/mastra";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
-import { verifyMetaSignature } from "@/lib/whatsapp/webhook-security";
+import { MAX_WEBHOOK_BYTES, readBodyWithLimit, verifyMetaSignature } from "@/lib/whatsapp/webhook-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,8 +48,14 @@ export async function POST(request: NextRequest) {
   if (!env) return unavailable();
   const channels = whatsappChannels();
   if (!channels) return unavailable();
-  const raw = await request.clone().text();
-  if (!verifyMetaSignature(raw, request.headers.get("x-hub-signature-256"), env.appSecret)) {
+  const limited = await readBodyWithLimit(request.clone(), MAX_WEBHOOK_BYTES);
+  if (!limited.ok) {
+    const tooLarge = limited.reason === "too_large";
+    return new NextResponse(tooLarge ? "Payload Too Large" : "Unreadable body", {
+      status: tooLarge ? 413 : 400,
+    });
+  }
+  if (!verifyMetaSignature(limited.body, request.headers.get("x-hub-signature-256"), env.appSecret)) {
     return new NextResponse("Invalid signature", { status: 401 });
   }
   return await channels.handleWebhookEvent("whatsapp", request, {

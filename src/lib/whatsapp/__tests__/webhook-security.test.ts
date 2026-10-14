@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractInboundEvents,
   mergeDeliveryStatus,
+  readBodyWithLimit,
   resolveVerificationChallenge,
   verifyMetaSignature,
 } from "../webhook-security";
@@ -74,5 +75,23 @@ describe("mergeDeliveryStatus", () => {
     expect(mergeDeliveryStatus("read", "failed")).toBe("failed");
     expect(mergeDeliveryStatus("failed", "read")).toBe("failed");
     expect(mergeDeliveryStatus("sent", "unknown-status")).toBe("sent");
+  });
+});
+
+describe("readBodyWithLimit", () => {
+  it("accepts a body within the limit", async () => {
+    const req = new Request("https://x.test", { method: "POST", body: "hello" });
+    expect(await readBodyWithLimit(req, 64)).toEqual({ ok: true, body: "hello" });
+  });
+
+  it("rejects a declared content-length over the limit", async () => {
+    const req = new Request("https://x.test", { method: "POST", headers: { "content-length": "9999" }, body: "hi" });
+    expect(await readBodyWithLimit(req, 64)).toEqual({ ok: false, reason: "too_large" });
+  });
+
+  it("rejects an oversized stream even when content-length is absent", async () => {
+    const req = new Request("https://x.test", { method: "POST", body: new Uint8Array(200) });
+    req.headers.delete("content-length");
+    expect(await readBodyWithLimit(req, 64)).toEqual({ ok: false, reason: "too_large" });
   });
 });
