@@ -29,8 +29,15 @@ export function buildConciergeChannels() {
         whatsapp: {
           adapter: createWhatsAppAdapter(env),
           // WhatsApp has no message editing: streamed progress arrives as many separate
-          // notifications (one question produced 7 messages). Post one consolidated reply and
-          // hide tool/progress output instead.
+          // notifications (one question produced 7 messages). Post consolidated replies and hide
+          // tool/progress output instead.
+          //
+          // ponytail: this REDUCES the message count, it does not guarantee exactly one. Mastra's
+          // static driver flushes buffered text on `text-end`, `step-finish` AND `tool-call`
+          // (@mastra/core dist, the static driver's flush triggers), so a model that narrates
+          // ("I'll check those apartments") before searching can still emit a second message.
+          // Guaranteeing one message needs whole-run output buffering plus a deterministic
+          // multi-step channel test — a separate change, not this one.
           streaming: false,
           toolDisplay: "hidden" as const,
         },
