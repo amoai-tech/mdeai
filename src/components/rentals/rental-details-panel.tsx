@@ -256,7 +256,9 @@ export function RentalDetailsPanel({ rental, onClose, onSchedule }: DetailsProps
 /** Phone and tablet: a bottom sheet over the results. The sheet handles Escape and focus return. */
 export function RentalDetailsSheet({ rental, onClose, onSchedule }: DetailsProps) {
   return (
-    <Sheet open onOpenChange={(open) => (open ? undefined : onClose())}>
+    <Sheet open onOpenChange={(open) => {
+        if (!open) onClose();
+      }}>
       <SheetContent
         side="bottom"
         showCloseButton={false}

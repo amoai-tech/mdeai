@@ -95,14 +95,18 @@ function viewProps(results: Rental[] = NINE) {
 }
 
 async function mount(results: Rental[] = NINE) {
-  await act(async () => root.render(<RentalBrowseView {...viewProps(results)} />));
+  await act(() => {
+    root.render(<RentalBrowseView {...viewProps(results)} />);
+  });
 }
 
 const byId = (id: string) => container.ownerDocument.querySelector<HTMLElement>(`[data-testid="${id}"]`);
 const q = (selector: string) => container.ownerDocument.querySelector<HTMLElement>(selector);
 const click = async (el: HTMLElement | null) => {
   if (!el) throw new Error("element to click was not found");
-  await act(async () => el.click());
+  await act(() => {
+    el.click();
+  });
 };
 const detailsButton = (slug: string) => byId(`rental-details-cta-${slug}`) as HTMLButtonElement;
 
@@ -137,7 +141,9 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root.unmount());
+  await act(() => {
+    root.unmount();
+  });
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
   if (previousEnv === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -257,7 +263,7 @@ describe("/rentals Details panel — desktop", () => {
     trigger.focus();
     await click(trigger);
     expect(document.activeElement).toBe(byId("rental-details-close")); // focus moves into the panel
-    await act(async () => {
+    await act(() => {
       byId("rental-details-panel")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(byId("rental-details-panel")).toBeNull();
@@ -324,13 +330,13 @@ describe("RentalDetailsPanel — states", () => {
   const baseRentalOf = () => NINE[1];
 
   async function renderPanel(rental: Rental, onSchedule?: () => void) {
-    await act(async () =>
+    await act(() => {
       root.render(
         <div className="relative">
           <RentalDetailsPanel rental={rental} onClose={noop} onSchedule={onSchedule} />
         </div>,
-      ),
-    );
+      );
+    });
   }
 
   it("shows a placeholder, not a broken image, when there are no photos", async () => {
@@ -349,7 +355,9 @@ describe("RentalDetailsPanel — states", () => {
   it("a failed photo shows 'Photo unavailable' rather than a broken image", async () => {
     await renderPanel(baseRentalOf());
     const first = byId("rental-details-photo-1") as HTMLImageElement;
-    await act(async () => first.dispatchEvent(new Event("error")));
+    await act(() => {
+      first.dispatchEvent(new Event("error"));
+    });
     expect(byId("rental-details-photo-1-unavailable")?.textContent).toContain("Photo unavailable");
   });
 
