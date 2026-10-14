@@ -16,6 +16,11 @@ begin;
 
 select plan(30);
 
+-- The table's own CHECK constraint (apartments_availability_window_check, SAN-486) now refuses a
+-- reversed window outright. The launch gate and the viewing RPC must still fail closed on one as
+-- defence in depth, so lift the constraint for THIS transaction (rolled back below) to prove they do.
+alter table public.apartments drop constraint if exists apartments_availability_window_check;
+
 insert into auth.users (id, instance_id, aud, role, email)
 values ('f4860000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
         'authenticated', 'authenticated', 'san486-owner@example.com');
