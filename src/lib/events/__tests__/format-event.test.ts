@@ -39,6 +39,18 @@ describe("formatEventCardPrice", () => {
 });
 
 describe("formatEventSchedule", () => {
+  it("shows Medellín times independent of the server/browser timezone", () => {
+    expect(
+      formatEventSchedule("2026-10-19T21:00:00.000Z", "2026-10-20T02:00:00.000Z"),
+    ).toBe("Mon, Oct 19, 4:00 PM – 9:00 PM");
+  });
+
+  it("uses Medellín local dates to decide whether the event spans two days", () => {
+    expect(
+      formatEventSchedule("2026-10-19T04:30:00.000Z", "2026-10-19T06:30:00.000Z"),
+    ).toContain("Sun, Oct 18, 11:30 PM – 10/19/2026, 1:30:00 AM");
+  });
+
   it("shows end time on same day", () => {
     const label = formatEventSchedule(
       "2027-02-24T01:00:00.000Z",

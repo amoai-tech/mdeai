@@ -1,0 +1,38 @@
+[
+  {
+    "id": "tests-1",
+    "prompt": "Design the smallest deterministic regression test matrix for rental leads, including retry, wrong-owner denial, and missing coordinates.",
+    "should_trigger": true,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "tests-2",
+    "prompt": "List meaningful positive, negative, and concurrency test cases for the ticket-webhook idempotency contract, without running them.",
+    "should_trigger": true,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "tests-3",
+    "prompt": "Draft test cases and a grading rubric for concierge tool routing, hallucinated prices, and unauthorized actions.",
+    "should_trigger": true,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "tests-4",
+    "prompt": "Run existing Vitest tests and diagnose failures in their output.",
+    "should_trigger": false,
+    "expected_owner": "testing"
+  },
+  {
+    "id": "tests-5",
+    "prompt": "Walk through the complete mobile checkout with real browser, API, persistence, and visible ticket.",
+    "should_trigger": false,
+    "expected_owner": "e2e"
+  },
+  {
+    "id": "tests-6",
+    "prompt": "Independently certify that the task meets its current Linear acceptance criteria and is safe to mark Done.",
+    "should_trigger": false,
+    "expected_owner": "task-verifier"
+  }
+]

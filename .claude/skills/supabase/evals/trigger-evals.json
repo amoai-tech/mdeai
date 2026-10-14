@@ -1,0 +1,38 @@
+[
+  {
+    "id": "supabase-1",
+    "prompt": "Update Supabase RLS for landlord viewing requests to deny cross-broker reads; prove grants and policies first.",
+    "should_trigger": true,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "supabase-2",
+    "prompt": "A Postgres SECURITY DEFINER RPC is exposing rows to the wrong tenant. Audit the function grants and live schema.",
+    "should_trigger": true,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "supabase-3",
+    "prompt": "Inspect the migration and schema contract for a Supabase realtime replication publication.",
+    "should_trigger": true,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "supabase-4",
+    "prompt": "Review the PR diff that changes Supabase SQL and produce independent code-quality findings.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  },
+  {
+    "id": "supabase-5",
+    "prompt": "Plan a user-facing regression suite for Supabase tenant reads without applying SQL changes.",
+    "should_trigger": false,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "supabase-6",
+    "prompt": "Investigate an unknown intermittent production 500 where the failing subsystem has not been identified.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  }
+]

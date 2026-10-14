@@ -101,7 +101,7 @@ WABA ID, phone number id, permanent system-user token, app secret, MDE verify to
 
 ## 11. Known limitations (do not over-claim)
 - **At-least-once external sends.** If the provider accepted a reply and the process died before completion committed, the retry sends again. Fencing prevents stale overwrites, not a duplicate send.
-- **Completion contract.** Completion awaits the task the adapter registers via `waitUntil` (`chat.processMessage(..., options)`); the adapter does not reference `waitUntil` directly but forwards `WebhookOptions` to `chat`, which does. Residual ambiguity remains for any provider send that settles after that task.
+- **Completion contract.** Completion now requires a **confirmed outbound send**, not just a settled task. The worker opens an AsyncLocalStorage scope; the WhatsApp adapter's `postMessage` records each attempt (success with the provider message id, or the error). A settled `waitUntil` task with no successful send fails the row for retry, because the Chat SDK resolves that task even when the agent or the Meta send failed. Residual ambiguity remains for a send that succeeds and then the process dies before completion (at-least-once).
 - **Defect found by this suite.** The first `whatsapp_record_inbound` revision returned two rows on conflict: PL/pgSQL `RETURN QUERY` appends a row without exiting, so the `true` branch also ran. Fixed with an explicit `RETURN`. Unit tests missed it; the PostgreSQL test caught it.
 
 ## 12. Review hardening (post-review)
@@ -122,6 +122,17 @@ These do not block merging the durable foundation; they block turning the channe
 1. **Recovery schedule.** Live has zero WhatsApp cron jobs. Provision the Vault secrets and apply §7, then prove restart recovery by claiming a row, killing the worker, and watching the sweeper complete it.
 2. **Same-sender ordering across serverless instances.** Distinct messages are distinct rows, so nothing is processed twice, but two messages from one customer can run concurrently and out of order. Add sender-level serialization (or a supported shared pub/sub) and test two rapid messages from one number.
 3. **Agent-run cancellation.** The 120s wait is bounded and fencing prevents stale writes, but the underlying promise can outlive the wait. Thread an AbortSignal through the adapter before enabling traffic.
-4. **Delivery truth.** Awaited agent work does not prove the reply reached the device. Store the outbound provider id and persist `sent`/`delivered`/`read`/`failed` statuses.
+4. **Delivery truth.** Completion is now gated on a confirmed send (the provider message id is captured in-process). Remaining: **persist** the outbound provider id and the `sent`/`delivered`/`read`/`failed` statuses so delivery is auditable.
 5. **Authorization.** Prove a WhatsApp user without an MDE account cannot read private data or trigger consequential actions (viewings, bookings).
 6. **Real device round trip.** One signed inbound message ⇒ one durable row ⇒ one grounded reply ⇒ valid `wamid` ⇒ receipt, with no fabricated prices, availability, or coordinates.
+
+## 14. Outbound sends and delivery status (delivery tracking)
+Reuses `public.whatsapp_messages`: the outbound `wamid` is the existing unique `external_id`, and the existing status check already allows `pending/sent/delivered/read/failed`. Two columns were added: `inbound_message_id` (links an outbound row to its inbound message) and `delivery_status_at`.
+
+- **One transaction for send + completion.** `whatsapp_complete_inbound_with_sends(p_message_id, p_claim_token, p_sends)` is fenced on the claim token, inserts one outbound row per confirmed send (status `sent`, linked to the inbound row), and marks the inbound row `processed` in the same transaction. It returns the number of sends recorded; `0` means the claim was fenced or nothing was sent, so the caller must not treat the message as answered.
+- **Status is monotonic.** `whatsapp_record_delivery_status(p_external_id, p_status, p_status_at, p_error)` upserts by wamid and never regresses (`read → delivered`/`sent` is ignored). Duplicates are idempotent; a `failed` status keeps its diagnostic.
+- **Early callbacks are not discarded.** A status callback that arrives before the outbound row exists creates a placeholder row keyed by the wamid; the send RPC later enriches it (phone, content, inbound link) without downgrading its status.
+- **The webhook never runs the agent for a receipt.** After signature verification, `extractWhatsAppStatuses` persists every `statuses[]` event (across all entries/changes) and a status-only payload is acknowledged without processing. A payload carrying both statuses and messages persists the statuses first, then records the messages.
+- **Privileges.** All three RPCs and the `whatsapp_status_rank` helper have EXECUTE revoked from `public`/`anon`/`authenticated` and granted to `service_role`; the helper pins `search_path = ''` (required by the SAN-1331 advisor gate).
+
+Verified: `supabase db reset --local` clean replay; pgTAP `Result: PASS` (40 files / 1175 tests) including a 24-assertion delivery suite; two-connection concurrency PASS.

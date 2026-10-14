@@ -3,23 +3,27 @@ const searchMock = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }))
 vi.mock("@/lib/supabase/service", () => ({
   createServiceRoleClient: () => ({
     from: () => {
-      const result = { data: searchMock.rows, error: null };
+      // Mirror PostgREST filters: tests must fail if SQL accidentally retains
+      // draft-only predicates after source advertisements are published.
+      let rows = [...searchMock.rows];
       const query = {
         select: () => query,
-        in: () => query,
-        eq: () => query,
-        contains: (_column: string, expected: Record<string, unknown>) => {
-          return {
-            then: (resolve: (value: unknown) => unknown) => Promise.resolve({
-              data: searchMock.rows.filter((row) => {
-                const metadata = row.metadata as Record<string, unknown> | undefined;
-                return Object.entries(expected).every(([key, value]) => metadata?.[key] === value);
-              }),
-              error: null,
-            }).then(resolve),
-          };
+        in: (column: string, values: string[]) => {
+          rows = rows.filter((row) => values.includes(String(row[column])));
+          return query;
         },
-        then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
+        eq: (column: string, value: unknown) => {
+          rows = rows.filter((row) => row[column] === value);
+          return query;
+        },
+        contains: (column: string, expected: Record<string, unknown>) => {
+          rows = rows.filter((row) => {
+            const field = row[column] as Record<string, unknown> | undefined;
+            return Object.entries(expected).every(([key, value]) => field?.[key] === value);
+          });
+          return query;
+        },
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve),
       };
       return query;
     },
@@ -80,11 +84,28 @@ describe("public external source cards", () => {
     expect(publicExternalRentalCard({ ...base, source_url: "https://evil.example/rental" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, slug: "other-landlord-private-draft" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, landlord_id: "another-profile" })).toBeNull();
+    // Partial transitions do not qualify: only the old draft state or the
+    // complete active/approved/published state may display a source card.
     expect(publicExternalRentalCard({ ...base, verified: true })).toBeNull();
     expect(publicExternalRentalCard({ ...base, status: "active" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, listing_workflow_status: "published" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, moderation_status: "approved" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, metadata: { ...base.metadata, allowed_action: "schedule_viewing" } })).toBeNull();
+  });
+
+  it("keeps published source cards discoverable regardless of their independent verified flag", () => {
+    for (const verified of [true, false]) {
+      const published = publicExternalRentalCard({
+        ...base, verified, status: "active", moderation_status: "approved",
+        listing_workflow_status: "published",
+      });
+      expect(published?.id).toBe(base.slug);
+      expect(published?.can_schedule_viewing).toBe(false);
+      expect(published?.source_url).toBe(base.source_url);
+      expect(published?.tags).toContain("external-source");
+      // A database boolean does not turn a source ad into a verified MDE offering.
+      expect(published?.tags).toContain("not-verified");
+    }
   });
 
   it("does not gate approved external ads on the canonical photo-rights status", () => {
@@ -185,6 +206,26 @@ describe("public external source cards", () => {
 });
 
 describe("public external rental search date filtering", () => {
+  it("finds all nine already-published source ads, including mixed verified booleans", async () => {
+    const slugs = [
+      "candidate-fincaraiz-193916988", "candidate-fincaraiz-192658136",
+      "candidate-fincaraiz-194158672", "candidate-fincaraiz-194188459",
+      "candidate-fincaraiz-193811264", "candidate-fincaraiz-194104380",
+      "candidate-fincaraiz-194115640", "candidate-fincaraiz-194096982",
+      "candidate-fincaraiz-193522702",
+    ];
+    searchMock.rows = slugs.map((slug, i) => ({
+      ...base, slug, verified: i < 4,
+      status: "active", moderation_status: "approved",
+      listing_workflow_status: "published",
+    }));
+    const ads = await searchPublicExternalRentals({ limit: 24 });
+    expect(ads).toHaveLength(9);
+    expect(ads.map((row) => row.id).sort()).toEqual([...slugs].sort());
+    expect(ads.every((row) => row.can_schedule_viewing === false && row.source_url.includes("fincaraiz.com.co"))).toBe(true);
+  });
+
+
   it("never presents a COP/month advertisement as matching a USD/night budget", async () => {
     searchMock.rows = [{ ...base }];
     expect(await searchPublicExternalRentals({ maxPricePerNight: 80, limit: 8 })).toEqual([]);

@@ -1,3 +1,6 @@
+/** Event listings are for Medellín; always render their schedule in local Colombia time. */
+export const EVENT_TIME_ZONE = "America/Bogota";
+
 export function formatTicketPrice(priceCents: number, currency: string): string {
   const amount = priceCents / 100;
   if (currency === "COP") {
@@ -33,22 +36,27 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: EVENT_TIME_ZONE,
   }).format(start);
 
   if (!endsAt) return startLabel;
 
   const end = new Date(endsAt);
-  const sameDay =
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate();
+  const localDay = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: EVENT_TIME_ZONE,
+  });
+  const sameDay = localDay.format(start) === localDay.format(end);
 
   const endLabel = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: EVENT_TIME_ZONE,
   }).format(end);
 
-  return sameDay ? `${startLabel} – ${endLabel}` : `${startLabel} – ${end.toLocaleString("en-US")}`;
+  return sameDay ? `${startLabel} – ${endLabel}` : `${startLabel} – ${end.toLocaleString("en-US", { timeZone: EVENT_TIME_ZONE })}`;
 }
 
 export function ticketsRemaining(qtyTotal: number, qtySold: number): number {

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "review-1",
+    "prompt": "A reviewer says our PR reintroduces an insecure file-access test. Verify their comment against the current head and fix only what remains valid.",
+    "should_trigger": true,
+    "expected_owner": "review"
+  },
+  {
+    "id": "review-2",
+    "prompt": "Sort the latest CodeRabbit and Codacy review feedback into confirmed, stale, and needs-evidence, and address actual issues.",
+    "should_trigger": true,
+    "expected_owner": "review"
+  },
+  {
+    "id": "review-3",
+    "prompt": "Two review threads claim the broker-isolation fix is missing. Check the exact current diff and respond with evidence.",
+    "should_trigger": true,
+    "expected_owner": "review"
+  },
+  {
+    "id": "review-4",
+    "prompt": "Review a new PR diff for security and maintainability problems; no review comments exist yet.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  },
+  {
+    "id": "review-5",
+    "prompt": "Is PR #312 safe to merge after checking approvals, required jobs and dependencies?",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "review-6",
+    "prompt": "Investigate why requests time out in production even though no PR feedback exists.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  }
+]
