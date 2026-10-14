@@ -1,0 +1,38 @@
+[
+  {
+    "id": "real-estate-1",
+    "prompt": "Verify which Medellin rental rows are eligible for search and how unknown availability must be displayed.",
+    "should_trigger": true,
+    "expected_owner": "real-estate"
+  },
+  {
+    "id": "real-estate-2",
+    "prompt": "A renter requested Alizares viewing but the wrong broker got the lead. Trace the canonical owner and listing relationship.",
+    "should_trigger": true,
+    "expected_owner": "real-estate"
+  },
+  {
+    "id": "real-estate-3",
+    "prompt": "Check whether an external rental candidate can become an internal requestable listing without owner verification.",
+    "should_trigger": true,
+    "expected_owner": "real-estate"
+  },
+  {
+    "id": "real-estate-4",
+    "prompt": "Review the entire PR diff for a rentals change and give actionable code-review findings.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  },
+  {
+    "id": "real-estate-5",
+    "prompt": "Draw a mobile rental-listing wireframe without changing rental eligibility or backend contracts.",
+    "should_trigger": false,
+    "expected_owner": "wireframe"
+  },
+  {
+    "id": "real-estate-6",
+    "prompt": "Design test scenarios for listing deduplication but do not inspect or modify actual rentals implementation.",
+    "should_trigger": false,
+    "expected_owner": "tests"
+  }
+]

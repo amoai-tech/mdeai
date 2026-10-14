@@ -1,0 +1,38 @@
+[
+  {
+    "id": "merge-1",
+    "prompt": "PR #297 just merged. Verify the exact main commit, post-merge checks, and the skill workflow before closing out.",
+    "should_trigger": true,
+    "expected_owner": "merge"
+  },
+  {
+    "id": "merge-2",
+    "prompt": "The rental-viewing fix merged yesterday; prove it is on current main, deployed, and still succeeds after refresh.",
+    "should_trigger": true,
+    "expected_owner": "merge"
+  },
+  {
+    "id": "merge-3",
+    "prompt": "Finish the post-merge verification for the ticketing PR and record any missing runtime proof.",
+    "should_trigger": true,
+    "expected_owner": "merge"
+  },
+  {
+    "id": "merge-4",
+    "prompt": "Review this open, unmerged PR for merge blockers and approval state.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "merge-5",
+    "prompt": "Clean up old worktrees and remove a dead local branch; no merged user outcome needs verification.",
+    "should_trigger": false,
+    "expected_owner": "tasks"
+  },
+  {
+    "id": "merge-6",
+    "prompt": "Certify a full new production release before promoting the deployment.",
+    "should_trigger": false,
+    "expected_owner": "prod"
+  }
+]

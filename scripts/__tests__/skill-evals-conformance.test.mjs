@@ -13,6 +13,16 @@ import implementTriggers from "../../.claude/skills/implement/evals/trigger-eval
 import prodBehavior from "../../.claude/skills/prod/evals/evals.json" with { type: "json" };
 import prodTriggers from "../../.claude/skills/prod/evals/trigger-evals.json" with { type: "json" };
 
+import routerTriggers from "../../.claude/skills/using-mde-skills/evals/trigger-evals.json" with { type: "json" };
+import reviewTriggers from "../../.claude/skills/review/evals/trigger-evals.json" with { type: "json" };
+import e2eTriggers from "../../.claude/skills/e2e/evals/trigger-evals.json" with { type: "json" };
+import testsTriggers from "../../.claude/skills/tests/evals/trigger-evals.json" with { type: "json" };
+import mergeTriggers from "../../.claude/skills/merge/evals/trigger-evals.json" with { type: "json" };
+import rentalTriggers from "../../.claude/skills/real-estate/evals/trigger-evals.json" with { type: "json" };
+import eventsTriggers from "../../.claude/skills/events/evals/trigger-evals.json" with { type: "json" };
+import supabaseTriggers from "../../.claude/skills/supabase/evals/trigger-evals.json" with { type: "json" };
+import mastraTriggers from "../../.claude/skills/mastra/evals/trigger-evals.json" with { type: "json" };
+
 const SKILLS = path.resolve(".claude/skills");
 
 /**
@@ -115,6 +125,27 @@ test("the two most consequential workflow skills keep evals", () => {
   }
 });
 
+/**
+ * Metadata-only contract. These fixtures do NOT execute an agent or prove routing.
+ * Agent benchmarks must independently exercise each case before claiming accuracy.
+ */
+function assertTriggerCases(skill, triggers) {
+  assert.ok(triggers.length >= 6, `${skill}: missing routing cases`);
+  assert.ok(triggers.filter((c) => c.should_trigger === true).length >= 3);
+  assert.ok(triggers.filter((c) => c.should_trigger === false).length >= 3);
+  assert.equal(new Set(triggers.map((c) => c.id)).size, triggers.length);
+  assert.equal(new Set(triggers.map((c) => c.prompt)).size, triggers.length);
+  for (const c of triggers) {
+    assert.equal(typeof c.id, "string", `${skill}: id missing`);
+    assert.ok(c.id.startsWith(`${skill}-`), `${skill}: id must identify owner`);
+    assert.equal(typeof c.prompt, "string", `${skill}: prompt missing`);
+    assert.ok(c.prompt.length >= 20, `${skill}: unrealistically brief probe`);
+    assert.equal(typeof c.should_trigger, "boolean");
+    assert.equal(typeof c.expected_owner, "string");
+    assert.equal(c.expected_owner === skill, c.should_trigger, `${skill}: conflicting owner`);
+  }
+}
+
 test("short execution skills cover routing positives, negatives, and behavior", () => {
   // Static imports are part of the test bundle: no user-derived path can reach file I/O.
   const fixtures = {
@@ -126,16 +157,24 @@ test("short execution skills cover routing positives, negatives, and behavior", 
   };
   for (const [skill, [behavior, triggers]] of Object.entries(fixtures)) {
     assert.ok(behavior.evals.length >= 3, `${skill}: missing behavior cases`);
-    assert.ok(triggers.length >= 6, `${skill}: missing routing cases`);
-    assert.ok(triggers.filter((c) => c.should_trigger === true).length >= 3);
-    assert.ok(triggers.filter((c) => c.should_trigger === false).length >= 3);
-    assert.equal(new Set(triggers.map((c) => c.id)).size, triggers.length);
-    for (const c of triggers) {
-      assert.equal(typeof c.prompt, "string", `${skill}: prompt missing`);
-      assert.ok(c.prompt.length >= 20, `${skill}: unrealistically brief probe`);
-      assert.equal(typeof c.should_trigger, "boolean");
-      assert.equal(typeof c.expected_owner, "string");
-      assert.equal(c.expected_owner === skill, c.should_trigger, `${skill}: conflicting owner`);
-    }
+    assertTriggerCases(skill, triggers);
+  }
+});
+
+
+test("critical routing workflows and production domains have positive and near-miss probes", () => {
+  const fixtures = {
+    "using-mde-skills": routerTriggers,
+    review: reviewTriggers,
+    e2e: e2eTriggers,
+    tests: testsTriggers,
+    merge: mergeTriggers,
+    "real-estate": rentalTriggers,
+    events: eventsTriggers,
+    supabase: supabaseTriggers,
+    mastra: mastraTriggers,
+  };
+  for (const [skill, triggers] of Object.entries(fixtures)) {
+    assertTriggerCases(skill, triggers);
   }
 });
