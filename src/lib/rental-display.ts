@@ -135,6 +135,10 @@ export function fastPathRentalNarrative(count: number): string {
 }
 
 /** Shown when the search itself could not run — never confused with "no rentals match". */
+/** Shown when a queued message could not be passed to the concierge (already acknowledged). */
+export const RENTAL_HANDOFF_FAILED_SUMMARY =
+  "I couldn't pass that message along just now. Please send it again.";
+
 export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
   "Rental search is temporarily unavailable. Please try again in a moment.";
 

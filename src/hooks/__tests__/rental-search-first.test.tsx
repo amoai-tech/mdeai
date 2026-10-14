@@ -207,6 +207,8 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     }
     // Both were tried and handed back even though the first hand-off threw.
     expect(unhandled).toEqual(["Only apartments in Laureles", "apartments in Envigado instead"]);
+    // ...and the renter is told, instead of the message silently going unanswered.
+    expect(assistantText()).toMatch(/couldn't pass that message along/i);
   });
 
   it.each([500, 502, 503, 429])("HTTP %i is reported as temporarily unavailable", async (status) => {
@@ -295,6 +297,24 @@ describe("SAN-407 · rental chat searches before it asks", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2); // the replay tried the search...
     expect(unhandled).toEqual(["Actually only apartments in Laureles"]); // ...and gave it back
+  });
+
+  it("a refinement keeps the monthly meaning of the first search", async () => {
+    respond(200, { results: [] });
+    const search = await startSlowFirstSearch("monthly stay in El Poblado under $2000 per month", {
+      results: [],
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).stayType).toBe("monthly");
+
+    await act(async () => {
+      await probe.send("Only apartments in Laureles");
+    });
+    await search.finish();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(second.neighborhood).toBe("Laureles");
+    expect(second.stayType).toBe("monthly"); // dropped before: the refinement ran as an unlabelled search
   });
 
   it("a replay that is answered is not also sent to the concierge", async () => {

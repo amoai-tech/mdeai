@@ -16,7 +16,7 @@ import {
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
 import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
-import { RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
+import { RENTAL_HANDOFF_FAILED_SUMMARY, RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -63,6 +63,8 @@ function isTemporaryOutage(err: unknown): boolean {
     return err.status >= 500 || err.status === 429 || err.status === 408;
   }
   // fetch() rejects with a TypeError when the network fails (offline, DNS…); a timeout aborts it.
+  // The only code inside the caller's try is fetch() and res.json(), so a TypeError here cannot be
+  // an application bug; a malformed body is a SyntaxError and is handled as such above.
   if (err instanceof TypeError) return true;
   const name = (err as { name?: string } | null)?.name;
   return name === "AbortError" || name === "TimeoutError";
@@ -168,6 +170,9 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
           maxPricePerNight: params.maxPricePerNight,
+          // Keep the monthly/trip meaning of the budget so a refinement ("Only Laureles") still
+          // searches as a monthly stay instead of silently becoming a nightly one.
+          budgetType: params.stayType,
           genericAskPending: false,
           checkIn: params.checkIn,
           checkOut: params.checkOut,
@@ -267,16 +272,18 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         }
         if (!handled) await onUnhandled?.(next);
       } catch (err) {
-        // The concierge hand-off itself failed. Log it and keep draining the queue rather than
-        // leaving an unhandled rejection that stalls the messages behind this one.
+        // The concierge hand-off itself failed. Log it, tell the renter (their message was already
+        // acknowledged, so silence would read as "ignored"), and keep draining the queue rather
+        // than leaving an unhandled rejection that stalls the messages behind this one.
         console.error("[rental-fast-path] hand-off to the concierge failed", err);
+        showExchange(next, RENTAL_HANDOFF_FAILED_SUMMARY);
       } finally {
         // A replay that never reached a search (declined) leaves no search to schedule the next
         // one, so continue the chain here.
         if (pendingRef.current.length > 0 && !busyRef.current) setReplayTick((tick) => tick + 1);
       }
     })();
-  }, [replayTick, dispatchMessage, onUnhandled]);
+  }, [replayTick, dispatchMessage, onUnhandled, showExchange]);
 
   return { handleUserMessage };
 }
