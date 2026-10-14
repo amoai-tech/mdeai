@@ -325,8 +325,9 @@ export async function getLocalPreviewRentals(): Promise<Rental[]> {
       nightly_price: 0,
       price_monthly: c.price_monthly,
       currency: c.currency,
-      // Preserve an unknown bedroom count as null rather than a false "Studio".
-      bedrooms: c.bedrooms ?? null,
+      // The numeric contract stays 0; the flag is what lets the card say "unknown".
+      bedrooms: c.bedrooms ?? 0,
+      bedrooms_unknown: c.bedrooms == null,
       wifi: false,
       amenities: c.amenities ?? [],
       image,

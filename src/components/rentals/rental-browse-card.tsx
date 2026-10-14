@@ -12,9 +12,9 @@ import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
-function bedroomLabel(bedrooms: number | null): string {
-  // Unknown is not the same as a studio: never replace a missing count with 0.
-  if (bedrooms == null) return "Bedrooms unknown";
+function bedroomLabel(bedrooms: number, bedroomsUnknown = false): string {
+  // The caller flags an unknown source count; a real 0 still means "Studio".
+  if (bedroomsUnknown) return "Bedrooms unknown";
   if (bedrooms === 0) return "Studio";
   return `${bedrooms} BR`;
 }
@@ -240,7 +240,7 @@ export function RentalBrowseCard({
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Badge variant="secondary" className="gap-1 font-normal">
           <Bed className="size-3" aria-hidden />
-          {bedroomLabel(rental.bedrooms)}
+          {bedroomLabel(rental.bedrooms, rental.bedrooms_unknown)}
         </Badge>
         {hasWifi ? (
           <Badge variant="outline" className="gap-1 font-normal">

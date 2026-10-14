@@ -111,9 +111,22 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
   });
 
-  it("keeps the production bedroom contract: an unknown count is 0, not null", () => {
-    // Only the dev preview opts into null; production must keep emitting a number.
-    expect(rowToRental(apartmentRow({ bedrooms: null })).bedrooms).toBe(0);
+  it("keeps production bedrooms numeric and never flags them unknown", () => {
+    const unknownRow = rowToRental(apartmentRow({ bedrooms: null }));
+    expect(unknownRow.bedrooms).toBe(0);
+    expect(unknownRow.bedrooms_unknown).toBeUndefined();
+    expect(renderCard({ bedrooms: 0 })).toContain("Studio");
+    expect(renderCard({ bedrooms: 0 })).not.toContain("Bedrooms unknown");
+  });
+
+  it("renders 'Bedrooms unknown' only when the dev-preview flag is set", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={{ ...rowToRental(apartmentRow()), bedrooms_unknown: true }}
+      />,
+    );
+    expect(html).toContain("Bedrooms unknown");
+    expect(html).not.toContain("Studio");
   });
 
   it("defaults testId to rental-card-{id} for browse Playwright contract", () => {

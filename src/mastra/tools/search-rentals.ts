@@ -23,7 +23,9 @@ export const rentalSchema = z.object({
    * USD, making a 2,400,000 COP monthly rent read as a USD figure.
    */
   currency: z.string(),
-  bedrooms: z.number().nullable(),
+  bedrooms: z.number(),
+  /** Dev-preview only: the source advert had no bedroom count, so `bedrooms` stays 0. */
+  bedrooms_unknown: z.boolean().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),

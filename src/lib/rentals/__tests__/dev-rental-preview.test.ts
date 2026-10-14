@@ -174,9 +174,10 @@ describe("local rental preview (no publishing bypass)", () => {
       id: candidate.slug,
       currency: "COP",
       price_monthly: 2100000,
-      // No invented nightly rent, and an unknown bedroom count stays null (not a "Studio").
+      // No invented nightly rent; the numeric contract stays 0 with an explicit unknown flag.
       nightly_price: 0,
-      bedrooms: null,
+      bedrooms: 0,
+      bedrooms_unknown: true,
       image: photoUrl(0),
       can_schedule_viewing: false,
       schedule_viewing_url: null,
