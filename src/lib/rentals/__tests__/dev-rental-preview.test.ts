@@ -150,6 +150,16 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(isLocalPreviewHost(undefined)).toBe(false);
   });
 
+  it("keeps a known bedroom count and does not flag it unknown", async () => {
+    await writeFile(
+      path.join(root, "supabase_draft_records.json"),
+      JSON.stringify([{ ...candidate, bedrooms: 2 }]),
+    );
+    const [rental] = await getLocalPreviewRentals();
+    expect(rental.bedrooms).toBe(2);
+    expect(rental.bedrooms_unknown).toBe(false);
+  });
+
   it("refuses a request that arrived through a proxy or tunnel", () => {
     expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({}))).toBe(true);
     // Next dev itself fills x-forwarded-* with the loopback peer, so these must pass.

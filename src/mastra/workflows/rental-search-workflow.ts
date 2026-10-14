@@ -9,6 +9,8 @@ const rentalSchema = z.object({
   nightly_price: z.number(),
   currency: z.literal('USD'),
   bedrooms: z.number(),
+  /** Matches the search-tool schema; the workflow keeps rendering its USD nightly label. */
+  bedrooms_unknown: z.boolean().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
