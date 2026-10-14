@@ -1,0 +1,36 @@
+{
+  "skill_name": "whatsapp",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Integrate a signed Meta WhatsApp webhook into the existing MDE Mastra concierge without breaking /chat.",
+      "expected_output": "Reuse installed native adapter and existing concierge; verify raw HMAC at real ingress; don't scaffold a second app/agent/webhook; require fake/duplicate tests.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Notify an assigned rental broker when a customer requests a viewing twice by retry.",
+      "expected_output": "Reuse canonical viewing and wa_outbox, authorize assigned broker, enforce consent, stable idempotency, authentication and wrong-broker negative test.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Meta delivered the same WhatsApp event twice and delivery statuses arrived out of order. Fix it.",
+      "expected_output": "Diagnose ingress and outbound ownership, atomic provider event dedupe, monotonic status reconciliation, one sender; no unsupported exactly-once guarantee.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "A WhatsApp user sends STOP while a worker has claimed a broker reminder using an earlier opted_in=true snapshot. Prevent sends that have not been submitted, and define what happens to in-flight messages.",
+      "expected_output": "Coordinate opt-out and dispatch via atomic recipient lock/fence; cancel pending or claimed-but-unsent jobs, prohibit stale consent decisions, document irreversible submitted sends, test race and stop retries.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "The Meta webhook persisted the provider event ID, replied HTTP 200, then crashed before creating its viewing-request job. Meta retries the same event. Prevent lost work and duplicate actions.",
+      "expected_output": "Atomically commit provider dedupe identity and durable retryable pending work before ack; duplicate checks existing work state; leased worker recovers crashes; separate business idempotency and failure tests.",
+      "files": []
+    }
+  ]
+}

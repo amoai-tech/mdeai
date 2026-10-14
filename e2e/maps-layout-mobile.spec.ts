@@ -67,11 +67,28 @@ async function expectTouchContext(page: Page, viewport: { width: number; height:
   expect(await page.evaluate(() => window.innerHeight)).toBe(viewport.height);
 }
 
+/**
+ * Measure a control the way a thumb meets it: at rest.
+ *
+ * The map sheet slides in over ~200 ms. While a control is moving by a transform, the browser's
+ * bounding box carries floating-point error: a 44px Close button reads 43.99998474121094 for about
+ * a fifth of the slide, so a single measurement failed roughly one run in five (seen on #271, #272,
+ * #278 and #279). Poll actual rendered dimensions until the animation settles instead of awaiting
+ * every document animation: a paused animation might never finish. Keep the 44px requirement exact.
+ */
 async function expectMinimumTouchTarget(locator: Locator, label: string) {
-  const box = await locator.boundingBox();
-  expect(box, `${label} must have a rendered bounding box`).not.toBeNull();
-  expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44);
-  expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44);
+  await expect
+    .poll(async () => (await locator.boundingBox())?.width ?? 0, {
+      message: `${label} width must reach 44px after layout settles`,
+      timeout: 5_000,
+    })
+    .toBeGreaterThanOrEqual(44);
+  await expect
+    .poll(async () => (await locator.boundingBox())?.height ?? 0, {
+      message: `${label} height must reach 44px after layout settles`,
+      timeout: 5_000,
+    })
+    .toBeGreaterThanOrEqual(44);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {

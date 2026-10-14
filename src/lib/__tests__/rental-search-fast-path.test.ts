@@ -5,6 +5,7 @@ import {
 } from "@/lib/rental-search-fast-path";
 import {
   MAX_RENTAL_TEXT_CHARS,
+  isWholeCityReply,
   looksLikeInjection,
   statesBudget,
 } from "@/lib/rental-query-parser";
@@ -264,6 +265,99 @@ describe("rental-search-fast-path", () => {
       "someone's apartment in Laureles",
     ])("no bedroom filter is invented for %j", (prompt) => {
       expect(buildRentalSearchParams(prompt, {})?.minBedrooms).toBeUndefined();
+    });
+  });
+
+  describe("SAN-407: a whole-city request starts a fresh search", () => {
+    const last = {
+      lastRentalQuery: { neighborhood: "Belén", minBedrooms: 2, maxPricePerNight: 80, budgetType: "nightly" as const, genericAskPending: false },
+    };
+
+    it("'Search apartments Medellín' after a Belén search does not stay in Belén", () => {
+      const params = buildRentalSearchParams("Search apartments Medellín", last);
+      expect(params?.neighborhood).toBeUndefined();
+      expect(params?.minBedrooms).toBeUndefined();
+      expect(params?.maxPricePerNight).toBeUndefined();
+      expect(params?.queryText).toBe("Search apartments Medellín");
+    });
+
+    it("'apartments anywhere' also starts fresh, keeping only what it states itself", () => {
+      const params = buildRentalSearchParams("apartments anywhere under $90 per night", last);
+      expect(params?.neighborhood).toBeUndefined();
+      expect(params?.minBedrooms).toBeUndefined();
+      expect(params?.maxPricePerNight).toBe(90);
+    });
+
+    it.each(["Anywhere is fine", "Any neighborhood is fine", "Medellín"])(
+      "a short whole-city reply %j widens the location and keeps size, budget and stay type",
+      (text) => {
+        const params = buildRentalSearchParams(text, last);
+        expect(canFastPathRentalSearch(text, last)).toBe(true);
+        expect(params).toEqual({ minBedrooms: 2, maxPricePerNight: 80, stayType: "nightly", limit: 8 });
+        expect(params?.neighborhood).toBeUndefined();
+        expect(params?.queryText).toBeUndefined();
+      },
+    );
+
+    it("keeps the saved stay dates when widening", () => {
+      const dated = { lastRentalQuery: { ...last.lastRentalQuery, checkIn: "2026-11-01", checkOut: "2026-11-30" } };
+      expect(buildRentalSearchParams("Anywhere is fine", dated)).toMatchObject({ checkIn: "2026-11-01", checkOut: "2026-11-30" });
+    });
+
+    it.each([
+      ["Anywhere is fine", true],
+      ["Anywhere in Medellín is fine", true],
+      ["any neighborhood works", true],
+      ["Medellín", true],
+      ["toda la ciudad", true],
+      ["Is Medellín safe at night?", false],
+      ["Anywhere but El Poblado", false],
+      ["not anywhere near the metro", false],
+      ["anywhere under 3 million", false],
+      ["", false],
+    ])("isWholeCityReply(%j) is %s", (text, expected) => {
+      expect(isWholeCityReply(text)).toBe(expected);
+    });
+
+    it.each(["apartments in anywhereville", "rentals Medellínshire", "apartments in any neighboring towns"])(
+      "does not broaden on an embedded phrase: %j",
+      (text) => {
+        const params = buildRentalSearchParams(text, last);
+        expect(params?.neighborhood).toBe("Belén");
+      },
+    );
+
+    it("does not mistake a standalone vague city-wide reply for a rental search", () => {
+      expect(buildRentalSearchParams("Anywhere is fine", {})).toBeNull();
+      expect(canFastPathRentalSearch("Anywhere is fine", {})).toBe(false);
+    });
+
+    it.each([
+      "show me apartments across the city",
+      "apartments in the whole city",
+      "citywide apartments please",
+      "apartments in any neighborhood",
+      "apartments cualquier barrio",
+      "apartamentos en toda la ciudad, rentals please",
+    ])("other whole-city wording also starts fresh: %j", (prompt) => {
+      const params = buildRentalSearchParams(prompt, last);
+      expect(params).not.toBeNull();
+      expect(params?.neighborhood).toBeUndefined();
+      expect(params?.minBedrooms).toBeUndefined();
+    });
+
+    it("Belén -> no match -> Medellín returns the whole-city search with the renter's words", () => {
+      const afterNoMatch = { lastRentalQuery: { neighborhood: "Belén", genericAskPending: false } };
+      const params = buildRentalSearchParams("Search apartments Medellín", afterNoMatch);
+      expect(params).toMatchObject({ limit: 8, queryText: "Search apartments Medellín" });
+      expect(params?.neighborhood).toBeUndefined();
+    });
+
+    it("a refinement that names no city still builds on the last search", () => {
+      const params = buildRentalSearchParams("only apartments under $60 per night", last);
+      expect(params?.neighborhood).toBe("Belén");
+      expect(params?.minBedrooms).toBe(2);
+      expect(params?.maxPricePerNight).toBe(60);
     });
   });
 });

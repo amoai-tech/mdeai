@@ -15,6 +15,8 @@
  * A future move-in is still discoverable with no dates: it is shown as upcoming and can be toured.
  */
 
+import { isRealCalendarDate } from "@/lib/rentals/date-only";
+
 /** The slice of a Supabase/PostgREST filter builder this helper needs. */
 type FilterChain = {
   or: (filters: string) => FilterChain;
@@ -35,6 +37,14 @@ const DAY_MS = 86_400_000;
  * generic blow the compiler's instantiation depth, so the chain is narrowed internally.
  */
 export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today }: AvailabilityFilterOptions): Q {
+  // The dates are written into PostgREST filter strings, where a stray comma or dot would add a
+  // condition of its own. Callers validate at their boundary; this guards the helper itself so a
+  // future caller that forgets cannot put free text into a filter.
+  for (const [name, value] of [["checkIn", checkIn], ["checkOut", checkOut], ["today", today]] as const) {
+    if (value && !isRealCalendarDate(value)) {
+      throw new RangeError(`applyAvailabilityFilters: ${name} must be a real YYYY-MM-DD date`);
+    }
+  }
   let q = (query as unknown as FilterChain).not("available_from", "is", null);
   if (checkIn || checkOut) {
     const stayStart = checkIn ?? checkOut!;

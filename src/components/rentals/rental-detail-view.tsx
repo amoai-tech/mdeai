@@ -8,6 +8,14 @@ import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-bann
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { RentalAvailabilityCalendar } from "@/components/rentals/rental-availability-calendar";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { GalleryImage } from "@/components/rentals/gallery-image";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
@@ -25,8 +33,8 @@ const specLabel = (count: number | null, one: string, many: string): React.React
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
-  const cover = detail.images[0];
-  const rest = detail.images.slice(1, 5);
+  const images = detail.images.slice(0, 5);
+  const cover = images[0];
   if (!cover) {
     return (
       <div
@@ -37,31 +45,59 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
       </div>
     );
   }
+  const rest = images.slice(1);
   return (
-    <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={cover}
-        alt={`${detail.title} in ${detail.neighborhood}`}
-        data-testid="rental-detail-cover"
-        className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
-        loading="eager"
-      />
-      {rest.length > 0 ? (
-        <div className="hidden grid-cols-2 gap-2 sm:grid">
-          {rest.map((src, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={src}
-              src={src}
-              alt={`${detail.title} photo ${index + 2}`}
-              className="aspect-square w-full rounded-lg bg-muted object-cover"
-              loading="lazy"
-            />
+    <>
+      {/* Desktop: cover plus up to four thumbnails. */}
+      <div
+        data-testid="rental-detail-gallery-desktop"
+        className="hidden gap-2 sm:grid sm:grid-cols-[2fr_1fr]"
+      >
+        <GalleryImage
+          src={cover}
+          alt={`${detail.title} in ${detail.neighborhood}`}
+          testId="rental-detail-cover"
+          className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+          loading="eager"
+        />
+        {rest.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {rest.map((src, index) => (
+              <GalleryImage
+                key={src}
+                src={src}
+                alt={`${detail.title} photo ${index + 2}`}
+                className="aspect-square w-full rounded-lg bg-muted object-cover"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Mobile: every photo reachable by swipe or the next/previous controls. */}
+      <Carousel
+        className="sm:hidden"
+        data-testid="rental-detail-gallery-mobile"
+        opts={{ loop: false, align: "start" }}
+      >
+        <CarouselContent>
+          {images.map((src, index) => (
+            <CarouselItem key={src}>
+              <GalleryImage
+                src={src}
+                alt={`${detail.title} photo ${index + 1}`}
+                testId={`rental-detail-slide-${index + 1}`}
+                className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            </CarouselItem>
           ))}
-        </div>
-      ) : null}
-    </div>
+        </CarouselContent>
+        <CarouselPrevious className="left-2" />
+        <CarouselNext className="right-2" />
+      </Carousel>
+    </>
   );
 };
 
@@ -89,12 +125,14 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   hostName: string | null;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  isDevelopmentPreview?: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
 
@@ -112,19 +150,21 @@ const RentalPriceSidebar = ({
             Request viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          data-testid="rental-detail-ask-cta"
-          onClick={onRequest}
-        >
-          Ask a question
-        </Button>
+        {!isDevelopmentPreview ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            data-testid="rental-detail-ask-cta"
+            onClick={onRequest}
+          >
+            Ask a question
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
           <Heart className="size-4" aria-hidden /> Save
         </Button>
-        <p className="text-center text-xs text-muted-foreground">{REQUEST_ONLY}</p>
+        <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
     </aside>
@@ -136,11 +176,14 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Preview details must not imply that payment is handled with an unverified host. */
+  isDevelopmentPreview?: boolean;
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
@@ -151,7 +194,9 @@ const RentalMobileCta = ({
         <div className="truncate font-mono text-sm font-semibold">
           {prices.monthlyLabel ?? prices.nightlyLabel ?? PENDING}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">{REQUEST_ONLY}</div>
+        <div className="truncate text-[11px] text-muted-foreground">
+          {isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}
+        </div>
       </div>
       {canRequestViewing ? (
         <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
@@ -224,7 +269,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
       {/* A saved viewing request must be visible where it was made, not only in the chat. */}
       <LeadConfirmationBanner />
       <Link
-        href={backHref}
+        href={detail.status === "development-preview" ? "/dev/rentals" : backHref}
         data-testid="rental-detail-back"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
@@ -299,6 +344,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isDevelopmentPreview={detail.status === "development-preview"}
         />
       </div>
 
@@ -306,6 +352,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isDevelopmentPreview={detail.status === "development-preview"}
       />
     </main>
   );

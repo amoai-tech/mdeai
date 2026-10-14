@@ -48,6 +48,29 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
   });
 });
 
+describe("applyAvailabilityFilters refuses anything that is not a real date (SAN-486)", () => {
+  it.each([
+    ["checkIn", { checkIn: "2026-11-01,id.gt.0" }],
+    ["checkIn", { checkIn: "2026-02-31" }],
+    ["checkOut", { checkOut: "x),status.eq.draft" }],
+    ["checkOut", { checkIn: "2026-11-01", checkOut: "2026-13-40" }],
+  ])("throws for a bad %s and adds no filter", (_name, opts) => {
+    const { builder, calls } = recorder();
+    expect(() => applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13" })).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("throws for a bad today value too", () => {
+    const { builder, calls } = recorder();
+    expect(() => applyAvailabilityFilters(builder, { today: "2026-10-13;drop" })).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("still accepts real dates, including a leap day", () => {
+    expect(run({ checkIn: "2028-02-29", checkOut: "2028-03-02" })).toHaveLength(5);
+  });
+});
+
 describe("calendar date validation (SAN-486)", () => {
   it.each(["2026-02-31", "2026-13-01", "2026-00-10", "2026-04-31", "2026-1-5", "tomorrow", ""])("rejects %j", (d) => {
     expect(isRealCalendarDate(d)).toBe(false);

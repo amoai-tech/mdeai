@@ -64,6 +64,7 @@ export function DeterministicConciergeChat() {
             data-testid="copilot-chat-textarea"
             aria-label="Type a message"
             placeholder="Type a message..."
+            disabled={!hydrated}
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {
