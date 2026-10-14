@@ -154,8 +154,10 @@ async function handleTestViewing(
   const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
   const wallClock = typeof body.preferredAt === "string" ? body.preferredAt.trim() : "";
   const at = resolvePreferredAtInstant(wallClock);
-  if (!apartmentId || !at || new Date(at).getTime() <= Date.now() || !adminEmail) {
-    return NextResponse.json({ error: "Test apartment and future Medellín viewing time required" }, { status: 400 });
+  if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
+  if (!isUuid(apartmentId)) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
+  if (!at || new Date(at).getTime() <= Date.now() || !adminEmail) {
+    return NextResponse.json({ error: "Future Medellín viewing time and admin email required" }, { status: 400 });
   }
   const { data, error } = await supabase.rpc("admin_request_test_viewing", {
     p_apartment_id: apartmentId,
@@ -245,6 +247,7 @@ export async function POST(request: Request) {
   if (action === "assign-test-operator") {
     const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
     if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
+    if (!isUuid(apartmentId)) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
     if (typeof body.enabled !== "boolean") return NextResponse.json({ error: "enabled must be boolean" }, { status: 400 });
     const { data, error } = await supabase.rpc("admin_assign_rental_test_operator", {
       p_apartment_id: apartmentId,
@@ -259,6 +262,7 @@ export async function POST(request: Request) {
   if (action === "publish" || action === "cleanup") {
     const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
     if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
+    if (!isUuid(apartmentId)) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
     const rpc = action === "publish" ? "admin_publish_test_rental" : "admin_cleanup_test_rental";
     const { data, error } = await supabase.rpc(rpc, { p_apartment_id: apartmentId });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

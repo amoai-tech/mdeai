@@ -22,6 +22,7 @@ test("admin test rental: create, publish, view, retry, cleanup without duplicate
   let fixtureId: string | undefined;
   const fixtureTitle = `E2E internal rental ${Date.now()}`;
   let cleaned = false;
+  let primaryError: unknown;
   try {
     await page.goto("/admin/rentals");
     await expect(page.getByTestId("admin-rental-test-panel")).toBeVisible();
@@ -67,49 +68,60 @@ test("admin test rental: create, publish, view, retry, cleanup without duplicate
     expect(postLeads.data).toHaveLength(0);
     expect(postShowings.data).toHaveLength(0);
     cleaned = true;
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
     if (fixtureId) {
-      if (!cleaned) {
-        const response = await page.request.post("/api/admin/rentals/test", {
-          data: { action: "cleanup", apartmentId: fixtureId },
-        });
-        if (!response.ok()) {
-          throw new Error(`Fixture ${fixtureId} cleanup failed; do not delete unclassified records`);
+      try {
+        if (!cleaned) {
+          const response = await page.request.post("/api/admin/rentals/test", {
+            data: { action: "cleanup", apartmentId: fixtureId },
+          });
+          if (!response.ok()) {
+            throw new Error(`Fixture ${fixtureId} cleanup failed; do not delete unclassified records`);
+          }
         }
-      }
-      // The RPC intentionally retains the draft for interactive admins.
-      // This E2E owns a uniquely titled fixture, so remove that draft as well.
-      // Never delete an existing/unrelated listing based only on a returned UUID.
-      const { data: owned, error: lookupError } = await admin.from("apartments")
-        .select("id,title,metadata,status,listing_workflow_status")
-        .eq("id", fixtureId).maybeSingle();
-      if (lookupError || !owned || owned.title !== fixtureTitle
-        || String((owned.metadata as Record<string, unknown> | null)?.is_test_fixture) !== "true"
-        || owned.status !== "inactive" || owned.listing_workflow_status !== "draft") {
-        throw new Error(`Fixture ${fixtureId} failed ownership/draft verification; no deletion performed`);
-      }
-      const [leadsBeforeDelete, showingsBeforeDelete] = await Promise.all([
-        admin.from("leads").select("id").eq("apartment_id", fixtureId),
-        admin.from("showings").select("id").eq("apartment_id", fixtureId),
-      ]);
-      if (leadsBeforeDelete.error || showingsBeforeDelete.error
-        || leadsBeforeDelete.data?.length || showingsBeforeDelete.data?.length) {
-        throw new Error(`Fixture ${fixtureId} still has viewing records; no deletion performed`);
-      }
-      const { data: deleted, error: deleteError } = await admin.from("apartments")
-        .delete().eq("id", fixtureId).select("id");
-      if (deleteError || deleted?.length !== 1 || deleted[0]?.id !== fixtureId) {
-        throw new Error(`Could not delete the owned fixture ${fixtureId}`);
-      }
-      const [apartments, leadsAfterDelete, showingsAfterDelete] = await Promise.all([
-        admin.from("apartments").select("id").eq("id", fixtureId),
-        admin.from("leads").select("id").eq("apartment_id", fixtureId),
-        admin.from("showings").select("id").eq("apartment_id", fixtureId),
-      ]);
-      for (const result of [apartments, leadsAfterDelete, showingsAfterDelete]) {
-        if (result.error || result.data?.length !== 0) {
-          throw new Error(`Fixture ${fixtureId} left residual rows after deletion`);
+        // The RPC intentionally retains the draft for interactive admins.
+        // This E2E owns a uniquely titled fixture, so remove that draft as well.
+        // Never delete an existing/unrelated listing based only on a returned UUID.
+        const { data: owned, error: lookupError } = await admin.from("apartments")
+          .select("id,title,metadata,status,listing_workflow_status")
+          .eq("id", fixtureId).maybeSingle();
+        if (lookupError || !owned || owned.title !== fixtureTitle
+          || String((owned.metadata as Record<string, unknown> | null)?.is_test_fixture) !== "true"
+          || owned.status !== "inactive" || owned.listing_workflow_status !== "draft") {
+          throw new Error(`Fixture ${fixtureId} failed ownership/draft verification; no deletion performed`);
         }
+        const [leadsBeforeDelete, showingsBeforeDelete] = await Promise.all([
+          admin.from("leads").select("id").eq("apartment_id", fixtureId),
+          admin.from("showings").select("id").eq("apartment_id", fixtureId),
+        ]);
+        if (leadsBeforeDelete.error || showingsBeforeDelete.error
+          || leadsBeforeDelete.data?.length || showingsBeforeDelete.data?.length) {
+          throw new Error(`Fixture ${fixtureId} still has viewing records; no deletion performed`);
+        }
+        const { data: deleted, error: deleteError } = await admin.from("apartments")
+          .delete().eq("id", fixtureId).select("id");
+        if (deleteError || deleted?.length !== 1 || deleted[0]?.id !== fixtureId) {
+          throw new Error(`Could not delete the owned fixture ${fixtureId}`);
+        }
+        const [apartments, leadsAfterDelete, showingsAfterDelete] = await Promise.all([
+          admin.from("apartments").select("id").eq("id", fixtureId),
+          admin.from("leads").select("id").eq("apartment_id", fixtureId),
+          admin.from("showings").select("id").eq("apartment_id", fixtureId),
+        ]);
+        for (const result of [apartments, leadsAfterDelete, showingsAfterDelete]) {
+          if (result.error || result.data?.length !== 0) {
+            throw new Error(`Fixture ${fixtureId} left residual rows after deletion`);
+          }
+        }
+      } catch (cleanupError) {
+        if (primaryError !== undefined) {
+          throw new AggregateError([primaryError, cleanupError],
+            `Rental test and fixture ${fixtureId} cleanup both failed`);
+        }
+        throw cleanupError;
       }
     }
   }

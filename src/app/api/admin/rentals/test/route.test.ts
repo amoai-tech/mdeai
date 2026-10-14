@@ -66,6 +66,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { GET, POST } from "./route";
 
+const RENTAL_UUID = "f1460000-0000-4000-8000-000000000021";
 const request = (body: Record<string, unknown>) => new Request("http://localhost/api/admin/rentals/test", {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
@@ -149,7 +150,7 @@ describe("GET /api/admin/rentals/test", () => {
 
 describe("POST /api/admin/rentals/test admin viewing", () => {
   it("denies unauthenticated and non-admin requests before calling the viewing RPC", async () => {
-    const body = { action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2099-11-01T10:00" };
+    const body = { action: "request-viewing", apartmentId: RENTAL_UUID, preferredAt: "2099-11-01T10:00" };
     h.rpc.mockResolvedValue({ data: false, error: null });
     expect((await POST(request(body))).status).toBe(403);
     h.getUser.mockResolvedValue({ data: { user: null } });
@@ -157,17 +158,26 @@ describe("POST /api/admin/rentals/test admin viewing", () => {
     expect(h.rpc).not.toHaveBeenCalledWith("admin_request_test_viewing", expect.anything());
   });
 
+  it("rejects malformed UUIDs before calling the admin viewing RPC", async () => {
+    for (const apartmentId of ["not-a-uuid", "12345678-123456789012345678901234567"]) {
+      const res = await POST(request({ action: "request-viewing", apartmentId, preferredAt: "2099-11-01T10:00" }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toContain("apartmentId must be a UUID");
+    }
+    expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
+  });
+
   it("requires valid future Medellín time and uses the authenticated admin email", async () => {
-    const invalid = await POST(request({ action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2001-01-01T10:00" }));
+    const invalid = await POST(request({ action: "request-viewing", apartmentId: RENTAL_UUID, preferredAt: "2001-01-01T10:00" }));
     expect(invalid.status).toBe(400);
     h.rpc.mockImplementation(async (name: string) => name === "is_admin"
       ? { data: true, error: null }
       : { data: { lead: { id: "lead-one" }, showing: { id: "showing-one" }, idempotent_replay: false }, error: null });
-    const valid = await POST(request({ action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2099-11-01T10:00", email: "spoofed@example.com" }));
+    const valid = await POST(request({ action: "request-viewing", apartmentId: RENTAL_UUID, preferredAt: "2099-11-01T10:00", email: "spoofed@example.com" }));
     expect(valid.status).toBe(200);
     expect(await valid.json()).toEqual({ success: true, leadId: "lead-one", showingId: "showing-one", idempotentReplay: false });
     expect(h.rpc).toHaveBeenCalledWith("admin_request_test_viewing", expect.objectContaining({
-      p_apartment_id: "fixture-1", p_email: "admin@example.com",
+      p_apartment_id: RENTAL_UUID, p_email: "admin@example.com",
     }));
   });
 });
@@ -250,17 +260,26 @@ describe("POST /api/admin/rentals/test clone validation", () => {
 
 
 describe.each([
-  { action: "assign-test-operator", rpc: "admin_assign_rental_test_operator", extra: { enabled: false }, args: { p_apartment_id: "fixture-id", p_enabled: false } },
-  { action: "publish", rpc: "admin_publish_test_rental", extra: {}, args: { p_apartment_id: "fixture-id" } },
-  { action: "cleanup", rpc: "admin_cleanup_test_rental", extra: {}, args: { p_apartment_id: "fixture-id" } },
+  { action: "assign-test-operator", rpc: "admin_assign_rental_test_operator", extra: { enabled: false }, args: { p_apartment_id: RENTAL_UUID, p_enabled: false } },
+  { action: "publish", rpc: "admin_publish_test_rental", extra: {}, args: { p_apartment_id: RENTAL_UUID } },
+  { action: "cleanup", rpc: "admin_cleanup_test_rental", extra: {}, args: { p_apartment_id: RENTAL_UUID } },
 ])("POST /api/admin/rentals/test $action", ({ action, rpc, extra, args }) => {
-  const payload = { action, apartmentId: "fixture-id", ...extra };
+  const payload = { action, apartmentId: RENTAL_UUID, ...extra };
 
   it("rejects signed-out and non-admin users before the write RPC", async () => {
     h.getUser.mockResolvedValueOnce({ data: { user: null } });
     expect((await POST(request(payload))).status).toBe(401);
     h.rpc.mockResolvedValueOnce({ data: false, error: null });
     expect((await POST(request(payload))).status).toBe(403);
+    expect(h.rpc).not.toHaveBeenCalledWith(rpc, expect.anything());
+  });
+
+  it("rejects malformed apartmentId before the write RPC", async () => {
+    for (const apartmentId of ["not-a-uuid", "12345678-123456789012345678901234567"]) {
+      const res = await POST(request({ ...payload, apartmentId }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("apartmentId must be a UUID");
+    }
     expect(h.rpc).not.toHaveBeenCalledWith(rpc, expect.anything());
   });
 
@@ -291,7 +310,7 @@ describe.each([
 describe("POST /api/admin/rentals/test operator flag validation", () => {
   it("rejects non-boolean enabled values", async () => {
     for (const enabled of ["true", 1, null, undefined]) {
-      const res = await POST(request({ action: "assign-test-operator", apartmentId: "fixture-id", enabled }));
+      const res = await POST(request({ action: "assign-test-operator", apartmentId: RENTAL_UUID, enabled }));
       expect(res.status).toBe(400);
       expect((await res.json()).error).toMatch(/enabled must be boolean/i);
     }
