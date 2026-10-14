@@ -7,12 +7,15 @@
  * listings they could not request. Rules, identical for every caller:
  *
  *  - a listing must have a known move-in date (`available_from` not null);
- *  - with dates: it must start on or before the first day and stay open through the last day, and
- *    the stay length must satisfy its minimum/maximum stay;
+ *  - with dates (From = first day, Through = last day, both inclusive): it must start on or before
+ *    the first day and stay open through the last day, and the stay length in days (Nov 1–30 = 30)
+ *    must satisfy its minimum/maximum stay;
  *  - without dates: it must not have expired (`available_to` open or on/after today, Bogotá date).
  *
  * A future move-in is still discoverable with no dates: it is shown as upcoming and can be toured.
  */
+
+import { isRealCalendarDate } from "@/lib/rentals/date-only";
 
 /** The slice of a Supabase/PostgREST filter builder this helper needs. */
 type FilterChain = {
@@ -34,6 +37,14 @@ const DAY_MS = 86_400_000;
  * generic blow the compiler's instantiation depth, so the chain is narrowed internally.
  */
 export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today }: AvailabilityFilterOptions): Q {
+  // The dates are written into PostgREST filter strings, where a stray comma or dot would add a
+  // condition of its own. Callers validate at their boundary; this guards the helper itself so a
+  // future caller that forgets cannot put free text into a filter.
+  for (const [name, value] of [["checkIn", checkIn], ["checkOut", checkOut], ["today", today]] as const) {
+    if (value && !isRealCalendarDate(value)) {
+      throw new RangeError(`applyAvailabilityFilters: ${name} must be a real YYYY-MM-DD date`);
+    }
+  }
   let q = (query as unknown as FilterChain).not("available_from", "is", null);
   if (checkIn || checkOut) {
     const stayStart = checkIn ?? checkOut!;
@@ -41,10 +52,11 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
     q = q.or(`available_from.lte.${stayStart}`);
     q = q.or(`available_to.is.null,available_to.gte.${stayEnd}`);
     if (checkIn && checkOut) {
-      const nights = Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / DAY_MS);
-      if (nights > 0) {
-        q = q.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${nights}`);
-        q = q.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${nights}`);
+      // From..Through are the first and LAST occupied day, so Nov 1–30 is a 30-day stay (not 29).
+      const days = Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / DAY_MS) + 1;
+      if (days > 0) {
+        q = q.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${days}`);
+        q = q.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${days}`);
       }
     }
     return q as unknown as Q;

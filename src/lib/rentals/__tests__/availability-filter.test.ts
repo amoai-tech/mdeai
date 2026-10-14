@@ -29,13 +29,13 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
     expect(run({})).toEqual(["not(available_from,is,null)", "or(available_to.is.null,available_to.gte.2026-10-13)"]);
   });
 
-  it("with a full stay it requires the listing to start on or before the first day and cover the last day and the length", () => {
+  it("with a full stay (Nov 1–30 inclusive = 30 days) it requires the listing to start on or before the first day and cover the last day and the length", () => {
     expect(run({ checkIn: "2026-11-01", checkOut: "2026-11-30" })).toEqual([
       "not(available_from,is,null)",
       "or(available_from.lte.2026-11-01)",
       "or(available_to.is.null,available_to.gte.2026-11-30)",
-      "or(minimum_stay_days.is.null,minimum_stay_days.lte.29)",
-      "or(maximum_stay_days.is.null,maximum_stay_days.gte.29)",
+      "or(minimum_stay_days.is.null,minimum_stay_days.lte.30)",
+      "or(maximum_stay_days.is.null,maximum_stay_days.gte.30)",
     ]);
   });
 
@@ -45,6 +45,29 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
       "or(available_from.lte.2026-11-01)",
       "or(available_to.is.null,available_to.gte.2026-11-01)",
     ]);
+  });
+});
+
+describe("applyAvailabilityFilters refuses anything that is not a real date (SAN-486)", () => {
+  it.each([
+    ["checkIn", { checkIn: "2026-11-01,id.gt.0" }],
+    ["checkIn", { checkIn: "2026-02-31" }],
+    ["checkOut", { checkOut: "x),status.eq.draft" }],
+    ["checkOut", { checkIn: "2026-11-01", checkOut: "2026-13-40" }],
+  ])("throws for a bad %s and adds no filter", (_name, opts) => {
+    const { builder, calls } = recorder();
+    expect(() => applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13" })).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("throws for a bad today value too", () => {
+    const { builder, calls } = recorder();
+    expect(() => applyAvailabilityFilters(builder, { today: "2026-10-13;drop" })).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("still accepts real dates, including a leap day", () => {
+    expect(run({ checkIn: "2028-02-29", checkOut: "2028-03-02" })).toHaveLength(5);
   });
 });
 
