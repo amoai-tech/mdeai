@@ -37,5 +37,5 @@ describe("Mastra registration in hosted runtimes", () => {
       ]),
     );
     expect(tools.some((id) => id.includes("workspace"))).toBe(false);
-  });
+  }, 15_000); // Real registry import can exceed Vitest's 5s default in parallel floor runs.
 });
