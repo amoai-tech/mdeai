@@ -74,6 +74,11 @@ test("private-bucket paths and unrelated URLs are ignored", () => {
   assert.equal(objectNameFromReference("https://images.unsplash.com/photo-1"), null);
 });
 
+test("malformed percent-encoding falls back to the raw slice", () => {
+  const malformed = "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/bad%E0%A4%A.jpg";
+  assert.equal(objectNameFromReference(publicUrl(malformed)), malformed);
+});
+
 test("an allowlisted object referenced by an apartment URL is kept", () => {
   const referenced = extractReferencedListingPhotoNames([{ images: [publicUrl(rentJpg)] }], []);
   assert.ok(referenced.has(rentJpg));

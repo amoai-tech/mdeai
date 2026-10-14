@@ -91,8 +91,13 @@ if (!apply) {
 }
 
 // 2 · Delete through the Storage API (permanent; see the runbook).
-const { error: removeError } = await db.storage.from(LISTING_PHOTOS_BUCKET).remove(targets);
+const { data: removed, error: removeError } = await db.storage.from(LISTING_PHOTOS_BUCKET).remove(targets);
 if (removeError) throw removeError;
+if ((removed?.length ?? 0) !== targets.length) {
+  throw new Error(
+    "Storage removed " + (removed?.length ?? 0) + " of " + targets.length + " object(s); refusing to report success.",
+  );
+}
 console.log("Removed " + targets.length + " unapproved public object(s).");
 
 // 3 · Prove each object is gone and no longer publicly reachable.

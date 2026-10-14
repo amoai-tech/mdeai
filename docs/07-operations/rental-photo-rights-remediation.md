@@ -43,7 +43,10 @@ node --env-file=.env.local scripts/quarantine-unapproved-rental-photos.mjs --app
 ```
 The script uses the server-side service role, considers only the reviewed allowlist in
 `scripts/lib/rental-photo-rights.mjs`, refuses any object still referenced by listing data,
-never touches `partner-assets`, and is idempotent.
+never touches `partner-assets`, and is idempotent. Before deleting, it matches each target's
+live size and etag against the reviewed allowlist and aborts on either mismatch. Deletion goes
+through the Supabase Storage API and is **permanent — it cannot be undone**, so run the dry-run
+first and keep the private originals as the recovery source.
 
 ## Verification after apply
 - `listing-photos` public object count drops from 42 to 36.

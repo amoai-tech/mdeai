@@ -78,7 +78,13 @@ export function objectNameFromReference(value) {
 
   const markerIndex = trimmed.indexOf(PUBLIC_URL_MARKER);
   if (markerIndex >= 0) {
-    return decodeURIComponent(trimmed.slice(markerIndex + PUBLIC_URL_MARKER.length));
+    const raw = trimmed.slice(markerIndex + PUBLIC_URL_MARKER.length);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      // A malformed apartment image must not abort the whole reference read.
+      return raw;
+    }
   }
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return null;
   if (trimmed.startsWith(LISTING_PHOTOS_BUCKET + "/")) {
