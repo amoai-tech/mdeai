@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(48);
+select plan(52);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -192,6 +192,48 @@ select throws_ok(
           current_setting('mde.admin_test_id')::uuid, now()+interval '3 day', 'scheduled')$q$,
   '42501', 'test rental viewing requires administrator',
   'A48: guest cannot insert a fixture showing directly');
+reset role;
+
+-- A49/A50: model a pre-existing guest fixture booking created before the
+-- guard deployed. A previously committed request must not bypass access checks
+-- just because the atomic RPC returns a saved lead/showing without writing.
+set local role service_role;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.p1_schedule_tour_atomic(current_setting('mde.admin_test_id'), null::uuid,
+    'admin-test-old-guest-replay', 'form', 'oldguest@example.com', 'Old Guest', null, null::uuid,
+    (now() + interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
+  'A49: simulate a historical guest lead/showing on an admin test fixture');
+reset role;
+select is(
+  (select count(*)::int from public.leads where idempotency_key='admin-test-old-guest-replay')
+  + (select count(*)::int from public.showings s join public.leads l on l.id=s.lead_id
+     where l.idempotency_key='admin-test-old-guest-replay'),
+  2,
+  'A50: historical guest fixture viewing exists for replay protection');
+
+-- A51: direct service-role guest replay MUST NOT reveal historical lead data.
+set local role service_role;
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(current_setting('mde.admin_test_id'), null::uuid,
+    'admin-test-old-guest-replay', 'form', 'oldguest@example.com', 'Old Guest', null, null::uuid,
+    (now() + interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'test rental viewing requires administrator',
+  'A51: existing guest fixture viewing cannot be replayed by non-admin');
+reset role;
+
+-- A52: slug identifiers must enforce the same fixture restriction as UUIDs.
+set local role service_role;
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(
+    (select slug from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+    null::uuid, 'admin-test-guest-slug-deny', 'form', 'slugguest@example.com',
+    'Slug Guest', null, null::uuid, (now() + interval '3 day')::timestamptz,
+    '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'test rental viewing requires administrator',
+  'A52: guest fixture viewing denied by listing slug too');
 reset role;
 
 -- A9/A10: cleanup removes the test leads/showings and returns the listing to draft.
