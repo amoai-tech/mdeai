@@ -351,22 +351,6 @@ function deriveTags(row: {
   return tags.length ? tags : ['walkable'];
 }
 
-export function isAvailableForStay(
-  row: { available_from: string | null; available_to: string | null },
-  checkIn?: string,
-  checkOut?: string,
-): boolean {
-  if (!checkIn && !checkOut) return true;
-  // SAN-486: full-stay coverage. The listing must begin on or before the first day of
-  // the requested stay and remain open through its last day. Partial overlap does not
-  // qualify: a renter asking Nov 1–30 cannot use a listing ending Nov 15.
-  const stayStart = checkIn ?? checkOut;
-  const stayEnd = checkOut ?? checkIn;
-  if (stayStart && row.available_from && row.available_from > stayStart) return false;
-  if (stayEnd && row.available_to && row.available_to < stayEnd) return false;
-  return true;
-}
-
 export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
   return [...results].sort((a, b) => {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
