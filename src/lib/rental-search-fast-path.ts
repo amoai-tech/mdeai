@@ -24,6 +24,7 @@ export function rentalsToToolEnvelope(
       bedrooms_unknown: r.bedrooms_unknown,
       nightly_price: r.nightly_price,
       price_monthly: r.price_monthly,
+      currency: r.currency,
       host_name: r.host_name,
       wifi: r.wifi,
       amenities: r.amenities,
