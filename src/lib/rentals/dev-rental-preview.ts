@@ -2,13 +2,18 @@
  * Local-only rental preview for SAN-1431.
  *
  * Does NOT change the publish RPC, RLS, listing eligibility, or production records.
- * The preview consumes existing research fixtures and local photos, not public Storage.
- * A server-only flag AND NODE_ENV=development are both required.
+ * Candidate metadata still comes from the staged research fixture; the image bytes
+ * now come from the existing private `partner-assets` Storage bucket, addressed by
+ * `rental_listing_images.sort_order`. Only the server-only service client reads the
+ * private bucket, and it is imported exclusively by server components and the dev
+ * photo route — never by a client component. A server-only flag AND
+ * NODE_ENV=development are both required.
  */
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 
 type Candidate = {
   slug: string;
@@ -27,8 +32,10 @@ type Candidate = {
   metadata?: { original_listing_url?: string };
 };
 
+/** Existing private bucket that holds the source-review photos. */
+const SOURCE_REVIEW_BUCKET = "partner-assets";
 const SLUG = /^candidate-fincaraiz-\d{6,12}$/;
-const PHOTO = /^photo-0[1-4]\.webp$/;
+const PHOTO = /^photo-0([1-9])\.webp$/;
 
 export function isLocalRentalPreviewEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
@@ -65,29 +72,71 @@ async function candidates(): Promise<Candidate[]> {
   return data;
 }
 
-export async function getLocalPreviewPhoto(slug: string, filename: string): Promise<Buffer | null> {
-  if (!isLocalRentalPreviewEnabled() || !SLUG.test(slug) || !PHOTO.test(filename)) return null;
-  // Only photos for known source candidates, even if a caller guesses a filename.
-  if (!(await candidates()).some((c) => c.slug === slug)) return null;
-  try {
-    return await readFile(path.join(fixtureRoot(), "photos", slug, filename));
-  } catch {
-    return null;
-  }
+type ListingImageRow = {
+  sort_order: number;
+  storage_path: string;
+  mime_type: string | null;
+};
+
+/**
+ * The staged photos for a candidate, ordered exactly as uploaded. Uses the
+ * server-only service client because `partner-assets` is a private bucket; the
+ * credential never leaves the server process.
+ */
+async function listingImages(slug: string): Promise<ListingImageRow[]> {
+  const client = createServiceRoleClient();
+  if (!client) return [];
+  const { data: apartment, error: apartmentError } = await client
+    .from("apartments")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (apartmentError || !apartment) return [];
+  const { data, error } = await client
+    .from("rental_listing_images")
+    .select("sort_order, storage_path, mime_type")
+    .eq("listing_id", apartment.id)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return data as ListingImageRow[];
+}
+
+function photoUrl(slug: string, position: number): string {
+  return `/api/dev/rental-photo/${slug}/photo-0${position + 1}.webp`;
 }
 
 async function photos(slug: string): Promise<string[]> {
-  const urls: string[] = [];
-  for (let i = 1; i <= 4; i += 1) {
-    const file = `photo-0${i}.webp`;
-    try {
-      await access(path.join(fixtureRoot(), "photos", slug, file));
-      urls.push(`/api/dev/rental-photo/${slug}/${file}`);
-    } catch {
-      // An unknown/missing photo stays absent; never use a wrong unit's image.
-    }
-  }
-  return urls;
+  if (!isLocalRentalPreviewEnabled()) return [];
+  const rows = await listingImages(slug);
+  // Address photos by their sort-order position so a gap can never shift one
+  // unit's image onto another, and a missing row simply stays absent.
+  return rows.map((_row, index) => photoUrl(slug, index));
+}
+
+export type DevPreviewPhoto = { bytes: ArrayBuffer; contentType: string };
+
+/**
+ * Stream one staged photo from the private bucket. The dev route is the existing
+ * authorized delivery mechanism: it keeps the bucket private and avoids putting a
+ * service-role read or an expiring URL into the browser.
+ */
+export async function getLocalPreviewPhoto(
+  slug: string,
+  filename: string,
+): Promise<DevPreviewPhoto | null> {
+  if (!isLocalRentalPreviewEnabled() || !SLUG.test(slug)) return null;
+  const match = PHOTO.exec(filename);
+  if (!match) return null;
+  const client = createServiceRoleClient();
+  if (!client) return null;
+  const row = (await listingImages(slug))[Number(match[1]) - 1];
+  if (!row) return null;
+  const objectPath = row.storage_path.startsWith(`${SOURCE_REVIEW_BUCKET}/`)
+    ? row.storage_path.slice(SOURCE_REVIEW_BUCKET.length + 1)
+    : row.storage_path;
+  const { data, error } = await client.storage.from(SOURCE_REVIEW_BUCKET).download(objectPath);
+  if (error || !data) return null;
+  return { bytes: await data.arrayBuffer(), contentType: row.mime_type ?? "image/webp" };
 }
 
 export async function getLocalPreviewRentals(): Promise<Rental[]> {

@@ -20,8 +20,8 @@ export default async function LocalRentalPreviewPage() {
     <main>
       <div role="status" data-testid="dev-rentals-disclaimer" className="mx-auto max-w-7xl rounded-lg border border-amber-500 p-4 text-sm">
         <strong>Development preview only</strong> — external advertisements, unverified availability and
-        ownership. Photos are local research copies. These properties are not published or requestable;
-        all real viewing and booking actions are disabled.
+        ownership. Photos come from the private Supabase Storage bucket for development review. These
+        properties are not published or requestable; all real viewing and booking actions are disabled.
       </div>
       <RentalBrowseView results={rentals} total={rentals.length} error={error}
         neighborhood={null} beds={null} previewMode />

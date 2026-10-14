@@ -1,7 +1,58 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
+// The preview reads the private partner-assets bucket with the server-only service
+// client. Mock that client so no credential or network is needed, and so the test
+// can prove the URL/order behaviour without touching real Storage.
+const h = vi.hoisted(() => {
+  const bytes = new Uint8Array([82, 73, 70, 70, 1, 2, 3, 4]);
+  const images = [0, 1, 2, 3].map((sort_order) => ({
+    sort_order,
+    storage_path: `partner-assets/source-review/fincaraiz/apt-1/${sort_order + 1}-hash.webp`,
+    mime_type: "image/webp",
+  }));
+  return {
+    bytes,
+    images,
+    download: vi.fn(
+      async (): Promise<{ data: Blob | null; error: unknown }> => ({
+        data: new Blob([bytes]),
+        error: null,
+      }),
+    ),
+    knownSlug: "candidate-fincaraiz-193916988",
+  };
+});
+
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceRoleClient: () => ({
+    from: (table: string) => {
+      if (table === "apartments") {
+        return {
+          select: () => ({
+            eq: (_column: string, value: string) => ({
+              maybeSingle: async () => ({
+                data: value === h.knownSlug ? { id: "apt-1" } : null,
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            order: async () => ({ data: h.images, error: null }),
+          }),
+        }),
+      };
+    },
+    storage: { from: () => ({ download: h.download }) },
+  }),
+}));
+
 import {
   getLocalPreviewDetail,
   getLocalPreviewPhoto,
@@ -25,17 +76,19 @@ const candidate = {
   source_url: "https://www.fincaraiz.com.co/apartaestudio-en-arriendo-en-conquistadores-medellin/193916988",
 };
 
+const photoUrl = (index: number) =>
+  `/api/dev/rental-photo/${candidate.slug}/photo-0${index + 1}.webp`;
+
 let root: string;
-const photo = Buffer.from("RIFFfake-webp-test-bytes");
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "mde-rental-preview-"));
-  await mkdir(path.join(root, "photos", candidate.slug), { recursive: true });
   await writeFile(path.join(root, "supabase_draft_records.json"), JSON.stringify([candidate]));
-  await writeFile(path.join(root, "photos", candidate.slug, "photo-01.webp"), photo);
   vi.stubEnv("MDE_DEV_RENTAL_FIXTURES_DIR", root);
   vi.stubEnv("MDE_DEV_RENTAL_PREVIEW", "1");
   vi.stubEnv("NODE_ENV", "development");
+  h.download.mockClear();
+  h.download.mockResolvedValue({ data: new Blob([h.bytes]), error: null });
 });
 
 afterEach(async () => {
@@ -53,16 +106,17 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(await getLocalPreviewRentals()).toEqual([]);
     expect(await getLocalPreviewDetail(candidate.slug)).toBeNull();
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
+    expect(h.download).not.toHaveBeenCalled();
   });
 
-  it("shows the source price and local image without claiming viewing rights, availability or map pin", async () => {
+  it("shows the source price and all four Storage photos without claiming viewing rights, availability or a map pin", async () => {
     const rentals = await getLocalPreviewRentals();
     expect(rentals).toHaveLength(1);
     expect(rentals[0]).toMatchObject({
       id: candidate.slug,
       currency: "COP",
       price_monthly: 2100000,
-      image: `/api/dev/rental-photo/${candidate.slug}/photo-01.webp`,
+      image: photoUrl(0),
       can_schedule_viewing: false,
       schedule_viewing_url: null,
       tags: ["dev-preview"],
@@ -70,6 +124,7 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(rentals[0].availability).toMatch(/unconfirmed/i);
     expect(rentals[0].latitude).toBeUndefined();
     expect(rentals[0].longitude).toBeUndefined();
+
     const detail = await getLocalPreviewDetail(candidate.slug);
     expect(detail).toMatchObject({
       priceNightly: null,
@@ -78,16 +133,25 @@ describe("local rental preview (no publishing bypass)", () => {
       latitude: null,
       longitude: null,
       status: "development-preview",
-      images: [`/api/dev/rental-photo/${candidate.slug}/photo-01.webp`],
+      images: [photoUrl(0), photoUrl(1), photoUrl(2), photoUrl(3)],
     });
   });
 
-  it("restricts photo paths and unit IDs; returns only known candidate files", async () => {
-    expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toEqual(photo);
+  it("streams the ordered photo bytes and rejects unknown slugs, filenames and positions", async () => {
+    const photo = await getLocalPreviewPhoto(candidate.slug, "photo-01.webp");
+    expect(photo?.contentType).toBe("image/webp");
+    expect(Buffer.from(photo?.bytes ?? new ArrayBuffer(0))).toEqual(Buffer.from(h.bytes));
+
     expect(await getLocalPreviewPhoto(candidate.slug, "../.env")).toBeNull();
     expect(await getLocalPreviewPhoto("../../etc", "photo-01.webp")).toBeNull();
     expect(await getLocalPreviewPhoto("candidate-fincaraiz-999999999", "photo-01.webp")).toBeNull();
-    expect(await getLocalPreviewPhoto(candidate.slug, "photo-09.webp")).toBeNull();
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-05.webp")).toBeNull();
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-0x.webp")).toBeNull();
+  });
+
+  it("returns no URL for a missing Storage object and no bytes when Storage errors", async () => {
+    h.download.mockResolvedValueOnce({ data: null, error: { message: "not found" } });
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
   });
 
   it("accepts original verified source URL on aggregator records", async () => {
