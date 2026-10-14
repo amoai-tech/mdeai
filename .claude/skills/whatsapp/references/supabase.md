@@ -12,7 +12,9 @@
 ## Data decisions
 - Keep existing four tables and their unique indexes. Only add consent evidence/provider correlation fields through a reviewed migration if the installed adapter and live schema demonstrate a gap.
 - Support durable, atomic dedupe at ingress and atomic business transitions with stable action idempotency keys. A unique key alone does not guarantee exactly one external network send.
-- Re-check opt-out and template rules **at dispatch**, not just when enqueuing. Reconcile out-of-order delivery callbacks without regressing final status.
+- **STOP vs dispatch race:** Lock or atomically fence recipient consent with message claim/authorization, using consistent lock ordering. Commit STOP plus cancellation of queued and not-yet-submitted claimed work atomically; stale `opted_in=true` snapshots cannot authorize a send. Define the exact point after which a provider submission is in flight and cannot be recalled, with status reconciliation and no retries after opt-out. Avoid holding database locks across the provider network call unless a reviewed design explicitly justifies it.
+- Re-check template rules at dispatch and ensure consent state is coordinated with dispatch, not merely read beforehand. Reconcile out-of-order callbacks without regressing final status.
+- **Durable inbound handoff:** In one transaction persist the unique provider event identity **and** retryable pending work (existing queue/worker if suitable). Ack only after commit; on duplicate, return/inspect the existing work state rather than suppressing incomplete work. A worker lease, retry/backoff and dead-letter/operator replay must recover crash-after-ack cases; business writes still need their own idempotency key.
 - Use existing `pg_cron`, `pg_net` or outbound worker as justified; don't add `pgmq` or another queue by default.
 
-**Verification:** pgTAP/negative RLS probes, unique/retry/concurrency tests, migration roll-forward/rollback, delivery recovery and live source comparison.
+**Verification:** pgTAP/negative RLS probes, unique/retry/concurrency tests, migration roll-forward/rollback, STOP/claim/send race tests, crash-after-ack recovery and live source comparison.

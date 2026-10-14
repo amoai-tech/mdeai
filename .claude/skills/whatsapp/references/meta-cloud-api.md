@@ -10,7 +10,8 @@
 
 ## Policy
 - Distinguish customer-initiated replies from business-initiated sends. Observe Meta's current service window/template category rules and approved opt-in requirements. A prior inbound message is not blanket permission to send later.
-- Respect STOP immediately, before queued messages dispatch; ensure inbound opt-out survives retries. Keep broker identity/auth separate from phone.
+- Treat STOP as a concurrent state transition, not a best-effort boolean check: in one database transaction lock the recipient/suppression state using a consistent order, persist the opt-out, and cancel eligible queued/claimed-but-not-sent messages. Coordinate the dispatch claim/final authorization decision with this same lock or an equivalent atomic compare-and-set/consent version check. A worker must not rely on an earlier `opted_in=true` read. Keep broker identity/auth separate from phone.
+- Define an explicit send boundary. Work already submitted to Meta or irrevocably in flight may not be recallable after STOP; record that outcome accurately, stop retries/future sends, reconcile provider callbacks, and never promise retroactive cancellation. For a worker that has claimed but **not submitted** a message, STOP must win or the sender must hold the per-recipient dispatch fence until the provider submission decision. Do not hold a database transaction across a remote network call by default; document and test the selected concurrency protocol.
 - Test rejected template, unknown recipient, expired session, rate limit, token rotation, media link failure and callback arriving after retry.
 
 **MDE adaptation:** reuse `whatsapp_subscriptions` + `wa_outbox` and the one authorized Meta sender. Do not paste separate vendor SDK startup code.
