@@ -24,7 +24,7 @@
 begin;
 
 select plan(
-  case when to_regclass('vote.entities') is null then 0 else 14 end
+  case when to_regclass('vote.entities') is null then 0 else 15 end
 );
 
 -- ── vote.entities table privileges ───────────────────────────────────────────────
@@ -100,12 +100,16 @@ select is(
 select cmp_ok(
   (select count(*)::int from pg_trigger tg
     where not tg.tgisinternal
-      and tg.tgfoid in (
-        to_regprocedure('vote.trigger_recompute_on_vote()'),
-        to_regprocedure('vote.trigger_recompute_on_judge_score()')
-      )),
-  '>=', 1, 'vote triggers are still bound to their helper functions'
-) where to_regclass('vote.entities') is not null;
+      and tg.tgfoid = to_regprocedure('vote.trigger_recompute_on_vote()')),
+  '>=', 1, 'trigger_recompute_on_vote is still bound to a trigger'
+) where to_regprocedure('vote.trigger_recompute_on_vote()') is not null;
+
+select cmp_ok(
+  (select count(*)::int from pg_trigger tg
+    where not tg.tgisinternal
+      and tg.tgfoid = to_regprocedure('vote.trigger_recompute_on_judge_score()')),
+  '>=', 1, 'trigger_recompute_on_judge_score is still bound to a trigger'
+) where to_regprocedure('vote.trigger_recompute_on_judge_score()') is not null;
 
 -- ── direct invocation denied ─────────────────────────────────────────────────────
 set local role anon;
