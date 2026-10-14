@@ -57,8 +57,8 @@ select is(
   (select count(*)::int from pg_policies
     where schemaname = 'public' and tablename = 'property_verifications'
       and policyname = 'property_verifications_select_public'),
-  1,
-  'F7: verification reads use the scoped visibility policy');
+  0,
+  'F7: the broad public verification-read policy is gone');
 
 -- Fixtures -------------------------------------------------------------------
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -133,12 +133,16 @@ select is((select count(*)::int from public.apartments
 select is((select count(*)::int from public.apartments
            where id = 'e4680000-0000-4000-8000-000000000007'), 0,
   'A7: anon cannot see an active-but-unapproved/unowned row');
-select is((select count(*)::int from public.property_verifications
-           where apartment_id = 'e4680000-0000-4000-8000-000000000001'), 1,
-  'A8: anon can read verification for a public listing');
-select is((select count(*)::int from public.property_verifications
-           where apartment_id = 'e4680000-0000-4000-8000-000000000002'), 0,
-  'A9: anon cannot read verification for a private draft');
+select throws_ok(
+  $$select count(*) from public.property_verifications
+     where apartment_id = 'e4680000-0000-4000-8000-000000000001'$$,
+  '42501', null,
+  'A8: anon has no read grant on verification evidence');
+select throws_ok(
+  $$select count(*) from public.property_verifications
+     where apartment_id = 'e4680000-0000-4000-8000-000000000002'$$,
+  '42501', null,
+  'A9: anon cannot read a private draft verification either');
 reset role;
 
 -- Authenticated renter (no landlord profile) ---------------------------------

@@ -117,11 +117,13 @@ jobs:
           set -o pipefail
           supabase test db 2>&1 | tee pgtap.log
 
-      # pgTAP runs in a single transaction, so it cannot prove SKIP LOCKED contention.
-      # This opens two real connections: worker A claims and holds its row locks, worker B
-      # must skip those locked rows. It reads only the local database (config.toml ports).
-      - name: WhatsApp claim concurrency (two connections)
-        run: node supabase/tests/concurrency/san1444_claim_concurrency.mjs
+      # pgTAP runs in a single transaction, so it cannot prove SKIP LOCKED contention or a
+      # send-vs-delivery-receipt race. These open real connections and read only the local
+      # database (config.toml ports).
+      - name: WhatsApp concurrency and delivery race (two connections)
+        run: |
+          node supabase/tests/concurrency/san1444_claim_concurrency.mjs
+          node supabase/tests/concurrency/san1444_send_receipt_race.mjs
 
       # Run the real HTTP path, not just SET ROLE in psql. This checks both
       # legacy service JWTs and modern sb_secret_ keys through Kong/PostgREST.

@@ -19,6 +19,13 @@ const event: PublishedEventListItem = {
 };
 
 describe("EventBrowseCard", () => {
+  it("renders Medellín-local event times regardless of the machine timezone", () => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={{ ...event, startsAt: "2026-10-19T21:00:00.000Z" }} />,
+    );
+    expect(html).toContain("Mon, Oct 19, 4:00 PM");
+  });
+
   it("renders nova cover shell for browse grid", () => {
     const html = renderToStaticMarkup(
       <EventBrowseCard

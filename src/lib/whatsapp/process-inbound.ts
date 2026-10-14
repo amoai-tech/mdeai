@@ -15,12 +15,20 @@
  */
 import {
   claimInbound,
-  completeInbound,
+  completeInboundWithSends,
   deadLetterInbound,
   failInbound,
+  recordPartialSends,
   type ClaimedRow,
   type InboundRpcClient,
 } from "./inbound-store";
+import {
+  confirmedSends,
+  flushBufferedReply,
+  recordOutboundSend,
+  runWithOutboundTracking,
+  sendOutcome,
+} from "./outbound-tracker";
 
 export type AdapterWebhook = (
   request: Request,
@@ -45,6 +53,8 @@ export type ProcessSummary = {
   claimed: number;
   processed: number;
   failed: number;
+  /** Replies where only some physical sends succeeded (terminal, operator-visible). */
+  partial: number;
   stale: number;
   deadLettered: number;
 };
@@ -77,6 +87,7 @@ export async function processDueInbound(deps: ProcessDeps): Promise<ProcessSumma
     claimed: 0,
     processed: 0,
     failed: 0,
+    partial: 0,
     stale: 0,
     deadLettered: await deadLetterInbound(deps.client, maxAttempts, leaseSeconds),
   };
@@ -114,33 +125,95 @@ async function processRow(
   }
   try {
     const body = JSON.stringify(row.raw_payload);
-    let registered: Promise<unknown> | null = null;
-    const response = await deps.adapterWebhook(
-      new Request(deps.webhookUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-hub-signature-256": deps.sign(body),
+    // Track outbound sends for THIS message. The Chat SDK resolves the waitUntil task even when
+    // the agent or the Meta send fails, so "the task settled" is not proof of delivery.
+    const { sends } = await runWithOutboundTracking(async () => {
+      let registered: Promise<unknown> | null = null;
+      const response = await deps.adapterWebhook(
+        new Request(deps.webhookUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hub-signature-256": deps.sign(body),
+          },
+          body,
+        }),
+        (promise) => {
+          registered = isPromise(promise)
+            ? promise
+            : Promise.reject(new Error("adapter passed a non-promise to waitUntil"));
         },
-        body,
-      }),
-      (promise) => {
-        registered = isPromise(promise)
-          ? promise
-          : Promise.reject(new Error("adapter passed a non-promise to waitUntil"));
-      },
-    );
-    if (!response.ok) throw new Error("adapter webhook returned " + response.status);
-    // The adapter must register the agent/reply work through waitUntil. If it does not, an
-    // HTTP 200 means nothing: marking the row processed here would tell the sweeper never to
-    // retry while the customer never receives a reply. Fail loudly and let it retry.
-    if (!registered) {
-      throw new Error("adapter did not register background work via waitUntil");
+      );
+      if (!response.ok) throw new Error("adapter webhook returned " + response.status);
+      // The adapter must register the agent/reply work through waitUntil; an HTTP 200 that
+      // registers nothing would let the sweeper skip a message the customer never got answered.
+      if (!registered) {
+        throw new Error("adapter did not register background work via waitUntil");
+      }
+      await withTimeout(registered, executionTimeoutMs, "agent run");
+      // Post the run's final reply exactly once, INSIDE the scope: the adapter may split a long
+      // answer across several Meta calls, and every physical send must be observed and linked.
+      // The adapter THROWS on a non-2xx response, so catch it here: a chunk Meta already accepted
+      // must still be persisted (partial) instead of losing the run to a blind, duplicating retry.
+      try {
+        await flushBufferedReply();
+      } catch (error) {
+        recordOutboundSend({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    // Completing requires EVERY physical send to succeed with a provider id, recorded in the SAME
+    // transaction as the completion. A partial reply (some chunks sent, some failed) must never
+    // look like a complete answer, and a missing wamid must never be a false success.
+    const outcome = sendOutcome(sends);
+    if (outcome === "partial") {
+      // Persist what DID go out, then dead-letter: the customer received a partial reply and an
+      // operator must see it. Blind retry would duplicate the chunks that already sent.
+      const failure = sends.find((send) => send.success === false);
+      const reason =
+        "partial outbound send: " +
+        (failure && failure.success === false ? failure.error : "some messages failed");
+      const recordedPartial = await recordPartialSends(
+        deps.client,
+        row.id,
+        row.claim_token,
+        confirmedSends(sends),
+        reason,
+      );
+      summary.partial += 1;
+      console.error("[whatsapp] partial outbound send recorded", {
+        externalId: row.external_id,
+        sendsRecorded: recordedPartial,
+      });
+      return;
     }
-    await withTimeout(registered, executionTimeoutMs, "agent run");
-    const completed = await completeInbound(deps.client, row.id, row.claim_token);
-    if (completed) summary.processed += 1;
-    else summary.stale += 1;
+    if (outcome === "failed") {
+      const failure = sends.find((send) => send.success === false);
+      throw new Error(
+        "no confirmed outbound send: " +
+          (failure && failure.success === false ? failure.error : "the agent produced no reply"),
+      );
+    }
+    const sendsToRecord = confirmedSends(sends);
+
+    const recorded = await completeInboundWithSends(
+      deps.client,
+      row.id,
+      row.claim_token,
+      sendsToRecord,
+    );
+    if (recorded > 0) {
+      summary.processed += 1;
+      console.info("[whatsapp] inbound processed", {
+        externalId: row.external_id,
+        providerMessageIds: sendsToRecord.map((send) => send.wamid),
+      });
+    } else {
+      summary.stale += 1;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failed = await failInbound(deps.client, row.id, row.claim_token, message, maxAttempts);

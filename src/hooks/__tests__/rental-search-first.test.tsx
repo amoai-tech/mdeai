@@ -135,7 +135,7 @@ describe("SAN-407 · rental chat searches before it asks", () => {
   it("a true empty marketplace is an honest answer with zero pins", async () => {
     respond(200, { results: [] });
     await send("Show me apartments in Medellín");
-    expect(assistantText()).toMatch(/no verified rentals/i);
+    expect(assistantText()).toMatch(/no rentals are available in this search right now/i);
     // Whatever was merged for the rental category must be empty (clears any stale pins).
     const rentalMerges = map.merges.filter(([category]) => category === "rental");
     expect(rentalMerges.every(([, pins]) => pins.length === 0)).toBe(true);
@@ -149,7 +149,7 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(handled).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(assistantText()).toMatch(/temporarily unavailable|try again/i);
-    expect(assistantText()).not.toMatch(/no verified rentals/i);
+    expect(assistantText()).not.toMatch(/no rentals (are available|match)/i);
     expect(probe.hasResult()).toBe(false);
   });
 
