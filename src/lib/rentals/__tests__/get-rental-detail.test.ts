@@ -87,7 +87,7 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       moderation_status: "approved",
       listing_workflow_status: "published",
       landlord_id: "11111111-1111-4111-8111-111111111111",
-      available_from: null,
+      available_from: "2026-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
       available_to: null,
     };
 

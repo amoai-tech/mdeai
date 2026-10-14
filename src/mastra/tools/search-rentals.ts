@@ -200,6 +200,9 @@ export function isRentalRequestable(
   if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
   if (row.listing_workflow_status !== 'published') return false;
+  // SAN-486: the viewing RPC requires a known move-in date, so a listing without one is not
+  // requestable. Mirror it here, or the card shows a Request button the database will refuse.
+  if (!row.available_from) return false;
   const isoToday = rentalAvailabilityDate(today);
   // SAN-486: a future move-in date does not block requesting a *viewing* — a renter
   // can tour an apartment before it becomes available. Only an expired window blocks.

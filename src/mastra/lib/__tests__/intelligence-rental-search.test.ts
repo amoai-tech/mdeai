@@ -120,7 +120,7 @@ describe("isRentalRequestable", () => {
     status: "active",
     moderation_status: "approved",
     listing_workflow_status: "published",
-    available_from: null,
+    available_from: "2026-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
     available_to: null,
   };
   const today = new Date("2026-09-27T12:00:00Z");
@@ -143,6 +143,10 @@ describe("isRentalRequestable", () => {
 
   it("refuses an inactive listing", () => {
     expect(isRentalRequestable({ ...owned, status: "inactive" }, today)).toBe(false);
+  });
+
+  it("refuses a listing with no move-in date, because the viewing RPC refuses it", () => {
+    expect(isRentalRequestable({ ...owned, available_from: null }, today)).toBe(false);
   });
 
   it("refuses a listing whose availability window has already closed", () => {
