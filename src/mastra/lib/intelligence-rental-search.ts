@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { applyAvailabilityFilters } from "@/lib/rentals/availability-filter";
 import { RentalSearchUnavailableError } from "./rental-search-unavailable";
 import {
   embedQueryTextDetailed,
@@ -212,26 +213,13 @@ export async function searchRentalsIntelligent(
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
-    const today = rentalAvailabilityDate();
-    if (query.checkIn || query.checkOut) {
-      // SAN-486: full-stay coverage — start on or before the first day, open through
-      // the last day.
-      const stayStart = query.checkIn ?? query.checkOut!;
-      const stayEnd = query.checkOut ?? query.checkIn!;
-      q = q.or(`available_from.is.null,available_from.lte.${stayStart}`);
-      q = q.or(`available_to.is.null,available_to.gte.${stayEnd}`);
-      if (query.checkIn && query.checkOut) {
-        const nights = Math.round((Date.parse(query.checkOut) - Date.parse(query.checkIn)) / 86_400_000);
-        if (nights > 0) {
-          q = q.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${nights}`);
-          q = q.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${nights}`);
-        }
-      }
-    } else {
-      q = q.or(`available_to.is.null,available_to.gte.${today}`);
-    }
+    // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
+    // not expired), "today" being the America/Bogota date the viewing RPC uses.
+    q = applyAvailabilityFilters(q, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+    });
     const { data, error } = await q;
     if (error) {
       throw new RentalSearchUnavailableError(
@@ -269,25 +257,13 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids);
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
-    const today = rentalAvailabilityDate();
-    if (query.checkIn || query.checkOut) {
-      // SAN-486: full-stay coverage on the canonical apartment lookup too.
-      const aptStayStart = query.checkIn ?? query.checkOut!;
-      const aptStayEnd = query.checkOut ?? query.checkIn!;
-      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${aptStayStart}`);
-      aptQ = aptQ.or(`available_to.is.null,available_to.gte.${aptStayEnd}`);
-      if (query.checkIn && query.checkOut) {
-        const nights = Math.round((Date.parse(query.checkOut) - Date.parse(query.checkIn)) / 86_400_000);
-        if (nights > 0) {
-          aptQ = aptQ.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${nights}`);
-          aptQ = aptQ.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${nights}`);
-        }
-      }
-    } else {
-      aptQ = aptQ.or(`available_to.is.null,available_to.gte.${today}`);
-    }
+    // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
+    // not expired), "today" being the America/Bogota date the viewing RPC uses.
+    aptQ = applyAvailabilityFilters(aptQ, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+    });
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {
       throw new RentalSearchUnavailableError(

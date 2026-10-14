@@ -14,7 +14,7 @@
 -- appointment. Run with: supabase test db
 begin;
 
-select plan(28);
+select plan(30);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values ('f4860000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
@@ -36,11 +36,11 @@ values
   -- Future move-in, fully evidenced; created draft so the image guard does not demote it.
   ('f4860000-0000-4000-8000-000000000021', 'SAN486 future', 'san486-future', 'Laureles',
    'SAN486 future address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date + 30, null, 6.2447, -75.5916),
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', (now() at time zone 'America/Bogota')::date + 30, null, 6.2447, -75.5916),
   -- Expired window.
   ('f4860000-0000-4000-8000-000000000022', 'SAN486 expired', 'san486-expired', 'Laureles',
    'SAN486 expired address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date - 60, current_date - 1, 6.2447, -75.5916),
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', (now() at time zone 'America/Bogota')::date - 60, (now() at time zone 'America/Bogota')::date - 1, 6.2447, -75.5916),
   -- Missing window.
   ('f4860000-0000-4000-8000-000000000023', 'SAN486 missing', 'san486-missing', 'Laureles',
    'SAN486 missing address', 'inactive', 'pending', 'draft',
@@ -48,7 +48,7 @@ values
   -- Reversed window: ends before it starts.
   ('f4860000-0000-4000-8000-000000000024', 'SAN486 reversed', 'san486-reversed', 'Laureles',
    'SAN486 reversed address', 'inactive', 'pending', 'draft',
-   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', current_date + 30, current_date + 10, 6.2447, -75.5916),
+   'f4860000-0000-4000-8000-000000000011', false, 2900000, 'COP', (now() at time zone 'America/Bogota')::date + 30, (now() at time zone 'America/Bogota')::date + 10, 6.2447, -75.5916),
   -- Published but no move-in date: the viewing RPC must refuse it.
   ('f4860000-0000-4000-8000-000000000025', 'SAN486 no-from', 'san486-no-from', 'Laureles',
    'SAN486 no-from address', 'active', 'approved', 'published',
@@ -56,7 +56,7 @@ values
   -- Published but reversed: the viewing RPC must refuse it.
   ('f4860000-0000-4000-8000-000000000026', 'SAN486 reversed-pub', 'san486-reversed-pub', 'Laureles',
    'SAN486 reversed-pub address', 'active', 'approved', 'published',
-   'f4860000-0000-4000-8000-000000000011', true, 2900000, 'COP', current_date + 30, current_date + 10, 6.2447, -75.5916);
+   'f4860000-0000-4000-8000-000000000011', true, 2900000, 'COP', (now() at time zone 'America/Bogota')::date + 30, (now() at time zone 'America/Bogota')::date + 10, 6.2447, -75.5916);
 
 -- The reviewed receipt: names THIS apartment's exact move-in date, a non-owner reviewer
 -- and the evidence reviewed.
@@ -96,7 +96,7 @@ begin
   ) as t(sfx, days, kind)
   loop
     v_id := ('f4860000-0000-4000-8000-0000000000' || r.sfx)::uuid;
-    v_from := current_date + r.days;
+    v_from := (now() at time zone 'America/Bogota')::date + r.days;
     insert into public.apartments
       (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
        landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude)
@@ -239,6 +239,18 @@ select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-0000000
 select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-000000000032', false),
   array[]::text[], 'B6: an apartment that is already available needs no move-in receipt');
 
+-- B7/B8 · expiry uses the America/Bogota calendar date, not the database's UTC date (which is a
+-- day ahead for five hours every night). A window that ends TODAY in Bogotá is still open; one that
+-- ended yesterday there is not. (The UTC/Bogotá difference only shows between 00:00 and 05:00 UTC.)
+update public.apartments set available_to = (now() at time zone 'America/Bogota')::date
+ where id = 'f4860000-0000-4000-8000-000000000032';
+select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-000000000032', false),
+  array[]::text[], 'B7: a window that ends today in Bogotá is still open');
+update public.apartments set available_to = (now() at time zone 'America/Bogota')::date - 1
+ where id = 'f4860000-0000-4000-8000-000000000032';
+select is(public.rental_listing_launch_blockers('f4860000-0000-4000-8000-000000000032', false) @> array['no current availability evidence']::text[],
+  true, 'B8: a window that ended yesterday in Bogotá is expired');
+
 -- H · publication with missing evidence really fails; with the receipt it succeeds.
 set local role service_role;
 select throws_ok($q$select public.publish_verified_rental('f4860000-0000-4000-8000-000000000027'::uuid, 'f4860000-0000-4000-8000-000000000002'::uuid)$q$,
@@ -253,7 +265,7 @@ select is((select listing_workflow_status || '/' || status || '/' || verified::t
 
 -- C · moving the move-in date after publication sends the listing back to review, and the
 -- receipt for the OLD date cannot republish it.
-update public.apartments set available_from = current_date + 60
+update public.apartments set available_from = (now() at time zone 'America/Bogota')::date + 60
  where id = 'f4860000-0000-4000-8000-000000000033';
 select is((select listing_workflow_status || '/' || status || '/' || verified::text from public.apartments
             where id = 'f4860000-0000-4000-8000-000000000033'),
@@ -264,7 +276,7 @@ select throws_ok($q$select public.publish_verified_rental('f4860000-0000-4000-80
   'C2: the old date''s receipt cannot republish the new date');
 reset role;
 update public.property_verifications
-   set metadata = metadata || jsonb_build_object('move_in_verified_for', to_char(current_date + 60, 'YYYY-MM-DD'))
+   set metadata = metadata || jsonb_build_object('move_in_verified_for', to_char((now() at time zone 'America/Bogota')::date + 60, 'YYYY-MM-DD'))
  where apartment_id = 'f4860000-0000-4000-8000-000000000033';
 set local role service_role;
 select lives_ok($q$select public.publish_verified_rental('f4860000-0000-4000-8000-000000000033'::uuid, 'f4860000-0000-4000-8000-000000000002'::uuid)$q$,

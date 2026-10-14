@@ -20,7 +20,12 @@
  *     [--verification-status=… --verified-by=<uuid> --notes=…] \
  *     [--owner-control=verified|unverified --publish-permission=granted|not_granted] \
  *     [--viewings-permission=granted|not_granted --coordinate-receipt=verified|unverified] \
+ *     [--move-in-verified-for=YYYY-MM-DD --move-in-evidence="<what was reviewed>"] \
  *     [--neighborhood="Laureles"] [--update-verification=true]
+ *
+ * A FUTURE move-in date needs a receipt naming that exact date (--move-in-verified-for) plus the
+ * evidence reviewed (--move-in-evidence); the reviewer is --verified-by and must not be the
+ * listing owner (the launch gate enforces that). Moving available_from later needs a new receipt.
  *
  * Listing-specific approvals (owner-control / publish / viewings / coordinate receipt)
  * are written into public.property_verifications.metadata — the fields the canonical
@@ -182,6 +187,9 @@ try {
   if (v.publishPermission) verifyMetadata.publish_permission = v.publishPermission;
   if (v.viewingsPermission) verifyMetadata.viewings_permission = v.viewingsPermission;
   if (v.coordinateReceipt) verifyMetadata.coordinates = v.coordinateReceipt;
+  // SAN-486: the receipt names the exact move-in date it covers, so it cannot authorize a different one.
+  if (v.moveInVerifiedFor) verifyMetadata.move_in_verified_for = v.moveInVerifiedFor;
+  if (v.moveInEvidence) verifyMetadata.move_in_evidence = v.moveInEvidence;
   const verifyMetadataJson = JSON.stringify(verifyMetadata);
 
   let verification = 0;

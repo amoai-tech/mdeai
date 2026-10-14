@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
+import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
@@ -420,29 +421,13 @@ async function searchRentalsFromSupabase(
     q = q.gte('bedrooms', query.minBedrooms);
   }
 
-  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-  // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
-  // so the query window and isRentalRequestable() cannot disagree near local midnight.
-  const today = rentalAvailabilityDate();
-  if (query.checkIn || query.checkOut) {
-    // SAN-486: full-stay coverage — start on or before the first day, open through the
-    // last day. With no dates, a future move-in is still discoverable, so only the
-    // expired check applies.
-    const stayStart = query.checkIn ?? query.checkOut!;
-    const stayEnd = query.checkOut ?? query.checkIn!;
-    q = q.or(`available_from.is.null,available_from.lte.${stayStart}`);
-    q = q.or(`available_to.is.null,available_to.gte.${stayEnd}`);
-    if (query.checkIn && query.checkOut) {
-      // SAN-486: the requested stay length must satisfy the listing's own term limits.
-      const nights = Math.round((Date.parse(query.checkOut) - Date.parse(query.checkIn)) / 86_400_000);
-      if (nights > 0) {
-        q = q.or(`minimum_stay_days.is.null,minimum_stay_days.lte.${nights}`);
-        q = q.or(`maximum_stay_days.is.null,maximum_stay_days.gte.${nights}`);
-      }
-    }
-  } else {
-    q = q.or(`available_to.is.null,available_to.gte.${today}`);
-  }
+  // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
+  // not expired), with "today" as the America/Bogota date the viewing RPC uses.
+  q = applyAvailabilityFilters(q, {
+    checkIn: query.checkIn,
+    checkOut: query.checkOut,
+    today: rentalAvailabilityDate(),
+  });
 
   const { data, error, count } = await q;
   if (error) {

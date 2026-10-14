@@ -7,12 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { rowToRental, type ApartmentRow } from "../../tools/search-rentals";
 
 const mocks = vi.hoisted(() => {
-  const state = { aptRows: [] as Array<Record<string, unknown>>, hybridIds: [] as string[] };
+  const state = { aptRows: [] as Array<Record<string, unknown>>, hybridIds: [] as string[], filters: [] as string[] };
   const makeThenable = (dataFactory: () => unknown[]) => {
     const chain: Record<string, unknown> = {};
     const pass = vi.fn(() => chain);
     Object.assign(chain, {
-      select: pass, in: pass, or: pass, eq: pass, not: pass, order: pass, ilike: pass, limit: pass,
+      select: pass, in: pass, eq: pass, order: pass, ilike: pass, limit: pass,
+      or: vi.fn((f: string) => { state.filters.push(`or(${f})`); return chain; }),
+      not: vi.fn((c: string, o: string, v: unknown) => { state.filters.push(`not(${c},${o},${String(v)})`); return chain; }),
       maybeSingle: vi.fn(async () => ({ data: null, error: null })),
       then: (resolve: (v: unknown) => unknown, reject?: (r: unknown) => unknown) =>
         Promise.resolve({ data: dataFactory(), error: null }).then(resolve, reject),
@@ -75,6 +77,7 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
   beforeEach(() => {
     mocks.state.aptRows = [];
     mocks.state.hybridIds = [];
+    mocks.state.filters = [];
   });
 
   it("shows a future move-in as upcoming, requestable, and identical to the structured mapper", async () => {
@@ -116,5 +119,17 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
 
     const { results } = await searchRentalsIntelligent({ queryText: "1BR in Laureles", limit: 5 });
     expect(results).toEqual([]);
+  });
+
+  it("applies the shared availability rule to the canonical lookup: a missing move-in date is never allowed", async () => {
+    const row = baseRow({ available_from: "2099-11-01" });
+    mocks.state.aptRows = [row];
+    mocks.state.hybridIds = [row.id as string];
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    await searchRentalsIntelligent({ queryText: "1BR in Laureles", checkIn: "2099-11-01", checkOut: "2099-11-30", limit: 5 });
+    expect(mocks.state.filters).toContain("not(available_from,is,null)");
+    expect(mocks.state.filters).toContain("or(available_from.lte.2099-11-01)");
+    expect(mocks.state.filters.some((f) => f.includes("available_from.is.null"))).toBe(false);
   });
 });

@@ -7,7 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listPublishedEvents } from "@/lib/events/list-published-events";
 import type { PlaceCardData } from "@/components/home/home-discovery-rows";
-import { formatDateOnly, isFutureDate } from "@/lib/rentals/date-only";
+import { formatDateOnly, isFutureDate, rentalToday } from "@/lib/rentals/date-only";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,11 +64,13 @@ function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   if (row.pet_friendly) hints.push("pet-friendly");
   // A future move-in listing must never be described as available now (SAN-486).
   const futureMoveIn = isFutureDate(row.available_from);
+  // An upcoming move-in is always shown, however many descriptive hints the card has.
+  const upcoming = futureMoveIn && row.available_from ? `Available from ${formatDateOnly(row.available_from)}` : null;
   const why =
     hints.length > 1
-      ? `${hints.join(" · ")}.`
-      : futureMoveIn && row.available_from
-        ? `Available from ${formatDateOnly(row.available_from)} in ${row.neighborhood}.`
+      ? `${upcoming ? `${upcoming} · ` : ""}${hints.join(" · ")}.`
+      : upcoming
+        ? `${upcoming} in ${row.neighborhood}.`
         : `Available now in ${row.neighborhood}.`;
 
   return {
@@ -94,6 +96,9 @@ export async function fetchLiveRentals(
     )
     .eq("moderation_status", "approved")
     .not("images", "is", null)
+    // Same rule as search and the viewing RPC (SAN-486): a known move-in date, and not expired.
+    .not("available_from", "is", null)
+    .or(`available_to.is.null,available_to.gte.${rentalToday()}`)
     .order("rating", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(4);

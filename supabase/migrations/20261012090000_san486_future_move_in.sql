@@ -4,7 +4,7 @@
 -- =============================================================================
 -- MDE should publish apartments with a verified upcoming move-in date. Two rules
 -- blocked that:
---   1. the launch gate required available_from <= current_date, so a Nov 1 move-in
+--   1. the launch gate required available_from <= today, so a Nov 1 move-in
 --      was reported as missing availability;
 --   2. p1_schedule_tour_atomic required available_from <= viewing_date, so an
 --      October viewing of a Nov 1 apartment failed even though a tour is allowed
@@ -69,7 +69,9 @@ begin
   -- an already-expired available_to fails closed. A recent freshness check does not
   -- prove the unit is still offered.
   if not (r.available_from is not null
-          and (r.available_to is null or r.available_to >= current_date)
+          -- America/Bogota calendar date, like the future-date check below and the viewing RPC:
+          -- the database's own current_date is UTC, which is a day ahead for five hours every night.
+          and (r.available_to is null or r.available_to >= (now() at time zone 'America/Bogota')::date)
           -- A window that ends before it starts can never accommodate a stay.
           and (r.available_to is null or r.available_from <= r.available_to)) then
     b := b || 'no current availability evidence'::text;
