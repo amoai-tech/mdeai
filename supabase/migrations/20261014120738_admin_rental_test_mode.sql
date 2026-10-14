@@ -131,6 +131,16 @@ begin
     raise exception 'only a test-marked listing can be test-published' using errcode = '42501';
   end if;
 
+  -- Keep live fixtures live on repeated publish requests (button double-click,
+  -- retries). Rewriting the audit timestamp on a live row would be treated as
+  -- a material metadata edit and cause the normal review trigger to demote it.
+  if v_row.status = 'active'
+     and v_row.moderation_status = 'approved'
+     and v_row.listing_workflow_status = 'published'
+     and v_row.verified = false then
+    return v_row;
+  end if;
+
   if not (v_row.price_monthly is not null and v_row.price_monthly > 0
           and upper(coalesce(v_row.currency, '')) in ('COP', 'USD')
           and v_row.available_from is not null

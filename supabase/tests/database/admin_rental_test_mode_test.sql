@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(24);
+select plan(35);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -59,6 +59,59 @@ select is(
     (select metadata from public.apartments where id = (current_setting('mde.admin_test_id'))::uuid)),
   false,
   'A6: test listing is excluded from the customer-visible predicate');
+
+-- A25-A29: published test rental remains live on publish retries and
+-- operator changes; prior successful publication/audit stays unchanged.
+select set_config('mde.original_published_row',
+ (select jsonb_build_object('published_at', published_at,
+                            'published_by', published_by,
+                            'metadata', metadata)::text
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid), true);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_publish_test_rental(current_setting('mde.admin_test_id')::uuid)$q$,
+  'A25: already published test rental accepts retry');
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+ 'active/approved/published',
+ 'A26: publish retry does not silently unpublish fixture');
+select is(
+ (select jsonb_build_object('published_at', published_at,
+                            'published_by', published_by,
+                            'metadata', metadata)::text
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+ current_setting('mde.original_published_row'),
+ 'A27: publish retry preserves timestamps and metadata exactly');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_assign_rental_test_operator(current_setting('mde.admin_test_id')::uuid, true)$q$,
+  'A28: assign admin test operator on already-published rental');
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+ 'active/approved/published/false',
+ 'A29: admin operator assignment cannot demote live rental');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_assign_rental_test_operator(current_setting('mde.admin_test_id')::uuid, false)$q$,
+  'A30: clear admin test operator from already-published rental');
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+ 'active/approved/published',
+ 'A31: clearing operator cannot demote a published rental');
+select is(
+ (select published_at is not null and published_by='f1460000-0000-4000-8000-000000000001'
+  from public.apartments where id=current_setting('mde.admin_test_id')::uuid),
+ true,
+ 'A32: published_at and published_by remain intact after operator changes');
 
 -- A7/A8: the existing atomic viewing path persists exactly one lead + one showing.
 set local role service_role;
@@ -204,6 +257,66 @@ select throws_ok(
   '42501', 'source must be an original apartment, not a test fixture',
   'A24: fixtures cannot recursively clone each other');
 reset role;
+
+-- A33: genuinely material edits still cause re-review even if performed by
+-- an admin in the same update as exempt internal operator bookkeeping.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.material_test_id', (public.admin_create_test_rental(
+ 'Another admin test', 'Laureles', 'Calle 18', 2000000, 'COP',
+ (now() at time zone 'America/Bogota')::date + 5, 'https://example.com/b.jpg')).id::text, true);
+select public.admin_publish_test_rental(current_setting('mde.material_test_id')::uuid);
+reset role;
+set local role service_role;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+update public.apartments
+ set price_monthly=price_monthly+1,
+     metadata=metadata||jsonb_build_object('admin_test_operator_active',true)
+ where id=current_setting('mde.material_test_id')::uuid;
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
+  from public.apartments where id=current_setting('mde.material_test_id')::uuid),
+ 'inactive/pending/draft/false',
+ 'A33: material price update still demotes a live rental with exempt operator metadata');
+
+-- A34: unrelated metadata still forces re-review when changed by an admin.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.other_metadata_test_id', (public.admin_create_test_rental(
+ 'Other metadata test', 'Laureles', 'Calle 19', 2000000, 'COP',
+ (now() at time zone 'America/Bogota')::date + 5, 'https://example.com/c.jpg')).id::text, true);
+select public.admin_publish_test_rental(current_setting('mde.other_metadata_test_id')::uuid);
+reset role;
+set local role service_role;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+update public.apartments set metadata=metadata||jsonb_build_object('some_unrelated_key', 'changed')
+ where id=current_setting('mde.other_metadata_test_id')::uuid;
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status
+  from public.apartments where id=current_setting('mde.other_metadata_test_id')::uuid),
+ 'inactive/pending/draft',
+ 'A34: unrelated metadata remains a material edit even when admin wrote it');
+
+-- A35: the exempt keys require a real admin JWT, not just SQL service_role.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.nonadmin_metadata_test_id', (public.admin_create_test_rental(
+ 'Non-admin metadata test', 'Laureles', 'Calle 20', 2000000, 'COP',
+ (now() at time zone 'America/Bogota')::date + 5, 'https://example.com/d.jpg')).id::text, true);
+select public.admin_publish_test_rental(current_setting('mde.nonadmin_metadata_test_id')::uuid);
+reset role;
+set local role service_role;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+update public.apartments set metadata=metadata||jsonb_build_object('admin_test_operator_active', true)
+ where id=current_setting('mde.nonadmin_metadata_test_id')::uuid;
+reset role;
+select is(
+ (select status || '/' || moderation_status || '/' || listing_workflow_status
+  from public.apartments where id=current_setting('mde.nonadmin_metadata_test_id')::uuid),
+ 'inactive/pending/draft',
+ 'A35: non-admin cannot bypass the material-edit guard with operator-only metadata');
 
 select * from finish();
 rollback;
