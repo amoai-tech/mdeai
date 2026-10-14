@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
-import { clearConciergePendingSend } from "@/lib/concierge-pending-store";
+import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
 import { getConciergeErrorVersion, reportConciergeError } from "@/lib/concierge-error-store";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
@@ -22,7 +22,15 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { appendMessage, isRuntimeUnavailable } = useConciergeChat();
   const { showExchange, showNotice } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
-  const { handleUserMessage: handleRentalMessage } = useRentalSearchFastPath();
+  // The rental hook can need the agent for a message it queued while a search was running and then
+  // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
+  const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
+  const { handleUserMessage: handleRentalMessage } = useRentalSearchFastPath({
+    onUnhandled: async (text) => {
+      setConciergePendingSend(true);
+      return (await agentSendRef.current?.(text)) ?? false;
+    },
+  });
   const { handleUserMessage: handleEventMessage } = useEventSearchFastPath();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
@@ -56,6 +64,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     },
     [appendMessage, isRuntimeUnavailable, showExchange, showNotice],
   );
+
+  useEffect(() => {
+    agentSendRef.current = onAgentSend;
+  }, [onAgentSend]);
 
   return useMemo(
     () => ({

@@ -28,6 +28,13 @@ function attachQueryText(
     ...(s.checkOut && { checkOut: s.checkOut }),
     ...(s.budgetType && { stayType: s.budgetType }),
   };
+  // SAN-407: a monthly or whole-trip budget is not a nightly cap. `parseBudget` still derives a
+  // per-night figure for display and routing signals, but sending it as a search filter would
+  // present a guess ("4,000,000 / 30") as exact eligibility. The validated amount + currency +
+  // period contract belongs to SAN-386; until then the stay type travels and the cap does not.
+  if (s.budgetType === "monthly" || s.budgetType === "total_trip") {
+    delete dated.maxPricePerNight;
+  }
   if (s.confidence >= 0.6 || s.hasNomad || s.hasCafeOrGym || s.hasVibeOrUseCase) {
     return { ...dated, queryText: text.trim() };
   }
@@ -81,7 +88,9 @@ function parseExplicitLimit(text: string): number | undefined {
 }
 
 const BEDROOM_RE =
-  /\b(\d+)\s?(?:br|bed(?:room)?s?)\b|\b(studio|one bedroom|1 bedroom|2 bedroom|3 bedroom)\b/i;
+  /\b(\d+|one|two|three|four)[\s-]?(?:br|bed(?:room)?s?)\b|\b(studio)\b/i;
+
+const BEDROOM_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4 };
 
 const VIBE_RE =
   /\b(remote work|remote-work|digital nomad|nomad|nightlife|family|quiet|long[- ]term|monthly|workspace|pet[- ]friendly|wifi|cowork)\b/i;
@@ -93,6 +102,37 @@ const NOMAD_RE = /\b(digital nomad|nomad|remote work|remote-work|work from|works
 const MONTHLY_RE = /\b(month|monthly|per month|\/month|mes)\b/i;
 const TRIP_RE = /\b(for the trip|total|10 days|two weeks|\d+\s+days)\b/i;
 const MEDELLIN_CITY_RE = /\bmedell[ií]n\b/i;
+
+/**
+ * Longest message the rental fast path will read. A rental request is a sentence or two; anything
+ * longer goes to the concierge, which has its own limits. Bounding the input keeps every regex
+ * in this module O(n) on a small n regardless of what a client sends (Codacy regex-dos).
+ */
+export const MAX_RENTAL_TEXT_CHARS = 1000;
+
+/**
+ * SQL statements and prompt-override phrases (SAN-1054). Deliberately narrow: each SQL alternative
+ * needs SQL *structure* ("drop table", "delete from <name>", "union select"), so ordinary English
+ * after a semicolon ("; drop by later", "; select few") is not caught. Every repeat is bounded
+ * ({1,5}, {0,40}) so there is no unbounded backtracking even without the length cap.
+ */
+const INJECTION_PATTERNS: readonly RegExp[] = [
+  /\b(?:drop|truncate|alter)\s{1,5}(?:table|database|schema)\b/i,
+  /\bdelete\s{1,5}from\s{1,5}[a-z_.]{1,40}\s{0,5}(?:where\b|;|$)/i,
+  /\binsert\s{1,5}into\s{1,5}[a-z_.]{1,40}\b/i,
+  /\bupdate\s{1,5}[a-z_.]{1,40}\s{1,5}set\b/i,
+  /\bunion\s{1,5}(?:all\s{1,5})?select\b/i,
+  /\bselect\s{1,5}\*\s{1,5}from\b/i,
+  /\bignore\s{1,5}(?:all|any|previous|prior|the)\b[^.]{0,40}\b(?:rules?|instructions?|prompts?)\b/i,
+  /\bsystem\s{1,5}prompt\b/i,
+];
+
+/** True when the text carries SQL or instruction-override markers. Exported for tests. */
+export function looksLikeInjection(text: string): boolean {
+  // Bounded like every other rental-text check: scan at most MAX_RENTAL_TEXT_CHARS.
+  const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  return INJECTION_PATTERNS.some((pattern) => pattern.test(bounded));
+}
 
 const MONTH_IDX: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
@@ -151,9 +191,8 @@ function parseBudget(text: string): {
   const plainMatch = text.match(/\$\s*([\d,.]+)/);
   const amountStr = underMatch?.[1] ?? plainMatch?.[1];
   if (!amountStr) {
-    if (/\b(cheap|budget|affordable)\b/i.test(text)) {
-      return { maxPricePerNight: 60, budgetType: "nightly" };
-    }
+    // "cheap" / "affordable" is a preference, not a number. It used to become a hard
+    // $60/night cap that no renter had stated (SAN-407).
     return {};
   }
 
@@ -180,19 +219,16 @@ function parseBudget(text: string): {
 function parseBedrooms(text: string): number | undefined {
   const m = text.match(BEDROOM_RE);
   if (!m) return undefined;
-  if (/studio/i.test(m[0])) return 0;
-  const n = Number(m[1]);
-  if (Number.isFinite(n)) return n;
-  if (/one bedroom|1 bedroom/i.test(m[0])) return 1;
-  if (/2 bedroom/i.test(m[0])) return 2;
-  if (/3 bedroom/i.test(m[0])) return 3;
-  return undefined;
+  if (m[2]) return 0; // studio
+  const raw = m[1].toLowerCase();
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : BEDROOM_WORDS[raw];
 }
 
 /** User message is clearly about rentals, not events or cafés. */
 export function looksLikeRentalSearch(text: string): boolean {
   const t = text.trim();
-  if (!t) return false;
+  if (!t || t.length > MAX_RENTAL_TEXT_CHARS) return false;
   if (EVENT_INTENT_RE.test(t) && !RENTAL_INTENT_RE.test(t)) return false;
   return RENTAL_INTENT_RE.test(t) || BEDROOM_RE.test(t) || /\/night|per night/i.test(t);
 }
@@ -275,24 +311,29 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
   };
 }
 
-/** Generic = rental intent but no budget, bedrooms, or vibe. */
-export function isGenericRentalQuery(text: string): boolean {
-  if (!looksLikeRentalSearch(text)) return false;
-  const s = scoreRentalQuery(text);
-  if (s.confidence >= 0.6) return false;
-  return s.confidence < 0.6;
-}
+/**
+ * True when the renter stated an explicit budget the search cannot yet enforce (an amount with a
+ * currency or period — "under COP 4M/month", "$2000 per month", "up to 3.500.000 pesos").
+ * Vague preferences ("cheap", "affordable", "budget apartments") are NOT a stated budget, so the
+ * chat does not tell the renter a budget "wasn't applied" when they never gave one. Explicit
+ * nightly USD caps are enforced by the search; the caller checks whether a cap was actually sent.
+ */
+const EXPLICIT_BUDGET_PATTERNS: readonly RegExp[] = [
+  // currency word or symbol directly followed by an amount: "COP 4M", "$2000", "pesos 3.500.000"
+  /(?:\b(?:cop|pesos?|usd|dollars?)\b|[$€])\s{0,3}\d/i,
+  // amount followed by a currency word: "3.500.000 pesos", "80 dollars"
+  /\d[\d.,]{0,15}\s{0,3}(?:m|k|million|millones|mil)?\s{0,3}(?:cop|pesos?|usd|dollars?)\b/i,
+  // amount with a magnitude AND a period: "4M/month", "4 million a month", "2k per night"
+  /\b\d[\d.,]{0,15}\s{0,2}(?:m|k|million|millones)\b\s{0,3}(?:\/|per\s|a\s|al\s)?\s{0,3}(?:month|mes|night|noche)\b/i,
+  // "budget" followed closely by a number
+  /\bbudget\b\D{0,20}\d/i,
+  // limit word followed by a money-looking amount (not "under 2 bedrooms", "up to 3 people")
+  /\b(?:under|below|max|up to|hasta|menos de)\s{0,3}(?:(?:cop|usd|\$)\s{0,3}\d|\d[\d.,]{2,15}|\d\s{0,2}(?:m|k|million|millones)\b)/i,
+];
 
-export function shouldInstantRentalClarify(
-  text: string,
-  memory: ConciergeWorkingMemory,
-): boolean {
-  if (!looksLikeRentalSearch(text)) return false;
-  if (memory.lastRentalQuery && !memory.lastRentalQuery.genericAskPending) {
-    return false;
-  }
-  if (memory.lastRentalQuery?.genericAskPending === true) return false;
-  return isGenericRentalQuery(text);
+export function statesBudget(text: string): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  return EXPLICIT_BUDGET_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 const FAST_PATH_LIMIT = 8;
@@ -305,6 +346,11 @@ export function buildRentalSearchParams(
   text: string,
   memory: ConciergeWorkingMemory,
 ): RentalSearchApiParams | null {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return null;
+  // SAN-1054 / RE-SEC-001: text that carries SQL or instruction-override markers is never
+  // promoted to an automatic search, whatever else it says ("rentals in Laureles; DROP TABLE…").
+  // It keeps its old route (clarify / concierge), where the agent's own guardrails apply.
+  if (looksLikeInjection(text)) return null;
   if (looksLikeNonRentalSearch(text)) return null;
 
   const s = scoreRentalQuery(text);
@@ -397,15 +443,32 @@ export function buildRentalSearchParams(
     );
   }
 
-  return null;
+  // SAN-407: recognised rental-search intent with no optional slots ("Search apartments
+  // Medellín") is still a search. It goes out with the renter's own words and nothing invented;
+  // any refinement question comes after the answer.
+  // Whatever the renter did state (neighborhood, size, budget) still travels as a filter; only
+  // what they did not say is left out.
+  return {
+    ...attachQueryText(
+      {
+        limit,
+        neighborhood: s.neighborhood,
+        minBedrooms: s.minBedrooms,
+        maxPricePerNight: s.maxPricePerNight,
+      },
+      text,
+      s,
+    ),
+    queryText: text.trim(),
+  };
 }
 
 export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,
 ): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
   if (looksLikeNonRentalSearch(text)) return false;
-  if (shouldInstantRentalClarify(text, memory)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
   }

@@ -3,14 +3,12 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
-  shouldInstantRentalClarify,
   type RentalSearchApiParams,
 } from "@/lib/rental-query-parser";
 
 export {
   buildRentalSearchParams,
   canFastPathRentalSearch,
-  shouldInstantRentalClarify,
 };
 
 export function rentalsToToolEnvelope(
