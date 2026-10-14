@@ -80,7 +80,7 @@ select lives_ok(
   'A9: admin cleans up the test listing');
 reset role;
 select is(
-  (select listing_workflow_status || '/' || (select count(*)::text from public.leads where apartment_id = (current_setting('mde.admin_test_id'))::uuid)
+  (select listing_workflow_status || '/' || (select count(*)::text from public.leads l where l.apartment_id = (current_setting('mde.admin_test_id'))::uuid)
      from public.apartments where id = (current_setting('mde.admin_test_id'))::uuid),
   'draft/0',
   'A10: cleanup removed the test lead and returned the listing to draft');

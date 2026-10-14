@@ -14,7 +14,7 @@ export const maxDuration = 20;
  * excludes fixtures).
  *
  *   GET  -> list rentals (with a test marker + test lead/showing counts)
- *   POST -> { action: "create" | "publish" | "cleanup", ... }
+ *   POST -> { action: "create" | "clone-test" | "assign-test-operator" | "publish" | "cleanup", ... }
  */
 
 type Gate =
@@ -56,17 +56,34 @@ export async function GET() {
   if (!gate.ok) return NextResponse.json({ error: gate.message }, { status: gate.status });
   const { supabase } = gate;
 
+  const columns = "id, title, neighborhood, address, price_monthly, currency, available_from, status, moderation_status, listing_workflow_status, verified, metadata, created_at";
   const { data, error } = await supabase
     .from("apartments")
-    .select(
-      "id, title, neighborhood, address, price_monthly, currency, available_from, status, moderation_status, listing_workflow_status, verified, metadata, created_at",
-    )
+    .select(columns)
     .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rentals = (data ?? []) as RentalRow[];
+  // Preserve the newest 100 while keeping every older test fixture available
+  // for Publish / Request viewing / Cleanup. Paginate to avoid the API row cap.
+  const byId = new Map<string, RentalRow>(
+    ((data ?? []) as RentalRow[]).map((row) => [row.id, row]),
+  );
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data: fixtures, error: fixtureError } = await supabase
+      .from("apartments")
+      .select(columns)
+      .contains("metadata", { is_test_fixture: true })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (fixtureError) return NextResponse.json({ error: fixtureError.message }, { status: 500 });
+    for (const row of (fixtures ?? []) as RentalRow[]) byId.set(row.id, row);
+    if ((fixtures?.length ?? 0) < pageSize) break;
+  }
+
+  const rentals = [...byId.values()];
   const testIds = rentals.filter(isTestRow).map((r) => r.id);
   const counts: Record<string, { leads: number; showings: number }> = {};
   for (const id of testIds) counts[id] = { leads: 0, showings: 0 };
@@ -113,12 +130,17 @@ export async function POST(request: Request) {
     const currency = typeof body.currency === "string" ? body.currency.trim().toUpperCase() : "COP";
     const availableFrom = typeof body.availableFrom === "string" ? body.availableFrom.trim() : "";
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
-    const priceMonthly = Number(body.priceMonthly);
-    if (!title || !neighborhood || !address || !availableFrom || !imageUrl || !Number.isFinite(priceMonthly) || priceMonthly <= 0) {
-      return NextResponse.json(
-        { error: "title, neighborhood, address, priceMonthly, availableFrom and imageUrl are required" },
-        { status: 400 },
-      );
+    const priceMonthly = body.priceMonthly != null &&
+      (typeof body.priceMonthly === "number" || typeof body.priceMonthly === "string")
+      ? Number(body.priceMonthly) : NaN;
+    if (!title || !neighborhood || !address || !availableFrom || !imageUrl) {
+      return NextResponse.json({ error: "title, neighborhood, address, availableFrom and imageUrl are required" }, { status: 400 });
+    }
+    if (!Number.isFinite(priceMonthly) || priceMonthly <= 0) {
+      return NextResponse.json({ error: "priceMonthly must be a positive number" }, { status: 400 });
+    }
+    if (currency !== "COP" && currency !== "USD") {
+      return NextResponse.json({ error: "currency must be COP or USD" }, { status: 400 });
     }
     const { data, error } = await supabase.rpc("admin_create_test_rental", {
       p_title: title,

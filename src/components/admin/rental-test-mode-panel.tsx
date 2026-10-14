@@ -74,8 +74,10 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
   useEffect(() => {
     let cancelled = false;
     // setState lives in the .then callback (not synchronous in the effect body).
-    fetchRentals().then((result) => {
+    void fetchRentals().then((result) => {
       if (!cancelled) applyResult(result);
+    }).catch(() => {
+      if (!cancelled) setError("Could not load rentals. Please retry.");
     });
     return () => {
       cancelled = true;
@@ -190,22 +192,22 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {(
             [
-              ["title", "Title"],
-              ["neighborhood", "Neighbourhood"],
-              ["address", "Address"],
-              ["priceMonthly", "Monthly price"],
-              ["currency", "Currency"],
-              ["availableFrom", "Available from (YYYY-MM-DD)"],
-              ["imageUrl", "Image URL"],
+              ["title", "Title", form.title],
+              ["neighborhood", "Neighbourhood", form.neighborhood],
+              ["address", "Address", form.address],
+              ["priceMonthly", "Monthly price", form.priceMonthly],
+              ["currency", "Currency", form.currency],
+              ["availableFrom", "Available from (YYYY-MM-DD)", form.availableFrom],
+              ["imageUrl", "Image URL", form.imageUrl],
             ] as const
-          ).map(([key, label]) => (
+          ).map(([key, label, value]) => (
             <label key={key} className="text-xs">
               <span className="text-muted-foreground">{label}</span>
               <input
                 data-testid={`admin-test-${key}`}
                 className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-sm"
-                value={form[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                value={value}
+                onChange={(e) => { setForm((f) => ({ ...f, [key]: e.target.value })); }}
               />
             </label>
           ))}
