@@ -39,6 +39,16 @@ describe("Mastra workspace", () => {
     }
   });
 
+  it("fails closed for production even when Vercel system environment variables are absent", () => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(getRuntimeWorkspace()).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("preserves local development workspace behavior", () => {
     vi.stubEnv("VERCEL", "");
     try {

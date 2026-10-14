@@ -37,8 +37,12 @@ export const workspace = new Workspace({
  * directory is not shipped with this repo, so attempting to initialize its
  * inherited workspace inside a Function fails with ENOENT (mkdir /vercel).
  * Keep the development workspace but do not attach it to hosted agents.
+ * NODE_ENV is a fail-closed fallback when platform system variables are
+ * disabled; no production mode should depend on an optional local skills dir.
  * Remote/packaged production skills need an explicitly reviewed backend.
  */
 export function getRuntimeWorkspace() {
-  return process.env.VERCEL ? undefined : workspace;
+  return process.env.NODE_ENV === "production" || process.env.VERCEL === "1"
+    ? undefined
+    : workspace;
 }
