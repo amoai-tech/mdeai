@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => {
   return { state, createClient: vi.fn(() => ({ from: vi.fn(() => chain) })) };
 });
 
+// These tests exercise the canonical verified-inventory path only.
+ // The separate source-linked public discovery path has its own regression tests.
+vi.mock("@/lib/rentals/public-external-discovery", () => ({
+  searchPublicExternalRentals: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/supabase/server-env", () => ({
   getSupabaseServerAnonEnv: () => ({ url: "https://example.supabase.co", anonKey: "anon" }),

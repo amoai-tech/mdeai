@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
+  rentalsToToolEnvelope,
 } from "@/lib/rental-search-fast-path";
 import {
   MAX_RENTAL_TEXT_CHARS,
@@ -10,8 +11,24 @@ import {
   statesBudget,
 } from "@/lib/rental-query-parser";
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import type { Rental } from "@/mastra/tools/search-rentals";
 
 describe("rental-search-fast-path", () => {
+  it("preserves COP currency and unknown bedrooms for public chat rental cards", () => {
+    const listing = {
+      id: "candidate-fincaraiz-193916988", title: "Apartment", neighborhood: "Conquistadores",
+      nightly_price: 0, price_monthly: 2_100_000, currency: "COP", bedrooms: 0,
+      bedrooms_unknown: true, wifi: false, amenities: [], image: "",
+      source_url: "https://www.fincaraiz.com.co/apartment/193916988",
+      can_schedule_viewing: false, schedule_viewing_url: null,
+      host_name: "External advertisement", availability: "User-reported", tags: ["external-source"],
+    } as Rental;
+    expect(rentalsToToolEnvelope([listing]).results[0]).toMatchObject({
+      currency: "COP", bedrooms_unknown: true, price_monthly: 2_100_000,
+      can_schedule_viewing: false, schedule_viewing_url: null,
+    });
+  });
+
   // SAN-407 — answer first, refine second. A generic rental request searches immediately;
   // it is never held behind a dates/budget/setup form.
   it.each([

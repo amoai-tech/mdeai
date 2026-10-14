@@ -12,6 +12,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// These tests exercise the canonical verified-inventory path only.
+ // The separate source-linked public discovery path has its own regression tests.
+vi.mock("@/lib/rentals/public-external-discovery", () => ({
+  searchPublicExternalRentals: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../../lib/intelligence-rental-search", () => ({
   searchRentalsIntelligent: vi.fn().mockResolvedValue({
     results: [],
