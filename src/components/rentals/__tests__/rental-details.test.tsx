@@ -325,6 +325,28 @@ describe("/rentals Details sheet — phone width (390px)", () => {
   });
 });
 
+describe("RentalDetailsPanel — trust label", () => {
+  const noop = () => undefined;
+  const render = (rental: Rental) =>
+    act(() => {
+      root.render(
+        <div className="relative">
+          <RentalDetailsPanel rental={rental} onClose={noop} />
+        </div>,
+      );
+    });
+
+  it("shows 'Not independently verified' for a self-attested listing, as the card does", async () => {
+    await render({ ...NINE[1], tags: [...NINE[1].tags, "self-attested"] });
+    expect(byId("rental-details-self-attested-label")?.textContent).toBe("Not independently verified");
+  });
+
+  it("does not show it for a listing that is not self-attested", async () => {
+    await render(NINE[1]);
+    expect(byId("rental-details-self-attested-label")).toBeNull();
+  });
+});
+
 describe("RentalDetailsPanel — states", () => {
   const noop = () => undefined;
   const baseRentalOf = () => NINE[1];

@@ -109,6 +109,12 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
         <Badge variant="secondary" className="font-normal" data-testid="rental-details-bedrooms">
           {bedroomLabel(rental.bedrooms, rental.bedrooms_unknown)}
         </Badge>
+        {/* SAN-1449: same disclosure the card shows; a self-attested listing is not reviewed by MDE. */}
+        {rental.tags.includes("self-attested") ? (
+          <Badge variant="outline" className="font-normal" data-testid="rental-details-self-attested-label">
+            Not independently verified
+          </Badge>
+        ) : null}
       </div>
 
       <section aria-label="Amenities">
