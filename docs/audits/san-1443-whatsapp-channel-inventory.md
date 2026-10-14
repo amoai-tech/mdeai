@@ -84,8 +84,9 @@ callback URL. None verified. Owned by SAN-1444.
 
 1. **Contain (this PR).** Ship a deny-by-default `whatsapp-webhook`: every request is 403, no body parse,
    no env read, no database client, no outbound fetch. Deploy is the gated action.
-2. **Drain/verify.** Extend the traffic window; confirm no legitimate caller.
-3. **Deny.** With the deny-by-default revision deployed, the endpoint can neither write nor send.
+2. **Deny.** Deploy the deny-by-default revision first, so the endpoint can neither write nor send
+   while the review below runs.
+3. **Drain/verify.** Extend the traffic window; confirm no legitimate caller.
 4. **Revoke.** After the extended window confirms inactivity, unregister the Infobip callback and revoke
    Infobip/OpenClaw/Twilio credentials and secrets. Do not revoke on 24h evidence alone.
 5. **Retire the other senders** (`notify-entity-approved`, `outbox-dispatch`, `openclaw-*`) as SAN-1444
