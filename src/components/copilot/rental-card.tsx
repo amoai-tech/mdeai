@@ -51,6 +51,8 @@ export function RentalCard({
   price_monthly,
   currency,
   bedrooms,
+  bedrooms_unknown,
+  source_url,
   photoUrl,
   availability,
   wifi,
@@ -69,7 +71,7 @@ export function RentalCard({
 }: RentalCardProps) {
   // The listing's own currency — never assumed USD.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    nightly_price,
+    tags?.includes("external-source") ? null : nightly_price,
     price_monthly,
     currency,
   );
@@ -171,14 +173,17 @@ export function RentalCard({
 
       <p className="mt-0.5 text-xs text-muted-foreground">
         {neighborhood}
-        {bedrooms != null ? ` · ${bedrooms} BR` : ""}
+        {bedrooms_unknown ? " · Bedrooms unknown" : bedrooms != null
+          ? ` · ${bedrooms === 0 ? "Studio" : `${bedrooms} BR`}` : ""}
       </p>
 
-      {nightlyLabel ? (
+      {nightlyLabel || monthlyLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-            {nightlyLabel}
-          </span>
+          {nightlyLabel ? (
+            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+              {nightlyLabel}
+            </span>
+          ) : null}
           {monthlyLabel ? (
             <span className="text-xs text-muted-foreground">{monthlyLabel}</span>
           ) : null}
@@ -221,6 +226,17 @@ export function RentalCard({
           >
             Details
           </Button>
+        ) : null}
+        {tags?.includes("external-source") && source_url?.startsWith("https://www.fincaraiz.com.co/") ? (
+          <a
+            href={source_url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            data-testid="rental-original-listing-cta"
+            className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+          >
+            View original listing
+          </a>
         ) : null}
         {showScheduleCta ? (
           <Button

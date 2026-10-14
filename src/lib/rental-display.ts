@@ -14,6 +14,8 @@ export type RentalResultRow = {
    */
   currency?: string;
   bedrooms?: number;
+  bedrooms_unknown?: boolean;
+  source_url?: string;
   wifi?: boolean;
   amenities?: string[];
   tags?: string[];

@@ -251,6 +251,8 @@ export function RentalResults({
     /** The listing's own currency; the search envelope already carries it. */
     currency?: string;
     bedrooms?: number;
+    bedrooms_unknown?: boolean;
+    source_url?: string;
     photo_url?: string;
     image_url?: string;
     amenities?: string[];
@@ -343,6 +345,8 @@ export function RentalResults({
               price_monthly={r.price_monthly}
               currency={r.currency}
               bedrooms={r.bedrooms}
+              bedrooms_unknown={r.bedrooms_unknown}
+              source_url={r.source_url}
               photoUrl={r.photo_url ?? r.image_url}
               wifi={r.wifi}
               amenities={r.amenities}
@@ -352,7 +356,7 @@ export function RentalResults({
               searchParams={searchParams}
               selected={hasPin && selectedPinId === pinId}
               onSelect={hasPin ? () => panToPin(pinId) : undefined}
-              onOpenDetails={openDetail}
+              onOpenDetails={r.tags?.includes("external-source") ? undefined : openDetail}
               canScheduleViewing={r.can_schedule_viewing === true}
               onSchedule={() =>
                 openScheduleViewing({
