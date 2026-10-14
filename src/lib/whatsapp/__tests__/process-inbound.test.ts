@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaimedRow, InboundRpcClient } from "../inbound-store";
-import { recordOutboundSend } from "../outbound-tracker";
+import { bufferOutboundText, recordOutboundSend } from "../outbound-tracker";
 import { processDueInbound } from "../process-inbound";
 
 function row(id: string, overrides: Partial<ClaimedRow> = {}): ClaimedRow {
@@ -135,6 +135,25 @@ describe("processDueInbound", () => {
     const failed = calls.find((c) => c.fn === "whatsapp_fail_inbound");
     expect(failed?.args?.p_error).toContain("no confirmed outbound send");
     expect(failed?.args?.p_error).toContain("Invalid OAuth access token");
+  });
+
+  it("posts one consolidated reply for the whole run", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const flushReply = vi.fn(async () => "wamid.final");
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      bufferOutboundText("I'll check those apartments");
+      bufferOutboundText("Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook, flushReply, phoneNumberId: "123456" });
+    expect(flushReply).toHaveBeenCalledTimes(1);
+    expect(flushReply).toHaveBeenCalledWith("whatsapp:123456:57300", [
+      "I'll check those apartments",
+      "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M",
+    ]);
+    expect(summary).toMatchObject({ processed: 1 });
+    expect(calls.some((c) => c.fn === "whatsapp_complete_inbound_with_sends")).toBe(true);
   });
 
   it("never marks a partial reply as processed", async () => {

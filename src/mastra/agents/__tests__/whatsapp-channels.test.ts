@@ -6,7 +6,8 @@ vi.mock("@chat-adapter/whatsapp", () => ({
   createWhatsAppAdapter: mocks.createWhatsAppAdapter,
 }));
 
-import { buildConciergeChannels } from "../whatsapp-channels";
+import { buildConciergeChannels, flushBufferedReply } from "../whatsapp-channels";
+import { runWithOutboundTracking } from "@/lib/whatsapp/outbound-tracker";
 
 function configure(): void {
   vi.stubEnv("WHATSAPP_ACCESS_TOKEN", "token");
@@ -39,6 +40,28 @@ describe("buildConciergeChannels", () => {
       adapters: { whatsapp: { adapter, streaming: false, toolDisplay: "hidden" } },
     });
     expect(typeof channels?.adapters.whatsapp.adapter.postMessage).toBe("function");
+  });
+
+  it("buffers a whole run and sends exactly one reply", async () => {
+    configure();
+    const postMessage = vi.fn(async (_threadId: string, _message: unknown) => ({ id: "wamid.sent" }));
+    mocks.createWhatsAppAdapter.mockReturnValue({ postMessage });
+    const channels = buildConciergeChannels();
+    const wrapped = channels!.adapters.whatsapp.adapter as unknown as {
+      postMessage: (threadId: string, message: unknown) => Promise<unknown>;
+    };
+
+    const { buffered } = await runWithOutboundTracking(async () => {
+      await wrapped.postMessage("thread", "I'll check those apartments");
+      await wrapped.postMessage("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(buffered).toHaveLength(2);
+
+    const wamid = await flushBufferedReply("thread", buffered);
+    expect(wamid).toBe("wamid.sent");
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
   });
 
   it("disables the channel on a configuration (ValidationError)", () => {

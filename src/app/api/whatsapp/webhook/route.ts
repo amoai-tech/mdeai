@@ -21,6 +21,7 @@ import {
   type InboundRpcClient,
 } from "@/lib/whatsapp/inbound-store";
 import { reportInboundProcessingFailure } from "@/lib/whatsapp/monitoring";
+import { flushBufferedReply } from "@/mastra/agents/whatsapp-channels";
 import { processDueInbound } from "@/lib/whatsapp/process-inbound";
 import {
   MAX_WEBHOOK_BYTES,
@@ -124,6 +125,8 @@ export async function POST(request: NextRequest) {
       sign: (body) => signWebhookBody(body, env.appSecret),
       adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
       workerId,
+      phoneNumberId: env.phoneNumberId,
+      flushReply: flushBufferedReply,
     }).catch((error) => {
       // The response is already sent, so surface the failure instead of swallowing it.
       reportInboundProcessingFailure(error, { workerId, stage: "webhook_after" });

@@ -23,7 +23,7 @@ export type SendOutcome = "full" | "partial" | "failed";
 /** A send Meta accepted, with the provider id needed to track delivery later. */
 export type ConfirmedSend = { wamid: string; content: string };
 
-type Scope = { sends: OutboundSend[] };
+type Scope = { sends: OutboundSend[]; buffered: string[] };
 
 const storage = new AsyncLocalStorage<Scope>();
 
@@ -34,6 +34,16 @@ export function isTrackingOutbound(): boolean {
 /** No-op when no scope is active, so ordinary (non-worker) sends are unaffected. */
 export function recordOutboundSend(send: OutboundSend): void {
   storage.getStore()?.sends.push(send);
+}
+
+/**
+ * Hold one piece of the reply until the whole run finishes. Mastra's static driver flushes
+ * buffered text on every step boundary (text-end, step-finish, tool-call), so a model that
+ * narrates before a tool call would otherwise post several WhatsApp notifications.
+ */
+export function bufferOutboundText(text: string): void {
+  const scope = storage.getStore();
+  if (scope && text.trim() !== "") scope.buffered.push(text);
 }
 
 /**
@@ -63,10 +73,10 @@ export function sendOutcome(sends: OutboundSend[]): SendOutcome {
 
 export async function runWithOutboundTracking<T>(
   fn: () => Promise<T>,
-): Promise<{ result: T; sends: OutboundSend[] }> {
-  const scope: Scope = { sends: [] };
+): Promise<{ result: T; sends: OutboundSend[]; buffered: string[] }> {
+  const scope: Scope = { sends: [], buffered: [] };
   const result = await storage.run(scope, fn);
-  return { result, sends: scope.sends };
+  return { result, sends: scope.sends, buffered: scope.buffered };
 }
 
 function requestUrl(input: RequestInfo | URL): string {

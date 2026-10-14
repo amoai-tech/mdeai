@@ -41,6 +41,10 @@ export type ProcessDeps = {
   executionTimeoutMs?: number;
   /** Total wall-clock budget for one batch, so it cannot exceed the route's maxDuration. */
   batchDeadlineMs?: number;
+  /** WhatsApp phone-number id, used to build the thread id for the consolidated reply. */
+  phoneNumberId?: string;
+  /** Posts the run's single consolidated reply and returns the provider message id. */
+  flushReply?: (threadId: string, texts: string[]) => Promise<string | null>;
 };
 
 export type ProcessSummary = {
@@ -121,7 +125,7 @@ async function processRow(
     const body = JSON.stringify(row.raw_payload);
     // Track outbound sends for THIS message. The Chat SDK resolves the waitUntil task even when
     // the agent or the Meta send fails, so "the task settled" is not proof of delivery.
-    const { sends } = await runWithOutboundTracking(async () => {
+    const { sends, buffered } = await runWithOutboundTracking(async () => {
       let registered: Promise<unknown> | null = null;
       const response = await deps.adapterWebhook(
         new Request(deps.webhookUrl, {
@@ -146,6 +150,20 @@ async function processRow(
       }
       await withTimeout(registered, executionTimeoutMs, "agent run");
     });
+
+    // Post the run's final reply exactly once. The driver flushes buffered text per step, so a
+    // pre-tool narration would otherwise arrive as its own WhatsApp notification.
+    if (buffered.length > 0 && deps.flushReply) {
+      const threadId = "whatsapp:" + (deps.phoneNumberId ?? "") + ":" + row.phone_number;
+      const wamid = await deps.flushReply(threadId, buffered);
+      if (wamid) {
+        sends.push({
+          success: true,
+          providerMessageId: wamid,
+          content: buffered[buffered.length - 1],
+        });
+      }
+    }
 
     // Completing requires EVERY physical send to succeed with a provider id, recorded in the SAME
     // transaction as the completion. A partial reply (some chunks sent, some failed) must never
