@@ -34,8 +34,11 @@ describe("buildConciergeChannels", () => {
     const adapter = { name: "whatsapp", postMessage: vi.fn() };
     mocks.createWhatsAppAdapter.mockReturnValue(adapter);
     const channels = buildConciergeChannels();
-    expect(channels).toEqual({ adapters: { whatsapp: adapter } });
-    expect(typeof channels?.adapters.whatsapp.postMessage).toBe("function");
+    // WhatsApp gets ONE consolidated reply: no streamed progress notifications, no tool cards.
+    expect(channels).toEqual({
+      adapters: { whatsapp: { adapter, streaming: false, toolDisplay: "hidden" } },
+    });
+    expect(typeof channels?.adapters.whatsapp.adapter.postMessage).toBe("function");
   });
 
   it("disables the channel on a configuration (ValidationError)", () => {

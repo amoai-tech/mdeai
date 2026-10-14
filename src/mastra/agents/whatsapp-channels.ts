@@ -24,7 +24,18 @@ export function buildConciergeChannels() {
   try {
     // Record every physical Meta send (chunked text and media included) for the worker's scope.
     installWhatsAppSendInterceptor();
-    return { adapters: { whatsapp: createWhatsAppAdapter(env) } };
+    return {
+      adapters: {
+        whatsapp: {
+          adapter: createWhatsAppAdapter(env),
+          // WhatsApp has no message editing: streamed progress arrives as many separate
+          // notifications (one question produced 7 messages). Post one consolidated reply and
+          // hide tool/progress output instead.
+          streaming: false,
+          toolDisplay: "hidden" as const,
+        },
+      },
+    };
   } catch (error) {
     if (isAdapterConfigError(error)) {
       console.error("[whatsapp] channel disabled — adapter rejected its configuration", {
