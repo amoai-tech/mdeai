@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
 function bedroomLabel(bedrooms: number | null): string {
-  if (bedrooms == null || bedrooms === 0) return "Studio";
+  // Unknown is not the same as a studio: never replace a missing count with 0.
+  if (bedrooms == null) return "Bedrooms unknown";
+  if (bedrooms === 0) return "Studio";
   return `${bedrooms} BR`;
 }
 
@@ -141,6 +143,11 @@ export function RentalBrowseCard({
   // owner stays browseable but can never expose a viewing CTA, so the UI cannot advertise
   // an action the database will reject — and with no handler there is nothing to open.
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
+  // The useful next action for an unrequestable external candidate is its source advert.
+  const externalSourceUrl =
+    rental.tags.includes("dev-preview") && /^https?:\/\//i.test(rental.source_url)
+      ? rental.source_url
+      : null;
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
 
@@ -191,6 +198,19 @@ export function RentalBrowseCard({
               <Calendar data-icon="inline-start" aria-hidden />
               Schedule viewing
             </Button>
+          ) : null}
+          {externalSourceUrl ? (
+            <a
+              href={externalSourceUrl}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              data-testid={`rental-card-source-${rental.id}`}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink data-icon="inline-start" aria-hidden />
+              View original listing
+            </a>
           ) : null}
           <Button
             size="sm"

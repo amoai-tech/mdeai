@@ -80,6 +80,50 @@ export function isLocalPreviewHost(host: string | null | undefined): boolean {
   );
 }
 
+/**
+ * Headers a reverse proxy or tunnel adds. A direct loopback request has none, so a
+ * Host that looks local but arrives through a proxy (ngrok, Cloudflare) is refused.
+ */
+/** Headers that carry the peer/proxy address; Next dev sets them to the loopback peer. */
+const FORWARDING_HEADERS = [
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-real-ip",
+  "forwarded",
+  "cf-connecting-ip",
+] as const;
+
+type HeaderLookup = { get(name: string): string | null };
+
+const LOOPBACK_NAMES = new Set(["127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1", "[::1]"]);
+
+/**
+ * True when a header value (or its first entry in a comma list) is loopback.
+ * Next dev fills `x-forwarded-*` with the loopback peer, so those values pass; a
+ * tunnel or reverse proxy fills them with the real client IP or public host and fails.
+ */
+function isLoopbackValue(raw: string | null): boolean {
+  if (!raw) return true;
+  const first = raw.split(",")[0]?.trim().toLowerCase() ?? "";
+  if (LOOPBACK_NAMES.has(first)) return true;
+  const bare = first.startsWith("[") ? first.slice(1, first.indexOf("]")) : first.split(":")[0];
+  return LOOPBACK_NAMES.has(bare) || bare.startsWith("127.");
+}
+
+/**
+ * Full preview access check: a loopback Host AND forwarding headers that all still
+ * point at loopback. A Host alone is caller-supplied, so the forwarded values catch a
+ * request that reached us through a tunnel while claiming a local Host.
+ */
+export function isLocalPreviewRequest(
+  host: string | null | undefined,
+  headers?: HeaderLookup | null,
+): boolean {
+  if (!isLocalPreviewHost(host)) return false;
+  if (!headers) return true;
+  return FORWARDING_HEADERS.every((name) => isLoopbackValue(headers.get(name)));
+}
+
 /** Fixture array fields must be string arrays (or absent), or the UI can crash. */
 function isStringArrayOrAbsent(value: unknown): boolean {
   return value == null || (Array.isArray(value) && value.every((item) => typeof item === "string"));
@@ -243,12 +287,14 @@ export async function getLocalPreviewRentals(): Promise<Rental[]> {
       id: c.slug,
       title: c.title,
       neighborhood: c.neighborhood ?? "",
-      // Type contract requires a number. The browse card deliberately suppresses
-      // nightly pricing for development candidates; only source monthly rent is shown.
-      nightly_price: Math.round(c.price_monthly / 30),
+      // No invented nightly figure: these candidates only publish a monthly rent. The
+      // shared contract keeps nightly as a number, so 0 is the explicit "no nightly
+      // price" value and the browse card already suppresses it for dev-preview.
+      nightly_price: 0,
       price_monthly: c.price_monthly,
       currency: c.currency,
-      bedrooms: c.bedrooms ?? 0,
+      // Preserve an unknown bedroom count as null rather than a false "Studio".
+      bedrooms: c.bedrooms ?? null,
       wifi: false,
       amenities: c.amenities ?? [],
       image,

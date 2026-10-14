@@ -8,7 +8,8 @@ const rentalSchema = z.object({
   neighborhood: z.string(),
   nightly_price: z.number(),
   currency: z.literal('USD'),
-  bedrooms: z.number(),
+  // A listing with no recorded bedroom count stays null; 0 would read as a studio.
+  bedrooms: z.number().nullable(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
@@ -95,7 +96,9 @@ const formatStep = createStep({
     const cards = inputData.results.map((r) => ({
       id: r.id,
       headline: r.title,
-      subline: `${r.neighborhood} · ${r.bedrooms === 0 ? 'studio' : `${r.bedrooms}BR`} · host ${r.host_name}`,
+      subline: `${r.neighborhood} · ${
+        r.bedrooms == null ? 'bedrooms unknown' : r.bedrooms === 0 ? 'studio' : `${r.bedrooms}BR`
+      } · host ${r.host_name}`,
       priceLabel: `$${r.nightly_price}/night`,
       imageUrl: r.image,
       sourceUrl: r.source_url,

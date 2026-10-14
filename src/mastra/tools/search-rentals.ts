@@ -23,7 +23,7 @@ export const rentalSchema = z.object({
    * USD, making a 2,400,000 COP monthly rent read as a USD figure.
    */
   currency: z.string(),
-  bedrooms: z.number(),
+  bedrooms: z.number().nullable(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
@@ -289,7 +289,8 @@ export function rowToRental(r: ApartmentRow): Rental {
     neighborhood: r.neighborhood,
     nightly_price: nightlyPrice,
     currency: (r.currency ?? 'USD').toUpperCase(),
-    bedrooms: r.bedrooms ?? 0,
+    // Preserve an unknown bedroom count as null: 0 would render as a false "Studio".
+    bedrooms: r.bedrooms ?? null,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
     image: (r.images ?? [])[0] ?? '',

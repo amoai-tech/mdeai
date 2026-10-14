@@ -1,6 +1,6 @@
 import {
   getLocalPreviewPhoto,
-  isLocalPreviewHost,
+  isLocalPreviewRequest,
   isLocalRentalPreviewEnabled,
 } from "@/lib/rentals/dev-rental-preview";
 
@@ -10,9 +10,13 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string; filename: string }> },
 ) {
-  // Dev flag AND a localhost Host header. A tunnel or a 0.0.0.0-bound server
-  // changes the Host, so research photos can never leave the developer machine.
-  if (!isLocalRentalPreviewEnabled() || !isLocalPreviewHost(request.headers.get("host"))) {
+  // Dev flag AND a direct loopback request (local Host, no proxy/tunnel headers).
+  // A tunnel or a 0.0.0.0-bound server is refused, so research photos never leave
+  // the developer machine.
+  if (
+    !isLocalRentalPreviewEnabled() ||
+    !isLocalPreviewRequest(request.headers.get("host"), request.headers)
+  ) {
     return new Response(null, { status: 404 });
   }
   const { slug, filename } = await params;

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
 import {
   getLocalPreviewRentals,
-  isLocalPreviewHost,
+  isLocalPreviewRequest,
   isLocalRentalPreviewEnabled,
 } from "@/lib/rentals/dev-rental-preview";
 
@@ -12,9 +12,14 @@ export const metadata = { title: "Local rental preview · MDE", robots: { index:
 
 /** Development fixtures use real MDE cards, but NEVER the production publication or viewing workflow. */
 export default async function LocalRentalPreviewPage() {
-  const host = (await headers()).get("host");
+  const requestHeaders = await headers();
   // Localhost-only: a tunnel or LAN-reachable dev server must not serve the fixture.
-  if (!isLocalRentalPreviewEnabled() || !isLocalPreviewHost(host)) notFound();
+  if (
+    !isLocalRentalPreviewEnabled() ||
+    !isLocalPreviewRequest(requestHeaders.get("host"), requestHeaders)
+  ) {
+    notFound();
+  }
   let rentals: Awaited<ReturnType<typeof getLocalPreviewRentals>> = [];
   let error: string | null = null;
   try {

@@ -9,14 +9,15 @@ import {
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
 import {
   getLocalPreviewDetail,
-  isLocalPreviewHost,
+  isLocalPreviewRequest,
   isLocalRentalPreviewEnabled,
 } from "@/lib/rentals/dev-rental-preview";
 
-/** A candidate detail is only served to a localhost request with the dev flag on. */
-async function isLocalPreviewRequest(): Promise<boolean> {
+/** A candidate detail is only served to a direct localhost request with the dev flag on. */
+async function isLocalPreviewPage(): Promise<boolean> {
   if (!isLocalRentalPreviewEnabled()) return false;
-  return isLocalPreviewHost((await headers()).get("host"));
+  const requestHeaders = await headers();
+  return isLocalPreviewRequest(requestHeaders.get("host"), requestHeaders);
 }
 
 interface Props {
@@ -27,7 +28,7 @@ interface Props {
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   try {
-    const preview = (await isLocalPreviewRequest()) && id.startsWith("candidate-fincaraiz-");
+    const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
     const detail = preview ? await getLocalPreviewDetail(id) : await getRentalDetail(id);
     if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: Props) {
 // skipcq: JS-0067 - Next.js App Router page export; not browser global scope
 export default async function RentalDetailPage({ params }: Props) {
   const { id } = await params;
-  const preview = (await isLocalPreviewRequest()) && id.startsWith("candidate-fincaraiz-");
+  const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
 
   let detail;
   try {

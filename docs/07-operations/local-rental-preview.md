@@ -8,10 +8,12 @@ Supabase RLS, or the viewing RPC. It is not proof that public booking works.
 
 ## Start (local Ubuntu only)
 
+Run from the repository root; `MDE_DEV_RENTAL_FIXTURES_DIR` defaults to
+`<repo>/photos/medellin_furnished_import` when unset, so any checkout can point at its own copy:
+
 ```bash
-cd /home/sk/mdeai
 MDE_DEV_RENTAL_PREVIEW=1 \
-MDE_DEV_RENTAL_FIXTURES_DIR=/home/sk/mdeai/photos/medellin_furnished_import \
+MDE_DEV_RENTAL_FIXTURES_DIR="$PWD/photos/medellin_furnished_import" \
 npx next dev --webpack --hostname 127.0.0.1 --port 3015
 ```
 
@@ -27,11 +29,23 @@ pin**. Viewing requests are intentionally unavailable for external research copi
 failed photo request stays blank. In other environments the preview and photo endpoints return
 **404**.
 
-The `MDE_DEV_RENTAL_FIXTURES_DIR` points at the original checkout because the candidate metadata
-fixture is not committed to Git. Bind the server to `127.0.0.1` so the private preview is not offered
-to other devices on your network. Never enable this on a publicly accessible development host or
-tunnel. The flag is server-only and **requires** `NODE_ENV=development`; `production` builds cannot
-enable it even if the flag is set.
+The fixture directory is not committed to Git, so point `MDE_DEV_RENTAL_FIXTURES_DIR` at your own
+copy. **Bind the server to `127.0.0.1`.**
+
+### Access boundary
+
+The preview serves unverified research photos, so it is guarded in depth and fails closed (404):
+
+1. The flag is server-only and **requires** `NODE_ENV=development`; `production` builds cannot enable
+   it even if the flag is set.
+2. The `Host` header must be loopback (`127.0.0.1`, `localhost`, `::1`).
+3. A request that carries proxy/tunnel forwarding headers (`x-forwarded-for`, `x-forwarded-host`,
+   `x-forwarded-proto`, `x-real-ip`, `forwarded`, `cf-connecting-ip`, `cf-ray`) is refused even when
+   its `Host` looks local.
+
+That combination blocks LAN access and tunnels, but it is deliberately a development boundary, not
+authentication. Never expose the server on a publicly accessible dev host, and do not treat it as a
+reason to skip the production publishing gates.
 
 To test **real viewing requests**, use the already-existing DB rollback-only pgTAP tests and
 owner/renter Playwright tests against **local or isolated test Supabase**, not the live Medellín

@@ -13,6 +13,7 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  */
 const PREVIEW_ENABLED = process.env.MDE_DEV_RENTAL_PREVIEW === "1";
 const CARD = '[data-testid^="rental-card-candidate-"]';
+const CANDIDATE_SLUG = "candidate-fincaraiz-193916988";
 
 async function expectImageLoaded(locator: Locator, label: string) {
   await expect
@@ -68,6 +69,48 @@ test.describe("SAN-1431 local rental preview — Supabase Storage photos", () =>
     await expect(page.getByTestId("rental-detail-request-cta")).toHaveCount(0);
     await expect(page.getByTestId("rental-detail-ask-cta")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("denies access that arrives through a proxy or tunnel header", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-forwarded-for": "203.0.113.9" });
+    const pageResponse = await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });
+    expect(pageResponse?.status()).toBe(404);
+
+    // page.request does not inherit setExtraHTTPHeaders, so send it explicitly.
+    const photoResponse = await page.request.get(
+      `/api/dev/rental-photo/${CANDIDATE_SLUG}/photo-01.webp`,
+      { headers: { "x-forwarded-for": "203.0.113.9" } },
+    );
+    expect(photoResponse.status()).toBe(404);
+  });
+
+  test("every candidate detail shows its own four photos", async ({ page }) => {
+    await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });
+    const hrefs = await page
+      .locator(`${CARD} a[href^="/rentals/"]`)
+      .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+    expect(hrefs).toHaveLength(9);
+
+    const uniqueSources = new Set<string>();
+    for (const href of hrefs) {
+      if (!href) throw new Error("a candidate card is missing its detail link");
+      const slug = href.split("/").pop();
+      await page.goto(href, { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("rental-detail")).toBeVisible();
+
+      const photos = page.getByTestId("rental-detail-gallery-desktop").locator("img");
+      await expect(photos).toHaveCount(4);
+      for (let index = 0; index < 4; index += 1) {
+        const photo = photos.nth(index);
+        await expectImageLoaded(photo, `${slug} photo ${index + 1}`);
+        const src = await photo.getAttribute("src");
+        if (!src) throw new Error(`${slug} photo ${index + 1} has no src`);
+        // The URL must belong to this candidate, so photos cannot be mixed between units.
+        expect(src).toContain(slug);
+        uniqueSources.add(src);
+      }
+    }
+    expect(uniqueSources.size).toBe(36);
   });
 
   test("creates no lead, viewing or booking request", async ({ page }) => {

@@ -62,9 +62,14 @@ import {
   getLocalPreviewPhoto,
   getLocalPreviewRentals,
   isLocalPreviewHost,
+  isLocalPreviewRequest,
   isLocalRentalPreviewEnabled,
   resetLocalPreviewImageCache,
 } from "@/lib/rentals/dev-rental-preview";
+
+const headerLookup = (values: Record<string, string>) => ({
+  get: (name: string) => values[name] ?? null,
+});
 
 const candidate = {
   slug: "candidate-fincaraiz-193916988",
@@ -134,6 +139,22 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(isLocalPreviewHost(undefined)).toBe(false);
   });
 
+  it("refuses a request that arrived through a proxy or tunnel", () => {
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({}))).toBe(true);
+    // Next dev itself fills x-forwarded-* with the loopback peer, so these must pass.
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-for": "127.0.0.1" }))).toBe(true);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-host": "127.0.0.1:3016" }))).toBe(true);
+    // A tunnel can keep a local-looking Host but forwards the real client address.
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-for": "203.0.113.9" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-for": "203.0.113.9, 127.0.0.1" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-forwarded-host": "preview.example.com" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "x-real-ip": "203.0.113.9" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ "cf-connecting-ip": "203.0.113.9" }))).toBe(false);
+    expect(isLocalPreviewRequest("127.0.0.1:3016", headerLookup({ forwarded: "for=203.0.113.9" }))).toBe(false);
+    // A non-local Host is refused with or without forwarding headers.
+    expect(isLocalPreviewRequest("evil.example.com", headerLookup({}))).toBe(false);
+  });
+
   it("shows the source price and all four Storage photos without claiming availability or a map pin", async () => {
     const rentals = await getLocalPreviewRentals();
     expect(rentals).toHaveLength(1);
@@ -141,6 +162,9 @@ describe("local rental preview (no publishing bypass)", () => {
       id: candidate.slug,
       currency: "COP",
       price_monthly: 2100000,
+      // No invented nightly rent, and an unknown bedroom count stays null (not a "Studio").
+      nightly_price: 0,
+      bedrooms: null,
       image: photoUrl(0),
       can_schedule_viewing: false,
       schedule_viewing_url: null,
