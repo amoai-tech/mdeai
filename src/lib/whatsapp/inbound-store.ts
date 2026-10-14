@@ -248,6 +248,28 @@ export async function completeInboundWithSends(
   return readCount(data, "whatsapp_complete_inbound_with_sends");
 }
 
+/**
+ * A reply where only some physical sends succeeded: persist what went out and dead-letter the
+ * inbound row. Returns the number of sends recorded; 0 means the claim was fenced out.
+ */
+export async function recordPartialSends(
+  client: InboundRpcClient,
+  messageId: string,
+  claimToken: string | null,
+  sends: ConfirmedSend[],
+  error: string,
+): Promise<number> {
+  if (!claimToken) return 0;
+  const { data, error: rpcError } = await client.rpc("whatsapp_record_partial_sends", {
+    p_message_id: messageId,
+    p_claim_token: claimToken,
+    p_sends: sends,
+    p_error: error,
+  });
+  if (rpcError) throw new Error("whatsapp_record_partial_sends failed: " + rpcError.message);
+  return readCount(data, "whatsapp_record_partial_sends");
+}
+
 /** Returns false when the claim was fenced out (a newer worker owns the row). */
 export async function failInbound(
   client: InboundRpcClient,

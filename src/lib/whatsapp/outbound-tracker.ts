@@ -76,9 +76,13 @@ function requestUrl(input: RequestInfo | URL): string {
 }
 
 /** A physical outbound message: the Meta messages endpoint with a WhatsApp payload. */
-function isWhatsAppSend(url: string, body: string): boolean {
+function isWhatsAppSend(url: string, method: string, body: string): boolean {
   const path = url.split("?")[0];
-  return path.endsWith("/messages") && body.includes("messaging_product");
+  return (
+    method.toUpperCase() === "POST" &&
+    path.endsWith("/messages") &&
+    body.includes("messaging_product")
+  );
 }
 
 function replyText(body: string): string {
@@ -111,7 +115,7 @@ export function installWhatsAppSendInterceptor(): void {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input);
     const body = typeof init?.body === "string" ? init.body : "";
-    const tracked = isTrackingOutbound() && isWhatsAppSend(url, body);
+    const tracked = isTrackingOutbound() && isWhatsAppSend(url, init?.method ?? "", body);
     let response: Response;
     try {
       response = await original(input, init);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   confirmedSends,
   installWhatsAppSendInterceptor,
@@ -7,6 +7,32 @@ import {
   runWithOutboundTracking,
   sendOutcome,
 } from "../outbound-tracker";
+
+// Install once, over a body-driven mock: the interceptor captures global fetch at install time.
+beforeAll(() => {
+  let index = 0;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = String(init?.body ?? "");
+    if (body.includes("fail")) {
+      return new Response(JSON.stringify({ error: { message: "401 no" } }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    index += 1;
+    return new Response(JSON.stringify({ messages: [{ id: "wamid." + index }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  installWhatsAppSendInterceptor();
+});
+
+const metaSend = (text: string, method = "POST") =>
+  fetch("https://graph.facebook.com/v25.0/123456/messages", {
+    method,
+    body: JSON.stringify({ messaging_product: "whatsapp", text: { body: text } }),
+  });
 
 describe("outbound tracker", () => {
   it("collects the sends made inside a scope", async () => {
@@ -50,41 +76,33 @@ describe("outbound tracker", () => {
     expect(sendOutcome([])).toBe("failed");
   });
 
-  it("records every physical WhatsApp send via the global fetch, and fakes failures", async () => {
-    let index = 0;
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const body = String(init?.body ?? "");
-      if (body.includes("fail")) {
-        return new Response(JSON.stringify({ error: { message: "401 no" } }), {
-          status: 401,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      index += 1;
-      return new Response(JSON.stringify({ messages: [{ id: "wamid." + index }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }) as typeof fetch;
-    installWhatsAppSendInterceptor();
-
+  it("records every physical send, but ignores unrelated and non-POST requests", async () => {
     const { sends } = await runWithOutboundTracking(async () => {
-      const send = (text: string) =>
-        fetch("https://graph.facebook.com/v25.0/123456/messages", {
-          method: "POST",
-          body: JSON.stringify({ messaging_product: "whatsapp", text: { body: text } }),
-        });
-      await send("chunk one");
-      await send("chunk two");
-      await send("fail chunk");
+      await metaSend("chunk one");
+      await metaSend("chunk two");
+      await metaSend("fail chunk");
+      // Not the Meta messages endpoint.
       await fetch("https://example.com/not-meta", { method: "POST", body: "{}" });
+      // Right endpoint, wrong method (a status read must never look like a send).
+      await metaSend("status read", "GET");
     });
 
-    expect(sends).toEqual([
-      { success: true, providerMessageId: "wamid.1", content: "chunk one" },
-      { success: true, providerMessageId: "wamid.2", content: "chunk two" },
-      { success: false, error: "401 no" },
-    ]);
+    expect(sends).toHaveLength(3);
+    expect(sends[0]).toMatchObject({ success: true, content: "chunk one" });
+    expect(sends[1]).toMatchObject({ success: true, content: "chunk two" });
+    expect(sends[2]).toMatchObject({ success: false, error: "401 no" });
+  });
+
+  it("keeps concurrent worker scopes isolated from each other", async () => {
+    const run = (tag: string, count: number) =>
+      runWithOutboundTracking(async () => {
+        for (let i = 0; i < count; i += 1) await metaSend(tag + "-" + i);
+      });
+    const [a, b] = await Promise.all([run("A", 2), run("B", 3)]);
+    expect(a.sends).toHaveLength(2);
+    expect(b.sends).toHaveLength(3);
+    expect(a.sends.every((s) => s.success === true && s.content.startsWith("A-"))).toBe(true);
+    expect(b.sends.every((s) => s.success === true && s.content.startsWith("B-"))).toBe(true);
   });
 
   it("does not leak sends between scopes", async () => {

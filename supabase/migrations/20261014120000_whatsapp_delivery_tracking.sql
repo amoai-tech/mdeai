@@ -51,33 +51,31 @@ begin
     v_wamid := nullif(btrim(coalesce(v_send->>'wamid', '')), '');
     continue when v_wamid is null;
 
-    -- Lock the row if it exists, then decide: create our own row, or enrich one we already own.
-    select * into v_existing from public.whatsapp_messages where external_id = v_wamid for update;
+    -- Race-safe: ONE atomic upsert, so a delivery receipt inserting the same wamid concurrently
+    -- cannot slip between a check and an insert and trip the unique index. Ownership is validated
+    -- immediately after, and a mismatch raises inside this transaction.
+    insert into public.whatsapp_messages
+      (phone_number, direction, message_type, content, sender, external_id, status, to_number, inbound_message_id, delivery_status_at)
+    values
+      (v_inbound.phone_number, 'outbound', 'text', coalesce(v_send->>'content', ''), 'assistant', v_wamid, 'sent', v_inbound.phone_number, v_inbound.id, now())
+    on conflict (external_id) where external_id is not null do update
+      set inbound_message_id = coalesce(public.whatsapp_messages.inbound_message_id, excluded.inbound_message_id),
+          content = case when public.whatsapp_messages.content = '' then excluded.content else public.whatsapp_messages.content end,
+          phone_number = case when public.whatsapp_messages.phone_number = 'unknown' then excluded.phone_number else public.whatsapp_messages.phone_number end,
+          status = case when public.whatsapp_status_rank(public.whatsapp_messages.status) >= public.whatsapp_status_rank('sent') then public.whatsapp_messages.status else 'sent' end,
+          -- Keep an early receipt's ORIGINAL Meta timestamp; only fill it when we have none.
+          delivery_status_at = coalesce(public.whatsapp_messages.delivery_status_at, excluded.delivery_status_at)
+      where public.whatsapp_messages.direction = 'outbound';
 
-    if not found then
-      insert into public.whatsapp_messages
-        (phone_number, direction, message_type, content, sender, external_id, status, to_number, inbound_message_id, delivery_status_at)
-      values
-        (v_inbound.phone_number, 'outbound', 'text', coalesce(v_send->>'content', ''), 'assistant', v_wamid, 'sent', v_inbound.phone_number, v_inbound.id, now());
-    else
-      -- Integrity: an id we already own must never be silently reassigned to another conversation.
-      if v_existing.direction <> 'outbound' then
-        raise exception 'whatsapp send id % already belongs to a % message', v_wamid, v_existing.direction;
-      end if;
-      if v_existing.inbound_message_id is not null and v_existing.inbound_message_id <> v_inbound.id then
-        raise exception 'whatsapp send id % is already linked to another inbound message', v_wamid;
-      end if;
-      if v_existing.phone_number not in ('unknown', v_inbound.phone_number) then
-        raise exception 'whatsapp send id % belongs to a different recipient', v_wamid;
-      end if;
-      update public.whatsapp_messages
-         set inbound_message_id = coalesce(v_existing.inbound_message_id, v_inbound.id),
-             content = case when v_existing.content = '' then coalesce(v_send->>'content', '') else v_existing.content end,
-             phone_number = case when v_existing.phone_number = 'unknown' then v_inbound.phone_number else v_existing.phone_number end,
-             status = case when public.whatsapp_status_rank(v_existing.status) >= public.whatsapp_status_rank('sent') then v_existing.status else 'sent' end,
-             -- Keep an early receipt's ORIGINAL Meta timestamp; only fill it when we have none.
-             delivery_status_at = coalesce(v_existing.delivery_status_at, now())
-       where id = v_existing.id;
+    select * into v_existing from public.whatsapp_messages where external_id = v_wamid;
+    if v_existing.direction <> 'outbound' then
+      raise exception 'whatsapp send id % already belongs to a % message', v_wamid, v_existing.direction;
+    end if;
+    if v_existing.inbound_message_id is not null and v_existing.inbound_message_id <> v_inbound.id then
+      raise exception 'whatsapp send id % is already linked to another inbound message', v_wamid;
+    end if;
+    if v_existing.phone_number not in ('unknown', v_inbound.phone_number) then
+      raise exception 'whatsapp send id % belongs to a different recipient', v_wamid;
     end if;
     v_count := v_count + 1;
   end loop;
@@ -125,9 +123,59 @@ begin
   return v_rows;
 end $fn$;
 
+-- A reply where only SOME physical sends succeeded: persist what DID go out, then dead-letter the
+-- inbound row. Terminal on purpose: an operator sees the partial reply, and the sweeper cannot
+-- blindly retry it into duplicate customer messages.
+create or replace function public.whatsapp_record_partial_sends(
+  p_message_id uuid,
+  p_claim_token uuid,
+  p_sends jsonb,
+  p_error text
+) returns integer
+language plpgsql security definer set search_path to ''
+as $fn$
+declare
+  v_inbound public.whatsapp_messages;
+  v_send jsonb;
+  v_wamid text;
+  v_count integer := 0;
+begin
+  select * into v_inbound from public.whatsapp_messages
+   where id = p_message_id and processing_status = 'processing' and claim_token = p_claim_token
+   for update;
+  if not found then return 0; end if;
+
+  if p_sends is not null and jsonb_typeof(p_sends) = 'array' then
+    for v_send in select * from jsonb_array_elements(p_sends) loop
+      v_wamid := nullif(btrim(coalesce(v_send->>'wamid', '')), '');
+      continue when v_wamid is null;
+      insert into public.whatsapp_messages
+        (phone_number, direction, message_type, content, sender, external_id, status, to_number, inbound_message_id, delivery_status_at)
+      values
+        (v_inbound.phone_number, 'outbound', 'text', coalesce(v_send->>'content', ''), 'assistant', v_wamid, 'sent', v_inbound.phone_number, v_inbound.id, now())
+      on conflict (external_id) where external_id is not null do update
+        set inbound_message_id = coalesce(public.whatsapp_messages.inbound_message_id, excluded.inbound_message_id),
+            delivery_status_at = coalesce(public.whatsapp_messages.delivery_status_at, excluded.delivery_status_at)
+        where public.whatsapp_messages.direction = 'outbound'
+          and (public.whatsapp_messages.inbound_message_id is null
+               or public.whatsapp_messages.inbound_message_id = excluded.inbound_message_id);
+      v_count := v_count + 1;
+    end loop;
+  end if;
+
+  update public.whatsapp_messages
+     set processing_status = 'dead',
+         last_error = left(coalesce(p_error, 'partial outbound send'), 500),
+         claimed_at = null, claimed_by = null, claim_token = null
+   where id = v_inbound.id;
+  return v_count;
+end $fn$;
+
 revoke all on function public.whatsapp_status_rank(text) from public, anon, authenticated;
+revoke all on function public.whatsapp_record_partial_sends(uuid, uuid, jsonb, text) from public, anon, authenticated;
 revoke all on function public.whatsapp_complete_inbound_with_sends(uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.whatsapp_record_delivery_status(text, text, timestamptz, text) from public, anon, authenticated;
 grant execute on function public.whatsapp_status_rank(text) to service_role;
+grant execute on function public.whatsapp_record_partial_sends(uuid, uuid, jsonb, text) to service_role;
 grant execute on function public.whatsapp_complete_inbound_with_sends(uuid, uuid, jsonb) to service_role;
 grant execute on function public.whatsapp_record_delivery_status(text, text, timestamptz, text) to service_role;

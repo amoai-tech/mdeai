@@ -4,7 +4,7 @@
 -- enrichment path, fencing, and the service_role-only execution boundary.
 
 begin;
-select plan(29);
+select plan(35);
 
 -- A · structure and permissions
 select has_column('public', 'whatsapp_messages', 'inbound_message_id', 'inbound_message_id column exists');
@@ -73,6 +73,22 @@ select throws_ok(
 
 select is(public.whatsapp_complete_inbound_with_sends(:'inb2', '33333333-3333-3333-3333-333333333333', '[{"wamid":"t-dup-a","content":"1"},{"wamid":"t-dup-a","content":"2"}]'::jsonb), 2, 'a repeated wamid in one call is counted');
 select is((select count(*)::int from public.whatsapp_messages where external_id = 't-dup-a'), 1, 'a repeated wamid creates only one row');
+
+-- E · a partial reply is persisted and dead-lettered, never blindly retried
+select has_function('public', 'whatsapp_record_partial_sends', array['uuid','uuid','jsonb','text'], 'partial-send RPC exists');
+select ok(not has_function_privilege('anon', 'public.whatsapp_record_partial_sends(uuid,uuid,jsonb,text)', 'execute'), 'anon may NOT record partial sends');
+
+insert into public.whatsapp_messages
+  (phone_number, direction, message_type, content, sender, external_id, status, processing_status, attempts, claimed_at, claimed_by, claim_token, next_attempt_at)
+values
+  ('573001112233', 'inbound', 'text', 'partial', 'user', 't-in-3', 'pending', 'processing', 1, now(), 'w4', '55555555-5555-5555-5555-555555555555', now())
+returning id as inb3
+\gset
+
+select is(public.whatsapp_record_partial_sends(:'inb3', '55555555-5555-5555-5555-555555555555', '[{"wamid":"t-part-1","content":"sent part"}]'::jsonb, 'partial outbound send: chunk 2 failed'), 1, 'the confirmed chunk of a partial reply is persisted');
+select is((select processing_status from public.whatsapp_messages where id = :'inb3'), 'dead', 'the partial inbound row is dead-lettered (no blind duplicate retry)');
+select is((select count(*)::int from public.whatsapp_messages where external_id = 't-part-1' and inbound_message_id = :'inb3'), 1, 'the partial outbound row is linked to its inbound message');
+select ok((select last_error from public.whatsapp_messages where id = :'inb3') like 'partial outbound send%', 'the partial reason is recorded for an operator');
 
 select * from finish();
 rollback;

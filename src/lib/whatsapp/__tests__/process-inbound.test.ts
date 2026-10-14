@@ -9,7 +9,7 @@ function row(id: string, overrides: Partial<ClaimedRow> = {}): ClaimedRow {
 
 type RpcCall = { fn: string; args?: Record<string, unknown> };
 
-function trackingClient(claims: ClaimedRow[][], results: { complete?: number; fail?: number; dead?: number } = {}) {
+function trackingClient(claims: ClaimedRow[][], results: { complete?: number; fail?: number; dead?: number; partial?: number } = {}) {
   const calls: RpcCall[] = [];
   let claimIndex = 0;
   const client: InboundRpcClient = {
@@ -22,6 +22,7 @@ function trackingClient(claims: ClaimedRow[][], results: { complete?: number; fa
       }
       if (fn === "whatsapp_complete_inbound_with_sends") return Promise.resolve({ data: results.complete ?? 1, error: null });
       if (fn === "whatsapp_complete_inbound") return Promise.resolve({ data: results.complete ?? 1, error: null });
+      if (fn === "whatsapp_record_partial_sends") return Promise.resolve({ data: results.partial ?? 1, error: null });
       if (fn === "whatsapp_fail_inbound") return Promise.resolve({ data: results.fail ?? 1, error: null });
       if (fn === "whatsapp_dead_letter_inbound") return Promise.resolve({ data: results.dead ?? 0, error: null });
       return Promise.resolve({ data: null, error: { message: "unexpected " + fn } });
@@ -145,10 +146,12 @@ describe("processDueInbound", () => {
       return Promise.resolve(new Response("ok", { status: 200 }));
     });
     const summary = await processDueInbound({ ...base, client, adapterWebhook });
-    expect(summary).toMatchObject({ processed: 0, failed: 1 });
-    expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain(
-      "partial outbound send",
-    );
+    expect(summary).toMatchObject({ processed: 0, partial: 1, failed: 0 });
+    const partial = calls.find((c) => c.fn === "whatsapp_record_partial_sends");
+    expect(partial?.args?.p_error).toContain("partial outbound send");
+    // The confirmed chunk is persisted, and the row is NOT blindly failed into a duplicate retry.
+    expect(Array.isArray(partial?.args?.p_sends)).toBe(true);
+    expect(calls.some((c) => c.fn === "whatsapp_fail_inbound")).toBe(false);
   });
 
   it("fails the row when the agent settled without sending anything", async () => {
