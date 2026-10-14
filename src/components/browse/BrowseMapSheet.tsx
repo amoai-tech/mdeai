@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MapIcon } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { MapIcon, XIcon } from "lucide-react";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
@@ -23,7 +23,23 @@ export function BrowseMapSheet() {
         Map
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="h-[70vh] p-0">
+        {/* The default close button is 28px; rentals and restaurants use this shared
+            browse map sheet, with a 44px phone target (SAN-524). */}
+        <SheetContent side="bottom" className="h-[70vh] p-0" showCloseButton={false}>
+          <SheetClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute right-3 top-3 z-10 size-11"
+                aria-label="Close"
+                data-testid="browse-map-close"
+              />
+            }
+          >
+            <XIcon aria-hidden />
+          </SheetClose>
           <SheetHeader className="sr-only">
             <SheetTitle>Map view</SheetTitle>
           </SheetHeader>
