@@ -3,9 +3,12 @@ import {
   buildSingleMessageEnvelope,
   claimInbound,
   completeInbound,
+  completeInboundWithSends,
   deadLetterInbound,
   extractInboundMessages,
+  extractWhatsAppStatuses,
   failInbound,
+  recordDeliveryStatus,
   recordInboundMessage,
   type InboundRpcClient,
 } from "../inbound-store";
@@ -132,8 +135,78 @@ describe("claim / complete / fail / dead-letter", () => {
     await expect(failInbound(client, "m1", null, "x")).resolves.toBe(false);
   });
 
+  it("records confirmed sends and completes in one fenced RPC call", async () => {
+    const calls: Array<{ fn: string; args?: Record<string, unknown> }> = [];
+    const client: InboundRpcClient = {
+      rpc: (fn, args) => {
+        calls.push({ fn, args });
+        return Promise.resolve({ data: 2, error: null });
+      },
+    };
+    await expect(
+      completeInboundWithSends(client, "m1", "tok", [
+        { wamid: "wamid.1", content: "a" },
+        { wamid: "wamid.2", content: "b" },
+      ]),
+    ).resolves.toBe(2);
+    expect(calls[0].fn).toBe("whatsapp_complete_inbound_with_sends");
+    expect(calls[0].args?.p_claim_token).toBe("tok");
+    await expect(completeInboundWithSends(client, "m1", "tok", [])).resolves.toBe(0);
+    await expect(completeInboundWithSends(client, "m1", null, [{ wamid: "w", content: "" }])).resolves.toBe(0);
+  });
+
+  it("persists a delivery status event through the RPC", async () => {
+    const calls: Array<{ fn: string; args?: Record<string, unknown> }> = [];
+    const client: InboundRpcClient = {
+      rpc: (fn, args) => {
+        calls.push({ fn, args });
+        return Promise.resolve({ data: 1, error: null });
+      },
+    };
+    await expect(
+      recordDeliveryStatus(client, { providerMessageId: "wamid.1", status: "delivered", statusAt: "2026-01-01T00:00:00.000Z", error: null }),
+    ).resolves.toBe(1);
+    expect(calls[0].fn).toBe("whatsapp_record_delivery_status");
+    expect(calls[0].args?.p_status).toBe("delivered");
+  });
+
   it("dead-letters exhausted work and returns the count", async () => {
     const client = fakeClient(new Map([["whatsapp_dead_letter_inbound", () => ({ data: 3, error: null })]]));
     await expect(deadLetterInbound(client, 5, 180)).resolves.toBe(3);
+  });
+});
+
+describe("extractWhatsAppStatuses", () => {
+  const statusEnvelope = (entries: unknown[]) => ({ object: "whatsapp_business_account", entry: entries });
+
+  it("extracts every status from every entry and change, not just the first", () => {
+    const payload = statusEnvelope([
+      { changes: [{ field: "messages", value: { statuses: [{ id: "wamid.a", status: "sent", timestamp: "1700000000" }] } }] },
+      { changes: [
+        { field: "messages", value: { statuses: [{ id: "wamid.b", status: "delivered", timestamp: "1700000001" }, { id: "wamid.c", status: "read", timestamp: "1700000002" }] } },
+      ] },
+    ]);
+    const events = extractWhatsAppStatuses(payload);
+    expect(events.map((e) => e.providerMessageId + ":" + e.status)).toEqual([
+      "wamid.a:sent",
+      "wamid.b:delivered",
+      "wamid.c:read",
+    ]);
+    expect(events[0].statusAt).toBe(new Date(1700000000 * 1000).toISOString());
+  });
+
+  it("captures the Meta error detail for a failed status", () => {
+    const payload = statusEnvelope([
+      { changes: [{ field: "messages", value: { statuses: [{ id: "wamid.f", status: "failed", timestamp: "1700000003", errors: [{ code: 131026, title: "Message undeliverable", message: "Receiver incapable" }] }] } }] },
+    ]);
+    const [event] = extractWhatsAppStatuses(payload);
+    expect(event.status).toBe("failed");
+    expect(event.error).toBe("Receiver incapable");
+  });
+
+  it("ignores unknown statuses, malformed events and non-whatsapp payloads", () => {
+    expect(extractWhatsAppStatuses(null)).toEqual([]);
+    expect(extractWhatsAppStatuses({ object: "page" })).toEqual([]);
+    expect(extractWhatsAppStatuses(statusEnvelope([{ changes: [{ field: "messages", value: { statuses: [{ id: "w", status: "deleted" }, { status: "read" }] } }] }]))).toEqual([]);
   });
 });

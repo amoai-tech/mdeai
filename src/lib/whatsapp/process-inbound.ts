@@ -15,13 +15,13 @@
  */
 import {
   claimInbound,
-  completeInbound,
+  completeInboundWithSends,
   deadLetterInbound,
   failInbound,
   type ClaimedRow,
   type InboundRpcClient,
 } from "./inbound-store";
-import { runWithOutboundTracking } from "./outbound-tracker";
+import { confirmedSends, runWithOutboundTracking } from "./outbound-tracker";
 
 export type AdapterWebhook = (
   request: Request,
@@ -143,9 +143,10 @@ async function processRow(
       await withTimeout(registered, executionTimeoutMs, "agent run");
     });
 
-    // Completing requires a CONFIRMED outbound send, not just a settled task.
-    const confirmed = sends.find((send) => send.success === true);
-    if (!confirmed || confirmed.success !== true) {
+    // Completing requires CONFIRMED sends carrying provider ids, recorded in the SAME transaction
+    // as the completion: a missing wamid or a failed write can never become a false success.
+    const sendsToRecord = confirmedSends(sends);
+    if (sendsToRecord.length === 0) {
       const attempt = sends.find((send) => send.success === false);
       throw new Error(
         attempt && attempt.success === false
@@ -154,12 +155,17 @@ async function processRow(
       );
     }
 
-    const completed = await completeInbound(deps.client, row.id, row.claim_token);
-    if (completed) {
+    const recorded = await completeInboundWithSends(
+      deps.client,
+      row.id,
+      row.claim_token,
+      sendsToRecord,
+    );
+    if (recorded > 0) {
       summary.processed += 1;
       console.info("[whatsapp] inbound processed", {
         externalId: row.external_id,
-        providerMessageId: confirmed.providerMessageId,
+        providerMessageIds: sendsToRecord.map((send) => send.wamid),
       });
     } else {
       summary.stale += 1;

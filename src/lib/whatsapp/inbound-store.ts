@@ -1,11 +1,12 @@
 /**
  * SAN-1444 P0 — durable inbound store.
  *
- * Wraps the SECURITY DEFINER RPCs in
- * supabase/migrations/20261014090000_san1444_whatsapp_inbound_durability.sql.
- * Every completion/failure carries the claim token (fencing), so a worker whose lease expired
- * cannot overwrite a newer worker's claim.
+ * Wraps the SECURITY DEFINER RPCs in supabase/migrations. Every completion/failure carries the
+ * claim token (fencing), so a worker whose lease expired cannot overwrite a newer worker's claim.
+ * Confirmed outbound sends are recorded in the SAME transaction as the completion, so "answered"
+ * and "provider accepted it" can never disagree.
  */
+import type { ConfirmedSend } from "./outbound-tracker";
 
 export type InboundRpcClient = {
   rpc: (
@@ -33,6 +34,18 @@ export type ClaimedRow = {
   attempts: number;
   claim_token: string | null;
 };
+
+export type WhatsAppDeliveryStatus = "sent" | "delivered" | "read" | "failed";
+
+export type DeliveryStatusEvent = {
+  providerMessageId: string;
+  status: WhatsAppDeliveryStatus;
+  /** ISO timestamp derived from Meta's unix-seconds field, when present. */
+  statusAt: string | null;
+  error: string | null;
+};
+
+const DELIVERY_STATUSES = new Set<string>(["sent", "delivered", "read", "failed"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
@@ -65,7 +78,7 @@ export function buildSingleMessageEnvelope(
   };
 }
 
-/** Extract only inbound user messages (status events are out of scope for this PR). */
+/** Extract only inbound user messages (status events are handled separately). */
 export function extractInboundMessages(payload: unknown): InboundMessage[] {
   const root = asRecord(payload);
   if (!root || root.object !== "whatsapp_business_account") return [];
@@ -89,6 +102,45 @@ export function extractInboundMessages(payload: unknown): InboundMessage[] {
           messageType: typeof record.type === "string" ? record.type : "unknown",
           content: typeof text?.body === "string" ? text.body : "",
           payload: buildSingleMessageEnvelope(entryRecord, value, record),
+        });
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Extract every delivery status event (sent/delivered/read/failed) from ALL entries and changes,
+ * never just the first. A failing status carries Meta's error detail for diagnostics.
+ */
+export function extractWhatsAppStatuses(payload: unknown): DeliveryStatusEvent[] {
+  const root = asRecord(payload);
+  if (!root || root.object !== "whatsapp_business_account") return [];
+  const entries = Array.isArray(root.entry) ? root.entry : [];
+  const result: DeliveryStatusEvent[] = [];
+  for (const entry of entries) {
+    const entryRecord = asRecord(entry);
+    const changes = entryRecord && Array.isArray(entryRecord.changes) ? entryRecord.changes : [];
+    for (const change of changes) {
+      const changeRecord = asRecord(change);
+      if (changeRecord?.field !== "messages") continue;
+      const value = asRecord(changeRecord.value);
+      if (!value || !Array.isArray(value.statuses)) continue;
+      for (const status of value.statuses) {
+        const record = asRecord(status);
+        if (!record || typeof record.id !== "string" || typeof record.status !== "string") continue;
+        if (!DELIVERY_STATUSES.has(record.status)) continue;
+        const errors = Array.isArray(record.errors) ? record.errors : [];
+        const firstError = asRecord(errors[0]);
+        const errorTitle = firstError && typeof firstError.title === "string" ? firstError.title : null;
+        const errorMessage =
+          firstError && typeof firstError.message === "string" ? firstError.message : null;
+        const seconds = typeof record.timestamp === "string" ? Number(record.timestamp) : NaN;
+        result.push({
+          providerMessageId: record.id,
+          status: record.status as WhatsAppDeliveryStatus,
+          statusAt: Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null,
+          error: errorMessage ?? errorTitle,
         });
       }
     }
@@ -171,6 +223,26 @@ export async function completeInbound(
   return readCount(data, "whatsapp_complete_inbound") === 1;
 }
 
+/**
+ * Record the confirmed outbound sends and complete the inbound claim in ONE transaction.
+ * Returns the number of sends recorded; 0 means the claim was fenced out or no send was given.
+ */
+export async function completeInboundWithSends(
+  client: InboundRpcClient,
+  messageId: string,
+  claimToken: string | null,
+  sends: ConfirmedSend[],
+): Promise<number> {
+  if (!claimToken || sends.length === 0) return 0;
+  const { data, error } = await client.rpc("whatsapp_complete_inbound_with_sends", {
+    p_message_id: messageId,
+    p_claim_token: claimToken,
+    p_sends: sends,
+  });
+  if (error) throw new Error("whatsapp_complete_inbound_with_sends failed: " + error.message);
+  return readCount(data, "whatsapp_complete_inbound_with_sends");
+}
+
 /** Returns false when the claim was fenced out (a newer worker owns the row). */
 export async function failInbound(
   client: InboundRpcClient,
@@ -190,4 +262,22 @@ export async function failInbound(
   });
   if (error) throw new Error("whatsapp_fail_inbound failed: " + error.message);
   return readCount(data, "whatsapp_fail_inbound") === 1;
+}
+
+/**
+ * Persist one Meta delivery callback. Safe for duplicates and out-of-order events (the RPC never
+ * regresses a status) and for an early callback that arrives before the outbound row exists.
+ */
+export async function recordDeliveryStatus(
+  client: InboundRpcClient,
+  event: DeliveryStatusEvent,
+): Promise<number> {
+  const { data, error } = await client.rpc("whatsapp_record_delivery_status", {
+    p_external_id: event.providerMessageId,
+    p_status: event.status,
+    p_status_at: event.statusAt,
+    p_error: event.error,
+  });
+  if (error) throw new Error("whatsapp_record_delivery_status failed: " + error.message);
+  return readCount(data, "whatsapp_record_delivery_status");
 }

@@ -19,6 +19,15 @@ function isAdapterConfigError(error: unknown): boolean {
   return error instanceof Error && error.name === "ValidationError";
 }
 
+/** Best-effort plain text of a postable message, for the stored outbound row. */
+function postableText(message: AdapterPostableMessage): string {
+  if (typeof message === "string") return message;
+  const candidate = message as { markdown?: unknown; text?: unknown };
+  if (typeof candidate.markdown === "string") return candidate.markdown;
+  if (typeof candidate.text === "string") return candidate.text;
+  return "";
+}
+
 /**
  * SAN-1444 — record whether each reply actually reached Meta.
  *
@@ -44,6 +53,7 @@ function attachOutboundTracking(adapter: WhatsAppAdapter): WhatsAppAdapter {
       recordOutboundSend({
         success: true,
         providerMessageId: typeof raw?.id === "string" ? raw.id : null,
+        content: postableText(message),
       });
       return raw;
     } catch (error) {

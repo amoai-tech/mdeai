@@ -20,6 +20,7 @@ function trackingClient(claims: ClaimedRow[][], results: { complete?: number; fa
         claimIndex += 1;
         return Promise.resolve({ data, error: null });
       }
+      if (fn === "whatsapp_complete_inbound_with_sends") return Promise.resolve({ data: results.complete ?? 1, error: null });
       if (fn === "whatsapp_complete_inbound") return Promise.resolve({ data: results.complete ?? 1, error: null });
       if (fn === "whatsapp_fail_inbound") return Promise.resolve({ data: results.fail ?? 1, error: null });
       if (fn === "whatsapp_dead_letter_inbound") return Promise.resolve({ data: results.dead ?? 0, error: null });
@@ -34,7 +35,7 @@ const base = { webhookUrl: "https://x/api/whatsapp/webhook", sign, workerId: "w1
 const okAdapter = (_request: Request, waitUntil: (p: Promise<unknown>) => void) => {
   waitUntil(Promise.resolve());
   // A real adapter records the send through postMessage; the happy path must show one.
-  recordOutboundSend({ success: true, providerMessageId: "wamid.sent" });
+  recordOutboundSend({ success: true, providerMessageId: "wamid.sent", content: "reply" });
   return Promise.resolve(new Response("ok", { status: 200 }));
 };
 
@@ -44,8 +45,9 @@ describe("processDueInbound", () => {
     const adapterWebhook = vi.fn(okAdapter);
     const summary = await processDueInbound({ ...base, client, adapterWebhook });
     expect(summary).toMatchObject({ claimed: 1, processed: 1, failed: 0, stale: 0 });
-    const complete = calls.find((c) => c.fn === "whatsapp_complete_inbound");
+    const complete = calls.find((c) => c.fn === "whatsapp_complete_inbound_with_sends");
     expect(complete?.args?.p_claim_token).toBe("tok-m1");
+    expect(Array.isArray(complete?.args?.p_sends)).toBe(true);
   });
 
   it("does not count a row as processed when a newer worker owns the claim", async () => {
@@ -171,7 +173,9 @@ describe("processDueInbound", () => {
       processDueInbound({ ...base, client: b.client, adapterWebhook, workerId: "w2" }),
     ]);
     expect(sa.processed + sb.processed).toBe(3);
-    const completed = [...a.calls, ...b.calls].filter((c) => c.fn === "whatsapp_complete_inbound");
+    const completed = [...a.calls, ...b.calls].filter(
+      (c) => c.fn === "whatsapp_complete_inbound_with_sends",
+    );
     expect(new Set(completed.map((c) => c.args?.p_message_id)).size).toBe(3);
   });
 });
