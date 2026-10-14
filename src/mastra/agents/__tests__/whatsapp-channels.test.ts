@@ -44,7 +44,9 @@ describe("buildConciergeChannels", () => {
 
   it("buffers a whole run and sends exactly one reply", async () => {
     configure();
-    const postMessage = vi.fn(async (_threadId: string, _message: unknown) => ({ id: "wamid.sent" }));
+    const postMessage = vi.fn<(threadId: string, message: unknown) => Promise<{ id: string }>>(
+      async () => ({ id: "wamid.sent" }),
+    );
     mocks.createWhatsAppAdapter.mockReturnValue({ postMessage });
     const channels = buildConciergeChannels();
     const wrapped = channels!.adapters.whatsapp.adapter as unknown as {
