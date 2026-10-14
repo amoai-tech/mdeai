@@ -15,6 +15,18 @@
 
 export const LISTING_TIME_ZONE = "America/Bogota";
 
+/** Tomorrow at 10 AM in the listing timezone, independent of the browser's zone. */
+export function nextMedellinTestViewingWallClock(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: LISTING_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const tomorrow = new Date(Date.UTC(value("year"), value("month") - 1, value("day") + 1));
+  return `${tomorrow.toISOString().slice(0, 10)}T10:00`;
+}
+
+
 const WALL_CLOCK_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /** Offset in minutes between the given instant and the same wall clock in `timeZone`. */
