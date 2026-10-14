@@ -1,0 +1,23 @@
+{
+  "skill_name": "whatsapp",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Integrate a signed Meta WhatsApp webhook into the existing MDE Mastra concierge without breaking /chat.",
+      "expected_output": "Reuse installed native adapter and existing concierge; verify raw HMAC at real ingress; don't scaffold a second app/agent/webhook; require fake/duplicate tests.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Notify an assigned rental broker when a customer requests a viewing twice by retry.",
+      "expected_output": "Reuse canonical viewing and wa_outbox, authorize assigned broker, enforce consent, stable idempotency, authentication and wrong-broker negative test.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Meta delivered the same WhatsApp event twice and delivery statuses arrived out of order. Fix it.",
+      "expected_output": "Diagnose ingress and outbound ownership, atomic provider event dedupe, monotonic status reconciliation, one sender; no unsupported exactly-once guarantee.",
+      "files": []
+    }
+  ]
+}
