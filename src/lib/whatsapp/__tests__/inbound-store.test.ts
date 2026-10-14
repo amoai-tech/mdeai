@@ -204,6 +204,21 @@ describe("extractWhatsAppStatuses", () => {
     expect(event.error).toBe("Receiver incapable");
   });
 
+  it("ignores malformed timestamps and blank ids instead of throwing", () => {
+    const payload = statusEnvelope([
+      { changes: [{ field: "messages", value: { statuses: [
+        { id: "wamid.bad-ts", status: "delivered", timestamp: "99999999999999999999" },
+        { id: "   ", status: "read", timestamp: "1700000000" },
+        { id: "wamid.ok", status: "read", timestamp: "1700000000" },
+      ] } }] },
+    ]);
+    const events = extractWhatsAppStatuses(payload);
+    expect(events).toHaveLength(2);
+    expect(events[0].statusAt).toBeNull();
+    expect(events[1].providerMessageId).toBe("wamid.ok");
+    expect(events[1].statusAt).toBe(new Date(1700000000 * 1000).toISOString());
+  });
+
   it("ignores unknown statuses, malformed events and non-whatsapp payloads", () => {
     expect(extractWhatsAppStatuses(null)).toEqual([]);
     expect(extractWhatsAppStatuses({ object: "page" })).toEqual([]);

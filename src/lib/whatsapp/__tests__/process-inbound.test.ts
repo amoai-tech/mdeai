@@ -136,6 +136,21 @@ describe("processDueInbound", () => {
     expect(failed?.args?.p_error).toContain("Invalid OAuth access token");
   });
 
+  it("never marks a partial reply as processed", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      recordOutboundSend({ success: true, providerMessageId: "wamid.ok", content: "part one" });
+      recordOutboundSend({ success: false, error: "401 on the second chunk" });
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, failed: 1 });
+    expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain(
+      "partial outbound send",
+    );
+  });
+
   it("fails the row when the agent settled without sending anything", async () => {
     const { client, calls } = trackingClient([[row("m1")]]);
     const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {

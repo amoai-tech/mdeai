@@ -21,7 +21,7 @@ import {
   type ClaimedRow,
   type InboundRpcClient,
 } from "./inbound-store";
-import { confirmedSends, runWithOutboundTracking } from "./outbound-tracker";
+import { confirmedSends, runWithOutboundTracking, sendOutcome } from "./outbound-tracker";
 
 export type AdapterWebhook = (
   request: Request,
@@ -143,17 +143,20 @@ async function processRow(
       await withTimeout(registered, executionTimeoutMs, "agent run");
     });
 
-    // Completing requires CONFIRMED sends carrying provider ids, recorded in the SAME transaction
-    // as the completion: a missing wamid or a failed write can never become a false success.
-    const sendsToRecord = confirmedSends(sends);
-    if (sendsToRecord.length === 0) {
-      const attempt = sends.find((send) => send.success === false);
+    // Completing requires EVERY physical send to succeed with a provider id, recorded in the SAME
+    // transaction as the completion. A partial reply (some chunks sent, some failed) must never
+    // look like a complete answer, and a missing wamid must never be a false success.
+    const outcome = sendOutcome(sends);
+    if (outcome !== "full") {
+      const failure = sends.find((send) => send.success === false);
+      const detail = failure && failure.success === false ? failure.error : null;
       throw new Error(
-        attempt && attempt.success === false
-          ? "no confirmed outbound send: " + attempt.error
-          : "no confirmed outbound send: the agent produced no reply",
+        outcome === "partial"
+          ? "partial outbound send: " + (detail ?? "some messages failed")
+          : "no confirmed outbound send: " + (detail ?? "the agent produced no reply"),
       );
     }
+    const sendsToRecord = confirmedSends(sends);
 
     const recorded = await completeInboundWithSends(
       deps.client,

@@ -47,6 +47,9 @@ export type DeliveryStatusEvent = {
 
 const DELIVERY_STATUSES = new Set<string>(["sent", "delivered", "read", "failed"]);
 
+/** 2100-01-01: anything outside (0, this] is not a usable Meta timestamp. */
+const MAX_STATUS_TIMESTAMP_SECONDS = 4_102_444_800;
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
@@ -128,18 +131,20 @@ export function extractWhatsAppStatuses(payload: unknown): DeliveryStatusEvent[]
       if (!value || !Array.isArray(value.statuses)) continue;
       for (const status of value.statuses) {
         const record = asRecord(status);
-        if (!record || typeof record.id !== "string" || typeof record.status !== "string") continue;
-        if (!DELIVERY_STATUSES.has(record.status)) continue;
+        if (!record || typeof record.id !== "string" || record.id.trim() === "") continue;
+        if (typeof record.status !== "string" || !DELIVERY_STATUSES.has(record.status)) continue;
         const errors = Array.isArray(record.errors) ? record.errors : [];
         const firstError = asRecord(errors[0]);
         const errorTitle = firstError && typeof firstError.title === "string" ? firstError.title : null;
         const errorMessage =
           firstError && typeof firstError.message === "string" ? firstError.message : null;
         const seconds = typeof record.timestamp === "string" ? Number(record.timestamp) : NaN;
+        const usableTimestamp =
+          Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_STATUS_TIMESTAMP_SECONDS;
         result.push({
           providerMessageId: record.id,
           status: record.status as WhatsAppDeliveryStatus,
-          statusAt: Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null,
+          statusAt: usableTimestamp ? new Date(seconds * 1000).toISOString() : null,
           error: errorMessage ?? errorTitle,
         });
       }

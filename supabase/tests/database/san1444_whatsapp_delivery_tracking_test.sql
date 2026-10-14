@@ -4,7 +4,7 @@
 -- enrichment path, fencing, and the service_role-only execution boundary.
 
 begin;
-select plan(25);
+select plan(29);
 
 -- A · structure and permissions
 select has_column('public', 'whatsapp_messages', 'inbound_message_id', 'inbound_message_id column exists');
@@ -42,6 +42,37 @@ select is((select content from public.whatsapp_messages where external_id = 't-e
 select is((select delivery_status_at from public.whatsapp_messages where external_id = 't-early'), '2026-01-01T10:03:00Z'::timestamptz, 'enrichment preserves the ORIGINAL Meta delivery timestamp');
 select is(public.whatsapp_complete_inbound_with_sends(:'inb', gen_random_uuid(), '[{"wamid":"t-x","content":"x"}]'::jsonb), 0, 'a stale/wrong claim token records nothing');
 select is((select count(*)::int from public.whatsapp_messages where external_id = 't-x'), 0, 'a fenced call inserts no outbound row');
+
+-- D · integrity: an existing id is never reassigned to another conversation
+insert into public.whatsapp_messages
+  (phone_number, direction, message_type, content, sender, external_id, status, inbound_message_id)
+values
+  ('573001112233', 'outbound', 'text', 'owned', 'assistant', 't-owned', 'sent', :'inb');
+
+insert into public.whatsapp_messages
+  (phone_number, direction, message_type, content, sender, external_id, status, processing_status, attempts, claimed_at, claimed_by, claim_token, next_attempt_at)
+values
+  ('573001112233', 'inbound', 'text', 'second', 'user', 't-in-2', 'pending', 'processing', 1, now(), 'w2', '33333333-3333-3333-3333-333333333333', now())
+returning id as inb2
+\gset
+
+select throws_ok(
+  format('select public.whatsapp_complete_inbound_with_sends(%L, %L, %L::jsonb)',
+         :'inb2', '33333333-3333-3333-3333-333333333333', '[{"wamid":"t-owned","content":"y"}]'),
+  'P0001', NULL, 'a send id already linked to another inbound message aborts the completion');
+
+insert into public.whatsapp_messages
+  (phone_number, direction, message_type, content, sender, external_id, status, processing_status, attempts, claimed_at, claimed_by, claim_token, next_attempt_at)
+values
+  ('573001112233', 'inbound', 'text', 'inbound id', 'user', 't-inbound-id', 'pending', 'processing', 1, now(), 'w3', '44444444-4444-4444-4444-444444444444', now());
+
+select throws_ok(
+  format('select public.whatsapp_complete_inbound_with_sends(%L, %L, %L::jsonb)',
+         :'inb2', '33333333-3333-3333-3333-333333333333', '[{"wamid":"t-inbound-id","content":"z"}]'),
+  'P0001', NULL, 'an inbound id cannot be reused as a send id');
+
+select is(public.whatsapp_complete_inbound_with_sends(:'inb2', '33333333-3333-3333-3333-333333333333', '[{"wamid":"t-dup-a","content":"1"},{"wamid":"t-dup-a","content":"2"}]'::jsonb), 2, 'a repeated wamid in one call is counted');
+select is((select count(*)::int from public.whatsapp_messages where external_id = 't-dup-a'), 1, 'a repeated wamid creates only one row');
 
 select * from finish();
 rollback;
