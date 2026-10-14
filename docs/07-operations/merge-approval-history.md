@@ -108,10 +108,12 @@ The account `amoai-tech` has repository **admin** permission.
 protection requests **one approving review**, requires **`floor`** and
 **`mastra-schema-init`**, and has **`enforce_admins=false`**.
 The collaborator API lists **only `amoai-tech`** (also the PR author and
-merger). Under GitHub's documented classic-branch-protection rules, admin
-restrictions do not apply unless admin enforcement is enabled. This merge
-therefore meets the observable conditions for the administrator exemption;
-it **does not** meet the normal independent-review requirement.
+merger). GitHub's classic-branch-protection rules ordinarily exempt admins
+unless administrator enforcement is enabled. These settings were checked
+**after the merge**; they explain how an administrator-exempt merge was
+possible but do not independently prove the precise historical bypass
+event or what settings existed when the merge occurred. Regardless, there
+was **no independent approving review**.
 
 **Required-check evidence:** on PR head
 `bf16cd7437cc18256c75e28b92297f05439c39ab`, GitHub Actions
@@ -140,13 +142,22 @@ no lost checkout behavior, six-configuration real-browser proof, and
 whether any scheduled event type legitimately uses a different timezone.
 [Production evidence](https://github.com/amoai-tech/mdeai/pull/310#issuecomment-6173465239).
 
-**Required closure:** repository owner supplies and signs the actual
-merge rationale, records an independent retrospective review if an
-eligible reviewer is available, and resolves the structural one-reviewer
-deadlock rather than routinely exempting administrators. Keep
-[SAN-1486 · MDE Events — Show Correct Medellín Event Times Without Hydration Errors](https://linear.app/amo100/issue/SAN-1486/mde-events-show-correct-medellin-event-times-without-hydration-errors)
-flagged for governance signoff; the production timezone outcome itself
-is verified.
+**Required closure (pending, not a retroactive approval):**
+
+- [ ] The merging administrator adds a dated comment to PR #310 stating
+  their **actual reason** for proceeding without normal review and why
+  waiting was not appropriate. If that reason cannot be reconstructed,
+  record it as unknown instead of guessing. Link the comment here.
+- [ ] An eligible, independent reviewer with write access examines the
+  exact merged diff and the production test evidence. Record their
+  **retrospective** findings and date; never present that review as if it
+  preceded the merge.
+- [ ] Resolve the single-collaborator deadlock for future production
+  changes by adding a legitimate reviewer and enforcing the intended
+  branch rule. Any policy adjustment requires explicit owner approval.
+- [ ] Reconcile this ledger and [SAN-1486 · MDE Events — Show Correct Medellín Event Times Without Hydration Errors](https://linear.app/amo100/issue/SAN-1486/mde-events-show-correct-medellin-event-times-without-hydration-errors)
+  after the above evidence is recorded. The timezone outcome itself is
+  already proven on production; only governance signoff remains.
 
 **Official rule:** https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
 
