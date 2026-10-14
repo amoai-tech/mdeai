@@ -145,6 +145,9 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(await getLocalPreviewPhoto(candidate.slug, "../.env")).toBeNull();
     expect(await getLocalPreviewPhoto("../../etc", "photo-01.webp")).toBeNull();
     expect(await getLocalPreviewPhoto("candidate-fincaraiz-999999999", "photo-01.webp")).toBeNull();
+    expect(await getLocalPreviewPhoto("candidate-fincaraiz-12345", "photo-01.webp")).toBeNull();
+    expect(await getLocalPreviewPhoto("candidate-fincaraiz-1234567890123", "photo-01.webp")).toBeNull();
+    expect(await getLocalPreviewPhoto("candidate-fincaraiz-123456X", "photo-01.webp")).toBeNull();
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-05.webp")).toBeNull();
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-0x.webp")).toBeNull();
   });

@@ -34,8 +34,24 @@ type Candidate = {
 
 /** Existing private bucket that holds the source-review photos. */
 const SOURCE_REVIEW_BUCKET = "partner-assets";
-const SLUG = /^candidate-fincaraiz-\d{6,12}$/;
+const CANDIDATE_PREFIX = "candidate-fincaraiz-";
 const PHOTO = /^photo-0([1-9])\.webp$/;
+
+/**
+ * Anchored, linear candidate-slug check. Written without a regex on the
+ * user-supplied value so it cannot be mistaken for a backtracking pattern; the
+ * format is a known prefix plus 6–12 digits.
+ */
+function isCandidateSlug(value: string): boolean {
+  if (!value.startsWith(CANDIDATE_PREFIX)) return false;
+  const suffix = value.slice(CANDIDATE_PREFIX.length);
+  if (suffix.length < 6 || suffix.length > 12) return false;
+  for (let index = 0; index < suffix.length; index += 1) {
+    const code = suffix.charCodeAt(index);
+    if (code < 48 || code > 57) return false;
+  }
+  return true;
+}
 
 export function isLocalRentalPreviewEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
@@ -52,7 +68,7 @@ function fixtureRoot(): string {
 function validCandidate(value: unknown): value is Candidate {
   if (value === null || typeof value !== "object") return false;
   const r = value as Partial<Candidate>;
-  return typeof r.slug === "string" && SLUG.test(r.slug) &&
+  return typeof r.slug === "string" && isCandidateSlug(r.slug) &&
     typeof r.title === "string" &&
     typeof r.price_monthly === "number" && r.price_monthly > 0 &&
     r.currency === "COP" && typeof r.source_url === "string" &&
@@ -124,7 +140,7 @@ export async function getLocalPreviewPhoto(
   slug: string,
   filename: string,
 ): Promise<DevPreviewPhoto | null> {
-  if (!isLocalRentalPreviewEnabled() || !SLUG.test(slug)) return null;
+  if (!isLocalRentalPreviewEnabled() || !isCandidateSlug(slug)) return null;
   const match = PHOTO.exec(filename);
   if (!match) return null;
   const client = createServiceRoleClient();
@@ -168,7 +184,7 @@ export async function getLocalPreviewRentals(): Promise<Rental[]> {
 }
 
 export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | null> {
-  if (!isLocalRentalPreviewEnabled() || !SLUG.test(id)) return null;
+  if (!isLocalRentalPreviewEnabled() || !isCandidateSlug(id)) return null;
   const c = (await candidates()).find((row) => row.slug === id);
   if (!c) return null;
   return {
