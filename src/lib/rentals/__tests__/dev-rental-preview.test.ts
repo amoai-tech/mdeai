@@ -206,6 +206,8 @@ describe("local rental preview (no publishing bypass)", () => {
       longitude: null,
       status: "development-preview",
       images: [photoUrl(0), photoUrl(1), photoUrl(2), photoUrl(3)],
+      // The detail must be able to send the renter to the advertiser's own listing.
+      sourceUrl: candidate.source_url,
     });
   });
 

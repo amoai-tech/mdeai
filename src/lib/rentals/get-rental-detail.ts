@@ -34,6 +34,8 @@ export type RentalDetail = {
   latitude: number | null;
   longitude: number | null;
   status: string | null;
+  /** The advertiser's own listing, when this is an external candidate (never for MDE-owned rows). */
+  sourceUrl: string | null;
   /**
    * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
    * ownership + workflow + availability proof the database enforces. Every scheduling
@@ -100,6 +102,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     status: str(row.status),
+    sourceUrl: str(row.source_url),
     // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
     // treats as unproven rather than as a reason to offer the CTA.
     canScheduleViewing: isRentalRequestable({
