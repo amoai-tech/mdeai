@@ -58,6 +58,7 @@ begin
   if v_id is null then
     select m.id into v_id from public.whatsapp_messages m where m.external_id = p_external_id;
     return query select v_id, false;
+    return;  -- RETURN QUERY appends a row; without RETURN the true branch below adds a second row
   end if;
   return query select v_id, true;
 end $fn$;
