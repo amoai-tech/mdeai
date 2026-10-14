@@ -60,10 +60,46 @@ const batch = rows.map(r => {
   return {row:r,files};
 });
 console.log('Validated nine scoped advertisements and 36 private source photos; apply=',apply);
-if (!apply) process.exit(0);
-
 const destination = db.storage.from('listing-photos');
+const targetUrls = (row) => Array.from({length: 4}, (_,index) => {
+  const object = 'external-discovery/fincaraiz/' + row.slug + '/photo-'
+    + String(index + 1).padStart(2,'0') + '.webp';
+  return destination.getPublicUrl(object).data.publicUrl;
+});
+// A rerun of an already-complete release is a read-only success, not an overwrite.
+const complete = batch.every(({row}) =>
+  row.metadata?.external_discovery_publication === 'user_authorized_2026-10-14'
+  && row.metadata?.public_photo_republication_permission === 'user_attested_2026-10-14'
+  && Array.isArray(row.images)
+  && JSON.stringify(row.images) === JSON.stringify(targetUrls(row))
+);
+if (complete) {
+  console.log('ALREADY PUBLISHED: 9/9 records / 36 public photo references. No writes performed.');
+  process.exit(0);
+}
+// Mixed releases need manual diagnosis. Never overwrite live user-visible data blindly.
+if (batch.some(({row}) => Boolean(row.metadata?.external_discovery_publication)
+  || (Array.isArray(row.images) && row.images.length > 0))) {
+  throw Error('PARTIAL_PUBLICATION: no changes made. Review docs/07-operations/external-rental-publication-recovery.md');
+}
+if (!apply) {
+  console.log('No apartment records published. Run --apply only after checking the recovery guide.');
+  process.exit(0);
+}
+// If an earlier run uploaded files but failed before DB publication, do not overwrite
+// those orphaned public files until operators investigate the source/target checksums.
+for (const {row} of batch) {
+  const {data,error} = await destination.list('external-discovery/fincaraiz/' + row.slug, {limit:100});
+  if (error) throw error;
+  if (data?.length) {
+    throw Error('ORPHAN_PUBLIC_PHOTOS: files exist for ' + row.slug
+      + '. Review docs/07-operations/external-rental-publication-recovery.md');
+  }
+}
+
 const saved = [];
+const updatedRows = [];
+try {
 // Stage and verify *all* objects before changing any publicly discoverable record.
 for (const {row,files} of batch) {
   const urls = [];
@@ -106,6 +142,7 @@ for (const {row,urls} of saved) {
   if (error || data?.length !== 1 || data[0].images?.length !== 4
       || data[0].status !== 'inactive' || data[0].listing_workflow_status !== 'draft'
       || data[0].verified !== false) throw Error('Post-update invariant failed for '+row.slug);
+  updatedRows.push(row);
 }
 const {data:verified,error:readbackError} = await db.from('apartments')
   .select('slug,images,status,listing_workflow_status,verified,metadata')
@@ -116,3 +153,21 @@ if (readbackError || verified?.length !== 9
     || r.status !== 'inactive' || r.listing_workflow_status !== 'draft'
     || r.verified !== false)) throw Error('Final nine-listing verification failed');
 console.log('SUCCESS: 9 externally discoverable records / 36 public image URLs. Verified viewing restrictions unchanged.');
+
+
+// Storage and Postgres cannot share a single transaction. Best-effort compensation
+// restores the pre-publication row state; orphan public objects require operator
+// review and cleanup before attempting another release.
+} catch (error) {
+  console.error('PUBLICATION_INTERRUPTED: do not rerun blindly.', error);
+  for (const row of updatedRows.reverse()) {
+    const {error: rollbackError} = await db.from('apartments')
+      .update({images:row.images,metadata:row.metadata})
+      .eq('id',row.id)
+      .eq('landlord_id',landlord)
+      .eq('status','inactive').eq('listing_workflow_status','draft');
+    if (rollbackError) console.error('ROLLBACK_FAILED for',row.slug);
+  }
+  console.error('Review docs/07-operations/external-rental-publication-recovery.md');
+  process.exitCode = 1;
+}

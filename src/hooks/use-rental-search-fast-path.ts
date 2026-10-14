@@ -40,6 +40,7 @@ function buildRentalSlots(
 
 type RentalSearchResponse = {
   results: Rental[];
+  budgetNote?: string;
   hybridUsed?: boolean;
   rankExplanation?: Array<{ factor: string; score: number; note: string }>;
 };
@@ -119,7 +120,11 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       cards: Rental[],
       query: ConciergeWorkingMemory["lastRentalQuery"],
       memory: ConciergeWorkingMemory,
-      meta?: { hybridUsed?: boolean; rankExplanation?: Array<{ factor: string; score: number; note: string }> },
+      meta?: {
+        hybridUsed?: boolean;
+        rankExplanation?: Array<{ factor: string; score: number; note: string }>;
+        budgetNote?: string;
+      },
     ) => {
       clearOthers("rental");
       const envelope = rentalsToToolEnvelope(cards, meta);
@@ -165,7 +170,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
-        const { results: cards, hybridUsed, rankExplanation } = response;
+        const { results: cards, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
@@ -188,7 +193,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           ts: new Date().toISOString(),
         });
         setSearchMeta({ userText, params });
-        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation });
+        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation, budgetNote });
         showExchange(
           userText,
           fastPathRentalSummary(cards.length, pinCount, {

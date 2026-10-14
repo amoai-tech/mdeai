@@ -13,7 +13,11 @@ export {
 
 export function rentalsToToolEnvelope(
   cards: Rental[],
-  meta?: { hybridUsed?: boolean; rankExplanation?: Array<{ factor: string; score: number; note: string }> },
+  meta?: {
+    hybridUsed?: boolean;
+    rankExplanation?: Array<{ factor: string; score: number; note: string }>;
+    budgetNote?: string;
+  },
 ) {
   return {
     results: cards.map((r) => ({
@@ -45,6 +49,7 @@ export function rentalsToToolEnvelope(
     source: "supabase" as const,
     hybridUsed: meta?.hybridUsed,
     rankExplanation: meta?.rankExplanation,
+    budgetNote: meta?.budgetNote,
   };
 }
 

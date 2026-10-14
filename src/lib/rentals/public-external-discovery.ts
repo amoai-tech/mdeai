@@ -22,6 +22,10 @@ const AUTHORIZED_LANDLORD_PROFILE = "a4da05ae-347e-4250-8ae0-83812ccc7703";
 
 type ExternalListing = {
   landlord_id: string;
+  verified: boolean;
+  status: string;
+  listing_workflow_status: string;
+  moderation_status: string;
   slug: string; title: string; neighborhood: string | null;
   source_url: string | null; price_monthly: number | string | null;
   currency: string | null; bedrooms: number | null;
@@ -52,6 +56,10 @@ function publicRentalPhoto(row: ExternalListing): string {
 export function publicExternalRentalCard(row: ExternalListing): Rental | null {
   const metadata = row.metadata ?? {};
   if (row.landlord_id !== AUTHORIZED_LANDLORD_PROFILE
+      || row.verified !== false
+      || row.status !== "inactive"
+      || row.listing_workflow_status !== "draft"
+      || row.moderation_status !== "pending"
       || !PUBLIC_SOURCE_SLUGS.includes(row.slug as typeof PUBLIC_SOURCE_SLUGS[number])
       || metadata.inventory_kind !== "external_candidate"
       || metadata.allowed_action !== "view_original_listing"
@@ -87,15 +95,18 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
 export async function searchPublicExternalRentals(query: RentalQuery): Promise<Rental[]> {
   // Emergency disable without database writes or weakening RLS.
   if (process.env.MDE_EXTERNAL_DISCOVERY_DISABLED === "1") return [];
+  // This catalog has COP/month amounts only; never imply they match USD/night budgets.
+  if (query.maxPricePerNight != null) return [];
   const client = createServiceRoleClient();
   if (!client) return [];
   const { data, error } = await client.from("apartments")
-    .select("landlord_id,slug,title,neighborhood,source_url,price_monthly,currency,bedrooms,amenities,images,latitude,longitude,available_from,available_to,metadata")
+    .select("landlord_id,verified,status,listing_workflow_status,moderation_status,slug,title,neighborhood,source_url,price_monthly,currency,bedrooms,amenities,images,latitude,longitude,available_from,available_to,metadata")
     .in("slug", [...PUBLIC_SOURCE_SLUGS])
     .eq("landlord_id", AUTHORIZED_LANDLORD_PROFILE)
     .eq("status", "inactive")
     .eq("listing_workflow_status", "draft")
-    .eq("moderation_status", "pending");
+    .eq("moderation_status", "pending")
+    .eq("verified", false);
   if (error) throw new Error("Public external discovery temporarily unavailable");
 
   return (data ?? [])

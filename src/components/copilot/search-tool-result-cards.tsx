@@ -286,6 +286,11 @@ export function RentalResults({
     <>
       <RichCardResultsRegistrar category="rental" count={rows.length} />
       <ToolPinsSync category="rental" result={result} />
+      {envelope.budgetNote ? (
+        <p className="text-xs text-muted-foreground" data-testid="rental-budget-comparison-note">
+          {envelope.budgetNote}
+        </p>
+      ) : null}
       {rankExplanation.length > 0 ? (
         <div
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"

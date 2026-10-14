@@ -6,7 +6,7 @@ import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
-import { searchPublicExternalRentals } from '@/lib/rentals/public-external-discovery';
+import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
   describeRentalSearchError,
@@ -81,6 +81,7 @@ export type RentalSearchResult = {
   total: number;
   /** SAN-1089: only the real database. A search that cannot read it throws instead. */
   source: 'supabase';
+  budgetNote?: string;
   hybridUsed?: boolean;
   embedStatus?: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -456,10 +457,12 @@ export async function searchRentals(
         groundingUsed: false,
         rankExplanation: intel.rankExplanation,
       });
-      const external = await searchPublicExternalRentals(query);
+      const external = await getOptionalExternalRentals(query);
+      const mixed = mixRentalResults(intel.results, external, limit);
       return {
-        results: [...intel.results, ...external].slice(0, limit),
-        total: intel.total + external.length,
+        results: mixed.results,
+        total: intel.total + mixed.distinctExternal,
+        budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
         source: intel.source,
         hybridUsed: intel.hybridUsed,
         embedStatus: intel.embedStatus,
@@ -477,8 +480,12 @@ export async function searchRentals(
 
   try {
     const { results, total, source } = await searchRentalsFromSupabase(query);
-    const external = await searchPublicExternalRentals(query);
-    return { results: [...results, ...external].slice(0, limit), total: total + external.length, source };
+    const external = await getOptionalExternalRentals(query);
+    const mixed = mixRentalResults(results, external, limit);
+    return {
+      results: mixed.results, total: total + mixed.distinctExternal, source,
+      budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
+    };
   } catch (err) {
     // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
     // a different answer from a healthy query that matched nothing. Log only a stable reason
@@ -512,6 +519,7 @@ export const searchRentalsTool = createTool({
       }),
     ),
     source: z.literal('supabase'),
+    budgetNote: z.string().optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -526,7 +534,7 @@ export const searchRentalsTool = createTool({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
     const { neighborhood, minBedrooms, maxPricePerNight, limit = 8, queryText } = inputData;
-    const { results, source, hybridUsed, rankExplanation } = await runAuditedSearch(
+    const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       searchRentals,
       { neighborhood, minBedrooms, maxPricePerNight, limit, queryText },
@@ -557,6 +565,7 @@ export const searchRentalsTool = createTool({
         evidenceText: "evidenceText" in r ? (r as { evidenceText?: string | null }).evidenceText : undefined,
       })),
       source,
+      budgetNote,
       hybridUsed,
       rankExplanation,
     };

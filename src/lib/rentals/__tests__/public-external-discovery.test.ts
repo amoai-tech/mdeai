@@ -19,6 +19,10 @@ import { publicExternalRentalCard, searchPublicExternalRentals } from "../public
 
 const base = {
   landlord_id: "a4da05ae-347e-4250-8ae0-83812ccc7703",
+  verified: false,
+  status: "inactive",
+  listing_workflow_status: "draft",
+  moderation_status: "pending",
   slug: "candidate-fincaraiz-193916988",
   title: "Furnished apartment in Conquistadores",
   neighborhood: "Conquistadores",
@@ -58,6 +62,11 @@ describe("public external source cards", () => {
     expect(publicExternalRentalCard({ ...base, source_url: "https://evil.example/rental" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, slug: "other-landlord-private-draft" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, landlord_id: "another-profile" })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, verified: true })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, status: "active" })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, listing_workflow_status: "published" })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, moderation_status: "approved" })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, metadata: { ...base.metadata, allowed_action: "schedule_viewing" } })).toBeNull();
   });
 
   it("displays a public listing-photo URL, not arbitrary or private Storage media", () => {
@@ -97,6 +106,11 @@ describe("public external source cards", () => {
 });
 
 describe("public external rental search date filtering", () => {
+  it("never presents a COP/month advertisement as matching a USD/night budget", async () => {
+    searchMock.rows = [{ ...base }];
+    expect(await searchPublicExternalRentals({ maxPricePerNight: 80, limit: 8 })).toEqual([]);
+  });
+
   it("filters using the native DATE column, not a sliced display label", async () => {
     searchMock.rows = [{ ...base }];
     const tooEarly = await searchPublicExternalRentals({ checkOut: "2026-10-13", limit: 9 });

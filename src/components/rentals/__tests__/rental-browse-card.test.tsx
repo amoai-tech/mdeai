@@ -276,3 +276,27 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
     container.remove();
   });
 });
+
+describe("External rental title navigation", () => {
+  it("opens the original advertisement instead of a non-public MDE detail URL", () => {
+    const rental = {
+      ...rowToRental(apartmentRow()),
+      id: "candidate-fincaraiz-193916988",
+      tags: ["external-source"],
+      source_url: "https://fincaraiz.com.co/apartment/193916988",
+      can_schedule_viewing: false,
+      schedule_viewing_url: null,
+    };
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} />);
+    expect(html).toContain('data-testid="rental-card-link-candidate-fincaraiz-193916988"');
+    expect(html).toContain('href="https://fincaraiz.com.co/apartment/193916988"');
+    expect(html).not.toContain('/rentals/candidate-fincaraiz-193916988');
+    expect(html).toContain("View original listing");
+    expect(html).not.toContain("Schedule viewing");
+  });
+
+  it("keeps the normal MDE detail route for verified internal rentals", () => {
+    const html = renderCard();
+    expect(html).toContain('href="/rentals/rnt_lau_001"');
+  });
+});
