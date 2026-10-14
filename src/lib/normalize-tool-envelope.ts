@@ -87,6 +87,7 @@ export function normalizeToolEnvelope(result: unknown): {
   total?: number;
   source?: string;
   hybridUsed?: boolean;
+  budgetNote?: string;
   rankExplanation?: Array<{ factor: string; score: number; note: string }>;
   webGrounding?: WebGroundingEnvelope;
 } {
@@ -97,6 +98,7 @@ export function normalizeToolEnvelope(result: unknown): {
     total?: number;
     source?: string;
     hybridUsed?: boolean;
+    budgetNote?: string;
     rankExplanation?: Array<{ factor: string; score: number; note: string }>;
     webGrounding?: WebGroundingEnvelope;
   };
@@ -105,6 +107,7 @@ export function normalizeToolEnvelope(result: unknown): {
     total: envelope.total,
     source: envelope.source,
     hybridUsed: envelope.hybridUsed,
+    budgetNote: typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
     rankExplanation: envelope.rankExplanation,
     webGrounding: envelope.webGrounding,
   };

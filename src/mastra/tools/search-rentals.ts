@@ -6,6 +6,7 @@ import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
+import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
   describeRentalSearchError,
@@ -80,6 +81,7 @@ export type RentalSearchResult = {
   total: number;
   /** SAN-1089: only the real database. A search that cannot read it throws instead. */
   source: 'supabase';
+  budgetNote?: string;
   hybridUsed?: boolean;
   embedStatus?: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -455,9 +457,12 @@ export async function searchRentals(
         groundingUsed: false,
         rankExplanation: intel.rankExplanation,
       });
+      const external = await getOptionalExternalRentals(query);
+      const mixed = mixRentalResults(intel.results, external, limit);
       return {
-        results: intel.results.slice(0, limit),
-        total: intel.total,
+        results: mixed.results,
+        total: intel.total + mixed.distinctExternal,
+        budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
         source: intel.source,
         hybridUsed: intel.hybridUsed,
         embedStatus: intel.embedStatus,
@@ -475,7 +480,12 @@ export async function searchRentals(
 
   try {
     const { results, total, source } = await searchRentalsFromSupabase(query);
-    return { results, total, source };
+    const external = await getOptionalExternalRentals(query);
+    const mixed = mixRentalResults(results, external, limit);
+    return {
+      results: mixed.results, total: total + mixed.distinctExternal, source,
+      budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
+    };
   } catch (err) {
     // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
     // a different answer from a healthy query that matched nothing. Log only a stable reason
@@ -490,7 +500,7 @@ export async function searchRentals(
 export const searchRentalsTool = createTool({
   id: 'search-rentals',
   description:
-    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries the live Supabase apartments table and returns only publicly eligible listings; if the database cannot be read the call fails and you must tell the user search is temporarily unavailable — never invent listings. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
+    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries the live Supabase apartments table for verified listings and explicitly user-authorized, source-linked external advertisements (never requestable); if the database cannot be read the call fails and you must tell the user search is temporarily unavailable — never invent listings. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
@@ -509,6 +519,7 @@ export const searchRentalsTool = createTool({
       }),
     ),
     source: z.literal('supabase'),
+    budgetNote: z.string().optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -523,7 +534,7 @@ export const searchRentalsTool = createTool({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
     const { neighborhood, minBedrooms, maxPricePerNight, limit = 8, queryText } = inputData;
-    const { results, source, hybridUsed, rankExplanation } = await runAuditedSearch(
+    const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       searchRentals,
       { neighborhood, minBedrooms, maxPricePerNight, limit, queryText },
@@ -554,6 +565,7 @@ export const searchRentalsTool = createTool({
         evidenceText: "evidenceText" in r ? (r as { evidenceText?: string | null }).evidenceText : undefined,
       })),
       source,
+      budgetNote,
       hybridUsed,
       rankExplanation,
     };

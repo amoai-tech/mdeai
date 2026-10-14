@@ -251,6 +251,12 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
   return builder;
 }
 
+// These tests exercise the canonical verified-inventory path only.
+ // The separate source-linked public discovery path has its own regression tests.
+vi.mock("@/lib/rentals/public-external-discovery", () => ({
+  searchPublicExternalRentals: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("@/lib/supabase/server-env", () => ({
   getSupabaseServerUrl: () => "https://stub.supabase.co",
   getSupabaseServerAnonKey: () => "stub-anon-key",

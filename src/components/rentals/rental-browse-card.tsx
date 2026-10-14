@@ -131,7 +131,7 @@ export function RentalBrowseCard({
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    rental.tags.includes("dev-preview") ? null : rental.nightly_price,
+    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
@@ -145,7 +145,7 @@ export function RentalBrowseCard({
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
   const externalSourceUrl =
-    rental.tags.includes("dev-preview") && /^https?:\/\//i.test(rental.source_url)
+    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
       ? rental.source_url
       : null;
   const preview = () => (onPreview ?? onSelect)?.();
@@ -227,14 +227,27 @@ export function RentalBrowseCard({
     >
       <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
       <h3 className="mt-0.5 font-medium leading-snug">
-        <Link
-          href={`/rentals/${rental.id}`}
-          data-testid={`rental-card-link-${rental.id}`}
-          className="hover:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {rental.title}
-        </Link>
+        {externalSourceUrl ? (
+          <a
+            href={externalSourceUrl}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            data-testid={`rental-card-link-${rental.id}`}
+            className="hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {rental.title}
+          </a>
+        ) : (
+          <Link
+            href={`/rentals/${rental.id}`}
+            data-testid={`rental-card-link-${rental.id}`}
+            className="hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {rental.title}
+          </Link>
+        )}
       </h3>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">

@@ -96,3 +96,31 @@ describe("SAN-1349 rental card viewing CTA gating", () => {
     expect(html).toContain("1BR Laureles");
   });
 });
+
+describe("external source rental cards", () => {
+  it("shows a real monthly COP price, unknown bedrooms, and the original-advertisement link", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-fincaraiz-193916988"
+        listingId="candidate-fincaraiz-193916988"
+        title="Conquistadores"
+        neighborhood="Conquistadores"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={0}
+        bedrooms_unknown
+        tags={["external-source", "not-verified"]}
+        source_url="https://www.fincaraiz.com.co/apartaestudio-en-arriendo-en-conquistadores-medellin/193916988"
+        canScheduleViewing={false}
+        onSchedule={() => undefined}
+      />
+    );
+    expect(html).toContain("COP 2,100,000/mo");
+    expect(html).toContain("Bedrooms unknown");
+    expect(html).toContain("View original listing");
+    expect(html).not.toContain("COP 0/night");
+    expect(html).not.toContain("0 BR");
+    expect(html).not.toContain("Schedule viewing");
+  });
+});

@@ -12,6 +12,12 @@ type QueryResult = { data: unknown[] | null; error: { message: string } | null; 
 let anonEnv: { url: string; anonKey: string } | null = null;
 let queryResult: QueryResult = { data: [], error: null, count: 0 };
 
+// These tests exercise the canonical verified-inventory path only.
+ // The separate source-linked public discovery path has its own regression tests.
+vi.mock("@/lib/rentals/public-external-discovery", () => ({
+  searchPublicExternalRentals: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("@/lib/supabase/server-env", () => ({
   getSupabaseServerAnonEnv: () => anonEnv,
 }));
