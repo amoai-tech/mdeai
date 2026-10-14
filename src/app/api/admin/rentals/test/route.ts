@@ -133,6 +133,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ rental: data });
   }
 
+  if (action === "clone-test") {
+    const sourceId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
+    const date = typeof body.availableFrom === "string" ? body.availableFrom.trim() : "";
+    const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(sourceId)
+      || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+      || !/^https:\/\/\S+$/.test(imageUrl)) {
+      return NextResponse.json({ error: "Valid source, test date, and HTTPS test image required" }, { status: 400 });
+    }
+    const { data, error } = await supabase.rpc("admin_clone_rental_for_testing", {
+      p_source_apartment_id: sourceId,
+      p_available_from: date,
+      p_test_image_url: imageUrl,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
   if (action === "assign-test-operator") {
     const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
     if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });

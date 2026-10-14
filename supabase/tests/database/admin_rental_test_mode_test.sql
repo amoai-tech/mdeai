@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(16);
+select plan(24);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -132,6 +132,77 @@ select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-0000000
 select lives_ok(
   $q$select public.admin_assign_rental_test_operator('f1460000-0000-4000-8000-000000000021', false)$q$,
   'A16: admin can revoke test assignment');
+reset role;
+
+-- A17: another tenant cannot create a development-owned clone.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_clone_rental_for_testing('f1460000-0000-4000-8000-000000000021', (now() at time zone 'America/Bogota')::date + 3, 'https://example.com/test-only.jpg')$q$,
+  '42501', 'administrator required', 'A17: ordinary user denied from test ownership workflow');
+reset role;
+
+-- A18: MDE administrator clones an existing apartment to its own landlord profile.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.clone_test_id', (public.admin_clone_rental_for_testing(
+  'f1460000-0000-4000-8000-000000000021',
+  (now() at time zone 'America/Bogota')::date + 3,
+  'https://example.com/test-only.jpg')).id::text, true);
+reset role;
+select ok(
+  (select landlord_id = 'f1460000-0000-4000-8000-000000000011'
+      and created_by = 'f1460000-0000-4000-8000-000000000001'
+   from public.apartments where id = current_setting('mde.clone_test_id')::uuid),
+  'A18: development copy is controlled by MDE administrator landlord');
+
+-- A19: actual state is active/approved/published; independent verified is still false.
+select is(
+  (select status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
+   from public.apartments where id = current_setting('mde.clone_test_id')::uuid),
+  'active/approved/published/false',
+  'A19: development listing published without false independent verification');
+
+-- A20: development-scoped approvals and original source reference recorded.
+select is(
+  (select metadata->>'admin_test_approval' || '/' || metadata->>'admin_test_verification'
+       || '/' || metadata->>'admin_test_photo_rights'
+   from public.apartments where id = current_setting('mde.clone_test_id')::uuid),
+  'approved_for_testing/verified_for_testing/test_image_only',
+  'A20: approvals are scoped to development fixture only');
+
+-- A21: tenant-visible predicate still excludes test fixture from marketplace.
+select is(
+  (select public.rental_listing_is_public(status,moderation_status,listing_workflow_status,landlord_id,metadata)
+   from public.apartments where id = current_setting('mde.clone_test_id')::uuid),
+  false,
+  'A21: real renters never see an internal development rental');
+
+-- A22: accidental duplicate submit reuses the original test listing.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select is(
+  (public.admin_clone_rental_for_testing('f1460000-0000-4000-8000-000000000021',
+   (now() at time zone 'America/Bogota')::date + 3, 'https://example.com/test-only.jpg')).id::text,
+  current_setting('mde.clone_test_id'),
+  'A22: repeated clone requests are idempotent');
+reset role;
+
+-- A23: original source's owner and publication workflow unchanged.
+select is(
+  (select landlord_id::text || '/' || status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
+   from public.apartments where id='f1460000-0000-4000-8000-000000000021'),
+  'f1460000-0000-4000-8000-000000000011/inactive/pending/draft/false',
+  'A23: original external/source listing is not altered');
+
+-- A24: the test workflow prevents copies of copies.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_clone_rental_for_testing(current_setting('mde.clone_test_id')::uuid,
+   (now() at time zone 'America/Bogota')::date + 3, 'https://example.com/test-only.jpg')$q$,
+  '42501', 'source must be an original apartment, not a test fixture',
+  'A24: fixtures cannot recursively clone each other');
 reset role;
 
 select * from finish();

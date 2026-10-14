@@ -9,6 +9,11 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_clone_rental_for_testing(p_source_apartment_id uuid, p_available_from date, p_test_image_url text, p_fallback_price_monthly numeric)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_cleanup_test_rental(p_apartment_id uuid)": {
     "public": false,
     "anon": false,

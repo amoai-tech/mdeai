@@ -130,6 +130,13 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
       setMessage("Test rental published (internal only; verified=false; not customer-visible).");
     });
 
+  const cloneAsTest = (id: string) =>
+    act("clone:" + id, async () => {
+      await post({ action: "clone-test", apartmentId: id,
+        availableFrom: form.availableFrom, imageUrl: form.imageUrl });
+      setMessage("MDE-managed development copy is active / approved / published for testing, with test-only verification and photo approvals. The original listing is unchanged.");
+    });
+
   const assignTestOperator = (id: string, enabled: boolean) =>
     act("operator:" + id, async () => {
       await post({ action: "assign-test-operator", apartmentId: id, enabled });
@@ -289,11 +296,23 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
                         </Button>
                       </div>
                     ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        data-testid={`admin-test-operator-${row.id}`}
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          data-testid={`admin-clone-test-${row.id}`}
+                          disabled={busy !== null || !form.availableFrom || !form.imageUrl}
+                          onClick={() => void cloneAsTest(row.id)}
+                          title="Creates an MDE-owned, approved and published development fixture. Original listing is unchanged."
+                        >
+                          Make MDE test copy
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          data-testid={`admin-test-operator-${row.id}`}
                         disabled={busy !== null}
                         onClick={() => void assignTestOperator(
                           row.id,
@@ -302,7 +321,8 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
                       >
                         {row.metadata?.admin_test_operator_active === true
                           ? "Clear MDE test operator" : "Assign MDE test operator"}
-                      </Button>
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

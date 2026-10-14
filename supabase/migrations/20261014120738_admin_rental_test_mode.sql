@@ -232,6 +232,97 @@ $function$;
 comment on function public.admin_cleanup_test_rental(uuid) is
   'Admin test mode: remove a test listing''s leads/showings and return it to draft. Audited on the row.';
 
+-- Produce a NEW administrator-controlled test fixture from an existing rental.
+-- The source listing remains untouched, and the new listing cannot be exposed to
+-- customers by rental_listing_is_public(). All approvals below are test-scoped.
+create or replace function public.admin_clone_rental_for_testing(
+  p_source_apartment_id uuid,
+  p_available_from date,
+  p_test_image_url text,
+  p_fallback_price_monthly numeric default 2400000
+)
+returns public.apartments
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_source public.apartments;
+  v_test public.apartments;
+  v_title text;
+  v_neighborhood text;
+  v_address text;
+  v_price numeric;
+  v_currency text;
+begin
+  if not public.is_admin() then
+    raise exception 'administrator required' using errcode = '42501';
+  end if;
+  if p_source_apartment_id is null then
+    raise exception 'source apartment required' using errcode = '22004';
+  end if;
+  if p_available_from is null
+     or nullif(btrim(coalesce(p_test_image_url, '')), '') is null
+     or p_test_image_url !~ '^https://[^[:space:]]+$' then
+    raise exception 'test date and HTTPS test photo URL required' using errcode = 'check_violation';
+  end if;
+
+  select a.* into v_source from public.apartments a
+   where a.id = p_source_apartment_id;
+  if not found then
+    raise exception 'source apartment not found' using errcode = 'P0002';
+  end if;
+  if coalesce(lower(v_source.metadata->>'is_test_fixture'), 'false') = 'true' then
+    raise exception 'source must be an original apartment, not a test fixture' using errcode = '42501';
+  end if;
+
+  -- Repeat clicks/retries reuse this administrator's existing test copy.
+  perform pg_advisory_xact_lock(hashtext('mde-rental-test-clone'),
+                                hashtext(p_source_apartment_id::text || v_uid::text));
+  select a.* into v_test from public.apartments a
+   where a.created_by = v_uid
+     and a.metadata->>'is_test_fixture' = 'true'
+     and a.metadata->>'admin_test_source_apartment_id' = p_source_apartment_id::text
+   order by a.created_at desc, a.id desc limit 1 for update;
+  if found then
+    if v_test.listing_workflow_status <> 'published' then
+      return public.admin_publish_test_rental(v_test.id);
+    end if;
+    return v_test;
+  end if;
+
+  v_title := 'DEVELOPMENT TEST — ' || coalesce(nullif(btrim(v_source.title), ''), 'Apartment');
+  v_neighborhood := coalesce(nullif(btrim(v_source.neighborhood), ''), 'Medellín test location');
+  v_address := coalesce(nullif(btrim(v_source.address), ''), 'Test address — source location not confirmed');
+  v_price := case when v_source.price_monthly > 0 then v_source.price_monthly
+                  else p_fallback_price_monthly end;
+  v_currency := case when upper(coalesce(v_source.currency, '')) in ('COP', 'USD')
+                     then upper(v_source.currency) else 'COP' end;
+
+  -- The canonical create/publish RPCs provide test ownership through this
+  -- admin's own landlord profile, not the unrelated source's landlord_id.
+  v_test := public.admin_create_test_rental(v_title, v_neighborhood, v_address,
+                              v_price, v_currency, p_available_from,
+                              p_test_image_url, null);
+  update public.apartments a
+     set metadata = a.metadata || jsonb_build_object(
+       'admin_test_source_apartment_id', p_source_apartment_id,
+       'admin_test_approval', 'approved_for_testing',
+       'admin_test_verification', 'verified_for_testing',
+       'admin_test_photo_rights', 'test_image_only',
+       'admin_test_operator_user_id', v_uid,
+       'admin_test_operator_active', true)
+   where a.id = v_test.id;
+  return public.admin_publish_test_rental(v_test.id);
+end;
+$function$;
+
+comment on function public.admin_clone_rental_for_testing(uuid, date, text, numeric) is
+  'Clone an existing source into an MDE-admin-owned, internally approved test fixture. Never changes real ownership or verification.';
+revoke all on function public.admin_clone_rental_for_testing(uuid, date, text, numeric) from public, anon;
+grant execute on function public.admin_clone_rental_for_testing(uuid, date, text, numeric) to authenticated, service_role;
+
 -- Allow a trusted administrator to operate on existing catalog records for
 -- TESTING only, without transferring ownership or changing publication claims.
 -- This marker cannot make a listing searchable, requestable, or verified.
