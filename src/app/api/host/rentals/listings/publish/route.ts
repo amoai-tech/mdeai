@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isListingWorkflowStatus } from "@/lib/rentals/listing-workflow";
 import { runPublishRpc } from "@/lib/rentals/run-publish-rpc";
+import { runSelfAttestedPublishRpc } from "@/lib/rentals/run-self-attested-publish";
+
+const PUBLISH_MODES = ["verified", "self_attested"] as const;
+type PublishMode = (typeof PUBLISH_MODES)[number];
+const isPublishMode = (value: unknown): value is PublishMode =>
+  typeof value === "string" && (PUBLISH_MODES as readonly string[]).includes(value);
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -32,6 +38,23 @@ export async function POST(request: Request) {
   const apartmentId = apartmentIdRaw.trim();
   if (!apartmentId) {
     return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
+  }
+
+  const mode = (raw as Record<string, unknown>).mode ?? "verified";
+  if (!isPublishMode(mode)) {
+    return NextResponse.json({ error: "Invalid publish mode" }, { status: 400 });
+  }
+
+  // Publish First, Verify Later: the owning landlord self-attests and publishes.
+  if (mode === "self_attested") {
+    const result = await runSelfAttestedPublishRpc(supabase, apartmentId, {
+      advertisingAuthority: (raw as Record<string, unknown>).advertisingAuthority === true,
+      photoRights: (raw as Record<string, unknown>).photoRights === true,
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.message }, { status: result.status });
+    }
+    return NextResponse.json({ transition: result.transition });
   }
 
   const listingWorkflowStatus = (raw as Record<string, unknown>).listingWorkflowStatus;

@@ -310,9 +310,9 @@ export function RentalResults({
         <EmptyState
           testId="rentals-empty"
           title="No rentals matched"
-          description="Try a wider budget, another neighborhood, or fewer filters."
+          description={envelope.budgetNote ?? "Try another neighborhood or fewer filters."}
           suggestions={[
-            { label: "Laureles under $80", testId: "rentals-empty-suggest-laureles" },
+            { label: "Rentals in Laureles", testId: "rentals-empty-suggest-laureles" },
             { label: "Poblado 2BR", testId: "rentals-empty-suggest-poblado" },
           ]}
         />

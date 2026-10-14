@@ -323,6 +323,15 @@ export function RentalBrowseCard({
             WiFi
           </Badge>
         ) : null}
+        {rental.tags.includes("self-attested") ? (
+          <Badge
+            variant="outline"
+            className="font-normal"
+            data-testid="rental-self-attested-label"
+          >
+            Not independently verified
+          </Badge>
+        ) : null}
         {chips.map((chip) =>
           chip.toLowerCase() !== "wifi" ? (
             <Badge key={chip} variant="outline" className="font-normal">

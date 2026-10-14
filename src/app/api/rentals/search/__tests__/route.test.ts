@@ -39,6 +39,19 @@ describe("POST /api/rentals/search", () => {
     expect(json.source).toBe("supabase");
   });
 
+  it("passes through the currency mismatch explanation for monthly COP inventory", async () => {
+    const budgetNote = "External advertisements priced in COP/month are excluded from USD/night budget searches.";
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase", budgetNote });
+    const res = await POST(post({ maxPricePerNight: 80, limit: 8 }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.results).toEqual([]);
+    expect(json.budgetNote).toBe(budgetNote);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ maxPricePerNight: 80 }),
+    );
+  });
+
   it("returns 503 rental_search_unavailable when the database cannot be read", async () => {
     searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
     const res = await POST(post({ limit: 8 }));
