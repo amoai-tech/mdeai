@@ -19,28 +19,32 @@
 set check_function_bodies = false;
 set search_path = public, extensions;
 
--- ── Preflight: verify an existing vote schema matches the recovered baseline ──────
--- On a fresh database the schema is absent, so this returns early and the objects are
--- created below. On production (or anywhere vote already exists) it validates every
--- table's columns and types, the three helpers and both triggers, and raises with a
--- precise message on drift instead of silently skipping or overwriting. vector types
--- are compared without their schema prefix (public vs extensions drift).
+-- ── Preflight: an existing vote schema is verified, never silently replaced ────────
+-- If the vote schema is absent this returns early and the objects are created below.
+-- If it exists, every object the migration would create or replace is validated
+-- against the recovered baseline first, and the migration raises before any DDL runs
+-- on a mismatch. Deployment on an existing schema is therefore a validated no-op.
 do $$
 declare
-  expected jsonb := '{"votes": ["contest_id:uuid", "country:text", "created_at:timestamp with time zone", "device_hash:text", "entity_id:uuid", "fraud_score:numeric(4,3)", "fraud_status:text", "id:uuid", "idempotency_key:text", "ip_hash:text", "source:text", "user_agent:text", "voter_anon_id:text", "voter_user_id:uuid", "weight:numeric(6,3)"], "judges": ["contest_id:uuid", "invited_at:timestamp with time zone", "user_id:uuid", "weight:numeric(4,2)"], "contests": ["cover_url:text", "created_at:timestamp with time zone", "description:text", "ends_at:timestamp with time zone", "event_id:uuid", "free_votes_per_user_per_day:integer", "id:uuid", "judge_weight_pct:integer", "kind:text", "org_id:uuid", "paid_votes_enabled:boolean", "scoring_formula:jsonb", "slug:text", "starts_at:timestamp with time zone", "status:text", "title:text", "updated_at:timestamp with time zone"], "entities": ["ai_flag_override_by:uuid", "ai_flag_override_note:text", "ai_moderation_at:timestamp with time zone", "ai_moderation_categories:text[]", "ai_moderation_status:text", "approved:boolean", "bio:text", "category_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "created_by_user_id:uuid", "display_name:text", "embedding:vector(768)", "hero_url:text", "id:uuid", "id_back_url:text", "id_front_url:text", "identity_verified_at:timestamp with time zone", "media:jsonb", "rejection_reason:text", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "slug:text", "socials:jsonb", "submitted_at:timestamp with time zone", "updated_at:timestamp with time zone", "waiver_url:text"], "categories": ["contest_id:uuid", "id:uuid", "position:integer", "slug:text", "title:text"], "entity_tally": ["audience_votes:bigint", "contest_id:uuid", "entity_id:uuid", "judge_score:numeric(8,3)", "paid_votes:bigint", "rank:integer", "trend_24h:numeric(8,3)", "updated_at:timestamp with time zone", "weighted_total:numeric(12,3)"], "judge_scores": ["ai_assist_score:numeric(5,2)", "comment:text", "contest_id:uuid", "created_at:timestamp with time zone", "criterion_id:uuid", "entity_id:uuid", "judge_id:uuid", "score:numeric(5,2)", "updated_at:timestamp with time zone"], "fraud_signals": ["ai_label:text", "ai_reason:text", "created_at:timestamp with time zone", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "rules_hit:text[]", "vote_id:uuid"], "paid_vote_orders": ["amount_cents:integer", "buyer_user_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "currency:text", "entity_id:uuid", "id:uuid", "status:text", "stripe_session_id:text", "updated_at:timestamp with time zone", "votes_credited:integer", "votes_purchased:integer"], "scoring_criteria": ["contest_id:uuid", "id:uuid", "key:text", "label:text", "max_score:integer", "weight_pct:integer"]}'::jsonb;
+  exp_tables jsonb := '{"votes": ["contest_id:uuid", "country:text", "created_at:timestamp with time zone", "device_hash:text", "entity_id:uuid", "fraud_score:numeric(4,3)", "fraud_status:text", "id:uuid", "idempotency_key:text", "ip_hash:text", "source:text", "user_agent:text", "voter_anon_id:text", "voter_user_id:uuid", "weight:numeric(6,3)"], "judges": ["contest_id:uuid", "invited_at:timestamp with time zone", "user_id:uuid", "weight:numeric(4,2)"], "contests": ["cover_url:text", "created_at:timestamp with time zone", "description:text", "ends_at:timestamp with time zone", "event_id:uuid", "free_votes_per_user_per_day:integer", "id:uuid", "judge_weight_pct:integer", "kind:text", "org_id:uuid", "paid_votes_enabled:boolean", "scoring_formula:jsonb", "slug:text", "starts_at:timestamp with time zone", "status:text", "title:text", "updated_at:timestamp with time zone"], "entities": ["ai_flag_override_by:uuid", "ai_flag_override_note:text", "ai_moderation_at:timestamp with time zone", "ai_moderation_categories:text[]", "ai_moderation_status:text", "approved:boolean", "bio:text", "category_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "created_by_user_id:uuid", "display_name:text", "embedding:vector(768)", "hero_url:text", "id:uuid", "id_back_url:text", "id_front_url:text", "identity_verified_at:timestamp with time zone", "media:jsonb", "rejection_reason:text", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "slug:text", "socials:jsonb", "submitted_at:timestamp with time zone", "updated_at:timestamp with time zone", "waiver_url:text"], "categories": ["contest_id:uuid", "id:uuid", "position:integer", "slug:text", "title:text"], "entity_tally": ["audience_votes:bigint", "contest_id:uuid", "entity_id:uuid", "judge_score:numeric(8,3)", "paid_votes:bigint", "rank:integer", "trend_24h:numeric(8,3)", "updated_at:timestamp with time zone", "weighted_total:numeric(12,3)"], "judge_scores": ["ai_assist_score:numeric(5,2)", "comment:text", "contest_id:uuid", "created_at:timestamp with time zone", "criterion_id:uuid", "entity_id:uuid", "judge_id:uuid", "score:numeric(5,2)", "updated_at:timestamp with time zone"], "fraud_signals": ["ai_label:text", "ai_reason:text", "created_at:timestamp with time zone", "reviewed_at:timestamp with time zone", "reviewed_by:uuid", "rules_hit:text[]", "vote_id:uuid"], "paid_vote_orders": ["amount_cents:integer", "buyer_user_id:uuid", "contest_id:uuid", "created_at:timestamp with time zone", "currency:text", "entity_id:uuid", "id:uuid", "status:text", "stripe_session_id:text", "updated_at:timestamp with time zone", "votes_credited:integer", "votes_purchased:integer"], "scoring_criteria": ["contest_id:uuid", "id:uuid", "key:text", "label:text", "max_score:integer", "weight_pct:integer"]}'::jsonb;
+  exp_indexes jsonb := '["categories_contest_id_slug_key", "categories_pkey", "contests_pkey", "contests_slug_key", "entities_contest_id_slug_key", "entities_pkey", "entity_tally_pkey", "fraud_signals_pkey", "idx_vote_entities_ai_flag_override_by", "idx_vote_entities_reviewed_by", "judge_scores_pkey", "judges_pkey", "paid_vote_orders_pkey", "scoring_criteria_contest_id_key_key", "scoring_criteria_pkey", "vote_categories_contest_idx", "vote_contests_event_idx", "vote_contests_org_idx", "vote_contests_status_idx", "vote_entities_ai_mod_status_idx", "vote_entities_approved_idx", "vote_entities_category_idx", "vote_entities_contest_idx", "vote_entities_created_by_idx", "vote_entities_embedding_idx", "vote_entities_rejected_idx", "vote_entities_submitted_idx", "vote_entity_tally_leaderboard_idx", "vote_fraud_signals_reviewed_by_idx", "vote_judge_scores_criterion_idx", "vote_judge_scores_entity_idx", "vote_judge_scores_judge_idx", "vote_judges_user_idx", "vote_paid_orders_buyer_idx", "vote_paid_orders_contest_idx", "vote_paid_orders_entity_idx", "vote_scoring_criteria_contest_idx", "vote_votes_contest_entity_idx", "vote_votes_entity_idx", "vote_votes_fraud_status_idx", "vote_votes_idempotency_idx", "vote_votes_ip_hash_idx", "vote_votes_voter_user_idx", "votes_pkey"]'::jsonb;
+  exp_funcs jsonb := '[{"md5": "00b806840726525884811dfac78ddda5", "sig": "vote.recompute_entity_tally(uuid)"}, {"md5": "07ea6d1c8be45ee43a50118ee8e7c8d2", "sig": "vote.trigger_recompute_on_judge_score()"}, {"md5": "07ea6d1c8be45ee43a50118ee8e7c8d2", "sig": "vote.trigger_recompute_on_vote()"}]'::jsonb;
+  exp_triggers jsonb := '[{"fn": "vote.trigger_recompute_on_judge_score()", "tbl": "vote.judge_scores", "name": "tr_recompute_tally_on_judge_score", "tgtype": 21, "enabled": "O"}, {"fn": "vote.trigger_recompute_on_vote()", "tbl": "vote.votes", "name": "tr_recompute_tally_on_vote", "tgtype": 5, "enabled": "O"}]'::jsonb;
+  exp_policies jsonb := '[{"cmd": "DELETE", "md5": "af56e1eb2ad9000b7393610cf22d8217", "tbl": "categories", "name": "categories_org_delete", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "af56e1eb2ad9000b7393610cf22d8217", "tbl": "categories", "name": "categories_org_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "048dcd689e5157edd9ba862c7a38c720", "tbl": "categories", "name": "categories_org_write", "roles": "{public}"}, {"cmd": "SELECT", "md5": "2363c79f35d4cc502fe3b4191e5f7b38", "tbl": "categories", "name": "categories_select", "roles": "{public}"}, {"cmd": "DELETE", "md5": "c16ec9b81b0e969028bc7efbd484f4d8", "tbl": "contests", "name": "contests_org_delete", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "c16ec9b81b0e969028bc7efbd484f4d8", "tbl": "contests", "name": "contests_org_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "5cae86f9a127b1d29b44a8e9723d1e54", "tbl": "contests", "name": "contests_org_write", "roles": "{public}"}, {"cmd": "SELECT", "md5": "a4ec8e17060a20c5a68b458ac3995911", "tbl": "contests", "name": "contests_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "bacfeb32aaf27b0ac4cef78858217c9a", "tbl": "entities", "name": "entities_admin_select", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "bacfeb32aaf27b0ac4cef78858217c9a", "tbl": "entities", "name": "entities_admin_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "adf2effc816ed0a16b40cf1c4d6f3a1e", "tbl": "entities", "name": "entities_contestant_insert", "roles": "{public}"}, {"cmd": "SELECT", "md5": "dbc065a7ea3ccedd9c167c00a8f11c52", "tbl": "entities", "name": "entities_contestant_select", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "fc17b49e61b97e97c238eb4638089b53", "tbl": "entities", "name": "entities_contestant_update", "roles": "{public}"}, {"cmd": "DELETE", "md5": "9450c437a28b78bbbcc72911260f38b5", "tbl": "entities", "name": "entities_org_delete", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "9450c437a28b78bbbcc72911260f38b5", "tbl": "entities", "name": "entities_org_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "ec916f1a33e48fe3521b1c24742ed179", "tbl": "entities", "name": "entities_org_write", "roles": "{public}"}, {"cmd": "SELECT", "md5": "f7e339dda850d26632e01830405f13de", "tbl": "entities", "name": "entities_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "73177c56c679ba15db7bd481518fedae", "tbl": "entity_tally", "name": "tally_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "4f13e808c2d4ceaf8c8e21e08951e534", "tbl": "fraud_signals", "name": "fraud_signals_org_select", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "f094da7ebb6d25c310a3160279dc8989", "tbl": "judge_scores", "name": "judge_scores_judge_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "279f4826074918e1addabf777b198fcc", "tbl": "judge_scores", "name": "judge_scores_judge_write", "roles": "{public}"}, {"cmd": "SELECT", "md5": "5917b60a6049a1537cee20a30589a00e", "tbl": "judge_scores", "name": "judge_scores_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "23115e1171360eb129afe266a8d9130d", "tbl": "judges", "name": "judges_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "fc91b406e320eee5c98d7c06287f596a", "tbl": "paid_vote_orders", "name": "paid_orders_select", "roles": "{public}"}, {"cmd": "DELETE", "md5": "b81d1c35eaeb5c34b7d833de71165293", "tbl": "scoring_criteria", "name": "criteria_org_delete", "roles": "{public}"}, {"cmd": "UPDATE", "md5": "b81d1c35eaeb5c34b7d833de71165293", "tbl": "scoring_criteria", "name": "criteria_org_update", "roles": "{public}"}, {"cmd": "INSERT", "md5": "746d00f1551718929e275c228f0dc9ae", "tbl": "scoring_criteria", "name": "criteria_org_write", "roles": "{public}"}, {"cmd": "SELECT", "md5": "27efb466c4433f4ba3949e24cdd0f3f5", "tbl": "scoring_criteria", "name": "criteria_select", "roles": "{public}"}, {"cmd": "SELECT", "md5": "1b81fd39889f2462874973e80b204214", "tbl": "votes", "name": "votes_own_select", "roles": "{public}"}]'::jsonb;
   k text;
   v jsonb;
   actual jsonb;
 begin
-  if to_regclass('vote.contests') is null then
+  if to_regnamespace('vote') is null then
     return;
   end if;
 
-  for k, v in select key, value from jsonb_each(expected) loop
+  -- 1. every expected table exists with matching columns and types
+  for k, v in select key, value from jsonb_each(exp_tables) loop
     if to_regclass('vote.' || k) is null then
       raise exception 'SAN-1482 preflight: vote.% is missing while the vote schema exists', k;
     end if;
-    select jsonb_agg(a.attname || ':' || replace(replace(format_type(a.atttypid, a.atttypmod), 'extensions.', ''), 'public.', '') order by a.attname)
+    select jsonb_agg(a.attname || ':' || replace(replace(format_type(a.atttypid, a.atttypmod), 'extensions.', ''), 'public.', ''))
       into actual
       from pg_attribute a
      where a.attrelid = ('vote.' || k)::regclass and a.attnum > 0 and not a.attisdropped;
@@ -49,19 +53,57 @@ begin
     end if;
   end loop;
 
-  if to_regprocedure('vote.recompute_entity_tally(uuid)') is null
-     or to_regprocedure('vote.trigger_recompute_on_vote()') is null
-     or to_regprocedure('vote.trigger_recompute_on_judge_score()') is null then
-    raise exception 'SAN-1482 preflight: one or more vote helpers are missing while the vote schema exists';
-  end if;
-  if (select count(*) from pg_proc p where p.pronamespace = 'vote'::regnamespace and p.prosecdef) < 3 then
-    raise exception 'SAN-1482 preflight: expected three SECURITY DEFINER helpers in vote';
-  end if;
-  if (select count(*) from pg_trigger tg where not tg.tgisinternal
-        and tg.tgfoid in (to_regprocedure('vote.trigger_recompute_on_vote()'), to_regprocedure('vote.trigger_recompute_on_judge_score()'))) < 2 then
-    raise exception 'SAN-1482 preflight: the two tally triggers are not both bound';
-  end if;
+  -- 2. every expected index exists
+  for v in select value from jsonb_array_elements(exp_indexes) loop
+    if to_regclass('vote.' || (v #>> '{}')) is null then
+      raise exception 'SAN-1482 preflight: index vote.% is missing', v #>> '{}';
+    end if;
+  end loop;
+
+  -- 3. every helper exists, is SECURITY DEFINER and has the expected body
+  for v in select value from jsonb_array_elements(exp_funcs) loop
+    if to_regprocedure(v->>'sig') is null then
+      raise exception 'SAN-1482 preflight: function % is missing', v->>'sig';
+    end if;
+    if not (select p.prosecdef from pg_proc p where p.oid = to_regprocedure(v->>'sig')) then
+      raise exception 'SAN-1482 preflight: function % is not SECURITY DEFINER', v->>'sig';
+    end if;
+    if (select md5(p.prosrc) from pg_proc p where p.oid = to_regprocedure(v->>'sig')) <> (v->>'md5') then
+      raise exception 'SAN-1482 preflight: function % body differs from the recovered baseline', v->>'sig';
+    end if;
+  end loop;
+
+  -- 4. every trigger matches exactly: table, event/timing mask, enabled state, function
+  for v in select value from jsonb_array_elements(exp_triggers) loop
+    if not exists (
+      select 1 from pg_trigger tg
+      where tg.tgname = v->>'name'
+        and tg.tgrelid = (v->>'tbl')::regclass
+        and tg.tgenabled = (v->>'enabled')
+        and tg.tgtype = (v->>'tgtype')::int
+        and tg.tgfoid = to_regprocedure(v->>'fn')
+    ) then
+      raise exception 'SAN-1482 preflight: trigger % on % does not match the recovered baseline', v->>'name', v->>'tbl';
+    end if;
+  end loop;
+
+  -- 5. every policy matches exactly: command, roles and expression
+  for v in select value from jsonb_array_elements(exp_policies) loop
+    if not exists (
+      select 1 from pg_policies pol
+      where pol.schemaname = 'vote'
+        and pol.tablename = v->>'tbl'
+        and pol.policyname = v->>'name'
+        and pol.cmd = v->>'cmd'
+        and pol.roles::text = v->>'roles'
+        and md5(coalesce(pol.qual, '') || '~' || coalesce(pol.with_check, '')) = v->>'md5'
+    ) then
+      raise exception 'SAN-1482 preflight: policy % on vote.% does not match the recovered baseline', v->>'name', v->>'tbl';
+    end if;
+  end loop;
 end $$;
+
+
 
 CREATE SCHEMA IF NOT EXISTS "vote";
 
