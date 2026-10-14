@@ -41,7 +41,7 @@ async function fetchRentals(): Promise<LoadResult> {
   }
 }
 
-export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
+export function RentalTestModePanel() {
   const [rentals, setRentals] = useState<AdminRentalRow[]>([]);
   const [counts, setCounts] = useState<Counts>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -158,15 +158,12 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
       const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const pad = (n: number) => String(n).padStart(2, "0");
       const preferredAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T10:00`;
-      const res = await fetch("/api/leads/schedule-viewing", {
+      const res = await fetch("/api/admin/rentals/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          listingId: row.id,
-          listingTitle: row.title ?? "Admin test listing",
-          neighborhood: row.neighborhood ?? "Medellín",
-          name: "Admin test renter",
-          email: adminEmail,
+          action: "request-viewing",
+          apartmentId: row.id,
           preferredAt,
         }),
       });
@@ -174,10 +171,10 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
         success?: boolean;
         leadId?: string;
         showingId?: string;
-        error?: { message?: string };
+        error?: string;
       };
       if (!res.ok || !body.success || !body.showingId) {
-        throw new Error(body.error?.message ?? "Viewing request failed");
+        throw new Error(body.error ?? "Viewing request failed");
       }
       setMessage(`Test viewing committed: lead ${body.leadId} + showing ${body.showingId}.`);
     });

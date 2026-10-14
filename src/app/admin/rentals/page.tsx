@@ -39,7 +39,7 @@ export default async function AdminRentalsPage() {
           Admin access required.
         </p>
       ) : (
-        <RentalTestModePanel adminEmail={user.email ?? "admin@mdeai.co"} />
+        <RentalTestModePanel  />
       )}
     </main>
   );

@@ -8990,6 +8990,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_request_test_viewing: {
+        Args: {
+          p_apartment_id: string
+          p_email: string
+          p_scheduled_at: string
+        }
+        Returns: Json
+      }
       admin_create_test_rental: {
         Args: {
           p_address: string

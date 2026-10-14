@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolvePreferredAtInstant } from "@/lib/leads/schedule-viewing-time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export const maxDuration = 20;
  */
 
 type Gate =
-  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>> }
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>>; adminEmail: string }
   | { ok: false; status: number; message: string };
 
 async function requireAdmin(): Promise<Gate> {
@@ -29,7 +30,7 @@ async function requireAdmin(): Promise<Gate> {
   if (!user) return { ok: false, status: 401, message: "Sign in." };
   const { data: isAdmin, error } = await supabase.rpc("is_admin");
   if (error || !isAdmin) return { ok: false, status: 403, message: "Admin access required." };
-  return { ok: true, supabase };
+  return { ok: true, supabase, adminEmail: user.email ?? "" };
 }
 
 type RentalRow = {
@@ -89,22 +90,35 @@ export async function GET() {
   for (const id of testIds) counts[id] = { leads: 0, showings: 0 };
 
   if (testIds.length) {
-    const [{ data: leads, error: leadsError }, { data: showings, error: showingsError }] = await Promise.all([
-      supabase.from("leads").select("apartment_id").in("apartment_id", testIds),
-      supabase.from("showings").select("apartment_id").in("apartment_id", testIds),
-    ]);
-    if (leadsError || showingsError) {
-      // Never show fabricated zero counts when the database is unavailable.
+    // The Data API caps each select (currently 1,000 rows). Count all pages
+    // rather than silently undercounting requests beyond the first page.
+    const loadIds = async (table: "leads" | "showings") => {
+      const result: string[] = [];
+      const pageSize = 200;
+      for (let i = 0; i < testIds.length; i += 100) {
+        const group = testIds.slice(i, i + 100);
+        for (let offset = 0; ; offset += pageSize) {
+          const { data: rows, error: countError } = await supabase
+            .from(table)
+            .select("apartment_id")
+            .in("apartment_id", group)
+            .order("id", { ascending: true })
+            .range(offset, offset + pageSize - 1);
+          if (countError) throw new Error("Could not load test viewing counts.");
+          for (const row of rows ?? []) if (row.apartment_id) result.push(row.apartment_id);
+          if ((rows?.length ?? 0) < pageSize) break;
+        }
+      }
+      return result;
+    };
+    let leads: string[], showings: string[];
+    try {
+      [leads, showings] = await Promise.all([loadIds("leads"), loadIds("showings")]);
+    } catch {
       return NextResponse.json({ error: "Could not load test viewing counts." }, { status: 500 });
     }
-    for (const row of leads ?? []) {
-      const id = row.apartment_id as string | null;
-      if (id && counts[id]) counts[id].leads += 1;
-    }
-    for (const row of showings ?? []) {
-      const id = row.apartment_id as string | null;
-      if (id && counts[id]) counts[id].showings += 1;
-    }
+    for (const id of leads) if (counts[id]) counts[id].leads += 1;
+    for (const id of showings) if (counts[id]) counts[id].showings += 1;
   }
 
   return NextResponse.json({ rentals, counts });
@@ -187,6 +201,27 @@ export async function POST(request: Request) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ rental: data });
+  }
+
+  if (action === "request-viewing") {
+    const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
+    const wallClock = typeof body.preferredAt === "string" ? body.preferredAt.trim() : "";
+    const at = resolvePreferredAtInstant(wallClock);
+    if (!apartmentId || !at || new Date(at).getTime() <= Date.now() || !gate.adminEmail) {
+      return NextResponse.json({ error: "Test apartment and future Medellín viewing time required" }, { status: 400 });
+    }
+    const { data, error } = await supabase.rpc("admin_request_test_viewing", {
+      p_apartment_id: apartmentId,
+      p_scheduled_at: at,
+      p_email: gate.adminEmail,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    const result = data as { lead?: { id?: string }; showing?: { id?: string }; idempotent_replay?: boolean } | null;
+    if (!result?.lead?.id || !result.showing?.id) {
+      return NextResponse.json({ error: "Test viewing did not commit a lead and showing" }, { status: 502 });
+    }
+    return NextResponse.json({ success: true, leadId: result.lead.id,
+      showingId: result.showing.id, idempotentReplay: result.idempotent_replay === true });
   }
 
   if (action === "publish" || action === "cleanup") {

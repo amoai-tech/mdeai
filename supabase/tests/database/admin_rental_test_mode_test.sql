@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(42);
+select plan(48);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -133,17 +133,66 @@ select is(
  true,
  'A32: published_at and published_by remain intact after operator changes');
 
--- A7/A8: the existing atomic viewing path persists exactly one lead + one showing.
+-- A43: the public service-role atomic RPC cannot create fixture leads.
+-- Edge functions call it with service credentials; the guest JWT is absent.
 set local role service_role;
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(current_setting('mde.admin_test_id'), null::uuid,
+  'admin-test-guest-should-fail', 'form', 'guest@example.com', 'Guest', null, null::uuid,
+  (now() + interval '2 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'test rental viewing requires administrator',
+  'A43: guest cannot schedule an internal fixture through normal atomic RPC');
+reset role;
+
+-- A7/A8: the admin-gated wrapper reuses atomic lead + showing, exactly once.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select lives_ok(
-  $q$select public.p1_schedule_tour_atomic((current_setting('mde.admin_test_id'))::uuid::text, null::uuid, 'admin-test-view-key', 'form', 'renter@example.com', 'Test Renter', null, null::uuid, (now() + interval '2 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
-  'A7: a viewing can be committed on the test listing');
+  $q$select public.admin_request_test_viewing(current_setting('mde.admin_test_id')::uuid,
+  (now() + interval '2 day')::timestamptz, 'admin-test@example.com')$q$,
+  'A7: authorized test viewing creates a real lead and showing');
 reset role;
 select is(
-  (select count(*)::int from public.leads where idempotency_key = 'admin-test-view-key')
-  + (select count(*)::int from public.showings s join public.leads l on l.id = s.lead_id where l.idempotency_key = 'admin-test-view-key'),
+  (select count(*)::int from public.leads where apartment_id = current_setting('mde.admin_test_id')::uuid)
+  + (select count(*)::int from public.showings where apartment_id = current_setting('mde.admin_test_id')::uuid),
   2,
-  'A8: exactly one test lead + one test showing exist');
+  'A8: exactly one admin test lead + one showing exist');
+
+-- A44/A45: repeat request uses the existing atomic retry contract.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_request_test_viewing(current_setting('mde.admin_test_id')::uuid,
+    (now() + interval '2 day')::timestamptz, 'admin-test@example.com')$q$,
+  'A44: same admin fixture viewing safely replays');
+reset role;
+select is(
+  (select count(*)::int from public.leads where apartment_id = current_setting('mde.admin_test_id')::uuid)
+  + (select count(*)::int from public.showings where apartment_id = current_setting('mde.admin_test_id')::uuid),
+  2,
+  'A45: replay created no duplicate lead or showing');
+
+-- A46: ordinary signed-in users are denied the admin viewing RPC.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_request_test_viewing(current_setting('mde.admin_test_id')::uuid,
+    (now() + interval '3 day')::timestamptz, 'ordinary@example.com')$q$,
+  '42501', 'administrator required',
+  'A46: non-admin cannot call internal fixture viewing RPC');
+reset role;
+
+-- A48: direct service-role showing inserts also cannot target fixtures.
+set local role service_role;
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $q$insert into public.showings (lead_id, apartment_id, scheduled_at, status)
+  values ((select id from public.leads where apartment_id=current_setting('mde.admin_test_id')::uuid limit 1),
+          current_setting('mde.admin_test_id')::uuid, now()+interval '3 day', 'scheduled')$q$,
+  '42501', 'test rental viewing requires administrator',
+  'A48: guest cannot insert a fixture showing directly');
+reset role;
 
 -- A9/A10: cleanup removes the test leads/showings and returns the listing to draft.
 set local role authenticated;
@@ -157,6 +206,16 @@ select is(
      from public.apartments where id = (current_setting('mde.admin_test_id'))::uuid),
   'draft/0',
   'A10: cleanup removed the test lead and returned the listing to draft');
+
+-- A47: cleaned-up fixtures are no longer eligible for test viewing.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_request_test_viewing(current_setting('mde.admin_test_id')::uuid,
+    (now() + interval '3 day')::timestamptz, 'admin-test@example.com')$q$,
+  '42501', 'active test listing required',
+  'A47: cleanup removes test viewing eligibility');
+reset role;
 
 -- A11: a non-test listing cannot be test-published.
 insert into public.apartments (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status, landlord_id, verified, price_monthly, currency, available_from, images, metadata)

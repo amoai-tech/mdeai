@@ -6,6 +6,9 @@ const h = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
   ranges: [] as Array<[number, number]>,
   countErrorTable: null as string | null,
+  leadsRows: [] as Array<Record<string, unknown>>,
+  showingsRows: [] as Array<Record<string, unknown>>,
+  countRanges: [] as Array<{ table: string; start: number; end: number }>,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -13,10 +16,15 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: h.getUser },
     rpc: h.rpc,
     from: (table: string) => {
-      let rows = table === "apartments" ? [...h.rows] : [];
+      let rows = table === "apartments" ? [...h.rows]
+        : table === "leads" ? [...h.leadsRows]
+        : table === "showings" ? [...h.showingsRows] : [];
       const query = {
         select: () => query,
-        order: () => query,
+        order: (column: string) => {
+          rows.sort((a, b) => String(a[column] ?? "").localeCompare(String(b[column] ?? "")));
+          return query;
+        },
         limit: (count: number) => { rows = rows.slice(0, count); return query; },
         eq: (field: string, value: string) => {
           if (field === "metadata->>is_test_fixture") {
@@ -37,11 +45,15 @@ vi.mock("@/lib/supabase/server", () => ({
           return query;
         },
         range: (start: number, end: number) => {
-          h.ranges.push([start, end]);
+          if (table === "apartments") h.ranges.push([start, end]);
+          else h.countRanges.push({ table, start, end });
           rows = rows.slice(start, end + 1);
           return query;
         },
-        in: () => query,
+        in: (field: string, values: string[]) => {
+          rows = rows.filter((row) => values.includes(String(row[field])));
+          return query;
+        },
         then: (resolve: (result: { data: typeof rows | null; error: { message: string } | null }) => unknown) =>
           Promise.resolve(h.countErrorTable === table
             ? { data: null, error: { message: "database unavailable" } }
@@ -64,13 +76,16 @@ const fields = {
 };
 
 beforeEach(() => {
-  h.getUser.mockReset().mockResolvedValue({ data: { user: { id: "admin-id" } } });
+  h.getUser.mockReset().mockResolvedValue({ data: { user: { id: "admin-id", email: "admin@example.com" } } });
   h.rpc.mockReset().mockImplementation(async (name: string) => name === "is_admin"
     ? { data: true, error: null }
     : { data: { id: "new-test-rental" }, error: null });
   h.rows = [];
   h.ranges = [];
   h.countErrorTable = null;
+  h.countRanges = [];
+  h.leadsRows = [];
+  h.showingsRows = [];
 });
 
 describe("GET /api/admin/rentals/test", () => {
@@ -108,6 +123,18 @@ describe("GET /api/admin/rentals/test", () => {
     expect((await response.json()).error).toMatch(/could not load .* counts/i);
   });
 
+  it("counts all lead/showing rows beyond the 1,000-row PostgREST limit", async () => {
+    h.rows = [{ id: "fixture-1", metadata: { is_test_fixture: "true" } }];
+    h.leadsRows = Array.from({ length: 1_107 }, (_, i) => ({ id: `l-${String(i).padStart(5, "0")}`, apartment_id: "fixture-1" }));
+    h.showingsRows = Array.from({ length: 1_203 }, (_, i) => ({ id: `s-${String(i).padStart(5, "0")}`, apartment_id: "fixture-1" }));
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.counts["fixture-1"]).toEqual({ leads: 1107, showings: 1203 });
+    expect(h.countRanges.filter((r) => r.table === "leads")).toHaveLength(6);
+    expect(h.countRanges.filter((r) => r.table === "showings")).toHaveLength(7);
+  });
+
   it("does not duplicate test listings appearing among the newest 100", async () => {
     h.rows = [
       { id: "new-test", metadata: { is_test_fixture: true } },
@@ -117,6 +144,31 @@ describe("GET /api/admin/rentals/test", () => {
     const body = await (await GET()).json();
     expect(body.rentals.map((row: { id: string }) => row.id)).toEqual(["new-test", "recent", "old-test"]);
     expect(Object.keys(body.counts)).toEqual(["new-test", "old-test"]);
+  });
+});
+
+describe("POST /api/admin/rentals/test admin viewing", () => {
+  it("denies unauthenticated and non-admin requests before calling the viewing RPC", async () => {
+    const body = { action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2099-11-01T10:00" };
+    h.rpc.mockResolvedValue({ data: false, error: null });
+    expect((await POST(request(body))).status).toBe(403);
+    h.getUser.mockResolvedValue({ data: { user: null } });
+    expect((await POST(request(body))).status).toBe(401);
+    expect(h.rpc).not.toHaveBeenCalledWith("admin_request_test_viewing", expect.anything());
+  });
+
+  it("requires valid future Medellín time and uses the authenticated admin email", async () => {
+    const invalid = await POST(request({ action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2001-01-01T10:00" }));
+    expect(invalid.status).toBe(400);
+    h.rpc.mockImplementation(async (name: string) => name === "is_admin"
+      ? { data: true, error: null }
+      : { data: { lead: { id: "lead-one" }, showing: { id: "showing-one" }, idempotent_replay: false }, error: null });
+    const valid = await POST(request({ action: "request-viewing", apartmentId: "fixture-1", preferredAt: "2099-11-01T10:00", email: "spoofed@example.com" }));
+    expect(valid.status).toBe(200);
+    expect(await valid.json()).toEqual({ success: true, leadId: "lead-one", showingId: "showing-one", idempotentReplay: false });
+    expect(h.rpc).toHaveBeenCalledWith("admin_request_test_viewing", expect.objectContaining({
+      p_apartment_id: "fixture-1", p_email: "admin@example.com",
+    }));
   });
 });
 

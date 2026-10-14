@@ -343,6 +343,57 @@ comment on function public.admin_clone_rental_for_testing(uuid, date, text, nume
 revoke all on function public.admin_clone_rental_for_testing(uuid, date, text, numeric) from public, anon;
 grant execute on function public.admin_clone_rental_for_testing(uuid, date, text, numeric) to authenticated, service_role;
 
+-- Admin-only viewing path for development fixtures. Reuse the canonical
+-- atomic lead/showing RPC, its retry identity, and the existing broker linkage;
+-- do not grant service-role RPC access to the browser or bypass the lead guard.
+create or replace function public.admin_request_test_viewing(
+  p_apartment_id uuid,
+  p_scheduled_at timestamptz,
+  p_email text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_listing_id uuid;
+  v_key text;
+begin
+  if not coalesce(public.is_admin(), false) then
+    raise exception 'administrator required' using errcode = '42501';
+  end if;
+  if p_scheduled_at is null or p_scheduled_at <= now()
+     or nullif(btrim(coalesce(p_email,'')), '') is null then
+    raise exception 'valid future time and admin email required'
+      using errcode = '22023';
+  end if;
+  select a.id into v_listing_id
+    from public.apartments a
+   where a.id = p_apartment_id
+     and lower(coalesce(a.metadata->>'is_test_fixture','false')) = 'true'
+     and a.status = 'active'
+     and a.moderation_status = 'approved'
+     and a.listing_workflow_status = 'published';
+  if not found then
+    raise exception 'active test listing required' using errcode = '42501';
+  end if;
+
+  v_key := 'admin-test-' || md5(v_uid::text || ':' || p_apartment_id::text
+    || ':' || p_scheduled_at::text || ':' || lower(btrim(p_email)));
+  return public.p1_schedule_tour_atomic(
+    p_apartment_id::text, v_uid, v_key, 'form', lower(btrim(p_email)),
+    'Admin test renter', null, null::uuid, p_scheduled_at,
+    jsonb_build_object('admin_test', true),
+    jsonb_build_object('admin_test', true)
+  );
+end;
+$function$;
+
+revoke all on function public.admin_request_test_viewing(uuid, timestamptz, text) from public, anon;
+grant execute on function public.admin_request_test_viewing(uuid, timestamptz, text) to authenticated, service_role;
+
 -- Allow a trusted administrator to operate on existing catalog records for
 -- TESTING only, without transferring ownership or changing publication claims.
 -- This marker cannot make a listing searchable, requestable, or verified.
