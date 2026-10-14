@@ -129,14 +129,51 @@ export function describeSearchCriteria(
 /** Rental fast-path uses cards only — no prose block in chat. */
 export function fastPathRentalNarrative(count: number): string {
   if (count === 0) {
-    return "No rentals matched — try a wider budget or another neighborhood.";
+    return "No verified rentals are available right now.";
   }
   return "";
 }
 
-export function fastPathRentalSummary(count: number, pinCount: number): string {
+/** Shown when a queued message could not be passed to the concierge (already acknowledged). */
+export const RENTAL_HANDOFF_FAILED_SUMMARY =
+  "I couldn't pass that message along just now. Please send it again.";
+
+/** Shown when the search itself could not run — never confused with "no rentals match". */
+export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
+  "Rental search is temporarily unavailable. Please try again in a moment.";
+
+export type FastPathRentalSummaryOptions = {
+  /** The renter gave no neighborhood, size or budget — offer one optional refinement. */
+  generic?: boolean;
+  /** The renter named a budget the search did not apply — say so instead of implying it did. */
+  budgetNotApplied?: boolean;
+};
+
+/**
+ * SAN-407 — answer first, refine second. Zero results is a truthful empty state with one
+ * optional follow-up; results come before any refinement question.
+ */
+export function fastPathRentalSummary(
+  count: number,
+  pinCount: number,
+  options: FastPathRentalSummaryOptions = {},
+): string {
   if (count === 0) {
-    return "No rentals matched — try a wider budget or another neighborhood.";
+    const budgetNote = options.budgetNotApplied
+      ? " Your budget was not applied to this search."
+      : "";
+    // A broad search that finds nothing means there is nothing to show at all. A specific search
+    // that finds nothing only says that THIS search matched nothing — other listings may exist.
+    return options.generic
+      ? `No verified rentals are available right now.${budgetNote} Want to try a neighborhood like Laureles?`
+      : `No verified rentals match that search right now.${budgetNote} Want to try another neighborhood or size?`;
   }
-  return withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
+  let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
+  if (options.budgetNotApplied) {
+    text += " Your budget isn't applied yet, so these aren't filtered by price — check each card.";
+  }
+  if (options.generic) {
+    text += " Want to narrow by neighborhood or monthly budget?";
+  }
+  return text;
 }
