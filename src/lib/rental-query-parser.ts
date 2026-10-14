@@ -85,7 +85,7 @@ function hasSequence(words: readonly string[], at: number, phrase: readonly stri
  * Token matching, not a regex: no backtracking on user text, and "anywhereville" or
  * "Medellínshire" do not count. Filler "the" is skipped so "across the city" matches.
  */
-function requestsWholeCity(text: string): boolean {
+export function requestsWholeCity(text: string): boolean {
   const words = text
     .toLowerCase()
     .split(/[^a-z0-9áéíóúñ]+/)
