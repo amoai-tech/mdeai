@@ -69,6 +69,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     agentSendRef.current = onAgentSend;
   }, [onAgentSend]);
 
+  // A rental search is under way when its query is saved and the last intent is still a rental one.
+  // Saved older conversations carry "rental_refine", which the current intent list no longer has.
+  const lastIntentName: string | undefined = state?.lastIntent;
+  const inRentalSearch =
+    Boolean(state?.lastRentalQuery) &&
+    (lastIntentName === undefined || lastIntentName === "rental_search" || lastIntentName === "rental_refine");
+
   return useMemo(
     () => ({
       handleRentalMessage,
@@ -78,6 +85,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleRestaurantMessage,
       onAgentSend,
       lastIntent: state?.lastIntent,
+      inRentalSearch,
     }),
     [
       handleRentalMessage,
@@ -87,6 +95,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleRestaurantMessage,
       onAgentSend,
       state?.lastIntent,
+      inRentalSearch,
     ],
   );
 }

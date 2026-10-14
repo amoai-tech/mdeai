@@ -6,7 +6,7 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
-import { requestsWholeCity } from "@/lib/rental-query-parser";
+import { isWholeCityReply } from "@/lib/rental-query-parser";
 // Uses the raw Gemini model (not the COST-001-wrapped FLASH_MODEL): this module
 // is reachable from the client chat bundle, and the wrapped model pulls in the
 // server-only node:async_hooks token sink. Same model *id* via
@@ -189,14 +189,16 @@ export function mergeRegexAndFlashClassification(
 
 export async function resolveRouterClassification(
   text: string,
-  options?: { lastIntent?: RouterIntent },
+  options?: { lastIntent?: RouterIntent; inRentalSearch?: boolean },
 ): Promise<FlashRouteClassification> {
   const regex = classifyRouterIntent(text);
 
   // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the
   // assistant, which anonymous visitors cannot reach. Right after a rental search it is the renter
   // widening that search: keep it on the rental fast path, which resets the neighborhood (SAN-407).
-  if (options?.lastIntent === "rental_search" && regex.routingTarget === "agent" && requestsWholeCity(text)) {
+  // Only a plain whole-city reply qualifies, so "Is Medellín safe at night?" still goes to the assistant.
+  const inRentalSearch = options?.inRentalSearch ?? options?.lastIntent === "rental_search";
+  if (inRentalSearch && regex.routingTarget === "agent" && isWholeCityReply(text)) {
     return {
       ...regex,
       intent: "rental_search",

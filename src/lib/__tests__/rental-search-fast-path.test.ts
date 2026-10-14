@@ -5,6 +5,7 @@ import {
 } from "@/lib/rental-search-fast-path";
 import {
   MAX_RENTAL_TEXT_CHARS,
+  isWholeCityReply,
   looksLikeInjection,
   statesBudget,
 } from "@/lib/rental-query-parser";
@@ -288,13 +289,35 @@ describe("rental-search-fast-path", () => {
     });
 
     it.each(["Anywhere is fine", "Any neighborhood is fine", "Medellín"])(
-      "a short whole-city follow-up %j resets the previous filters",
+      "a short whole-city reply %j widens the location and keeps size, budget and stay type",
       (text) => {
         const params = buildRentalSearchParams(text, last);
         expect(canFastPathRentalSearch(text, last)).toBe(true);
-        expect(params).toEqual({ limit: 8 });
+        expect(params).toEqual({ minBedrooms: 2, maxPricePerNight: 80, stayType: "nightly", limit: 8 });
+        expect(params?.neighborhood).toBeUndefined();
+        expect(params?.queryText).toBeUndefined();
       },
     );
+
+    it("keeps the saved stay dates when widening", () => {
+      const dated = { lastRentalQuery: { ...last.lastRentalQuery, checkIn: "2026-11-01", checkOut: "2026-11-30" } };
+      expect(buildRentalSearchParams("Anywhere is fine", dated)).toMatchObject({ checkIn: "2026-11-01", checkOut: "2026-11-30" });
+    });
+
+    it.each([
+      ["Anywhere is fine", true],
+      ["Anywhere in Medellín is fine", true],
+      ["any neighborhood works", true],
+      ["Medellín", true],
+      ["toda la ciudad", true],
+      ["Is Medellín safe at night?", false],
+      ["Anywhere but El Poblado", false],
+      ["not anywhere near the metro", false],
+      ["anywhere under 3 million", false],
+      ["", false],
+    ])("isWholeCityReply(%j) is %s", (text, expected) => {
+      expect(isWholeCityReply(text)).toBe(expected);
+    });
 
     it.each(["apartments in anywhereville", "rentals Medellínshire", "apartments in any neighboring towns"])(
       "does not broaden on an embedded phrase: %j",
