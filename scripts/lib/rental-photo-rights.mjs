@@ -3,7 +3,7 @@
  *
  * No I/O and no dependencies, so it is unit-testable with `node --test`.
  * The operator script (scripts/quarantine-unapproved-rental-photos.mjs) supplies
- * the storage listing and listing references; this module only decides.
+ * the storage metadata and listing references; this module only decides.
  */
 
 export const LISTING_PHOTOS_BUCKET = "listing-photos";
@@ -14,16 +14,53 @@ export const PRIVATE_BUCKET_PREFIXES = ["partner-assets/", "contracts/", "identi
 /**
  * Reviewed 2026-10-14. Five identical orphaned JPEGs (one etag, 39183 bytes each)
  * and one 4-byte sweep-test artifact in the public listing-photos bucket.
- * Removal is refused unless the object is also unreferenced by listing data.
+ * Removal is refused unless the object is also unreferenced AND its live size and
+ * etag still match the reviewed values.
  */
 export const REVIEWED_REMOVAL_ALLOWLIST = Object.freeze([
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578474641_rent.jpg",
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578486212_rent.jpg",
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578493192_rent.jpg",
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578496417_rent.jpg",
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578502278_rent.jpg",
-  "a5f6adc5-5e86-4730-8ade-3617893a4f68/sweep-test/1777588084265_sweep.jpg",
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578474641_rent.jpg", size: 39183, etag: "b66f15c01f0333ec62188634d0646cba" },
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578486212_rent.jpg", size: 39183, etag: "b66f15c01f0333ec62188634d0646cba" },
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578493192_rent.jpg", size: 39183, etag: "b66f15c01f0333ec62188634d0646cba" },
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578496417_rent.jpg", size: 39183, etag: "b66f15c01f0333ec62188634d0646cba" },
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/f0a63f50-dbad-4583-876c-981cd09ebb97/1777578502278_rent.jpg", size: 39183, etag: "b66f15c01f0333ec62188634d0646cba" },
+  { name: "a5f6adc5-5e86-4730-8ade-3617893a4f68/sweep-test/1777588084265_sweep.jpg", size: 4, etag: "144c9defac04969c7bfad8efaa8ea194" },
 ]);
+
+export const ALLOWLIST_NAMES = new Set(REVIEWED_REMOVAL_ALLOWLIST.map((entry) => entry.name));
+
+/** Strip surrounding quotes/whitespace from a Storage etag. */
+export function normalizeEtag(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/^"+|"+$/g, "");
+}
+
+/**
+ * Refuse to delete an object whose live bytes differ from the reviewed values.
+ *
+ * @param {{name: string, size: number, etag: string}} entry
+ * @param {{size?: unknown, etag?: unknown}|null} actual  null when the object is absent
+ * @returns {{ok: boolean, reason: string}}
+ */
+export function verifyTargetIntegrity(entry, actual) {
+  if (!entry || typeof entry.name !== "string") {
+    return { ok: false, reason: "no allowlist entry" };
+  }
+  if (!actual) {
+    return { ok: false, reason: "object not found in storage" };
+  }
+  if (Number(actual.size) !== Number(entry.size)) {
+    return { ok: false, reason: `size mismatch (expected ${entry.size}, found ${actual.size})` };
+  }
+  if (normalizeEtag(actual.etag) !== normalizeEtag(entry.etag)) {
+    return { ok: false, reason: "etag mismatch" };
+  }
+  return { ok: true, reason: "size and etag match" };
+}
+
+/** Pagination decision: a full page means there may be more rows. */
+export function hasMorePages(pageLength, pageSize) {
+  return Number(pageLength) >= Number(pageSize);
+}
 
 /**
  * Resolve a stored listing reference to a listing-photos object name.
@@ -43,7 +80,7 @@ export function objectNameFromReference(value) {
   if (markerIndex >= 0) {
     return decodeURIComponent(trimmed.slice(markerIndex + PUBLIC_URL_MARKER.length));
   }
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return null; // another absolute URL
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return null;
   if (trimmed.startsWith(LISTING_PHOTOS_BUCKET + "/")) {
     return trimmed.slice(LISTING_PHOTOS_BUCKET.length + 1);
   }
@@ -86,7 +123,7 @@ export function classifyPublicPhoto({ name, referenced }) {
       reason: "external-discovery photos require an explicit policy decision; not auto-removed",
     };
   }
-  if (!REVIEWED_REMOVAL_ALLOWLIST.includes(name)) {
+  if (!ALLOWLIST_NAMES.has(name)) {
     return { action: "keep", reason: "not in the reviewed removal allowlist" };
   }
   if (referenced) {
