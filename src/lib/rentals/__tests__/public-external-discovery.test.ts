@@ -122,12 +122,12 @@ describe("public external source cards", () => {
     expect(ad?.source_url).toBe(base.source_url);
   });
 
-  it("displays a public listing-photo URL, not arbitrary or private Storage media", () => {
+  it("renders the placeholder while republication is unapproved, even for approved or foreign URLs", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
       const photo = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-01.webp";
-      expect(publicExternalRentalCard({ ...base, images: [photo] })?.image).toBe(photo);
+      expect(publicExternalRentalCard({ ...base, images: [photo] })?.image).toBe("");
       expect(publicExternalRentalCard({ ...base, images: ["https://example.net/other.webp"] })?.image).toBe("");
       expect(publicExternalRentalCard({ ...base, images: ["https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/partner-assets/foo.webp"] })?.image).toBe("");
     } finally {
@@ -136,22 +136,22 @@ describe("public external source cards", () => {
     }
   });
 
-  it("returns up to five approved photos in stored order, with `image` as the first (SAN-1416)", () => {
+  it("does not serve the approved photos while republication is unapproved (SAN-1416 fallback)", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
       const dir = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988";
       const approved = [1, 2, 3, 4, 5, 6].map((n) => `${dir}/photo-0${n}.webp`);
       const ad = publicExternalRentalCard({ ...base, images: approved });
-      expect(ad?.images).toEqual(approved.slice(0, 5)); // capped at five, order preserved
-      expect(ad?.image).toBe(approved[0]);
+      expect(ad?.images).toEqual([]);
+      expect(ad?.image).toBe("");
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
     }
   });
 
-  it("drops every photo that is not an approved public object, without hiding the ones that are", () => {
+  it("serves no public photos while republication is unapproved, even when a valid URL is stored", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
     try {
@@ -169,8 +169,8 @@ describe("public external source cards", () => {
           good,
         ],
       });
-      expect(ad?.images).toEqual([good]);
-      expect(ad?.image).toBe(good);
+      expect(ad?.images).toEqual([]);
+      expect(ad?.image).toBe("");
     } finally {
       if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;

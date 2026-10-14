@@ -40,6 +40,18 @@ type ExternalListing = {
 const MAX_PUBLIC_PHOTOS = 5;
 
 /**
+ * Public republication of the external-discovery photographs is NOT approved.
+ *
+ * The only recorded basis is `rental_listing_images.rights_evidence`:
+ * "User attests permission for development testing, 2026-10-13; not independently
+ * certified for public publishing." Until valid republication permission is documented,
+ * source-linked cards render the existing placeholder instead of the public photo URLs.
+ * Flip only after permission is recorded; see
+ * docs/07-operations/rental-photo-rights-remediation.md.
+ */
+const PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED = false;
+
+/**
  * Only public, scoped object URLs from the expected Supabase listing-photo bucket, in stored
  * order. One malformed entry is skipped rather than hiding the photos that pass the same check.
  */
@@ -107,7 +119,8 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
     && Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))
     && Number(row.latitude) >= -90 && Number(row.latitude) <= 90
     && Number(row.longitude) >= -180 && Number(row.longitude) <= 180;
-  const images = publicRentalPhotos(row);
+  const approvedPhotos = publicRentalPhotos(row);
+  const images = PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED ? approvedPhotos : [];
   return {
     id: row.slug, title: row.title, neighborhood: row.neighborhood ?? "",
     nightly_price: 0, price_monthly: Number(row.price_monthly), currency: "COP",

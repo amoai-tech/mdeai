@@ -55,6 +55,20 @@ so re-running after a partial deletion completes the rest without a manual reset
 - Anonymous GET of a private `partner-assets/source-review/...` object returns 403.
 - `/rentals` still returns 200; external cards still render; "View original listing" links resolve.
 
+## External-discovery photos (36) — separate decision
+Recorded evidence: `rental_listing_images.rights_evidence` = "User attests permission for
+development testing, 2026-10-13; **not independently certified for public publishing."** Public
+republication is therefore **not approved**. The card fallback is
+`PUBLIC_EXTERNAL_PHOTO_REPUBLICATION_APPROVED = false` in
+`src/lib/rentals/public-external-discovery.ts`, which renders the existing placeholder while
+keeping listing details and "View original listing".
+
+Withdrawing the 36 public copies is a **separate, explicitly approved** action: extend the
+allowlist only after permission is documented or the decision to withdraw is recorded, run the
+dry-run, then `--apply`, and verify the 36 external URLs are absent while
+`partner-assets/source-review/fincaraiz/...` originals remain and `/rentals` still works via
+the original listing links. Do not make the bucket private.
+
 ## Source receipts
 - Supabase Storage access control — REFERENCE ONLY —
   https://supabase.com/docs/guides/storage/security/access-control
