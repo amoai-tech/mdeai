@@ -83,7 +83,8 @@ export function conciergeComposerInput(
       ...textAreaProps,
       enterKeyHint: "send",
       inputMode: "text",
-      disabled: !hydrated,
+      // A caller that disables the composer for its own reasons keeps it disabled.
+      disabled: textAreaProps.disabled === true || !hydrated,
     },
   } as CopilotChatViewProps["input"];
 }
