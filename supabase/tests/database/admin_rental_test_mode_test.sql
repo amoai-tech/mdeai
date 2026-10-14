@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(35);
+select plan(40);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -257,6 +257,44 @@ select throws_ok(
   '42501', 'source must be an original apartment, not a test fixture',
   'A24: fixtures cannot recursively clone each other');
 reset role;
+
+-- A36-A40: a previously cleaned-up source clone can be reused with NEW
+-- dates and test imagery, and an old expired available_to must not block it.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_cleanup_test_rental(current_setting('mde.clone_test_id')::uuid)$q$,
+  'A36: admin can clean up a previously cloned development fixture');
+reset role;
+set local role service_role;
+update public.apartments
+  set available_from = (now() at time zone 'America/Bogota')::date - 14,
+      available_to = (now() at time zone 'America/Bogota')::date - 1
+ where id = current_setting('mde.clone_test_id')::uuid;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.reused_clone_test_id', (public.admin_clone_rental_for_testing(
+  'f1460000-0000-4000-8000-000000000021',
+  (now() at time zone 'America/Bogota')::date + 21,
+  'https://example.com/new-test-image.jpg')).id::text, true);
+reset role;
+select is(current_setting('mde.reused_clone_test_id'), current_setting('mde.clone_test_id'),
+  'A37: cleaned-up fixture reuses its canonical test copy ID');
+select is(
+  (select available_from from public.apartments where id=current_setting('mde.clone_test_id')::uuid),
+  (now() at time zone 'America/Bogota')::date + 21,
+  'A38: reused draft uses the newly requested availability date');
+select is(
+  (select images[1] || '/' || coalesce(available_to::text, 'null')
+   from public.apartments where id=current_setting('mde.clone_test_id')::uuid),
+  'https://example.com/new-test-image.jpg/null',
+  'A39: reused draft gets new image and removes expired available_to');
+select is(
+  (select status || '/' || moderation_status || '/' || listing_workflow_status
+   from public.apartments where id=current_setting('mde.clone_test_id')::uuid),
+  'active/approved/published',
+  'A40: reusable draft is republished successfully with current fields');
 
 -- A33: genuinely material edits still cause re-review even if performed by
 -- an admin in the same update as exempt internal operator bookkeeping.

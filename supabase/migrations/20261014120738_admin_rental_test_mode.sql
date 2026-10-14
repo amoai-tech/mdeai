@@ -297,6 +297,15 @@ begin
    order by a.created_at desc, a.id desc limit 1 for update;
   if found then
     if v_test.listing_workflow_status <> 'published' then
+      -- Cleanup intentionally preserves the test copy, but its old dates and
+      -- photo may be stale. Reuse the same ID with this request's test inputs.
+      -- No real source listing is changed, and the draft is not publicly visible.
+      update public.apartments a
+         set available_from = p_available_from,
+             available_to = null,
+             images = array[p_test_image_url]::text[],
+             updated_at = now()
+       where a.id = v_test.id;
       return public.admin_publish_test_rental(v_test.id);
     end if;
     return v_test;

@@ -3,6 +3,8 @@
 -- photo, source and ownership re-review trigger from SAN-1431.
 -- Changing the deployed 20261011 migration would not update production;
 -- this independent migration replaces the same trigger function in place.
+-- IMPORTANT: this migration runs BEFORE 20261014120738_admin_rental_test_mode
+-- so the operator RPC can never be installed ahead of its guard exemption.
 
 create or replace function public.apartments_material_edit_guard()
 returns trigger
