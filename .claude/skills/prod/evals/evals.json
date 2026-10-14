@@ -1,0 +1,42 @@
+{
+  "skill_name": "prod",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Certify the exact production candidate for Medellín Rentals. Confirm deployed SHA, real inventory, owner-scoped viewing write, unauthorized denial and cleanup of synthetic data.",
+      "expected_output": "Requires real deployed evidence beyond build; reports pass/fail/unknown and refuses certification for missing real path.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Requires real deployed evidence beyond build; reports pass/fail/unknown and refuses certification for missing real path."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Decide whether the released paid event flow is production-ready. Test live webhook replay, wallet ownership and failure recovery; do not charge cards.",
+      "expected_output": "Verifies real provider authority and safe test strategy, does not claim live-money proof from mocks.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Verifies real provider authority and safe test strategy, does not claim live-money proof from mocks."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Certify production concierge, including pinned map results, user isolation, model errors and fallback behavior.",
+      "expected_output": "Checks deployment to source and data parity, negative cases, no fabricated geo fields.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Checks deployment to source and data parity, negative cases, no fabricated geo fields."
+      ]
+    }
+  ]
+}

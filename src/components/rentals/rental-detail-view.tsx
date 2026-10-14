@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Bed, Bath, Users, Building2, MapPin, Heart } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
@@ -105,7 +105,8 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
 const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
   <div className="flex flex-wrap gap-2" data-testid="rental-detail-specs">
     <Badge variant="secondary" className="gap-1 font-normal">
-      <Bed className="size-3.5" aria-hidden /> {specLabel(detail.bedrooms, "bed", "beds")}
+      <Bed className="size-3.5" aria-hidden />{" "}
+      {detail.bedrooms == null ? "Bedrooms unknown" : specLabel(detail.bedrooms, "bed", "beds")}
     </Badge>
     <Badge variant="secondary" className="gap-1 font-normal">
       <Bath className="size-3.5" aria-hidden /> {specLabel(detail.bathrooms, "bath", "baths")}
@@ -323,19 +324,32 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               {detail.neighborhood || <Pending />}
               {detail.address ? ` · ${detail.address}` : ""}
             </p>
-            {mapsHref ? (
-              <a
-                href={mapsHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="rental-detail-map-link"
-                className="mt-1 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                <MapPin className="size-3.5" aria-hidden /> View on map
-              </a>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
-            )}
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              {mapsHref ? (
+                <a
+                  href={mapsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="rental-detail-map-link"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <MapPin className="size-3.5" aria-hidden /> View on map
+                </a>
+              ) : (
+                <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
+              )}
+              {detail.status === "development-preview" && detail.sourceUrl ? (
+                <a
+                  href={detail.sourceUrl}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  data-testid="rental-detail-source-link"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                </a>
+              ) : null}
+            </div>
           </section>
         </div>
 

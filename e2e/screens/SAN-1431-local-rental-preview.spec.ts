@@ -71,6 +71,18 @@ test.describe("SAN-1431 local rental preview — Supabase Storage photos", () =>
     await expectNoHorizontalOverflow(page);
   });
 
+  test("detail says 'Bedrooms unknown' and links to the advertiser's listing", async ({ page }) => {
+    await page.goto(`/rentals/${CANDIDATE_SLUG}`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("rental-detail")).toBeVisible();
+    // Unknown is not a studio, and the renter must be able to reach the source advert.
+    await expect(page.getByTestId("rental-detail-specs")).toContainText("Bedrooms unknown");
+    await expect(page.getByTestId("rental-detail-specs")).not.toContainText("Studio");
+    await expect(page.getByTestId("rental-detail-source-link")).toHaveAttribute(
+      "href",
+      /fincaraiz\.com\.co/,
+    );
+  });
+
   test("denies access that arrives through a proxy or tunnel header", async ({ page }) => {
     await page.setExtraHTTPHeaders({ "x-forwarded-for": "203.0.113.9" });
     const pageResponse = await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });

@@ -14,7 +14,7 @@ Run from the repository root; `MDE_DEV_RENTAL_FIXTURES_DIR` defaults to
 ```bash
 MDE_DEV_RENTAL_PREVIEW=1 \
 MDE_DEV_RENTAL_FIXTURES_DIR="$PWD/photos/medellin_furnished_import" \
-npx next dev --webpack --hostname 127.0.0.1 --port 3015
+npx next dev --webpack --hostname 127.0.0.1 --port 3001
 ```
 
 The Supabase URL and anon key come from `.env.local`; the photo endpoint additionally needs the
@@ -22,12 +22,24 @@ server-only service role there because `partner-assets` is a **private** bucket.
 is used only inside the server process: the browser receives image bytes from
 `/api/dev/rental-photo/<slug>/photo-0N.webp`, never a credential, a storage path, or a Supabase URL.
 
-Visit **http://127.0.0.1:3015/dev/rentals**. The existing rental browse cards show all nine source
-listings with advertised COP/month price and the first Storage photo; click each title to view its
-four-photo gallery, full details, and unconfirmed availability. Unknown coordinates produce **no map
-pin**. Viewing requests are intentionally unavailable for external research copies. A missing or
-failed photo request stays blank. In other environments the preview and photo endpoints return
-**404**.
+Visit **http://localhost:3001/dev/rentals** (use `localhost`, not `127.0.0.1` — see **Maps**).
+The existing rental browse cards show all nine source listings with their advertised COP/month price,
+the first Storage photo and the user-attested availability; click each title for its four-photo
+gallery, full details, and a **View original listing** link to the advertiser. Seven candidates carry
+a Google rooftop-address receipt and render a map pin; the two without a receipt produce **no map
+pin**. A candidate with no advertised bedroom count says **Bedrooms unknown**. Viewing requests are
+intentionally unavailable for external research copies. A missing or failed photo request stays
+blank. In other environments the preview and photo endpoints return **404**.
+
+### Maps
+
+The map reads the key in `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. That key's HTTP-referrer allowlist
+permits the standard dev origin **http://localhost:3001**, so run the preview on that port and open
+`localhost`. Any other host or port shows the in-app `map-referer-help` panel instead of tiles
+(`RefererNotAllowedMapError`) even though the cards and photos keep working; either use the
+allowlisted origin or add yours to the key's referrer list in Google Cloud. Pin clustering
+(`MAP_CLUSTER_MIN_PINS = 4`) is expected on the smaller mobile map.
+`NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` is production-only; its absence in development is expected.
 
 The fixture directory is not committed to Git, so point `MDE_DEV_RENTAL_FIXTURES_DIR` at your own
 copy. **Bind the server to `127.0.0.1`.**

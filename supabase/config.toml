@@ -387,6 +387,13 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# SAN-1443 — per-function rules live in the ROOT config (Supabase's documented location:
+# https://supabase.com/docs/guides/functions/function-configuration).
+# The retired legacy webhook is deny-by-default in code; verify_jwt=false lets our handler
+# answer 403 rather than the platform answering 401 before the handler runs.
+[functions.whatsapp-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54627

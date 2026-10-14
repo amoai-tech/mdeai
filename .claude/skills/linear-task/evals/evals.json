@@ -1,0 +1,42 @@
+{
+  "skill_name": "linear-task",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Rewrite this existing Linear issue into one executable rental task. Verify its exact title, dependencies, PRs and current code; remove repetition. Do not create a duplicate.",
+      "expected_output": "Preserves exact verified Linear title; updates existing issue only if authorized; ordered steps, acceptance and tests.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Preserves exact verified Linear title; updates existing issue only if authorized; ordered steps, acceptance and tests."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create one Linear task for the first real landlord onboarding, but check the issue list for an existing owner first.",
+      "expected_output": "Searches live Linear before creating, identifies user outcome, separates scope and production proof.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Searches live Linear before creating, identifies user outcome, separates scope and production proof."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Improve the current Linear issue for Maps marker reliability. Keep one task and make failure cases testable.",
+      "expected_output": "Defines acceptance criteria for zero invented coordinates, negative cases and observed evidence.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Defines acceptance criteria for zero invented coordinates, negative cases and observed evidence."
+      ]
+    }
+  ]
+}

@@ -277,3 +277,88 @@ test("the committed repository passes", () => {
   );
   assert.match(result.stdout, /SKILL_LAYOUT_PASS active=\d+/);
 });
+
+test("rejects absent or empty skill descriptions", () => {
+  for (const description of ["", "description: ", "description: ''"]) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\n${description}\n---\n\n# Alpha\n`,
+    });
+    assert.match(failing(root), /missing skill description|skill description must contain/);
+  }
+});
+
+test("rejects malformed duplicate frontmatter and broad shell preapproval", () => {
+  const fixture = (lines) => writeSkill(tmpRepo(), "alpha", {
+    body: `---\nname: alpha\ndescription: Use when auditing skills.\n${lines}\n---\n# Skill\n`,
+  });
+  assert.match(failing(fixture("name: alpha")), /duplicate skill metadata key/);
+  assert.match(failing(fixture("user-invocable: sometimes")), /must be true or false/);
+  assert.match(failing(fixture("allowed-tools: Bash(npm:*)")), /broad shell preapproval/);
+  assert.match(failing(fixture("allowed-tools: Bash(npx:*)")), /broad shell preapproval/);
+});
+
+test("rejects space-wildcard shell preapprovals without rejecting scoped commands", () => {
+  const fixture = (tools) => writeSkill(tmpRepo(), "alpha", {
+    body: `---\nname: alpha\ndescription: Use when testing permissions.\nallowed-tools: ${tools}\n---\n# Alpha\n`,
+  });
+  for (const rule of [
+    "Bash(npm *)",
+    "Bash(npx *)",
+    "Bash(pnpm *)",
+    "Bash(bun *)",
+    "Bash(bash *)",
+    "Bash(sh *)",
+    "Bash(npm  *)",
+    "Bash( *)",
+    "Bash( :*)",
+  ]) {
+    assert.match(failing(fixture(rule)), /broad shell preapproval/, rule);
+  }
+  for (const rule of ["Read Glob Bash(git:status)", "Bash(git status)"]) {
+    const result = runChecker(fixture(rule));
+    assert.equal(result.status, 0, `${rule} unexpectedly rejected: ${result.stdout}`);
+  }
+});
+
+test("accepts folded description and reports evaluation definitions as unexecuted", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body: "---\nname: alpha\ndescription: >-\n  Use when verifying a skill.\n  Do not change production.\nmetadata:\n  version: 1.0\n---\n# Skill\n",
+  });
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /SKILL_EVAL_DEFINITIONS behavior=0\/1 trigger=0\/1 cases=0 \(not executed\)/);
+});
+
+test("rejects YAML block scalars hiding dangerous shell preapprovals", () => {
+  const cases = [
+    "allowed-tools: >\n  Bash(npm:*)\n  Bash(npx:*)",
+    "allowed-tools: |\n  Bash(pnpm:*)\n  Bash(bun:*)",
+    "allowed-tools: >-\n  Bash(sh:*)",
+    "allowed-tools: |+ # multiline shell tools\n  Bash(*)",
+    "allowed-tools: >2-\n    Bash(npx:*)",
+    "allowed-tools:\n  - Bash(npm:*)",
+  ];
+  for (const allowed of cases) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\ndescription: Use when checking shell approvals.\n${allowed}\n---\n# Alpha\n`,
+    });
+    assert.match(failing(root), /allowed-tools.*single-line|broad shell preapproval/, allowed);
+  }
+});
+
+test("allows safe single-line tool permissions and rejects encoded or aliased values", () => {
+  const safe = writeSkill(tmpRepo(), "alpha", {
+    body: "---\nname: alpha\ndescription: Use when checking safe metadata.\nallowed-tools: Read Glob Bash(git:status)\n---\n# Alpha\n",
+  });
+  assert.equal(runChecker(safe).status, 0);
+  for (const allowed of [
+    String.raw`allowed-tools: "Bash(n\u0070m:*)"`,
+    "allowed-tools: *broadPermissions",
+    "allowed-tools: Bash",
+  ]) {
+    const root = writeSkill(tmpRepo(), "alpha", {
+      body: `---\nname: alpha\ndescription: Use when checking shell permissions.\n${allowed}\n---\n# Alpha\n`,
+    });
+    assert.match(failing(root), /allowed-tools.*single-line|broad shell preapproval/, allowed);
+  }
+});

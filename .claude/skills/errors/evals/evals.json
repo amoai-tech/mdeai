@@ -1,0 +1,42 @@
+{
+  "skill_name": "errors",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Build started failing after a dependency update, but I do not know which package caused it. Investigate root cause only; do not edit files.",
+      "expected_output": "Confirms actual error and affected runtime before suggesting a small scoped fix; makes no code changes.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Confirms actual error and affected runtime before suggesting a small scoped fix; makes no code changes."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A renter clicks Request Viewing and receives 403 while search still works. Diagnose the failing journey and distinguish RLS from the UI.",
+      "expected_output": "Traces UI to backend to Supabase authorization, identifies evidence needed, does not bypass authorization.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Traces UI to backend to Supabase authorization, identifies evidence needed, does not bypass authorization."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The CI TypeScript step is red only on one PR. Please find the precise regression and show how to reproduce it.",
+      "expected_output": "Checks exact branch and error, isolates regression before proposing changes.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Checks exact branch and error, isolates regression before proposing changes."
+      ]
+    }
+  ]
+}
