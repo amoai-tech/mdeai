@@ -1,9 +1,10 @@
 /**
  * SAN-1444 P0 — durable inbound store.
  *
- * Wraps the SECURITY DEFINER RPCs added in
+ * Wraps the SECURITY DEFINER RPCs in
  * supabase/migrations/20261014090000_san1444_whatsapp_inbound_durability.sql.
- * The client is a narrow RPC surface so this module is unit-testable without Supabase types.
+ * Every completion/failure carries the claim token (fencing), so a worker whose lease expired
+ * cannot overwrite a newer worker's claim.
  */
 
 export type InboundRpcClient = {
@@ -18,7 +19,7 @@ export type InboundMessage = {
   from: string;
   messageType: string;
   content: string;
-  /** Single-message Meta envelope, so replaying one row processes exactly one message. */
+  /** Single-message Meta envelope scoped to the ORIGINAL entry/change, for exact replay. */
   payload: Record<string, unknown>;
 };
 
@@ -30,20 +31,19 @@ export type ClaimedRow = {
   phone_number: string;
   raw_payload: unknown;
   attempts: number;
+  claim_token: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
-/** Build a one-message envelope from the original payload so a replay is scoped to one row. */
+/** Build a one-message envelope from the message's OWN entry and change. */
 export function buildSingleMessageEnvelope(
-  raw: Record<string, unknown>,
+  entry: Record<string, unknown> | null,
+  value: Record<string, unknown> | null,
   message: Record<string, unknown>,
 ): Record<string, unknown> {
-  const entry = Array.isArray(raw.entry) ? asRecord(raw.entry[0]) : null;
-  const change = entry && Array.isArray(entry.changes) ? asRecord(entry.changes[0]) : null;
-  const value = change ? asRecord(change.value) : null;
   return {
     object: "whatsapp_business_account",
     entry: [
@@ -88,12 +88,19 @@ export function extractInboundMessages(payload: unknown): InboundMessage[] {
           from: record.from,
           messageType: typeof record.type === "string" ? record.type : "unknown",
           content: typeof text?.body === "string" ? text.body : "",
-          payload: buildSingleMessageEnvelope(root, record),
+          payload: buildSingleMessageEnvelope(entryRecord, value, record),
         });
       }
     }
   }
   return result;
+}
+
+function readCount(data: unknown): number {
+  if (typeof data === "number") return data;
+  if (typeof data === "string" && data.trim() !== "" && !Number.isNaN(Number(data))) return Number(data);
+  if (Array.isArray(data)) return data.length;
+  return 0;
 }
 
 export async function recordInboundMessage(
@@ -119,34 +126,64 @@ export async function claimInbound(
   client: InboundRpcClient,
   workerId: string,
   limit = 5,
-  leaseSeconds = 120,
+  leaseSeconds = 180,
+  maxAttempts = 5,
 ): Promise<ClaimedRow[]> {
   const { data, error } = await client.rpc("whatsapp_claim_inbound", {
     p_worker: workerId,
     p_limit: limit,
     p_lease_seconds: leaseSeconds,
+    p_max_attempts: maxAttempts,
   });
   if (error) throw new Error("whatsapp_claim_inbound failed: " + error.message);
   return Array.isArray(data) ? (data as ClaimedRow[]) : [];
 }
 
-export async function completeInbound(client: InboundRpcClient, messageId: string): Promise<void> {
-  const { error } = await client.rpc("whatsapp_complete_inbound", { p_message_id: messageId });
-  if (error) throw new Error("whatsapp_complete_inbound failed: " + error.message);
+export async function deadLetterInbound(
+  client: InboundRpcClient,
+  maxAttempts = 5,
+  leaseSeconds = 180,
+): Promise<number> {
+  const { data, error } = await client.rpc("whatsapp_dead_letter_inbound", {
+    p_max_attempts: maxAttempts,
+    p_lease_seconds: leaseSeconds,
+  });
+  if (error) throw new Error("whatsapp_dead_letter_inbound failed: " + error.message);
+  return readCount(data);
 }
 
+/** Returns false when the claim was fenced out (a newer worker owns the row). */
+export async function completeInbound(
+  client: InboundRpcClient,
+  messageId: string,
+  claimToken: string | null,
+): Promise<boolean> {
+  if (!claimToken) return false;
+  const { data, error } = await client.rpc("whatsapp_complete_inbound", {
+    p_message_id: messageId,
+    p_claim_token: claimToken,
+  });
+  if (error) throw new Error("whatsapp_complete_inbound failed: " + error.message);
+  return readCount(data) === 1;
+}
+
+/** Returns false when the claim was fenced out (a newer worker owns the row). */
 export async function failInbound(
   client: InboundRpcClient,
   messageId: string,
+  claimToken: string | null,
   message: string,
   maxAttempts = 5,
   baseBackoffSeconds = 30,
-): Promise<void> {
-  const { error } = await client.rpc("whatsapp_fail_inbound", {
+): Promise<boolean> {
+  if (!claimToken) return false;
+  const { data, error } = await client.rpc("whatsapp_fail_inbound", {
     p_message_id: messageId,
+    p_claim_token: claimToken,
     p_error: message,
     p_max_attempts: maxAttempts,
     p_base_backoff_seconds: baseBackoffSeconds,
   });
   if (error) throw new Error("whatsapp_fail_inbound failed: " + error.message);
+  return readCount(data) === 1;
 }

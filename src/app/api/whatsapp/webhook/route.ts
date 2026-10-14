@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       client: rpcClient,
       webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
       sign: (body) => signWebhookBody(body, env.appSecret),
-      adapterWebhook: (req) => channels.handleWebhookEvent("whatsapp", req),
+      adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
       workerId: "webhook:" + crypto.randomUUID(),
     }).catch((error) => console.error("[whatsapp] inbound processing failed", error)),
   );

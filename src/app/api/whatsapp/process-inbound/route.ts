@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     client: client as unknown as InboundRpcClient,
     webhookUrl: new URL("/api/whatsapp/webhook", request.nextUrl.origin).toString(),
     sign: (body) => signWebhookBody(body, env.appSecret),
-    adapterWebhook: (req) => channels.handleWebhookEvent("whatsapp", req),
+    adapterWebhook: (req, waitUntil) => channels.handleWebhookEvent("whatsapp", req, { waitUntil }),
     workerId: "sweeper:" + crypto.randomUUID(),
   });
   return NextResponse.json(summary);
