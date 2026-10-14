@@ -12,9 +12,9 @@
 --
 -- ENVIRONMENT NOTE
 --   The vote schema is production-only today; SAN-1482 recovers it into versioned migrations.
---   On a fresh rebuild it does not exist, so this suite plans zero tests and asserts nothing
---   rather than failing on a schema the rebuild cannot create yet. It runs in full wherever the
---   schema exists (a production-like database, or after SAN-1482).
+--   On a fresh rebuild it does not exist; skip the 16 planned assertions with a
+--   visible reason. A skip does NOT establish privilege safety: all 16 assertions must pass
+--   on a production-shaped database (or after SAN-1482 restores the schema).
 --
 -- NOTE: Fresh main rebuilds do not yet include the vote schema (SAN-1482).
 -- Use to_regclass/to_regnamespace for optional objects: direct ::regclass
@@ -23,9 +23,13 @@
 
 begin;
 
-select plan(
-  case when to_regclass('vote.entities') is null then 0 else 15 end
-);
+select plan(16);
+
+-- A zero-test plan makes finish() raise "No tests run" in the pg_prove CI harness.
+-- Preserve the plan and emit 16 explicit TAP skips only when the legacy schema
+-- is absent. Never count these skips as proof of the actual access boundary.
+select * from skip('vote schema not yet recovered; SAN-1482', 16)
+where to_regclass('vote.entities') is null;
 
 -- ── vote.entities table privileges ───────────────────────────────────────────────
 select is(
@@ -79,6 +83,11 @@ select is(
 select is(
   has_function_privilege('anon', 'vote.trigger_recompute_on_judge_score()', 'EXECUTE'),
   false, 'anon cannot execute trigger_recompute_on_judge_score'
+) where to_regprocedure('vote.trigger_recompute_on_judge_score()') is not null;
+
+select is(
+  has_function_privilege('authenticated', 'vote.trigger_recompute_on_judge_score()', 'EXECUTE'),
+  false, 'authenticated cannot execute trigger_recompute_on_judge_score'
 ) where to_regprocedure('vote.trigger_recompute_on_judge_score()') is not null;
 
 select is(
