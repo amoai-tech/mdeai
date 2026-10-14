@@ -18,6 +18,7 @@ import {
   publishActionLabel,
   publishRequiresAck,
 } from "@/lib/rentals/resolve-publish-rpc";
+import type { RentalSelfAttestation } from "@/lib/rentals/run-self-attested-publish";
 import { ListingWorkflowPill } from "@/components/host/rentals/listing-workflow-pill";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +34,12 @@ type RentalsListingsDrawerProps = {
   onPublish: (listing: BrokerListingDetail) => Promise<void>;
   publishing: boolean;
   publishError: string | null;
+  onSelfAttestedPublish: (
+    listing: BrokerListingDetail,
+    attestation: RentalSelfAttestation,
+  ) => Promise<void>;
+  selfAttestedPublishing: boolean;
+  selfAttestedError: string | null;
 };
 
 export function RentalsListingsDrawer({
@@ -42,9 +49,14 @@ export function RentalsListingsDrawer({
   onPublish,
   publishing,
   publishError,
+  onSelfAttestedPublish,
+  selfAttestedPublishing,
+  selfAttestedError,
 }: RentalsListingsDrawerProps) {
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [ack, setAck] = useState(false);
+  const [advertisingAuthority, setAdvertisingAuthority] = useState(false);
+  const [photoRights, setPhotoRights] = useState(false);
   const [leads, setLeads] = useState<BrokerListingLeadSummary[]>([]);
   const [showings, setShowings] = useState<BrokerListingShowingSummary[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -234,6 +246,58 @@ export function RentalsListingsDrawer({
               >
                 {publishing ? "Working…" : actionLabel}
               </Button>
+            ) : null}
+
+            {listing.listingWorkflowStatus !== "published" &&
+            listing.listingWorkflowStatus !== "rejected" ? (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Publish now — not independently verified
+                </p>
+                <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-advertising">
+                  <input
+                    type="checkbox"
+                    data-testid="listings-attest-advertising"
+                    id="r2-attest-advertising"
+                    checked={advertisingAuthority}
+                    onChange={(e) => setAdvertisingAuthority(e.target.checked)}
+                    className="mt-1 size-4 rounded border-border"
+                  />
+                  <span>
+                    I am authorised to advertise this apartment and accept inquiries for it.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-photos">
+                  <input
+                    type="checkbox"
+                    data-testid="listings-attest-photos"
+                    id="r2-attest-photos"
+                    checked={photoRights}
+                    onChange={(e) => setPhotoRights(e.target.checked)}
+                    className="mt-1 size-4 rounded border-border"
+                  />
+                  <span>I have the right to let MDE display the photos I supplied.</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="lx-publish-self-attested"
+                  disabled={!advertisingAuthority || !photoRights || selfAttestedPublishing}
+                  onClick={() =>
+                    void onSelfAttestedPublish(listing, { advertisingAuthority, photoRights })
+                  }
+                  className="w-full"
+                >
+                  {selfAttestedPublishing
+                    ? "Working…"
+                    : "Publish now (not independently verified)"}
+                </Button>
+                {selfAttestedError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {selfAttestedError}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
 
             {publishError ? (

@@ -123,6 +123,8 @@ export interface ApartmentRow {
   images: string[] | null;
   host_name: string | null;
   source_url: string | null;
+  /** SAN-1449: provenance metadata decides the "not independently verified" label. */
+  metadata?: unknown;
   available_from: string | null;
   available_to: string | null;
   pet_friendly: boolean;
@@ -142,6 +144,17 @@ export interface ApartmentRow {
   moderation_status: string;
   listing_workflow_status: string;
   status: string;
+}
+
+/**
+ * SAN-1449: true when the row was published through the self-attested path. The label is
+ * derived from the row's own provenance, never from a client flag.
+ */
+function isSelfAttestedRow(row: ApartmentRow): boolean {
+  const m = row.metadata;
+  if (!m || typeof m !== 'object') return false;
+  const meta = m as Record<string, unknown>;
+  return meta.inventory_kind === 'self_attested' || meta.provenance === 'self_attested';
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -314,14 +327,18 @@ export function rowToRental(r: ApartmentRow): Rental {
       : null,
     host_name: r.host_name ?? 'Host',
     availability: formatAvailability(r.available_from, r.available_to),
-    tags: deriveTags({
-      amenities: r.amenities ?? [],
-      pet_friendly: r.pet_friendly,
-      parking_included: r.parking_included,
-      minimum_stay_days: r.minimum_stay_days,
-      wifi_speed: r.wifi_speed,
-      price_daily: nightlyPrice,
-    }),
+    tags: (() => {
+      const tags = deriveTags({
+        amenities: r.amenities ?? [],
+        pet_friendly: r.pet_friendly,
+        parking_included: r.parking_included,
+        minimum_stay_days: r.minimum_stay_days,
+        wifi_speed: r.wifi_speed,
+        price_daily: nightlyPrice,
+      });
+      if (isSelfAttestedRow(r)) tags.push('self-attested');
+      return tags;
+    })(),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
     price_monthly: r.price_monthly != null ? Number(r.price_monthly) : undefined,
@@ -383,7 +400,7 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
       { count: 'exact' },
     )
     .eq('status', 'active')
