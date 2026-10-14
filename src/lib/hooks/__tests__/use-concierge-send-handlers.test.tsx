@@ -10,10 +10,12 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable }),
 }));
+vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: session.user, loading: session.loading }) }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: () => {} }),
 }));
@@ -27,7 +29,7 @@ vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchF
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
-import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { AGENT_UNAVAILABLE_MESSAGE, GUEST_ASSISTANT_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,6 +53,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   chat.runtimeUnavailable = false;
   coagent.state = {};
+  session.user = { id: "u1" };
+  session.loading = false;
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
   container = document.createElement("div");
@@ -82,6 +86,62 @@ describe("onAgentSend never leaves the renter with nothing", () => {
       ["user", "what is the capital of Colombia?"],
       ["assistant", AGENT_UNAVAILABLE_MESSAGE],
     ]);
+  });
+
+  describe("who is told to sign in", () => {
+    const rerender = () =>
+      act(() =>
+        root.render(
+          <EventLocalChatProvider>
+            <Harness />
+          </EventLocalChatProvider>,
+        ),
+      );
+
+    it("a visitor who is not signed in is told to sign in, not to try again", async () => {
+      session.user = null;
+      rerender();
+      chat.appendMessage.mockResolvedValue(false);
+      await act(async () => {
+        await handlers.onAgentSend("what is the capital of Colombia?");
+      });
+      expect(shown.map((m) => [m.role, m.content])).toEqual([
+        ["user", "what is the capital of Colombia?"],
+        ["assistant", GUEST_ASSISTANT_MESSAGE],
+      ]);
+      expect(GUEST_ASSISTANT_MESSAGE).toMatch(/sign in/i);
+      expect(GUEST_ASSISTANT_MESSAGE).not.toMatch(/try again/i);
+    });
+
+    it("the same wording is used when a guest's run fails after it started", async () => {
+      session.user = null;
+      rerender();
+      chat.appendMessage.mockRejectedValue(new Error("401"));
+      await act(async () => {
+        await handlers.onAgentSend("tell me about El Poblado");
+      });
+      expect(shown.map((m) => [m.role, m.content])).toEqual([["assistant", GUEST_ASSISTANT_MESSAGE]]);
+    });
+
+    it("keeps the generic wording while the session check is still loading", async () => {
+      session.user = null;
+      session.loading = true;
+      rerender();
+      chat.appendMessage.mockResolvedValue(false);
+      await act(async () => {
+        await handlers.onAgentSend("hello");
+      });
+      expect(shown.at(-1)?.content).toBe(AGENT_UNAVAILABLE_MESSAGE);
+    });
+
+    it("a signed-in renter is never told to sign in", async () => {
+      chat.runtimeUnavailable = true;
+      await act(async () => {
+        await handlers.onAgentSend("hello");
+      });
+      expect(shown.at(-1)?.content).toBe(AGENT_UNAVAILABLE_MESSAGE);
+      expect(shown.at(-1)?.content).not.toMatch(/sign in/i);
+    });
   });
 
   it("does not even try the agent when CopilotKit says the runtime is unreachable", async () => {

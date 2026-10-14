@@ -5,6 +5,7 @@ import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
 import { getConciergeErrorVersion, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
@@ -17,11 +18,22 @@ import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-
 export const AGENT_UNAVAILABLE_MESSAGE =
   "The assistant can't answer right now. Please try again in a moment — searches for rentals, events, restaurants and cafés still work.";
 
+/**
+ * Shown instead when the visitor is not signed in. The assistant only answers signed-in users, so
+ * "try again in a moment" is wrong for them: retrying cannot help, signing in does.
+ */
+export const GUEST_ASSISTANT_MESSAGE =
+  "Sign in to ask the assistant. Searches for rentals, events, restaurants and cafés work without an account.";
+
 /** Fast-path + agent handlers for sendConciergeUserMessage (CopilotChat + ?q=). */
 export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { appendMessage, isRuntimeUnavailable } = useConciergeChat();
   const { showExchange, showNotice } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  // Not signed in = a finished session check with no user; while it is still loading, keep the
+  // generic wording so a signed-in renter is never told to sign in.
+  const { user, loading: sessionLoading } = useSession();
+  const unavailableMessage = !sessionLoading && !user ? GUEST_ASSISTANT_MESSAGE : AGENT_UNAVAILABLE_MESSAGE;
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
@@ -50,19 +62,19 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       try {
         if (!isRuntimeUnavailable() && (await appendMessage(text))) {
           if (getConciergeErrorVersion() === 0) return true;
-          showNotice(AGENT_UNAVAILABLE_MESSAGE);
+          showNotice(unavailableMessage);
         } else {
-          showExchange(text, AGENT_UNAVAILABLE_MESSAGE);
+          showExchange(text, unavailableMessage);
         }
       } catch (error) {
         console.error("[concierge-agent-send]", error);
         reportConciergeError();
-        showNotice(AGENT_UNAVAILABLE_MESSAGE);
+        showNotice(unavailableMessage);
       }
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, showExchange, showNotice],
+    [appendMessage, isRuntimeUnavailable, showExchange, showNotice, unavailableMessage],
   );
 
   useEffect(() => {
