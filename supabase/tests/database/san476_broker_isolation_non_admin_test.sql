@@ -83,11 +83,11 @@ values ('a4760000-0000-4000-8000-000000000004', 'admin');
 -- Owned by the owning broker and fully requestable: active + approved + published.
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
-   landlord_id, available_to)
+   landlord_id, available_from, available_to)
 values
   ('b4760000-0000-4000-8000-000000000001', 'SAN476 owned requestable', 'san476-owned',
    'Laureles', 'active', 'approved', 'published',
-   'a4760000-0000-4000-8000-000000000011', '2099-12-31');
+   'a4760000-0000-4000-8000-000000000011', '2026-01-01', '2099-12-31');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · NON-ADMIN CONTRACT — the property that makes the allow case attributable

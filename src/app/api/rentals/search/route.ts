@@ -1,3 +1,4 @@
+import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
@@ -17,9 +18,12 @@ const bodySchema = z.object({
   maxPricePerNight: z.number().positive().optional(),
   limit: z.number().int().min(1).max(20).optional().default(8),
   queryText: z.string().optional(),
-  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  checkIn: z.string().refine(isRealCalendarDate, "checkIn must be a real date, YYYY-MM-DD").optional(),
+  checkOut: z.string().refine(isRealCalendarDate, "checkOut must be a real date, YYYY-MM-DD").optional(),
   stayType: z.enum(["nightly", "monthly", "total_trip"]).optional(),
+}).refine((b) => isOrderedStay(b.checkIn, b.checkOut), {
+  message: "checkOut must not be before checkIn",
+  path: ["checkOut"],
 });
 
 /** Fast path — rental search without conciergeAgent round-trip. */

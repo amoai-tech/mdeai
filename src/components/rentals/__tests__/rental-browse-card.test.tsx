@@ -35,7 +35,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     images: ["https://images.example/photo.jpg"],
     host_name: "Andrés Restrepo",
     source_url: "https://mdeai.co/rentals/rnt_lau_001",
-    available_from: null,
+    available_from: "2000-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
     available_to: null,
     pet_friendly: false,
     parking_included: false,

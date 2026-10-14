@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseRentalIntelligenceSlots } from "../intelligence-rental-search";
 import {
-  isAvailableForStay,
   isRentalRequestable,
   rentalAvailabilityDate,
   sortForMonthlyStay,
@@ -35,80 +34,6 @@ describe("parseRentalIntelligenceSlots", () => {
   });
 });
 
-describe("isAvailableForStay", () => {
-  it("passes when both available_from and available_to are null (always available)", () => {
-    expect(isAvailableForStay({ available_from: null, available_to: null }, "2026-06-01", "2026-06-30")).toBe(true);
-  });
-
-  it("passes when no checkIn/checkOut requested", () => {
-    expect(isAvailableForStay({ available_from: "2026-07-01", available_to: "2026-08-31" })).toBe(true);
-  });
-
-  it("filters out listing whose window ends before checkIn", () => {
-    // available_to 2026-05-31 < checkIn 2026-06-01 → unavailable
-    expect(isAvailableForStay(
-      { available_from: "2026-05-01", available_to: "2026-05-31" },
-      "2026-06-01", "2026-06-30",
-    )).toBe(false);
-  });
-
-  it("filters out listing whose window starts after checkOut", () => {
-    // available_from 2026-07-01 > checkOut 2026-06-30 → unavailable
-    expect(isAvailableForStay(
-      { available_from: "2026-07-01", available_to: "2026-08-31" },
-      "2026-06-01", "2026-06-30",
-    )).toBe(false);
-  });
-
-  it("passes a listing that overlaps the stay window", () => {
-    // available Jun 15–Aug 31, stay Jun 1–30 → overlaps
-    expect(isAvailableForStay(
-      { available_from: "2026-06-15", available_to: "2026-08-31" },
-      "2026-06-01", "2026-06-30",
-    )).toBe(true);
-  });
-
-  it("passes boundary: available_from equals checkOut", () => {
-    expect(isAvailableForStay(
-      { available_from: "2026-06-30", available_to: null },
-      "2026-06-01", "2026-06-30",
-    )).toBe(true);
-  });
-
-  it("passes boundary: available_to equals checkIn", () => {
-    expect(isAvailableForStay(
-      { available_from: null, available_to: "2026-06-01" },
-      "2026-06-01", "2026-06-30",
-    )).toBe(true);
-  });
-
-  it("respects checkIn-only (no checkOut)", () => {
-    // available_to 2026-05-31 < checkIn 2026-06-15 → unavailable
-    expect(isAvailableForStay(
-      { available_from: "2026-04-01", available_to: "2026-05-31" },
-      "2026-06-15", undefined,
-    )).toBe(false);
-    // available_to null → open-ended, passes
-    expect(isAvailableForStay(
-      { available_from: "2026-06-01", available_to: null },
-      "2026-06-15", undefined,
-    )).toBe(true);
-  });
-
-  it("respects checkOut-only (no checkIn)", () => {
-    // available_from 2026-07-01 > checkOut 2026-06-30 → unavailable
-    expect(isAvailableForStay(
-      { available_from: "2026-07-01", available_to: "2026-08-31" },
-      undefined, "2026-06-30",
-    )).toBe(false);
-    // available_from null → open start, passes
-    expect(isAvailableForStay(
-      { available_from: null, available_to: "2026-08-31" },
-      undefined, "2026-06-30",
-    )).toBe(true);
-  });
-});
-
 // SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
 // The database remains the authority; these cases pin the contract the UI and agents rely on.
 describe("isRentalRequestable", () => {
@@ -117,7 +42,7 @@ describe("isRentalRequestable", () => {
     status: "active",
     moderation_status: "approved",
     listing_workflow_status: "published",
-    available_from: null,
+    available_from: "2026-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
     available_to: null,
   };
   const today = new Date("2026-09-27T12:00:00Z");
@@ -142,12 +67,18 @@ describe("isRentalRequestable", () => {
     expect(isRentalRequestable({ ...owned, status: "inactive" }, today)).toBe(false);
   });
 
+  it("refuses a listing with no move-in date, because the viewing RPC refuses it", () => {
+    expect(isRentalRequestable({ ...owned, available_from: null }, today)).toBe(false);
+  });
+
   it("refuses a listing whose availability window has already closed", () => {
     expect(isRentalRequestable({ ...owned, available_to: "2026-01-01" }, today)).toBe(false);
   });
 
-  it("refuses a listing that is not available yet", () => {
-    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(false);
+  // SAN-486: a future move-in date does not block requesting a *viewing*. A renter can
+  // tour an apartment before it becomes available; only an expired window blocks.
+  it("allows requesting a viewing before the move-in date", () => {
+    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(true);
   });
 
   it("allows a listing whose availability window is currently open", () => {
@@ -217,11 +148,12 @@ describe("isRentalRequestable", () => {
     ).toBe(false);
   });
 
-  it("does not open a listing before its Bogota available_from day", () => {
-    // 2026-09-28T02:00:00Z is still 2026-09-27 local, so a listing starting 2026-09-28 is closed.
+  it("keeps a future-dated listing requestable across the Bogota date boundary", () => {
+    // 2026-09-28T02:00:00Z is still 2026-09-27 local. A listing starting 2026-09-28 is
+    // upcoming, not closed: SAN-486 allows a viewing to be requested before move-in.
     expect(
       isRentalRequestable({ ...owned, available_from: "2026-09-28" }, new Date("2026-09-28T02:00:00Z")),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 

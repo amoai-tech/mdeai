@@ -165,3 +165,28 @@ test("does not treat --database-url as a certification argument", () => {
   assert.equal(parsed.ok, true, parsed.errors.join("; "));
   assert.equal(parsed.value.databaseUrl, undefined);
 });
+
+test("records a move-in receipt that names the exact date and the evidence reviewed (SAN-486)", () => {
+  const parsed = parseCertificationEvidenceArgs([
+    ...VERIFIED,
+    "--move-in-verified-for=2026-11-01",
+    "--move-in-evidence=signed lease start + reviewer site visit",
+  ]);
+  assert.equal(parsed.ok, true, parsed.errors.join("; "));
+  assert.equal(parsed.value.moveInVerifiedFor, "2026-11-01");
+  assert.equal(parsed.value.moveInEvidence, "signed lease start + reviewer site visit");
+});
+
+test("refuses a move-in receipt with an impossible date, a missing evidence note, or no verified status", () => {
+  const evidence = "--move-in-evidence=lease";
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--move-in-verified-for=2026-02-31", evidence]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--move-in-verified-for=2026-11-01"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, evidence]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--move-in-verified-for=2026-11-01", evidence]).ok, false);
+});
+
+test("does not accept the obsolete generic --availability flag as a receipt", () => {
+  const parsed = parseCertificationEvidenceArgs([...VERIFIED, "--availability=verified"]);
+  assert.equal(parsed.value.moveInVerifiedFor, null);
+  assert.equal("availability" in parsed.value, false);
+});

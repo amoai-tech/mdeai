@@ -28,7 +28,8 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     images: [],
     host_name: null,
     source_url: null,
-    available_from: null,
+    // A known move-in date, as the viewing RPC requires (SAN-486).
+    available_from: "2000-01-01",
     available_to: null,
     pet_friendly: false,
     parking_included: false,
@@ -80,6 +81,25 @@ describe("schedule_viewing_url — SAN-478 resolves to a real page", () => {
 
   it("stays null for an unapproved listing", () => {
     const row = apartmentRow({ moderation_status: "pending" });
+    expect(isRentalRequestable(row)).toBe(false);
+    expect(rowToRental(row).schedule_viewing_url).toBeNull();
+  });
+
+  // SAN-486: a future move-in date must not hide the listing from viewings.
+  it("stays requestable when the move-in date is in the future", () => {
+    const row = apartmentRow({ available_from: "2099-11-01", available_to: null });
+    expect(isRentalRequestable(row)).toBe(true);
+    expect(rowToRental(row).schedule_viewing_url).not.toBeNull();
+  });
+
+  it("is not requestable without a move-in date, matching the viewing RPC", () => {
+    const row = apartmentRow({ available_from: null, available_to: null });
+    expect(isRentalRequestable(row)).toBe(false);
+    expect(rowToRental(row).schedule_viewing_url).toBeNull();
+  });
+
+  it("is not requestable once the availability window has expired", () => {
+    const row = apartmentRow({ available_from: "2000-01-01", available_to: "2000-01-31" });
     expect(isRentalRequestable(row)).toBe(false);
     expect(rowToRental(row).schedule_viewing_url).toBeNull();
   });

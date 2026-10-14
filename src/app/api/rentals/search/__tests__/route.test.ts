@@ -59,4 +59,23 @@ describe("POST /api/rentals/search", () => {
     const res = await POST(post({ limit: 8 }));
     expect(res.status).toBe(500);
   });
+
+  describe("date validation (SAN-486)", () => {
+    it.each([
+      { why: "an impossible check-in", dates: { checkIn: "2026-02-31" } },
+      { why: "an impossible check-out", dates: { checkOut: "2026-13-01" } },
+      { why: "a reversed stay", dates: { checkIn: "2026-11-30", checkOut: "2026-11-01" } },
+    ])("rejects $why with HTTP 400 and never searches", async ({ dates }) => {
+      const res = await POST(post({ limit: 8, ...dates }));
+      expect(res.status).toBe(400);
+      expect(searchRentals).not.toHaveBeenCalled();
+    });
+
+    it("accepts a real, ordered stay and passes the dates through", async () => {
+      searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+      const res = await POST(post({ limit: 8, checkIn: "2026-11-01", checkOut: "2026-11-30" }));
+      expect(res.status).toBe(200);
+      expect(searchRentals).toHaveBeenCalledWith(expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30" }));
+    });
+  });
 });

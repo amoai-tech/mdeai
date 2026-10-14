@@ -1,0 +1,45 @@
+/**
+ * SAN-486 — structured search applies the SAME availability rule as free-text search and the
+ * viewing RPC: a listing with no move-in date is never offered, dated searches need full-stay coverage.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => {
+  const state = { filters: [] as string[] };
+  const chain: Record<string, unknown> = {};
+  const pass = vi.fn(() => chain);
+  Object.assign(chain, {
+    select: pass, eq: pass, order: pass, limit: pass, ilike: pass, gte: pass, lte: pass,
+    or: vi.fn((f: string) => { state.filters.push(`or(${f})`); return chain; }),
+    not: vi.fn((c: string, o: string, v: unknown) => { state.filters.push(`not(${c},${o},${String(v)})`); return chain; }),
+    then: (resolve: (v: unknown) => unknown, reject?: (r: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null, count: 0 }).then(resolve, reject),
+  });
+  return { state, createClient: vi.fn(() => ({ from: vi.fn(() => chain) })) };
+});
+
+vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
+vi.mock("@/lib/supabase/server-env", () => ({
+  getSupabaseServerAnonEnv: () => ({ url: "https://example.supabase.co", anonKey: "anon" }),
+}));
+vi.mock("../../lib/intelligence-rental-search", () => ({ searchRentalsIntelligent: vi.fn() }));
+
+describe("searchRentals structured path — availability filter", () => {
+  beforeEach(() => { mocks.state.filters = []; });
+
+  it("never allows a listing with no move-in date, with a dated search", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    await searchRentals({ neighborhood: "Laureles", checkIn: "2099-11-01", checkOut: "2099-11-30", limit: 5 });
+    expect(mocks.state.filters).toContain("not(available_from,is,null)");
+    expect(mocks.state.filters).toContain("or(available_from.lte.2099-11-01)");
+    expect(mocks.state.filters).toContain("or(available_to.is.null,available_to.gte.2099-11-30)");
+    expect(mocks.state.filters.some((f) => f.includes("available_from.is.null"))).toBe(false);
+  });
+
+  it("never allows a listing with no move-in date, with no dates either", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    await searchRentals({ neighborhood: "Laureles", limit: 5 });
+    expect(mocks.state.filters).toContain("not(available_from,is,null)");
+    expect(mocks.state.filters.some((f) => /^or\(available_to\.is\.null,available_to\.gte\.\d{4}-\d{2}-\d{2}\)$/.test(f))).toBe(true);
+  });
+});

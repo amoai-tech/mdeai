@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listPublishedEvents } from "@/lib/events/list-published-events";
 import type { PlaceCardData } from "@/components/home/home-discovery-rows";
+import { formatDateOnly, isFutureDate, rentalToday } from "@/lib/rentals/date-only";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ type ApartmentRow = {
   pet_friendly: boolean | null;
   images: string[] | null;
   rating: number | null;
+  available_from: string | null;
 };
 
 function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
@@ -60,16 +62,23 @@ function mapApartmentToCard(row: ApartmentRow): PlaceCardData {
   if (row.wifi_speed && row.wifi_speed >= 50) hints.push("fast Wi-Fi");
   if (row.utilities_included) hints.push("bills included");
   if (row.pet_friendly) hints.push("pet-friendly");
+  // A future move-in listing must never be described as available now (SAN-486).
+  const futureMoveIn = isFutureDate(row.available_from);
+  // An upcoming move-in is always shown, however many descriptive hints the card has.
+  const upcoming = futureMoveIn && row.available_from ? `Available from ${formatDateOnly(row.available_from)}` : null;
   const why =
     hints.length > 1
-      ? `${hints.join(" · ")}.`
-      : `Available now in ${row.neighborhood}.`;
+      ? `${upcoming ? `${upcoming} · ` : ""}${hints.join(" · ")}.`
+      : upcoming
+        ? `${upcoming} in ${row.neighborhood}.`
+        : `Available now in ${row.neighborhood}.`;
 
   return {
     id: row.id,
     name: row.title,
     kind: "Rental",
-    rating: Number(row.rating) || 4.5,
+    // Never invent a rating: an unrated property stays unrated.
+    rating: row.rating == null || !Number.isFinite(Number(row.rating)) ? null : Number(row.rating),
     meta: price,
     why,
     image: row.images?.[0] ?? "",
@@ -83,10 +92,13 @@ export async function fetchLiveRentals(
   const { data, error } = await supabase
     .from("apartments")
     .select(
-      "id, title, neighborhood, price_monthly, bedrooms, wifi_speed, utilities_included, pet_friendly, images, rating",
+      "id, title, neighborhood, price_monthly, bedrooms, wifi_speed, utilities_included, pet_friendly, images, rating, available_from",
     )
     .eq("moderation_status", "approved")
     .not("images", "is", null)
+    // Same rule as search and the viewing RPC (SAN-486): a known move-in date, and not expired.
+    .not("available_from", "is", null)
+    .or(`available_to.is.null,available_to.gte.${rentalToday()}`)
     .order("rating", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(4);
@@ -117,7 +129,8 @@ function mapRestaurantToCard(row: RestaurantRow): PlaceCardData {
     id: row.id,
     name: row.name,
     kind,
-    rating: Number(row.rating) || 4.5,
+    // Never invent a rating: an unrated restaurant stays unrated.
+    rating: row.rating == null || !Number.isFinite(Number(row.rating)) ? null : Number(row.rating),
     meta,
     why: row.ai_summary ?? `Highly rated in ${row.neighborhood ?? "Medellín"}.`,
     image: row.primary_image_url ?? "",

@@ -1,6 +1,8 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { formatDateOnly } from '@/lib/rentals/date-only';
+import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
@@ -152,9 +154,10 @@ export type RentalRequestabilityInput = {
 
 /**
  * The timezone the database uses for its availability calendar. `p1_schedule_tour_atomic`
- * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_from` /
- * `available_to`, so the application must read "today" in the same zone or it will disagree
- * with the database for five hours out of every day.
+ * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_to`
+ * only — SAN-486 made viewing eligibility independent of the move-in date — so the
+ * application must read "today" in the same zone or it will disagree with the database
+ * for five hours out of every day.
  */
 export const RENTAL_AVAILABILITY_TIME_ZONE = 'America/Bogota';
 
@@ -193,8 +196,9 @@ export function rentalAvailabilityDate(at: Date = new Date()): string {
  * It fails CLOSED on missing proof. Every predicate is an allow-list, so an absent, null or
  * unexpected value is rejected rather than skipped — the helper can only ever under-claim
  * requestability, never over-claim it. It proves what the UI can actually know: canonical
- * owner, active, approved, published, and the listing's current-date availability window. It
- * cannot know the eventual viewing timestamp, so it must not claim more than that.
+ * owner, active, approved, published, and an unexpired availability window. A future
+ * move-in date stays requestable for a viewing (SAN-486). It cannot know the eventual
+ * viewing timestamp, so it must not claim more than that.
  */
 export function isRentalRequestable(
   row: RentalRequestabilityInput,
@@ -205,8 +209,12 @@ export function isRentalRequestable(
   if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
   if (row.listing_workflow_status !== 'published') return false;
+  // SAN-486: the viewing RPC requires a known move-in date, so a listing without one is not
+  // requestable. Mirror it here, or the card shows a Request button the database will refuse.
+  if (!row.available_from) return false;
   const isoToday = rentalAvailabilityDate(today);
-  if (row.available_from && row.available_from > isoToday) return false;
+  // SAN-486: a future move-in date does not block requesting a *viewing* — a renter
+  // can tour an apartment before it becomes available. Only an expired window blocks.
   if (row.available_to && row.available_to < isoToday) return false;
   return true;
 }
@@ -320,10 +328,8 @@ export function rowToRental(r: ApartmentRow): Rental {
 
 function formatAvailability(from: string | null, to: string | null): string {
   if (!from && !to) return 'Available now';
-  const fmt = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (from && to) return `Available ${fmt(from)} – ${fmt(to)}`;
-  if (from) return `Available from ${fmt(from)}`;
+  if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  if (from) return `Available from ${formatDateOnly(from)}`;
   return 'Available now';
 }
 
@@ -347,17 +353,6 @@ function deriveTags(row: {
   if (am.some((a) => a.includes('nightlife') || a.includes('bar'))) tags.push('nightlife');
   if (am.some((a) => a.includes('family') || a.includes('kid'))) tags.push('family');
   return tags.length ? tags : ['walkable'];
-}
-
-export function isAvailableForStay(
-  row: { available_from: string | null; available_to: string | null },
-  checkIn?: string,
-  checkOut?: string,
-): boolean {
-  if (!checkIn && !checkOut) return true;
-  if (checkOut && row.available_from && row.available_from > checkOut) return false;
-  if (checkIn && row.available_to && row.available_to < checkIn) return false;
-  return true;
 }
 
 export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
@@ -414,16 +409,13 @@ async function searchRentalsFromSupabase(
     q = q.gte('bedrooms', query.minBedrooms);
   }
 
-  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-  // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
-  // so the query window and isRentalRequestable() cannot disagree near local midnight.
-  const today = rentalAvailabilityDate();
-  const checkInDate = query.checkIn ?? today;
-  q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-  if (query.checkOut) {
-    // available_from IS NULL (available now) OR available_from <= checkOut
-    q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-  }
+  // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
+  // not expired), with "today" as the America/Bogota date the viewing RPC uses.
+  q = applyAvailabilityFilters(q, {
+    checkIn: query.checkIn,
+    checkOut: query.checkOut,
+    today: rentalAvailabilityDate(),
+  });
 
   const { data, error, count } = await q;
   if (error) {

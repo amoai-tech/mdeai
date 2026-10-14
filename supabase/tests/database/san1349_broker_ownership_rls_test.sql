@@ -70,33 +70,33 @@ values ('a1349000-0000-4000-8000-000000000003', 'san1349-renter@example.com', 'S
 -- landlord profile and no auth.users row — auth.uid() only reads the JWT claim.
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
-   landlord_id, host_id, available_to)
+   landlord_id, host_id, available_from, available_to)
 values
   -- Control: owned by A, fully requestable (active + approved + published).
   ('b1349000-0000-4000-8000-000000000001', 'SAN1349 A requestable', 'san1349-a-requestable',
    'Laureles', 'active', 'approved', 'published',
-   'a1349000-0000-4000-8000-000000000011', null, '2099-12-31'),
+   'a1349000-0000-4000-8000-000000000011', null, '2026-01-01', '2099-12-31'),
   -- Owned by A but NOT approved — differs from the control in moderation_status only.
   ('b1349000-0000-4000-8000-000000000002', 'SAN1349 A unapproved', 'san1349-a-unapproved',
    'Laureles', 'active', 'pending', 'published',
-   'a1349000-0000-4000-8000-000000000011', null, '2099-12-31'),
+   'a1349000-0000-4000-8000-000000000011', null, '2026-01-01', '2099-12-31'),
   -- Owned by A but NOT published — differs from the control in listing_workflow_status only.
   ('b1349000-0000-4000-8000-000000000003', 'SAN1349 A unpublished', 'san1349-a-unpublished',
    'Laureles', 'active', 'approved', 'draft',
-   'a1349000-0000-4000-8000-000000000011', null, '2099-12-31'),
+   'a1349000-0000-4000-8000-000000000011', null, '2026-01-01', '2099-12-31'),
   -- Active and ownerless — the exact pre-SAN-1349 requestable shape, kept CHECK-safe by
   -- staying out of the published/approved state.
   ('b1349000-0000-4000-8000-000000000004', 'SAN1349 unowned active', 'san1349-unowned-active',
-   'Laureles', 'active', 'pending', 'draft', null, null, '2099-12-31'),
+   'Laureles', 'active', 'pending', 'draft', null, null, '2026-01-01', '2099-12-31'),
   -- Inactive control for the availability precondition.
   ('b1349000-0000-4000-8000-000000000005', 'SAN1349 inactive', 'san1349-inactive',
    'Laureles', 'inactive', 'pending', 'draft',
-   'a1349000-0000-4000-8000-000000000011', null, '2099-12-31'),
+   'a1349000-0000-4000-8000-000000000011', null, '2026-01-01', '2099-12-31'),
   -- Legacy ownership shape: host_id points at Broker B, landlord_id is NULL. Under the old
   -- `showings_select_visible` this alone granted Broker B visibility.
   ('b1349000-0000-4000-8000-000000000006', 'SAN1349 legacy host_id', 'san1349-legacy-host-id',
    'Laureles', 'active', 'pending', 'draft', null,
-   'a1349000-0000-4000-8000-000000000002', '2099-12-31');
+   'a1349000-0000-4000-8000-000000000002', '2026-01-01', '2099-12-31');
 
 -- Broker A's private lead + showing on its own apartment.
 insert into public.leads

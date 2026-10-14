@@ -44,6 +44,15 @@ function isHttpUrl(value) {
  * @param {string[]} argv - process.argv.slice(2)
  * @returns {{ ok: boolean, errors: string[], value: Record<string, string | null> }}
  */
+/** A real Gregorian date written YYYY-MM-DD; a bare regex would accept 2026-02-31. */
+function isRealCalendarDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
+}
+
 export function parseCertificationEvidenceArgs(argv) {
   /** @type {Record<string, string>} */
   const args = {};
@@ -93,6 +102,8 @@ export function parseCertificationEvidenceArgs(argv) {
   const publishPermission = (args["publish-permission"] ?? "").trim() || null;
   const viewingsPermission = (args["viewings-permission"] ?? "").trim() || null;
   const coordinateReceipt = (args["coordinate-receipt"] ?? "").trim() || null;
+  const moveInVerifiedFor = (args["move-in-verified-for"] ?? "").trim() || null;
+  const moveInEvidence = (args["move-in-evidence"] ?? "").trim() || null;
   const neighborhood = (args["neighborhood"] ?? "").trim() || null;
   const updateVerification = args["update-verification"] === "true";
 
@@ -131,12 +142,23 @@ export function parseCertificationEvidenceArgs(argv) {
   if (viewingsPermission && !PERMISSION_VALUES.includes(viewingsPermission)) {
     errors.push(`--viewings-permission must be one of ${PERMISSION_VALUES.join("|")}`);
   }
+  // SAN-486: a future move-in date is proven by a receipt that names THAT exact date and the
+  // evidence reviewed; a generic "availability verified" flag is deliberately not supported.
+  if (moveInVerifiedFor && !isRealCalendarDate(moveInVerifiedFor)) {
+    errors.push("--move-in-verified-for must be a real calendar date, YYYY-MM-DD");
+  }
+  if (Boolean(moveInVerifiedFor) !== Boolean(moveInEvidence)) {
+    errors.push("--move-in-verified-for and --move-in-evidence must be provided together");
+  }
+  if (moveInEvidence && moveInEvidence.length > 500) {
+    errors.push("--move-in-evidence must be at most 500 characters");
+  }
   const hasListingApproval = Boolean(
-    ownerControl || publishPermission || viewingsPermission || coordinateReceipt,
+    ownerControl || publishPermission || viewingsPermission || coordinateReceipt || moveInVerifiedFor,
   );
   if (hasListingApproval && verificationStatus !== "verified") {
     errors.push(
-      "--owner-control/--publish-permission/--viewings-permission/--coordinate-receipt require --verification-status=verified (they are listing-specific approvals)",
+      "--owner-control/--publish-permission/--viewings-permission/--coordinate-receipt/--move-in-verified-for require --verification-status=verified (they are listing-specific approvals)",
     );
   }
   if (neighborhood) {
@@ -164,6 +186,8 @@ export function parseCertificationEvidenceArgs(argv) {
       publishPermission,
       viewingsPermission,
       coordinateReceipt,
+      moveInVerifiedFor,
+      moveInEvidence,
       neighborhood,
       updateVerification,
     },
