@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * SAN-1089 — USD/night caps are not a valid budget for COP/month stock. Until SAN-386 ships a
  * validated amount + currency + period contract there must be no price chip at all.
@@ -45,18 +46,11 @@ describe("RentalBrowseFilters — stay dates (SAN-486)", () => {
   });
 
   it("neighborhood and bedroom chips keep the chosen dates", () => {
-    // Parse the rendered anchor by locating its test id, then extract href from that tag.
-    // Uses a literal regex (no RegExp constructor from a variable) and is independent of
-    // the attribute order Next.js Link emits.
-    const href = (testId: string) => {
-      const marker = 'data-testid="' + testId + '"';
-      const at = withDates.indexOf(marker);
-      if (at < 0) return "";
-      const start = withDates.lastIndexOf("<a ", at);
-      const end = withDates.indexOf(">", at);
-      if (start < 0 || end < 0) return "";
-      return withDates.slice(start, end).match(/href="([^"]*)"/)?.[1] ?? "";
-    };
+    // Read the actual link from the rendered markup rather than slicing the HTML string,
+    // so the assertion does not depend on attribute order and parses real DOM.
+    const parsed = new DOMParser().parseFromString(withDates, "text/html");
+    const href = (testId: string) =>
+      parsed.querySelector(`[data-testid="${testId}"]`)?.getAttribute("href") ?? "";
     expect(href("rentals-filter-neighborhood-envigado")).toContain("from=2026-11-01");
     expect(href("rentals-filter-neighborhood-envigado")).toContain("through=2026-11-30");
     expect(href("rentals-filter-beds-1")).toContain("from=2026-11-01");
