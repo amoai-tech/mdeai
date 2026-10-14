@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(11);
+select plan(16);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -94,6 +94,44 @@ select throws_ok(
   $q$select public.admin_publish_test_rental('f1460000-0000-4000-8000-000000000021')$q$,
   '42501', 'only a test-marked listing can be test-published',
   'A11: test mode refuses a non-test listing');
+reset role;
+
+-- A12: non-admin cannot assign an MDE test operator to an existing listing.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_assign_rental_test_operator('f1460000-0000-4000-8000-000000000021', true)$q$,
+  '42501', 'administrator required', 'A12: non-admin cannot assign test operator');
+reset role;
+
+-- A13: administrator may take TEST operating responsibility only.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_assign_rental_test_operator('f1460000-0000-4000-8000-000000000021', true)$q$,
+  'A13: admin may assign internal test operator');
+reset role;
+
+-- A14: assignment never changes property landlord, workflow state, or verification.
+select is(
+  (select landlord_id::text || '/' || status || '/' || moderation_status || '/' || listing_workflow_status || '/' || verified::text
+   from public.apartments where id='f1460000-0000-4000-8000-000000000021'),
+  'f1460000-0000-4000-8000-000000000011/inactive/pending/draft/false',
+  'A14: MDE test operator does not overwrite real listing provenance');
+
+-- A15: assignment is auditable and bound to the real current admin identity.
+select is(
+  (select (metadata->>'admin_test_operator_active') || '/' || (metadata->>'admin_test_operator_user_id')
+   from public.apartments where id='f1460000-0000-4000-8000-000000000021'),
+  'true/f1460000-0000-4000-8000-000000000001',
+  'A15: assignment targets actual admin identity');
+
+-- A16: admin can revoke the testing assignment without impacting the listing.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_assign_rental_test_operator('f1460000-0000-4000-8000-000000000021', false)$q$,
+  'A16: admin can revoke test assignment');
 reset role;
 
 select * from finish();

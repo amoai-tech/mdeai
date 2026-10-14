@@ -232,6 +232,55 @@ $function$;
 comment on function public.admin_cleanup_test_rental(uuid) is
   'Admin test mode: remove a test listing''s leads/showings and return it to draft. Audited on the row.';
 
+-- Allow a trusted administrator to operate on existing catalog records for
+-- TESTING only, without transferring ownership or changing publication claims.
+-- This marker cannot make a listing searchable, requestable, or verified.
+create or replace function public.admin_assign_rental_test_operator(
+  p_apartment_id uuid,
+  p_enabled boolean default true
+)
+returns public.apartments
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_row public.apartments;
+begin
+  if not public.is_admin() then
+    raise exception 'administrator required' using errcode = '42501';
+  end if;
+  if p_enabled is null then
+    raise exception 'enabled must not be null' using errcode = '22004';
+  end if;
+
+  update public.apartments a
+     set metadata = (coalesce(a.metadata, '{}'::jsonb) - 'admin_test_operator_user_id')
+       || jsonb_build_object(
+            'admin_test_operator_active', p_enabled,
+            'admin_test_operator_updated_by', v_uid,
+            'admin_test_operator_updated_at', now()
+          )
+       || case when p_enabled
+            then jsonb_build_object('admin_test_operator_user_id', v_uid)
+            else '{}'::jsonb end
+   where a.id = p_apartment_id
+   returning a.* into v_row;
+
+  if not found then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+  return v_row;
+end;
+$function$;
+
+comment on function public.admin_assign_rental_test_operator(uuid, boolean) is
+  'Admin-only internal test operator assignment. Does not imply property ownership, verification, or advertiser permission.';
+
+revoke all on function public.admin_assign_rental_test_operator(uuid, boolean) from public, anon;
+grant execute on function public.admin_assign_rental_test_operator(uuid, boolean) to authenticated, service_role;
+
 revoke all on function public.admin_create_test_rental(text, text, text, numeric, text, date, text, uuid) from public, anon;
 revoke all on function public.admin_publish_test_rental(uuid) from public, anon;
 revoke all on function public.admin_cleanup_test_rental(uuid) from public, anon;

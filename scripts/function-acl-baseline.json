@@ -4,6 +4,11 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_assign_rental_test_operator(p_apartment_id uuid, p_enabled boolean)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_cleanup_test_rental(p_apartment_id uuid)": {
     "public": false,
     "anon": false,

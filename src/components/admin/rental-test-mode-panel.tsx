@@ -130,6 +130,14 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
       setMessage("Test rental published (internal only; verified=false; not customer-visible).");
     });
 
+  const assignTestOperator = (id: string, enabled: boolean) =>
+    act("operator:" + id, async () => {
+      await post({ action: "assign-test-operator", apartmentId: id, enabled });
+      setMessage(enabled
+        ? "MDE test operations assigned to your admin account. The property's landlord and verification are unchanged."
+        : "MDE test operations assignment cleared.");
+    });
+
   const cleanup = (id: string) =>
     act("cleanup:" + id, async () => {
       await post({ action: "cleanup", apartmentId: id });
@@ -281,7 +289,20 @@ export function RentalTestModePanel({ adminEmail }: { adminEmail: string }) {
                         </Button>
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Read-only here</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-testid={`admin-test-operator-${row.id}`}
+                        disabled={busy !== null}
+                        onClick={() => void assignTestOperator(
+                          row.id,
+                          row.metadata?.admin_test_operator_active !== true,
+                        )}
+                      >
+                        {row.metadata?.admin_test_operator_active === true
+                          ? "Clear MDE test operator" : "Assign MDE test operator"}
+                      </Button>
                     )}
                   </td>
                 </tr>

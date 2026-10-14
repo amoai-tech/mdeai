@@ -133,6 +133,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ rental: data });
   }
 
+  if (action === "assign-test-operator") {
+    const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
+    if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
+    if (typeof body.enabled !== "boolean") return NextResponse.json({ error: "enabled must be boolean" }, { status: 400 });
+    const { data, error } = await supabase.rpc("admin_assign_rental_test_operator", {
+      p_apartment_id: apartmentId,
+      p_enabled: body.enabled,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
   if (action === "publish" || action === "cleanup") {
     const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
     if (!apartmentId) return NextResponse.json({ error: "apartmentId is required" }, { status: 400 });
