@@ -46,7 +46,8 @@ The script uses the server-side service role, considers only the reviewed allowl
 never touches `partner-assets`, and is idempotent. Before deleting, it matches each target's
 live size and etag against the reviewed allowlist and aborts on either mismatch. Deletion goes
 through the Supabase Storage API and is **permanent — it cannot be undone**, so run the dry-run
-first and keep the private originals as the recovery source.
+first and keep the private originals as the recovery source. Targets already absent are skipped,
+so re-running after a partial deletion completes the rest without a manual reset.
 
 ## Verification after apply
 - `listing-photos` public object count drops from 42 to 36.

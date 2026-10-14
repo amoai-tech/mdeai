@@ -47,8 +47,17 @@ test("integrity fails on a changed etag", () => {
   assert.equal(verifyTargetIntegrity(entry, { size: entry.size, etag: "deadbeef" }).ok, false);
 });
 
-test("integrity fails when the object is missing", () => {
-  assert.equal(verifyTargetIntegrity(REVIEWED_REMOVAL_ALLOWLIST[0], null).ok, false);
+test("a missing target is flagged for idempotent skip, not a hard failure", () => {
+  const result = verifyTargetIntegrity(REVIEWED_REMOVAL_ALLOWLIST[0], null);
+  assert.equal(result.ok, false);
+  assert.equal(result.missing, true);
+});
+
+test("a changed present target is a mismatch, not a missing object", () => {
+  const entry = REVIEWED_REMOVAL_ALLOWLIST[0];
+  const result = verifyTargetIntegrity(entry, { size: entry.size + 1, etag: entry.etag });
+  assert.equal(result.ok, false);
+  assert.notEqual(result.missing, true);
 });
 
 test("pagination continues only on a full page", () => {

@@ -46,7 +46,7 @@ export function verifyTargetIntegrity(entry, actual) {
     return { ok: false, reason: "no allowlist entry" };
   }
   if (!actual) {
-    return { ok: false, reason: "object not found in storage" };
+    return { ok: false, missing: true, reason: "object already absent (nothing to remove)" };
   }
   if (Number(actual.size) !== Number(entry.size)) {
     return { ok: false, reason: `size mismatch (expected ${entry.size}, found ${actual.size})` };
