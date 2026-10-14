@@ -266,28 +266,20 @@ test("fails when a retired skill reappears", () => {
 
   const output = failing(root);
   assert.match(output, /retired skill\/discovery entry exists: maps-review/);
-});
 
-test("Codacy has exactly one discoverable skill and preserves its operations reference", () => {
-  const retired = [
-    "codacy-analysis-cli", "codacy-cloud-cli", "codacy-code-review",
-    "configure-codacy", "configure-codacy-cloud", "setup-coverage",
-  ];
-  for (const root of [".claude/skills", ".agents/skills"]) {
-    for (const name of retired) {
-      assert.equal(
-        fs.existsSync(path.join(REPO_ROOT, root, name)),
-        false,
-        `${root}/${name} is a duplicate Codacy skill`,
-      );
-    }
+  for (const name of [
+    "codacy-analysis-cli",
+    "codacy-cloud-cli",
+    "codacy-code-review",
+    "configure-codacy",
+    "configure-codacy-cloud",
+    "setup-coverage",
+  ]) {
+    assert.ok(
+      failing(writeSkill(tmpRepo(), name)).includes(`retired skill/discovery entry exists: ${name}`),
+      name,
+    );
   }
-  const canonical = path.join(REPO_ROOT, ".claude/skills/codacy");
-  const exposure = path.join(REPO_ROOT, ".agents/skills/codacy");
-  assert.ok(fs.existsSync(path.join(canonical, "SKILL.md")));
-  assert.ok(fs.existsSync(path.join(canonical, "references/operations.md")));
-  assert.ok(fs.lstatSync(path.join(exposure, "SKILL.md")).isSymbolicLink());
-  assert.ok(fs.lstatSync(path.join(exposure, "references")).isSymbolicLink());
 });
 
 test("the committed repository passes", () => {
