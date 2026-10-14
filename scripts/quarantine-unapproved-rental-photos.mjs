@@ -16,6 +16,7 @@ import {
   LISTING_PHOTOS_BUCKET,
   REVIEWED_REMOVAL_ALLOWLIST,
   buildRemovalPlan,
+  extractReferencedListingPhotoNames,
   removalTargets,
 } from "./lib/rental-photo-rights.mjs";
 
@@ -31,11 +32,11 @@ const { data: apartments, error: apartmentError } = await db.from("apartments").
 if (apartmentError) throw apartmentError;
 const { data: imageRows, error: imageError } = await db.from("rental_listing_images").select("storage_path");
 if (imageError) throw imageError;
-const referenceBlob = JSON.stringify([apartments, imageRows]);
 
+const referencedNames = extractReferencedListingPhotoNames(apartments, imageRows);
 const objects = REVIEWED_REMOVAL_ALLOWLIST.map((name) => ({
   name,
-  referenced: referenceBlob.includes("/" + LISTING_PHOTOS_BUCKET + "/" + name),
+  referenced: referencedNames.has(name),
 }));
 
 const plan = buildRemovalPlan(objects);
