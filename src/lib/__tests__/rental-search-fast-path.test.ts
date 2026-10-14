@@ -266,5 +266,33 @@ describe("rental-search-fast-path", () => {
       expect(buildRentalSearchParams(prompt, {})?.minBedrooms).toBeUndefined();
     });
   });
+
+  describe("SAN-407: a whole-city request starts a fresh search", () => {
+    const last = {
+      lastRentalQuery: { neighborhood: "Belén", minBedrooms: 2, maxPricePerNight: 80, budgetType: "nightly" as const, genericAskPending: false },
+    };
+
+    it("'Search apartments Medellín' after a Belén search does not stay in Belén", () => {
+      const params = buildRentalSearchParams("Search apartments Medellín", last);
+      expect(params?.neighborhood).toBeUndefined();
+      expect(params?.minBedrooms).toBeUndefined();
+      expect(params?.maxPricePerNight).toBeUndefined();
+      expect(params?.queryText).toBe("Search apartments Medellín");
+    });
+
+    it("'apartments anywhere' also starts fresh, keeping only what it states itself", () => {
+      const params = buildRentalSearchParams("apartments anywhere under $90 per night", last);
+      expect(params?.neighborhood).toBeUndefined();
+      expect(params?.minBedrooms).toBeUndefined();
+      expect(params?.maxPricePerNight).toBe(90);
+    });
+
+    it("a refinement that names no city still builds on the last search", () => {
+      const params = buildRentalSearchParams("only apartments under $60 per night", last);
+      expect(params?.neighborhood).toBe("Belén");
+      expect(params?.minBedrooms).toBe(2);
+      expect(params?.maxPricePerNight).toBe(60);
+    });
+  });
 });
 

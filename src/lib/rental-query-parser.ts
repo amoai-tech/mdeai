@@ -62,6 +62,13 @@ export type RentalQuerySignals = {
   explicitLimit?: number;
 };
 
+/**
+ * Asking for the whole city ("Search apartments Medellín", "anywhere in Medellín") starts a
+ * fresh search. Without this, any message with saved context was treated as a refinement and
+ * silently reused the previous neighborhood, size and budget.
+ */
+const WHOLE_CITY_RE = /\b(?:medell[ií]n|anywhere|everywhere|any neighbou?rhood|all neighbou?rhoods)\b/i;
+
 const RENTAL_INTENT_RE =
   /\b(rental|rentals|apartment|apartments|airbnb|stay|stays|lodging|for rent|list.*rent)\b/i;
 
@@ -354,7 +361,8 @@ export function buildRentalSearchParams(
   if (looksLikeNonRentalSearch(text)) return null;
 
   const s = scoreRentalQuery(text);
-  const q = memory.lastRentalQuery;
+  // A whole-city request is a new search, not a refinement: ignore what the last search stored.
+  const q = WHOLE_CITY_RE.test(text) ? undefined : memory.lastRentalQuery;
   const limit = effectiveLimit(s);
 
   if (q?.genericAskPending) {
@@ -379,7 +387,7 @@ export function buildRentalSearchParams(
     }
   }
 
-  if (memory.lastRentalQuery && !memory.lastRentalQuery.genericAskPending) {
+  if (q && !q.genericAskPending) {
     return attachQueryText(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
