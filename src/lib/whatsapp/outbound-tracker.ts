@@ -75,14 +75,28 @@ function requestUrl(input: RequestInfo | URL): string {
   return (input as { url?: string }).url ?? "";
 }
 
-/** A physical outbound message: the Meta messages endpoint with a WhatsApp payload. */
+/**
+ * A physical outbound MESSAGE — not a read receipt or a typing indicator.
+ *
+ * All three share the Meta `/messages` endpoint, but Meta answers receipts and typing with
+ * `{ "success": true }` and no message id. Counting those as sends would mark every reply
+ * "partial" and dead-letter it, so require an actual message payload (`type`).
+ */
 function isWhatsAppSend(url: string, method: string, body: string): boolean {
+  if (method.toUpperCase() !== "POST") return false;
   const path = url.split("?")[0];
-  return (
-    method.toUpperCase() === "POST" &&
-    path.endsWith("/messages") &&
-    body.includes("messaging_product")
-  );
+  if (!path.endsWith("/messages") || !body.includes("messaging_product")) return false;
+  try {
+    const parsed = JSON.parse(body) as {
+      type?: unknown;
+      status?: unknown;
+      typing_indicator?: unknown;
+    };
+    if (parsed.typing_indicator !== undefined || parsed.status !== undefined) return false;
+    return typeof parsed.type === "string";
+  } catch {
+    return false;
+  }
 }
 
 function replyText(body: string): string {
