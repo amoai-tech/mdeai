@@ -96,6 +96,60 @@ This should be fixed deliberately — invite a second reviewer, or scope the rev
 excludes docs-only paths — rather than worked around repeatedly."* Two overrides in two merges is that
 pattern. The structural fix remains open and is the reason a third entry should not be needed.
 
+## 2026-10-14 — PR #310 (retrospective merge-approval audit)
+
+**What GitHub proves:** [PR #310](https://github.com/amoai-tech/mdeai/pull/310)
+merged at **2026-10-14 16:32:06 UTC** by `amoai-tech`, merge commit
+`369803dc06462ee8ed0f1c808927ac56d1e33ecb`. The GitHub
+`/pulls/310/reviews` API returns **zero submitted reviews**, not one approval.
+The account `amoai-tech` has repository **admin** permission.
+
+**Why an admin-exempt merge was possible:** the current classic `main`
+protection requests **one approving review**, requires **`floor`** and
+**`mastra-schema-init`**, and has **`enforce_admins=false`**.
+The collaborator API lists **only `amoai-tech`** (also the PR author and
+merger). Under GitHub's documented classic-branch-protection rules, admin
+restrictions do not apply unless admin enforcement is enabled. This merge
+therefore meets the observable conditions for the administrator exemption;
+it **does not** meet the normal independent-review requirement.
+
+**Required-check evidence:** on PR head
+`bf16cd7437cc18256c75e28b92297f05439c39ab`, GitHub Actions
+`floor` and `mastra-schema-init` were **success**, as was advisory
+`deterministic chromium`. The merge's exact release was subsequently
+certified on Vercel and six timezone × mobile/desktop browser scenarios
+passed on production.
+
+**Operator's contemporaneous reason:** **NOT RECORDED / UNVERIFIED.**
+The one-collaborator limitation explains why a normal independent review
+was impossible; it does **not** establish why the operator chose to merge
+this runtime UI change without the required review. The GitHub timeline
+does not include the rationale. The organization's audit-log endpoint was
+not accessible to this verification account (HTTP 404). Do not
+retroactively claim an approval, an emergency, or a policy waiver.
+
+**Exception to existing project policy:** unlike the prior documentation
+or test-only precedents, #310 modified event runtime formatting and a
+browse card. The earlier policy explicitly says runtime changes need
+normal independent approval. This is an **unresolved process deviation**,
+not a precedent authorizing future runtime bypasses.
+
+**What an independent reviewer should check:** deterministic
+server/browser timezone handling, no change to stored UTC timestamps,
+no lost checkout behavior, six-configuration real-browser proof, and
+whether any scheduled event type legitimately uses a different timezone.
+[Production evidence](https://github.com/amoai-tech/mdeai/pull/310#issuecomment-6173465239).
+
+**Required closure:** repository owner supplies and signs the actual
+merge rationale, records an independent retrospective review if an
+eligible reviewer is available, and resolves the structural one-reviewer
+deadlock rather than routinely exempting administrators. Keep
+[SAN-1486 · MDE Events — Show Correct Medellín Event Times Without Hydration Errors](https://linear.app/amo100/issue/SAN-1486/mde-events-show-correct-medellin-event-times-without-hydration-errors)
+flagged for governance signoff; the production timezone outcome itself
+is verified.
+
+**Official rule:** https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
