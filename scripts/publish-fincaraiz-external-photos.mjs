@@ -132,8 +132,9 @@ for (const {row,urls} of saved) {
     external_discovery_publication:'user_authorized_2026-10-14',
     external_discovery_type:'source_linked_external_advertisement',
     public_photo_republication_permission:'user_attested_2026-10-14',
-    photo_rights_independently_verified:false,
   };
+  // This source-linked discovery release uses the recorded user permission
+  // without an additional photo-verification requirement.
   const {data,error} = await db.from('apartments')
     .update({images:urls,metadata:updatedMetadata})
     .eq('id',row.id).eq('landlord_id',landlord)

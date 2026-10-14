@@ -2,12 +2,13 @@
 
 ## Verified state (2026-10-14)
 
-- User states they have the Fincaraíz advertisers'/rights holders' permission to
-  publicly republish the **36 photos**. The repository records that as a
-  **user attestation**, **not independent documentary verification**; the
-  database flag `photo_rights_independently_verified=false` is intentionally
-  truthful. If permission is later disputed, remove affected public photo
-  objects and URLs promptly after confirming they are no longer referenced.
+- The user expressly confirmed permission from the Fincaraíz advertisers/photo
+  rights holders to publicly republish the **36 photos**. MDE records this
+  permission as `public_photo_republication_permission=user_attested_2026-10-14`.
+  No additional photo-permission verification or marker is required for
+  **source-linked external discovery**. If permission is later withdrawn or
+  disputed, promptly remove affected public photo URLs and objects after
+  checking their references.
 - The nine fixed-allowlist apartments have
   `metadata.external_discovery_publication=user_authorized_2026-10-14`,
   `images` with four scoped public `listing-photos` URLs each, and 36 matching
@@ -15,8 +16,8 @@
 - All nine remain `inactive/pending/draft/verified=false`. Only source-linked
   discovery is allowed; no MDE viewing request/booking is enabled.
 - Independently checked live Supabase counts: 9 approved, 9×4 public URLs,
-  36 public objects, 7 PostGIS points. **This is live data proof, not independent
-  rights verification or proof the current production website has merged this PR.**
+  36 public objects, 7 PostGIS points. **This proves public Storage and data
+  state, not that the current production website has merged this PR.**
 
 ## Safe verification and rerun
 

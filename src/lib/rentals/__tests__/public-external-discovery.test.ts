@@ -69,6 +69,20 @@ describe("public external source cards", () => {
     expect(publicExternalRentalCard({ ...base, metadata: { ...base.metadata, allowed_action: "schedule_viewing" } })).toBeNull();
   });
 
+  it("does not gate approved external ads on the canonical photo-rights status", () => {
+    const ad = publicExternalRentalCard({
+      ...base,
+      metadata: {
+        ...base.metadata,
+        photo_rights_status: "unverified",
+        public_photo_republication_permission: "user_attested_2026-10-14",
+      },
+    });
+    expect(ad?.id).toBe(base.slug);
+    expect(ad?.can_schedule_viewing).toBe(false);
+    expect(ad?.source_url).toBe(base.source_url);
+  });
+
   it("displays a public listing-photo URL, not arbitrary or private Storage media", () => {
     const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
