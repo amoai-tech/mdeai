@@ -31,9 +31,11 @@ describe("buildConciergeChannels", () => {
 
   it("returns the adapter config when it builds", () => {
     configure();
-    const adapter = { name: "whatsapp" };
+    const adapter = { name: "whatsapp", postMessage: vi.fn() };
     mocks.createWhatsAppAdapter.mockReturnValue(adapter);
-    expect(buildConciergeChannels()).toEqual({ adapters: { whatsapp: adapter } });
+    const channels = buildConciergeChannels();
+    expect(channels).toEqual({ adapters: { whatsapp: adapter } });
+    expect(typeof channels?.adapters.whatsapp.postMessage).toBe("function");
   });
 
   it("disables the channel on a configuration (ValidationError)", () => {
