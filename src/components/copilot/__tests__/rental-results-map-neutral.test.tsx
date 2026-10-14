@@ -44,7 +44,9 @@ function render(result: unknown = {
   source: "supabase",
   results: [rental("mapped", { latitude: 6.24, longitude: -75.59 }), rental("unmapped")],
 }) {
-  act(() => root.render(<RentalResults result={result} />));
+  act(() => {
+    root.render(<RentalResults result={result} />);
+  });
 }
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
