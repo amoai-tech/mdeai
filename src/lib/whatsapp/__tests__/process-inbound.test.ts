@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaimedRow, InboundRpcClient } from "../inbound-store";
+import { recordOutboundSend } from "../outbound-tracker";
 import { processDueInbound } from "../process-inbound";
 
 function row(id: string, overrides: Partial<ClaimedRow> = {}): ClaimedRow {
@@ -32,6 +33,8 @@ const sign = () => "sha256=test";
 const base = { webhookUrl: "https://x/api/whatsapp/webhook", sign, workerId: "w1" };
 const okAdapter = (_request: Request, waitUntil: (p: Promise<unknown>) => void) => {
   waitUntil(Promise.resolve());
+  // A real adapter records the send through postMessage; the happy path must show one.
+  recordOutboundSend({ ok: true, providerMessageId: "wamid.sent" });
   return Promise.resolve(new Response("ok", { status: 200 }));
 };
 
@@ -115,6 +118,33 @@ describe("processDueInbound", () => {
     expect(
       calls.filter((c) => c.fn === "whatsapp_fail_inbound" && c.args?.p_error === "batch deadline reached"),
     ).toHaveLength(2);
+  });
+
+  it("fails the row when the outbound send was rejected", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      recordOutboundSend({ ok: false, error: "401 Invalid OAuth access token" });
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, failed: 1 });
+    const failed = calls.find((c) => c.fn === "whatsapp_fail_inbound");
+    expect(failed?.args?.p_error).toContain("no confirmed outbound send");
+    expect(failed?.args?.p_error).toContain("Invalid OAuth access token");
+  });
+
+  it("fails the row when the agent settled without sending anything", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, failed: 1 });
+    expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain(
+      "no confirmed outbound send",
+    );
   });
 
   it("dead-letters exhausted work before claiming", async () => {

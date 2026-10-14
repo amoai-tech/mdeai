@@ -21,6 +21,7 @@ import {
   type ClaimedRow,
   type InboundRpcClient,
 } from "./inbound-store";
+import { runWithOutboundTracking } from "./outbound-tracker";
 
 export type AdapterWebhook = (
   request: Request,
@@ -114,33 +115,55 @@ async function processRow(
   }
   try {
     const body = JSON.stringify(row.raw_payload);
-    let registered: Promise<unknown> | null = null;
-    const response = await deps.adapterWebhook(
-      new Request(deps.webhookUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-hub-signature-256": deps.sign(body),
+    // Track outbound sends for THIS message. The Chat SDK resolves the waitUntil task even when
+    // the agent or the Meta send fails, so "the task settled" is not proof of delivery.
+    const { sends } = await runWithOutboundTracking(async () => {
+      let registered: Promise<unknown> | null = null;
+      const response = await deps.adapterWebhook(
+        new Request(deps.webhookUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hub-signature-256": deps.sign(body),
+          },
+          body,
+        }),
+        (promise) => {
+          registered = isPromise(promise)
+            ? promise
+            : Promise.reject(new Error("adapter passed a non-promise to waitUntil"));
         },
-        body,
-      }),
-      (promise) => {
-        registered = isPromise(promise)
-          ? promise
-          : Promise.reject(new Error("adapter passed a non-promise to waitUntil"));
-      },
-    );
-    if (!response.ok) throw new Error("adapter webhook returned " + response.status);
-    // The adapter must register the agent/reply work through waitUntil. If it does not, an
-    // HTTP 200 means nothing: marking the row processed here would tell the sweeper never to
-    // retry while the customer never receives a reply. Fail loudly and let it retry.
-    if (!registered) {
-      throw new Error("adapter did not register background work via waitUntil");
+      );
+      if (!response.ok) throw new Error("adapter webhook returned " + response.status);
+      // The adapter must register the agent/reply work through waitUntil; an HTTP 200 that
+      // registers nothing would let the sweeper skip a message the customer never got answered.
+      if (!registered) {
+        throw new Error("adapter did not register background work via waitUntil");
+      }
+      await withTimeout(registered, executionTimeoutMs, "agent run");
+    });
+
+    // Completing requires a CONFIRMED outbound send, not just a settled task.
+    const confirmed = sends.find((send) => send.ok);
+    if (!confirmed || !confirmed.ok) {
+      const attempt = sends.find((send) => !send.ok);
+      throw new Error(
+        attempt && !attempt.ok
+          ? "no confirmed outbound send: " + attempt.error
+          : "no confirmed outbound send: the agent produced no reply",
+      );
     }
-    await withTimeout(registered, executionTimeoutMs, "agent run");
+
     const completed = await completeInbound(deps.client, row.id, row.claim_token);
-    if (completed) summary.processed += 1;
-    else summary.stale += 1;
+    if (completed) {
+      summary.processed += 1;
+      console.info("[whatsapp] inbound processed", {
+        externalId: row.external_id,
+        providerMessageId: confirmed.providerMessageId,
+      });
+    } else {
+      summary.stale += 1;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failed = await failInbound(deps.client, row.id, row.claim_token, message, maxAttempts);

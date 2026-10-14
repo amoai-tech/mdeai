@@ -101,7 +101,7 @@ WABA ID, phone number id, permanent system-user token, app secret, MDE verify to
 
 ## 11. Known limitations (do not over-claim)
 - **At-least-once external sends.** If the provider accepted a reply and the process died before completion committed, the retry sends again. Fencing prevents stale overwrites, not a duplicate send.
-- **Completion contract.** Completion awaits the task the adapter registers via `waitUntil` (`chat.processMessage(..., options)`); the adapter does not reference `waitUntil` directly but forwards `WebhookOptions` to `chat`, which does. Residual ambiguity remains for any provider send that settles after that task.
+- **Completion contract.** Completion now requires a **confirmed outbound send**, not just a settled task. The worker opens an AsyncLocalStorage scope; the WhatsApp adapter's `postMessage` records each attempt (success with the provider message id, or the error). A settled `waitUntil` task with no successful send fails the row for retry, because the Chat SDK resolves that task even when the agent or the Meta send failed. Residual ambiguity remains for a send that succeeds and then the process dies before completion (at-least-once).
 - **Defect found by this suite.** The first `whatsapp_record_inbound` revision returned two rows on conflict: PL/pgSQL `RETURN QUERY` appends a row without exiting, so the `true` branch also ran. Fixed with an explicit `RETURN`. Unit tests missed it; the PostgreSQL test caught it.
 
 ## 12. Review hardening (post-review)
@@ -122,6 +122,6 @@ These do not block merging the durable foundation; they block turning the channe
 1. **Recovery schedule.** Live has zero WhatsApp cron jobs. Provision the Vault secrets and apply §7, then prove restart recovery by claiming a row, killing the worker, and watching the sweeper complete it.
 2. **Same-sender ordering across serverless instances.** Distinct messages are distinct rows, so nothing is processed twice, but two messages from one customer can run concurrently and out of order. Add sender-level serialization (or a supported shared pub/sub) and test two rapid messages from one number.
 3. **Agent-run cancellation.** The 120s wait is bounded and fencing prevents stale writes, but the underlying promise can outlive the wait. Thread an AbortSignal through the adapter before enabling traffic.
-4. **Delivery truth.** Awaited agent work does not prove the reply reached the device. Store the outbound provider id and persist `sent`/`delivered`/`read`/`failed` statuses.
+4. **Delivery truth.** Completion is now gated on a confirmed send (the provider message id is captured in-process). Remaining: **persist** the outbound provider id and the `sent`/`delivered`/`read`/`failed` statuses so delivery is auditable.
 5. **Authorization.** Prove a WhatsApp user without an MDE account cannot read private data or trigger consequential actions (viewings, bookings).
 6. **Real device round trip.** One signed inbound message ⇒ one durable row ⇒ one grounded reply ⇒ valid `wamid` ⇒ receipt, with no fabricated prices, availability, or coordinates.
