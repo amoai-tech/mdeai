@@ -58,7 +58,8 @@ begin
           content = case when public.whatsapp_messages.content = '' then excluded.content else public.whatsapp_messages.content end,
           phone_number = case when public.whatsapp_messages.phone_number = 'unknown' then excluded.phone_number else public.whatsapp_messages.phone_number end,
           status = case when public.whatsapp_status_rank(public.whatsapp_messages.status) >= public.whatsapp_status_rank('sent') then public.whatsapp_messages.status else 'sent' end,
-          delivery_status_at = now();
+          -- Keep an early receipt's ORIGINAL Meta timestamp; only fill it when we have none.
+          delivery_status_at = coalesce(public.whatsapp_messages.delivery_status_at, excluded.delivery_status_at);
     v_count := v_count + 1;
   end loop;
 

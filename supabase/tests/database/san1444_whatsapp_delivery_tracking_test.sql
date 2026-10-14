@@ -4,7 +4,7 @@
 -- enrichment path, fencing, and the service_role-only execution boundary.
 
 begin;
-select plan(24);
+select plan(25);
 
 -- A · structure and permissions
 select has_column('public', 'whatsapp_messages', 'inbound_message_id', 'inbound_message_id column exists');
@@ -33,12 +33,13 @@ values
   ('573001112233', 'inbound', 'text', 'find me a 2br', 'user', 't-in-1', 'pending', 'processing', 1, now(), 'w1', '22222222-2222-2222-2222-222222222222', now())
 returning id as inb
 \gset
-select is(public.whatsapp_record_delivery_status('t-early', 'delivered', now(), null), 1, 'early receipt (before the send) is buffered');
+select is(public.whatsapp_record_delivery_status('t-early', 'delivered', '2026-01-01T10:03:00Z'::timestamptz, null), 1, 'early receipt (before the send) is buffered');
 select is(public.whatsapp_complete_inbound_with_sends(:'inb', '22222222-2222-2222-2222-222222222222', '[{"wamid":"t-early","content":"here are listings"},{"wamid":"t-new","content":"more"}]'::jsonb), 2, 'both confirmed sends are recorded');
 select is((select processing_status from public.whatsapp_messages where id = :'inb'), 'processed', 'the inbound row is completed in the same transaction');
 select is((select count(*)::int from public.whatsapp_messages where inbound_message_id = :'inb'), 2, 'both outbound rows link to the inbound message');
 select is((select status from public.whatsapp_messages where external_id = 't-early'), 'delivered', 'the early receipt status is preserved');
 select is((select content from public.whatsapp_messages where external_id = 't-early'), 'here are listings', 'the placeholder is enriched with the reply content');
+select is((select delivery_status_at from public.whatsapp_messages where external_id = 't-early'), '2026-01-01T10:03:00Z'::timestamptz, 'enrichment preserves the ORIGINAL Meta delivery timestamp');
 select is(public.whatsapp_complete_inbound_with_sends(:'inb', gen_random_uuid(), '[{"wamid":"t-x","content":"x"}]'::jsonb), 0, 'a stale/wrong claim token records nothing');
 select is((select count(*)::int from public.whatsapp_messages where external_id = 't-x'), 0, 'a fenced call inserts no outbound row');
 
