@@ -72,6 +72,11 @@ BEGIN
        WHERE a.id = v_lead.apartment_id
          AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
     )
+    OR EXISTS (
+      SELECT 1 FROM public.apartments a
+       WHERE a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
+         AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+    )
   ) AND NOT coalesce(public.is_admin(), false) THEN
     RAISE EXCEPTION 'test rental viewing requires administrator'
       USING ERRCODE = '42501';

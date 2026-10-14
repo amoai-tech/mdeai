@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(52);
+select plan(53);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -234,6 +234,35 @@ select throws_ok(
     '{}'::jsonb, '{}'::jsonb)$q$,
   '42501', 'test rental viewing requires administrator',
   'A52: guest fixture viewing denied by listing slug too');
+reset role;
+
+-- A53: an old slug and a mutable CRM apartment reference can both change.
+-- The immutable request identity must STILL block replay of fixture data.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select set_config('mde.renamed_fixture_id', (public.admin_create_test_rental(
+ 'Legacy slug test', 'Laureles', 'Calle 66', 2000000, 'COP',
+ (now() at time zone 'America/Bogota')::date + 5, 'https://example.com/legacy.jpg')).id::text, true);
+select public.admin_publish_test_rental(current_setting('mde.renamed_fixture_id')::uuid);
+reset role;
+select set_config('mde.old_fixture_slug',
+ (select slug from public.apartments where id=current_setting('mde.renamed_fixture_id')::uuid), true);
+set local role service_role;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select public.p1_schedule_tour_atomic(current_setting('mde.old_fixture_slug'), null::uuid,
+ 'admin-test-old-slug-replay', 'form', 'oldslug@example.com', 'Old Slug Guest',
+ null, null::uuid, (now()+interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb);
+update public.apartments set slug=slug||'-renamed'
+ where id=current_setting('mde.renamed_fixture_id')::uuid;
+update public.leads set apartment_id=null
+ where idempotency_key='admin-test-old-slug-replay';
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+ $q$select public.p1_schedule_tour_atomic(current_setting('mde.old_fixture_slug'), null::uuid,
+  'admin-test-old-slug-replay', 'form', 'oldslug@example.com', 'Old Slug Guest',
+  null, null::uuid, (now()+interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
+ '42501', 'test rental viewing requires administrator',
+ 'A53: immutable snapshot blocks guest replay after slug and mutable CRM ID change');
 reset role;
 
 -- A9/A10: cleanup removes the test leads/showings and returns the listing to draft.
