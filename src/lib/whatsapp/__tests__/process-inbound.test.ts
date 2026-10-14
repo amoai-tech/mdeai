@@ -62,6 +62,24 @@ describe("processDueInbound", () => {
     expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain("agent failed");
   });
 
+  it("fails the row when the adapter acknowledges without registering any work", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn(() => Promise.resolve(new Response("ok", { status: 200 })));
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, failed: 1 });
+    expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain("waitUntil");
+  });
+
+  it("fails the row when waitUntil receives a non-promise", async () => {
+    const { client } = trackingClient([[row("m1")]]);
+    const adapterWebhook = ((_req: Request, waitUntil: (p: unknown) => void) => {
+      waitUntil("not-a-promise");
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    }) as never;
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, failed: 1 });
+  });
+
   it("fails a stuck agent run once the execution timeout is exceeded", async () => {
     const { client } = trackingClient([[row("m1")]]);
     const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {

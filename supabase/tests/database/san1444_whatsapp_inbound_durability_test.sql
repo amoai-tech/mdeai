@@ -8,7 +8,7 @@
 -- in docs/audits/san-1444-durable-inbound.md.
 
 begin;
-select plan(23);
+select plan(25);
 
 -- A · structure and permissions
 select has_column('public', 'whatsapp_messages', 'processing_status', 'processing_status column exists');
@@ -55,11 +55,18 @@ insert into public.whatsapp_messages
   (phone_number, direction, content, sender, external_id, processing_status, attempts, next_attempt_at)
 values
   ('57300', 'inbound', 'crashed', 'user', 't-crash', 'processing', 1, now()),
-  ('57300', 'inbound', 'exhausted', 'user', 't-dead', 'failed', 5, now());
-update public.whatsapp_messages set claimed_at = now() - interval '1 hour' where external_id = 't-crash';
+  ('57300', 'inbound', 'exhausted', 'user', 't-dead', 'failed', 5, now()),
+  ('57300', 'inbound', 'lease-expired exhaust', 'user', 't-dead2', 'processing', 5, now()),
+  ('57300', 'inbound', 'in-flight final attempt', 'user', 't-dead3', 'processing', 5, now());
+update public.whatsapp_messages set claimed_at = now() - interval '1 hour'
+ where external_id in ('t-crash', 't-dead2');
 select is((select count(*)::int from public.whatsapp_claim_inbound('worker-c', 10, 180, 5) where external_id = 't-crash'), 1, 'work left by a crashed worker is reclaimable');
-select ok(public.whatsapp_dead_letter_inbound(5, 180) >= 1, 'exhausted work is dead-lettered');
+select ok(public.whatsapp_dead_letter_inbound(5, 180) >= 2, 'exhausted work is dead-lettered');
 select is((select processing_status from public.whatsapp_messages where external_id = 't-dead'), 'dead', 'the exhausted row is terminal');
+select is((select processing_status from public.whatsapp_messages where external_id = 't-dead2'), 'dead', 'an exhausted row with an EXPIRED lease is dead-lettered');
+-- Deliberate: a row on its final attempt with a VALID lease is left alone, so a live worker is
+-- never dead-lettered mid-run. It becomes dead-letterable only after the lease expires.
+select is((select processing_status from public.whatsapp_messages where external_id = 't-dead3'), 'processing', 'an exhausted row with a valid lease is protected');
 select is((select count(*)::int from public.whatsapp_claim_inbound('worker-d', 10, 180, 5) where external_id = 't-dead'), 0, 'the exhausted row is not reclaimable');
 
 select * from finish();

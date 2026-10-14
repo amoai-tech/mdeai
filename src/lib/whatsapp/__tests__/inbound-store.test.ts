@@ -117,6 +117,15 @@ describe("claim / complete / fail / dead-letter", () => {
     expect(calls[1].args?.p_claim_token).toBe("tok");
   });
 
+  it("throws when a count RPC returns an unexpected value instead of reporting stale", async () => {
+    const client = fakeClient(new Map<string, RpcHandler>([
+      ["whatsapp_complete_inbound", () => ({ data: { count: 1 }, error: null })],
+      ["whatsapp_fail_inbound", () => ({ data: null, error: null })],
+    ]));
+    await expect(completeInbound(client, "m1", "tok")).rejects.toThrow("unexpected value");
+    await expect(failInbound(client, "m1", "tok", "x")).rejects.toThrow("unexpected value");
+  });
+
   it("refuses to complete or fail without a claim token", async () => {
     const client = fakeClient(new Map());
     await expect(completeInbound(client, "m1", null)).resolves.toBe(false);

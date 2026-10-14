@@ -96,11 +96,15 @@ export function extractInboundMessages(payload: unknown): InboundMessage[] {
   return result;
 }
 
-function readCount(data: unknown): number {
-  if (typeof data === "number") return data;
-  if (typeof data === "string" && data.trim() !== "" && !Number.isNaN(Number(data))) return Number(data);
-  if (Array.isArray(data)) return data.length;
-  return 0;
+/**
+ * The count-returning RPCs are declared `returns integer`. Anything else means the RPC contract
+ * drifted (bad migration, wrong function overload). Returning 0 would be mistaken for a fenced
+ * claim and silently drop the error, so refuse it instead.
+ */
+function readCount(data: unknown, operation: string): number {
+  if (typeof data === "number" && Number.isInteger(data)) return data;
+  if (Array.isArray(data) && data.length === 1 && typeof data[0] === "number") return data[0];
+  throw new Error(operation + " returned an unexpected value: " + JSON.stringify(data));
 }
 
 export async function recordInboundMessage(
@@ -149,7 +153,7 @@ export async function deadLetterInbound(
     p_lease_seconds: leaseSeconds,
   });
   if (error) throw new Error("whatsapp_dead_letter_inbound failed: " + error.message);
-  return readCount(data);
+  return readCount(data, "whatsapp_dead_letter_inbound");
 }
 
 /** Returns false when the claim was fenced out (a newer worker owns the row). */
@@ -164,7 +168,7 @@ export async function completeInbound(
     p_claim_token: claimToken,
   });
   if (error) throw new Error("whatsapp_complete_inbound failed: " + error.message);
-  return readCount(data) === 1;
+  return readCount(data, "whatsapp_complete_inbound") === 1;
 }
 
 /** Returns false when the claim was fenced out (a newer worker owns the row). */
@@ -185,5 +189,5 @@ export async function failInbound(
     p_base_backoff_seconds: baseBackoffSeconds,
   });
   if (error) throw new Error("whatsapp_fail_inbound failed: " + error.message);
-  return readCount(data) === 1;
+  return readCount(data, "whatsapp_fail_inbound") === 1;
 }

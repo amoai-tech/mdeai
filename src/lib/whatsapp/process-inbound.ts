@@ -49,6 +49,10 @@ export type ProcessSummary = {
 
 const DEFAULT_EXECUTION_TIMEOUT_MS = 150_000;
 
+function isPromise(value: unknown): value is Promise<unknown> {
+  return typeof (value as { then?: unknown } | null)?.then === "function";
+}
+
 async function withTimeout(promise: Promise<unknown>, ms: number, label: string): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -95,7 +99,7 @@ async function processRow(
   }
   try {
     const body = JSON.stringify(row.raw_payload);
-    let pending: Promise<unknown> | null = null;
+    let registered: Promise<unknown> | null = null;
     const response = await deps.adapterWebhook(
       new Request(deps.webhookUrl, {
         method: "POST",
@@ -106,14 +110,19 @@ async function processRow(
         body,
       }),
       (promise) => {
-        pending = promise;
+        registered = isPromise(promise)
+          ? promise
+          : Promise.reject(new Error("adapter passed a non-promise to waitUntil"));
       },
     );
     if (!response.ok) throw new Error("adapter webhook returned " + response.status);
-    // Wait for the agent/reply work the adapter scheduled, bounded so a stuck run is recoverable.
-    if (pending) {
-      await withTimeout(pending, deps.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS, "agent run");
+    // The adapter must register the agent/reply work through waitUntil. If it does not, an
+    // HTTP 200 means nothing: marking the row processed here would tell the sweeper never to
+    // retry while the customer never receives a reply. Fail loudly and let it retry.
+    if (!registered) {
+      throw new Error("adapter did not register background work via waitUntil");
     }
+    await withTimeout(registered, deps.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS, "agent run");
     const completed = await completeInbound(deps.client, row.id, row.claim_token);
     if (completed) summary.processed += 1;
     else summary.stale += 1;

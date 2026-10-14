@@ -95,3 +95,16 @@ WABA ID, phone number id, permanent system-user token, app secret, MDE verify to
 - **At-least-once external sends.** If the provider accepted a reply and the process died before completion committed, the retry sends again. Fencing prevents stale overwrites, not a duplicate send.
 - **Completion contract.** Completion awaits the task the adapter registers via `waitUntil` (`chat.processMessage(..., options)`); the adapter does not reference `waitUntil` directly but forwards `WebhookOptions` to `chat`, which does. Residual ambiguity remains for any provider send that settles after that task.
 - **Defect found by this suite.** The first `whatsapp_record_inbound` revision returned two rows on conflict: PL/pgSQL `RETURN QUERY` appends a row without exiting, so the `true` branch also ran. Fixed with an explicit `RETURN`. Unit tests missed it; the PostgreSQL test caught it.
+
+## 12. Review hardening (post-review)
+- **waitUntil is now enforced, not assumed.** If the adapter returns HTTP 200 without registering work through `waitUntil` (or passes a non-promise), the row is **failed** with `adapter did not register background work via waitUntil` instead of being marked `processed`. A silent-200 path can no longer tell the sweeper a message is done.
+- **Count RPCs fail loudly.** `whatsapp_complete_inbound`/`whatsapp_fail_inbound`/`whatsapp_dead_letter_inbound` must return an integer. An unexpected return type throws instead of being coerced to 0 (which would masquerade as a fenced `stale` claim).
+- **Dead-letter semantics are deliberate.** A row at `attempts >= max` that is **actively processing with a valid lease** is *not* dead-lettered, because that would kill a live final attempt. It is dead-lettered once the lease expires. The pgTAP suite asserts both cases (expired ⇒ `dead`; valid lease ⇒ still `processing`).
+- **Sweeper is a hard operational dependency.** A durable row left `pending` by a failed `after()` is only retried by the sweeper. Provision the schedule (§7) before enabling customer traffic; until then the residual latency is unbounded. Recommended alert:
+```sql
+select now() - min(coalesce(next_attempt_at, created_at)) as oldest_due,
+       count(*) filter (where processing_status in ('pending','failed')) as waiting,
+       count(*) filter (where processing_status = 'dead') as dead
+from public.whatsapp_messages where direction = 'inbound';
+```
+Alert when `oldest_due` exceeds the retry SLA or `dead > 0`.
