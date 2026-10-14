@@ -17,21 +17,21 @@ values ('f1449000-0000-4000-8000-000000000011', 'f1449000-0000-4000-8000-0000000
 
 insert into public.apartments
   (id, title, slug, neighborhood, address, status, moderation_status, listing_workflow_status,
-   landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude, metadata)
+   landlord_id, verified, price_monthly, currency, available_from, available_to, latitude, longitude, metadata, images)
 values
   ('f1449000-0000-4000-8000-000000000021', 'SAN1449 genuine', 'san1449-genuine', 'Laureles', 'Calle 1 #2-3',
    'inactive', 'pending', 'draft', 'f1449000-0000-4000-8000-000000000011', false, 2500000, 'COP',
-   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{}'::jsonb),
+   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{}'::jsonb, array['https://example.com/san1449-g.jpg']),
   ('f1449000-0000-4000-8000-000000000022', 'SAN1449 fixture', 'san1449-fixture', 'Laureles', 'Calle 1 #2-4',
    'inactive', 'pending', 'draft', 'f1449000-0000-4000-8000-000000000011', false, 2500000, 'COP',
-   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{"is_test_fixture":"true"}'::jsonb),
+   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{"is_test_fixture":"true"}'::jsonb, array['https://example.com/san1449-f.jpg']),
   ('f1449000-0000-4000-8000-000000000023', 'SAN1449 external', 'san1449-external', 'Laureles', 'Calle 1 #2-5',
    'inactive', 'pending', 'draft', 'f1449000-0000-4000-8000-000000000011', false, 2500000, 'COP',
    (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916,
-   '{"inventory_kind":"external_candidate","allowed_action":"view_original_listing"}'::jsonb),
+   '{"inventory_kind":"external_candidate","allowed_action":"view_original_listing"}'::jsonb, array['https://example.com/san1449-e.jpg']),
   ('f1449000-0000-4000-8000-000000000024', 'SAN1449 no price', 'san1449-noprice', 'Laureles', 'Calle 1 #2-6',
    'inactive', 'pending', 'draft', 'f1449000-0000-4000-8000-000000000011', false, null, 'COP',
-   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{}'::jsonb);
+   (now() at time zone 'America/Bogota')::date + 10, null, 6.2447, -75.5916, '{}'::jsonb, array['https://example.com/san1449-n.jpg']);
 
 insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
 values

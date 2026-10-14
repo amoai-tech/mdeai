@@ -93,6 +93,15 @@ begin
     b := b || 'no usable photo'::text;
   end if;
 
+  -- The cards and search read apartments.images, not rental_listing_images. A
+  -- listing that only has a gallery row would publish with no displayable image.
+  if not exists (
+    select 1 from unnest(coalesce(r.images, array[]::text[])) as img
+     where coalesce(btrim(img), '') <> ''
+  ) then
+    b := b || 'no displayable listing photo'::text;
+  end if;
+
   return b;
 end;
 $function$;
@@ -168,11 +177,11 @@ begin
 
   update public.apartments a
      set status = 'active',
-         -- Publication is cleared automatically for a self-attested listing; the
-         -- independent-verification marker (verified) is deliberately left as-is.
-         -- A genuine self-attested row is created with verified = false and stays
-         -- false; only publish_verified_rental() ever sets it true.
+         -- Publication is cleared automatically for a self-attested listing, and the
+         -- independent-verification marker is explicitly cleared: choosing the
+         -- self-attested path must never leave a row presenting as verified.
          moderation_status = 'approved',
+         verified = false,
          listing_workflow_status = 'published',
          published_at = now(),
          published_by = v_uid,
@@ -208,3 +217,91 @@ comment on function public.publish_self_attested_rental(uuid, boolean, boolean) 
 
 revoke all on function public.publish_self_attested_rental(uuid, boolean, boolean) from public, anon;
 grant execute on function public.publish_self_attested_rental(uuid, boolean, boolean) to authenticated, service_role;
+
+-- -----------------------------------------------------------------------------
+-- 3 · Database-controlled initial state and provenance.
+--     The SAN-1106 column boundary governs UPDATE only. Without this guard an
+--     authenticated landlord could INSERT an apartment already active/approved/
+--     published/verified and bypass both publication RPCs, or clear an external/
+--     fixture classification out of editable metadata. Both are now enforced in
+--     trusted database logic rather than by client discipline.
+-- -----------------------------------------------------------------------------
+drop function if exists public.apartment_state_is_trusted_writer();
+
+create or replace function public.enforce_apartment_initial_state()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $function$
+begin
+  if public.is_admin() or current_user in ('postgres', 'supabase_admin', 'service_role') then
+    return new;
+  end if;
+  -- A client-created listing always starts as a draft/unverified row. Publication
+  -- and independent verification stay reachable only through the gated RPCs.
+  new.status := 'inactive';
+  new.moderation_status := 'pending';
+  new.listing_workflow_status := 'draft';
+  new.verified := false;
+  new.published_at := null;
+  new.published_by := null;
+  return new;
+end;
+$function$;
+
+create or replace function public.protect_apartment_provenance()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $function$
+declare
+  v_old_fixture boolean;
+  v_new_fixture boolean;
+  v_old_external boolean;
+  v_new_external boolean;
+begin
+  if public.is_admin() or current_user in ('postgres', 'supabase_admin', 'service_role') then
+    return new;
+  end if;
+  -- Classification is one-way: an ordinary writer may never REMOVE a fixture or
+  -- external marker, even while leaving another marker in place.
+  v_old_fixture :=
+       coalesce(lower(old.metadata->>'is_test_fixture'), 'false') = 'true'
+    or lower(coalesce(old.metadata->>'inventory_kind', '')) = 'test_fixture';
+  v_new_fixture :=
+       coalesce(lower(new.metadata->>'is_test_fixture'), 'false') = 'true'
+    or lower(coalesce(new.metadata->>'inventory_kind', '')) = 'test_fixture';
+  v_old_external :=
+       lower(coalesce(old.metadata->>'inventory_kind', '')) = 'external_candidate'
+    or lower(coalesce(old.metadata->>'inventory_type', '')) = 'external'
+    or lower(coalesce(old.metadata->>'allowed_action', '')) = 'view_original_listing';
+  v_new_external :=
+       lower(coalesce(new.metadata->>'inventory_kind', '')) = 'external_candidate'
+    or lower(coalesce(new.metadata->>'inventory_type', '')) = 'external'
+    or lower(coalesce(new.metadata->>'allowed_action', '')) = 'view_original_listing';
+  if (v_old_fixture and not v_new_fixture) or (v_old_external and not v_new_external) then
+    raise exception 'listing provenance is database-controlled' using errcode = '42501';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists apartments_enforce_initial_state on public.apartments;
+create trigger apartments_enforce_initial_state
+  before insert on public.apartments
+  for each row execute function public.enforce_apartment_initial_state();
+
+drop trigger if exists apartments_protect_provenance on public.apartments;
+create trigger apartments_protect_provenance
+  before update of metadata on public.apartments
+  for each row execute function public.protect_apartment_provenance();
+
+-- Trigger functions are not client-callable; the trigger machinery invokes them.
+-- service_role keeps EXECUTE, matching every other app-owned trigger function (SAN-1284).
+revoke all on function public.enforce_apartment_initial_state() from public, anon, authenticated;
+revoke all on function public.protect_apartment_provenance() from public, anon, authenticated;
+grant execute on function public.enforce_apartment_initial_state() to service_role;
+grant execute on function public.protect_apartment_provenance() to service_role;
+
