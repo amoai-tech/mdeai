@@ -57,6 +57,10 @@ function publicRentalPhoto(row: ExternalListing): string {
 export function publicExternalRentalCard(row: ExternalListing): Rental | null {
   const metadata = row.metadata ?? {};
   // Publication status is not proof of independent verification or viewing rights.
+  // Deliberately ignore row.verified for published EXTERNAL source ads: legacy
+  // operator-set true/false values do not establish source-ad verification.
+  // Keep "not-verified", source_url and can_schedule_viewing=false regardless;
+  // managed rental eligibility continues through rental_listing_is_public().
   // The nine allowlisted source-linked ads can transition from legacy draft to
   // active/approved/published without disappearing from public discovery.
   const sourcePublished = row.status === "active"

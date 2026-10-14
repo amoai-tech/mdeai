@@ -189,11 +189,61 @@ describe("POST /api/admin/rentals/test create validation", () => {
     expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
   });
 
+  it("rejects malformed, impossible, and non-ISO availableFrom dates", async () => {
+    for (const availableFrom of ["next month", "2026-02-30", "2026-2-3", "2026-13-01"]) {
+      const res = await POST(request({ ...fields, availableFrom }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/availableFrom/i);
+    }
+    expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
+  });
+
+  it("rejects insecure or malformed imageUrl values before calling create RPC", async () => {
+    for (const imageUrl of ["http://example.com/photo.jpg", "https://", "javascript:alert(1)"]) {
+      const res = await POST(request({ ...fields, imageUrl }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/imageUrl.*HTTPS/i);
+    }
+    expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
+  });
+
   it("accepts valid COP currency and passes the exact numeric price to the RPC", async () => {
     const response = await POST(request({ ...fields, currency: "cop" }));
     expect(response.status).toBe(200);
     expect(h.rpc).toHaveBeenCalledWith("admin_create_test_rental", expect.objectContaining({
       p_currency: "COP", p_price_monthly: 2500000,
+    }));
+  });
+});
+
+
+describe("POST /api/admin/rentals/test clone validation", () => {
+  const clone = { action: "clone-test", apartmentId: "f1460000-0000-4000-8000-000000000021", availableFrom: "2026-11-01", imageUrl: "https://example.com/test.webp" };
+
+  it("rejects malformed UUIDs before calling the clone RPC", async () => {
+    for (const apartmentId of ["12345678-123456789012345678901234567", "f1460000000040008000000000000021", "f1460000-0000-4000-8000-00000000002z"]) {
+      const res = await POST(request({ ...clone, apartmentId }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/valid source/i);
+    }
+    expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
+  });
+
+  it("rejects impossible calendar dates and malformed HTTPS URLs consistently with create", async () => {
+    for (const changes of [{ availableFrom: "2026-02-30" }, { imageUrl: "https://" }, { imageUrl: "http://example.com/photo.jpg" }]) {
+      const res = await POST(request({ ...clone, ...changes }));
+      expect(res.status).toBe(400);
+    }
+    expect(h.rpc.mock.calls.every(([name]) => name === "is_admin")).toBe(true);
+  });
+
+  it("accepts canonical UUID, valid ISO date and secure photo URL", async () => {
+    const res = await POST(request(clone));
+    expect(res.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_clone_rental_for_testing", expect.objectContaining({
+      p_source_apartment_id: clone.apartmentId,
+      p_available_from: clone.availableFrom,
+      p_test_image_url: clone.imageUrl,
     }));
   });
 });

@@ -52,6 +52,28 @@ type RentalRow = {
 const isTestRow = (row: RentalRow) =>
   String((row.metadata as Record<string, unknown> | null)?.is_test_fixture ?? "") === "true";
 
+// Accept the PostgreSQL UUID text shape without forcing a UUID version;
+// malformed identifiers should fail before reaching the RPC argument cast.
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+const isIsoCalendarDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const isHttpsImageUrl = (value: string) => {
+  if (!value || /\s/.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !!parsed.hostname
+      && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+};
+
 export async function GET() {
   const gate = await requireAdmin();
   if (!gate.ok) return NextResponse.json({ error: gate.message }, { status: gate.status });
@@ -160,6 +182,12 @@ export async function POST(request: Request) {
     if (currency !== "COP" && currency !== "USD") {
       return NextResponse.json({ error: "currency must be COP or USD" }, { status: 400 });
     }
+    if (!isIsoCalendarDate(availableFrom)) {
+      return NextResponse.json({ error: "availableFrom must be a valid YYYY-MM-DD date" }, { status: 400 });
+    }
+    if (!isHttpsImageUrl(imageUrl)) {
+      return NextResponse.json({ error: "imageUrl must be a valid HTTPS URL" }, { status: 400 });
+    }
     const { data, error } = await supabase.rpc("admin_create_test_rental", {
       p_title: title,
       p_neighborhood: neighborhood,
@@ -177,9 +205,7 @@ export async function POST(request: Request) {
     const sourceId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
     const date = typeof body.availableFrom === "string" ? body.availableFrom.trim() : "";
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : "";
-    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(sourceId)
-      || !/^\d{4}-\d{2}-\d{2}$/.test(date)
-      || !/^https:\/\/\S+$/.test(imageUrl)) {
+    if (!isUuid(sourceId) || !isIsoCalendarDate(date) || !isHttpsImageUrl(imageUrl)) {
       return NextResponse.json({ error: "Valid source, test date, and HTTPS test image required" }, { status: 400 });
     }
     const { data, error } = await supabase.rpc("admin_clone_rental_for_testing", {
