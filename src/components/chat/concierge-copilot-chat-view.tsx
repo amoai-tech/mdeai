@@ -74,19 +74,38 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
     },
     [handlers],
   );
+  const input = useMemo(() => {
+    const inputProps =
+      typeof props.input === "object" &&
+      props.input !== null &&
+      !("$$typeof" in props.input)
+        ? (props.input as Record<string, unknown>)
+        : {};
+    const textAreaProps =
+      typeof inputProps.textArea === "object" &&
+      inputProps.textArea !== null &&
+      !("$$typeof" in inputProps.textArea)
+        ? (inputProps.textArea as Record<string, unknown>)
+        : {};
+
+    return {
+      ...inputProps,
+      onSubmitMessage,
+      textArea: {
+        ...textAreaProps,
+        enterKeyHint: "send",
+        inputMode: "text",
+      },
+    } as CopilotChatViewProps["input"];
+  }, [onSubmitMessage, props.input]);
+
   return (
     <div data-testid="concierge-chat-view-mounted" className="contents">
       <CopilotChatView
         {...props}
         messageView={ConciergeMessageView}
         welcomeScreen={conciergeWelcomeScreen(hasTailContent, props.welcomeScreen)}
-        input={
-          typeof props.input === "object" &&
-          props.input !== null &&
-          !("$$typeof" in props.input)
-            ? { ...props.input, onSubmitMessage }
-            : { onSubmitMessage }
-        }
+        input={input}
       />
     </div>
   );

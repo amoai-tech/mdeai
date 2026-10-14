@@ -1,4 +1,4 @@
-import type { MapPin } from "@/platform/contracts/map-pin";
+import { mapPinSchema, type MapPin } from "@/platform/contracts/map-pin";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -28,9 +28,12 @@ export function restaurantToMapPin(r: Restaurant): MapPin | null {
   };
 }
 
+/** Return a canonical rental pin only when its coordinates satisfy mapPinSchema. */
 export function rentalToMapPin(r: Rental): MapPin | null {
   if (r.latitude == null || r.longitude == null) return null;
-  return {
+  // Validate exactly like tool/map pins: a non-null pair can still be invalid.
+  // Verification of *ownership* of coordinates remains upstream of the public result.
+  const validated = mapPinSchema.safeParse({
     id: `rental-${r.id}`,
     category: "rental",
     lat: r.latitude,
@@ -38,5 +41,6 @@ export function rentalToMapPin(r: Rental): MapPin | null {
     title: r.title,
     subtitle: r.neighborhood,
     source: "sql",
-  };
+  });
+  return validated.success ? validated.data : null;
 }

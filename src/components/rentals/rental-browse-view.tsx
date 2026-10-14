@@ -9,6 +9,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -45,6 +46,7 @@ export type RentalBrowseViewProps = {
   beds: string | null;
 };
 
+/** Keep the visible rental list and its valid map markers on the same selection state. */
 function RentalBrowseViewInner({
   results,
   total,
@@ -52,7 +54,7 @@ function RentalBrowseViewInner({
   neighborhood,
   beds,
 }: RentalBrowseViewProps) {
-  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
@@ -68,6 +70,7 @@ function RentalBrowseViewInner({
   );
 
   useBrowseMapSync(pins, "rental");
+  const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
   // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
@@ -88,6 +91,8 @@ function RentalBrowseViewInner({
         mapSlot={<BrowseMapPanel />}
       >
         <section className="mt-6" aria-label="Rental listings">
+          {/* A saved viewing request must be visible where it was made, not only in the chat. */}
+          <LeadConfirmationBanner />
           {error ? (
             <div
               className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -127,8 +132,9 @@ function RentalBrowseViewInner({
                     key={r.id}
                     rental={r}
                     testId={`rental-card-${r.id}`}
-                    selected={selectedPinId === pinId}
-                    onSelect={() => setSelectedPinId(pinId)}
+                    selected={mappedIds.has(pinId) && selectedPinId === pinId}
+                    onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+                    onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={() =>
                       openScheduleViewing({
                         listingId: r.id,
@@ -149,6 +155,7 @@ function RentalBrowseViewInner({
   );
 }
 
+/** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>
