@@ -15,6 +15,7 @@ import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
+import { buildConciergeChannels } from "./whatsapp-channels";
 
 export const conciergeWorkingMemorySchema = z.object({
   lastIntent: z
@@ -408,6 +409,7 @@ ${formatEventSourcePromptHint()}`,
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: getDefaultInputProcessors(),
+  channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input
   // tokens — and latency — on busy threads without changing follow-up behavior.
