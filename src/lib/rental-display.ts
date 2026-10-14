@@ -131,7 +131,7 @@ export function describeSearchCriteria(
 /** Rental fast-path uses cards only — no prose block in chat. */
 export function fastPathRentalNarrative(count: number): string {
   if (count === 0) {
-    return "No verified rentals are available right now.";
+    return "No rentals are available in this search right now.";
   }
   return "";
 }
@@ -167,8 +167,8 @@ export function fastPathRentalSummary(
     // A broad search that finds nothing means there is nothing to show at all. A specific search
     // that finds nothing only says that THIS search matched nothing — other listings may exist.
     return options.generic
-      ? `No verified rentals are available right now.${budgetNote} Want to try a neighborhood like Laureles?`
-      : `No verified rentals match that search right now.${budgetNote} Want to try another neighborhood or size?`;
+      ? `No rentals are available in this search right now.${budgetNote} Want to try a neighborhood like Laureles?`
+      : `No rentals match that search right now.${budgetNote} Want to try another neighborhood or size?`;
   }
   let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
   if (options.budgetNotApplied) {
