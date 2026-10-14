@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(53);
+select plan(55);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -297,6 +297,38 @@ select throws_ok(
   $q$select public.admin_publish_test_rental('f1460000-0000-4000-8000-000000000021')$q$,
   '42501', 'only a test-marked listing can be test-published',
   'A11: test mode refuses a non-test listing');
+reset role;
+
+-- A54/A55: the nine public source ads remain discovery-only even after
+-- publication; their active flags must not make the atomic viewing RPC bookable.
+insert into public.apartments
+  (id,title,slug,neighborhood,address,status,moderation_status,
+   listing_workflow_status,landlord_id,verified,price_monthly,currency,
+   available_from,images,metadata)
+values
+  ('f1460000-0000-4000-8000-000000000031','External source test',
+   'admin-test-source-link-only','Laureles','Calle 19','active',
+   'approved','published','f1460000-0000-4000-8000-000000000011',
+   false,2400000,'COP',(now() at time zone 'America/Bogota')::date+5,
+   array['https://example.com/source.jpg'],
+   '{"inventory_kind":"external_candidate","allowed_action":"view_original_listing"}'::jsonb);
+set local role service_role;
+select set_config('request.jwt.claims', '{}', true);
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic('admin-test-source-link-only',
+    null::uuid,'admin-test-source-guest-key','form','extguest@example.com',
+    'External Guest',null,null::uuid,(now()+interval '4 day')::timestamptz,
+    '{}'::jsonb,'{}'::jsonb)$q$,
+  '42501','source-linked rental is not requestable',
+  'A54: source-only ad cannot accept a guest viewing by slug');
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic('f1460000-0000-4000-8000-000000000031',
+    null::uuid,'admin-test-source-admin-key','form','extadmin@example.com',
+    'External Admin',null,null::uuid,(now()+interval '4 day')::timestamptz,
+    '{}'::jsonb,'{}'::jsonb)$q$,
+  '42501','source-linked rental is not requestable',
+  'A55: even an admin cannot use normal viewing on a source-only ad');
 reset role;
 
 -- A12: non-admin cannot assign an MDE test operator to an existing listing.

@@ -1,7 +1,7 @@
 -- Retain SAN-1286 / SAN-486 atomic idempotency, ownership, move-in checks,
 -- and lead/showing inserts without modifying their contract.
--- A test-fixture request must be denied BEFORE the early committed replay
--- return, not merely by the insert/update triggers added in this PR.
+-- Source-linked external ads and test-fixture requests must be denied BEFORE
+-- the early committed replay return (no insertion trigger fires on replay).
 -- This definition is copied from the latest 20261012090000_san486_future_move_in
 -- function with only the guarded block below added.
 -- No grant changes: CREATE OR REPLACE preserves the original service_role ACL.
@@ -54,6 +54,27 @@ BEGIN
     FROM public.leads AS l
     WHERE l.user_id IS NULL
       AND l.idempotency_key = v_idempotency_key;
+  END IF;
+
+  -- A published third-party source advertisement is discoverable via the
+  -- original source link, but is never MDE-requestable. Do not rely on UI
+  -- can_schedule_viewing=false: reject both new requests and early replays.
+  IF EXISTS (
+    SELECT 1 FROM public.apartments a
+     WHERE (
+       a.id::text = lower(v_listing_id)
+       OR a.slug = v_listing_id
+       OR a.id = v_lead.apartment_id
+       OR a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
+     )
+       AND (
+         lower(coalesce(a.metadata->>'inventory_kind', '')) = 'external_candidate'
+         OR lower(coalesce(a.metadata->>'inventory_type', '')) = 'external'
+         OR lower(coalesce(a.metadata->>'allowed_action', '')) = 'view_original_listing'
+       )
+  ) THEN
+    RAISE EXCEPTION 'source-linked rental is not requestable'
+      USING ERRCODE = '42501';
   END IF;
 
   -- An existing viewing is normally replayable after the listing changes,
