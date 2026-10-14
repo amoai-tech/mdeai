@@ -34,7 +34,7 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByTestId("rentals-browse")).toBeVisible();
       await expect(page.getByTestId("rentals-empty")).toBeVisible();
       await expect(
-        page.getByText("No verified rentals currently match these filters"),
+        page.getByText("No rentals currently match these filters"),
       ).toBeVisible();
     });
   });
