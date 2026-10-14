@@ -3,6 +3,7 @@ import {
   LISTING_TIME_ZONE,
   isFutureInstant,
   resolvePreferredAtInstant,
+  nextMedellinTestViewingWallClock,
 } from "@/lib/leads/schedule-viewing-time";
 
 /**
@@ -115,5 +116,15 @@ describe("schedule-viewing-time (SAN-1203 timezone contract)", () => {
     const instant = resolvePreferredAtInstant("2026-11-03T14:00");
     expect(instant).toBe("2026-11-03T19:00:00.000Z");
     expect(isFutureInstant(instant as string, new Date("2026-11-03T18:00:00.000Z"))).toBe(true);
+  });
+});
+
+
+describe("nextMedellinTestViewingWallClock", () => {
+  it("chooses tomorrow in Bogotá even when UTC already crossed midnight", () => {
+    expect(nextMedellinTestViewingWallClock(new Date("2026-10-15T03:30:00Z")))
+      .toBe("2026-10-15T10:00");
+    expect(nextMedellinTestViewingWallClock(new Date("2026-10-15T05:30:00Z")))
+      .toBe("2026-10-16T10:00");
   });
 });

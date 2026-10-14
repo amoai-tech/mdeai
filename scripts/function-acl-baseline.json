@@ -4,6 +4,36 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_assign_rental_test_operator(p_apartment_id uuid, p_enabled boolean)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_clone_rental_for_testing(p_source_apartment_id uuid, p_available_from date, p_test_image_url text, p_fallback_price_monthly numeric)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_cleanup_test_rental(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_create_test_rental(p_title text, p_neighborhood text, p_address text, p_price_monthly numeric, p_currency text, p_available_from date, p_image_url text, p_landlord_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_publish_test_rental(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_request_test_viewing(p_apartment_id uuid, p_scheduled_at timestamp with time zone, p_email text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "advance_developer_registration_stage(p_registration_id uuid, p_sales_stage text, p_evidence jsonb)": {
     "public": false,
     "anon": false,
@@ -23,6 +53,11 @@
     "public": false,
     "anon": false,
     "authenticated": true
+  },
+  "block_nonadmin_test_viewing()": {
+    "public": false,
+    "anon": false,
+    "authenticated": false
   },
   "broker_owns_apartment(p_apartment_id uuid)": {
     "public": true,

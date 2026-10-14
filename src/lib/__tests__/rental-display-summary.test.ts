@@ -5,20 +5,21 @@ import { fastPathRentalSummary } from "@/lib/rental-display";
 describe("fastPathRentalSummary", () => {
   it("zero results is an honest empty state, not a form wall, with one optional refinement", () => {
     const text = fastPathRentalSummary(0, 0);
-    expect(text).toMatch(/no verified rentals/i);
+    expect(text).toMatch(/no rentals/i);
     expect(text).toMatch(/laureles|neighborhood/i);
     expect(text).not.toMatch(/what dates|setup/i);
     expect(text.match(/\?/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 
   it("a broad search with nothing to show says there is nothing available", () => {
-    expect(fastPathRentalSummary(0, 0, { generic: true })).toMatch(/no verified rentals are available right now/i);
+    expect(fastPathRentalSummary(0, 0, { generic: true })).toMatch(/no rentals are available in this search right now/i);
   });
 
   it("a specific search with no match does not imply the whole marketplace is empty", () => {
     const text = fastPathRentalSummary(0, 0, { generic: false });
-    expect(text).toMatch(/no verified rentals match that search/i);
+    expect(text).toMatch(/no rentals match that search/i);
     expect(text).not.toMatch(/available right now/i);
+    expect(text).not.toMatch(/verified rentals/i);
     expect(text.match(/\?/g)?.length ?? 0).toBeLessThanOrEqual(1);
   });
 
@@ -44,7 +45,7 @@ describe("fastPathRentalSummary", () => {
 
   it("budget note also accompanies an empty answer without implying budget caused it", () => {
     const text = fastPathRentalSummary(0, 0, { budgetNotApplied: true });
-    expect(text).toMatch(/no verified rentals/i);
+    expect(text).toMatch(/no rentals/i);
     expect(text).toMatch(/budget/i);
     expect(text).toMatch(/not (yet )?(applied|filtered)|isn.t (applied|filtered)/i);
     expect(text).not.toMatch(/wider budget/i);
