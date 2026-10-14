@@ -126,7 +126,7 @@ export function RentalBrowseCard({
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    rental.nightly_price,
+    rental.tags.includes("dev-preview") ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );

@@ -6,6 +6,7 @@ import {
   isRentalSearchUnavailable,
 } from "@/mastra/lib/rental-search-unavailable";
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
+import { getLocalPreviewDetail, isLocalRentalPreviewEnabled } from "@/lib/rentals/dev-rental-preview";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -15,7 +16,9 @@ interface Props {
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   try {
-    const detail = await getRentalDetail(id);
+    const detail = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-")
+      ? await getLocalPreviewDetail(id)
+      : await getRentalDetail(id);
     if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
     /* fall through to default */
@@ -30,7 +33,9 @@ export default async function RentalDetailPage({ params }: Props) {
 
   let detail;
   try {
-    detail = await getRentalDetail(id);
+    detail = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-")
+      ? await getLocalPreviewDetail(id)
+      : await getRentalDetail(id);
   } catch (err) {
     console.error("[/rentals/[id]] load failed:", describeRentalSearchError(err));
     const unavailable = isRentalSearchUnavailable(err);
@@ -69,5 +74,16 @@ export default async function RentalDetailPage({ params }: Props) {
 
   if (!detail) notFound();
 
-  return <RentalDetailView detail={detail} />;
+  const preview = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-");
+  return (
+    <>
+      {preview ? (
+        <div data-testid="dev-rental-detail-disclaimer" role="status" className="mx-auto max-w-5xl rounded-lg border border-amber-500 p-4 text-sm">
+          Development preview only — this external property and its photos are not verified or published.
+          Availability is unknown; real viewing and booking requests are disabled.
+        </div>
+      ) : null}
+      <RentalDetailView detail={detail} />
+    </>
+  );
 }

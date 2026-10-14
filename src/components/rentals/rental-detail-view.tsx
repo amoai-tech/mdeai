@@ -88,12 +88,14 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   hostName: string | null;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  isDevelopmentPreview?: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
 
@@ -111,19 +113,21 @@ const RentalPriceSidebar = ({
             Request viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          data-testid="rental-detail-ask-cta"
-          onClick={onRequest}
-        >
-          Ask a question
-        </Button>
+        {!isDevelopmentPreview ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            data-testid="rental-detail-ask-cta"
+            onClick={onRequest}
+          >
+            Ask a question
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
           <Heart className="size-4" aria-hidden /> Save
         </Button>
-        <p className="text-center text-xs text-muted-foreground">{REQUEST_ONLY}</p>
+        <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
     </aside>
@@ -221,7 +225,7 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
     // skipcq: JS-0415 - detailed sectioned layout is intentional for readability and stable test selectors
     <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
       <Link
-        href="/rentals"
+        href={detail.status === "development-preview" ? "/dev/rentals" : "/rentals"}
         data-testid="rental-detail-back"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
@@ -296,6 +300,7 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isDevelopmentPreview={detail.status === "development-preview"}
         />
       </div>
 

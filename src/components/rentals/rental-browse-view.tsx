@@ -43,6 +43,8 @@ export type RentalBrowseViewProps = {
   error: string | null;
   neighborhood: string | null;
   beds: string | null;
+  /** Only for local previews, never changes actual rental eligibility. */
+  previewMode?: boolean;
 };
 
 /** Keep the visible rental list and its valid map markers on the same selection state. */
@@ -52,6 +54,7 @@ function RentalBrowseViewInner({
   error,
   neighborhood,
   beds,
+  previewMode = false,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
@@ -74,9 +77,11 @@ function RentalBrowseViewInner({
 
   // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
   // curated or available now — only that listed rentals are verified and published.
-  const subtitle = error
-    ? "Long-stay apartments in Medellín"
-    : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
+  const subtitle = previewMode
+    ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
+    : error
+      ? "Long-stay apartments in Medellín"
+      : `Verified long-stay apartments — ${formatCountSubtitle(total, results.length)}`;
 
   return (
     <>
@@ -85,7 +90,7 @@ function RentalBrowseViewInner({
         title="Rentals in Medellín"
         subtitle={subtitle}
         filterBar={
-          <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
+          previewMode ? <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p> : <RentalBrowseFilters neighborhood={neighborhood} beds={beds} />
         }
         mapSlot={<BrowseMapPanel />}
       >
