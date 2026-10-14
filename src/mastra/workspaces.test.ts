@@ -1,8 +1,8 @@
-import { describe, it, expect, test } from "vitest";
+import { describe, it, expect, test, vi } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { WORKSPACE_TOOLS } from "@mastra/core/workspace";
-import { workspace, workspaceBasePath, workspaceToolsConfig } from "./workspaces";
+import { getRuntimeWorkspace, workspace, workspaceBasePath, workspaceToolsConfig } from "./workspaces";
 
 const SKILL_DIRS = [
   "mde-prompt-qa",
@@ -29,6 +29,28 @@ describe("Mastra workspace", () => {
       }
     },
   );
+
+  it("does not expose a local filesystem workspace inside Vercel functions", () => {
+    vi.stubEnv("VERCEL", "1");
+    try {
+      expect(getRuntimeWorkspace()).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("preserves local development workspace behavior", () => {
+    vi.stubEnv("VERCEL", "");
+    try {
+      expect(getRuntimeWorkspace()).toBe(workspace);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("uses read-only filesystem even when local development tools are present", () => {
+    expect(workspace.filesystem?.readOnly).toBe(true);
+  });
 
   it("mutation tools are disabled", () => {
     const disabled = [
