@@ -144,11 +144,11 @@ async function processRow(
     });
 
     // Completing requires a CONFIRMED outbound send, not just a settled task.
-    const confirmed = sends.find((send) => send.ok);
-    if (!confirmed || !confirmed.ok) {
-      const attempt = sends.find((send) => !send.ok);
+    const confirmed = sends.find((send) => send.success === true);
+    if (!confirmed || confirmed.success !== true) {
+      const attempt = sends.find((send) => send.success === false);
       throw new Error(
-        attempt && !attempt.ok
+        attempt && attempt.success === false
           ? "no confirmed outbound send: " + attempt.error
           : "no confirmed outbound send: the agent produced no reply",
       );

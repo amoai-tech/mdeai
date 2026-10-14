@@ -34,7 +34,7 @@ const base = { webhookUrl: "https://x/api/whatsapp/webhook", sign, workerId: "w1
 const okAdapter = (_request: Request, waitUntil: (p: Promise<unknown>) => void) => {
   waitUntil(Promise.resolve());
   // A real adapter records the send through postMessage; the happy path must show one.
-  recordOutboundSend({ ok: true, providerMessageId: "wamid.sent" });
+  recordOutboundSend({ success: true, providerMessageId: "wamid.sent" });
   return Promise.resolve(new Response("ok", { status: 200 }));
 };
 
@@ -123,7 +123,7 @@ describe("processDueInbound", () => {
   it("fails the row when the outbound send was rejected", async () => {
     const { client, calls } = trackingClient([[row("m1")]]);
     const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
-      recordOutboundSend({ ok: false, error: "401 Invalid OAuth access token" });
+      recordOutboundSend({ success: false, error: "401 Invalid OAuth access token" });
       waitUntil(Promise.resolve());
       return Promise.resolve(new Response("ok", { status: 200 }));
     });

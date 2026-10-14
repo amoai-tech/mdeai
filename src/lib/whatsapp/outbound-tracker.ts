@@ -12,8 +12,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * agent run or a rejected Meta API call leaves the row retryable instead of `processed`.
  */
 export type OutboundSend =
-  | { ok: true; providerMessageId: string | null }
-  | { ok: false; error: string };
+  | { success: true; providerMessageId: string | null }
+  | { success: false; error: string };
 
 type Scope = { sends: OutboundSend[] };
 

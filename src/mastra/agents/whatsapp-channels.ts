@@ -42,13 +42,13 @@ function attachOutboundTracking(adapter: WhatsAppAdapter): WhatsAppAdapter {
     try {
       const raw = await original(threadId, message);
       recordOutboundSend({
-        ok: true,
+        success: true,
         providerMessageId: typeof raw?.id === "string" ? raw.id : null,
       });
       return raw;
     } catch (error) {
       recordOutboundSend({
-        ok: false,
+        success: false,
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
