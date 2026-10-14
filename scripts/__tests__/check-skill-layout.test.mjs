@@ -266,6 +266,40 @@ test("fails when a retired skill reappears", () => {
 
   const output = failing(root);
   assert.match(output, /retired skill\/discovery entry exists: maps-review/);
+
+  for (const name of [
+    "codacy-analysis-cli",
+    "codacy-cloud-cli",
+    "codacy-code-review",
+    "configure-codacy",
+    "configure-codacy-cloud",
+    "setup-coverage",
+  ]) {
+    assert.ok(
+      failing(writeSkill(tmpRepo(), name)).includes(`retired skill/discovery entry exists: ${name}`),
+      name,
+    );
+  }
+});
+
+test("the canonical Codacy skill and its Codex mirror remain usable", () => {
+  // Literal repository paths avoid introducing another dynamic-path scanner
+  // finding. The generic checker additionally validates every mirrored entry.
+  const skill = fs.readFileSync(".claude/skills/codacy/SKILL.md", "utf8");
+  assert.match(skill, /^name: codacy$/m);
+  assert.match(skill, /\]\(references\/operations\.md\)/);
+
+  const operations = fs.readFileSync(".claude/skills/codacy/references/operations.md", "utf8");
+  assert.match(operations, /^# Codacy on-demand operations$/m);
+
+  assert.equal(
+    fs.readlinkSync(".agents/skills/codacy/SKILL.md"),
+    "../../../.claude/skills/codacy/SKILL.md",
+  );
+  assert.equal(
+    fs.readlinkSync(".agents/skills/codacy/references"),
+    "../../../.claude/skills/codacy/references",
+  );
 });
 
 test("the committed repository passes", () => {

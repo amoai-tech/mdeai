@@ -1,1 +1,0 @@
-../../../.claude/skills/codacy-code-review/SKILL.md

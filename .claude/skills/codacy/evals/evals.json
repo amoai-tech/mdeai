@@ -1,0 +1,36 @@
+{
+  "skill_name": "codacy",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Codacy analysis for a PR reports zero issues but the toolResults array is empty and the local .codacy config is absent. Diagnose whether the PR is clean without changing any settings.",
+      "expected_output": "States no analyzer ran and no clean verdict is possible; inspects existing config and Cloud state, does not initialize or suppress.",
+      "files": [],
+      "expectations": [
+        "States no analyzer ran and no clean verdict is possible; inspects existing config and Cloud state, does not initialize or suppress.",
+        "No credentials, destructive actions, unsupported success or broad rule suppressions"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review Codacy's introduced security findings and coverage on a newly pushed MDE PR. Exact-head Cloud analysis is still running. Explain blockers and the smallest safe next steps.",
+      "expected_output": "Separates local evidence from pending Cloud, preserves existing review owner, and never claims in-progress reanalysis is clean.",
+      "files": [],
+      "expectations": [
+        "Separates local evidence from pending Cloud, preserves existing review owner, and never claims in-progress reanalysis is clean.",
+        "No credentials, destructive actions, unsupported success or broad rule suppressions"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The team wants to replace a Codacy Cloud organization coding standard and duplicate the CI coverage upload. Evaluate the existing owners and safest configuration approach.",
+      "expected_output": "Inspects org-enforced settings and existing reporter first; avoids unsanctioned standard edits or duplicate coverage pipeline.",
+      "files": [],
+      "expectations": [
+        "Inspects org-enforced settings and existing reporter first; avoids unsanctioned standard edits or duplicate coverage pipeline.",
+        "No credentials, destructive actions, unsupported success or broad rule suppressions"
+      ]
+    }
+  ]
+}

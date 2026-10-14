@@ -1,1 +1,0 @@
-../../../.claude/skills/setup-coverage/SKILL.md
