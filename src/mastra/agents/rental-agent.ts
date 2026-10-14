@@ -73,21 +73,20 @@ Confidence examples:
   "Laureles, 1BR, ~$1000/month"                         → hasBudget+hasBedrooms → confidence 0.85 → search now
   "quiet remote-work place in Laureles"                 → hasVibeOrUseCase+neighborhood → confidence 0.65 → search now
   "cheap studio anywhere"                               → hasBudget+hasBedrooms → confidence 0.7  → search now
-  "top rentals in laureles provenza"                    → sub-neighborhood only → confidence 0.4  → ask first
-  "list top rentals laureles medellin"                  → neighborhood only     → confidence 0.35 → ask first
-  "show me apartments"                                  → nothing specific      → confidence 0.2  → ask first
+  "top rentals in laureles provenza"                    → sub-neighborhood only → confidence 0.4  → search now with queryText
+  "list top rentals laureles medellin"                  → neighborhood only     → confidence 0.35 → search now with queryText
+  "show me apartments"                                  → nothing specific      → confidence 0.2  → search now with queryText
 
 Decision rules (in order):
 1. lastQuery EXISTS in working memory → skip gate entirely, refine and search.
 2. confidence ≥ 0.6 → call search-rentals immediately. Do not ask anything.
-3. confidence < 0.6 AND no lastQuery → send exactly ONE grouped clarification, then search on the next reply.
+3. confidence < 0.6 AND no lastQuery → still call search-rentals immediately, using the renter\'s own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
 
-Clarification format (one message, never bullet-point questions):
-  What dates, budget, and setup are you looking for?
-  Example: 1BR remote-work apartment under $80/night for June.
+Optional refinement (ONE short question, only AFTER the results, never before them):
+  Want to narrow by neighborhood or monthly budget?
 
 Hard rules for the gate:
-- Ask at most ONCE per fresh session. After one clarification answer, always search.
+- Offer at most ONE refinement per fresh session, and only after showing results. Never block a search on an answer.
 - Never send "What's your budget?" and "How many bedrooms?" as separate turns.
 - Never ask if the user already gave 2 of (budget, bedrooms, vibe/use-case).
 
