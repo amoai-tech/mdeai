@@ -6,9 +6,12 @@ import {
   isRentalSearchUnavailable,
 } from "@/mastra/lib/rental-search-unavailable";
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
+import { buildRentalsUrl, parseBrowseFilters, type RentalBrowseSearchParams } from "@/lib/rentals/browse-filters";
 
 interface Props {
   params: Promise<{ id: string }>;
+  /** The browse filters the renter arrived with; used only to build "Back to results". */
+  searchParams?: Promise<RentalBrowseSearchParams>;
 }
 
 // skipcq: JS-0067 - Next.js App Router metadata export; not browser global scope
@@ -25,8 +28,10 @@ export async function generateMetadata({ params }: Props) {
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page `/rentals/[id]`. */
 // skipcq: JS-0067 - Next.js App Router page export; not browser global scope
-export default async function RentalDetailPage({ params }: Props) {
+export default async function RentalDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  // Only recognised, validated filters are carried back; anything else in the URL is ignored.
+  const backHref = buildRentalsUrl(parseBrowseFilters((await searchParams) ?? {}).filters);
 
   let detail;
   try {
@@ -57,7 +62,7 @@ export default async function RentalDetailPage({ params }: Props) {
           </Link>
         ) : null}
         <Link
-          href="/rentals"
+          href={backHref}
           className="text-sm text-primary hover:underline"
           data-testid="rental-detail-error-back"
         >
@@ -69,5 +74,5 @@ export default async function RentalDetailPage({ params }: Props) {
 
   if (!detail) notFound();
 
-  return <RentalDetailView detail={detail} />;
+  return <RentalDetailView detail={detail} backHref={backHref} />;
 }

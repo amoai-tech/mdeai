@@ -31,10 +31,11 @@ function textOf(node: unknown): string {
   return textOf(element.props?.children);
 }
 
-async function render(id = "rnt_lau_001") {
-  return (await RentalDetailPage({ params: Promise.resolve({ id }) })) as ReactElement<
-    Record<string, unknown>
-  >;
+async function render(id = "rnt_lau_001", searchParams?: Record<string, string>) {
+  return (await RentalDetailPage({
+    params: Promise.resolve({ id }),
+    searchParams: searchParams ? Promise.resolve(searchParams) : undefined,
+  })) as ReactElement<Record<string, unknown>>;
 }
 
 beforeEach(() => {
@@ -69,5 +70,28 @@ describe("/rentals/[id]", () => {
   it("a missing rental is a 404, not an error page", async () => {
     getRentalDetail.mockResolvedValue(null);
     await expect(render("nope")).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  describe("Back to results keeps the renter's filters (SAN-486)", () => {
+    const detail = { id: "abc", title: "Loft" };
+
+    it("passes the validated browse filters to the detail view as the back link", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      const page = await render("abc", { neighborhood: "Laureles", beds: "2", from: "2026-11-01", through: "2026-11-30", evil: "x" });
+      const backHref = page.props.backHref as string;
+      expect(backHref).toBe("/rentals?neighborhood=Laureles&beds=2&from=2026-11-01&through=2026-11-30");
+      expect(backHref).not.toContain("evil");
+    });
+
+    it("drops an impossible date instead of carrying it back", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      const page = await render("abc", { from: "2026-02-31", neighborhood: "Laureles" });
+      expect(page.props.backHref).toBe("/rentals?neighborhood=Laureles");
+    });
+
+    it("is plain /rentals when the renter arrived without filters", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      expect((await render("abc")).props.backHref).toBe("/rentals");
+    });
   });
 });

@@ -29,13 +29,13 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
     expect(run({})).toEqual(["not(available_from,is,null)", "or(available_to.is.null,available_to.gte.2026-10-13)"]);
   });
 
-  it("with a full stay it requires the listing to start on or before the first day and cover the last day and the length", () => {
+  it("with a full stay (Nov 1–30 inclusive = 30 days) it requires the listing to start on or before the first day and cover the last day and the length", () => {
     expect(run({ checkIn: "2026-11-01", checkOut: "2026-11-30" })).toEqual([
       "not(available_from,is,null)",
       "or(available_from.lte.2026-11-01)",
       "or(available_to.is.null,available_to.gte.2026-11-30)",
-      "or(minimum_stay_days.is.null,minimum_stay_days.lte.29)",
-      "or(maximum_stay_days.is.null,maximum_stay_days.gte.29)",
+      "or(minimum_stay_days.is.null,minimum_stay_days.lte.30)",
+      "or(maximum_stay_days.is.null,maximum_stay_days.gte.30)",
     ]);
   });
 

@@ -56,6 +56,8 @@ type RentalBrowseCardProps = {
   rental: Rental;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
   testId?: string;
+  /** Query string (with leading `?`) appended to the detail link so the renter's filters survive the trip. */
+  detailSearch?: string;
   selected?: boolean;
   onSelect?: () => void;
   /** Hover/focus highlights the pin without moving the map camera. */
@@ -119,6 +121,7 @@ function RentalBrowseCardMedia({
 export function RentalBrowseCard({
   rental,
   testId,
+  detailSearch,
   selected,
   onSelect,
   onPreview,
@@ -205,7 +208,7 @@ export function RentalBrowseCard({
       <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
       <h3 className="mt-0.5 font-medium leading-snug">
         <Link
-          href={`/rentals/${rental.id}`}
+          href={`/rentals/${rental.id}${detailSearch ?? ""}`}
           data-testid={`rental-card-link-${rental.id}`}
           className="hover:underline"
           onClick={(e) => e.stopPropagation()}
