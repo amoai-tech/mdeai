@@ -16,6 +16,9 @@
 --   rather than failing on a schema the rebuild cannot create yet. It runs in full wherever the
 --   schema exists (a production-like database, or after SAN-1482).
 --
+-- NOTE: Fresh main rebuilds do not yet include the vote schema (SAN-1482).
+-- Use to_regclass/to_regnamespace for optional objects: direct ::regclass
+-- and ::regnamespace casts throw before a WHERE guard can skip the pgTAP case.
 -- Run with: supabase test db
 
 begin;
@@ -47,7 +50,7 @@ select is(
 
 select is(
   (select count(*)::int
-     from aclexplode((select relacl from pg_class where oid = 'vote.entities'::regclass)) a
+     from aclexplode((select relacl from pg_class where oid = to_regclass('vote.entities'))) a
     where a.grantee = 0 and a.privilege_type = 'SELECT'),
   0, 'no PUBLIC select grant remains on vote.entities'
 ) where to_regclass('vote.entities') is not null;
@@ -82,7 +85,7 @@ select is(
   (select count(*)::int
      from pg_proc p
      cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-    where p.pronamespace = 'vote'::regnamespace
+    where p.pronamespace = to_regnamespace('vote')
       and p.proname in ('recompute_entity_tally', 'trigger_recompute_on_vote', 'trigger_recompute_on_judge_score')
       and a.grantee = 0 and a.privilege_type = 'EXECUTE'),
   0, 'no PUBLIC execute grant remains on the vote helpers'
