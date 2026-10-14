@@ -24,13 +24,15 @@ const { data: bucket, error: bucketError } = await db.storage.getBucket('listing
 if (bucketError || !bucket?.public) throw Error('Destination bucket must already be public');
 
 const {data: rows, error: rowError} = await db.from('apartments')
-  .select('id,slug,landlord_id,status,listing_workflow_status,moderation_status,verified,metadata,images,source_url,available_from')
+  .select('id,slug,landlord_id,status,listing_workflow_status,moderation_status,verified,metadata,images,source_url,available_from,price_monthly,currency')
   .eq('landlord_id', landlord).in('slug', [...slugs]);
 if (rowError || rows?.length !== 9) throw Error('Expected exactly 9 owned external candidates');
 for (const r of rows) {
   if (!slugs.has(r.slug) || r.status !== 'inactive' || r.listing_workflow_status !== 'draft'
       || r.moderation_status !== 'pending' || r.verified !== false
       || r.available_from !== '2026-10-14'
+      || r.currency !== 'COP'
+      || !Number.isFinite(Number(r.price_monthly)) || Number(r.price_monthly) <= 0
       || r.metadata?.inventory_kind !== 'external_candidate'
       || r.metadata?.allowed_action !== 'view_original_listing'
       || !/^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(r.source_url)) {
@@ -146,11 +148,13 @@ for (const {row,urls} of saved) {
   updatedRows.push(row);
 }
 const {data:verified,error:readbackError} = await db.from('apartments')
-  .select('slug,images,status,listing_workflow_status,verified,metadata')
+  .select('slug,images,status,listing_workflow_status,verified,metadata,price_monthly,currency')
   .eq('landlord_id',landlord).in('slug',[...slugs]);
 if (readbackError || verified?.length !== 9
   || verified.some(r=>r.images?.length !== 4
     || r.metadata?.external_discovery_publication !== 'user_authorized_2026-10-14'
+    || r.currency !== 'COP'
+    || !Number.isFinite(Number(r.price_monthly)) || Number(r.price_monthly) <= 0
     || r.status !== 'inactive' || r.listing_workflow_status !== 'draft'
     || r.verified !== false)) throw Error('Final nine-listing verification failed');
 console.log('SUCCESS: 9 externally discoverable records / 36 public image URLs. Verified viewing restrictions unchanged.');
@@ -162,12 +166,15 @@ console.log('SUCCESS: 9 externally discoverable records / 36 public image URLs. 
 } catch (error) {
   console.error('PUBLICATION_INTERRUPTED: do not rerun blindly.', error);
   for (const row of updatedRows.reverse()) {
-    const {error: rollbackError} = await db.from('apartments')
+    const {data: rolledBack, error: rollbackError} = await db.from('apartments')
       .update({images:row.images,metadata:row.metadata})
       .eq('id',row.id)
       .eq('landlord_id',landlord)
-      .eq('status','inactive').eq('listing_workflow_status','draft');
-    if (rollbackError) console.error('ROLLBACK_FAILED for',row.slug);
+      .eq('status','inactive').eq('listing_workflow_status','draft')
+      .select('id');
+    if (rollbackError || rolledBack?.length !== 1 || rolledBack[0]?.id !== row.id) {
+      console.error('ROLLBACK_FAILED for',row.slug);
+    }
   }
   console.error('Review docs/07-operations/external-rental-publication-recovery.md');
   process.exitCode = 1;

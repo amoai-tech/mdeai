@@ -64,6 +64,7 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
       || metadata.inventory_kind !== "external_candidate"
       || metadata.allowed_action !== "view_original_listing"
       || metadata.external_discovery_publication !== "user_authorized_2026-10-14"
+      || metadata.public_photo_republication_permission !== "user_attested_2026-10-14"
       || !row.source_url || !/^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(row.source_url)
       || row.currency !== "COP"
       || !(Number(row.price_monthly) > 0)) return null;
@@ -106,7 +107,11 @@ export async function searchPublicExternalRentals(query: RentalQuery): Promise<R
     .eq("status", "inactive")
     .eq("listing_workflow_status", "draft")
     .eq("moderation_status", "pending")
-    .eq("verified", false);
+    .eq("verified", false)
+    .contains("metadata", {
+      external_discovery_publication: "user_authorized_2026-10-14",
+      public_photo_republication_permission: "user_attested_2026-10-14",
+    });
   if (error) throw new Error("Public external discovery temporarily unavailable");
 
   return (data ?? [])

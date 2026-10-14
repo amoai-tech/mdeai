@@ -8,6 +8,17 @@ vi.mock("@/lib/supabase/service", () => ({
         select: () => query,
         in: () => query,
         eq: () => query,
+        contains: (_column: string, expected: Record<string, unknown>) => {
+          return {
+            then: (resolve: (value: unknown) => unknown) => Promise.resolve({
+              data: searchMock.rows.filter((row) => {
+                const metadata = row.metadata as Record<string, unknown> | undefined;
+                return Object.entries(expected).every(([key, value]) => metadata?.[key] === value);
+              }),
+              error: null,
+            }).then(resolve),
+          };
+        },
         then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
       };
       return query;
@@ -40,6 +51,7 @@ const base = {
     inventory_kind: "external_candidate",
     allowed_action: "view_original_listing",
     external_discovery_publication: "user_authorized_2026-10-14",
+    public_photo_republication_permission: "user_attested_2026-10-14",
     map_geocoding: { provider: "google_geocoding_api", location_type: "ROOFTOP" },
   },
 };
@@ -59,6 +71,12 @@ describe("public external source cards", () => {
 
   it("refuses unapproved source ads, other domains, and other candidates", () => {
     expect(publicExternalRentalCard({ ...base, metadata: { ...base.metadata, external_discovery_publication: "development_only" } })).toBeNull();
+    expect(publicExternalRentalCard({ ...base, metadata: { ...base.metadata, public_photo_republication_permission: "pending" } })).toBeNull();
+    expect(publicExternalRentalCard({
+      ...base,
+      metadata: {inventory_kind: "external_candidate", allowed_action: "view_original_listing",
+        external_discovery_publication: "user_authorized_2026-10-14"},
+    })).toBeNull();
     expect(publicExternalRentalCard({ ...base, source_url: "https://evil.example/rental" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, slug: "other-landlord-private-draft" })).toBeNull();
     expect(publicExternalRentalCard({ ...base, landlord_id: "another-profile" })).toBeNull();
@@ -132,6 +150,16 @@ describe("public external rental search date filtering", () => {
     const eligible = await searchPublicExternalRentals({ checkOut: "2026-10-15", limit: 9 });
     expect(eligible).toHaveLength(1);
     expect(eligible[0]?.availability).toContain("Available from 2026-10-14");
+  });
+
+  it("excludes unpermissioned external records at the Supabase search gate", async () => {
+    searchMock.rows = [
+      {...base, metadata: {...base.metadata, public_photo_republication_permission: "pending"}},
+      {...base},
+    ];
+    const result = await searchPublicExternalRentals({limit: 9});
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe(base.slug);
   });
 
   it("does not claim past dates when a source end date is recorded", async () => {
