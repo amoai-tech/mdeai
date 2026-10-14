@@ -79,4 +79,14 @@ test.describe("SAN-1431 local rental preview — mobile 390px", () => {
     await expectImageLoaded(page.locator(CARD).locator("img").first(), "mobile cover");
     await expectNoHorizontalOverflow(page);
   });
+
+  test("preview detail shows the preview notice, not a host-payment claim", async ({ page }) => {
+    await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });
+    await page.locator(`${CARD} a[href^="/rentals/"]`).first().click();
+    await expect(page.getByTestId("rental-detail")).toBeVisible();
+    const cta = page.getByTestId("rental-detail-mobile-cta");
+    await expect(cta).toBeVisible();
+    await expect(cta).toContainText("Preview only — real inquiries disabled");
+    await expect(cta).not.toContainText("Request only");
+  });
 });

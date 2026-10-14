@@ -4,26 +4,24 @@ import os from "node:os";
 import path from "node:path";
 
 // The preview reads the private partner-assets bucket with the server-only service
-// client. Mock that client so no credential or network is needed, and so the test
-// can prove the URL/order behaviour without touching real Storage.
+// client. Mock that client so no credential or network is needed. The mock derives
+// the returned bytes from the *requested object path*, so a canned response that
+// ignores the requested photo is detected instead of passing.
 const h = vi.hoisted(() => {
-  const bytes = new Uint8Array([82, 73, 70, 70, 1, 2, 3, 4]);
+  const bytesFor = (objectPath: string) =>
+    new TextEncoder().encode(`WEBP:${objectPath}`);
   const images = [0, 1, 2, 3].map((sort_order) => ({
     sort_order,
     storage_path: `partner-assets/source-review/fincaraiz/apt-1/${sort_order + 1}-hash.webp`,
     mime_type: "image/webp",
   }));
-  return {
-    bytes,
-    images,
-    download: vi.fn(
-      async (): Promise<{ data: Blob | null; error: unknown }> => ({
-        data: new Blob([bytes]),
-        error: null,
-      }),
-    ),
-    knownSlug: "candidate-fincaraiz-193916988",
-  };
+  const download = vi.fn(
+    async (objectPath: string): Promise<{ data: Blob | null; error: unknown }> => ({
+      data: new Blob([bytesFor(objectPath)]),
+      error: null,
+    }),
+  );
+  return { bytesFor, images, download, knownSlug: "candidate-fincaraiz-193916988" };
 });
 
 vi.mock("@/lib/supabase/service", () => ({
@@ -57,6 +55,7 @@ import {
   getLocalPreviewDetail,
   getLocalPreviewPhoto,
   getLocalPreviewRentals,
+  isLocalPreviewHost,
   isLocalRentalPreviewEnabled,
 } from "@/lib/rentals/dev-rental-preview";
 
@@ -78,6 +77,8 @@ const candidate = {
 
 const photoUrl = (index: number) =>
   `/api/dev/rental-photo/${candidate.slug}/photo-0${index + 1}.webp`;
+const objectPath = (index: number) =>
+  `source-review/fincaraiz/apt-1/${index + 1}-hash.webp`;
 
 let root: string;
 
@@ -88,7 +89,6 @@ beforeEach(async () => {
   vi.stubEnv("MDE_DEV_RENTAL_PREVIEW", "1");
   vi.stubEnv("NODE_ENV", "development");
   h.download.mockClear();
-  h.download.mockResolvedValue({ data: new Blob([h.bytes]), error: null });
 });
 
 afterEach(async () => {
@@ -109,7 +109,19 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(h.download).not.toHaveBeenCalled();
   });
 
-  it("shows the source price and all four Storage photos without claiming viewing rights, availability or a map pin", async () => {
+  it("only serves the preview to localhost hosts", () => {
+    expect(isLocalPreviewHost("127.0.0.1:3016")).toBe(true);
+    expect(isLocalPreviewHost("localhost:3001")).toBe(true);
+    expect(isLocalPreviewHost("[::1]:3016")).toBe(true);
+    expect(isLocalPreviewHost("dev.example.com")).toBe(false);
+    expect(isLocalPreviewHost("192.168.1.10:3016")).toBe(false);
+    expect(isLocalPreviewHost("0.0.0.0:3016")).toBe(false);
+    expect(isLocalPreviewHost("")).toBe(false);
+    expect(isLocalPreviewHost(null)).toBe(false);
+    expect(isLocalPreviewHost(undefined)).toBe(false);
+  });
+
+  it("shows the source price and all four Storage photos without claiming availability or a map pin", async () => {
     const rentals = await getLocalPreviewRentals();
     expect(rentals).toHaveLength(1);
     expect(rentals[0]).toMatchObject({
@@ -121,7 +133,8 @@ describe("local rental preview (no publishing bypass)", () => {
       schedule_viewing_url: null,
       tags: ["dev-preview"],
     });
-    expect(rentals[0].availability).toMatch(/unconfirmed/i);
+    // Exact string: a disclaimer that also claims availability must fail, not pass on /unconfirmed/i.
+    expect(rentals[0].availability).toBe("Availability unconfirmed · Development preview");
     expect(rentals[0].latitude).toBeUndefined();
     expect(rentals[0].longitude).toBeUndefined();
 
@@ -137,11 +150,21 @@ describe("local rental preview (no publishing bypass)", () => {
     });
   });
 
-  it("streams the ordered photo bytes and rejects unknown slugs, filenames and positions", async () => {
-    const photo = await getLocalPreviewPhoto(candidate.slug, "photo-01.webp");
-    expect(photo?.contentType).toBe("image/webp");
-    expect(Buffer.from(photo?.bytes ?? new ArrayBuffer(0))).toEqual(Buffer.from(h.bytes));
+  it("streams each photo from its own object path in sort order", async () => {
+    const first = await getLocalPreviewPhoto(candidate.slug, "photo-01.webp");
+    const second = await getLocalPreviewPhoto(candidate.slug, "photo-02.webp");
+    if (!first || !second) throw new Error("expected both photos to resolve");
 
+    expect(first.contentType).toBe("image/webp");
+    expect(Buffer.from(first.bytes)).toEqual(Buffer.from(h.bytesFor(objectPath(0))));
+    expect(Buffer.from(second.bytes)).toEqual(Buffer.from(h.bytesFor(objectPath(1))));
+    // A canned response that ignores the requested photo would make these equal.
+    expect(Buffer.from(first.bytes)).not.toEqual(Buffer.from(second.bytes));
+    expect(h.download).toHaveBeenNthCalledWith(1, objectPath(0));
+    expect(h.download).toHaveBeenNthCalledWith(2, objectPath(1));
+  });
+
+  it("rejects unknown slugs, filenames and positions", async () => {
     expect(await getLocalPreviewPhoto(candidate.slug, "../.env")).toBeNull();
     expect(await getLocalPreviewPhoto("../../etc", "photo-01.webp")).toBeNull();
     expect(await getLocalPreviewPhoto("candidate-fincaraiz-999999999", "photo-01.webp")).toBeNull();
@@ -152,7 +175,7 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-0x.webp")).toBeNull();
   });
 
-  it("returns no URL for a missing Storage object and no bytes when Storage errors", async () => {
+  it("returns no bytes when Storage errors", async () => {
     h.download.mockResolvedValueOnce({ data: null, error: { message: "not found" } });
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
   });
@@ -168,10 +191,14 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(rental.can_schedule_viewing).toBe(false);
   });
 
-  it("rejects malicious fixture records even in development", async () => {
-    await writeFile(path.join(root, "supabase_draft_records.json"), JSON.stringify([
+  it("rejects malformed fixture records (slug, amenities, building_amenities)", async () => {
+    for (const bad of [
       { ...candidate, slug: "../../outside" },
-    ]));
-    await expect(getLocalPreviewRentals()).rejects.toThrow("missing or invalid");
+      { ...candidate, amenities: "internet" },
+      { ...candidate, building_amenities: [1, 2] },
+    ]) {
+      await writeFile(path.join(root, "supabase_draft_records.json"), JSON.stringify([bad]));
+      await expect(getLocalPreviewRentals()).rejects.toThrow("missing or invalid");
+    }
   });
 });

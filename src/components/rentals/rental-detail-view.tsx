@@ -139,11 +139,14 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Preview details must not imply that payment is handled with an unverified host. */
+  isDevelopmentPreview?: boolean;
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
@@ -154,7 +157,9 @@ const RentalMobileCta = ({
         <div className="truncate font-mono text-sm font-semibold">
           {prices.monthlyLabel ?? prices.nightlyLabel ?? PENDING}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">{REQUEST_ONLY}</div>
+        <div className="truncate text-[11px] text-muted-foreground">
+          {isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}
+        </div>
       </div>
       {canRequestViewing ? (
         <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
@@ -308,6 +313,7 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isDevelopmentPreview={detail.status === "development-preview"}
       />
     </main>
   );

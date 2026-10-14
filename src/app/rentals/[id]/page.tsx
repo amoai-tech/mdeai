@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getRentalDetail } from "@/lib/rentals/get-rental-detail";
 import {
@@ -6,7 +7,17 @@ import {
   isRentalSearchUnavailable,
 } from "@/mastra/lib/rental-search-unavailable";
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
-import { getLocalPreviewDetail, isLocalRentalPreviewEnabled } from "@/lib/rentals/dev-rental-preview";
+import {
+  getLocalPreviewDetail,
+  isLocalPreviewHost,
+  isLocalRentalPreviewEnabled,
+} from "@/lib/rentals/dev-rental-preview";
+
+/** A candidate detail is only served to a localhost request with the dev flag on. */
+async function isLocalPreviewRequest(): Promise<boolean> {
+  if (!isLocalRentalPreviewEnabled()) return false;
+  return isLocalPreviewHost((await headers()).get("host"));
+}
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -16,9 +27,8 @@ interface Props {
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   try {
-    const detail = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-")
-      ? await getLocalPreviewDetail(id)
-      : await getRentalDetail(id);
+    const preview = (await isLocalPreviewRequest()) && id.startsWith("candidate-fincaraiz-");
+    const detail = preview ? await getLocalPreviewDetail(id) : await getRentalDetail(id);
     if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
     /* fall through to default */
@@ -30,12 +40,11 @@ export async function generateMetadata({ params }: Props) {
 // skipcq: JS-0067 - Next.js App Router page export; not browser global scope
 export default async function RentalDetailPage({ params }: Props) {
   const { id } = await params;
+  const preview = (await isLocalPreviewRequest()) && id.startsWith("candidate-fincaraiz-");
 
   let detail;
   try {
-    detail = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-")
-      ? await getLocalPreviewDetail(id)
-      : await getRentalDetail(id);
+    detail = preview ? await getLocalPreviewDetail(id) : await getRentalDetail(id);
   } catch (err) {
     console.error("[/rentals/[id]] load failed:", describeRentalSearchError(err));
     const unavailable = isRentalSearchUnavailable(err);
@@ -74,7 +83,6 @@ export default async function RentalDetailPage({ params }: Props) {
 
   if (!detail) notFound();
 
-  const preview = isLocalRentalPreviewEnabled() && id.startsWith("candidate-fincaraiz-");
   return (
     <>
       {preview ? (

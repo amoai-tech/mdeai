@@ -60,6 +60,31 @@ export function isLocalRentalPreviewEnabled(
   return nodeEnv === "development" && flag === "1";
 }
 
+/**
+ * Only a genuinely local request may see the research fixture and its private
+ * photos. A tunnel (ngrok, Cloudflare) or a dev server bound to 0.0.0.0 changes
+ * the Host header, so it fails this check and the preview 404s instead of
+ * exposing research material to whoever can reach the port.
+ */
+export function isLocalPreviewHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const value = host.trim().toLowerCase();
+  const hostname = value.startsWith("[")
+    ? value.slice(1, value.indexOf("]"))
+    : value.split(":")[0];
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "0:0:0:0:0:0:0:1"
+  );
+}
+
+/** Fixture array fields must be string arrays (or absent), or the UI can crash. */
+function isStringArrayOrAbsent(value: unknown): boolean {
+  return value == null || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
 function fixtureRoot(): string {
   return process.env.MDE_DEV_RENTAL_FIXTURES_DIR?.trim() ||
     path.join(process.cwd(), "photos", "medellin_furnished_import");
@@ -72,6 +97,7 @@ function validCandidate(value: unknown): value is Candidate {
     typeof r.title === "string" &&
     typeof r.price_monthly === "number" && r.price_monthly > 0 &&
     r.currency === "COP" && typeof r.source_url === "string" &&
+    isStringArrayOrAbsent(r.amenities) && isStringArrayOrAbsent(r.building_amenities) &&
     // Eight source rows retain an aggregator URL while the original Fincaraíz
     // link is in metadata. Accept only the known domains; do not accept any URL.
     (r.source_url.startsWith("https://www.fincaraiz.com.co/") ||

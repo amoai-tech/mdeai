@@ -1,12 +1,20 @@
-import { getLocalPreviewPhoto, isLocalRentalPreviewEnabled } from "@/lib/rentals/dev-rental-preview";
+import {
+  getLocalPreviewPhoto,
+  isLocalPreviewHost,
+  isLocalRentalPreviewEnabled,
+} from "@/lib/rentals/dev-rental-preview";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string; filename: string }> },
 ) {
-  if (!isLocalRentalPreviewEnabled()) return new Response(null, { status: 404 });
+  // Dev flag AND a localhost Host header. A tunnel or a 0.0.0.0-bound server
+  // changes the Host, so research photos can never leave the developer machine.
+  if (!isLocalRentalPreviewEnabled() || !isLocalPreviewHost(request.headers.get("host"))) {
+    return new Response(null, { status: 404 });
+  }
   const { slug, filename } = await params;
   // Reads the private bucket with the server-only service client and streams the
   // bytes; the browser never sees the credential, the storage path, or a URL.

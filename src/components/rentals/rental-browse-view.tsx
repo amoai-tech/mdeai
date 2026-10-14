@@ -17,18 +17,8 @@ import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
+import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
-
-function buildRetryHref(filters: {
-  neighborhood?: string | null;
-  beds?: string | null;
-}): string {
-  const p = new URLSearchParams();
-  if (filters.neighborhood) p.set("neighborhood", filters.neighborhood);
-  if (filters.beds) p.set("beds", filters.beds);
-  const q = p.toString();
-  return q ? `/rentals?${q}` : "/rentals";
-}
 
 function formatCountSubtitle(total: number, shown: number): string {
   if (total === 0) return "0 apartments";
@@ -60,7 +50,8 @@ function RentalBrowseViewInner({
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
-  const retryHref = buildRetryHref({ neighborhood, beds });
+  // A preview fixture failure must retry the preview, not send the user to the public browse.
+  const retryHref = buildRetryHref({ neighborhood, beds }, previewMode);
 
   const pins = useMemo(
     () =>
