@@ -175,6 +175,12 @@ export function evaluatePreflight(state) {
   // ── 4 · On the release branch ────────────────────────────────────────────────────────────
   if (state.branch === EXPECTED_BRANCH) {
     add("pass", `current branch is ${EXPECTED_BRANCH}`);
+  } else if (state.branch === "HEAD" && state.head && state.head === state.originMain) {
+    // `git rev-parse --abbrev-ref HEAD` prints "HEAD" for a detached checkout. `main` can only
+    // be checked out in one worktree, so a clean release worktree is detached at origin/main.
+    // That carries nothing unreleased: the commit IS origin/main. A detached HEAD anywhere
+    // else still fails below, and check 5 independently requires HEAD == origin/main.
+    add("pass", `detached HEAD at exactly origin/${EXPECTED_BRANCH} — same commit as the release branch`);
   } else if (state.branch === null) {
     add("fail", `cannot determine the current branch — refusing to assume ${EXPECTED_BRANCH}`);
   } else {
