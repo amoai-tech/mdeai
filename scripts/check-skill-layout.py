@@ -38,6 +38,10 @@ RETIRED = {
     'stripe-review', 'supabase-review',
     # Retired before this PR; keep them forbidden as regression guards.
     'maps-review', 'nextjs-review',
+    # Codacy is the single active owner. Catch reintroduced duplicate entry points
+    # in either canonical skills or the Codex exposure mirror.
+    'codacy-analysis-cli', 'codacy-cloud-cli', 'codacy-code-review',
+    'configure-codacy', 'configure-codacy-cloud', 'setup-coverage',
 }
 
 LINK_RE = re.compile(r'\]\(([^)\s]+)\)')

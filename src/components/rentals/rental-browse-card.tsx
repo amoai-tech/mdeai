@@ -21,7 +21,7 @@ function bedroomLabel(bedrooms: number, bedroomsUnknown = false): string {
 
 const FEATURED_AMENITIES = ["wifi", "workspace", "kitchen", "gym", "pool", "balcony", "parking"];
 
-const AMENITY_LABELS: Record<string, string> = {
+const AMENITY_LABELS = new Map(Object.entries({
   wifi: "WiFi",
   workspace: "Workspace",
   kitchen: "Kitchen",
@@ -39,11 +39,11 @@ const AMENITY_LABELS: Record<string, string> = {
   rooftop: "Rooftop",
   concierge: "Concierge",
   "long-stay": "Long-stay",
-};
+}));
 
 function amenityLabel(raw: string): string {
   const key = raw.toLowerCase().trim();
-  return AMENITY_LABELS[key] ?? raw.charAt(0).toUpperCase() + raw.slice(1);
+  return AMENITY_LABELS.get(key) ?? raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 function topAmenities(amenities: string[] | null, limit = 3): string[] {
@@ -58,6 +58,8 @@ type RentalBrowseCardProps = {
   rental: Rental;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
   testId?: string;
+  /** Query string (with leading `?`) appended to the detail link so the renter's filters survive the trip. */
+  detailSearch?: string;
   selected?: boolean;
   onSelect?: () => void;
   /** Hover/focus highlights the pin without moving the map camera. */
@@ -124,6 +126,7 @@ function RentalBrowseCardMedia({
 export function RentalBrowseCard({
   rental,
   testId,
+  detailSearch,
   selected,
   onSelect,
   onPreview,
@@ -240,7 +243,7 @@ export function RentalBrowseCard({
           </a>
         ) : (
           <Link
-            href={`/rentals/${rental.id}`}
+            href={`/rentals/${rental.id}${detailSearch ?? ""}`}
             data-testid={`rental-card-link-${rental.id}`}
             className="hover:underline"
             onClick={(event) => event.stopPropagation()}

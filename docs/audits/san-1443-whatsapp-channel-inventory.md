@@ -33,7 +33,7 @@ byte-identical to the archived 2026-05-24 snapshot. The archive is a faithful re
 | `postiz-approval-webhook` | v18 | true | `ec67a93f6c18e972f1d07a0c1d5b5b52b43bab550a91689f30d33d8e5e9330c9` | yes | Low — JWT verified |
 
 Archived recovery path (preserve, do not delete):
-`sq/docs/_archive/legacy-active-docs-2026-09-18/tasks/backup/edge-functions-2026-05-24/deployed-live/supabase/functions/<slug>/index.ts`
+`docs/_archive/legacy-active-docs-2026-09-18/tasks/backup/edge-functions-2026-05-24/deployed-live/supabase/functions/<slug>/index.ts`
 
 ## 2. Sender inventory
 

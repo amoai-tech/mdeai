@@ -1,0 +1,38 @@
+[
+  {
+    "id": "codacy-1",
+    "prompt": "Codacy says my PR has 3 security findings. Use the Codacy CLI to verify and propose fixes.",
+    "should_trigger": true,
+    "expected_owner": "codacy"
+  },
+  {
+    "id": "codacy-2",
+    "prompt": "The local codacy-analysis scan ran zero tools; troubleshoot configuration before reporting any verdict.",
+    "should_trigger": true,
+    "expected_owner": "codacy"
+  },
+  {
+    "id": "codacy-3",
+    "prompt": "Configure Codacy Cloud coding standards and check why our changed-line coverage isn't uploading.",
+    "should_trigger": true,
+    "expected_owner": "codacy"
+  },
+  {
+    "id": "codacy-4",
+    "prompt": "Audit PR #290 for merge readiness, including RLS, reviews and current CI without mentioning Codacy.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "codacy-5",
+    "prompt": "Our production rental viewing requests are getting duplicated. Find the root cause.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "codacy-6",
+    "prompt": "Please design a focused Playwright end-to-end regression test plan for the event checkout.",
+    "should_trigger": false,
+    "expected_owner": "tests"
+  }
+]

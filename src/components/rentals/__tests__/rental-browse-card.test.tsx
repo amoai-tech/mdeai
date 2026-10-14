@@ -70,6 +70,11 @@ function renderCard(
 }
 
 describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
+  it("treats inherited object keys as ordinary amenity text, not object properties", () => {
+    const html = renderCard({ amenities: ["constructor"] });
+    expect(html).toContain("Constructor");
+  });
+
   it("shows the schedule CTA for a fully owned, approved, published, available listing", () => {
     const html = renderCard();
     expect(html).toContain('data-testid="rental-schedule-cta"');
@@ -287,7 +292,9 @@ describe("External rental title navigation", () => {
       can_schedule_viewing: false,
       schedule_viewing_url: null,
     };
-    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} />);
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rental} detailSearch="?from=2026-11-01&through=2026-11-30" />,
+    );
     expect(html).toContain('data-testid="rental-card-link-candidate-fincaraiz-193916988"');
     expect(html).toContain('href="https://fincaraiz.com.co/apartment/193916988"');
     expect(html).not.toContain('/rentals/candidate-fincaraiz-193916988');
@@ -298,5 +305,15 @@ describe("External rental title navigation", () => {
   it("keeps the normal MDE detail route for verified internal rentals", () => {
     const html = renderCard();
     expect(html).toContain('href="/rentals/rnt_lau_001"');
+  });
+
+  it("preserves stay filters only in the MDE detail link", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={rowToRental(apartmentRow())}
+        detailSearch="?from=2026-11-01&through=2026-11-30"
+      />,
+    );
+    expect(html).toContain('href="/rentals/rnt_lau_001?from=2026-11-01&amp;through=2026-11-30"');
   });
 });
