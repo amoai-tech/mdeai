@@ -217,8 +217,8 @@ def allowed_tools_errors(
     if not re.fullmatch(rf'{tool_spec}(?: +{tool_spec})*', raw):
         return [f'{path}: allowed-tools must be a single-line plain scalar']
     if re.search(
-        r'(?:^| )Bash(?: |$)|Bash\((?:npm|npx|pnpm|bun|bash|sh):\*\)|'
-        r'Bash\(\*\)|Bash\(:\*\)',
+        r'(?:^| )Bash(?: |$)|Bash\((?:npm|npx|pnpm|bun|bash|sh)(?::| +)\*\)|'
+        r'Bash\( *\* *\)|Bash\( *:\* *\)',
         raw,
     ):
         return [f'{path}: broad shell preapproval prohibited in allowed-tools']

@@ -297,6 +297,29 @@ test("rejects malformed duplicate frontmatter and broad shell preapproval", () =
   assert.match(failing(fixture("allowed-tools: Bash(npx:*)")), /broad shell preapproval/);
 });
 
+test("rejects space-wildcard shell preapprovals without rejecting scoped commands", () => {
+  const fixture = (tools) => writeSkill(tmpRepo(), "alpha", {
+    body: `---\nname: alpha\ndescription: Use when testing permissions.\nallowed-tools: ${tools}\n---\n# Alpha\n`,
+  });
+  for (const rule of [
+    "Bash(npm *)",
+    "Bash(npx *)",
+    "Bash(pnpm *)",
+    "Bash(bun *)",
+    "Bash(bash *)",
+    "Bash(sh *)",
+    "Bash(npm  *)",
+    "Bash( *)",
+    "Bash( :*)",
+  ]) {
+    assert.match(failing(fixture(rule)), /broad shell preapproval/, rule);
+  }
+  for (const rule of ["Read Glob Bash(git:status)", "Bash(git status)"]) {
+    const result = runChecker(fixture(rule));
+    assert.equal(result.status, 0, `${rule} unexpectedly rejected: ${result.stdout}`);
+  }
+});
+
 test("accepts folded description and reports evaluation definitions as unexecuted", () => {
   const root = writeSkill(tmpRepo(), "alpha", {
     body: "---\nname: alpha\ndescription: >-\n  Use when verifying a skill.\n  Do not change production.\nmetadata:\n  version: 1.0\n---\n# Skill\n",
