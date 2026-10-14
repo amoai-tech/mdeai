@@ -6,9 +6,15 @@
  * A configuration error disables the channel; an UNEXPECTED error is re-thrown so a real
  * fault surfaces at startup instead of silently dropping customer messages.
  */
-import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
+import { createWhatsAppAdapter, type WhatsAppAdapter, type WhatsAppRawMessage } from "@chat-adapter/whatsapp";
+import type { AdapterPostableMessage, RawMessage } from "chat";
 import { readWhatsAppChannelEnv } from "@/lib/whatsapp/channel-env";
-import { installWhatsAppSendInterceptor } from "@/lib/whatsapp/outbound-tracker";
+import {
+  bufferOutboundText,
+  installWhatsAppSendInterceptor,
+  isTrackingOutbound,
+  setBufferedFlusher,
+} from "@/lib/whatsapp/outbound-tracker";
 
 /**
  * The adapter throws a chat-sdk ValidationError but does not re-export the class from its
@@ -18,13 +24,82 @@ function isAdapterConfigError(error: unknown): boolean {
   return error instanceof Error && error.name === "ValidationError";
 }
 
+function postableText(message: AdapterPostableMessage): string {
+  if (typeof message === "string") return message;
+  const candidate = message as { markdown?: unknown; text?: unknown };
+  if (typeof candidate.markdown === "string") return candidate.markdown;
+  if (typeof candidate.text === "string") return candidate.text;
+  return "";
+}
+
+/** Approval prompts and media must post immediately; only plain reply text is buffered. */
+function isPlainText(message: AdapterPostableMessage): boolean {
+  if (typeof message === "string") return true;
+  const candidate = message as unknown as Record<string, unknown>;
+  return (
+    candidate.interactive === undefined &&
+    candidate.buttons === undefined &&
+    candidate.card === undefined &&
+    candidate.attachments === undefined &&
+    candidate.files === undefined &&
+    candidate.media === undefined
+  );
+}
+
+/**
+ * Buffer the WHOLE agent run and post one reply.
+ *
+ * Mastra's static channel driver flushes buffered text on every step boundary (text-end,
+ * step-finish AND tool-call), so a model that narrates before a tool call would produce several
+ * WhatsApp notifications. Inside a worker scope we hold plain reply text and send only the final
+ * answer once; approval/media messages still post immediately.
+ *
+ * The flusher is bound to THIS adapter instance and registered in the run's scope, so concurrent
+ * runs can never route a reply through another sender.
+ */
+function attachWholeRunBuffer(adapter: WhatsAppAdapter): WhatsAppAdapter {
+  if (typeof adapter.postMessage !== "function") {
+    console.error("[whatsapp] adapter exposes no postMessage; single-reply buffering is disabled");
+    return adapter;
+  }
+  const sendDirect = adapter.postMessage.bind(adapter);
+  adapter.postMessage = async (
+    threadId: string,
+    message: AdapterPostableMessage,
+  ): Promise<RawMessage<WhatsAppRawMessage>> => {
+    if (isTrackingOutbound() && isPlainText(message)) {
+      const text = postableText(message);
+      if (text.trim() !== "") {
+        bufferOutboundText(threadId, text);
+        setBufferedFlusher(async (targetThreadId, finalText) => {
+          const raw = await sendDirect(targetThreadId, finalText);
+          return typeof raw?.id === "string" ? raw.id : null;
+        });
+        return { id: "buffered", raw: {} as WhatsAppRawMessage, threadId };
+      }
+    }
+    return sendDirect(threadId, message);
+  };
+  return adapter;
+}
+
 export function buildConciergeChannels() {
   const env = readWhatsAppChannelEnv();
   if (!env) return undefined;
   try {
     // Record every physical Meta send (chunked text and media included) for the worker's scope.
     installWhatsAppSendInterceptor();
-    return { adapters: { whatsapp: createWhatsAppAdapter(env) } };
+    return {
+      adapters: {
+        whatsapp: {
+          adapter: attachWholeRunBuffer(createWhatsAppAdapter(env)),
+          // No streamed session and no tool cards: the adapter shows a typing indicator while the
+          // agent works, and the run scope posts the single consolidated final reply.
+          streaming: false,
+          toolDisplay: "hidden" as const,
+        },
+      },
+    };
   } catch (error) {
     if (isAdapterConfigError(error)) {
       console.error("[whatsapp] channel disabled — adapter rejected its configuration", {

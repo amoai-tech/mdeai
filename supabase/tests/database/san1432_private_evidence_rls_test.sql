@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(26);
+select plan(38);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIXTURES
@@ -57,6 +57,10 @@ select id, 'san1432/' || slug || '.jpg', 'image/jpeg', 'unverified'
   from public.apartments where slug like 'san1432-%';
 insert into public.rental_grounding (apartment_id, source_type, source_url, extracted_text)
 select id, 'source_page', 'https://example.com/' || slug, 'private grounding text'
+  from public.apartments where slug like 'san1432-%';
+insert into public.property_verifications (apartment_id, status, notes, metadata)
+select id, 'verified', 'private verification note for ' || slug,
+       jsonb_build_object('source', 'san1432-fixture')
   from public.apartments where slug like 'san1432-%';
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -154,6 +158,62 @@ select set_config('request.jwt.claim.sub', '', true);
 select is((select count(*)::int from public.rental_freshness_log), 4, 'E4: service_role sees all freshness evidence');
 select is((select count(*)::int from public.rental_listing_images), 4, 'E5: service_role sees all image evidence');
 select is((select count(*)::int from public.rental_grounding), 4, 'E6: service_role sees all grounding evidence');
+reset role;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- F · PROPERTY_VERIFICATIONS — no broad public read (2026-10-14 follow-up)
+-- ═══════════════════════════════════════════════════════════════════════════════
+select ok(
+  (select count(*) = 0 from pg_policies
+    where schemaname='public' and tablename='property_verifications'
+      and policyname='property_verifications_select_public'),
+  'F1: the broad public verification-read policy is gone');
+select ok(
+  (select count(*) = 1 from pg_policies
+    where schemaname='public' and tablename='property_verifications'
+      and policyname='property_verifications_select_owner_or_admin'),
+  'F2: the owner/admin SELECT policy remains');
+select ok(
+  not has_table_privilege('anon', 'public.property_verifications', 'SELECT'),
+  'F3: anon has no SELECT grant on property_verifications');
+select ok(
+  not has_table_privilege('anon', 'public.property_verifications', 'TRUNCATE'),
+  'F3a: anonymous users cannot TRUNCATE verification evidence');
+select ok(
+  not has_table_privilege('authenticated', 'public.property_verifications', 'TRUNCATE'),
+  'F3b: authenticated users cannot TRUNCATE verification evidence');
+
+set local role anon;
+select set_config('request.jwt.claim.sub', '', true);
+select throws_ok($$select count(*) from public.property_verifications$$,
+  '42501', null, 'F4: anon cannot read verification evidence');
+select throws_ok(
+  $$insert into public.property_verifications (apartment_id, status)
+    values ('c1432000-0000-4000-8000-000000000022', 'pending')$$,
+  '42501', null, 'F5: anon cannot insert verification evidence');
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'c1432000-0000-4000-8000-000000000004', true);
+select is((select count(*)::int from public.property_verifications), 0,
+  'F6: an unrelated signed-in renter reads no verification evidence');
+select set_config('request.jwt.claim.sub', 'c1432000-0000-4000-8000-000000000002', true);
+select is((select count(*)::int from public.property_verifications), 1,
+  'F7: another broker sees only its own verification row');
+select set_config('request.jwt.claim.sub', 'c1432000-0000-4000-8000-000000000001', true);
+select is((select count(*)::int from public.property_verifications), 2,
+  'F8: the owning broker sees its own verification rows');
+select set_config('request.jwt.claim.sub', 'c1432000-0000-4000-8000-000000000003', true);
+select is((select count(*)::int from public.property_verifications
+            where property_verifications.apartment_id in (select apartments.id from public.apartments where apartments.slug like 'san1432-%')), 4,
+  'F9: an admin sees all fixture verification evidence');
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claim.sub', '', true);
+select is((select count(*)::int from public.property_verifications
+            where property_verifications.apartment_id in (select apartments.id from public.apartments where apartments.slug like 'san1432-%')), 4,
+  'F10: service_role sees all fixture verification evidence');
 reset role;
 
 select * from finish();

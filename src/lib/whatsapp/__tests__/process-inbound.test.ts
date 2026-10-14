@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaimedRow, InboundRpcClient } from "../inbound-store";
-import { recordOutboundSend } from "../outbound-tracker";
+import { bufferOutboundText, recordOutboundSend, setBufferedFlusher } from "../outbound-tracker";
 import { processDueInbound } from "../process-inbound";
 
 function row(id: string, overrides: Partial<ClaimedRow> = {}): ClaimedRow {
@@ -137,6 +137,27 @@ describe("processDueInbound", () => {
     expect(failed?.args?.p_error).toContain("Invalid OAuth access token");
   });
 
+  it("posts one consolidated reply for the whole run", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const flusher = vi.fn(async () => {
+      // The real flush goes through the adapter INSIDE the scope, so the interceptor records it.
+      recordOutboundSend({ success: true, providerMessageId: "wamid.final", content: "Found 3" });
+      return "wamid.final";
+    });
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      bufferOutboundText("thread", "I'll check those apartments");
+      bufferOutboundText("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+      setBufferedFlusher(flusher);
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(flusher).toHaveBeenCalledTimes(1);
+    expect(flusher).toHaveBeenCalledWith("thread", "Found 3: A COP 2.9M, B COP 3.2M, C COP 3.4M");
+    expect(summary).toMatchObject({ processed: 1 });
+    expect(calls.some((c) => c.fn === "whatsapp_complete_inbound_with_sends")).toBe(true);
+  });
+
   it("never marks a partial reply as processed", async () => {
     const { client, calls } = trackingClient([[row("m1")]]);
     const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
@@ -152,6 +173,65 @@ describe("processDueInbound", () => {
     // The confirmed chunk is persisted, and the row is NOT blindly failed into a duplicate retry.
     expect(Array.isArray(partial?.args?.p_sends)).toBe(true);
     expect(calls.some((c) => c.fn === "whatsapp_fail_inbound")).toBe(false);
+  });
+
+  it("keeps an accepted chunk when the adapter throws on the next chunk", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      bufferOutboundText("thread", "long answer");
+      setBufferedFlusher(async () => {
+        // Meta accepted the first chunk, then the adapter THREW on the second (non-2xx).
+        recordOutboundSend({ success: true, providerMessageId: "wamid.chunk1", content: "long answer" });
+        throw new Error("Meta 401 on the second chunk");
+      });
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, partial: 1, failed: 0 });
+    const partial = calls.find((c) => c.fn === "whatsapp_record_partial_sends");
+    expect(partial?.args?.p_error).toContain("Meta 401 on the second chunk");
+    expect(JSON.stringify(partial?.args?.p_sends)).toContain("wamid.chunk1");
+    // Never blindly failed into a duplicating retry.
+    expect(calls.some((c) => c.fn === "whatsapp_fail_inbound")).toBe(false);
+  });
+
+  it("retries when the adapter throws before Meta accepted anything", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      bufferOutboundText("thread", "long answer");
+      setBufferedFlusher(async () => {
+        throw new Error("Meta 401");
+      });
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 0, partial: 0, failed: 1 });
+    expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain(
+      "no confirmed outbound send",
+    );
+  });
+
+  it("persists every chunk when all of them are accepted", async () => {
+    const { client, calls } = trackingClient([[row("m1")]]);
+    const adapterWebhook = vi.fn((_req: Request, waitUntil: (p: Promise<unknown>) => void) => {
+      bufferOutboundText("thread", "long answer");
+      setBufferedFlusher(async () => {
+        recordOutboundSend({ success: true, providerMessageId: "wamid.a", content: "part a" });
+        recordOutboundSend({ success: true, providerMessageId: "wamid.b", content: "part b" });
+        return "wamid.b";
+      });
+      waitUntil(Promise.resolve());
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+    const summary = await processDueInbound({ ...base, client, adapterWebhook });
+    expect(summary).toMatchObject({ processed: 1 });
+    const sends = JSON.stringify(
+      calls.find((c) => c.fn === "whatsapp_complete_inbound_with_sends")?.args?.p_sends,
+    );
+    expect(sends).toContain("wamid.a");
+    expect(sends).toContain("wamid.b");
   });
 
   it("fails the row when the agent settled without sending anything", async () => {
