@@ -57,7 +57,9 @@ export function BrowseLayout({
       {mapSlot ? (
         <div className="lg:flex lg:items-start lg:gap-6">
           <div className="min-w-0 flex-1">{children}</div>
-          <aside className="w-full lg:w-[400px] lg:shrink-0">{mapSlot}</aside>
+          {/* self-stretch: the sticky map column can only stick within this wrapper, so the wrapper
+              must be as tall as the list. Without it the column scrolls away with the page. */}
+          <aside className="w-full lg:w-[400px] lg:shrink-0 lg:self-stretch">{mapSlot}</aside>
         </div>
       ) : (
         children

@@ -317,3 +317,47 @@ describe("External rental title navigation", () => {
     expect(html).toContain('href="/rentals/rnt_lau_001?from=2026-11-01&amp;through=2026-11-30"');
   });
 });
+
+describe("SAN-1416: Details action on the card", () => {
+  const external = {
+    ...rowToRental(apartmentRow({ id: "candidate-fincaraiz-193916988", slug: "candidate-fincaraiz-193916988" })),
+    tags: ["external-source"],
+    source_url: "https://fincaraiz.com.co/apartment/193916988",
+    can_schedule_viewing: false,
+    schedule_viewing_url: null,
+  };
+
+  it("with a Details handler the title and photo are buttons, never links to the advertiser", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={external} onDetails={vi.fn()} />);
+    expect(html).toContain('data-testid="rental-details-cta-candidate-fincaraiz-193916988"');
+    expect(html).toMatch(/<button[^>]*data-testid="rental-card-link-candidate-fincaraiz-193916988"/);
+    expect(html).toContain('data-testid="rental-card-photo-details-candidate-fincaraiz-193916988"');
+    expect(html).not.toMatch(/<a[^>]*data-testid="rental-card-link-/);
+    // The advertiser stays one labelled secondary action, not the primary one.
+    expect(html).toContain('data-testid="rental-card-source-candidate-fincaraiz-193916988"');
+    expect(html).not.toContain("Schedule viewing");
+  });
+
+  it("without a Details handler the card is unchanged: no Details button, title still links out", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={external} />);
+    expect(html).not.toContain("rental-details-cta-");
+    expect(html).toMatch(/<a[^>]*data-testid="rental-card-link-candidate-fincaraiz-193916988"/);
+  });
+
+  it("clicking Details calls the handler once and does not navigate or open a window", async () => {
+    const onDetails = vi.fn();
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<RentalBrowseCard rental={external} onDetails={onDetails} onSelect={vi.fn()} />));
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid^="rental-details-cta-"]')?.click();
+    });
+    expect(onDetails).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    container.remove();
+    open.mockRestore();
+  });
+});

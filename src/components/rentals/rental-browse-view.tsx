@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { BrowseLayout } from "@/components/browse/BrowseLayout";
@@ -9,6 +9,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
+import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
@@ -86,6 +88,19 @@ function RentalBrowseViewInner({
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
 
+  // SAN-1416 — Details open in the page (right column on desktop, sheet on phones). The selection
+  // is plain local state, so closing it can never reset the filters, the card list or its scroll.
+  // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
+  const isLgUp = useIsLgUp();
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const detailsRental = useMemo(
+    () => (detailsId ? (results.find((r) => r.id === detailsId) ?? null) : null),
+    [detailsId, results],
+  );
+  const closeDetails = useCallback(() => setDetailsId(null), []);
+  const scheduleFor = (r: Rental) => () =>
+    openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
+
   // SAN-1089: an outage must not read as "0 apartments", and nothing here claims the stock is
   // curated or available now — only that listed rentals are verified and published.
   const subtitle = previewMode
@@ -115,7 +130,19 @@ function RentalBrowseViewInner({
             />
           )
         }
-        mapSlot={<BrowseMapPanel />}
+        mapSlot={
+          <BrowseMapPanel
+            overlay={
+              detailsRental && isLgUp ? (
+                <RentalDetailsPanel
+                  rental={detailsRental}
+                  onClose={closeDetails}
+                  onSchedule={scheduleFor(detailsRental)}
+                />
+              ) : undefined
+            }
+          />
+        }
       >
         <section className="mt-6" aria-label="Rental listings">
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
@@ -176,13 +203,12 @@ function RentalBrowseViewInner({
                     selected={mappedIds.has(pinId) && selectedPinId === pinId}
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
-                    onSchedule={() =>
-                      openScheduleViewing({
-                        listingId: r.id,
-                        title: r.title,
-                        neighborhood: r.neighborhood,
-                      })
-                    }
+                    onSchedule={scheduleFor(r)}
+                    onDetails={() => {
+                      setDetailsId(r.id);
+                      // A mapped rental also becomes the selected pin; an unmapped one gets none.
+                      if (mappedIds.has(pinId)) panToPin(pinId);
+                    }}
                   />
                 );
               })}
@@ -192,6 +218,13 @@ function RentalBrowseViewInner({
       </BrowseLayout>
 
       <BrowseMapSheet />
+      {detailsRental && !isLgUp ? (
+        <RentalDetailsSheet
+          rental={detailsRental}
+          onClose={closeDetails}
+          onSchedule={scheduleFor(detailsRental)}
+        />
+      ) : null}
     </>
   );
 }

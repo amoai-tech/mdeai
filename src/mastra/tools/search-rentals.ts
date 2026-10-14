@@ -32,6 +32,8 @@ export const rentalSchema = z.object({
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
+  /** Public photos for the Details panel (max 5); `image` is always the first. Absent = just `image`. */
+  images: z.array(z.string()).optional(),
   source_url: z.string(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.

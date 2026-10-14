@@ -20,4 +20,19 @@ describe("BrowseLayout", () => {
     expect(html).toContain('data-testid="results"');
     expect(html).toContain("Restaurants");
   });
+
+  it("stretches the map column's wrapper to the list height so the sticky map can actually stick (SAN-1416)", () => {
+    const html = renderToStaticMarkup(
+      <BrowseLayout
+        testId="rentals-browse"
+        title="Rentals"
+        subtitle="x"
+        filterBar={<div />}
+        mapSlot={<div data-testid="map-slot" />}
+      >
+        <section />
+      </BrowseLayout>,
+    );
+    expect(html).toMatch(/<aside[^>]*class="[^"]*lg:self-stretch[^"]*"[^>]*><div data-testid="map-slot"/);
+  });
 });

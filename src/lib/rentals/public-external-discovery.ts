@@ -6,7 +6,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Rental, RentalQuery } from "@/mastra/tools/search-rentals";
 
-const PUBLIC_SOURCE_SLUGS = [
+export const PUBLIC_SOURCE_SLUGS = [
   "candidate-fincaraiz-193916988",
   "candidate-fincaraiz-192658136",
   "candidate-fincaraiz-194158672",
@@ -35,22 +35,35 @@ type ExternalListing = {
   metadata: Record<string, unknown> | null;
 };
 
-/** Only public, scoped object URLs from the expected Supabase listing-photo bucket. */
-function publicRentalPhoto(row: ExternalListing): string {
+/** The detail panel shows at most this many photos; the card still uses only the first. */
+const MAX_PUBLIC_PHOTOS = 5;
+
+/**
+ * Only public, scoped object URLs from the expected Supabase listing-photo bucket, in stored
+ * order. One malformed entry is skipped rather than hiding the photos that pass the same check.
+ */
+function publicRentalPhotos(row: ExternalListing): string[] {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return "";
+  if (!base) return [];
+  let storageOrigin: string;
   try {
-    const storageOrigin = new URL(base).origin;
-    const prefix = `/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/${row.slug}/`;
-    for (const item of row.images ?? []) {
+    storageOrigin = new URL(base).origin;
+  } catch {
+    return [];
+  }
+  const prefix = `/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/${row.slug}/`;
+  const photos: string[] = [];
+  for (const item of row.images ?? []) {
+    try {
       const url = new URL(item);
       if (url.protocol === "https:" && url.origin === storageOrigin
-          && url.pathname.startsWith(prefix) && url.pathname.endsWith(".webp")) return item;
+          && url.pathname.startsWith(prefix) && url.pathname.endsWith(".webp")) photos.push(item);
+    } catch {
+      // Malformed URL: show no photo rather than leaking private media.
     }
-  } catch {
-    // Missing or malformed URL: show no photo rather than leaking private media.
+    if (photos.length === MAX_PUBLIC_PHOTOS) break;
   }
-  return "";
+  return photos;
 }
 
 export function publicExternalRentalCard(row: ExternalListing): Rental | null {
@@ -77,11 +90,12 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
     && Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude))
     && Number(row.latitude) >= -90 && Number(row.latitude) <= 90
     && Number(row.longitude) >= -180 && Number(row.longitude) <= 180;
+  const images = publicRentalPhotos(row);
   return {
     id: row.slug, title: row.title, neighborhood: row.neighborhood ?? "",
     nightly_price: 0, price_monthly: Number(row.price_monthly), currency: "COP",
     bedrooms: row.bedrooms ?? 0, bedrooms_unknown: row.bedrooms == null,
-    wifi: false, amenities: row.amenities ?? [], image: publicRentalPhoto(row),
+    wifi: false, amenities: row.amenities ?? [], image: images[0] ?? "", images,
     source_url: row.source_url, can_schedule_viewing: false,
     schedule_viewing_url: null, host_name: "External advertisement",
     availability: row.available_from

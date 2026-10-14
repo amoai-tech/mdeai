@@ -12,7 +12,7 @@ import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
-function bedroomLabel(bedrooms: number, bedroomsUnknown = false): string {
+export function bedroomLabel(bedrooms: number, bedroomsUnknown = false): string {
   // The caller flags an unknown source count; a real 0 still means "Studio".
   if (bedroomsUnknown) return "Bedrooms unknown";
   if (bedrooms === 0) return "Studio";
@@ -54,6 +54,18 @@ function topAmenities(amenities: string[] | null, limit = 3): string[] {
   return [...featured, ...rest].slice(0, limit).map(amenityLabel);
 }
 
+/** Source-linked external ads are read-only on MDE: no pricing guarantees, no viewing request. */
+export function isExternalAd(rental: Rental): boolean {
+  return rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source");
+}
+
+/** The advertiser's own listing, only for an external ad whose URL is on the approved domain. */
+export function externalSourceUrlFor(rental: Rental): string | null {
+  return isExternalAd(rental) && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
+    ? rental.source_url
+    : null;
+}
+
 type RentalBrowseCardProps = {
   rental: Rental;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
@@ -75,6 +87,12 @@ type RentalBrowseCardProps = {
    * without a handler there is nothing to open, so no CTA is rendered.
    */
   onSchedule?: () => void;
+  /**
+   * SAN-1416 — opens this rental's Details in the page (title, photo and the Details button).
+   * When absent the card behaves as before: the title links to the detail page or, for an
+   * external ad, to the advertiser's listing.
+   */
+  onDetails?: () => void;
 };
 
 function RentalBrowseCardMedia({
@@ -131,10 +149,11 @@ export function RentalBrowseCard({
   onSelect,
   onPreview,
   onSchedule,
+  onDetails,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") ? null : rental.nightly_price,
+    isExternalAd(rental) ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
@@ -147,10 +166,7 @@ export function RentalBrowseCard({
   // an action the database will reject — and with no handler there is nothing to open.
   const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
-  const externalSourceUrl =
-    rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source") && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
-      ? rental.source_url
-      : null;
+  const externalSourceUrl = externalSourceUrlFor(rental);
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
 
@@ -177,15 +193,46 @@ export function RentalBrowseCard({
       onBodyClick={interactive ? () => onSelect?.() : undefined}
       onBodyKeyDown={interactive ? handleBodyKeyDown : undefined}
       media={
-        <RentalBrowseCardMedia
-          imageUrl={rental.image || undefined}
-          title={rental.title}
-          neighborhood={rental.neighborhood}
-          nightlyLabel={nightlyLabel}
-        />
+        onDetails ? (
+          <button
+            type="button"
+            onClick={onDetails}
+            data-testid={`rental-card-photo-details-${rental.id}`}
+            aria-label={`Details: ${rental.title}`}
+            className="block w-full rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <RentalBrowseCardMedia
+              imageUrl={rental.image || undefined}
+              title={rental.title}
+              neighborhood={rental.neighborhood}
+              nightlyLabel={nightlyLabel}
+            />
+          </button>
+        ) : (
+          <RentalBrowseCardMedia
+            imageUrl={rental.image || undefined}
+            title={rental.title}
+            neighborhood={rental.neighborhood}
+            nightlyLabel={nightlyLabel}
+          />
+        )
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onDetails ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              data-testid={`rental-details-cta-${rental.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDetails();
+              }}
+            >
+              Details
+            </Button>
+          ) : null}
           {showScheduleCta ? (
             <Button
               type="button"
@@ -230,7 +277,19 @@ export function RentalBrowseCard({
     >
       <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
       <h3 className="mt-0.5 font-medium leading-snug">
-        {externalSourceUrl ? (
+        {onDetails ? (
+          <button
+            type="button"
+            data-testid={`rental-card-link-${rental.id}`}
+            className="text-left hover:underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDetails();
+            }}
+          >
+            {rental.title}
+          </button>
+        ) : externalSourceUrl ? (
           <a
             href={externalSourceUrl}
             target="_blank"
