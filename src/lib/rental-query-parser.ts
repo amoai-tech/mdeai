@@ -85,7 +85,7 @@ function hasSequence(words: readonly string[], at: number, phrase: readonly stri
  * Token matching, not a regex: no backtracking on user text, and "anywhereville" or
  * "Medellínshire" do not count. Filler "the" is skipped so "across the city" matches.
  */
-function requestsWholeCity(text: string): boolean {
+export function requestsWholeCity(text: string): boolean {
   const words = text
     .toLowerCase()
     .split(/[^a-z0-9áéíóúñ]+/)
@@ -94,6 +94,25 @@ function requestsWholeCity(text: string): boolean {
     (word, i) =>
       WHOLE_CITY_WORDS.has(word) || WHOLE_CITY_PHRASES.some((phrase) => hasSequence(words, i, phrase)),
   );
+}
+
+/** Words that may sit around a whole-city word in a plain reply ("Anywhere in Medellín is fine"). */
+const WHOLE_CITY_REPLY_FILLER = new Set([
+  "is", "are", "fine", "ok", "okay", "works", "work", "goes", "good", "great", "sure", "yes", "yeah",
+  "please", "any", "all", "anything", "in", "city", "whole", "entire", "across", "wide", "too",
+  "neighborhood", "neighborhoods", "neighbourhood", "neighbourhoods",
+  "cualquier", "cualquiera", "barrio", "zona", "toda", "la", "ciudad", "en", "está", "esta", "bien", "me", "da", "igual",
+]);
+
+/**
+ * A plain reply that only says "anywhere" ("Anywhere is fine", "Medellín", "any neighborhood works").
+ * Stricter than requestsWholeCity: any other word ("Is Medellín safe at night?", "anywhere but El
+ * Poblado") means the message is about something else and must not be turned into a search.
+ */
+export function isWholeCityReply(text: string): boolean {
+  if (!requestsWholeCity(text)) return false;
+  const words = text.toLowerCase().split(/[^a-z0-9áéíóúñ]+/).filter(Boolean);
+  return words.length <= 8 && words.every((w) => WHOLE_CITY_WORDS.has(w) || WHOLE_CITY_REPLY_FILLER.has(w));
 }
 
 const RENTAL_INTENT_RE =
@@ -393,11 +412,19 @@ export function buildRentalSearchParams(
   const q = cityWide ? undefined : memory.lastRentalQuery;
   const limit = effectiveLimit(s);
 
-  // After a rental search, "Anywhere is fine" or "Medellín" is a complete
-  // refinement. Do not send these short replies to the concierge or search
-  // semantically for the literal word "anywhere": search the whole city.
-  if (cityWide && memory.lastRentalQuery && !looksLikeRentalSearch(text)) {
-    return { limit };
+  // After a rental search, "Anywhere is fine" or "Medellín" widens the location only. Do not send
+  // these short replies to the concierge or search semantically for the literal word "anywhere":
+  // search the whole city, and keep the size, budget and dates the renter already gave.
+  const lastQuery = memory.lastRentalQuery;
+  if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
+    return {
+      minBedrooms: lastQuery.minBedrooms,
+      maxPricePerNight: lastQuery.maxPricePerNight,
+      checkIn: lastQuery.checkIn,
+      checkOut: lastQuery.checkOut,
+      stayType: lastQuery.budgetType,
+      limit,
+    };
   }
 
   if (q?.genericAskPending) {

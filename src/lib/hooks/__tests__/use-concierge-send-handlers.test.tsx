@@ -9,12 +9,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false }));
+const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable }),
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: () => {} }),
+  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: () => {} }),
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
@@ -49,6 +50,7 @@ let container: HTMLElement;
 beforeEach(() => {
   vi.clearAllMocks();
   chat.runtimeUnavailable = false;
+  coagent.state = {};
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
   container = document.createElement("div");
@@ -127,5 +129,29 @@ describe("onAgentSend never leaves the renter with nothing", () => {
     });
     expect(handled).toBe(true);
     expect(shown).toEqual([]);
+  });
+});
+
+describe("SAN-407 · INT-004 — is the conversation in a rental search?", () => {
+  const rerender = () =>
+    act(() =>
+      root.render(
+        <EventLocalChatProvider>
+          <Harness />
+        </EventLocalChatProvider>,
+      ),
+    );
+
+  it.each([
+    ["a current rental search", { lastIntent: "rental_search", lastRentalQuery: { neighborhood: "Laureles" } }, true],
+    ["a saved older conversation (rental_refine)", { lastIntent: "rental_refine", lastRentalQuery: { minBedrooms: 2 } }, true],
+    ["a saved query with no intent recorded yet", { lastRentalQuery: { minBedrooms: 2 } }, true],
+    ["an events search after a rental search", { lastIntent: "event_discovery", lastRentalQuery: { neighborhood: "Laureles" } }, false],
+    ["a rental intent with no saved query", { lastIntent: "rental_search" }, false],
+    ["a brand-new conversation", {}, false],
+  ])("%s -> %s", (_label, state, expected) => {
+    coagent.state = state;
+    rerender();
+    expect(handlers.inRentalSearch).toBe(expected);
   });
 });
