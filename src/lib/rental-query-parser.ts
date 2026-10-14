@@ -67,7 +67,34 @@ export type RentalQuerySignals = {
  * fresh search. Without this, any message with saved context was treated as a refinement and
  * silently reused the previous neighborhood, size and budget.
  */
-const WHOLE_CITY_RE = /\b(?:medell[ií]n|anywhere|everywhere|any neighbou?rhood|all neighbou?rhoods)\b/i;
+const WHOLE_CITY_WORDS = new Set(["medellín", "medellin", "anywhere", "everywhere", "citywide"]);
+
+/** Multi-word ways to say "the whole city", English and Spanish; "any|all" also takes "the". */
+const WHOLE_CITY_PHRASES: readonly (readonly string[])[] = [
+  ["any", "neighborhood"], ["any", "neighborhoods"], ["any", "neighbourhood"], ["any", "neighbourhoods"],
+  ["all", "neighborhoods"], ["all", "neighbourhoods"],
+  ["whole", "city"], ["entire", "city"], ["across", "city"], ["city", "wide"],
+  ["cualquier", "barrio"], ["cualquier", "zona"], ["toda", "la", "ciudad"],
+];
+
+function hasSequence(words: readonly string[], at: number, phrase: readonly string[]): boolean {
+  return phrase.every((word, k) => words[at + k] === word);
+}
+
+/**
+ * Token matching, not a regex: no backtracking on user text, and "anywhereville" or
+ * "Medellínshire" do not count. Filler "the" is skipped so "across the city" matches.
+ */
+function requestsWholeCity(text: string): boolean {
+  const words = text
+    .toLowerCase()
+    .split(/[^a-z0-9áéíóúñ]+/)
+    .filter((w) => w && w !== "the" && w !== "of");
+  return words.some(
+    (word, i) =>
+      WHOLE_CITY_WORDS.has(word) || WHOLE_CITY_PHRASES.some((phrase) => hasSequence(words, i, phrase)),
+  );
+}
 
 const RENTAL_INTENT_RE =
   /\b(rental|rentals|apartment|apartments|airbnb|stay|stays|lodging|for rent|list.*rent)\b/i;
@@ -362,8 +389,16 @@ export function buildRentalSearchParams(
 
   const s = scoreRentalQuery(text);
   // A whole-city request is a new search, not a refinement: ignore what the last search stored.
-  const q = WHOLE_CITY_RE.test(text) ? undefined : memory.lastRentalQuery;
+  const cityWide = requestsWholeCity(text);
+  const q = cityWide ? undefined : memory.lastRentalQuery;
   const limit = effectiveLimit(s);
+
+  // After a rental search, "Anywhere is fine" or "Medellín" is a complete
+  // refinement. Do not send these short replies to the concierge or search
+  // semantically for the literal word "anywhere": search the whole city.
+  if (cityWide && memory.lastRentalQuery && !looksLikeRentalSearch(text)) {
+    return { limit };
+  }
 
   if (q?.genericAskPending) {
     const merged: RentalSearchApiParams = {
@@ -480,6 +515,8 @@ export function canFastPathRentalSearch(
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
   }
-  if (!looksLikeRentalSearch(text)) return false;
+  if (!looksLikeRentalSearch(text) && !(memory.lastRentalQuery && requestsWholeCity(text))) {
+    return false;
+  }
   return buildRentalSearchParams(text, memory) != null;
 }
