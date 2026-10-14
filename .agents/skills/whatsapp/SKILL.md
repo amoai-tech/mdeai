@@ -1,0 +1,1 @@
+../../../.claude/skills/whatsapp/SKILL.md

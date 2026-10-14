@@ -11,6 +11,7 @@ import {
   ConciergeTranscriptTail,
   useTranscriptTailHasContent,
 } from "@/components/chat/concierge-transcript-tail";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 
@@ -58,6 +59,36 @@ export function conciergeWelcomeScreen<T>(hasTailContent: boolean, welcomeScreen
   return hasTailContent ? false : welcomeScreen;
 }
 
+/** Props for the composer: our submit handler wired unconditionally, and the textarea locked until the page is live. */
+export function conciergeComposerInput(
+  baseInput: CopilotChatViewProps["input"],
+  onSubmitMessage: (text: string) => void,
+  hydrated: boolean,
+): CopilotChatViewProps["input"] {
+  const inputProps =
+    typeof baseInput === "object" && baseInput !== null && !("$$typeof" in baseInput)
+      ? (baseInput as Record<string, unknown>)
+      : {};
+  const textAreaProps =
+    typeof inputProps.textArea === "object" &&
+    inputProps.textArea !== null &&
+    !("$$typeof" in inputProps.textArea)
+      ? (inputProps.textArea as Record<string, unknown>)
+      : {};
+
+  return {
+    ...inputProps,
+    onSubmitMessage,
+    textArea: {
+      ...textAreaProps,
+      enterKeyHint: "send",
+      inputMode: "text",
+      // A caller that disables the composer for its own reasons keeps it disabled.
+      disabled: textAreaProps.disabled === true || !hydrated,
+    },
+  } as CopilotChatViewProps["input"];
+}
+
 /**
  * Wrap CopilotChatView — route composer submit through classify + fast-path before agent fallback (CK-V2-015).
  *
@@ -74,30 +105,15 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
     },
     [handlers],
   );
-  const input = useMemo(() => {
-    const inputProps =
-      typeof props.input === "object" &&
-      props.input !== null &&
-      !("$$typeof" in props.input)
-        ? (props.input as Record<string, unknown>)
-        : {};
-    const textAreaProps =
-      typeof inputProps.textArea === "object" &&
-      inputProps.textArea !== null &&
-      !("$$typeof" in inputProps.textArea)
-        ? (inputProps.textArea as Record<string, unknown>)
-        : {};
-
-    return {
-      ...inputProps,
-      onSubmitMessage,
-      textArea: {
-        ...textAreaProps,
-        enterKeyHint: "send",
-        inputMode: "text",
-      },
-    } as CopilotChatViewProps["input"];
-  }, [onSubmitMessage, props.input]);
+  // The composer is server-rendered, so it shows up before the page's JavaScript can act on it.
+  // Typing or pressing Enter in that gap does nothing and the typed text is wiped when the page
+  // finishes loading — a renter's first message was silently lost. Keep it disabled until the
+  // client has taken over.
+  const hydrated = useHydrated();
+  const input = useMemo(
+    () => conciergeComposerInput(props.input, onSubmitMessage, hydrated),
+    [onSubmitMessage, props.input, hydrated],
+  );
 
   return (
     <div data-testid="concierge-chat-view-mounted" className="contents">

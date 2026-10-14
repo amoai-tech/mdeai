@@ -22,6 +22,8 @@ export type ConciergeSendHandlers = {
   onAgentSend: (text: string) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
   lastIntent?: FlashRouteClassification["intent"];
+  /** True while the conversation is in a rental search (current or saved legacy intent). */
+  inRentalSearch?: boolean;
 };
 
 /** Dispatch a classified router target to its fast-path handler; false → try next or agent. */
@@ -60,6 +62,7 @@ export async function sendConciergeUserMessage(
   try {
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,
+      inRentalSearch: handlers.inRentalSearch,
     });
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
