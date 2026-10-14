@@ -25,6 +25,7 @@ import {
 import {
   confirmedSends,
   flushBufferedReply,
+  recordOutboundSend,
   runWithOutboundTracking,
   sendOutcome,
 } from "./outbound-tracker";
@@ -152,7 +153,16 @@ async function processRow(
       await withTimeout(registered, executionTimeoutMs, "agent run");
       // Post the run's final reply exactly once, INSIDE the scope: the adapter may split a long
       // answer across several Meta calls, and every physical send must be observed and linked.
-      await flushBufferedReply();
+      // The adapter THROWS on a non-2xx response, so catch it here: a chunk Meta already accepted
+      // must still be persisted (partial) instead of losing the run to a blind, duplicating retry.
+      try {
+        await flushBufferedReply();
+      } catch (error) {
+        recordOutboundSend({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     });
 
     // Completing requires EVERY physical send to succeed with a provider id, recorded in the SAME
