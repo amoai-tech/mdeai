@@ -1,0 +1,38 @@
+[
+  {
+    "id": "events-1",
+    "prompt": "Check the canonical event publication-to-ticket delivery journey, including customer QR and wallet ownership.",
+    "should_trigger": true,
+    "expected_owner": "events"
+  },
+  {
+    "id": "events-2",
+    "prompt": "A paid attendee has no issued ticket. Trace MDE event ownership and ticket issuance requirements.",
+    "should_trigger": true,
+    "expected_owner": "events"
+  },
+  {
+    "id": "events-3",
+    "prompt": "Implement the authorized event-detail and ticket-availability rules without inventing sold-out status.",
+    "should_trigger": true,
+    "expected_owner": "events"
+  },
+  {
+    "id": "events-4",
+    "prompt": "Fix the Stripe Connect payout reconciliation algorithm; no event-ticket domain logic changes.",
+    "should_trigger": false,
+    "expected_owner": "stripe"
+  },
+  {
+    "id": "events-5",
+    "prompt": "Evaluate whether an events PR can merge, considering required approvals and current-head CI.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "events-6",
+    "prompt": "Create a mobile event page visual mockup with existing UI tokens; no checkout logic is requested.",
+    "should_trigger": false,
+    "expected_owner": "frontend-design"
+  }
+]

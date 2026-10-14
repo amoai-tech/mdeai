@@ -1,0 +1,38 @@
+[
+  {
+    "id": "e2e-1",
+    "prompt": "Run the real rental-request flow from card click through broker assignment and persisted showing; verify exactly one lead after double-click.",
+    "should_trigger": true,
+    "expected_owner": "e2e"
+  },
+  {
+    "id": "e2e-2",
+    "prompt": "Exercise mobile event checkout end-to-end: select tickets, pay in a safe test environment, receive the authorized QR ticket, and verify retry behavior.",
+    "should_trigger": true,
+    "expected_owner": "e2e"
+  },
+  {
+    "id": "e2e-3",
+    "prompt": "Verify the concierge journey across chat, grounded listings, map pins, request authorization, and the final renter-visible result.",
+    "should_trigger": true,
+    "expected_owner": "e2e"
+  },
+  {
+    "id": "e2e-4",
+    "prompt": "Design unit and integration test cases for the viewings RPC without executing a browser journey.",
+    "should_trigger": false,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "e2e-5",
+    "prompt": "Use Playwright to inspect one misaligned mobile CSS button; do not verify the full user workflow.",
+    "should_trigger": false,
+    "expected_owner": "playwright-cli"
+  },
+  {
+    "id": "e2e-6",
+    "prompt": "Certify that the deployed production release satisfies all launch gates and rollback requirements.",
+    "should_trigger": false,
+    "expected_owner": "prod"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "mastra-1",
+    "prompt": "Verify Mastra workflow suspend/resume preserves the exact approved artifact across restart and retries.",
+    "should_trigger": true,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "mastra-2",
+    "prompt": "A Mastra concierge tool returns another user’s memory. Trace RequestContext identity and storage isolation.",
+    "should_trigger": true,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "mastra-3",
+    "prompt": "Check the Mastra agent tool schema and stop/abort behavior for a provider timeout during streaming.",
+    "should_trigger": true,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "mastra-4",
+    "prompt": "Audit the entire Mastra feature PR for merge readiness, tests and approvals.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "mastra-5",
+    "prompt": "Create a plan for a cross-repository agent launch without implementing a Mastra change.",
+    "should_trigger": false,
+    "expected_owner": "plan"
+  },
+  {
+    "id": "mastra-6",
+    "prompt": "Review the payment processor webhook for Stripe idempotency with no Mastra workflow involvement.",
+    "should_trigger": false,
+    "expected_owner": "stripe"
+  }
+]
