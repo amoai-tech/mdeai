@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
+import errorsBehavior from "../../.claude/skills/errors/evals/evals.json" with { type: "json" };
+import errorsTriggers from "../../.claude/skills/errors/evals/trigger-evals.json" with { type: "json" };
+import prauditBehavior from "../../.claude/skills/praudit/evals/evals.json" with { type: "json" };
+import prauditTriggers from "../../.claude/skills/praudit/evals/trigger-evals.json" with { type: "json" };
+import linearTaskBehavior from "../../.claude/skills/linear-task/evals/evals.json" with { type: "json" };
+import linearTaskTriggers from "../../.claude/skills/linear-task/evals/trigger-evals.json" with { type: "json" };
+import implementBehavior from "../../.claude/skills/implement/evals/evals.json" with { type: "json" };
+import implementTriggers from "../../.claude/skills/implement/evals/trigger-evals.json" with { type: "json" };
+import prodBehavior from "../../.claude/skills/prod/evals/evals.json" with { type: "json" };
+import prodTriggers from "../../.claude/skills/prod/evals/trigger-evals.json" with { type: "json" };
 
 const SKILLS = path.resolve(".claude/skills");
 
@@ -106,10 +116,15 @@ test("the two most consequential workflow skills keep evals", () => {
 });
 
 test("short execution skills cover routing positives, negatives, and behavior", () => {
-  for (const skill of ["errors", "praudit", "linear-task", "implement", "prod"]) {
-    const base = path.join(SKILLS, skill, "evals");
-    const behavior = JSON.parse(fs.readFileSync(path.join(base, "evals.json"), "utf8"));
-    const triggers = JSON.parse(fs.readFileSync(path.join(base, "trigger-evals.json"), "utf8"));
+  // Static imports are part of the test bundle: no user-derived path can reach file I/O.
+  const fixtures = {
+    errors: [errorsBehavior, errorsTriggers],
+    praudit: [prauditBehavior, prauditTriggers],
+    "linear-task": [linearTaskBehavior, linearTaskTriggers],
+    implement: [implementBehavior, implementTriggers],
+    prod: [prodBehavior, prodTriggers],
+  };
+  for (const [skill, [behavior, triggers]] of Object.entries(fixtures)) {
     assert.ok(behavior.evals.length >= 3, `${skill}: missing behavior cases`);
     assert.ok(triggers.length >= 6, `${skill}: missing routing cases`);
     assert.ok(triggers.filter((c) => c.should_trigger === true).length >= 3);

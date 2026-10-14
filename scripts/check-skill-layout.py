@@ -148,20 +148,8 @@ def frontmatter_name(path: Path) -> str | None:
     return None
 
 
-def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
-    """Validate required Agent Skills metadata without adding a YAML dependency.
-
-    Only the required name/description and permission-sensitive scalar keys are
-    interpreted here; other vendor extension fields remain allowed. This is not
-    a general-purpose YAML parser.
-    """
-    lines = path.read_text(encoding='utf-8').splitlines()
-    if not lines or lines[0].strip() != '---':
-        return [f'missing skill YAML frontmatter: {path}']
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == '---'), None)
-    if end is None:
-        return [f'unclosed skill YAML frontmatter: {path}']
-    header = lines[1:end]
+def metadata_fields(header: list[str], path: Path) -> tuple[dict[str, tuple[int, str]], list[str]]:
+    """Read top-level scalar keys; retain the existing duplicate/format errors."""
     keys: dict[str, tuple[int, str]] = {}
     problems: list[str] = []
     for i, line in enumerate(header):
@@ -175,33 +163,58 @@ def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
         if key in keys:
             problems.append(f'duplicate skill metadata key in {path}: {key}')
         keys[key] = (i, raw)
+    return keys, problems
 
-    if frontmatter_name(path) != expected_name or len(expected_name) > 64:
-        problems.append(f'frontmatter name mismatch: {path} declares '
-                        f'{frontmatter_name(path)!r}, expected {expected_name!r}')
+
+def description_errors(
+    header: list[str], keys: dict[str, tuple[int, str]], path: Path,
+) -> list[str]:
+    """Check the required bounded description, including folded and quoted scalars."""
     if 'description' not in keys:
-        problems.append(f'missing skill description: {path}')
+        return [f'missing skill description: {path}']
+    i, raw = keys['description']
+    problems: list[str] = []
+    if raw in ('', '>', '>-', '>+', '|', '|-', '|+'):
+        parts = []
+        for line in header[i + 1:]:
+            if line and not line.startswith((' ', '\t', '#')):
+                break
+            if line.strip() and not line.lstrip().startswith('#'):
+                parts.append(line.strip())
+        value = ' '.join(parts)
     else:
-        i, raw = keys['description']
-        if raw in ('', '>', '>-', '>+', '|', '|-', '|+'):
-            following = header[i + 1:]
-            # Stop at the next top-level key, rather than capturing other fields.
-            parts = []
-            for line in following:
-                if line and not line.startswith((' ', '\t', '#')):
-                    break
-                if line.strip() and not line.lstrip().startswith('#'):
-                    parts.append(line.strip())
-            value = ' '.join(parts)
-        else:
-            value = raw.strip()
-            if value[:1] in ('"', "'"):
-                if len(value) < 2 or value[-1] != value[0]:
-                    problems.append(f'unbalanced description quotes: {path}')
-                else:
-                    value = value[1:-1]
-        if not value or len(value) > 1024:
-            problems.append(f'skill description must contain 1-1024 characters: {path}')
+        value = raw.strip()
+        if value[:1] in ('"', "'"):
+            if len(value) < 2 or value[-1] != value[0]:
+                problems.append(f'unbalanced description quotes: {path}')
+            else:
+                value = value[1:-1]
+    if not value or len(value) > 1024:
+        problems.append(f'skill description must contain 1-1024 characters: {path}')
+    return problems
+
+
+def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
+    """Validate required Agent Skills metadata without an additional YAML dependency.
+
+    This remains a focused validator for required fields and risky scalar keys,
+    not a full YAML parser; other vendor extensions remain allowed.
+    """
+    lines = path.read_text(encoding='utf-8').splitlines()
+    if not lines or lines[0].strip() != '---':
+        return [f'missing skill YAML frontmatter: {path}']
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == '---'), None)
+    if end is None:
+        return [f'unclosed skill YAML frontmatter: {path}']
+
+    header = lines[1:end]
+    keys, problems = metadata_fields(header, path)
+    declared = frontmatter_name(path)
+    if declared != expected_name or len(expected_name) > 64:
+        problems.append(
+            f'frontmatter name mismatch: {path} declares {declared!r}, expected {expected_name!r}'
+        )
+    problems.extend(description_errors(header, keys, path))
 
     for key in ('user-invocable', 'disable-model-invocation'):
         if key in keys and keys[key][1] not in ('true', 'false'):
@@ -210,7 +223,6 @@ def frontmatter_metadata_errors(path: Path, expected_name: str) -> list[str]:
         permission = keys['allowed-tools'][1]
         if re.search(r'Bash\((?:npm|npx|pnpm|bun|bash|sh):\*\)|Bash\(\*\)', permission):
             problems.append(f'{path}: broad shell preapproval prohibited in allowed-tools')
-
     return problems
 
 
