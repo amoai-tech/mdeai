@@ -72,6 +72,31 @@ describe("preflight-migration-release", () => {
       assert.match(messages(result), /feature branch may carry unreleased migrations/);
     });
 
+    it("accepts a detached checkout at exactly origin/main (main is checked out in another worktree)", () => {
+      const result = evaluatePreflight(cleanState({ branch: "HEAD" }));
+      assert.equal(result.failures, 0);
+      assert.match(messages(result), /detached HEAD at exactly origin\/main/);
+    });
+
+    it("still fails a detached checkout that is not origin/main", () => {
+      for (const drift of [
+        { head: "b".repeat(40), ahead: 1, behind: 0 }, // a local commit that is not on main
+        { head: "b".repeat(40), ahead: 0, behind: 3 }, // an older commit
+      ]) {
+        const result = evaluatePreflight(cleanState({ branch: "HEAD", ...drift }));
+        assert.ok(result.failures >= 1, JSON.stringify(drift));
+        assert.match(messages(result), /expected "main"/);
+      }
+    });
+
+    it("does not let an unresolvable origin/main make a detached HEAD look safe", () => {
+      const result = evaluatePreflight(
+        cleanState({ branch: "HEAD", head: null, originMain: null, revParseError: "boom" }),
+      );
+      assert.ok(result.failures >= 1);
+      assert.match(messages(result), /expected "main"/);
+    });
+
     it("fails when the branch cannot be determined rather than assuming main", () => {
       const result = evaluatePreflight(cleanState({ branch: null }));
       assert.equal(result.failures, 1);
