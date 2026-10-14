@@ -70,6 +70,14 @@ export type RentalQuery = {
   neighborhood?: string;
   minBedrooms?: number;
   maxPricePerNight?: number;
+  /**
+   * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
+   * to listings priced in `budgetCurrency`; there is no exchange-rate source in this repository,
+   * so it is never converted or compared across currencies.
+   */
+  maxPriceMonthly?: number;
+  /** Currency `maxPriceMonthly` is expressed in. @default "COP" */
+  budgetCurrency?: string;
   limit?: number;
   queryText?: string;
   checkIn?: string;
@@ -295,6 +303,58 @@ export function rentalPricePredicate(maxNightly: number | null): string {
   ].join(',');
 }
 
+/**
+ * The `or=(...)` predicate for a MONTHLY budget in a specific currency.
+ *
+ * `2,900,000 COP <= 3,500,000` is a real comparison; `2,900,000 <= 3500` is a unit error that
+ * silently deletes real supply, so the budget applies **only** to listings in its own currency.
+ * A same-currency listing must carry a stored monthly price to be a confirmed match — a
+ * nightly-only row is never presented as within a monthly budget. Listings in other currencies
+ * are retained (their card shows their own currency) and never compared to this budget.
+ */
+export function rentalMonthlyBudgetPredicate(maxMonthly: number, currency: string): string {
+  const budgetCurrency = currency.toUpperCase();
+  const sameCurrency = `currency.eq.${budgetCurrency}`;
+  const otherCurrency = `currency.neq.${budgetCurrency}`;
+  return [
+    `and(${otherCurrency},price_daily.not.is.null)`,
+    `and(${otherCurrency},price_monthly.not.is.null)`,
+    `and(${sameCurrency},price_monthly.not.is.null,price_monthly.lte.${maxMonthly})`,
+  ].join(',');
+}
+
+/** The price predicate for whichever budget the caller supplied. Monthly wins when both are set. */
+export function rentalBudgetPredicate(
+  maxNightly: number | null,
+  monthlyBudget: { amount: number; currency: string } | null,
+): string {
+  if (monthlyBudget) {
+    return rentalMonthlyBudgetPredicate(monthlyBudget.amount, monthlyBudget.currency);
+  }
+  return rentalPricePredicate(maxNightly);
+}
+
+/**
+ * The note shown with results when a monthly budget applied. Monthly budgets never compare across
+ * currencies, so say so rather than implying a converted or global match.
+ */
+export const MONTHLY_BUDGET_NOTE =
+  'Only listings priced in the requested currency at or below the monthly budget are confirmed matches. Listings in other currencies are shown without a budget comparison.';
+
+/** The note that matches whichever budget the query applied. */
+export function budgetNoteFor(query: RentalQuery): string | undefined {
+  if (typeof query.maxPriceMonthly === 'number') return MONTHLY_BUDGET_NOTE;
+  return query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined;
+}
+
+/** The monthly budget implied by a query, or null. */
+export function monthlyBudgetFromQuery(
+  query: RentalQuery,
+): { amount: number; currency: string } | null {
+  if (typeof query.maxPriceMonthly !== 'number') return null;
+  return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
@@ -385,6 +445,7 @@ async function searchRentalsFromSupabase(
   // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
+  const monthlyBudget = monthlyBudgetFromQuery(query);
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
   let q = client
@@ -401,7 +462,7 @@ async function searchRentalsFromSupabase(
     .eq('moderation_status', 'approved')
     .eq('listing_workflow_status', 'published')
     .not('landlord_id', 'is', null)
-    .or(rentalPricePredicate(maxNightly))
+    .or(rentalBudgetPredicate(maxNightly, monthlyBudget))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
     // every nightly-priced row and two different currencies are never meaningfully ordered
     // against each other. Comparing 80,000 COP to 78 USD is the same unit error the predicate
@@ -469,7 +530,7 @@ export async function searchRentals(
       return {
         results: mixed.results,
         total: intel.total + mixed.distinctExternal,
-        budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
+        budgetNote: budgetNoteFor(query),
         source: intel.source,
         hybridUsed: intel.hybridUsed,
         embedStatus: intel.embedStatus,
@@ -491,7 +552,7 @@ export async function searchRentals(
     const mixed = mixRentalResults(results, external, limit);
     return {
       results: mixed.results, total: total + mixed.distinctExternal, source,
-      budgetNote: query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined,
+      budgetNote: budgetNoteFor(query),
     };
   } catch (err) {
     // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
@@ -512,6 +573,17 @@ export const searchRentalsTool = createTool({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
+    maxPriceMonthly: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        'Monthly rent ceiling in the listing currency, e.g. 3500000 with budgetCurrency COP. Applied only to listings already priced in that currency.',
+      ),
+    budgetCurrency: z
+      .string()
+      .optional()
+      .describe('Currency for maxPriceMonthly (ISO code, e.g. COP). Defaults to COP.'),
     limit: z.number().int().min(1).max(20).default(8),
     queryText: z
       .string()
@@ -540,11 +612,19 @@ export const searchRentalsTool = createTool({
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
-    const { neighborhood, minBedrooms, maxPricePerNight, limit = 8, queryText } = inputData;
+    const {
+      neighborhood,
+      minBedrooms,
+      maxPricePerNight,
+      maxPriceMonthly,
+      budgetCurrency,
+      limit = 8,
+      queryText,
+    } = inputData;
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       searchRentals,
-      { neighborhood, minBedrooms, maxPricePerNight, limit, queryText },
+      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText },
       context,
     );
 

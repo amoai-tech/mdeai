@@ -11,9 +11,10 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  monthlyBudgetFromQuery,
   nightlyPriceFrom,
   rentalAvailabilityDate,
-  rentalPricePredicate,
+  rentalBudgetPredicate,
   rowToRental,
   sortForMonthlyStay,
 } from "../tools/search-rentals";
@@ -206,9 +207,12 @@ export async function searchRentalsIntelligent(
       .not("landlord_id", "is", null)
       // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
       // which listings are priced or how a nightly budget applies across currencies.
-      .or(rentalPricePredicate(
-        typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-      ))
+      .or(
+        rentalBudgetPredicate(
+          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
+          monthlyBudgetFromQuery(query),
+        ),
+      )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
