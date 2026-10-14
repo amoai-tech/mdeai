@@ -106,6 +106,17 @@ describe("processDueInbound", () => {
     expect(calls.find((c) => c.fn === "whatsapp_fail_inbound")?.args?.p_error).toContain("missing raw_payload");
   });
 
+  it("hands back claimed rows that cannot finish inside the batch budget", async () => {
+    const { client, calls } = trackingClient([[row("m1"), row("m2")]]);
+    const adapterWebhook = vi.fn(okAdapter);
+    const summary = await processDueInbound({ ...base, client, adapterWebhook, batchDeadlineMs: 0 });
+    expect(summary).toMatchObject({ claimed: 2, processed: 0, failed: 2 });
+    expect(adapterWebhook).not.toHaveBeenCalled();
+    expect(
+      calls.filter((c) => c.fn === "whatsapp_fail_inbound" && c.args?.p_error === "batch deadline reached"),
+    ).toHaveLength(2);
+  });
+
   it("dead-letters exhausted work before claiming", async () => {
     const { client, calls } = trackingClient([[]], { dead: 2 });
     const summary = await processDueInbound({ ...base, client, adapterWebhook: vi.fn(okAdapter) });

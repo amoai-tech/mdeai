@@ -5,12 +5,30 @@
  * independent connections: worker A claims and HOLDS its row locks, then worker B claims while
  * A's transaction is still open. B must skip A's locked rows, so no row is claimed twice.
  *
- * Run: SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54622/postgres node supabase/tests/concurrency/san1444_claim_concurrency.mjs
+ * SAFETY: this test inserts and deletes rows, so it is fail-closed on the target host. It reuses
+ * the repository's local-URL resolver and refuses anything that is not loopback, mirroring
+ * scripts/verify-san1106-postgrest-role.mjs. It can never run against production.
+ *
+ * Run: node supabase/tests/concurrency/san1444_claim_concurrency.mjs
  */
+import { randomUUID } from "node:crypto";
 import { Client } from "pg";
+import { resolveLocalDbUrl } from "../../../scripts/lib/local-db-url.mjs";
 
-const connectionString =
-  process.env.SUPABASE_DB_URL ?? "postgresql://postgres:postgres@127.0.0.1:54622/postgres";
+const connectionString = process.env.SUPABASE_DB_URL ?? resolveLocalDbUrl();
+const parsed = new URL(connectionString);
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1", "[::1]", "0.0.0.0"]);
+if (!LOOPBACK.has(parsed.hostname)) {
+  console.error(
+    "REFUSING to run: " + parsed.hostname + " is not loopback. This test inserts and deletes " +
+      "rows, so it must never target a remote or production database.",
+  );
+  process.exit(1);
+}
+
+// Unique per-run ids so the test can never claim or delete another run's rows.
+const runId = "t-conc-" + randomUUID();
+const seededIds = [0, 1, 2, 3].map((i) => runId + "-" + i);
 
 let failures = 0;
 function check(condition, message) {
@@ -25,35 +43,44 @@ const b = new Client({ connectionString });
 try {
   await Promise.all([seed.connect(), a.connect(), b.connect()]);
 
-  // Seed must be COMMITTED so the independent worker connections can see it.
-  for (let i = 0; i < 4; i += 1) {
+  for (const externalId of seededIds) {
     await seed.query(
       "insert into public.whatsapp_messages (phone_number, direction, content, sender, external_id, processing_status, attempts, next_attempt_at) " +
-        "values ('57300', 'inbound', 'c', 'user', $1, 'pending', 0, now()) " +
-        "on conflict (external_id) where external_id is not null do nothing",
-      ["t-conc-" + i],
+        "values ('57300', 'inbound', 'c', 'user', $1, 'pending', 0, now() - interval '1 hour')",
+      [externalId],
     );
   }
 
   await a.query("begin");
   const claimedByA = await a.query(
-    "select id, external_id, claim_token from public.whatsapp_claim_inbound('conc-a', 2, 180, 5)",
+    "select id, external_id, claim_token, claimed_by from public.whatsapp_claim_inbound('conc-a', 2, 180, 5)",
   );
 
   await b.query("begin");
   const claimedByB = await b.query(
-    "select id, external_id, claim_token from public.whatsapp_claim_inbound('conc-b', 2, 180, 5)",
+    "select id, external_id, claim_token, claimed_by from public.whatsapp_claim_inbound('conc-b', 2, 180, 5)",
   );
+
+  const all = [...claimedByA.rows, ...claimedByB.rows];
+  const claimedExternalIds = all.map((row) => row.external_id).sort();
 
   check(claimedByA.rowCount === 2, "worker A claimed 2 rows");
   check(claimedByB.rowCount === 2, "worker B claimed the other 2 while A still holds its locks");
 
   const idsA = new Set(claimedByA.rows.map((row) => row.id));
-  const overlap = claimedByB.rows.filter((row) => idsA.has(row.id));
-  check(overlap.length === 0, "no row is claimed by both workers");
-
-  const tokens = new Set([...claimedByA.rows, ...claimedByB.rows].map((row) => row.claim_token));
-  check(tokens.size === 4, "each claim gets its own fencing token");
+  check(
+    claimedByB.rows.filter((row) => idsA.has(row.id)).length === 0,
+    "no row is claimed by both workers",
+  );
+  check(
+    JSON.stringify(claimedExternalIds) === JSON.stringify([...seededIds].sort()),
+    "the claims are exactly this run's four seeded rows (no foreign rows touched)",
+  );
+  check(new Set(all.map((row) => row.claim_token)).size === 4, "each claim gets its own fencing token");
+  check(
+    all.every((row) => row.claimed_by === "conc-a" || row.claimed_by === "conc-b"),
+    "each row records its owning worker",
+  );
 
   await a.query("rollback");
   await b.query("rollback");
@@ -61,7 +88,9 @@ try {
   console.error("concurrency test error:", error instanceof Error ? error.message : error);
   failures += 1;
 } finally {
-  await seed.query("delete from public.whatsapp_messages where external_id like 't-conc-%'").catch(() => {});
+  await seed
+    .query("delete from public.whatsapp_messages where external_id = any($1::text[])", [seededIds])
+    .catch(() => {});
   await Promise.allSettled([seed.end(), a.end(), b.end()]);
 }
 

@@ -22,8 +22,22 @@ describe("reportInboundProcessingFailure", () => {
       event: "whatsapp.inbound.processing_failed",
       workerId: "sweeper:1",
       stage: "sweeper",
-      message: "claim rpc down",
+      errorName: "Error",
+      errorLength: "claim rpc down".length,
     });
+    expect(String(errorSpy.mock.calls[0][0])).not.toContain("claim rpc down");
+    errorSpy.mockRestore();
+  });
+
+  it("never logs raw error text that could carry customer data", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    reportInboundProcessingFailure(
+      new Error("send failed for +573001234567 https://wa.me/573001234567"),
+      { workerId: "webhook:1", stage: "webhook_after" },
+    );
+    const logged = String(errorSpy.mock.calls[0][0]);
+    expect(logged).not.toContain("573001234567");
+    expect(logged).not.toContain("https://wa.me");
     errorSpy.mockRestore();
   });
 

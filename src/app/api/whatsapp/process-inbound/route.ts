@@ -15,6 +15,7 @@ import { constantTimeEqual, signWebhookBody } from "@/lib/whatsapp/webhook-secur
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const secret = process.env.WHATSAPP_PROCESS_SECRET;

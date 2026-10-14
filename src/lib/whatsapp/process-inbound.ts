@@ -37,6 +37,8 @@ export type ProcessDeps = {
   leaseSeconds?: number;
   maxAttempts?: number;
   executionTimeoutMs?: number;
+  /** Total wall-clock budget for one batch, so it cannot exceed the route's maxDuration. */
+  batchDeadlineMs?: number;
 };
 
 export type ProcessSummary = {
@@ -47,7 +49,8 @@ export type ProcessSummary = {
   deadLettered: number;
 };
 
-const DEFAULT_EXECUTION_TIMEOUT_MS = 150_000;
+const DEFAULT_EXECUTION_TIMEOUT_MS = 120_000;
+const DEFAULT_BATCH_DEADLINE_MS = 240_000;
 
 function isPromise(value: unknown): value is Promise<unknown> {
   return typeof (value as { then?: unknown } | null)?.then === "function";
@@ -79,8 +82,19 @@ export async function processDueInbound(deps: ProcessDeps): Promise<ProcessSumma
   };
   const rows = await claimInbound(deps.client, deps.workerId, deps.limit ?? 5, leaseSeconds, maxAttempts);
   summary.claimed = rows.length;
+  const startedAt = Date.now();
+  const executionTimeoutMs = deps.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS;
+  const batchDeadlineMs = deps.batchDeadlineMs ?? DEFAULT_BATCH_DEADLINE_MS;
   for (const row of rows) {
-    await processRow(deps, row, summary, maxAttempts);
+    // Never start a row that could run past the batch budget; hand it back to be retried by the
+    // next run rather than being killed mid-send when the platform reaps the function.
+    if (Date.now() - startedAt + executionTimeoutMs > batchDeadlineMs) {
+      const released = await failInbound(deps.client, row.id, row.claim_token, "batch deadline reached", maxAttempts);
+      if (released) summary.failed += 1;
+      else summary.stale += 1;
+      continue;
+    }
+    await processRow(deps, row, summary, maxAttempts, executionTimeoutMs);
   }
   return summary;
 }
@@ -90,6 +104,7 @@ async function processRow(
   row: ClaimedRow,
   summary: ProcessSummary,
   maxAttempts: number,
+  executionTimeoutMs: number,
 ): Promise<void> {
   if (row.raw_payload === null || row.raw_payload === undefined) {
     const failed = await failInbound(deps.client, row.id, row.claim_token, "missing raw_payload", maxAttempts);
@@ -122,7 +137,7 @@ async function processRow(
     if (!registered) {
       throw new Error("adapter did not register background work via waitUntil");
     }
-    await withTimeout(registered, deps.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS, "agent run");
+    await withTimeout(registered, executionTimeoutMs, "agent run");
     const completed = await completeInbound(deps.client, row.id, row.claim_token);
     if (completed) summary.processed += 1;
     else summary.stale += 1;

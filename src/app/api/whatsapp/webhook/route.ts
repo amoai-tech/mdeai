@@ -29,6 +29,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function whatsappChannels() {
   // Mastra registers agents by registry key ("conciergeAgent"), not by the agent's own id.

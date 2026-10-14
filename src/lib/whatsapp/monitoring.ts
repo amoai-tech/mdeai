@@ -37,8 +37,11 @@ export function reportInboundProcessingFailure(
     event: "whatsapp.inbound.processing_failed",
     workerId: context.workerId,
     stage: context.stage,
-    message: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
+    // Logs are long-lived and widely readable: never emit the raw message or stack, which can
+    // carry customer text, phone numbers or URLs. The full error still reaches the sink
+    // (Sentry/alerting); the durable row keeps it in last_error for operator triage.
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorLength: error instanceof Error ? error.message.length : 0,
     summary: context.summary,
   };
   console.error(JSON.stringify(payload));
