@@ -199,14 +199,14 @@ select is((select count(*)::int from public.property_verifications), 2,
   'F8: the owning broker sees its own verification rows');
 select set_config('request.jwt.claim.sub', 'c1432000-0000-4000-8000-000000000003', true);
 select is((select count(*)::int from public.property_verifications
-            where apartment_id in (select id from public.apartments where slug like 'san1432-%')), 4,
+            where apartment_id in (select apartments.id from public.apartments where slug like 'san1432-%')), 4,
   'F9: an admin sees all fixture verification evidence');
 reset role;
 
 set local role service_role;
 select set_config('request.jwt.claim.sub', '', true);
 select is((select count(*)::int from public.property_verifications
-            where apartment_id in (select id from public.apartments where slug like 'san1432-%')), 4,
+            where apartment_id in (select apartments.id from public.apartments where slug like 'san1432-%')), 4,
   'F10: service_role sees all fixture verification evidence');
 reset role;
 
