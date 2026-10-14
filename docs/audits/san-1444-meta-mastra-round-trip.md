@@ -18,9 +18,9 @@ Verified against the installed packages, not from memory:
 | It owns POST `X-Hub-Signature-256` over raw bytes | valid → 200; forged/missing → 401; malformed JSON with a valid signature → 400; UTF-8 body signed over raw bytes → 200 |
 | It fails closed without credentials | `createWhatsAppAdapter()` throws `ValidationError` when any of the four env values is missing |
 | Mastra mounts the channel in-process | `new Mastra({ agents })` initializes the adapter; `agent.getChannels().handleWebhookEvent('whatsapp', req)` returns the challenge. Before init it returns 503 "Chat not initialized" |
-| MDE attaches the channel only when configured | `buildConciergeChannels()` in `sq/src/mastra/agents/concierge.ts` returns `u ndefined` without the full credential set, so web chat is unaffected |
+| MDE attaches the channel only when configured | `buildConciergeChannels()` in `src/mastra/agents/concierge.ts` returns `undefined` without the full credential set, so web chat is unaffected |
 
-Tests: `sq/src/lib/whatsapp/__tests__/`, `sq/src/app/api/whatsapp/__tests__/`, `sq/src/mastra/agents/__tests__/whatsapp-channel-adapter.test.ts` (23 tests). Run:
+Tests: `src/lib/whatsapp/__tests__/`, `src/app/api/whatsapp/__tests__/`, `src/mastra/agents/__tests__/whatsapp-channel-adapter.test.ts` (31 tests). Run:
 
 ```bash
 ./node_modules/.bin/vitest run src/lib/whatsapp src/app/api/whatsapp src/mastra/agents/__tests__/whatsapp-channel-adapter.test.ts
@@ -28,7 +28,7 @@ Tests: `sq/src/lib/whatsapp/__tests__/`, `sq/src/app/api/whatsapp/__tests__/`, `
 
 ## Architecture decision
 
-MDE runs Mastra **in-process** (see `sq/src/app/api/copilotkit/[[...path]]/route.ts`); there is no standalone Mastra server, so the generated `/api/agents/<id>/channels/whatsapp/webhook` route is not reachable by Meta. `sq/src/app/api/whatsapp/webhook/route.ts` is therefore the real ingress. It does **not** reimplement transport — it verifies the signature first, then delegates to `handleWebhookEvent`.
+MDE runs Mastra **in-process** (see `src/app/api/copilotkit/[[...path]]/route.ts`); there is no standalone Mastra server, so the generated `/api/agents/<id>/channels/whatsapp/webhook` route is not reachable by Meta. `src/app/api/whatsapp/webhook/route.ts` is therefore the real ingress. It does **not** reimplement transport — it verifies the signature first, then delegates to `handleWebhookEvent`.
 
 The route returns **503** when the channel is unconfigured, so an environment without WhatsApp credentials is inert, never open.
 
