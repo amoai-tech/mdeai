@@ -45,9 +45,15 @@ const batch = rows.map(r => {
   const files = photos.filter(p=>p.listing_id===r.id).sort((a,b)=>a.sort_order-b.sort_order);
   if (files.length !== 4) throw Error('Four photos required for ' + r.slug);
   files.forEach((f,i)=>{
-    if (f.sort_order !== i || f.mime_type !== 'image/webp'
-        || !f.storage_path?.startsWith('partner-assets/source-review/fincaraiz/' + r.id + '/')
-        || !/^partner-assets\/source-review\/fincaraiz\/[a-f0-9-]+\/[a-z0-9-]+\.webp$/.test(f.storage_path)) {
+    const allowedPrefix = 'partner-assets/source-review/fincaraiz/' + r.id + '/';
+    const filename = f.storage_path?.startsWith(allowedPrefix)
+      ? f.storage_path.slice(allowedPrefix.length) : '';
+    // Reject traversal or nested paths without using an unbounded-input regex.
+    const safeFilename = filename.length > 5 && filename.length <= 100
+      && filename.endsWith('.webp') && !filename.includes('/')
+      && !filename.includes('\\')
+      && [...filename].every(char => 'abcdefghijklmnopqrstuvwxyz0123456789-.'.includes(char));
+    if (f.sort_order !== i || f.mime_type !== 'image/webp' || !safeFilename) {
       throw Error('Unsafe source photo reference in ' + r.slug);
     }
   });
