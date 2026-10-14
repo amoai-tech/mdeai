@@ -15,7 +15,7 @@ export const maxDuration = 20;
  * excludes fixtures).
  *
  *   GET  -> list rentals (with a test marker + test lead/showing counts)
- *   POST -> { action: "create" | "clone-test" | "assign-test-operator" | "publish" | "cleanup", ... }
+ *   POST -> { action: "create" | "clone-test" | "assign-test-operator" | "request-viewing" | "publish" | "cleanup", ... }
  */
 
 type Gate =
@@ -146,6 +146,31 @@ export async function GET() {
   return NextResponse.json({ rentals, counts });
 }
 
+async function handleTestViewing(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  adminEmail: string,
+  body: Record<string, unknown>,
+) {
+  const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
+  const wallClock = typeof body.preferredAt === "string" ? body.preferredAt.trim() : "";
+  const at = resolvePreferredAtInstant(wallClock);
+  if (!apartmentId || !at || new Date(at).getTime() <= Date.now() || !adminEmail) {
+    return NextResponse.json({ error: "Test apartment and future Medellín viewing time required" }, { status: 400 });
+  }
+  const { data, error } = await supabase.rpc("admin_request_test_viewing", {
+    p_apartment_id: apartmentId,
+    p_scheduled_at: at,
+    p_email: adminEmail,
+  });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  const result = data as { lead?: { id?: string }; showing?: { id?: string }; idempotent_replay?: boolean } | null;
+  if (!result?.lead?.id || !result.showing?.id) {
+    return NextResponse.json({ error: "Test viewing did not commit a lead and showing" }, { status: 502 });
+  }
+  return NextResponse.json({ success: true, leadId: result.lead.id,
+    showingId: result.showing.id, idempotentReplay: result.idempotent_replay === true });
+}
+
 export async function POST(request: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return NextResponse.json({ error: gate.message }, { status: gate.status });
@@ -229,26 +254,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ rental: data });
   }
 
-  if (action === "request-viewing") {
-    const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
-    const wallClock = typeof body.preferredAt === "string" ? body.preferredAt.trim() : "";
-    const at = resolvePreferredAtInstant(wallClock);
-    if (!apartmentId || !at || new Date(at).getTime() <= Date.now() || !gate.adminEmail) {
-      return NextResponse.json({ error: "Test apartment and future Medellín viewing time required" }, { status: 400 });
-    }
-    const { data, error } = await supabase.rpc("admin_request_test_viewing", {
-      p_apartment_id: apartmentId,
-      p_scheduled_at: at,
-      p_email: gate.adminEmail,
-    });
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    const result = data as { lead?: { id?: string }; showing?: { id?: string }; idempotent_replay?: boolean } | null;
-    if (!result?.lead?.id || !result.showing?.id) {
-      return NextResponse.json({ error: "Test viewing did not commit a lead and showing" }, { status: 502 });
-    }
-    return NextResponse.json({ success: true, leadId: result.lead.id,
-      showingId: result.showing.id, idempotentReplay: result.idempotent_replay === true });
-  }
+  if (action === "request-viewing") return handleTestViewing(supabase, gate.adminEmail, body);
 
   if (action === "publish" || action === "cleanup") {
     const apartmentId = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";

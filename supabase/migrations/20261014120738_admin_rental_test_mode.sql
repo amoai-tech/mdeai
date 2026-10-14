@@ -94,13 +94,8 @@ begin
   )
   returning * into v_row;
 
-  insert into public.rental_listing_images (listing_id, storage_path, mime_type, rights_status)
-  values (
-    v_row.id,
-    'admin-test/' || replace(gen_random_uuid()::text, '-', '') || '.jpg',
-    'image/jpeg',
-    'unverified'
-  );
+  -- Test photos are supplied as authorized HTTPS URLs in apartments.images.
+  -- Never invent an object-storage path when no object was actually uploaded.
 
   return v_row;
 end;
@@ -211,11 +206,38 @@ begin
     raise exception 'only a test-marked listing can be cleaned up' using errcode = '42501';
   end if;
 
-  with deleted as (delete from public.showings where apartment_id = p_apartment_id returning 1)
-  select count(*) into v_showings from deleted;
+  -- Existing production fixtures may have historical/guest viewings without
+  -- an admin_test marker. An ID match alone is NEVER proof of test ownership.
+  -- Check the lead and every showing linked to that lead before any deletion;
+  -- a different apartment_id on a linked showing must also fail closed.
+  if exists (
+    select 1 from public.leads l
+     where l.apartment_id = p_apartment_id
+       and coalesce(l.metadata->>'admin_test', 'false') <> 'true'
+  ) or exists (
+    select 1 from public.showings s
+    left join public.leads l on l.id = s.lead_id
+     where (s.apartment_id = p_apartment_id or l.apartment_id = p_apartment_id)
+       and (coalesce(s.metadata->>'admin_test', 'false') <> 'true'
+            or s.apartment_id is distinct from p_apartment_id)
+  ) then
+    raise exception 'test fixture has unclassified viewings; manual review required'
+      using errcode = '42501';
+  end if;
 
-  with deleted as (delete from public.leads where apartment_id = p_apartment_id returning 1)
-  select count(*) into v_leads from deleted;
+  with deleted as (
+    delete from public.showings
+     where apartment_id = p_apartment_id
+       and metadata->>'admin_test' = 'true'
+    returning 1
+  ) select count(*) into v_showings from deleted;
+
+  with deleted as (
+    delete from public.leads
+     where apartment_id = p_apartment_id
+       and metadata->>'admin_test' = 'true'
+    returning 1
+  ) select count(*) into v_leads from deleted;
 
   update public.apartments a
      set status = 'inactive',

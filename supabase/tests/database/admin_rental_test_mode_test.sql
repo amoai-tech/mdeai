@@ -2,7 +2,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(55);
+select plan(58);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -263,6 +263,40 @@ select throws_ok(
   null, null::uuid, (now()+interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
  '42501', 'test rental viewing requires administrator',
  'A53: immutable snapshot blocks guest replay after slug and mutable CRM ID change');
+reset role;
+
+-- A56-A58: a fixture's historical unclassified lead/showing is NOT safe
+-- to delete automatically. A rejected cleanup is atomic and loses no data.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1460000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$select public.admin_cleanup_test_rental(current_setting('mde.admin_test_id')::uuid)$q$,
+  '42501', 'test fixture has unclassified viewings; manual review required',
+  'A56: reject cleanup containing historical unclassified guest records');
+reset role;
+select is(
+  (select count(*)::text from public.leads where apartment_id=current_setting('mde.admin_test_id')::uuid)
+  || '/' ||
+  (select count(*)::text from public.showings where apartment_id=current_setting('mde.admin_test_id')::uuid),
+  '2/2',
+  'A57: failed cleanup leaves both existing and admin test records untouched');
+select is(
+  (select count(*)::int from public.rental_listing_images
+   where listing_id=current_setting('mde.admin_test_id')::uuid),
+  0,
+  'A58: admin test photo URL does not produce fictitious Storage image records');
+
+-- This record is known synthetic because this test created it. Explicitly
+-- classify it before exercising successful cleanup; production legacy records
+-- must be reviewed, not automatically reclassified by the cleanup RPC.
+set local role service_role;
+update public.showings s
+   set metadata = coalesce(s.metadata, '{}'::jsonb) || '{"admin_test":true}'::jsonb
+  from public.leads l
+ where s.lead_id=l.id and l.idempotency_key='admin-test-old-guest-replay';
+update public.leads
+   set metadata = coalesce(metadata, '{}'::jsonb) || '{"admin_test":true}'::jsonb
+ where idempotency_key='admin-test-old-guest-replay';
 reset role;
 
 -- A9/A10: cleanup removes the test leads/showings and returns the listing to draft.

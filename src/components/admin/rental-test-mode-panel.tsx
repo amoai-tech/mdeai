@@ -1,5 +1,7 @@
 "use client";
 
+import { nextMedellinTestViewingWallClock } from "@/lib/leads/schedule-viewing-time";
+
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -155,9 +157,7 @@ export function RentalTestModePanel() {
 
   const requestViewing = (row: AdminRentalRow) =>
     act("viewing:" + row.id, async () => {
-      const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const preferredAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T10:00`;
+      const preferredAt = nextMedellinTestViewingWallClock();
       const res = await fetch("/api/admin/rentals/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
