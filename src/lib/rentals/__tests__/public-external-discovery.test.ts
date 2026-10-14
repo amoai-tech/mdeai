@@ -136,6 +136,73 @@ describe("public external source cards", () => {
     }
   });
 
+  it("returns up to five approved photos in stored order, with `image` as the first (SAN-1416)", () => {
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      const dir = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988";
+      const approved = [1, 2, 3, 4, 5, 6].map((n) => `${dir}/photo-0${n}.webp`);
+      const ad = publicExternalRentalCard({ ...base, images: approved });
+      expect(ad?.images).toEqual(approved.slice(0, 5)); // capped at five, order preserved
+      expect(ad?.image).toBe(approved[0]);
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
+  it("drops every photo that is not an approved public object, without hiding the ones that are", () => {
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      const origin = "https://zkwcbyxiwklihegjhuql.supabase.co/storage/v1/object";
+      const good = `${origin}/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-02.webp`;
+      const ad = publicExternalRentalCard({
+        ...base,
+        images: [
+          "not a url", // malformed: skipped, must not discard the rest
+          "https://example.net/other.webp", // foreign host
+          `${origin}/public/partner-assets/foo.webp`, // another bucket
+          `${origin}/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-192658136/photo-01.webp`, // another listing's folder
+          `${origin}/public/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-03.jpg`, // wrong type
+          `${origin}/sign/listing-photos/external-discovery/fincaraiz/candidate-fincaraiz-193916988/photo-04.webp`, // signed/private path
+          good,
+        ],
+      });
+      expect(ad?.images).toEqual([good]);
+      expect(ad?.image).toBe(good);
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
+  it("has no photos, and an empty list, when none are approved or the storage origin is unknown", () => {
+    const ad = publicExternalRentalCard({ ...base, images: ["https://example.net/a.webp"] });
+    expect(ad?.images).toEqual([]);
+    expect(ad?.image).toBe("");
+  });
+
+  it("warns (slug and count only) when every stored photo is rejected, and stays quiet otherwise", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://zkwcbyxiwklihegjhuql.supabase.co";
+    try {
+      publicExternalRentalCard({ ...base, images: ["https://example.net/a.webp", "not a url"] });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain(base.slug);
+      expect(warn.mock.calls[0][0]).toContain("2 stored photo(s)");
+      expect(warn.mock.calls[0][0]).not.toContain("example.net");
+      warn.mockClear();
+      publicExternalRentalCard({ ...base, images: [] }); // nothing stored: nothing to report
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
+  });
+
   it("accepts Fincaraíz source links without the www subdomain", () => {
     const result = publicExternalRentalCard({ ...base, source_url: "https://fincaraiz.com.co/apartamento/193916988" });
     expect(result?.source_url).toContain("https://fincaraiz.com.co/");
