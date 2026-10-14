@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bed, Bath, Users, Building2, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { RentalAvailabilityCalendar } from "@/components/rentals/rental-availability-calendar";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { cn } from "@/lib/utils";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
@@ -16,6 +25,45 @@ const PENDING = "Data pending";
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const Pending = () => <span className="text-muted-foreground">{PENDING}</span>;
 
+// skipcq: JS-0067 - React component (ES module); not browser global scope
+const GalleryImage = ({
+  src,
+  alt,
+  className,
+  loading,
+  testId,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+  loading: "eager" | "lazy";
+  testId?: string;
+}) => {
+  // A missing or failed Storage photo must stay an explicit placeholder.
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div
+        data-testid={testId ? `${testId}-unavailable` : undefined}
+        className={cn("flex items-center justify-center bg-muted text-xs text-muted-foreground", className)}
+      >
+        <Building2 className="mr-1 size-4" aria-hidden /> Photo unavailable
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading={loading}
+      data-testid={testId}
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 // skipcq: JS-0067 - module-local helper; not browser global scope
 const specLabel = (count: number | null, one: string, many: string): React.ReactNode => {
   if (count == null) return <Pending />;
@@ -24,8 +72,8 @@ const specLabel = (count: number | null, one: string, many: string): React.React
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
-  const cover = detail.images[0];
-  const rest = detail.images.slice(1, 5);
+  const images = detail.images.slice(0, 5);
+  const cover = images[0];
   if (!cover) {
     return (
       <div
@@ -36,31 +84,59 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
       </div>
     );
   }
+  const rest = images.slice(1);
   return (
-    <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={cover}
-        alt={`${detail.title} in ${detail.neighborhood}`}
-        data-testid="rental-detail-cover"
-        className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
-        loading="eager"
-      />
-      {rest.length > 0 ? (
-        <div className="hidden grid-cols-2 gap-2 sm:grid">
-          {rest.map((src, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={src}
-              src={src}
-              alt={`${detail.title} photo ${index + 2}`}
-              className="aspect-square w-full rounded-lg bg-muted object-cover"
-              loading="lazy"
-            />
+    <>
+      {/* Desktop: cover plus up to four thumbnails. */}
+      <div
+        data-testid="rental-detail-gallery-desktop"
+        className="hidden gap-2 sm:grid sm:grid-cols-[2fr_1fr]"
+      >
+        <GalleryImage
+          src={cover}
+          alt={`${detail.title} in ${detail.neighborhood}`}
+          testId="rental-detail-cover"
+          className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+          loading="eager"
+        />
+        {rest.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {rest.map((src, index) => (
+              <GalleryImage
+                key={src}
+                src={src}
+                alt={`${detail.title} photo ${index + 2}`}
+                className="aspect-square w-full rounded-lg bg-muted object-cover"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Mobile: every photo reachable by swipe or the next/previous controls. */}
+      <Carousel
+        className="sm:hidden"
+        data-testid="rental-detail-gallery-mobile"
+        opts={{ loop: false, align: "start" }}
+      >
+        <CarouselContent>
+          {images.map((src, index) => (
+            <CarouselItem key={src}>
+              <GalleryImage
+                src={src}
+                alt={`${detail.title} photo ${index + 1}`}
+                testId={`rental-detail-slide-${index + 1}`}
+                className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            </CarouselItem>
           ))}
-        </div>
-      ) : null}
-    </div>
+        </CarouselContent>
+        <CarouselPrevious className="left-2" />
+        <CarouselNext className="right-2" />
+      </Carousel>
+    </>
   );
 };
 

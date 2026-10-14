@@ -58,14 +58,34 @@ test.describe("SAN-1431 local rental preview — Supabase Storage photos", () =>
     await page.locator(`${CARD} a[href^="/rentals/"]`).first().click();
     await expect(page.getByTestId("rental-detail")).toBeVisible();
 
-    const gallery = page.locator('[data-testid="rental-detail"] img');
-    await expect(gallery).toHaveCount(4);
+    const gallery = page.getByTestId("rental-detail-gallery-desktop");
+    await expect(gallery).toBeVisible();
+    const photos = gallery.locator("img");
+    await expect(photos).toHaveCount(4);
     for (let index = 0; index < 4; index += 1) {
-      await expectImageLoaded(gallery.nth(index), `gallery photo ${index + 1}`);
+      await expectImageLoaded(photos.nth(index), `gallery photo ${index + 1}`);
     }
     await expect(page.getByTestId("rental-detail-request-cta")).toHaveCount(0);
     await expect(page.getByTestId("rental-detail-ask-cta")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("creates no lead, viewing or booking request", async ({ page }) => {
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "GET") return;
+      const url = request.url();
+      if (/lead|viewing|schedule|booking|checkout/i.test(url)) {
+        writes.push(`${request.method()} ${url}`);
+      }
+    });
+
+    await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });
+    await page.locator(`${CARD} a[href^="/rentals/"]`).first().click();
+    await expect(page.getByTestId("rental-detail")).toBeVisible();
+    await expect(page.getByTestId("rental-detail-gallery-desktop")).toBeVisible();
+
+    expect(writes).toEqual([]);
   });
 });
 
@@ -78,6 +98,25 @@ test.describe("SAN-1431 local rental preview — mobile 390px", () => {
     await expect(page.locator(CARD)).toHaveCount(9);
     await expectImageLoaded(page.locator(CARD).locator("img").first(), "mobile cover");
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("swipes through all four gallery photos", async ({ page }) => {
+    await page.goto("/dev/rentals", { waitUntil: "domcontentloaded" });
+    await page.locator(`${CARD} a[href^="/rentals/"]`).first().click();
+    await expect(page.getByTestId("rental-detail")).toBeVisible();
+
+    const gallery = page.getByTestId("rental-detail-gallery-mobile");
+    await expect(gallery).toBeVisible();
+    await expect(gallery.locator('[data-slot="carousel-item"]')).toHaveCount(4);
+
+    for (let index = 1; index <= 4; index += 1) {
+      const slide = page.getByTestId(`rental-detail-slide-${index}`);
+      await expect(slide).toBeInViewport();
+      await expectImageLoaded(slide, `mobile gallery photo ${index}`);
+      if (index < 4) {
+        await gallery.getByRole("button", { name: "Next slide" }).click();
+      }
+    }
   });
 
   test("preview detail shows the preview notice, not a host-payment claim", async ({ page }) => {

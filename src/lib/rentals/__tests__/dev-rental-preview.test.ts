@@ -5,50 +5,56 @@ import path from "node:path";
 
 // The preview reads the private partner-assets bucket with the server-only service
 // client. Mock that client so no credential or network is needed. The mock derives
-// the returned bytes from the *requested object path*, so a canned response that
-// ignores the requested photo is detected instead of passing.
+// bytes from the *requested object path*, so a canned response that ignores the
+// requested photo is detected instead of passing.
 const h = vi.hoisted(() => {
-  const bytesFor = (objectPath: string) =>
-    new TextEncoder().encode(`WEBP:${objectPath}`);
-  const images = [0, 1, 2, 3].map((sort_order) => ({
+  const bytesFor = (objectPath: string) => new TextEncoder().encode(`WEBP:${objectPath}`);
+  const defaultImages = [0, 1, 2, 3].map((sort_order) => ({
     sort_order,
     storage_path: `partner-assets/source-review/fincaraiz/apt-1/${sort_order + 1}-hash.webp`,
     mime_type: "image/webp",
   }));
-  const download = vi.fn(
-    async (objectPath: string): Promise<{ data: Blob | null; error: unknown }> => ({
-      data: new Blob([bytesFor(objectPath)]),
-      error: null,
-    }),
-  );
-  return { bytesFor, images, download, knownSlug: "candidate-fincaraiz-193916988" };
+  const state = { available: true, apartmentId: "apt-1", images: defaultImages };
+  return {
+    bytesFor,
+    defaultImages,
+    state,
+    download: vi.fn(
+      async (objectPath: string): Promise<{ data: Blob | null; error: unknown }> => ({
+        data: new Blob([bytesFor(objectPath)]),
+        error: null,
+      }),
+    ),
+    knownSlug: "candidate-fincaraiz-193916988",
+  };
 });
 
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceRoleClient: () => ({
-    from: (table: string) => {
-      if (table === "apartments") {
-        return {
-          select: () => ({
-            eq: (_column: string, value: string) => ({
-              maybeSingle: async () => ({
-                data: value === h.knownSlug ? { id: "apt-1" } : null,
-                error: null,
+  createServiceRoleClient: () => {
+    if (!h.state.available) return null;
+    return {
+      from: (table: string) => {
+        if (table === "apartments") {
+          return {
+            select: () => ({
+              eq: (_column: string, value: string) => ({
+                maybeSingle: async () => ({
+                  data: value === h.knownSlug ? { id: h.state.apartmentId } : null,
+                  error: null,
+                }),
               }),
             }),
+          };
+        }
+        return {
+          select: () => ({
+            eq: () => ({ order: async () => ({ data: h.state.images, error: null }) }),
           }),
         };
-      }
-      return {
-        select: () => ({
-          eq: () => ({
-            order: async () => ({ data: h.images, error: null }),
-          }),
-        }),
-      };
-    },
-    storage: { from: () => ({ download: h.download }) },
-  }),
+      },
+      storage: { from: () => ({ download: h.download }) },
+    };
+  },
 }));
 
 import {
@@ -57,6 +63,7 @@ import {
   getLocalPreviewRentals,
   isLocalPreviewHost,
   isLocalRentalPreviewEnabled,
+  resetLocalPreviewImageCache,
 } from "@/lib/rentals/dev-rental-preview";
 
 const candidate = {
@@ -75,12 +82,12 @@ const candidate = {
   source_url: "https://www.fincaraiz.com.co/apartaestudio-en-arriendo-en-conquistadores-medellin/193916988",
 };
 
-const photoUrl = (index: number) =>
-  `/api/dev/rental-photo/${candidate.slug}/photo-0${index + 1}.webp`;
-const objectPath = (index: number) =>
-  `source-review/fincaraiz/apt-1/${index + 1}-hash.webp`;
+const photoUrl = (sortOrder: number) =>
+  `/api/dev/rental-photo/${candidate.slug}/photo-0${sortOrder + 1}.webp`;
+const objectPath = (index: number) => `source-review/fincaraiz/apt-1/${index + 1}-hash.webp`;
 
 let root: string;
+let warnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "mde-rental-preview-"));
@@ -88,10 +95,16 @@ beforeEach(async () => {
   vi.stubEnv("MDE_DEV_RENTAL_FIXTURES_DIR", root);
   vi.stubEnv("MDE_DEV_RENTAL_PREVIEW", "1");
   vi.stubEnv("NODE_ENV", "development");
+  h.state.available = true;
+  h.state.apartmentId = "apt-1";
+  h.state.images = h.defaultImages;
   h.download.mockClear();
+  resetLocalPreviewImageCache();
+  warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(async () => {
+  warnSpy.mockRestore();
   vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true });
 });
@@ -133,7 +146,6 @@ describe("local rental preview (no publishing bypass)", () => {
       schedule_viewing_url: null,
       tags: ["dev-preview"],
     });
-    // Exact string: a disclaimer that also claims availability must fail, not pass on /unconfirmed/i.
     expect(rentals[0].availability).toBe("Availability unconfirmed · Development preview");
     expect(rentals[0].latitude).toBeUndefined();
     expect(rentals[0].longitude).toBeUndefined();
@@ -150,7 +162,24 @@ describe("local rental preview (no publishing bypass)", () => {
     });
   });
 
-  it("streams each photo from its own object path in sort order", async () => {
+  it("addresses photos by explicit sort_order, not array position", async () => {
+    h.state.images = [
+      { sort_order: 0, storage_path: "partner-assets/source-review/fincaraiz/apt-1/1-a.webp", mime_type: "image/webp" },
+      { sort_order: 2, storage_path: "partner-assets/source-review/fincaraiz/apt-1/3-c.webp", mime_type: "image/webp" },
+    ];
+    resetLocalPreviewImageCache();
+
+    const detail = await getLocalPreviewDetail(candidate.slug);
+    expect(detail?.images).toEqual([photoUrl(0), photoUrl(2)]);
+    // The sort_order gap is a real missing photo, not the next array element.
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-02.webp")).toBeNull();
+    const third = await getLocalPreviewPhoto(candidate.slug, "photo-03.webp");
+    expect(Buffer.from(third?.bytes ?? new ArrayBuffer(0))).toEqual(
+      Buffer.from(h.bytesFor("source-review/fincaraiz/apt-1/3-c.webp")),
+    );
+  });
+
+  it("streams each photo from its own object path", async () => {
     const first = await getLocalPreviewPhoto(candidate.slug, "photo-01.webp");
     const second = await getLocalPreviewPhoto(candidate.slug, "photo-02.webp");
     if (!first || !second) throw new Error("expected both photos to resolve");
@@ -158,10 +187,34 @@ describe("local rental preview (no publishing bypass)", () => {
     expect(first.contentType).toBe("image/webp");
     expect(Buffer.from(first.bytes)).toEqual(Buffer.from(h.bytesFor(objectPath(0))));
     expect(Buffer.from(second.bytes)).toEqual(Buffer.from(h.bytesFor(objectPath(1))));
-    // A canned response that ignores the requested photo would make these equal.
     expect(Buffer.from(first.bytes)).not.toEqual(Buffer.from(second.bytes));
     expect(h.download).toHaveBeenNthCalledWith(1, objectPath(0));
     expect(h.download).toHaveBeenNthCalledWith(2, objectPath(1));
+  });
+
+  it("refuses storage rows outside the apartment's allowlisted prefix or with an unsafe basename", async () => {
+    h.state.images = [
+      { sort_order: 0, storage_path: "partner-assets/source-review/other/apt-1/1-a.webp", mime_type: "image/webp" },
+    ];
+    resetLocalPreviewImageCache();
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
+    expect(h.download).not.toHaveBeenCalled();
+
+    h.state.images = [
+      { sort_order: 0, storage_path: "partner-assets/source-review/fincaraiz/apt-1/..%2Fsecret.webp", mime_type: "image/webp" },
+    ];
+    resetLocalPreviewImageCache();
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it("degrades safely and visibly when Storage credentials are missing", async () => {
+    h.state.available = false;
+    resetLocalPreviewImageCache();
+    expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
+    const [rental] = await getLocalPreviewRentals();
+    expect(rental.image).toBe("");
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("service-role client unavailable"));
   });
 
   it("rejects unknown slugs, filenames and positions", async () => {
@@ -178,6 +231,7 @@ describe("local rental preview (no publishing bypass)", () => {
   it("returns no bytes when Storage errors", async () => {
     h.download.mockResolvedValueOnce({ data: null, error: { message: "not found" } });
     expect(await getLocalPreviewPhoto(candidate.slug, "photo-01.webp")).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("storage download failed"));
   });
 
   it("accepts original verified source URL on aggregator records", async () => {

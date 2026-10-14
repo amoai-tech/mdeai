@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Bed, Building2, Calendar, Heart, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -84,9 +84,11 @@ function RentalBrowseCardMedia({
   neighborhood: string;
   nightlyLabel: string | null;
 }) {
+  // A failed Storage request must fall back to the normal placeholder, not a broken image.
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
-      {imageUrl ? (
+      {imageUrl && !imageFailed ? (
         <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -95,6 +97,7 @@ function RentalBrowseCardMedia({
             className="size-full object-cover"
             loading="lazy"
             data-testid="rental-browse-card-photo"
+            onError={() => setImageFailed(true)}
           />
         </div>
       ) : (

@@ -120,39 +120,75 @@ type ListingImageRow = {
   mime_type: string | null;
 };
 
+type ListingImages = { apartmentId: string; rows: ListingImageRow[] };
+
+const IMAGE_CACHE_TTL_MS = 30_000;
+const imageCache = new Map<string, { at: number; value: ListingImages | null }>();
+
+/** @internal Vitest only */
+export function resetLocalPreviewImageCache(): void {
+  imageCache.clear();
+}
+
+function warn(message: string): void {
+  // Observability only: a missing credential or a DB/Storage error must be visible
+  // in the dev server log instead of silently rendering empty galleries.
+  console.warn(`[dev-rental-preview] ${message}`);
+}
+
 /**
- * The staged photos for a candidate, ordered exactly as uploaded. Uses the
- * server-only service client because `partner-assets` is a private bucket; the
- * credential never leaves the server process.
+ * The staged photos for a candidate keyed by its apartment id, with a short TTL
+ * cache so a nine-card page and its image requests do not each re-query Supabase.
+ * Uses the server-only service client because `partner-assets` is private.
  */
-async function listingImages(slug: string): Promise<ListingImageRow[]> {
+async function listingImages(slug: string): Promise<ListingImages | null> {
+  const cached = imageCache.get(slug);
+  if (cached && Date.now() - cached.at < IMAGE_CACHE_TTL_MS) return cached.value;
+
   const client = createServiceRoleClient();
-  if (!client) return [];
+  if (!client) {
+    warn("service-role client unavailable; is SUPABASE_SERVICE_ROLE_KEY set?");
+    imageCache.set(slug, { at: Date.now(), value: null });
+    return null;
+  }
   const { data: apartment, error: apartmentError } = await client
     .from("apartments")
     .select("id")
     .eq("slug", slug)
     .maybeSingle();
-  if (apartmentError || !apartment) return [];
+  if (apartmentError) warn(`apartment lookup failed for ${slug}: ${apartmentError.message}`);
+  if (!apartment) {
+    imageCache.set(slug, { at: Date.now(), value: null });
+    return null;
+  }
   const { data, error } = await client
     .from("rental_listing_images")
     .select("sort_order, storage_path, mime_type")
     .eq("listing_id", apartment.id)
     .order("sort_order", { ascending: true });
-  if (error || !data) return [];
-  return data as ListingImageRow[];
+  if (error) warn(`image lookup failed for ${slug}: ${error.message}`);
+  const value: ListingImages = {
+    apartmentId: apartment.id,
+    rows: error || !data ? [] : (data as ListingImageRow[]),
+  };
+  imageCache.set(slug, { at: Date.now(), value });
+  return value;
 }
 
-function photoUrl(slug: string, position: number): string {
-  return `/api/dev/rental-photo/${slug}/photo-0${position + 1}.webp`;
+/** `photo-01.webp` → sort_order 0. Explicit, so a missing row never shifts a photo. */
+function sortOrderForFilename(filename: string): number | null {
+  const match = PHOTO.exec(filename);
+  return match ? Number(match[1]) - 1 : null;
+}
+
+function photoUrl(slug: string, sortOrder: number): string {
+  return `/api/dev/rental-photo/${slug}/photo-${String(sortOrder + 1).padStart(2, "0")}.webp`;
 }
 
 async function photos(slug: string): Promise<string[]> {
   if (!isLocalRentalPreviewEnabled()) return [];
-  const rows = await listingImages(slug);
-  // Address photos by their sort-order position so a gap can never shift one
-  // unit's image onto another, and a missing row simply stays absent.
-  return rows.map((_row, index) => photoUrl(slug, index));
+  const images = await listingImages(slug);
+  return (images?.rows ?? []).map((row) => photoUrl(slug, row.sort_order));
 }
 
 export type DevPreviewPhoto = { bytes: ArrayBuffer; contentType: string };
@@ -167,17 +203,35 @@ export async function getLocalPreviewPhoto(
   filename: string,
 ): Promise<DevPreviewPhoto | null> {
   if (!isLocalRentalPreviewEnabled() || !isCandidateSlug(slug)) return null;
-  const match = PHOTO.exec(filename);
-  if (!match) return null;
+  const sortOrder = sortOrderForFilename(filename);
+  if (sortOrder === null) return null;
+
+  const images = await listingImages(slug);
+  if (!images) return null;
+  const row = images.rows.find((candidate) => candidate.sort_order === sortOrder);
+  if (!row) return null;
+
+  // Allowlisted path: only this apartment's own source-review prefix, with a safe
+  // basename, can be read even if a database row were tampered with.
+  const prefix = `${SOURCE_REVIEW_BUCKET}/source-review/fincaraiz/${images.apartmentId}/`;
+  if (!row.storage_path.startsWith(prefix)) {
+    warn(`refusing non-allowlisted storage path for ${slug}`);
+    return null;
+  }
+  const objectPath = row.storage_path.slice(SOURCE_REVIEW_BUCKET.length + 1);
+  const basename = objectPath.slice(objectPath.lastIndexOf("/") + 1);
+  if (basename.includes("..") || !/^[A-Za-z0-9._-]+$/.test(basename)) {
+    warn(`refusing unsafe storage basename for ${slug}`);
+    return null;
+  }
+
   const client = createServiceRoleClient();
   if (!client) return null;
-  const row = (await listingImages(slug))[Number(match[1]) - 1];
-  if (!row) return null;
-  const objectPath = row.storage_path.startsWith(`${SOURCE_REVIEW_BUCKET}/`)
-    ? row.storage_path.slice(SOURCE_REVIEW_BUCKET.length + 1)
-    : row.storage_path;
   const { data, error } = await client.storage.from(SOURCE_REVIEW_BUCKET).download(objectPath);
-  if (error || !data) return null;
+  if (error || !data) {
+    warn(`storage download failed for ${slug} (${sortOrder}): ${error?.message ?? "no data"}`);
+    return null;
+  }
   return { bytes: await data.arrayBuffer(), contentType: row.mime_type ?? "image/webp" };
 }
 
