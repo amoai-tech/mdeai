@@ -251,6 +251,28 @@ exception when unique_violation then
 end;
 $$;
 
+-- ── 5. Receipt lookup: recover a committed ballot after a consumed nonce ─────
+create or replace function public.vote_receipt(
+  p_contest_id      uuid,
+  p_user_id         uuid,
+  p_idempotency_key text
+) returns jsonb
+language sql
+security definer
+set search_path = ''
+stable
+as $$
+  select jsonb_build_object(
+    'status', 'replayed', 'vote_id', v.id, 'contest_id', v.contest_id,
+    'entity_id', v.entity_id, 'created_at', v.created_at
+  )
+  from vote.votes v
+  where v.contest_id = p_contest_id
+    and v.voter_user_id = p_user_id
+    and v.idempotency_key = p_idempotency_key
+  limit 1;
+$$;
+
 -- ── Grants: backend-only boundaries, vote.* stays unexposed ──────────────────
 revoke all on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
   from public, anon, authenticated;
@@ -265,3 +287,6 @@ grant execute on function public.vote_tally(uuid) to service_role;
 
 revoke all on function public.vote_consume_nonce(uuid) from public, anon, authenticated;
 grant execute on function public.vote_consume_nonce(uuid) to service_role;
+
+revoke all on function public.vote_receipt(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.vote_receipt(uuid, uuid, text) to service_role;

@@ -10,7 +10,7 @@
 
 begin;
 
-select plan(39);
+select plan(42);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
@@ -163,6 +163,11 @@ select is((
   join vote.votes v on v.id = fs.vote_id
   where v.idempotency_key = 'idem-0013' and fs.rules_hit @> array['device_reuse']
 ), 1, 'device reuse writes a fraud signal');
+
+-- ── Receipt recovery after a consumed nonce ─────────────────────────────────
+select is(has_function_privilege('service_role', 'public.vote_receipt(uuid,uuid,text)', 'EXECUTE'), true, 'service_role can read a receipt');
+select is(has_function_privilege('authenticated', 'public.vote_receipt(uuid,uuid,text)', 'EXECUTE'), false, 'authenticated cannot read a receipt');
+select is((select public.vote_receipt('c0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','idem-0001')->>'status'), 'replayed', 'a committed ballot returns its original receipt');
 
 select * from finish();
 
