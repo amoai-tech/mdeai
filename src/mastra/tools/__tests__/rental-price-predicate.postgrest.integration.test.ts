@@ -20,7 +20,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { rentalPricePredicate } from "../search-rentals";
+import { rentalMonthlyBudgetPredicate, rentalPricePredicate } from "../search-rentals";
 import { hasLiveSupabase } from "../../lib/__tests__/live-supabase-gate";
 
 function loadEnvLocal() {
@@ -69,6 +69,11 @@ describe.skipIf(!hasLiveSupabase())(
 
     it("accepts the budgeted predicate with its currency-guarded alternatives", async () => {
       const result = await probe(rentalPricePredicate(80));
+      expect(result.status).toBe(200);
+    });
+
+    it("accepts the monthly COP budget predicate", async () => {
+      const result = await probe(rentalMonthlyBudgetPredicate(3_500_000, "COP"));
       expect(result.status).toBe(200);
     });
 
