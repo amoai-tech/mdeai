@@ -77,27 +77,14 @@ create policy rental_test_access_select_self
   to authenticated
   using (user_id = (select auth.uid()));
 
+-- There is deliberately NO insert/update/delete policy and no write privilege
+-- for end-user roles. A grant may only be created, changed or revoked through the
+-- audited SECURITY DEFINER RPCs below, so a direct table write cannot bypass the
+-- audit trail. The RPCs run as the table owner and are unaffected.
 drop policy if exists rental_test_access_insert_admin on public.rental_test_access;
-create policy rental_test_access_insert_admin
-  on public.rental_test_access
-  for insert
-  to authenticated
-  with check ((select public.is_admin()));
-
 drop policy if exists rental_test_access_update_admin on public.rental_test_access;
-create policy rental_test_access_update_admin
-  on public.rental_test_access
-  for update
-  to authenticated
-  using ((select public.is_admin()))
-  with check ((select public.is_admin()));
-
 drop policy if exists rental_test_access_delete_admin on public.rental_test_access;
-create policy rental_test_access_delete_admin
-  on public.rental_test_access
-  for delete
-  to authenticated
-  using ((select public.is_admin()));
+revoke insert, update, delete on public.rental_test_access from anon, authenticated;
 
 -- §2 — append-only development audit trail ----------------------------------
 create table if not exists public.rental_test_events (
@@ -160,7 +147,7 @@ create trigger rental_test_events_no_delete
 -- Defence in depth for append-only: even a future permissive RLS policy could
 -- not let an end-user role rewrite history, because the privilege is gone too.
 -- The SECURITY DEFINER RPCs run as the table owner and keep INSERT.
-revoke update, delete on public.rental_test_events from anon, authenticated;
+revoke insert, update, delete on public.rental_test_events from anon, authenticated;
 
 -- §3 — the authorization predicate ------------------------------------------
 -- SECURITY DEFINER so RLS on rental_test_access cannot recurse or hide the
@@ -188,10 +175,28 @@ as $function$
 $function$;
 
 comment on function public.is_authorized_test_actor(uuid, text) is
-  'SAN-1502: true when the user holds an active (not revoked, not expired) development grant, optionally limited to one role.';
+  'SAN-1502: internal, self-or-service scoped check. Not executable by end-user roles so a caller cannot ask about another user id.';
 
-revoke all on function public.is_authorized_test_actor(uuid, text) from public, anon;
-grant execute on function public.is_authorized_test_actor(uuid, text) to authenticated, service_role;
+-- The canonical, self-scoped predicate. Every RLS policy and search path must
+-- call this no-argument form: it can only ever answer about the authenticated
+-- user, so a client cannot probe development access by supplying someone else's id.
+create or replace function public.is_authorized_test_actor()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select public.is_authorized_test_actor(auth.uid(), null);
+$function$;
+
+comment on function public.is_authorized_test_actor() is
+  'SAN-1502: true when the AUTHENTICATED user holds an active (not revoked, not expired) development grant. The only form exposed to end-user roles.';
+
+revoke all on function public.is_authorized_test_actor(uuid, text) from public, anon, authenticated;
+grant execute on function public.is_authorized_test_actor(uuid, text) to service_role;
+revoke all on function public.is_authorized_test_actor() from public, anon;
+grant execute on function public.is_authorized_test_actor() to authenticated, service_role;
 
 -- §4 — one canonical "can an authorized tester be offered this fixture?" -----
 -- Materialized once so PR 2 search/RLS and PR 3 viewing consume the same rule.
@@ -488,6 +493,29 @@ begin
      and lower(coalesce(a.metadata ->> 'is_test_fixture', 'false')) = 'true';
   if not found then
     raise exception 'test fixture not found' using errcode = 'P0002';
+  end if;
+
+  -- Idempotent: assigning the broker already responsible is a no-op.
+  if v_previous is not distinct from v_landlord then
+    select a.* into v_row from public.apartments a where a.id = p_apartment_id;
+    return v_row;
+  end if;
+
+  -- Reassignment rule: a fixture with any ACTIVE viewing keeps its current
+  -- responsible broker until those requests are resolved or cleaned up, so an
+  -- in-flight request can never be silently transferred to a different broker.
+  if exists (
+       select 1 from public.leads l
+        where l.apartment_id = p_apartment_id
+          and l.status in ('new', 'contacted', 'qualified')
+     )
+     or exists (
+       select 1 from public.showings s
+        where s.apartment_id = p_apartment_id
+          and s.status in ('scheduled', 'confirmed')
+     ) then
+    raise exception 'test fixture has active viewings; resolve or clean them before reassigning the broker'
+      using errcode = '42501';
   end if;
 
   update public.apartments a

@@ -194,7 +194,7 @@
     "anon": true,
     "authenticated": true
   },
-  "is_authorized_test_actor(p_user_id uuid, p_access_role text)": {
+  "is_authorized_test_actor()": {
     "public": false,
     "anon": false,
     "authenticated": true

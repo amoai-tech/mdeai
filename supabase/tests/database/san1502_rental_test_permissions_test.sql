@@ -4,7 +4,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(54);
+select plan(64);
 
 -- Fixtures: one admin, one revoked renter, one owner, one broker, one observer.
 insert into auth.users (id, instance_id, aud, role, email)
@@ -286,6 +286,51 @@ select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-0000000
 select throws_ok(
   $q$select public.admin_grant_rental_test_access('f1502000-0000-4000-8000-00000000dead', 'renter')$q$,
   'P0002', 'target user not found', 'A50: unknown target user is rejected');
+
+-- A51-A53: grants cannot be changed except through the audited RPCs.
+select throws_ok(
+  $q$insert into public.rental_test_access (user_id, access_role) values ('f1502000-0000-4000-8000-000000000005', 'renter')$q$,
+  '42501', null, 'A51: a direct grant insert is denied');
+select throws_ok(
+  $q$update public.rental_test_access set access_role = 'owner' where user_id = 'f1502000-0000-4000-8000-000000000004'$q$,
+  '42501', null, 'A52: a direct grant update is denied');
+select throws_ok(
+  $q$delete from public.rental_test_access where user_id = 'f1502000-0000-4000-8000-000000000004'$q$,
+  '42501', null, 'A53: a direct grant delete is denied');
+-- A54: the arbitrary-id predicate is not executable by an end-user role.
+select throws_ok(
+  $q$select public.is_authorized_test_actor('f1502000-0000-4000-8000-000000000004', 'broker')$q$,
+  '42501', null, 'A54: an end user cannot query another id');
+reset role;
+
+-- A55/A56: the exposed predicate answers only about the authenticated user.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+select is(public.is_authorized_test_actor(), true,
+  'A55: the self-scoped predicate is true for my own active grant');
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-000000000005","role":"authenticated"}', true);
+select is(public.is_authorized_test_actor(), false,
+  'A56: the self-scoped predicate is false for a user with no grant');
+reset role;
+
+-- A57-A60: broker reassignment rule while a viewing is active.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select lives_ok(
+  $q$select public.admin_request_test_viewing((current_setting('mde.san1502_fixture'))::uuid, now() + interval '1 day', 'admin-1502@example.com')$q$,
+  'A57: admin creates an active test viewing');
+select throws_ok(
+  $q$select public.admin_assign_test_listing_broker((current_setting('mde.san1502_fixture'))::uuid, 'f1502000-0000-4000-8000-000000000004')$q$,
+  '42501', 'test fixture has active viewings; resolve or clean them before reassigning the broker',
+  'A58: reassignment is blocked while a viewing is active');
+select lives_ok(
+  $q$select public.admin_cleanup_test_rental((current_setting('mde.san1502_fixture'))::uuid)$q$,
+  'A59: cleanup removes the active viewing');
+select lives_ok(
+  $q$select public.admin_assign_test_listing_broker((current_setting('mde.san1502_fixture'))::uuid, 'f1502000-0000-4000-8000-000000000004')$q$,
+  'A60: reassignment succeeds after the viewings are resolved');
 reset role;
 
 select * from finish();
