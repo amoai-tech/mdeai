@@ -1,4 +1,5 @@
 import { createTool } from '@mastra/core/tools';
+import { formatWhatsAppRentalReply, type WhatsAppRentalItem } from './whatsapp-rental-reply';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
@@ -357,6 +358,23 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
+const CHAT_CHANNEL_RENDER_CONTEXT_KEY = '__mastra_chat_channel_render';
+
+/**
+ * Is this agent run serving WhatsApp?
+ *
+ * The channel framework stashes its render context on the run's RequestContext under this key
+ * (@mastra/core channels/output-processor). Read defensively: a run with no channel context
+ * (web chat, Studio, tests) is simply not WhatsApp.
+ */
+export function isWhatsAppRun(context: unknown): boolean {
+  const get = (context as { get?: (key: string) => unknown } | undefined)?.get;
+  if (typeof get !== 'function') return false;
+  const render = get.call(context, CHAT_CHANNEL_RENDER_CONTEXT_KEY);
+  const platform = (render as { platform?: unknown } | undefined)?.platform;
+  return typeof platform === 'string' && platform.toLowerCase().includes('whatsapp');
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
@@ -601,6 +619,12 @@ export const searchRentalsTool = createTool({
     ),
     source: z.literal('supabase'),
     budgetNote: z.string().optional(),
+    /**
+     * A ready-to-send WhatsApp answer built from these exact listings. Present only on WhatsApp
+     * runs; the concierge sends it verbatim so the customer sees real prices and links that the
+     * web cards would otherwise render.
+     */
+    whatsapp_reply: z.string().optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -630,8 +654,7 @@ export const searchRentalsTool = createTool({
       context,
     );
 
-    return {
-      results: results.map((r) => ({
+    const mapped = results.map((r) => ({
         id: r.id,
         title: r.title,
         neighborhood: r.neighborhood,
@@ -652,11 +675,17 @@ export const searchRentalsTool = createTool({
         longitude: r.longitude,
         rankScore: "rankScore" in r ? (r as { rankScore?: number }).rankScore : undefined,
         evidenceText: "evidenceText" in r ? (r as { evidenceText?: string | null }).evidenceText : undefined,
-      })),
+      }));
+
+    return {
+      results: mapped,
       source,
       budgetNote,
       hybridUsed,
       rankExplanation,
+      whatsapp_reply: isWhatsAppRun(context)
+        ? formatWhatsAppRentalReply(mapped as unknown as WhatsAppRentalItem[], monthlyBudgetFromQuery(inputData))
+        : undefined,
     };
   },
 });
