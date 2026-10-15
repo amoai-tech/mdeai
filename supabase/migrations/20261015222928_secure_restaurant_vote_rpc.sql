@@ -302,4 +302,3 @@ revoke all on function public.cast_pageant_vote(uuid, uuid, uuid, text, text, te
   from public, anon, authenticated;
 grant execute on function public.cast_pageant_vote(uuid, uuid, uuid, text, text, text, text, text, text)
   to service_role;
-
