@@ -6,7 +6,8 @@
 -- with PGRST106 before RLS is evaluated. vote-cast is verify_jwt=false and its current
 -- insert path allows anonymous ballots (voter_anon_id) with no one-ballot constraint.
 --
--- Option A keeps vote.* private and adds exactly one public RPC as the write boundary:
+-- Option A keeps vote.* private and adds a small public RPC boundary: one restaurant writer
+-- plus two readers. It contains no pageant logic.
 --
 --   authenticated user -> Edge Function (verifies the Supabase JWT)
 --     -> public.cast_restaurant_vote(...)   [SECURITY DEFINER, service_role only]
@@ -24,8 +25,8 @@
 --     transaction advisory lock serialises check-then-insert and guarantees exactly one
 --     record under concurrency through this contract. A kind-scoped unique index is a
 --     deliberate follow-up once the restaurant contest kind is fixed (SAN-1453/SAN-1496).
---   * Legacy pageant behaviour is untouched: this RPC refuses kind='pageant' and the
---     existing direct-insert path is not modified.
+--   * Restaurant-only: the contest must have kind = 'restaurant'. Historical pageant rows,
+--     tables and legacy callers are untouched; no pageant functionality is added.
 
 create or replace function public.cast_restaurant_vote(
   p_contest_id      uuid,
@@ -86,8 +87,8 @@ begin
   if not found then
     raise exception 'CONTEST_NOT_FOUND' using errcode = 'P0002';
   end if;
-  if v_contest.kind = 'pageant' then
-    raise exception 'LEGACY_CONTEST_RULES' using errcode = '22023';
+  if v_contest.kind is distinct from 'restaurant' then
+    raise exception 'CONTEST_NOT_RESTAURANT' using errcode = '22023';
   end if;
   if v_contest.status <> 'live' then
     raise exception 'CONTEST_NOT_OPEN' using errcode = '22023';
@@ -104,10 +105,10 @@ begin
     from vote.entities e
    where e.id = p_entity_id and e.contest_id = p_contest_id;
   if not found then
-    raise exception 'ENTITY_NOT_FOUND' using errcode = 'P0002';
+    raise exception 'RESTAURANT_NOT_FOUND' using errcode = 'P0002';
   end if;
   if not coalesce(v_entity.approved, false) then
-    raise exception 'ENTITY_NOT_APPROVED' using errcode = '22023';
+    raise exception 'RESTAURANT_NOT_APPROVED' using errcode = '22023';
   end if;
 
   -- ── One audience ballot per account per contest ───────────────────────────
@@ -205,100 +206,9 @@ as $$
   where et.entity_id = p_entity_id;
 $$;
 
--- ── Legacy pageant writer: preserves the 3-free-votes/day and anonymous rules ─
-create or replace function public.cast_pageant_vote(
-  p_contest_id      uuid,
-  p_entity_id       uuid,
-  p_user_id         uuid,
-  p_idempotency_key text,
-  p_ip_hash         text,
-  p_voter_anon_id   text default null,
-  p_device_hash     text default null,
-  p_user_agent      text default null,
-  p_country         text default null
-) returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_contest vote.contests;
-  v_entity  vote.entities;
-  v_vote    vote.votes;
-  v_now     timestamptz := now();
-  v_today   integer;
-begin
-  if p_idempotency_key is null or length(btrim(p_idempotency_key)) < 8 then
-    raise exception 'INVALID_IDEMPOTENCY_KEY' using errcode = '22023';
-  end if;
-
-  select * into v_vote from vote.votes v where v.idempotency_key = p_idempotency_key;
-  if found then
-    if v_vote.contest_id <> p_contest_id or v_vote.entity_id <> p_entity_id then
-      raise exception 'IDEMPOTENCY_KEY_CONFLICT' using errcode = '23505';
-    end if;
-    return jsonb_build_object('status', 'replayed', 'vote_id', v_vote.id, 'created_at', v_vote.created_at);
-  end if;
-
-  select * into v_contest from vote.contests c where c.id = p_contest_id;
-  if not found then
-    raise exception 'CONTEST_NOT_FOUND' using errcode = 'P0002';
-  end if;
-  if v_contest.kind <> 'pageant' then
-    raise exception 'NOT_PAGEANT' using errcode = '22023';
-  end if;
-  if v_contest.status <> 'live'
-     or (v_contest.starts_at is not null and v_now < v_contest.starts_at)
-     or (v_contest.ends_at is not null and v_now >= v_contest.ends_at) then
-    raise exception 'CONTEST_NOT_OPEN' using errcode = '22023';
-  end if;
-
-  select * into v_entity from vote.entities e where e.id = p_entity_id and e.contest_id = p_contest_id;
-  if not found then
-    raise exception 'ENTITY_NOT_FOUND' using errcode = 'P0002';
-  end if;
-  if not coalesce(v_entity.approved, false) then
-    raise exception 'ENTITY_NOT_APPROVED' using errcode = '22023';
-  end if;
-
-  if p_user_id is not null then
-    if not exists (select 1 from auth.users u where u.id = p_user_id) then
-      raise exception 'AUTH_USER_NOT_FOUND' using errcode = '42501';
-    end if;
-    select count(*)::int into v_today
-      from vote.votes v
-     where v.contest_id = p_contest_id
-       and v.voter_user_id = p_user_id
-       and v.source = 'audience'
-       and v.created_at >= date_trunc('day', v_now);
-    if v_today >= coalesce(v_contest.free_votes_per_user_per_day, 1) then
-      raise exception 'DAILY_QUOTA_EXCEEDED' using errcode = '22023';
-    end if;
-  end if;
-
-  insert into vote.votes (
-    contest_id, entity_id, voter_user_id, voter_anon_id,
-    weight, source, ip_hash, device_hash, user_agent, country,
-    fraud_status, idempotency_key
-  ) values (
-    p_contest_id, p_entity_id, p_user_id, p_voter_anon_id,
-    1.0, 'audience', p_ip_hash, p_device_hash, left(p_user_agent, 256), p_country,
-    'pending', p_idempotency_key
-  )
-  returning * into v_vote;
-
-  return jsonb_build_object('status', 'cast', 'vote_id', v_vote.id, 'created_at', v_vote.created_at);
-end;
-$$;
-
--- All four boundaries are backend-only. vote.* stays unexposed and ungranted to end users.
+-- The boundaries are backend-only. vote.* stays unexposed and ungranted to end users.
 revoke all on function public.vote_contest_context(uuid) from public, anon, authenticated;
 grant execute on function public.vote_contest_context(uuid) to service_role;
 
 revoke all on function public.vote_tally(uuid) from public, anon, authenticated;
 grant execute on function public.vote_tally(uuid) to service_role;
-
-revoke all on function public.cast_pageant_vote(uuid, uuid, uuid, text, text, text, text, text, text)
-  from public, anon, authenticated;
-grant execute on function public.cast_pageant_vote(uuid, uuid, uuid, text, text, text, text, text, text)
-  to service_role;
