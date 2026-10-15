@@ -173,7 +173,10 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
 
     const duration = Date.now() - t0;
     const logRes = await deps.service.from("ai_runs").insert({
+      user_id: userId,
       agent_name: "vote-cast",
+      agent_type: "general_concierge",
+      input_data: { contest_id, entity_id },
       input_tokens: 0,
       output_tokens: 0,
       duration_ms: duration,
