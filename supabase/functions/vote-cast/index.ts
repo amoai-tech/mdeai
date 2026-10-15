@@ -1,16 +1,19 @@
-// RECOVERED FROM PRODUCTION (SAN-1289) — deployed vote-cast v30, read 2026-10-15.
-// Provenance only: this snapshot still calls service.schema('vote'), which PostgREST
-// rejects (PGRST106) because the private vote schema is not exposed. It must be refactored
-// onto public.cast_restaurant_vote (SAN-1498) and reviewed before any redeploy.
 /**
  * vote-cast — POST /vote-cast
  *
- * 5-layer fraud defense:
+ * SAN-1498 refactor: this function no longer touches the private vote schema directly.
+ * Every read and write goes through a public SECURITY DEFINER RPC granted to service_role.
+ * The private vote.* schema stays unexposed, so PostgREST can never reject it (PGRST106).
+ *
+ *   authenticated user -> verify Supabase JWT -> public.cast_restaurant_vote(...) -> receipt
+ *   legacy pageant     -> public.cast_pageant_vote(...)          (3 free votes/day, anon allowed)
+ *
+ * Layers kept from the deployed version:
  *   L1 Turnstile  — verifyTurnstile()
  *   L2 Nonce JWT  — verifyNonce()
- *   L3 DB UNIQUE  — idempotency_key + daily dedup (Postgres)
- *   L4 Sync rules — IP burst, device reuse, daily quota
- *   L5 Async scan — fraud-scan cron reads fraud_signals
+ *   L3 DB UNIQUE  — idempotency_key (Postgres)
+ *   L4 Rate limits — durable per-IP and per-user buckets
+ *   L5 Async scan — fraud-scan cron reads vote.fraud_signals (separate recovery)
  */
 import { z } from "npm:zod@3.23.8";
 import { getCorsHeaders, jsonResponse, errorBody } from "../_shared/http.ts";
@@ -38,10 +41,21 @@ function err(status: number, code: string, message: string, req: Request) {
   return jsonResponse(errorBody(code, message), status, req);
 }
 
+/** Map the RPC's Postgres error codes to HTTP responses without leaking internals. */
+function rpcError(error: { code?: string; message?: string }, req: Request) {
+  const code = error.code ?? "";
+  const message = error.message ?? "Vote failed";
+  if (code === "42501") return err(401, "AUTH_REQUIRED", "Sign in to vote", req);
+  if (code === "P0002") return err(404, "NOT_FOUND", message, req);
+  if (code === "23505") return err(409, "CONFLICT", message, req);
+  if (code === "22023") return err(409, "VOTE_REJECTED", message, req);
+  console.error("vote RPC error:", error);
+  return err(500, "VOTE_FAILED", "Failed to record vote", req);
+}
+
 Deno.serve(async (req: Request) => {
   const cors = getCorsHeaders(req);
 
-  // ── CORS preflight ────────────────────────────────────────────────────────
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 204, headers: cors });
   }
@@ -52,13 +66,13 @@ Deno.serve(async (req: Request) => {
   const t0 = Date.now();
   const ip = clientIp(req);
   const country = req.headers.get("cf-ipcountry") ?? "XX";
+  const userAgent = req.headers.get("user-agent")?.slice(0, 256) ?? null;
   const authHeader = req.headers.get("authorization") ?? "";
   const service = getServiceClient();
 
-  // ── Auth (optional — phone OTP user or anonymous) ─────────────────────────
+  // Identity comes from the verified Supabase session, never from the request body.
   const userId = authHeader ? await getUserId(authHeader) : null;
 
-  // ── Parse + validate body ──────────────────────────────────────────────────
   let body: Body;
   try {
     body = BodySchema.parse(await req.json());
@@ -68,142 +82,79 @@ Deno.serve(async (req: Request) => {
 
   const { contest_id, entity_id, nonce, turnstile_token, fingerprint, idempotency_key, voter_anon_id } = body;
 
-  // ── L1: Turnstile ──────────────────────────────────────────────────────────
-  const turnstileOk = await verifyTurnstile(turnstile_token, ip);
-  if (!turnstileOk) {
+  // L1: bot challenge
+  if (!(await verifyTurnstile(turnstile_token, ip))) {
     return err(403, "TURNSTILE_FAILED", "Bot challenge failed", req);
   }
 
-  // ── L2: Nonce JWT ──────────────────────────────────────────────────────────
+  // L2: server-issued, single-use nonce bound to the contest
   const nonceResult = await verifyNonce(nonce, contest_id);
   if (!nonceResult.valid) {
     return err(403, "NONCE_INVALID", nonceResult.reason ?? "invalid nonce", req);
   }
 
-  // ── Load contest ───────────────────────────────────────────────────────────
-  const { data: contest, error: contestErr } = await service
-    .from("contests")
-    .select("id, status, free_votes_per_user_per_day")
-    .eq("id", contest_id)
-    .schema("vote")
-    .single();
-
-  if (contestErr || !contest) {
-    return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
+  // L4: durable rate limits
+  const ipBucket = "vote-cast-ip:" + ip;
+  const rlIp = await allowRateDurable(service, ipBucket, 30, 60);
+  if (!rlIp.allowed) {
+    return exec429(rlIp.retry_after_seconds, req);
   }
-  if (contest.status === "draft") {
-    return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
-  }
-  if (contest.status !== "live") {
-    return err(410, "CONTEST_CLOSED", "This contest is no longer accepting votes", req);
-  }
-
-  // ── L4 rate limit — IP burst ───────────────────────────────────────────────
-  const rl = await allowRateDurable(service, `vote-cast-ip:${ip}`, 10, 60);
-  if (!rl.allowed) {
-    const headers = { ...cors, "Retry-After": String(rl.retry_after_seconds) };
-    return new Response(
-      JSON.stringify(errorBody("RATE_LIMITED", "Too many votes from this IP")),
-      { status: 429, headers: { ...headers, "Content-Type": "application/json" } },
-    );
-  }
-
-  // ── L4 rate limit — per user/anon ─────────────────────────────────────────
-  const userBucket = userId ? `vote-cast-user:${userId}` : `vote-cast-anon:${voter_anon_id ?? ip}`;
+  const userBucket = userId ? "vote-cast-user:" + userId : "vote-cast-anon:" + (voter_anon_id ?? ip);
   const rlUser = await allowRateDurable(service, userBucket, 20, 60);
   if (!rlUser.allowed) {
-    return err(429, "RATE_LIMITED", "Slow down", req);
+    return exec429(rlUser.retry_after_seconds, req);
   }
 
-  // ── L4 daily quota check ───────────────────────────────────────────────────
-  if (userId) {
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
+  // Contest context from the private schema, through the read boundary.
+  const { data: context, error: ctxErr } = await service.rpc("vote_contest_context", { p_contest_id: contest_id });
+  if (ctxErr) {
+    console.error("vote_contest_context error:", ctxErr);
+    return err(500, "VOTE_FAILED", "Failed to load contest", req);
+  }
+  if (!context) {
+    return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
+  }
 
-    const { count, error: quotaErr } = await service
-      .from("votes")
-      .select("id", { count: "exact", head: true })
-      .eq("contest_id", contest_id)
-      .eq("voter_user_id", userId)
-      .eq("source", "audience")
-      .gte("created_at", todayStart.toISOString())
-      .schema("vote");
+  const ipHash = await sha256(ip + ":" + dailySalt());
 
-    if (!quotaErr && (count ?? 0) >= contest.free_votes_per_user_per_day) {
-      return err(409, "DAILY_QUOTA_EXCEEDED", "You've used your vote for today", req);
+  let receipt: Record<string, unknown>;
+  if (context.kind === "pageant") {
+    // Legacy pageant rules: anonymous allowed, up to free_votes_per_user_per_day.
+    const { data, error } = await service.rpc("cast_pageant_vote", {
+      p_contest_id: contest_id,
+      p_entity_id: entity_id,
+      p_user_id: userId,
+      p_idempotency_key: idempotency_key,
+      p_ip_hash: ipHash,
+      p_voter_anon_id: voter_anon_id ?? null,
+      p_device_hash: fingerprint ?? null,
+      p_user_agent: userAgent,
+      p_country: country,
+    });
+    if (error) return rpcError(error, req);
+    receipt = data as Record<string, unknown>;
+  } else {
+    // Restaurant contracts require an authenticated account and allow exactly one ballot.
+    if (!userId) {
+      return err(401, "AUTH_REQUIRED", "Sign in to vote", req);
     }
+    const { data, error } = await service.rpc("cast_restaurant_vote", {
+      p_contest_id: contest_id,
+      p_entity_id: entity_id,
+      p_user_id: userId,
+      p_idempotency_key: idempotency_key,
+      p_ip_hash: ipHash,
+      p_device_hash: fingerprint ?? null,
+      p_user_agent: userAgent,
+      p_country: country,
+    });
+    if (error) return rpcError(error, req);
+    receipt = data as Record<string, unknown>;
   }
 
-  // ── L4 device fingerprint reuse ────────────────────────────────────────────
-  const fraudRules: string[] = [];
-  if (fingerprint) {
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
-    const { count: deviceCount } = await service
-      .from("votes")
-      .select("voter_user_id", { count: "exact", head: true })
-      .eq("device_hash", fingerprint)
-      .eq("contest_id", contest_id)
-      .neq("voter_user_id", userId ?? "")
-      .gte("created_at", yesterday)
-      .schema("vote");
+  // Updated tally for the optimistic UI (never fails the committed vote).
+  const { data: tally } = await service.rpc("vote_tally", { p_entity_id: entity_id });
 
-    if ((deviceCount ?? 0) >= 3) {
-      fraudRules.push("device_reuse");
-    }
-  }
-
-  // ── L3 + L5: INSERT vote ───────────────────────────────────────────────────
-  const ipHash = await sha256(`${ip}:${dailySalt()}`);
-  const fraudStatus = fraudRules.length > 0 ? "suspicious" : "pending";
-
-  const { error: insertErr } = await service.from("votes").insert({
-    contest_id,
-    entity_id,
-    voter_user_id: userId,
-    voter_anon_id: voter_anon_id ?? null,
-    weight: fraudRules.length > 0 ? 0 : 1.0,
-    source: "audience",
-    ip_hash: ipHash,
-    device_hash: fingerprint ?? null,
-    user_agent: req.headers.get("user-agent")?.slice(0, 256) ?? null,
-    country,
-    fraud_status: fraudStatus,
-    idempotency_key,
-  }).schema("vote");
-
-  // ── Handle idempotency replay ──────────────────────────────────────────────
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      // UNIQUE violation on idempotency_key — safe replay
-      const tally = await getTally(service, entity_id);
-      return ok({ already_counted: true, tally }, req);
-    }
-    console.error("vote INSERT error:", insertErr);
-    return err(500, "INSERT_FAILED", "Failed to record vote", req);
-  }
-
-  // ── L5: queue fraud signal if suspicious ──────────────────────────────────
-  if (fraudRules.length > 0) {
-    // Best-effort — don't fail the vote if this errors
-    const { data: voteRow } = await service
-      .from("votes")
-      .select("id")
-      .eq("idempotency_key", idempotency_key)
-      .schema("vote")
-      .single();
-
-    if (voteRow?.id) {
-      await service.from("fraud_signals").insert({
-        vote_id: voteRow.id,
-        rules_hit: fraudRules,
-      }).schema("vote");
-    }
-  }
-
-  // ── Fetch updated tally for optimistic update ──────────────────────────────
-  const tally = await getTally(service, entity_id);
-
-  // ── Log to ai_runs for auditability ───────────────────────────────────────
   const duration = Date.now() - t0;
   await service.from("ai_runs").insert({
     agent_name: "vote-cast",
@@ -211,13 +162,19 @@ Deno.serve(async (req: Request) => {
     output_tokens: 0,
     duration_ms: duration,
     status: "success",
-    metadata: { contest_id, entity_id, fraud_status: fraudStatus, duration_ms: duration },
+    metadata: { contest_id, entity_id, status: receipt.status, duration_ms: duration },
   });
 
-  return ok({ tally, fraud_status: fraudStatus }, req);
+  return ok({ ...receipt, tally: tally ?? null }, req);
 });
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+function exec429(retryAfterSeconds: number, req: Request) {
+  const cors = getCorsHeaders(req);
+  return new Response(JSON.stringify(errorBody("RATE_LIMITED", "Too many votes")), {
+    status: 429,
+    headers: { ...cors, "Retry-After": String(retryAfterSeconds), "Content-Type": "application/json" },
+  });
+}
 
 async function sha256(input: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
@@ -226,15 +183,5 @@ async function sha256(input: string): Promise<string> {
 
 /** Daily salt rotates at UTC midnight — privacy-preserving IP fingerprint. */
 function dailySalt(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-async function getTally(service: ReturnType<typeof getServiceClient>, entityId: string) {
-  const { data } = await service
-    .from("entity_tally")
-    .select("audience_votes, paid_votes, judge_score, weighted_total, rank, trend_24h")
-    .eq("entity_id", entityId)
-    .schema("vote")
-    .maybeSingle();
-  return data ?? null;
+  return new Date().toISOString().slice(0, 10);
 }
