@@ -2,39 +2,46 @@
 
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
-export interface TurnstileResult {
-  success: boolean;
-  /** ISO timestamp of the challenge */
-  challenge_ts?: string;
-  hostname?: string;
-  "error-codes"?: string[];
+export type TurnstileOutcome = "ok" | "invalid" | "unavailable" | "misconfigured";
+
+/**
+ * Local dev/test may run without a Turnstile account. Everywhere else the check is
+ * fail-closed: a missing secret is a misconfiguration, not an implicit pass.
+ */
+function isLocalDev(): boolean {
+  const env = Deno.env.get("ENVIRONMENT");
+  return env === "development" || env === "test";
 }
 
 /**
- * Verify a Turnstile widget token server-side.
- * Returns true when valid; false on failure or network error.
- *
- * If TURNSTILE_SECRET_KEY is not configured, returns true so dev/staging
- * environments work without a Turnstile account.
+ * Verify a Turnstile widget token server-side. Fail-closed policy:
+ *   - no secret configured  -> "misconfigured" (503) unless ENVIRONMENT is dev/test
+ *   - network/HTTP failure  -> "unavailable"    (503), never a silent pass
+ *   - token rejected        -> "invalid"        (403)
  */
 export async function verifyTurnstile(
   token: string | undefined,
   remoteip?: string,
-): Promise<boolean> {
+): Promise<TurnstileOutcome> {
   const secret = Deno.env.get("TURNSTILE_SECRET_KEY");
-  if (!secret) return true; // not configured — allow (dev/staging)
-  if (!token) return false;
+  if (!secret) {
+    return isLocalDev() ? "ok" : "misconfigured";
+  }
+  if (!token) return "invalid";
 
   const body = new URLSearchParams({ secret, response: token });
   if (remoteip) body.set("remoteip", remoteip);
 
   try {
     const res = await fetch(VERIFY_URL, { method: "POST", body });
-    const data: TurnstileResult = await res.json();
-    return data.success === true;
-  } catch {
-    // Fail open — Cloudflare outage should not block all voting
-    console.error("Turnstile verify network error — failing open");
-    return true;
+    if (!res.ok) {
+      console.error("Turnstile verify HTTP", res.status, "— failing closed");
+      return "unavailable";
+    }
+    const data: { success?: boolean } = await res.json();
+    return data.success === true ? "ok" : "invalid";
+  } catch (e) {
+    console.error("Turnstile verify network error — failing closed", e);
+    return "unavailable";
   }
 }

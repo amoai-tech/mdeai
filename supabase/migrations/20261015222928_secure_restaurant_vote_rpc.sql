@@ -3,31 +3,33 @@
 -- Problem: the deployed vote Edge Functions call service.schema('vote').from(...) over
 -- PostgREST, but the private vote schema is deliberately NOT exposed
 -- (authenticator.pgrst.db_schemas = public,sponsor). Every vote read/write therefore fails
--- with PGRST106 before RLS is evaluated. vote-cast is verify_jwt=false and its current
--- insert path allows anonymous ballots (voter_anon_id) with no one-ballot constraint.
+-- with PGRST106 before RLS is evaluated.
 --
 -- Option A keeps vote.* private and adds a small public RPC boundary: one restaurant writer
--- plus two readers. It contains no pageant logic.
---
---   authenticated user -> Edge Function (verifies the Supabase JWT)
---     -> public.cast_restaurant_vote(...)   [SECURITY DEFINER, service_role only]
---       -> private vote.votes                [one audience ballot per account per contest]
---     -> persisted receipt (jsonb)
+-- plus readers. It contains no pageant logic. vote-cast reaches it with the service client.
 --
 -- Security properties:
 --   * SECURITY DEFINER with an empty, fixed search_path; every object is schema-qualified.
 --   * EXECUTE revoked from PUBLIC, anon and authenticated; granted only to service_role.
---     The service-role key identifies the backend, so the caller MUST pass the user id it
---     verified from the user's JWT — never a client-supplied id.
+--     The caller MUST pass the user id it verified from the user's JWT, never a body value.
 --   * No anonymous ballots: p_user_id is required and must be a real auth.users row.
---   * One audience ballot per (contest, user). The pageant contest allows 3 free votes/day,
---     so a table-wide unique index cannot express this rule; a per-(contest,user)
---     transaction advisory lock serialises check-then-insert and guarantees exactly one
---     record under concurrency through this contract. A kind-scoped unique index is a
---     deliberate follow-up once the restaurant contest kind is fixed (SAN-1453/SAN-1496).
---   * Restaurant-only: the contest must have kind = 'restaurant'. Historical pageant rows,
---     tables and legacy callers are untouched; no pageant functionality is added.
+--   * Restaurant-only: kind = 'restaurant' is required (CONTEST_NOT_RESTAURANT).
+--   * One final audience ballot per account per contest is enforced BOTH by a per-
+--     (contest,account) advisory lock and by a restaurant-scoped partial unique index.
+--     The flag column defaults false, so historical pageant rows are unaffected.
+--   * Device-reuse is scored at write time (weight 0, fraud_status 'suspicious', a row in
+--     vote.fraud_signals) in addition to the async scan.
+--   * Restaurant reads never expose legacy weighted/paid/judge fields.
 
+-- ── 0. Restaurant-scoped uniqueness (additive; legacy rows default false) ─────
+alter table vote.votes
+  add column if not exists restaurant_ballot boolean not null default false;
+
+create unique index if not exists vote_votes_one_restaurant_ballot_idx
+  on vote.votes (contest_id, voter_user_id)
+  where restaurant_ballot and source = 'audience' and voter_user_id is not null;
+
+-- ── 1. Restaurant vote writer ─────────────────────────────────────────────────
 create or replace function public.cast_restaurant_vote(
   p_contest_id      uuid,
   p_entity_id       uuid,
@@ -43,10 +45,12 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_contest  vote.contests;
-  v_entity   vote.entities;
-  v_vote     vote.votes;
-  v_now      timestamptz := now();
+  v_contest    vote.contests;
+  v_entity     vote.entities;
+  v_vote       vote.votes;
+  v_now        timestamptz := now();
+  v_suspicious boolean := false;
+  v_devices    integer;
 begin
   -- ── Authorization ─────────────────────────────────────────────────────────
   if p_user_id is null then
@@ -71,18 +75,15 @@ begin
       raise exception 'IDEMPOTENCY_KEY_CONFLICT' using errcode = '23505';
     end if;
     return jsonb_build_object(
-      'status', 'replayed',
-      'vote_id', v_vote.id,
-      'contest_id', v_vote.contest_id,
-      'entity_id', v_vote.entity_id,
-      'created_at', v_vote.created_at
+      'status', 'replayed', 'vote_id', v_vote.id, 'contest_id', v_vote.contest_id,
+      'entity_id', v_vote.entity_id, 'created_at', v_vote.created_at
     );
   end if;
 
-  -- ── Serialise per (contest, account): concurrent requests create one row ──
+  -- ── Serialise per (contest, account) ──────────────────────────────────────
   perform pg_advisory_xact_lock(hashtextextended(p_contest_id::text || ':' || p_user_id::text, 0));
 
-  -- ── Contest must be open by database time ─────────────────────────────────
+  -- ── Contest must be a restaurant contest, open by database time ───────────
   select * into v_contest from vote.contests c where c.id = p_contest_id;
   if not found then
     raise exception 'CONTEST_NOT_FOUND' using errcode = 'P0002';
@@ -100,7 +101,7 @@ begin
     raise exception 'CONTEST_CLOSED' using errcode = '22023';
   end if;
 
-  -- ── Entry must be approved and belong to this contest ─────────────────────
+  -- ── Entry must be an approved restaurant in this contest ──────────────────
   select * into v_entity
     from vote.entities e
    where e.id = p_entity_id and e.contest_id = p_contest_id;
@@ -111,40 +112,68 @@ begin
     raise exception 'RESTAURANT_NOT_APPROVED' using errcode = '22023';
   end if;
 
-  -- ── One audience ballot per account per contest ───────────────────────────
+  -- ── One restaurant ballot per account per contest ─────────────────────────
   select * into v_vote
     from vote.votes v
    where v.contest_id = p_contest_id
      and v.voter_user_id = p_user_id
      and v.source = 'audience'
+     and v.restaurant_ballot
    limit 1;
   if found then
     return jsonb_build_object(
-      'status', 'already_voted',
-      'vote_id', v_vote.id,
-      'contest_id', v_vote.contest_id,
-      'entity_id', v_vote.entity_id,
-      'created_at', v_vote.created_at
+      'status', 'already_voted', 'vote_id', v_vote.id, 'contest_id', v_vote.contest_id,
+      'entity_id', v_vote.entity_id, 'created_at', v_vote.created_at
     );
   end if;
 
-  insert into vote.votes (
-    contest_id, entity_id, voter_user_id,
-    weight, source, ip_hash, device_hash, user_agent, country,
-    fraud_status, idempotency_key
-  ) values (
-    p_contest_id, p_entity_id, p_user_id,
-    1.0, 'audience', p_ip_hash, p_device_hash, left(p_user_agent, 256), p_country,
-    'pending', p_idempotency_key
-  )
-  returning * into v_vote;
+  -- ── Sync device-reuse signal (legacy L4), kept alongside the async scan ───
+  if p_device_hash is not null then
+    select count(*) into v_devices
+      from vote.votes v
+     where v.device_hash = p_device_hash
+       and v.contest_id = p_contest_id
+       and v.voter_user_id is distinct from p_user_id
+       and v.created_at >= v_now - interval '1 day';
+    v_suspicious := v_devices >= 3;
+  end if;
+
+  begin
+    insert into vote.votes (
+      contest_id, entity_id, voter_user_id,
+      weight, source, ip_hash, device_hash, user_agent, country,
+      fraud_status, idempotency_key, restaurant_ballot
+    ) values (
+      p_contest_id, p_entity_id, p_user_id,
+      case when v_suspicious then 0 else 1.0 end, 'audience', p_ip_hash, p_device_hash,
+      left(p_user_agent, 256), p_country,
+      case when v_suspicious then 'suspicious' else 'pending' end, p_idempotency_key, true
+    )
+    returning * into v_vote;
+  exception when unique_violation then
+    select * into v_vote
+      from vote.votes v
+     where v.contest_id = p_contest_id and v.voter_user_id = p_user_id
+       and v.source = 'audience' and v.restaurant_ballot
+     limit 1;
+    if found then
+      return jsonb_build_object(
+        'status', 'already_voted', 'vote_id', v_vote.id, 'contest_id', v_vote.contest_id,
+        'entity_id', v_vote.entity_id, 'created_at', v_vote.created_at
+      );
+    end if;
+    raise;
+  end;
+
+  if v_suspicious then
+    insert into vote.fraud_signals (vote_id, rules_hit)
+    values (v_vote.id, array['device_reuse']);
+  end if;
 
   return jsonb_build_object(
-    'status', 'cast',
-    'vote_id', v_vote.id,
-    'contest_id', v_vote.contest_id,
-    'entity_id', v_vote.entity_id,
-    'created_at', v_vote.created_at
+    'status', 'cast', 'vote_id', v_vote.id, 'contest_id', v_vote.contest_id,
+    'entity_id', v_vote.entity_id, 'created_at', v_vote.created_at,
+    'fraud_status', v_vote.fraud_status
   );
 end;
 $$;
@@ -152,13 +181,7 @@ $$;
 comment on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text) is
   'SAN-1498: authorised restaurant vote writer. SECURITY DEFINER; service_role only. The caller must pass a user id verified from the user JWT.';
 
--- The private vote schema stays unexposed and no end user can call this directly.
-revoke all on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
-  from public, anon, authenticated;
-grant execute on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
-  to service_role;
-
--- ── Read boundary: contest context (kind, open-by-DB-time, quota fields) ──────
+-- ── 2. Read boundary: restaurant contest context ──────────────────────────────
 create or replace function public.vote_contest_context(p_contest_id uuid)
 returns jsonb
 language sql
@@ -184,7 +207,7 @@ as $$
   where c.id = p_contest_id;
 $$;
 
--- ── Read boundary: entity tally for the optimistic UI response ───────────────
+-- ── 3. Read boundary: restaurant audience tally (no legacy weighted fields) ───
 create or replace function public.vote_tally(p_entity_id uuid)
 returns jsonb
 language sql
@@ -193,22 +216,52 @@ set search_path = ''
 stable
 as $$
   select jsonb_build_object(
-    'entity_id', et.entity_id,
-    'audience_votes', et.audience_votes,
-    'paid_votes', et.paid_votes,
-    'judge_score', et.judge_score,
-    'weighted_total', et.weighted_total,
-    'rank', et.rank,
-    'trend_24h', et.trend_24h,
-    'updated_at', et.updated_at
+    'entity_id', p_entity_id,
+    'audience_accepted', count(*) filter (where v.source = 'audience' and v.fraud_status = 'clean'),
+    'audience_pending',  count(*) filter (where v.source = 'audience' and v.fraud_status in ('pending', 'suspicious')),
+    'audience_total',    count(*) filter (where v.source = 'audience' and v.fraud_status <> 'blocked')
   )
-  from vote.entity_tally et
-  where et.entity_id = p_entity_id;
+  from vote.votes v
+  where v.entity_id = p_entity_id;
 $$;
 
--- The boundaries are backend-only. vote.* stays unexposed and ungranted to end users.
+-- ── 4. Single-use nonce consumption (nonce replay protection) ────────────────
+create table if not exists public.vote_consumed_nonces (
+  jti uuid primary key,
+  consumed_at timestamptz not null default now()
+);
+
+alter table public.vote_consumed_nonces enable row level security;
+revoke all on public.vote_consumed_nonces from public, anon, authenticated;
+
+create or replace function public.vote_consume_nonce(p_jti uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_jti is null then
+    return false;
+  end if;
+  insert into public.vote_consumed_nonces (jti) values (p_jti);
+  return true;
+exception when unique_violation then
+  return false;
+end;
+$$;
+
+-- ── Grants: backend-only boundaries, vote.* stays unexposed ──────────────────
+revoke all on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
+  to service_role;
+
 revoke all on function public.vote_contest_context(uuid) from public, anon, authenticated;
 grant execute on function public.vote_contest_context(uuid) to service_role;
 
 revoke all on function public.vote_tally(uuid) from public, anon, authenticated;
 grant execute on function public.vote_tally(uuid) to service_role;
+
+revoke all on function public.vote_consume_nonce(uuid) from public, anon, authenticated;
+grant execute on function public.vote_consume_nonce(uuid) to service_role;

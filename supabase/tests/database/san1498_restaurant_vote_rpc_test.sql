@@ -10,12 +10,17 @@
 
 begin;
 
-select plan(28);
+select plan(39);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000001', 'voter-a@example.com'),
-  ('a0000000-0000-0000-0000-000000000002', 'voter-b@example.com');
+  ('a0000000-0000-0000-0000-000000000002', 'voter-b@example.com'),
+  ('a0000000-0000-0000-0000-000000000003', 'voter-c@example.com'),
+  ('a0000000-0000-0000-0000-000000000004', 'voter-d@example.com'),
+  ('a0000000-0000-0000-0000-000000000005', 'voter-e@example.com'),
+  ('a0000000-0000-0000-0000-000000000006', 'voter-f@example.com'),
+  ('a0000000-0000-0000-0000-000000000007', 'voter-g@example.com');
 
 insert into public.profiles (id, email)
   values ('f0000000-0000-0000-0000-000000000001', 'org@example.com');
@@ -121,6 +126,43 @@ select is((select public.vote_contest_context('c0000000-0000-0000-0000-000000000
 select is(has_function_privilege('service_role', 'public.vote_tally(uuid)', 'EXECUTE'), true, 'service_role can read the tally');
 select is(has_function_privilege('anon', 'public.vote_tally(uuid)', 'EXECUTE'), false, 'anon cannot read the tally directly');
 select is(to_regprocedure('public.cast_pageant_vote(uuid,uuid,uuid,text,text,text,text,text,text)'), null, 'no pageant RPC is introduced');
+
+
+-- ── Database-enforced uniqueness + nonce replay protection ──────────────────
+select is(to_regclass('vote.vote_votes_one_restaurant_ballot_idx') is not null, true, 'restaurant-scoped unique index exists');
+select is((
+  select count(*)::int from information_schema.columns
+  where table_schema = 'vote' and table_name = 'votes' and column_name = 'restaurant_ballot'
+), 1, 'restaurant_ballot flag column exists');
+select is(has_function_privilege('service_role', 'public.vote_consume_nonce(uuid)', 'EXECUTE'), true, 'service_role can consume a nonce');
+select is(has_function_privilege('authenticated', 'public.vote_consume_nonce(uuid)', 'EXECUTE'), false, 'authenticated cannot consume a nonce');
+select is((select public.vote_consume_nonce('11111111-1111-1111-1111-111111111111')), true, 'a fresh nonce is consumed once');
+select is((select public.vote_consume_nonce('11111111-1111-1111-1111-111111111111')), false, 'replaying the same nonce is rejected');
+select is((select public.vote_tally('e0000000-0000-0000-0000-000000000001')->>'audience_total') is not null, true, 'tally exposes audience_total only (no legacy weighted fields)');
+select is((select public.vote_tally('e0000000-0000-0000-0000-000000000001')->>'weighted_total'), null, 'tally does not expose weighted_total');
+
+-- ── Real service_role execution of the boundary ─────────────────────────────
+set local role service_role;
+select is(
+  (select public.cast_restaurant_vote('c0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','idem-0012','iphash-3')->>'status'),
+  'cast', 'service_role can execute the restaurant writer'
+);
+reset role;
+
+-- ── Device reuse is scored at write time ────────────────────────────────────
+insert into vote.votes (contest_id, entity_id, voter_user_id, source, ip_hash, device_hash, idempotency_key, restaurant_ballot, fraud_status) values
+  ('c0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','audience','iph','dev-x','dev-0005',true,'pending'),
+  ('c0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','audience','iph','dev-x','dev-0006',true,'pending'),
+  ('c0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','audience','iph','dev-x','dev-0007',true,'pending');
+select is(
+  (select public.cast_restaurant_vote('c0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','idem-0013','iphash-4','dev-x')->>'fraud_status'),
+  'suspicious', 'device reuse marks the ballot suspicious at write time'
+);
+select is((
+  select count(*)::int from vote.fraud_signals fs
+  join vote.votes v on v.id = fs.vote_id
+  where v.idempotency_key = 'idem-0013' and fs.rules_hit @> array['device_reuse']
+), 1, 'device reuse writes a fraud signal');
 
 select * from finish();
 

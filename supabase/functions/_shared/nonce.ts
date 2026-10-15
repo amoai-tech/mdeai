@@ -10,6 +10,11 @@
 const ALG = "HS256";
 const TTL_SECONDS = 90; // 60s + 30s clock skew
 
+function isLocalDev(): boolean {
+  const env = Deno.env.get("ENVIRONMENT");
+  return env === "development" || env === "test";
+}
+
 function base64url(buf: ArrayBuffer | Uint8Array): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer)))
     .replace(/\+/g, "-")
@@ -55,7 +60,7 @@ export async function issueNonce(contestId: string): Promise<string> {
   const unsigned = `${header}.${body}`;
 
   if (!secret) {
-    // No secret configured — return unsigned token (dev only)
+    if (!isLocalDev()) throw new Error("VOTE_NONCE_SECRET is not configured");
     return `${unsigned}.unsigned`;
   }
 
@@ -82,9 +87,14 @@ export async function verifyNonce(
   expectedContestId?: string,
 ): Promise<NonceVerifyResult> {
   const secret = Deno.env.get("VOTE_NONCE_SECRET");
+  const dev = isLocalDev();
+
+  if (!secret && !dev) {
+    return { valid: false, reason: "nonce_not_configured" };
+  }
 
   if (!token) {
-    if (!secret) return { valid: true }; // dev mode: no secret, no token = ok
+    if (!secret && dev) return { valid: true }; // local dev: no secret, no token = ok
     return { valid: false, reason: "missing_nonce" };
   }
 
