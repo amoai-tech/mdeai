@@ -317,3 +317,76 @@ describe("POST /api/admin/rentals/test operator flag validation", () => {
     expect(h.rpc).not.toHaveBeenCalledWith("admin_assign_rental_test_operator", expect.anything());
   });
 });
+
+describe("POST /api/admin/rentals/test development access (SAN-1502)", () => {
+  const userId = "f1502000-0000-4000-8000-000000000002";
+
+  it("grants a development role with a validated future expiry", async () => {
+    const res = await POST(request({ action: "grant-test-access", userId, accessRole: "renter", expiresAt: "2099-01-01T00:00:00Z", note: "qa" }));
+    expect(res.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_grant_rental_test_access", {
+      p_user_id: userId, p_access_role: "renter", p_expires_at: "2099-01-01T00:00:00.000Z", p_note: "qa",
+    });
+  });
+
+  it("rejects an invalid role, user or expiry before the grant RPC", async () => {
+    for (const payload of [
+      { action: "grant-test-access", userId, accessRole: "wizard" },
+      { action: "grant-test-access", userId: "not-a-uuid", accessRole: "renter" },
+      { action: "grant-test-access", accessRole: "renter" },
+      { action: "grant-test-access", userId, accessRole: "renter", expiresAt: "not-a-date" },
+    ]) {
+      expect((await POST(request(payload))).status).toBe(400);
+    }
+    expect(h.rpc).not.toHaveBeenCalledWith("admin_grant_rental_test_access", expect.anything());
+  });
+
+  it("revokes a development role", async () => {
+    const res = await POST(request({ action: "revoke-test-access", userId, accessRole: "broker" }));
+    expect(res.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_revoke_rental_test_access", { p_user_id: userId, p_access_role: "broker" });
+  });
+
+  it("assigns an owner or broker through the matching RPC", async () => {
+    const owner = await POST(request({ action: "assign-test-owner", apartmentId: RENTAL_UUID, ownerUserId: userId }));
+    expect(owner.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_assign_test_listing_owner", { p_apartment_id: RENTAL_UUID, p_owner_user_id: userId });
+    const broker = await POST(request({ action: "assign-test-broker", apartmentId: RENTAL_UUID, brokerUserId: userId }));
+    expect(broker.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_assign_test_listing_broker", { p_apartment_id: RENTAL_UUID, p_broker_user_id: userId });
+  });
+
+  it("rejects an invalid assignment target before the RPC", async () => {
+    const res = await POST(request({ action: "assign-test-owner", apartmentId: RENTAL_UUID, ownerUserId: "nope" }));
+    expect(res.status).toBe(400);
+    expect(h.rpc).not.toHaveBeenCalledWith("admin_assign_test_listing_owner", expect.anything());
+  });
+
+  it("validates development rights before setting them", async () => {
+    for (const payload of [
+      { action: "set-test-rights", apartmentId: RENTAL_UUID, right: "water", state: "authorized" },
+      { action: "set-test-rights", apartmentId: RENTAL_UUID, right: "photo", state: "maybe" },
+      { action: "set-test-rights", apartmentId: RENTAL_UUID, right: "publishing", state: "pending" },
+    ]) {
+      expect((await POST(request(payload))).status).toBe(400);
+    }
+    const ok = await POST(request({ action: "set-test-rights", apartmentId: RENTAL_UUID, right: "publishing", state: "revoked" }));
+    expect(ok.status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_set_test_rights", { p_apartment_id: RENTAL_UUID, p_right: "publishing", p_state: "revoked" });
+  });
+
+  it("runs approve, reject and reopen through their RPCs", async () => {
+    expect((await POST(request({ action: "approve-test-listing", apartmentId: RENTAL_UUID }))).status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_approve_test_listing", { p_apartment_id: RENTAL_UUID });
+    expect((await POST(request({ action: "reject-test-listing", apartmentId: RENTAL_UUID, reason: "no" }))).status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_reject_test_listing", { p_apartment_id: RENTAL_UUID, p_reason: "no" });
+    expect((await POST(request({ action: "reopen-test-listing", apartmentId: RENTAL_UUID }))).status).toBe(200);
+    expect(h.rpc).toHaveBeenCalledWith("admin_reopen_test_listing", { p_apartment_id: RENTAL_UUID });
+  });
+
+  it("returns the development grants and audit trail from GET", async () => {
+    const body = await (await GET()).json();
+    expect(body.testAccess).toEqual([]);
+    expect(body.testEvents).toEqual([]);
+  });
+});

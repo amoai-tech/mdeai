@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { resolvePreferredAtInstant } from "@/lib/leads/schedule-viewing-time";
 
@@ -14,8 +15,18 @@ export const maxDuration = 20;
  * reach this route and never see test listings (rental_listing_is_public()
  * excludes fixtures).
  *
- *   GET  -> list rentals (with a test marker + test lead/showing counts)
- *   POST -> { action: "create" | "clone-test" | "assign-test-operator" | "request-viewing" | "publish" | "cleanup", ... }
+ *   GET  -> list rentals (with a test marker + test lead/showing counts),
+ *           development grants, and the append-only development audit trail
+ *   POST -> { action: "create" | "clone-test" | "assign-test-operator"
+ *                     | "request-viewing" | "publish" | "cleanup"
+ *                     | "grant-test-access" | "revoke-test-access"
+ *                     | "assign-test-owner" | "assign-test-broker"
+ *                     | "set-test-rights" | "approve-test-listing"
+ *                     | "reject-test-listing" | "reopen-test-listing", ... }
+ *
+ * SAN-1502 PR1 adds the grant/ownership/rights/approval actions. Every one is
+ * re-checked by is_admin() inside its SECURITY DEFINER RPC and audited into
+ * rental_test_events.
  */
 
 type Gate =
@@ -32,6 +43,18 @@ async function requireAdmin(): Promise<Gate> {
   if (error || !isAdmin) return { ok: false, status: 403, message: "Admin access required." };
   return { ok: true, supabase, adminEmail: user.email ?? "" };
 }
+
+/**
+ * SAN-1502 added rental_test_access, rental_test_events and their RPCs after the
+ * committed database.types.ts was generated. Regenerating the whole file from
+ * the shared local database would import unrelated unreleased drift, so the new
+ * objects are reached through an untyped view of the SAME RLS-governed client.
+ * ponytail: temporary bridge; delete once database.types.ts is regenerated from
+ * a clean migration replay and the new tables/functions appear there.
+ */
+type UntypedClient = SupabaseClient;
+const asUntyped = (client: Awaited<ReturnType<typeof createClient>>) =>
+  client as unknown as UntypedClient;
 
 type RentalRow = {
   id: string;
@@ -72,6 +95,12 @@ const isHttpsImageUrl = (value: string) => {
   } catch {
     return false;
   }
+};
+
+const ACCESS_ROLES = ["owner", "broker", "renter"] as const;
+const RIGHTS: Record<string, readonly string[]> = {
+  photo: ["authorized", "revoked", "test_image_only"],
+  publishing: ["approved", "rejected", "revoked"],
 };
 
 export async function GET() {
@@ -143,7 +172,46 @@ export async function GET() {
     for (const id of showings) if (counts[id]) counts[id].showings += 1;
   }
 
-  return NextResponse.json({ rentals, counts });
+  // SAN-1502: the admin reads the grants and the append-only history through the
+  // same RLS-governed client (admin SELECT policies on both tables).
+  const untyped = asUntyped(supabase);
+  const [accessResult, eventsResult] = await Promise.all([
+    untyped
+      .from("rental_test_access")
+      .select("id, user_id, access_role, granted_by, granted_at, expires_at, revoked_at")
+      .order("granted_at", { ascending: false })
+      .limit(200),
+    untyped
+      .from("rental_test_events")
+      .select("id, apartment_id, actor_id, event_type, details, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+  if (accessResult.error) {
+    return NextResponse.json({ error: accessResult.error.message }, { status: 500 });
+  }
+  if (eventsResult.error) {
+    return NextResponse.json({ error: eventsResult.error.message }, { status: 500 });
+  }
+
+  // An active grant is server truth; the panel must not call Date.now() while
+  // rendering (React purity), so the client renders this precomputed flag.
+  const now = Date.now();
+  const testAccess = ((accessResult.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const revokedAt = (row.revoked_at as string | null) ?? null;
+    const expiresAt = (row.expires_at as string | null) ?? null;
+    return {
+      ...row,
+      active: !revokedAt && (!expiresAt || new Date(expiresAt).getTime() > now),
+    };
+  });
+
+  return NextResponse.json({
+    rentals,
+    counts,
+    testAccess,
+    testEvents: eventsResult.data ?? [],
+  });
 }
 
 async function handleTestViewing(
@@ -173,10 +241,17 @@ async function handleTestViewing(
     showingId: result.showing.id, idempotentReplay: result.idempotent_replay === true });
 }
 
+/** Validate a required apartment UUID in a request body. */
+function readApartmentId(body: Record<string, unknown>): string | null {
+  const value = typeof body.apartmentId === "string" ? body.apartmentId.trim() : "";
+  return isUuid(value) ? value : null;
+}
+
 export async function POST(request: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return NextResponse.json({ error: gate.message }, { status: gate.status });
   const { supabase } = gate;
+  const untyped = asUntyped(supabase);
 
   let raw: unknown;
   try {
@@ -265,6 +340,108 @@ export async function POST(request: Request) {
     if (!isUuid(apartmentId)) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
     const rpc = action === "publish" ? "admin_publish_test_rental" : "admin_cleanup_test_rental";
     const { data, error } = await supabase.rpc(rpc, { p_apartment_id: apartmentId });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
+  if (action === "grant-test-access") {
+    const userId = typeof body.userId === "string" ? body.userId.trim() : "";
+    const accessRole = typeof body.accessRole === "string" ? body.accessRole.trim().toLowerCase() : "";
+    const note = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null;
+    let expiresAt: string | null = null;
+    if (body.expiresAt != null && body.expiresAt !== "") {
+      const parsed = new Date(String(body.expiresAt));
+      if (!Number.isFinite(parsed.getTime())) {
+        return NextResponse.json({ error: "expiresAt must be a valid timestamp" }, { status: 400 });
+      }
+      expiresAt = parsed.toISOString();
+    }
+    if (!isUuid(userId)) return NextResponse.json({ error: "userId must be a UUID" }, { status: 400 });
+    if (!ACCESS_ROLES.includes(accessRole as (typeof ACCESS_ROLES)[number])) {
+      return NextResponse.json({ error: "accessRole must be owner, broker or renter" }, { status: 400 });
+    }
+    const { data, error } = await untyped.rpc("admin_grant_rental_test_access", {
+      p_user_id: userId,
+      p_access_role: accessRole,
+      p_expires_at: expiresAt,
+      p_note: note,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ access: data });
+  }
+
+  if (action === "revoke-test-access") {
+    const userId = typeof body.userId === "string" ? body.userId.trim() : "";
+    const accessRole = typeof body.accessRole === "string" ? body.accessRole.trim().toLowerCase() : "";
+    if (!isUuid(userId)) return NextResponse.json({ error: "userId must be a UUID" }, { status: 400 });
+    if (!ACCESS_ROLES.includes(accessRole as (typeof ACCESS_ROLES)[number])) {
+      return NextResponse.json({ error: "accessRole must be owner, broker or renter" }, { status: 400 });
+    }
+    const { data, error } = await untyped.rpc("admin_revoke_rental_test_access", {
+      p_user_id: userId,
+      p_access_role: accessRole,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ access: data });
+  }
+
+  if (action === "assign-test-owner" || action === "assign-test-broker") {
+    const apartmentId = readApartmentId(body);
+    const targetKey = action === "assign-test-owner" ? "ownerUserId" : "brokerUserId";
+    const target = typeof body[targetKey] === "string" ? (body[targetKey] as string).trim() : "";
+    if (!apartmentId) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
+    if (!isUuid(target)) return NextResponse.json({ error: `${targetKey} must be a UUID` }, { status: 400 });
+    const { data, error } = await untyped.rpc(
+      action === "assign-test-owner"
+        ? "admin_assign_test_listing_owner"
+        : "admin_assign_test_listing_broker",
+      action === "assign-test-owner"
+        ? { p_apartment_id: apartmentId, p_owner_user_id: target }
+        : { p_apartment_id: apartmentId, p_broker_user_id: target },
+    );
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
+  if (action === "set-test-rights") {
+    const apartmentId = readApartmentId(body);
+    const right = typeof body.right === "string" ? body.right.trim().toLowerCase() : "";
+    const state = typeof body.state === "string" ? body.state.trim().toLowerCase() : "";
+    if (!apartmentId) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
+    if (!(right in RIGHTS)) {
+      return NextResponse.json({ error: "right must be photo or publishing" }, { status: 400 });
+    }
+    if (!RIGHTS[right].includes(state)) {
+      return NextResponse.json({ error: `invalid state for ${right} right` }, { status: 400 });
+    }
+    const { data, error } = await untyped.rpc("admin_set_test_rights", {
+      p_apartment_id: apartmentId,
+      p_right: right,
+      p_state: state,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
+  if (action === "approve-test-listing" || action === "reopen-test-listing") {
+    const apartmentId = readApartmentId(body);
+    if (!apartmentId) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
+    const { data, error } = await untyped.rpc(
+      action === "approve-test-listing" ? "admin_approve_test_listing" : "admin_reopen_test_listing",
+      { p_apartment_id: apartmentId },
+    );
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ rental: data });
+  }
+
+  if (action === "reject-test-listing") {
+    const apartmentId = readApartmentId(body);
+    const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : null;
+    if (!apartmentId) return NextResponse.json({ error: "apartmentId must be a UUID" }, { status: 400 });
+    const { data, error } = await untyped.rpc("admin_reject_test_listing", {
+      p_apartment_id: apartmentId,
+      p_reason: reason,
+    });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ rental: data });
   }
