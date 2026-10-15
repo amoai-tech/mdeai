@@ -33,7 +33,9 @@ export async function verifyTurnstile(
   if (remoteip) body.set("remoteip", remoteip);
 
   try {
-    const res = await fetch(VERIFY_URL, { method: "POST", body });
+    // Bounded wait: a stalled Cloudflare request must reach the catch below quickly
+    // and return "unavailable" (503) instead of hitting the function wall-clock limit.
+    const res = await fetch(VERIFY_URL, { method: "POST", body, signal: AbortSignal.timeout(5000) });
     if (!res.ok) {
       console.error("Turnstile verify HTTP", res.status, "— failing closed");
       return "unavailable";
