@@ -36,6 +36,10 @@ export const conciergeWorkingMemorySchema = z.object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
       maxPricePerNight: z.number().optional(),
+      /** Monthly ceiling in the listing's own currency (e.g. COP 3500000). Never converted. */
+      maxPriceMonthly: z.number().optional(),
+      /** Currency for maxPriceMonthly, e.g. COP. */
+      budgetCurrency: z.string().optional(),
       budgetType: z.enum(['nightly', 'monthly', 'total_trip']).optional(),
       genericAskPending: z.boolean().optional(),
       checkIn: z.string().optional().describe('ISO date YYYY-MM-DD'),
@@ -118,7 +122,14 @@ export const conciergeWorkingMemorySchema = z.object({
  */
 const PADDED_FIELDS = {
   root: ['selectedListingId', 'selectedEventId'],
-  lastRentalQuery: ['neighborhood', 'budgetType', 'checkIn', 'checkOut'],
+  lastRentalQuery: [
+    'neighborhood',
+    'budgetType',
+    'maxPriceMonthly',
+    'budgetCurrency',
+    'checkIn',
+    'checkOut',
+  ],
   lastEventQuery: ['category', 'neighborhood', 'dateWindow'],
   lastRestaurantQuery: ['neighborhood', 'cuisine', 'vibe', 'priceTier'],
 } as const;
@@ -181,10 +192,11 @@ export const conciergeAgent = new Agent({
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType, and for a monthly budget maxPriceMonthly plus budgetCurrency) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- "Show cheaper options" / "más baratos": LOWER the saved budget in the SAME unit and currency. When lastRentalQuery.budgetType is monthly (or maxPriceMonthly is set), reduce maxPriceMonthly and keep budgetCurrency unchanged (e.g. COP 3,500,000 → COP 3,000,000). Never convert it to maxPricePerNight. When the budget was nightly, lower maxPricePerNight instead.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:

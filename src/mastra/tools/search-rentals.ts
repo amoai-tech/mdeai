@@ -1,5 +1,5 @@
 import { createTool } from '@mastra/core/tools';
-import { formatWhatsAppRentalReply, type WhatsAppRentalItem } from './whatsapp-rental-reply';
+import { formatWhatsAppRentalReply } from './whatsapp-rental-reply';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
@@ -358,21 +358,34 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
+/** @internal Mastra key for the channel render context (channels/output-processor). */
 const CHAT_CHANNEL_RENDER_CONTEXT_KEY = '__mastra_chat_channel_render';
 
 /**
  * Is this agent run serving WhatsApp?
  *
- * The channel framework stashes its render context on the run's RequestContext under this key
- * (@mastra/core channels/output-processor). Read defensively: a run with no channel context
- * (web chat, Studio, tests) is simply not WhatsApp.
+ * A Mastra tool receives `{ requestContext, ... }`; the channel framework also stashes a public
+ * `channel` value and an internal render context on that RequestContext. Read all of them
+ * defensively so a framework shape change degrades to "no WhatsApp reply" instead of a crash,
+ * and so the end-to-end test is what catches a rename.
  */
 export function isWhatsAppRun(context: unknown): boolean {
-  const get = (context as { get?: (key: string) => unknown } | undefined)?.get;
+  const outer = context as { requestContext?: unknown } | undefined;
+  const requestContext = outer?.requestContext ?? context;
+  const get = (requestContext as { get?: (key: string) => unknown } | undefined)?.get;
   if (typeof get !== 'function') return false;
-  const render = get.call(context, CHAT_CHANNEL_RENDER_CONTEXT_KEY);
-  const platform = (render as { platform?: unknown } | undefined)?.platform;
-  return typeof platform === 'string' && platform.toLowerCase().includes('whatsapp');
+  const keys = ['channel', CHAT_CHANNEL_RENDER_CONTEXT_KEY];
+  for (const key of keys) {
+    const value = get.call(requestContext, key) as
+      | { platform?: unknown; name?: unknown; id?: unknown }
+      | undefined;
+    for (const candidate of [value?.platform, value?.name, value?.id]) {
+      if (typeof candidate === 'string' && candidate.toLowerCase().includes('whatsapp')) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function rowToRental(r: ApartmentRow): Rental {
@@ -684,7 +697,7 @@ export const searchRentalsTool = createTool({
       hybridUsed,
       rankExplanation,
       whatsapp_reply: isWhatsAppRun(context)
-        ? formatWhatsAppRentalReply(mapped as unknown as WhatsAppRentalItem[], monthlyBudgetFromQuery(inputData))
+        ? formatWhatsAppRentalReply(mapped, monthlyBudgetFromQuery(inputData))
         : undefined,
     };
   },
