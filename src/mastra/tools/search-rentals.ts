@@ -512,57 +512,88 @@ async function searchRentalsFromSupabase(
   const monthlyBudget = monthlyBudgetFromQuery(query);
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
-  let q = client
-    .from('apartments')
-    .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
-      { count: 'exact' },
-    )
-    ;
-  // Ordering must not truncate the rows the caller asked for. With a monthly budget the matching
-  // rows are monthly-priced, whose `price_daily` is null, so a nightly-first sort pushes them past
-  // `.limit()` and silently drops the requested matches. Order the monthly figure first when a
-  // monthly budget applies; otherwise keep the stored nightly order (ponytail: a normalised
-  // cross-currency sort would be a lie until a canonical currency or FX source exists).
-  if (monthlyBudget) {
-    q = q.order('price_monthly', { ascending: true, nullsFirst: false });
-  }
-  q = q.order('price_daily', { ascending: true, nullsFirst: false }).limit(limit);
+  const baseQuery = () => {
+    let b = client
+      .from('apartments')
+      .select(
+        'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
+        { count: 'exact' },
+      );
+    if (!developmentMode) {
+      b = b.eq('status', 'active').not('landlord_id', 'is', null);
+    }
+    if (query.neighborhood) {
+      b = b.ilike('neighborhood', `%${query.neighborhood}%`);
+    }
+    if (typeof query.minBedrooms === 'number') {
+      b = b.gte('bedrooms', query.minBedrooms);
+    }
+    // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
+    // not expired), with "today" as the America/Bogota date the viewing RPC uses.
+    return applyAvailabilityFilters(b, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+      developmentMode,
+    });
+  };
 
+  type BudgetQueryResult = { data: unknown; error: { code?: string } | null; count: number | null };
+  const runQuery = async (q: PromiseLike<BudgetQueryResult>) => {
+    const { data, error, count } = await q;
+    if (error) {
+      // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
+      throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
+    }
+    return { rows: (data ?? []) as ApartmentRow[], count: count ?? 0 };
+  };
+
+  let rows: ApartmentRow[];
+  let total: number;
   if (monthlyBudget || maxNightly !== null) {
-    q = q.or(rentalBudgetPredicate(maxNightly, monthlyBudget));
-  }
-  if (!developmentMode) {
-    q = q.eq('status', 'active').not('landlord_id', 'is', null);
+    // A budget is only comparable inside its own currency, so rows that CONFIRM it must not be
+    // crowded out of the page by cheaper-looking rows in another currency (USD 1,300 sorts before
+    // COP 2,100,000 as a raw number). Fetch the confirmed same-currency set first, then fill the
+    // remainder with the labelled, never-compared alternatives. Ordering stays inside one currency,
+    // so no cross-currency amount comparison is ever made.
+    const budgetCurrency = monthlyBudget ? monthlyBudget.currency : NIGHTLY_BUDGET_CURRENCY;
+    const predicate = rentalBudgetPredicate(maxNightly, monthlyBudget);
+    const confirmed = await runQuery(
+      baseQuery()
+        .eq('currency', budgetCurrency)
+        .or(predicate)
+        .order(monthlyBudget ? 'price_monthly' : 'price_daily', {
+          ascending: true,
+          nullsFirst: false,
+        })
+        .limit(limit),
+    );
+    const remaining = Math.max(0, limit - confirmed.rows.length);
+    const alternatives =
+      remaining === 0
+        ? { rows: [] as ApartmentRow[], count: 0 }
+        : await runQuery(
+            baseQuery()
+              .neq('currency', budgetCurrency)
+              .or(predicate)
+              .order('price_daily', { ascending: true, nullsFirst: false })
+              .limit(remaining),
+          );
+    rows = [...confirmed.rows, ...alternatives.rows];
+    total = confirmed.count + alternatives.count;
+  } else {
+    const all = await runQuery(
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).limit(limit),
+    );
+    rows = all.rows;
+    total = all.count;
   }
 
-  if (query.neighborhood) {
-    q = q.ilike('neighborhood', `%${query.neighborhood}%`);
-  }
-  if (typeof query.minBedrooms === 'number') {
-    q = q.gte('bedrooms', query.minBedrooms);
-  }
-
-  // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
-  // not expired), with "today" as the America/Bogota date the viewing RPC uses.
-  q = applyAvailabilityFilters(q, {
-    checkIn: query.checkIn,
-    checkOut: query.checkOut,
-    today: rentalAvailabilityDate(),
-    developmentMode,
-  });
-
-  const { data, error, count } = await q;
-  if (error) {
-    // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
-    throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
-  }
-
-  let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
+  let results = rows.map(rowToRental);
   if (query.stayType === 'monthly') {
     results = sortForMonthlyStay(results);
   }
-  return { results, total: count ?? results.length, source: 'supabase' };
+  return { results, total, source: 'supabase' };
 }
 
 // Named export for direct workflow calls (sync signature kept for compatibility;
