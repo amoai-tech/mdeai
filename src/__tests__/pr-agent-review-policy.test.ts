@@ -323,6 +323,23 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.reason).toContain("excluded_files=17");
   });
 
+  it("rejects a newer partial review instead of falling back to an older complete review from the same run", () => {
+    const complete = envelopedCanonical();
+    const partial = complete.replace('"complete":true', '"complete":false');
+    const result = verifyReviewResult({
+      comments: [
+        comment(complete, "2026-09-20T01:00:05Z"),
+        comment(partial, "2026-09-20T01:00:10Z"),
+      ],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
   it("rejects excluded files even when an LLM incorrectly marks complete true", () => {
     const body = envelopedCanonical().replace('"excluded_files":[]', '"excluded_files":["src/unreviewed.ts"]');
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });

@@ -380,6 +380,16 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
       publishedCommand: candidate.publishedCommand,
       incrementalSkipped: candidate.incrementalSkipped,
     });
+    // A newer review of this same base/head must not be superseded by an
+    // older green review if the new publication explicitly records partial
+    // or invalid coverage. The previous loop silently skipped such failures.
+    if (failure && candidate.kind === "canonical" && candidate.envelope.valid &&
+        candidate.envelope.baseSha === baseSha.toLowerCase() &&
+        candidate.envelope.headSha === headSha.toLowerCase() &&
+        candidate.envelope.command === reviewCommand &&
+        ["INCOMPLETE_REVIEW", "INVALID_REVIEW_STATE", "STALE_HEAD"].includes(failure.code)) {
+      return failure;
+    }
     if (!failure) {
       return {
         ok: true,
