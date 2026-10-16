@@ -1,7 +1,7 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(28);
+select plan(30);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
@@ -17,6 +17,10 @@ select is(public.rental_listing_is_public('active','approved','published',
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"is_test_fixture":true}'::jsonb),false,'anonymous fixture boundary remains');
+select is(public.rental_listing_is_public('active','approved','published',
+  'f1506000-0000-4000-8000-000000000011'::uuid,
+  '{"visibility":"private"}'::jsonb),false,
+  'Phase A keeps explicitly private/internal listings out of public discovery');
 select is(has_function_privilege('anon','public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamptz,jsonb,jsonb)','execute'),
           false,'anon cannot invoke server-only atomic booking function');
 select is(has_function_privilege('authenticated','public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamptz,jsonb,jsonb)','execute'),
@@ -170,6 +174,10 @@ update public.rental_runtime_settings set phase='launch',changed_at=now() where 
 select is(public.rental_development_active(),false,'only an explicit database change exits Phase A');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
  false,'launch mode restores pending/draft public restrictions');
+select is(public.rental_listing_is_public('active','approved','published',
+  'f1506000-0000-4000-8000-000000000011'::uuid,
+  '{"visibility":"private"}'::jsonb),false,
+  'launch mode still keeps private/internal listings out of public discovery');
 
 select * from finish();
 rollback;

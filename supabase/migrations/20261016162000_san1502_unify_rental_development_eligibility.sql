@@ -7,11 +7,13 @@ CREATE OR REPLACE FUNCTION public.rental_listing_is_public(
  p_landlord_id uuid,p_metadata jsonb)
 RETURNS boolean LANGUAGE sql STABLE SET search_path=''
 AS $policy$
- SELECT CASE WHEN public.rental_development_active() THEN
+ -- The private/internal exclusion applies in BOTH phases: a listing that is private
+ -- now must never become publicly readable merely because the phase later flips to launch.
+ SELECT coalesce(lower(p_metadata->>'visibility'),'') NOT IN ('private','internal')
+ AND CASE WHEN public.rental_development_active() THEN
     p_status='active'
     AND coalesce(lower(p_metadata->>'is_test_fixture'),'false') <> 'true'
     AND coalesce(lower(p_metadata->>'inventory_kind'),'') <> 'test_fixture'
-    AND coalesce(lower(p_metadata->>'visibility'),'') NOT IN ('private','internal')
  ELSE
     p_status='active' AND p_moderation_status='approved'
     AND p_listing_workflow_status='published' AND p_landlord_id IS NOT NULL
