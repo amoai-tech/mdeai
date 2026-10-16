@@ -26,7 +26,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import RentalDetailPage from "../page";
+import RentalDetailPage, { generateMetadata } from "../page";
 
 function textOf(node: unknown): string {
   if (node == null || typeof node === "boolean") return "";
@@ -99,5 +99,26 @@ describe("/rentals/[id]", () => {
       getRentalDetail.mockResolvedValue(detail);
       expect((await render("abc")).props.backHref).toBe("/rentals");
     });
+  });
+});
+
+// SAN-1503 — an unknown slug answered HTTP 200 with a "not found" page, because the body streams and
+// the status was already sent. The title lookup runs first, so it is where the 404 must be raised.
+describe("/rentals/[id] generateMetadata", () => {
+  const props = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  it("raises not-found for a listing that does not exist or is not public", async () => {
+    getRentalDetail.mockResolvedValue(null);
+    await expect(generateMetadata(props("no-such-listing"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("titles a real listing", async () => {
+    getRentalDetail.mockResolvedValue({ title: "WE Home", neighborhood: "El Poblado" });
+    await expect(generateMetadata(props("mde-we-home"))).resolves.toEqual({ title: "WE Home · El Poblado · mdeai" });
+  });
+
+  it("does not turn a database outage into a 404", async () => {
+    getRentalDetail.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
   });
 });
