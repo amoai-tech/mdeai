@@ -1,6 +1,6 @@
 -- SAN-1483 · contest entry -> canonical restaurant link. Self-contained; rolled back.
 begin;
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, email) values ('f1483000-0000-0000-0000-000000000001','link-org@example.com');
 insert into public.profiles (id, email) values ('f1483000-0000-0000-0000-000000000001','link-org@example.com') on conflict do nothing;
@@ -16,6 +16,9 @@ select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001')-
 select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001')->>'application_phase', 'development', 'target RPC reports the phase truthfully');
 select throws_ok($q$ insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values ('e1483000-0000-0000-0000-000000000002','c1483000-0000-0000-0000-000000000001','dup','Dup','a1483000-0000-0000-0000-000000000001') $q$, '23505', null, 'a second entry for the same restaurant in the same contest is rejected');
 select is(has_function_privilege('anon', 'public.vote_restaurant_target(uuid)', 'EXECUTE'), false, 'anon cannot execute the target RPC');
+set local role anon;
+select throws_ok($q$ select public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001') $q$, '42501', null, 'anon is denied at execution time, not just by the privilege flag');
+reset role;
 select is(has_function_privilege('service_role', 'public.vote_restaurant_target(uuid)', 'EXECUTE'), true, 'service_role can execute the target RPC');
 
 select * from finish();
