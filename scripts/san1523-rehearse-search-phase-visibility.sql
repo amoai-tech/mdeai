@@ -1,4 +1,4 @@
--- SAN-1523 · rehearsal for 20261016170000_search_development_visibility.sql
+-- SAN-1523 · rehearsal for 20261016220000_search_development_visibility.sql
 --
 -- WHY A REHEARSAL, NOT pgTAP: hybrid_search_listings/events depend on the live-only generated column
 -- fts_content, so a fresh replay (supabase test db) never creates them. This script gives a scratch
@@ -27,7 +27,7 @@ begin
 end
 $shim$;
 
-\i supabase/migrations/20261016170000_search_development_visibility.sql
+\i supabase/migrations/20261016220000_search_development_visibility.sql
 
 -- fixtures go in with row triggers bypassed: existing triggers on events/apartments rewrite some columns
 -- (for example is_active), and this rehearsal needs the exact states below
