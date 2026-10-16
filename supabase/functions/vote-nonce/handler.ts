@@ -16,7 +16,7 @@ export interface RateResult { allowed: boolean; retry_after_seconds: number }
 export interface VoteNonceDeps {
   service: ServiceLike;
   getUserId: (authHeader: string) => Promise<string | null>;
-  issueNonce: (contestId: string) => Promise<string>;
+  issueNonce: (contestId: string, userId: string) => Promise<string>;
   allowRate: (key: string, max: number, windowSeconds: number) => Promise<RateResult>;
 }
 
@@ -73,7 +73,7 @@ export function createVoteNonceHandler(deps: VoteNonceDeps) {
 
     let nonce: string;
     try {
-      nonce = await deps.issueNonce(contestId);
+      nonce = await deps.issueNonce(contestId, userId);
     } catch (e) {
       console.error("issueNonce failed (check VOTE_NONCE_SECRET):", e);
       return err(503, "NONCE_UNAVAILABLE", "Vote protection is temporarily unavailable", req);

@@ -24,6 +24,25 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const DB = Deno.env.get("LOCAL_DB_URL") ?? "";
 
+// Refuse to run against anything that is not a local database.
+function assertLocalDb(url: string): void {
+  let host = "";
+  try { host = new globalThis.URL(url).hostname; } catch { host = ""; }
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1" && host !== "[::1]") {
+    throw new Error("Refusing to run: LOCAL_DB_URL must be a local database, got host '" + host + "'");
+  }
+}
+
+// Only the nonces this run issued may be cleaned up.
+const issuedJtis = new Set<string>();
+function decodeJti(token: string): string | null {
+  try {
+    const body = token.split(".")[1] ?? "";
+    const json = JSON.parse(atob(body.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof json.jti === "string" ? json.jti : null;
+  } catch { return null; }
+}
+
 const ORG = "f0000000-0000-0000-0000-0000000000e1";
 // Unique source IP per run so the real per-IP rate limiter does not bleed across runs.
 const IP = "10." + (Math.floor(Math.random() * 200) + 1) + "." + (Math.floor(Math.random() * 200) + 1) + "." + (Math.floor(Math.random() * 200) + 1);
@@ -85,6 +104,8 @@ async function nonce(jwt: string): Promise<string> {
   if (res.status !== 200 || !json.data?.nonce) {
     throw new Error("nonce issuer failed: " + res.status + " " + JSON.stringify(json));
   }
+  const jti = decodeJti(json.data.nonce);
+  if (jti) issuedJtis.add(jti);
   return json.data.nonce;
 }
 function body(entity: string, key: string, n: string): string {
@@ -115,12 +136,16 @@ async function setup(): Promise<void> {
   await sql("insert into vote.entities (id, contest_id, slug, display_name, approved) values ('" + ENTITY + "', '" + CONTEST + "', 'it-one', 'IT One', true), ('" + ENTITY2 + "', '" + CONTEST + "', 'it-two', 'IT Two', true);");
 }
 async function cleanup(): Promise<void> {
-  await sql("delete from vote.votes where contest_id = '" + CONTEST + "'; delete from vote.entities where contest_id = '" + CONTEST + "'; delete from vote.contests where id = '" + CONTEST + "'; delete from public.profiles where id = '" + ORG + "'; delete from public.vote_consumed_nonces where consumed_at > now() - interval '1 hour';");
+  await sql("delete from vote.votes where contest_id = '" + CONTEST + "'; delete from vote.entities where contest_id = '" + CONTEST + "'; delete from vote.contests where id = '" + CONTEST + "'; delete from public.profiles where id = '" + ORG + "';");
+  // Delete ONLY the nonces this run consumed; never touch another caller's tickets.
+  const jtis = Array.from(issuedJtis).map((j) => "'" + j + "'").join(",");
+  if (jtis) await sql("delete from public.vote_consumed_nonces where jti in (" + jtis + ");");
 }
 
 Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> isolation", ignore: !RUN, fn: async () => {
   Deno.env.set("ENVIRONMENT", "test");
   Deno.env.set("VOTE_NONCE_SECRET", "vote-it-secret");
+  assertLocalDb(DB);
   try {
     await setup();
     const userA = await makeUser("a");
