@@ -94,7 +94,8 @@ Deno.test("constantTimeEqual / isRetryableStatus / sanitizeReason / clampLimit",
 });
 
 // ── the batch loop, with a fake database and a fake Gemini ───────────────────────────────────────────────────
-import { ClaimFailedError, processEmbeddingBatch, statusForSummary, type RpcClient } from "../_shared/embedding-batch.ts";
+import { ClaimFailedError, processEmbeddingBatch, statusForSummary, type BatchSummary, type RpcClient } from "../_shared/embedding-batch.ts";
+import { handleEmbeddingRequest, type HandlerDeps } from "../_shared/embedding-handler.ts";
 import { EMBED_MODEL } from "../_shared/embedding-worker.ts";
 
 const job = (id: string, over: Record<string, unknown> = {}) => ({
@@ -249,4 +250,85 @@ Deno.test("processEmbeddingBatch — the first job always runs, even with a zero
   const summary = await processEmbeddingBatch(db, "k", 5, () => Promise.resolve({ ok: true as const, values: vec(EMBED_DIM) }), () => 0, -1);
   assertEquals(summary.done, 1);
   assertEquals(summary.deferred, 1);
+});
+
+// ── the HTTP boundary: verify_jwt is off, so these are the only gate in front of the queue ────────────────────
+const SECRET = "test-cron-secret-0123456789";
+const emptySummary: BatchSummary = {
+  claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0, deferred: 0,
+};
+function deps(over: Partial<HandlerDeps> = {}, runs: { key: string; limit: unknown }[] = []): HandlerDeps {
+  return {
+    env: (name) => ({ EMBEDDING_CRON_SECRET: SECRET, GOOGLE_GENERATIVE_AI_API_KEY: "gemini-key-xyz" } as Record<string, string>)[name],
+    run: (key, limit) => {
+      runs.push({ key, limit });
+      return Promise.resolve(emptySummary);
+    },
+    ...over,
+  };
+}
+const post = (headers: Record<string, string> = {}, body?: string) =>
+  new Request("https://x.test/functions/v1/process-embedding-jobs", { method: "POST", headers, body });
+
+Deno.test("handler — only POST is accepted", async () => {
+  const runs: { key: string; limit: unknown }[] = [];
+  for (const method of ["GET", "PUT", "DELETE", "PATCH"]) {
+    const res = await handleEmbeddingRequest(new Request("https://x.test/", { method }), deps({}, runs));
+    assertEquals(res.status, 405);
+  }
+  assertEquals(runs.length, 0);
+});
+
+Deno.test("handler — no secret, a wrong secret or a near-miss are refused and nothing runs", async () => {
+  const runs: { key: string; limit: unknown }[] = [];
+  for (const headers of <Record<string, string>[]> [{}, { "x-cron-secret": "" }, { "x-cron-secret": "wrong" }, { "x-cron-secret": SECRET + "x" }, { "x-cron-secret": SECRET.slice(0, -1) }, { authorization: `Bearer ${SECRET}` }]) {
+    const res = await handleEmbeddingRequest(post(headers), deps({}, runs));
+    assertEquals(res.status, 401);
+    assertEquals(await res.json(), { error: "unauthorized" });
+  }
+  assertEquals(runs.length, 0); // the queue is never touched without the secret
+});
+
+Deno.test("handler — a missing secret is a 500 not_configured, never an open door", async () => {
+  const runs: { key: string; limit: unknown }[] = [];
+  const noCron = deps({ env: (n) => (n === "GOOGLE_GENERATIVE_AI_API_KEY" ? "k" : undefined) }, runs);
+  const noGemini = deps({ env: (n) => (n === "EMBEDDING_CRON_SECRET" ? SECRET : undefined) }, runs);
+  for (const d of [noCron, noGemini]) {
+    // even a caller presenting an EMPTY secret must not get in when the configured one is missing
+    const res = await handleEmbeddingRequest(post({ "x-cron-secret": "" }), d);
+    assertEquals(res.status, 500);
+    assertEquals(await res.json(), { error: "not_configured" });
+  }
+  assertEquals(runs.length, 0);
+});
+
+Deno.test("handler — the right secret runs one batch with the requested limit and never echoes a secret", async () => {
+  const runs: { key: string; limit: unknown }[] = [];
+  const res = await handleEmbeddingRequest(post({ "x-cron-secret": SECRET }, JSON.stringify({ limit: 3 })), deps({}, runs));
+  assertEquals(res.status, 200);
+  assertEquals(runs, [{ key: "gemini-key-xyz", limit: 3 }]);
+  const text = await res.text();
+  assertEquals(text.includes(SECRET) || text.includes("gemini-key-xyz"), false);
+});
+
+Deno.test("handler — an empty or invalid body from the scheduler still runs with the default limit", async () => {
+  const runs: { key: string; limit: unknown }[] = [];
+  await handleEmbeddingRequest(post({ "x-cron-secret": SECRET }), deps({}, runs));
+  await handleEmbeddingRequest(post({ "x-cron-secret": SECRET }, "not json"), deps({}, runs));
+  assertEquals(runs.map((r) => r.limit), [undefined, undefined]);
+});
+
+Deno.test("handler — failures map to non-2xx statuses and leak nothing", async () => {
+  const auth = { "x-cron-secret": SECRET };
+  const halted = await handleEmbeddingRequest(post(auth), deps({ run: () => Promise.resolve({ ...emptySummary, halted: "gemini_auth" }) }));
+  assertEquals(halted.status, 503);
+  const unrecorded = await handleEmbeddingRequest(post(auth), deps({ run: () => Promise.resolve({ ...emptySummary, unrecorded: 1 }) }));
+  assertEquals(unrecorded.status, 502);
+  const claim = await handleEmbeddingRequest(post(auth), deps({ run: () => Promise.reject(new ClaimFailedError("42501")) }));
+  assertEquals(claim.status, 500);
+  assertEquals(await claim.json(), { error: "claim_failed" });
+  const boom = await handleEmbeddingRequest(post(auth), deps({ run: () => Promise.reject(new Error(`db password=${SECRET}`)) }));
+  assertEquals(boom.status, 500);
+  const text = JSON.stringify(await boom.json());
+  assertEquals(text.includes(SECRET), false); // an unexpected error message is never returned to the caller
 });
