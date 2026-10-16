@@ -24,12 +24,15 @@ type VoteResponse = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RECEIPT_STATUSES = new Set(["cast", "replayed", "already_voted"]);
 
-function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | null {
+export function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | null {
   const data = body.data;
   if (!data || !data.vote_id || !UUID_RE.test(data.vote_id)) return null;
   if (data.contest_id !== target.contestId || !data.entity_id || !UUID_RE.test(data.entity_id)) return null;
-  return { voteId: data.vote_id, createdAt: data.created_at ?? null, status: data.status ?? "cast", entityId: data.entity_id };
+  // Never show a "cast" receipt without an explicit, recognised server status.
+  if (!data.status || !RECEIPT_STATUSES.has(data.status)) return null;
+  return { voteId: data.vote_id, createdAt: data.created_at ?? null, status: data.status, entityId: data.entity_id };
 }
 
 export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurantName: string; voteTarget: VoteTarget | null }) {
@@ -45,14 +48,16 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const goToLogin = useCallback(() => {
     router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants"));
   }, [pathname, router]);
+  const contestId = voteTarget?.contestId;
+  const entityId = voteTarget?.entityId;
 
   // Store only the idempotency key, not a vote receipt or auth credential.
   // On reload the server re-reads the committed ballot. This lookup has no nonce
   // and cannot create a new ballot; vote-cast checks the existing key first.
   useEffect(() => {
-    if (!voteTarget) return;
+    if (!contestId || !entityId) return;
     let active = true;
-    const target = voteTarget;
+    const target: VoteTarget = { contestId, entityId };
     async function recover() {
       setState("checking");
       try {
@@ -91,7 +96,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     }
     void recover();
     return () => { active = false; };
-  }, [anonKey, functionsUrl, voteTarget]);
+  }, [anonKey, contestId, entityId, functionsUrl]);
 
   const castVote = useCallback(async () => {
     if (!voteTarget || inFlight.current) return;
