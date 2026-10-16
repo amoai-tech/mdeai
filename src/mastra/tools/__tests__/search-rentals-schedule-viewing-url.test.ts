@@ -42,6 +42,8 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     status: "active",
     moderation_status: "approved",
     listing_workflow_status: "published",
+    // SAN-1502: requestability is the database's computed column, not a UI re-derivation.
+    rental_can_request_viewing: true,
     ...overrides,
   };
 }
@@ -65,42 +67,21 @@ describe("schedule_viewing_url — SAN-478 resolves to a real page", () => {
     expect(rental.schedule_viewing_url).not.toContain("schedule-viewing");
   });
 
-  it("stays null for a listing with no canonical owner", () => {
-    const row = apartmentRow({ landlord_id: null });
+  // SAN-1502 — the database's computed `rental_can_request_viewing` is the only eligibility
+  // owner. Ownership, moderation, workflow and availability are already folded into that column,
+  // so the app must not re-derive them here (that duplicate rule made the agent disagree with the DB).
+  it("stays null whenever the database computed the listing not requestable", () => {
+    const row = apartmentRow({ rental_can_request_viewing: false });
     expect(isRentalRequestable(row)).toBe(false);
     const rental = rowToRental(row);
     expect(rental.can_schedule_viewing).toBe(false);
     expect(rental.schedule_viewing_url).toBeNull();
   });
 
-  it("stays null for an unpublished listing", () => {
-    const row = apartmentRow({ listing_workflow_status: "draft" });
-    expect(isRentalRequestable(row)).toBe(false);
-    expect(rowToRental(row).schedule_viewing_url).toBeNull();
-  });
-
-  it("stays null for an unapproved listing", () => {
-    const row = apartmentRow({ moderation_status: "pending" });
-    expect(isRentalRequestable(row)).toBe(false);
-    expect(rowToRental(row).schedule_viewing_url).toBeNull();
-  });
-
-  // SAN-486: a future move-in date must not hide the listing from viewings.
-  it("stays requestable when the move-in date is in the future", () => {
-    const row = apartmentRow({ available_from: "2099-11-01", available_to: null });
+  // SAN-486: a future move-in date does not block a viewing when the database allows one.
+  it("stays requestable for a future move-in date the database allows", () => {
+    const row = apartmentRow({ available_from: "2099-11-01", available_to: null, rental_can_request_viewing: true });
     expect(isRentalRequestable(row)).toBe(true);
     expect(rowToRental(row).schedule_viewing_url).not.toBeNull();
-  });
-
-  it("is not requestable without a move-in date, matching the viewing RPC", () => {
-    const row = apartmentRow({ available_from: null, available_to: null });
-    expect(isRentalRequestable(row)).toBe(false);
-    expect(rowToRental(row).schedule_viewing_url).toBeNull();
-  });
-
-  it("is not requestable once the availability window has expired", () => {
-    const row = apartmentRow({ available_from: "2000-01-01", available_to: "2000-01-31" });
-    expect(isRentalRequestable(row)).toBe(false);
-    expect(rowToRental(row).schedule_viewing_url).toBeNull();
   });
 });

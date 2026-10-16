@@ -48,6 +48,8 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     status: "active",
     moderation_status: "approved",
     listing_workflow_status: "published",
+    // SAN-1502: requestability is the database's computed column, not a UI re-derivation.
+    rental_can_request_viewing: true,
     ...overrides,
   };
 }
@@ -75,8 +77,8 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).toContain("Constructor");
   });
 
-  it("shows the schedule CTA for a fully owned, approved, published, available listing", () => {
-    const html = renderCard();
+  it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
+    const html = renderCard({ rental_can_request_viewing: true });
     expect(html).toContain('data-testid="rental-schedule-cta"');
     expect(html).toContain("Schedule viewing");
     // SAN-478 — the CTA is a button that opens a modal, never a link or a navigation to
@@ -84,29 +86,22 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).not.toContain("schedule-viewing");
   });
 
-  it("hides the CTA for an unowned listing (no canonical landlord_id)", () => {
-    const html = renderCard({ landlord_id: null });
+  // SAN-1502 — the database's computed `rental_can_request_viewing` is the only eligibility owner.
+  // Ownership, moderation, workflow and availability are already folded into that column under the
+  // server-controlled phase, so the UI must not re-decide them (that was the duplicate rule).
+  it("hides the CTA whenever the database computed the listing not requestable", () => {
+    const html = renderCard({ rental_can_request_viewing: false });
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
     expect(html).not.toContain("Schedule viewing");
   });
 
-  it("hides the CTA for an unapproved listing", () => {
-    const html = renderCard({ moderation_status: "pending" });
-    expect(html).not.toContain('data-testid="rental-schedule-cta"');
-  });
-
-  it("hides the CTA for an unpublished listing", () => {
-    const html = renderCard({ listing_workflow_status: "draft" });
-    expect(html).not.toContain('data-testid="rental-schedule-cta"');
-  });
-
-  it("hides the CTA when the current date is outside the availability window", () => {
-    const html = renderCard({ available_to: "2020-01-01" });
+  it("fails closed when the row projection omits the computed column", () => {
+    const html = renderCard({ rental_can_request_viewing: null });
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
   });
 
   it("still renders the listing itself when the CTA is withheld", () => {
-    const html = renderCard({ landlord_id: null });
+    const html = renderCard({ rental_can_request_viewing: false });
     expect(html).toContain('data-testid="rental-card-rnt_lau_001"');
     expect(html).toContain("Bright 2BR with Balcony in Laureles");
   });
@@ -283,7 +278,7 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
 });
 
 describe("External rental viewing CTA fails closed (SAN-1416)", () => {
-  it("offers no schedule button for an external ad even if its data wrongly says it is requestable", () => {
+  it("labels a database-requestable external ad as an MDE follow-up", () => {
     const rental = {
       ...rowToRental(apartmentRow()),
       id: "candidate-fincaraiz-193916988",
@@ -293,8 +288,57 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
       schedule_viewing_url: "https://mdeai.co/rentals/candidate-fincaraiz-193916988",
     };
     const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
-    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain("Request MDE follow-up");
     expect(html).toContain("View original listing");
+  });
+
+  // SAN-1502: the nine imported Fincaraíz listings lost the legacy inventory_kind marker but
+  // kept their preserved provenance. Attribution must not depend on the removed marker.
+  it("attributes a Fincaraíz import from preserved provenance without the removed marker", () => {
+    const rental = rowToRental(
+      apartmentRow({
+        id: "candidate-fincaraiz-194104380",
+        slug: "candidate-fincaraiz-194104380",
+        source_url: "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        metadata: {
+          source_record_type: "third_party_advertisement",
+          source_provider: "Fincaraíz",
+          source_original_url:
+            "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        },
+      }),
+    );
+    expect(rental.tags).toContain("external-source");
+    expect(rental.source_provider).toBe("Fincaraíz");
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).toContain("Request MDE follow-up");
+    expect(html).toContain("Source: Fincaraíz");
+    expect(html).toContain("View original listing");
+  });
+
+  // SAN-1502 Phase A: an imported record activated as MDE-managed development inventory is
+  // presented as an ordinary MDE listing; provenance stays in metadata for pre-launch cleanup.
+  it("treats an activated development import as ordinary MDE-managed inventory", () => {
+    const rental = rowToRental(
+      apartmentRow({
+        id: "candidate-fincaraiz-194104380",
+        slug: "candidate-fincaraiz-194104380",
+        source_url: "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        metadata: {
+          mde_managed_development: true,
+          source_record_type: "third_party_advertisement",
+          source_provider: "Fincaraíz",
+          inventory_kind: "external_candidate",
+        },
+      }),
+    );
+    expect(rental.tags).not.toContain("external-source");
+    expect(rental.source_provider).toBeUndefined();
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).not.toContain("Source: Fincaraíz");
+    expect(html).not.toContain("View original listing");
+    expect(html).toContain("Schedule viewing");
   });
 });
 

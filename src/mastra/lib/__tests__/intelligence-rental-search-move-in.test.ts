@@ -70,6 +70,8 @@ const baseRow = (over: Record<string, unknown>) => ({
   status: "active",
   moderation_status: "approved",
   listing_workflow_status: "published",
+  // SAN-1502: the database's computed column decides requestability.
+  rental_can_request_viewing: true,
   ...over,
 });
 
@@ -100,8 +102,8 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
     expect(free.schedule_viewing_url).toBe(structured.schedule_viewing_url);
   });
 
-  it("offers no viewing for a listing with no move-in date", async () => {
-    const row = baseRow({ available_from: null });
+  it("offers no viewing when the database computed the listing not requestable", async () => {
+    const row = baseRow({ available_from: null, rental_can_request_viewing: false });
     mocks.state.aptRows = [row];
     mocks.state.hybridIds = [row.id as string];
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");

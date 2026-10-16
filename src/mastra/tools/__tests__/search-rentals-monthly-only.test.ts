@@ -348,10 +348,13 @@ describe("searchRentals — monthly-only COP listings are findable and truthful"
     expect(ids).toContain("apt-cop-monthly");
   });
 
-  it("5 · still excludes an unpriced listing", async () => {
+  it("5 · includes unpriced inventory when no budget was requested", async () => {
     const results = (await search()).results;
-    expect(results.map((r) => r.id)).not.toContain("apt-unpriced");
-    expect(results.every((r) => r.nightly_price !== 0)).toBe(true);
+    expect(results.map((r) => r.id)).toContain("apt-unpriced");
+    const unknown = results.find((r) => r.id === "apt-unpriced");
+    expect(unknown?.price_monthly).toBeUndefined();
+    // Zero remains an internal schema placeholder, never a displayed rent.
+    expect(unknown?.nightly_price).toBe(0);
   });
 
   it("6 · includes the boundary monthly price and excludes the next one, matching the label", async () => {

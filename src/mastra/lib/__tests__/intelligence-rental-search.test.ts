@@ -34,126 +34,23 @@ describe("parseRentalIntelligenceSlots", () => {
   });
 });
 
-// SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
-// The database remains the authority; these cases pin the contract the UI and agents rely on.
+// SAN-1502 — requestability has exactly ONE owner: the database's computed
+// `rental_can_request_viewing` column, evaluated under the server-controlled phase.
+// The app must not re-derive it from ownership, workflow or availability columns; that
+// duplicate rule is what let search, Details and the AI agent drift apart.
 describe("isRentalRequestable", () => {
-  const owned = {
-    landlord_id: "11111111-1111-4111-8111-111111111111",
-    status: "active",
-    moderation_status: "approved",
-    listing_workflow_status: "published",
-    available_from: "2026-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
-    available_to: null,
-  };
-  const today = new Date("2026-09-27T12:00:00Z");
-
-  it("allows an owned, active, approved, published, available listing", () => {
-    expect(isRentalRequestable(owned, today)).toBe(true);
+  it("is true only when the database computed the row requestable", () => {
+    expect(isRentalRequestable({ rental_can_request_viewing: true })).toBe(true);
   });
 
-  it("refuses a listing with no canonical owner", () => {
-    expect(isRentalRequestable({ ...owned, landlord_id: null }, today)).toBe(false);
+  it("is false when the database computed it not requestable", () => {
+    expect(isRentalRequestable({ rental_can_request_viewing: false })).toBe(false);
   });
 
-  it("refuses an unapproved listing", () => {
-    expect(isRentalRequestable({ ...owned, moderation_status: "pending" }, today)).toBe(false);
-  });
-
-  it("refuses an unpublished listing", () => {
-    expect(isRentalRequestable({ ...owned, listing_workflow_status: "draft" }, today)).toBe(false);
-  });
-
-  it("refuses an inactive listing", () => {
-    expect(isRentalRequestable({ ...owned, status: "inactive" }, today)).toBe(false);
-  });
-
-  it("refuses a listing with no move-in date, because the viewing RPC refuses it", () => {
-    expect(isRentalRequestable({ ...owned, available_from: null }, today)).toBe(false);
-  });
-
-  it("refuses a listing whose availability window has already closed", () => {
-    expect(isRentalRequestable({ ...owned, available_to: "2026-01-01" }, today)).toBe(false);
-  });
-
-  // SAN-486: a future move-in date does not block requesting a *viewing*. A renter can
-  // tour an apartment before it becomes available; only an expired window blocks.
-  it("allows requesting a viewing before the move-in date", () => {
-    expect(isRentalRequestable({ ...owned, available_from: "2027-01-01" }, today)).toBe(true);
-  });
-
-  it("allows a listing whose availability window is currently open", () => {
-    expect(
-      isRentalRequestable(
-        { ...owned, available_from: "2026-01-01", available_to: "2026-12-31" },
-        today,
-      ),
-    ).toBe(true);
-  });
-
-  it("fails closed when ownership/workflow proof is entirely absent", () => {
-    expect(isRentalRequestable({}, today)).toBe(false);
-  });
-
-  // A missing `status` must reject, not fall through. The earlier `row.status != null && …`
-  // guard let null/undefined pass and would have granted a viewing CTA to a partial row.
-  it("fails closed when the status column is missing entirely", () => {
-    expect(
-      isRentalRequestable(
-        {
-          landlord_id: owned.landlord_id,
-          moderation_status: owned.moderation_status,
-          listing_workflow_status: owned.listing_workflow_status,
-          available_from: owned.available_from,
-          available_to: owned.available_to,
-        },
-        today,
-      ),
-    ).toBe(false);
-  });
-
-  it("fails closed when status is null", () => {
-    expect(isRentalRequestable({ ...owned, status: null }, today)).toBe(false);
-  });
-
-  it("fails closed when status is undefined", () => {
-    expect(isRentalRequestable({ ...owned, status: undefined }, today)).toBe(false);
-  });
-
-  it("fails closed when moderation or workflow proof is missing", () => {
-    const { landlord_id, status, available_from, available_to } = owned;
-    expect(
-      isRentalRequestable({ landlord_id, status, available_from, available_to }, today),
-    ).toBe(false);
-    expect(
-      isRentalRequestable(
-        { landlord_id, status, moderation_status: 'approved', available_from, available_to },
-        today,
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a listing requestable through the last Bogota hour of its final available day", () => {
-    // `available_to` is a Postgres DATE, so the listing is available for all of 2026-09-27 in
-    // Medellín. 2026-09-28T02:00:00Z is 2026-09-27 21:00 local. The old UTC-based comparison
-    // read "2026-09-28" and wrongly expired this still-requestable listing.
-    expect(
-      isRentalRequestable({ ...owned, available_to: "2026-09-27" }, new Date("2026-09-28T02:00:00Z")),
-    ).toBe(true);
-  });
-
-  it("expires a listing once the Bogota date has moved past available_to", () => {
-    // 2026-09-28T06:00:00Z is 2026-09-28 01:00 local, so the day really has rolled over.
-    expect(
-      isRentalRequestable({ ...owned, available_to: "2026-09-27" }, new Date("2026-09-28T06:00:00Z")),
-    ).toBe(false);
-  });
-
-  it("keeps a future-dated listing requestable across the Bogota date boundary", () => {
-    // 2026-09-28T02:00:00Z is still 2026-09-27 local. A listing starting 2026-09-28 is
-    // upcoming, not closed: SAN-486 allows a viewing to be requested before move-in.
-    expect(
-      isRentalRequestable({ ...owned, available_from: "2026-09-28" }, new Date("2026-09-28T02:00:00Z")),
-    ).toBe(true);
+  it("fails closed when the computed column is absent, null or undefined", () => {
+    expect(isRentalRequestable({})).toBe(false);
+    expect(isRentalRequestable({ rental_can_request_viewing: null })).toBe(false);
+    expect(isRentalRequestable({ rental_can_request_viewing: undefined })).toBe(false);
   });
 });
 

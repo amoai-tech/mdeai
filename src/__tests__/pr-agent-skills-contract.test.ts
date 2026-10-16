@@ -38,7 +38,7 @@ const skills = [
 
 describe("SAN-1312 PR-Agent review contract", () => {
   it("delegates runtime to the immutable shared core and keeps the caller trust boundary", () => {
-    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@cb4271e9563c512047d6d018acb5ff07db8ad755");
+    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@263f5fb347128538ed8ecc267fc5cfc8fced22a2");
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(workflow).toContain('NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
     expect(workflow).toContain('GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}');
@@ -54,6 +54,9 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain('review_heading = "MDE PR Review"');
     expect(config).toContain('repo_context_files = ["AGENTS.md", "docs/06-testing/pr-review-guidelines.md", "package.json"]');
     expect(config).toContain("persistent_finding_state = true");
+    // PR #342 excluded 17/20 files with the old three-call review cap.
+    expect(config).toContain("enable_large_pr_chunking = true");
+    expect(config).toContain("max_number_of_calls = 6");
     expect(config).toContain("repo_context_from_default_branch = true");
     expect(config).toContain("restricted_mode = true");
     expect(config).toContain("[ignore]");
