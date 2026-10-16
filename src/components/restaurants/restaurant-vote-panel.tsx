@@ -224,7 +224,10 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         setMessage("Could not confirm your vote. Retry to recover the same receipt if it was saved.");
       }
       setState("error");
-    } catch {
+    } catch (err) {
+      // Log the real exception: without it a thrown fetch is indistinguishable from a
+      // timeout, and CI has no other way to name the cause.
+      console.error("[vote] cast request threw:", err instanceof Error ? err.message : err);
       // A request may have committed even if the network response never arrived.
       setMessage("Connection interrupted. Retry to recover your original vote — do not assume it failed.");
       setState("error");
