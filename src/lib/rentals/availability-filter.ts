@@ -62,16 +62,19 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
       checkIn && checkOut
         ? Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / DAY_MS) + 1
         : null;
-    const lengthRules =
-      days && days > 0
-        ? `,or(minimum_stay_days.is.null,minimum_stay_days.lte.${days}),or(maximum_stay_days.is.null,maximum_stay_days.gte.${days})`
-        : "";
+    // The listing must be free through the last requested day and honour the stay length. These
+    // hold whether or not the move-in date is known.
+    const coverage = [`or(available_to.is.null,available_to.gte.${stayEnd})`];
+    if (days && days > 0) {
+      coverage.push(`or(minimum_stay_days.is.null,minimum_stay_days.lte.${days})`);
+      coverage.push(`or(maximum_stay_days.is.null,maximum_stay_days.gte.${days})`);
+    }
     if (developmentMode) {
-      // Known dates must satisfy the whole stay. A development listing with no confirmed move-in
-      // date stays discoverable and is labelled "Availability unconfirmed" by the card — never a
-      // confirmed whole-stay match, and never hidden behind business paperwork.
+      // A development listing with no confirmed move-in date stays discoverable and is labelled
+      // "Availability unconfirmed" — but an unknown start is not a free pass: a KNOWN end date or
+      // stay-length conflict still excludes it, so it is never shown for a stay it cannot cover.
       q = q.or(
-        `and(available_from.not.is.null,available_from.lte.${stayStart},or(available_to.is.null,available_to.gte.${stayEnd})${lengthRules}),available_from.is.null`,
+        `and(or(available_from.is.null,available_from.lte.${stayStart}),${coverage.join(",")})`,
       );
       return q as unknown as Q;
     }
