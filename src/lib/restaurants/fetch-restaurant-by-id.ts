@@ -8,6 +8,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
 
 const SELECT_FIELDS =
@@ -44,4 +45,26 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
   if (error) return { status: "error" };
   if (!data) return { status: "not_found" };
   return { status: "found", restaurant: rowToRestaurant(data as unknown as RestaurantRow) };
+}
+
+/**
+ * Resolve the contest + entry a restaurant is contesting in (SAN-1483).
+ *
+ * Server-only: public.vote_restaurant_target is granted to service_role alone, so this
+ * never runs in the browser and vote.* stays private. Returns null when the restaurant is
+ * not linked to a votable contest yet — the panel then shows its honest not-open state.
+ */
+export async function fetchRestaurantVoteTarget(
+  restaurantId: string,
+): Promise<{ contestId: string; entityId: string } | null> {
+  if (!UUID_RE.test(restaurantId)) return null;
+  const supabase = createServiceRoleClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc("vote_restaurant_target", { p_restaurant_id: restaurantId });
+  if (error || !data) return null;
+
+  const row = data as { contest_id?: string; entity_id?: string };
+  if (!row.contest_id || !row.entity_id) return null;
+  return { contestId: row.contest_id, entityId: row.entity_id };
 }

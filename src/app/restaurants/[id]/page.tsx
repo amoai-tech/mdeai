@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UtensilsCrossed } from "lucide-react";
-import { fetchRestaurantById } from "@/lib/restaurants/fetch-restaurant-by-id";
+import { fetchRestaurantById, fetchRestaurantVoteTarget } from "@/lib/restaurants/fetch-restaurant-by-id";
 import { RestaurantVotePanel } from "@/components/restaurants/restaurant-vote-panel";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 
@@ -27,6 +27,8 @@ export default async function RestaurantDetailPage({ params }: { params: Promise
   // priceTier/rating are derived estimates from the catalog; never present them as confirmed facts.
   const hasRating = typeof restaurant.rating === "number" && restaurant.rating > 0;
   const hasCoords = restaurant.latitude != null && restaurant.longitude != null;
+  // SAN-1483 supplies the canonical contest entry; null keeps the honest not-open state.
+  const voteTarget = await fetchRestaurantVoteTarget(restaurant.id);
   const mapHref =
     restaurant.mapsUrl ??
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
@@ -65,7 +67,7 @@ export default async function RestaurantDetailPage({ params }: { params: Promise
         {/* SAN-1483 supplies the canonical contest entry for this restaurant. Until it
             lands there is no honest target, so the panel states that instead of inventing one. */}
         <div className="mt-3">
-          <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={null} />
+          <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={voteTarget} />
         </div>
       </section>
     </main>
