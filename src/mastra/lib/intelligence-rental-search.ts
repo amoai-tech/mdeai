@@ -264,7 +264,25 @@ export async function searchRentalsIntelligent(
       .select(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
-      .in("id", ids);
+      .in("id", ids)
+      // The hybrid RPC filters only status='active'. Re-apply the structured
+      // path's canonical eligibility here, so the two paths cannot disagree
+      // about which listings are eligible. RLS still enforces the same contract
+      // at the database boundary first.
+      .eq("status", "active")
+      .eq("moderation_status", "approved")
+      .eq("listing_workflow_status", "published")
+      .not("landlord_id", "is", null)
+      // One shared budget predicate with the structured path, so a hybrid result
+      // can never bypass the caller's price filter.
+      .or(
+        rentalBudgetPredicate(
+          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
+          monthlyBudgetFromQuery(query),
+        ),
+      );
+    if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
+    if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     aptQ = applyAvailabilityFilters(aptQ, {

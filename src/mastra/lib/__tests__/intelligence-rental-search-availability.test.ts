@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     neighborhoodRow: null as { id: string; name: string } | null,
     profileRow: null as Record<string, unknown> | null,
     rpcError: null as { message: string; code: string } | null,
+    filterCalls: [] as unknown[][],
   };
 
   const activeApartment = {
@@ -77,11 +78,12 @@ const mocks = vi.hoisted(() => {
         return chain;
       }),
       in: pass,
-      or: pass,
-      eq: pass,
-      not: pass,
+      or: vi.fn((...args: unknown[]) => { state.filterCalls.push(["or", ...args]); return chain; }),
+      eq: vi.fn((...args: unknown[]) => { state.filterCalls.push(["eq", ...args]); return chain; }),
+      not: vi.fn((...args: unknown[]) => { state.filterCalls.push(["not", ...args]); return chain; }),
       order: pass,
-      ilike: pass,
+      ilike: vi.fn((...args: unknown[]) => { state.filterCalls.push(["ilike", ...args]); return chain; }),
+      gte: vi.fn((...args: unknown[]) => { state.filterCalls.push(["gte", ...args]); return chain; }),
       limit: pass,
       maybeSingle: vi.fn(async () => {
         if (state.errorTable === table) {
@@ -140,6 +142,7 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.neighborhoodRow = null;
     mocks.state.profileRow = null;
     mocks.state.rpcError = null;
+    mocks.state.filterCalls.length = 0;
   });
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
@@ -152,6 +155,32 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     expect(mocks.state.apartmentProjection).toContain("price_monthly");
     expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
     expect(result.results[0]?.price_monthly).toBe(650);
+  });
+
+  it("re-applies the structured eligibility, budget and location filters to the hybrid reload", async () => {
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    await searchRentalsIntelligent({
+      queryText: "digital nomad rental",
+      neighborhood: "Laureles",
+      minBedrooms: 1,
+      maxPricePerNight: 80,
+      limit: 5,
+    });
+
+    // The hybrid RPC filters only status='active'; the reload must re-check the
+    // canonical contract and the caller's own filters, exactly like the keyword path.
+    expect(mocks.state.filterCalls).toEqual(
+      expect.arrayContaining([
+        ["eq", "status", "active"],
+        ["eq", "moderation_status", "approved"],
+        ["eq", "listing_workflow_status", "published"],
+        ["not", "landlord_id", "is", null],
+        ["or", expect.any(String)],
+        ["ilike", "neighborhood", "%Laureles%"],
+        ["gte", "bedrooms", 1],
+      ]),
+    );
   });
 
 
