@@ -209,27 +209,35 @@ async function hydrateHybridEventRows(
   rows: HybridEventRow[],
 ): Promise<HybridEventRow[]> {
   if (rows.length === 0) return rows;
-  const { data, error } = await client
-    .from("events")
-    .select("id, city, currency, latitude, longitude, maps_url")
-    .in("id", rows.map((r) => r.id));
-  if (error) {
-    console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
+  try {
+    const { data, error } = await client
+      .from("events")
+      .select("id, city, currency, latitude, longitude, maps_url")
+      .in("id", rows.map((r) => r.id));
+    if (error) {
+      console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
+      return rows;
+    }
+    const byId = new Map((data ?? []).map((e: Record<string, unknown>) => [String(e.id), e]));
+    return rows.map((row) => {
+      const e = byId.get(row.id);
+      if (!e) return row;
+      return {
+        ...row,
+        city: row.city ?? (e.city as string | null),
+        currency: row.currency ?? (e.currency as string | null),
+        latitude: row.latitude ?? (e.latitude as number | null),
+        longitude: row.longitude ?? (e.longitude as number | null),
+        maps_url: row.maps_url ?? (e.maps_url as string | null),
+      };
+    });
+  } catch (error) {
+    console.warn(
+      "[intelligence-event-search] event detail lookup rejected:",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return rows;
   }
-  const byId = new Map((data ?? []).map((e: Record<string, unknown>) => [String(e.id), e]));
-  return rows.map((row) => {
-    const e = byId.get(row.id);
-    if (!e) return row;
-    return {
-      ...row,
-      city: row.city ?? (e.city as string | null),
-      currency: row.currency ?? (e.currency as string | null),
-      latitude: row.latitude ?? (e.latitude as number | null),
-      longitude: row.longitude ?? (e.longitude as number | null),
-      maps_url: row.maps_url ?? (e.maps_url as string | null),
-    };
-  });
 }
 
 /** Maps hybrid RPC / structured rows to EventCard — venue = full address (matches search-events rowToCard). */

@@ -86,6 +86,25 @@ describe("searchEventsIntelligent — hybrid results are completed from the even
     expect(out.results[0].latitude == null).toBe(true);
   });
 
+  it("keeps semantic results if the hydration query rejects unexpectedly", async () => {
+    const { client, eventsBuilder } = clientWith({ data: null, error: null });
+    eventsBuilder.in = vi.fn(() => Promise.reject(new Error("network-down")));
+    mocks.createClient.mockReturnValue(client);
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { searchEventsIntelligent } = await import("../intelligence-event-search");
+
+    const out = await searchEventsIntelligent({ queryText: "salsa tonight", limit: 5, dateWindow: "any" });
+
+    expect(out.hybridUsed).toBe(true);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]).toMatchObject({ id: "e-1" });
+    expect(out.results[0].latitude).toBeUndefined();
+    expect(warning).toHaveBeenCalledWith(
+      "[intelligence-event-search] event detail lookup rejected:", "network-down",
+    );
+    warning.mockRestore();
+  });
+
   it("never overwrites what the RPC row already carries", async () => {
     const { client } = clientWith({
       data: [{ id: "e-1", city: "Bogotá", currency: "COP", latitude: 4.7, longitude: -74.0, maps_url: "https://other.example.com" }],
