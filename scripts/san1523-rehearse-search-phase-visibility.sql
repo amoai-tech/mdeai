@@ -1,4 +1,4 @@
--- SAN-1523 · rehearsal for 20261016220000_search_development_visibility.sql
+-- SAN-1523 · rehearsal for 20261016232000_search_development_visibility.sql
 --
 -- WHY A REHEARSAL, NOT pgTAP: hybrid_search_listings/events depend on the live-only generated column
 -- fts_content, so a fresh replay (supabase test db) never creates them. This script gives a scratch
@@ -27,7 +27,7 @@ begin
 end
 $shim$;
 
-\i supabase/migrations/20261016220000_search_development_visibility.sql
+\i supabase/migrations/20261016232000_search_development_visibility.sql
 
 -- fixtures go in with row triggers bypassed: existing triggers on events/apartments rewrite some columns
 -- (for example is_active), and this rehearsal needs the exact states below
@@ -91,12 +91,19 @@ begin
 end
 $t$;
 
--- signatures and result shapes are untouched, and only service_role/authenticated-style callers keep EXECUTE
-select 'ok - listings result columns: ' || count(*) from information_schema.parameters
- where specific_schema = 'public' and parameter_mode = 'OUT'
-   and specific_name like 'hybrid_search_listings%';
-select 'ok - events result columns: ' || count(*) from information_schema.parameters
- where specific_schema = 'public' and parameter_mode = 'OUT'
-   and specific_name like 'hybrid_search_events%';
+-- Result shapes must equal the live signatures (15 listing columns, 11 event columns). CREATE OR REPLACE keeps
+-- the existing EXECUTE grants; production lets anon call both functions on purpose (public search uses the
+-- anonymous client), so no grant is changed or asserted here.
+do $shape$
+begin
+  assert (select count(*) from information_schema.parameters
+           where specific_schema = 'public' and parameter_mode = 'OUT'
+             and specific_name like 'hybrid_search_listings%') = 15, 'hybrid_search_listings returns 15 columns';
+  assert (select count(*) from information_schema.parameters
+           where specific_schema = 'public' and parameter_mode = 'OUT'
+             and specific_name like 'hybrid_search_events%') = 11, 'hybrid_search_events returns 11 columns';
+  raise notice 'ok - result shapes unchanged: 15 listing columns, 11 event columns';
+end
+$shape$;
 
 rollback;

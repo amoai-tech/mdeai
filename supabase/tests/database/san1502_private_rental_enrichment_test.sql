@@ -53,7 +53,7 @@ select is((select count(*)::int from public.rental_signals), 1,
   'A2: anon sees only publicly eligible signals');
 reset role;
 
--- A3/A4: DEVELOPMENT (product-owner decision, 20261016200000): an ordinary signed-in user reads the
+-- A3/A4: DEVELOPMENT (product-owner decision, 20261016231000): an ordinary signed-in user reads the
 -- enrichment of every apartment they can read, including the fixture.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1504000-0000-4000-8000-000000000003","role":"authenticated"}', true);

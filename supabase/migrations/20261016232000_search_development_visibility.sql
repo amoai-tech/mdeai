@@ -71,6 +71,8 @@ AS $function$
   limit match_count;
 $function$
     $ddl$;
+  else
+    raise notice 'SAN-1523: hybrid_search_listings not recreated (public.apartments.fts_content is a live-only column and is absent here)';
   end if;
 end
 $g1$;
@@ -132,6 +134,8 @@ AS $function$
   limit match_count;
 $function$
     $ddl$;
+  else
+    raise notice 'SAN-1523: hybrid_search_events not recreated (public.events.fts_content is a live-only column and is absent here)';
   end if;
 end
 $g2$;
