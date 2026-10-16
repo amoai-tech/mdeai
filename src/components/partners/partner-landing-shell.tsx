@@ -67,6 +67,15 @@ export type PartnerLandingShellProps = {
   signupHref: string;
   /** Inline lead-capture form rendered in the demo band (no /contact bounce). */
   leadForm?: ReactNode;
+  /** Optional copy slots for non-venue partner programs. */
+  audienceLabel?: string;
+  pricingIntro?: string;
+  demoHeading?: string;
+  demoDescription?: string;
+  closingPrimaryLabel?: string;
+  closingSecondaryHref?: string;
+  pricingHref?: string;
+  reassurancePills?: string[];
 };
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
@@ -88,6 +97,14 @@ export function PartnerLandingShell({
   pricingLine,
   signupHref,
   leadForm,
+  audienceLabel = "venue",
+  pricingIntro = "Flexible plans for every venue size. Contact us to see what fits.",
+  demoHeading = "Ready to grow your venue?",
+  demoDescription,
+  closingPrimaryLabel = "List your venue free",
+  closingSecondaryHref,
+  pricingHref,
+  reassurancePills = ["Free to list", "No setup fees", "Cancel anytime"],
 }: PartnerLandingShellProps) {
   const hasVisual = Boolean(hero.visual);
   return (
@@ -234,7 +251,7 @@ export function PartnerLandingShell({
             id="features-heading"
             className="mb-10 text-center text-2xl font-semibold text-balance text-foreground sm:text-3xl"
           >
-            Everything your venue needs
+            Everything your {audienceLabel} needs
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body, ai }) => (
@@ -314,7 +331,7 @@ export function PartnerLandingShell({
             {pricingLine}
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            Flexible plans for every venue size. Contact us to see what fits.
+            {pricingIntro}
           </p>
           <Button
             variant="outline"
@@ -322,7 +339,7 @@ export function PartnerLandingShell({
             className="mt-8"
             nativeButton={false}
             render={
-              <Link href={leadForm ? "#demo" : signupHref} data-testid={`${testId}-pricing-cta`} />
+              <Link href={leadForm ? "#demo" : (pricingHref ?? signupHref)} data-testid={`${testId}-pricing-cta`} />
             }
           >
             <MessageSquareIcon data-icon="inline-start" aria-hidden="true" />
@@ -342,12 +359,12 @@ export function PartnerLandingShell({
             id="demo-heading"
             className="text-2xl font-semibold text-balance text-foreground sm:text-3xl"
           >
-            Ready to grow your venue?
+            {demoHeading}
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            {leadForm
+            {demoDescription ?? (leadForm
               ? "Tell us about your venue — we'll set you up inside the concierge."
-              : "Join mdeai and put your venue inside Medellín's AI concierge today."}
+              : "Join mdeai and put your venue inside Medellín's AI concierge today.")}
           </p>
           {leadForm ? (
             <div className="mx-auto mt-8 max-w-md">{leadForm}</div>
@@ -363,7 +380,7 @@ export function PartnerLandingShell({
                   />
                 }
               >
-                List your venue free
+                {closingPrimaryLabel}
                 <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
               </Button>
               <Button
@@ -372,19 +389,19 @@ export function PartnerLandingShell({
                 nativeButton={false}
                 render={
                   <Link
-                    href={signupHref}
+                    href={closingSecondaryHref ?? signupHref}
                     data-testid={`${testId}-demo-secondary-cta`}
                   />
                 }
               >
                 <PhoneIcon data-icon="inline-start" aria-hidden="true" />
-                Get started
+                {closingSecondaryHref ? "Ask a question" : "Get started"}
               </Button>
             </div>
           )}
           <Separator className="mx-auto mt-12 max-w-sm" />
           <ul className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2">
-            {["Free to list", "No setup fees", "Cancel anytime"].map((item) => (
+            {reassurancePills.map((item) => (
               <li
                 key={item}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground"
