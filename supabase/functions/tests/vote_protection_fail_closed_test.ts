@@ -1,6 +1,7 @@
 // SAN-1498: vote protection must fail closed.
 // Deliberately dependency-free (no jsr/npm imports) so it runs anywhere, including offline.
 import { verifyTurnstile } from "../_shared/turnstile.ts";
+import { allowRateDurable } from "../_shared/rate-limit.ts";
 import { verifyNonce, issueNonce } from "../_shared/nonce.ts";
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
@@ -17,11 +18,27 @@ Deno.test("turnstile fails closed when the secret is missing outside dev/test", 
   if (prev !== undefined) Deno.env.set("ENVIRONMENT", prev);
 });
 
-Deno.test("turnstile only skips when explicitly in dev/test", async () => {
+Deno.test("turnstile never skips without a secret, even in test", async () => {
   Deno.env.set("ENVIRONMENT", "test");
   Deno.env.delete("TURNSTILE_SECRET_KEY");
-  assertEqual(await verifyTurnstile(undefined), "ok", "dev/test may skip Turnstile");
+  assertEqual(await verifyTurnstile(undefined), "misconfigured", "no secret must fail closed in every environment");
   Deno.env.delete("ENVIRONMENT");
+});
+
+Deno.test("turnstile fails closed even when ENVIRONMENT=development and no secret", async () => {
+  const prev = Deno.env.get("ENVIRONMENT");
+  Deno.env.set("ENVIRONMENT", "development");
+  Deno.env.delete("TURNSTILE_SECRET_KEY");
+  assertEqual(await verifyTurnstile("any-token"), "misconfigured", "dev must not bypass a missing secret");
+  if (prev !== undefined) Deno.env.set("ENVIRONMENT", prev);
+});
+
+Deno.test("rate limit fails closed on an RPC error when requested", async () => {
+  const fake = { rpc: async () => ({ data: null, error: { message: "boom" } }) };
+  const denied = await allowRateDurable(fake as never, "k", 10, 60, { failClosed: true });
+  assertEqual(denied.allowed, false, "failClosed must deny");
+  const open = await allowRateDurable(fake as never, "k", 10, 60);
+  assertEqual(open.allowed, true, "default stays fail-open");
 });
 
 Deno.test("nonce fails closed when the secret is missing outside dev/test", async () => {

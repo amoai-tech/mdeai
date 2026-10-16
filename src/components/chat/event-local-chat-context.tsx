@@ -35,6 +35,10 @@ type EventLocalChatContextValue = {
   showExchange: (userText: string, assistantText: string) => void;
   /** An assistant-only line, for when the renter's own message is already in the transcript. */
   showNotice: (assistantText: string) => void;
+  /** SAN-1507: true after a signed-out visitor asked the AI; the transcript then offers sign-in. */
+  signInPrompt: boolean;
+  /** Keep the visitor's question in the transcript and offer sign-in. No agent run is started. */
+  showSignInPrompt: (userText: string) => void;
   clearLocalMessages: () => void;
 };
 
@@ -51,6 +55,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
+  const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
   const agentRef = useRef(agent);
 
@@ -96,6 +101,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       ];
       setClarifyPending(true);
       setClarifyKind(kind);
+      setSignInPrompt(false);
       setMessages(nextMessages);
       publishOrQueue(nextMessages);
     },
@@ -116,6 +122,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       }
       setClarifyPending(false);
       setClarifyKind(null);
+      setSignInPrompt(false);
       setMessages((prev) => [...prev, ...nextMessages]);
       publishOrQueue(nextMessages);
     },
@@ -127,14 +134,26 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       const next: EventLocalChatMessage[] = [
         { id: nextId(), role: "assistant", content: assistantText },
       ];
+      setSignInPrompt(false);
       setMessages((prev) => [...prev, ...next]);
       publishOrQueue(next);
     },
     [publishOrQueue],
   );
 
+  const showSignInPrompt = useCallback((userText: string) => {
+    // This is a guest-only display message, not part of an authenticated AG-UI thread.
+    // Do not call showExchange: it publishes/queues messages into the CopilotKit agent,
+    // which could later be attached to a signed-in user's thread.
+    setClarifyPending(false);
+    setClarifyKind(null);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: userText }]);
+    setSignInPrompt(true);
+  }, []);
+
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];
+    setSignInPrompt(false);
     setMessages([]);
     setClarifyPending(false);
     setClarifyKind(null);
@@ -148,6 +167,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       showClarify,
       showExchange,
       showNotice,
+      signInPrompt,
+      showSignInPrompt,
       clearLocalMessages,
     }),
     [
@@ -157,6 +178,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       showClarify,
       showExchange,
       showNotice,
+      signInPrompt,
+      showSignInPrompt,
       clearLocalMessages,
     ],
   );
