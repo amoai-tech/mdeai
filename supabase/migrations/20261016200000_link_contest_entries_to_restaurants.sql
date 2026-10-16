@@ -15,9 +15,14 @@ create unique index if not exists vote_entities_one_entry_per_restaurant_idx
   on vote.entities (contest_id, restaurant_id) where restaurant_id is not null;
 
 -- Backfill: link the labelled development entry to its canonical restaurant (Carmen).
+-- The join on public.restaurants is deliberate: if the restaurant row is absent (a fresh
+-- environment that has the entry but not the catalog row) this is a no-op instead of a
+-- foreign-key failure that would break the whole rebuild.
 update vote.entities e
-   set restaurant_id = 'ade2d416-1250-4edb-b131-59691910e8e1'
- where e.id = 'e1520000-0000-0000-0000-000000000331'
+   set restaurant_id = r.id
+  from public.restaurants r
+ where r.id = 'ade2d416-1250-4edb-b131-59691910e8e1'
+   and e.id = 'e1520000-0000-0000-0000-000000000331'
    and e.restaurant_id is null;
 
 -- Server-only read contract: the contest + entry a restaurant is contesting in.
