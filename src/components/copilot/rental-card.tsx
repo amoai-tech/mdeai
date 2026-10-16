@@ -8,6 +8,7 @@ import {
   type RentalResultRow,
 } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { Calendar, Heart } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
@@ -248,7 +249,7 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
-        {tags?.includes("external-source") && source_url && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(source_url) ? (
+        {tags?.includes("external-source") && approvedExternalSourceUrl(source_url) ? (
           <a
             href={source_url}
             target="_blank"
