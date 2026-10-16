@@ -55,8 +55,6 @@ export const rentalSchema = z.object({
    * convenience.
    */
   source_last_checked: z.string().optional(),
-  /** Exact imported unit identity for deduplication; never based on address. */
-  source_import_key: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -437,9 +435,6 @@ export function rowToRental(r: ApartmentRow): Rental {
     source_url: r.source_url ?? externalSourceAttribution(r.metadata).originalUrl ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     source_provider: externalProvider ?? undefined,
     source_last_checked: sourceLastChecked,
-    source_import_key: typeof meta?.['san1503_import_key'] === 'string' && (meta['san1503_import_key'] as string).trim()
-      ? (meta['san1503_import_key'] as string).trim()
-      : undefined,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`

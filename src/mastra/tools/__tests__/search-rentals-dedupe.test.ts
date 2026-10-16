@@ -4,8 +4,8 @@ import { dedupeBySourceIdentity } from "../search-rentals";
 describe("dedupeBySourceIdentity — exact source identity only (SAN-1235)", () => {
   it("collapses two re-imports of the same source record", () => {
     const rows = [
-      { id: "a", metadata: { san1503_import_key: "fincaraiz-194104380" } },
-      { id: "b", metadata: { san1503_import_key: "fincaraiz-194104380" } },
+      { id: "a", metadata: { san1503_import_key: "unit-a" } },
+      { id: "b", metadata: { san1503_import_key: "unit-a" } },
     ];
     expect(dedupeBySourceIdentity(rows).map((r) => r.id)).toEqual(["a"]);
   });

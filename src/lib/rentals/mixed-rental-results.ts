@@ -32,7 +32,6 @@ export async function getOptionalExternalRentals(query: RentalQuery): Promise<Re
 
 function identityKeys(rental: Rental): string[] {
   const keys = [`id:${rental.id}`];
-  if (rental.source_import_key?.trim()) keys.push(`import:${rental.source_import_key.trim()}`);
   if (rental.source_url) {
     try {
       const uri = new URL(rental.source_url);

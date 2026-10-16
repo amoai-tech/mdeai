@@ -61,14 +61,6 @@ describe("mixed verified and source-linked rentals", () => {
     expect(results.map((r) => r.id)).toEqual(["telaviv-1204", "el-laurel-201"]);
   });
 
-  it("collapses exact repeated import identities without merging different units", () => {
-    const first = { ...rental("first", "https://fincaraiz.com.co/unit/1"), source_import_key: "san1503:unit1" };
-    const repeat = { ...rental("repeat", "https://fincaraiz.com.co/unit/1?ref=x"), source_import_key: "san1503:unit1" };
-    const nextUnit = { ...rental("next", "https://fincaraiz.com.co/unit/2"), source_import_key: "san1503:unit2" };
-    expect(mixRentalResults([first, repeat, nextUnit], [], 8).results.map((r) => r.id))
-      .toEqual(["first", "next"]);
-  });
-
   it("keeps all external entries when canonical search returns no inventory", () => {
     expect(mixRentalResults([], Array.from({ length: 9 }, (_, i) => external(i)), 8).results).toHaveLength(8);
   });
