@@ -13,6 +13,8 @@ import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useSession } from "@/hooks/use-session";
+import { createClient } from "@/lib/supabase/client";
+import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
 /** Shown in the transcript when the AI runtime cannot take a free-form question. */
 export const AGENT_UNAVAILABLE_MESSAGE =
@@ -24,8 +26,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
   const { user, loading: sessionLoading } = useSession();
-  // Unknown while loading: keep the old behaviour then rather than telling a signed-in user to sign in.
-  const signedOut = !sessionLoading && !user;
+  const signedIn = Boolean(user);
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
@@ -51,8 +52,21 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   const onAgentSend = useCallback(
     async (text: string) => {
-      if (signedOut) {
+      // A fast guest can send before the session check has finished. Ask once, now, instead of
+      // letting that send reach the protected runtime (401 -> "try again"). Only a thrown error
+      // (network down) leaves it unknown, and then the server decides, as before.
+      let hasAccount = signedIn;
+      if (sessionLoading) {
+        try {
+          const { data } = await createClient().auth.getUser();
+          hasAccount = Boolean(data.user);
+        } catch {
+          hasAccount = true;
+        }
+      }
+      if (!hasAccount) {
         // No agent run: the runtime would answer 401, and no thread may be created for a guest.
+        stashConciergeDraft(text);
         showSignInPrompt(text);
         clearConciergePendingSend();
         return true;
@@ -72,7 +86,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, showExchange, showNotice, showSignInPrompt, signedOut],
+    [appendMessage, isRuntimeUnavailable, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
   );
 
   useEffect(() => {

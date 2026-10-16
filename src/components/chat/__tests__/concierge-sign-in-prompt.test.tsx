@@ -18,11 +18,13 @@ import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/eve
 
 let show: (text: string) => void;
 let clear: () => void;
+let notice: (text: string) => void;
 function Probe() {
-  const { showSignInPrompt, clearLocalMessages } = useEventLocalChat();
+  const { showSignInPrompt, clearLocalMessages, showNotice } = useEventLocalChat();
   useEffect(() => {
     show = showSignInPrompt;
     clear = clearLocalMessages;
+    notice = showNotice;
   });
   return <ConciergeSignInPrompt />;
 }
@@ -60,6 +62,13 @@ describe("ConciergeSignInPrompt", () => {
     mount();
     act(() => show("hello"));
     act(() => clear());
+    expect(container.querySelector('[data-testid="concierge-sign-in-prompt"]')).toBeNull();
+  });
+
+  it("goes away when a newer answer arrives, so it never sits under unrelated results", () => {
+    mount();
+    act(() => show("hello"));
+    act(() => notice("Found 2 rentals"));
     expect(container.querySelector('[data-testid="concierge-sign-in-prompt"]')).toBeNull();
   });
 });

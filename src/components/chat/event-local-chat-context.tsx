@@ -101,6 +101,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       ];
       setClarifyPending(true);
       setClarifyKind(kind);
+      setSignInPrompt(false);
       setMessages(nextMessages);
       publishOrQueue(nextMessages);
     },
@@ -121,6 +122,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       }
       setClarifyPending(false);
       setClarifyKind(null);
+      setSignInPrompt(false);
       setMessages((prev) => [...prev, ...nextMessages]);
       publishOrQueue(nextMessages);
     },
@@ -132,6 +134,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       const next: EventLocalChatMessage[] = [
         { id: nextId(), role: "assistant", content: assistantText },
       ];
+      setSignInPrompt(false);
       setMessages((prev) => [...prev, ...next]);
       publishOrQueue(next);
     },

@@ -12,6 +12,8 @@ const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: fal
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
+const supa = vi.hoisted(() => ({ getUser: vi.fn() }));
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: supa.getUser } }) }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable }),
@@ -58,6 +60,8 @@ beforeEach(() => {
   coagent.state = {};
   session.user = { id: "u1" };
   session.loading = false;
+  supa.getUser.mockReset();
+  window.sessionStorage.clear();
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
   container = document.createElement("div");
@@ -200,15 +204,50 @@ describe("onAgentSend for a signed-out visitor", () => {
     expect(promptShown).toBe(false);
   });
 
-  it("does not guess while the session is still loading", async () => {
+  it("keeps the question for the trip to /login", async () => {
     session.user = null;
-    session.loading = true;
     rerender();
-    chat.appendMessage.mockResolvedValue(true);
     await act(async () => {
-      await handlers.onAgentSend("tell me about Laureles");
+      await handlers.onAgentSend("What is a good day trip?");
     });
-    expect(chat.appendMessage).toHaveBeenCalled();
-    expect(promptShown).toBe(false);
+    expect(JSON.parse(window.sessionStorage.getItem("mde.concierge.draft") ?? "{}").text).toBe("What is a good day trip?");
+  });
+
+  // A fast guest can send before the session check has finished.
+  describe("while the session check is still running", () => {
+    beforeEach(() => {
+      session.user = null;
+      session.loading = true;
+      rerender();
+    });
+
+    it("asks once and shows sign-in when there is no account, without reaching the agent", async () => {
+      supa.getUser.mockResolvedValue({ data: { user: null }, error: { name: "AuthSessionMissingError" } });
+      await act(async () => {
+        await handlers.onAgentSend("tell me about Laureles");
+      });
+      expect(chat.appendMessage).not.toHaveBeenCalled();
+      expect(promptShown).toBe(true);
+    });
+
+    it("goes to the agent when the answer is a signed-in user", async () => {
+      supa.getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
+      chat.appendMessage.mockResolvedValue(true);
+      await act(async () => {
+        await handlers.onAgentSend("tell me about Laureles");
+      });
+      expect(chat.appendMessage).toHaveBeenCalled();
+      expect(promptShown).toBe(false);
+    });
+
+    it("lets the server decide when the check itself fails (network down)", async () => {
+      supa.getUser.mockRejectedValue(new Error("Failed to fetch"));
+      chat.appendMessage.mockResolvedValue(true);
+      await act(async () => {
+        await handlers.onAgentSend("tell me about Laureles");
+      });
+      expect(chat.appendMessage).toHaveBeenCalled();
+      expect(promptShown).toBe(false);
+    });
   });
 });
