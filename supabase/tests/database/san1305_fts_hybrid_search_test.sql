@@ -8,7 +8,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(36);
+select plan(37);
 
 -- A. the generated full-text columns exist and are STORED generated tsvectors -----------------------
 select col_type_is('public', 'apartments',  'fts_content', 'tsvector', 'A1: apartments.fts_content is a tsvector');
@@ -59,6 +59,13 @@ select ok(
           unnest(array['public.apartments','public.events','public.restaurants',
                        'public.listing_embeddings','public.event_embeddings','public.restaurant_embeddings']) t),
   'D7: anon and authenticated can read the six tables the search functions read');
+
+select is(
+  (select count(*)::int from pg_class
+    where oid in ('public.apartments'::regclass, 'public.events'::regclass, 'public.restaurants'::regclass,
+                  'public.listing_embeddings'::regclass, 'public.event_embeddings'::regclass, 'public.restaurant_embeddings'::regclass)
+      and relrowsecurity),
+  6, 'D8: row security is enabled on all six tables the search functions read');
 
 -- Fixtures (inserted as the owner, before any role switch) --------------------------------------------------
 -- listing A: found by keyword AND by meaning
