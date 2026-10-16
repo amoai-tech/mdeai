@@ -377,3 +377,31 @@ describe("SAN-1416: Details action on the card", () => {
     open.mockRestore();
   });
 });
+
+/**
+ * A monthly-priced listing leads with its monthly rent. Its nightly figure is only rent ÷ 30, so
+ * WE Home (COP 14,500,000 a month) used to read as "COP 483,333/night" over its photo, and a
+ * USD 1,550 rent as "$52/night". A listing that has only a nightly price still shows it.
+ */
+describe("RentalBrowseCard — price label", () => {
+  it("shows the monthly rent and no derived nightly price for a COP monthly listing", () => {
+    const html = renderCard({ price_daily: null, price_monthly: 14_500_000, currency: "COP" });
+
+    expect(html).toContain("COP 14,500,000/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("483,333");
+  });
+
+  it("shows the monthly rent in dollars with no derived nightly price for a USD monthly listing", () => {
+    const html = renderCard({ price_daily: null, price_monthly: 1550, currency: "USD" });
+
+    expect(html).toContain("$1,550/mo");
+    expect(html).not.toContain("/night");
+  });
+
+  it("still shows the nightly price for a listing that has no monthly price", () => {
+    const html = renderCard({ price_daily: 78, price_monthly: null, currency: "USD" });
+
+    expect(html).toContain("$78/night");
+  });
+});

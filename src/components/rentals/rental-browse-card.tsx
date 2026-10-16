@@ -152,8 +152,13 @@ export function RentalBrowseCard({
   onDetails,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
+  // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
+  // so it must not be shown as a nightly offer: WE Home (COP 14,500,000 a month) read as
+  // "COP 483,333/night" over its photo. An advertiser's listing never showed one either.
+  // ponytail: a listing with BOTH a stored nightly and monthly price also shows only the monthly on
+  // this long-stay page; add a `nightly_is_derived` flag to Rental if short-stay cards come back.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    isExternalAd(rental) ? null : rental.nightly_price,
+    isExternalAd(rental) || rental.price_monthly != null ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );

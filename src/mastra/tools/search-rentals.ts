@@ -33,7 +33,10 @@ export const rentalSchema = z.object({
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
-  /** Public photos for the Details panel (max 5); `image` is always the first. Absent = just `image`. */
+  /**
+   * Public photos for the Details panel (at most `RENTAL_PANEL_PHOTO_LIMIT`); `image` is always the
+   * first. Absent = just `image`.
+   */
   images: z.array(z.string()).optional(),
   source_url: z.string(),
   /**
@@ -67,6 +70,14 @@ export const rentalSchema = z.object({
 });
 
 export type Rental = z.infer<typeof rentalSchema>;
+
+/**
+ * How many of an apartment's stored photos travel with each search result for the Details panel.
+ * A managed listing can hold dozens (one has 76); the panel needs a gallery, not the whole set, and
+ * every result is serialized into the page, so the list stays bounded. The full set is on the
+ * listing's own page.
+ */
+export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 
 export type RentalQuery = {
   neighborhood?: string;
@@ -388,6 +399,7 @@ export function monthlyBudgetFromQuery(
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
+  const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -399,7 +411,9 @@ export function rowToRental(r: ApartmentRow): Rental {
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
-    image: (r.images ?? [])[0] ?? '',
+    image: photos[0] ?? '',
+    // The Details panel shows `images`; without it a managed listing showed only its cover photo.
+    images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
