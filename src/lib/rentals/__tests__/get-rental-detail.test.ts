@@ -114,10 +114,9 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
         moderation_status: "pending",
         listing_workflow_status: "draft",
         available_from: null,
-        available_to: "2026-10-14",
+        available_to: "2020-01-01",
       };
-      // These assertions use the calendar date of 2026-10-16 in Bogotá.
-      // Expired fixture must be denied in Details just as in rental search.
+      // Expired fixtures must be denied in Details just as in rental search.
       expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(false);
     });
 
