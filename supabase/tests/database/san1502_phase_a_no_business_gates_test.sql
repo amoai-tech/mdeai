@@ -1,7 +1,7 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(24);
+select plan(28);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
@@ -122,6 +122,43 @@ set local role anon;
 select is((select count(*)::integer from public.apartments where slug='san1502-source-qa'),1,
  'anonymous catalog can browse active source candidate in development');
 reset role;
+
+-- P0 (2026-10-16 review): inactive and explicitly private/internal records must never be
+-- requestable in Phase A, and the authenticated development policy must not expose a
+-- private record to an unrelated signed-in user.
+insert into public.apartments (id,title,neighborhood,slug,status,
+ moderation_status,listing_workflow_status,metadata,verified,created_by)
+values
+ ('f1506000-0000-4000-8000-000000000098','QA inactive apartment','Laureles',
+  'san1502-inactive-qa','inactive','pending','draft','{}'::jsonb,false,
+  'f1506000-0000-4000-8000-000000000001'),
+ ('f1506000-0000-4000-8000-000000000099','QA private apartment','Laureles',
+  'san1502-private-qa','active','pending','draft','{"visibility":"private"}'::jsonb,false,
+  'f1506000-0000-4000-8000-000000000001');
+
+select is((select public.rental_can_request_viewing(a) from public.apartments a
+ where a.id='f1506000-0000-4000-8000-000000000098'::uuid), false,
+ 'inactive apartments are never requestable in Phase A');
+select is((select public.rental_can_request_viewing(a) from public.apartments a
+ where a.id='f1506000-0000-4000-8000-000000000099'::uuid), false,
+ 'private/internal apartments are never requestable in Phase A');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+ '{"sub":"f1506000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+select is((select count(*)::int from public.apartments
+ where id='f1506000-0000-4000-8000-000000000099'::uuid), 0,
+ 'an unrelated signed-in renter cannot select a private development apartment');
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+ '{"sub":"f1506000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select is((select count(*)::int from public.apartments
+ where id='f1506000-0000-4000-8000-000000000099'::uuid), 1,
+ 'the creating administrator can still select their private development apartment');
+reset role;
+select set_config('request.jwt.claims','{}',true);
 
 select matches(pg_get_triggerdef((select oid from pg_trigger
  where tgname='trg_enqueue_embed_apartment' and tgrelid='public.apartments'::regclass)),

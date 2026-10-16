@@ -116,4 +116,58 @@ begin
   return v_row;
 end;
 $function$;
+
+-- ---------------------------------------------------------------------------
+-- P0 corrections (2026-10-16 independent review).
+--
+-- 1. `rental_can_request_viewing()` short-circuited to TRUE whenever
+--    `rental_development_active()` was true, so every INACTIVE apartment (and the
+--    two inactive test fixtures) reported as requestable. The database is the single
+--    owner of this decision, so the defect reached cards, Details, search and the agent.
+--    Requestability now always requires an active, non-private record; Phase A merely
+--    removes the approval/photo/move-in paperwork, it never resurrects an inactive row.
+--
+-- 2. `apartments_authenticated_development_access` let ANY signed-in user read any
+--    active apartment during development, with no `visibility` check. Permissive
+--    policies combine with OR, so it must be corrected at its own owner rather than
+--    cancelled elsewhere. Private/internal records stay readable to their creator,
+--    their broker and administrators only.
+-- ---------------------------------------------------------------------------
+create or replace function public.rental_can_request_viewing(a public.apartments)
+returns boolean language sql stable set search_path = ''
+as $function$
+  select
+    a.status = 'active'
+    and coalesce(lower(a.metadata->>'visibility'), '') not in ('private', 'internal')
+    and case when public.rental_development_active() then
+      -- Phase A: an active, non-private development record is requestable without
+      -- ownership, photo, publication or move-in paperwork. The atomic viewing RPC
+      -- still enforces the authorized-actor grant for test-marked fixtures.
+      true
+    else
+      a.landlord_id is not null
+      and a.moderation_status = 'approved'
+      and a.listing_workflow_status = 'published'
+      and a.available_from is not null
+      and (a.available_to is null or a.available_to >= (now() at time zone 'America/Bogota')::date)
+      and coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true'
+      and coalesce(lower(a.metadata->>'inventory_kind'), '') not in ('external_candidate', 'test_fixture')
+      and coalesce(lower(a.metadata->>'inventory_type'), '') <> 'external'
+      and coalesce(lower(a.metadata->>'allowed_action'), '') <> 'view_original_listing'
+    end;
+$function$;
+revoke all on function public.rental_can_request_viewing(public.apartments) from public;
+grant execute on function public.rental_can_request_viewing(public.apartments)
+  to anon, authenticated, service_role;
+
+drop policy if exists apartments_authenticated_development_access on public.apartments;
+create policy apartments_authenticated_development_access on public.apartments
+  for select to authenticated
+  using (
+    auth.uid() is not null
+    and public.rental_development_active()
+    and status = 'active'
+    and coalesce(lower(metadata->>'visibility'), '') not in ('private', 'internal')
+  );
+
 COMMIT;
