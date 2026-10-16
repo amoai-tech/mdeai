@@ -73,12 +73,8 @@ describe("onboarding definitions", () => {
       "addressLine",
       "city",
       "neighborhood",
-      "placeId",
     ]);
-    expect(requiredFieldIdsFor("photos")).toEqual([
-      "photoUrls",
-      "photoPublicationRightsConfirmed",
-    ]);
+    expect(requiredFieldIdsFor("photos")).toEqual([]);
     expect(requiredFieldIdsFor("price_availability")).toEqual([
       "priceAmount",
       "currency",
@@ -86,8 +82,12 @@ describe("onboarding definitions", () => {
     ]);
   });
 
-  it("requires the listing-rights attestation on the review step", () => {
-    expect(requiredFieldIdsFor("review")).toEqual(["listingRightsConfirmed"]);
+  it("never requires photos, Place identity or rights attestations for development readiness", () => {
+    expect(requiredFieldIdsFor("review")).toEqual([]);
+    for (const field of ["placeId", "photoUrls", "photoPublicationRightsConfirmed", "listingRightsConfirmed"]) {
+      expect(ALL_REQUIRED_FIELD_IDS).not.toContain(field);
+      expect(FIELD_VALIDATORS[field]).toBeDefined();
+    }
   });
 
   it("gives every required field a validator", () => {

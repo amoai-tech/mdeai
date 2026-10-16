@@ -98,22 +98,22 @@ describe("evaluateOnboarding", () => {
       payload: payload({ fullName: "Ada" }),
     });
     expect(review.stepId).toBe("review");
-    expect(review.missingRequiredFieldIds).toEqual(["listingRightsConfirmed"]);
+    expect(review.missingRequiredFieldIds).toEqual([]);
   });
 
   it("computes completion as the rounded share of all required fields", () => {
-    expect(TOTAL_REQUIRED).toBe(20);
+    expect(TOTAL_REQUIRED).toBe(16);
     expect(
       evaluateOnboarding({ step: 1, payload: payload(dataWith(0)) }).completion,
     ).toBe(0);
     expect(
       evaluateOnboarding({ step: 1, payload: payload(dataWith(1)) }).completion,
-    ).toBe(5);
+    ).toBe(6);
     expect(
       evaluateOnboarding({ step: 1, payload: payload(dataWith(3)) }).completion,
-    ).toBe(15);
+    ).toBe(19);
     expect(
-      evaluateOnboarding({ step: 8, payload: payload(dataWith(20)) }).completion,
+      evaluateOnboarding({ step: 8, payload: payload(dataWith(TOTAL_REQUIRED)) }).completion,
     ).toBe(100);
   });
 
@@ -129,14 +129,14 @@ describe("evaluateOnboarding", () => {
   it("is ready_to_submit only when every required field is valid", () => {
     const nearly = evaluateOnboarding({
       step: 8,
-      payload: payload(dataWith(19)),
+      payload: payload(dataWith(TOTAL_REQUIRED - 1)),
     });
     expect(nearly.readyToSubmit).toBe(false);
     expect(nearly.lifecycle).toBe("in_progress");
 
     const complete = evaluateOnboarding({
       step: 8,
-      payload: payload(dataWith(20)),
+      payload: payload(dataWith(TOTAL_REQUIRED)),
     });
     expect(complete.readyToSubmit).toBe(true);
     expect(complete.lifecycle).toBe("ready_to_submit");
@@ -144,7 +144,7 @@ describe("evaluateOnboarding", () => {
   });
 
   it("never treats a non-materializable intent (sell) as ready", () => {
-    const sell = { ...dataWith(20), transactionIntent: "sell" };
+    const sell = { ...dataWith(TOTAL_REQUIRED), transactionIntent: "sell" };
     const result = evaluateOnboarding({ step: 8, payload: payload(sell) });
     expect(result.completion).toBe(100);
     expect(result.readyToSubmit).toBe(false);
@@ -164,24 +164,41 @@ describe("evaluateOnboarding", () => {
     expect(result.missingRequiredFieldIds).toEqual(["actorRole"]);
   });
 
-  it("requires a real photo and the publication-rights attestation", () => {
-    const result = evaluateOnboarding({
-      step: 6,
+  it("does not block development on photos, Place identity or rights paperwork", () => {
+    const owner = evaluateOnboarding({
+      step: 8,
+      payload: payload(dataWith(TOTAL_REQUIRED)),
+    });
+    expect(owner.readyToSubmit).toBe(true);
+    expect(owner.completion).toBe(100);
+
+    const broker = evaluateOnboarding({
+      step: 8,
       payload: payload({
-        photoUrls: [""],
+        ...dataWith(TOTAL_REQUIRED),
+        actorRole: "broker_agent",
+        propertyRelationship: "authorized_representative",
+        photoUrls: [],
         photoPublicationRightsConfirmed: false,
+        listingRightsConfirmed: false,
+        placeId: "",
       }),
     });
-    expect(result.missingRequiredFieldIds).toEqual([
-      "photoUrls",
-      "photoPublicationRightsConfirmed",
-    ]);
+    expect(broker.readyToSubmit).toBe(true);
+    expect(broker.missingRequiredFieldIds).toEqual([]);
+
+    const photosStep = evaluateOnboarding({
+      step: 6,
+      payload: payload({ photoUrls: [], photoPublicationRightsConfirmed: false }),
+    });
+    expect(photosStep.missingRequiredFieldIds).toEqual([]);
+    expect(canAdvance(photosStep)).toBe(true);
   });
 
   it("reports submitted as its own lifecycle", () => {
     const result = evaluateOnboarding({
       step: 8,
-      payload: payload(dataWith(20)),
+      payload: payload(dataWith(TOTAL_REQUIRED)),
       submittedAt: "2026-01-01T00:00:00.000Z",
     });
     expect(result.lifecycle).toBe("submitted");
@@ -253,7 +270,7 @@ describe("canAdvance", () => {
 
     const completeReview = evaluateOnboarding({
       step: 8,
-      payload: payload(dataWith(20)),
+      payload: payload(dataWith(TOTAL_REQUIRED)),
     });
     expect(canAdvance(completeReview)).toBe(false);
   });

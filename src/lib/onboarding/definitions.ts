@@ -34,10 +34,11 @@ interface OnboardingStepContent {
 }
 
 /**
- * What a real rental partner must supply. Deliberately includes the facts a
- * listing cannot be published without: location identity (placeId), the rental
- * shape (bedrooms/bathrooms), currency, and the two rights attestations.
- * `bio` is optional prose and is not required anywhere.
+ * Phase A development: required fields are the core structured onboarding
+ * inputs only. A Google Place ID, photos, and listing/photo-rights attestations
+ * must NEVER become prerequisites to save or finish a development rental.
+ * Supplied optional facts retain validators; server-side consumers must not
+ * trust unverified coordinates or use media without a lawful basis.
  */
 const STEP_CONTENT: Readonly<Record<OnboardingStepId, OnboardingStepContent>> = {
   identity: {
@@ -63,11 +64,11 @@ const STEP_CONTENT: Readonly<Record<OnboardingStepId, OnboardingStepContent>> = 
   },
   address: {
     label: "Address",
-    requiredFieldIds: ["addressLine", "city", "neighborhood", "placeId"],
+    requiredFieldIds: ["addressLine", "city", "neighborhood"],
   },
   photos: {
     label: "Photos",
-    requiredFieldIds: ["photoUrls", "photoPublicationRightsConfirmed"],
+    requiredFieldIds: [], // Photos optional during prelaunch development.
   },
   price_availability: {
     label: "Price & availability",
@@ -75,7 +76,7 @@ const STEP_CONTENT: Readonly<Record<OnboardingStepId, OnboardingStepContent>> = 
   },
   review: {
     label: "Review",
-    requiredFieldIds: ["listingRightsConfirmed"],
+    requiredFieldIds: [], // Rights paperwork is for public-launch certification only.
   },
 };
 
@@ -135,8 +136,9 @@ export const ALL_REQUIRED_FIELD_IDS: readonly string[] = Object.freeze(
  * `actorRole` and `-50` is not a price, so readiness is computed from these
  * schemas rather than from whether a key exists.
  *
- * `availability` is the ISO date the listing becomes available. Rights fields
- * are attestations the partner must affirm — `false` is not a valid value.
+ * `availability` is the ISO date the listing becomes available. Optional
+ * attestations retain literal-true validators for honest provenance, but are
+ * not included in required-field readiness or advancement in Phase A.
  */
 export const FIELD_VALIDATORS: Readonly<
   Record<string, z.ZodType<unknown>>
