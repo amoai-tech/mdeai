@@ -1,7 +1,7 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(14);
+select plan(16);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
@@ -31,8 +31,21 @@ select set_config('mde.san1502_phase_fixture',
 select lives_ok(
  $q$select public.admin_publish_test_rental(current_setting('mde.san1502_phase_fixture')::uuid)$q$,
  'admin can publish before real-world approval');
+-- A normal development publisher can use the existing RPC without creating
+-- false ownership/photo authorization or verified-availability assertions.
+select set_config('mde.san1502_development_publish',
+  (public.admin_create_test_rental('Development publish status','Laureles','Calle 14',
+   2300000,'COP',(now() at time zone 'America/Bogota')::date+2,
+   'https://example.com/phase-publish.jpg')).id::text,true);
+select lives_ok(
+ $q$select public.publish_verified_rental(current_setting('mde.san1502_development_publish')::uuid)$q$,
+ 'standard publisher permits Phase A operational publication');
 reset role;
 select set_config('request.jwt.claims','{}',true);
+
+select is((select verified from public.apartments
+ where id=current_setting('mde.san1502_development_publish')::uuid),false,
+ 'development publication leaves independently unverified inventory as unverified');
 
 update public.apartments set price_monthly=2410000,available_from=null,
  images=array['https://example.com/new-photo.jpg']
