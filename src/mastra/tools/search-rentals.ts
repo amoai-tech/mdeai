@@ -2,7 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
-import { isSelfAttested } from '@/lib/rentals/provenance';
+import { isAvailabilityUnconfirmed, isSelfAttested } from '@/lib/rentals/provenance';
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -437,7 +437,9 @@ export function rowToRental(r: ApartmentRow): Rental {
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
-    availability: formatAvailability(r.available_from, r.available_to),
+    availability: isAvailabilityUnconfirmed(r.metadata)
+      ? 'Availability unconfirmed'
+      : formatAvailability(r.available_from, r.available_to),
     tags: (() => {
       const tags = deriveTags({
         amenities: r.amenities ?? [],
