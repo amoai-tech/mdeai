@@ -11,5 +11,5 @@ Deno.serve(createVoteCastHandler({
   verifyTurnstile,
   verifyNonce,
   getUserId,
-  allowRate: (key, max, windowSeconds) => allowRateDurable(service, key, max, windowSeconds),
+  allowRate: (key, max, windowSeconds) => allowRateDurable(service, key, max, windowSeconds, { failClosed: true }),
 }));
