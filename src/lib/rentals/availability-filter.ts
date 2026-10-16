@@ -28,6 +28,8 @@ export type AvailabilityFilterOptions = {
   checkOut?: string;
   /** Today's calendar date in America/Bogota, `YYYY-MM-DD`. */
   today: string;
+  /** Explicitly server-owned development phase; no inventory paperwork gating. */
+  developmentMode?: boolean;
 };
 
 const DAY_MS = 86_400_000;
@@ -36,7 +38,7 @@ const DAY_MS = 86_400_000;
  * Generic over the caller's builder type: Supabase's own recursive builder types make a constrained
  * generic blow the compiler's instantiation depth, so the chain is narrowed internally.
  */
-export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today }: AvailabilityFilterOptions): Q {
+export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today, developmentMode }: AvailabilityFilterOptions): Q {
   // The dates are written into PostgREST filter strings, where a stray comma or dot would add a
   // condition of its own. Callers validate at their boundary; this guards the helper itself so a
   // future caller that forgets cannot put free text into a filter.
@@ -46,6 +48,9 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
     }
   }
   let q = (query as unknown as FilterChain);
+  // Searching a stay date during development must not silently hide inventory
+  // with unconfirmed move-in dates; cards remain truthful about availability.
+  if (developmentMode) return q as unknown as Q;
   if (checkIn || checkOut) {
     q = q.not("available_from", "is", null);
     const stayStart = checkIn ?? checkOut!;
