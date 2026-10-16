@@ -21,6 +21,11 @@ begin
       and cardinality(a.images)=4
       and a.landlord_id is not null
       and a.status='active';
+  -- Fresh development DBs do not contain this one-time live source batch.
+  if v_count = 0 then
+    raise notice 'SAN-1502: no Fincaraiz nine-listing batch in this environment';
+    return;
+  end if;
   if v_count <> 9 then
     raise exception 'SAN-1502 expected exactly 9 source-matched photo-backed active apartments; found %', v_count;
   end if;
