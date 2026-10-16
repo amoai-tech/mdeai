@@ -34,12 +34,16 @@ union all select 'restaurant', (select count(*) from public.restaurants), (selec
 select 'listing' as t, vector_dims(embedding) as dims, count(*) from public.listing_embeddings group by 2
 union all select 'event',      vector_dims(embedding), count(*) from public.event_embeddings group by 2
 union all select 'restaurant', vector_dims(embedding), count(*) from public.restaurant_embeddings group by 2;
+-- the three triggers this migration drops and recreates must exist under exactly these names (any other trigger
+-- calling the enqueue function would keep firing; harmless because jobs are deduplicated, but worth knowing)
+select tgrelid::regclass as on_table, tgname from pg_trigger
+ where tgfoid = 'public.enqueue_embedding_job'::regproc and not tgisinternal order by 1, 2;
 -- applied migrations (latest first)
 select version from supabase_migrations.schema_migrations order by version desc limit 8;
 SQL
 ```
 
-Last read (not independently re-verified by this runbook's author): 96 `pending` jobs, 0 attempts (67 apartment, 28 event, 1 restaurant); all three embedding columns `vector(768)`.
+Last read (not independently re-verified by this runbook's author): 96–97 `pending` jobs, 0 attempts (67 apartment, 28 event, 1 restaurant); all three embedding columns `vector(768)`.
 
 ## 2. Release gate (repository + ledger + dry run)
 

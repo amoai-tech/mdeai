@@ -1,7 +1,7 @@
 -- SAN-1523 · MDE AI — Process Embedding Jobs Reliably and Keep Semantic Search Current (PR 1 of 2)
 --
 -- WHY
--- public.embedding_jobs (DATA-040) has 96 jobs that were never attempted: nothing consumes the queue, and
+-- public.embedding_jobs (DATA-040) has ~97 jobs that were never attempted: nothing consumes the queue, and
 -- the enqueue triggers are wrong for development. Apartments need moderation_status = 'approved', events
 -- and restaurants need is_active (business gates); the change fingerprint is md5(title || description || id),
 -- so editing the neighborhood or amenities never refreshes a vector. This migration fixes the SOURCE of
@@ -10,8 +10,8 @@
 -- has processed real jobs by hand.
 --
 -- TIMESTAMP
--- Not the `supabase migration new` default: that stamp (20261016103922) sorts BEFORE the newest migration
--- already applied in production (20261016110100), which `db push` refuses. This one sorts after it.
+-- Chosen to sort after every migration already applied in production and after every other open PR; earlier
+-- stamps (…160000, …210000, …230000) collided with versions production had applied. See the rollout runbook.
 --
 -- WHAT IT DOES
 --   1. embedding_jobs: lease_token, lease_expires_at, next_attempt_at (claim + retry state).
@@ -22,7 +22,7 @@
 --   4. claim_embedding_jobs / complete_embedding_job / fail_embedding_job: FOR UPDATE SKIP LOCKED claim with
 --      a lease, atomic compare-and-upsert on completion (a stale vector can never overwrite a newer edit),
 --      bounded retries with backoff. EXECUTE is granted to service_role only.
---   5. One-time queue rebuild: the 96 stale jobs become `skipped` (history kept); one fresh job per entity
+--   5. One-time queue rebuild: the ~97 stale jobs become `skipped` (history kept); one fresh job per entity
 --      whose stored vector does not match its current document.
 --
 -- Model contract (kept in sync with src/mastra/lib/query-embedding.ts by a unit test):
