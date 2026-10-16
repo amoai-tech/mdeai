@@ -129,6 +129,15 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
     if (!context) return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
     if (context.kind !== "restaurant") return err(409, "NOT_A_RESTAURANT_CONTEST", "Not a restaurant contest", req);
 
+    // A committed ballot is always recoverable, even after the contest closed or when new
+    // voting is unavailable: the voter already voted and needs their original receipt back.
+    const priorReceipt = await deps.service.rpc("vote_receipt", {
+      p_contest_id: contest_id, p_user_id: userId, p_idempotency_key: idempotency_key,
+    });
+    if (!priorReceipt.error && priorReceipt.data) {
+      return ok(priorReceipt.data as Record<string, unknown>, req);
+    }
+
     const phase = context.application_phase;
     if (phase !== "development" && phase !== "launch") {
       // Fail closed: an unknown phase must never be treated as development.

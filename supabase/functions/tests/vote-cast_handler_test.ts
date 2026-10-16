@@ -137,6 +137,18 @@ Deno.test("development: invalid nonce -> 403 (nonce still enforced)", async () =
   assertEqual(r.status, 403, "status");
 });
 
+Deno.test("closed contest: an existing receipt is still returned -> 200", async () => {
+  const r = await call(deps({
+    phase: "development",
+    rpc: {
+      vote_contest_context: () => ({ data: { kind: "restaurant", is_open: false, voting_available: false, application_phase: "development" }, error: null }),
+      vote_receipt: () => ({ data: { status: "cast", vote_id: "v-prior", contest_id: C, entity_id: E }, error: null }),
+    },
+  }), makeRequest());
+  assertEqual(r.status, 200, "status");
+  assertEqual((r.json.data as Record<string, unknown>).vote_id, "v-prior", "prior receipt returned");
+});
+
 Deno.test("unknown/missing phase -> 503 PHASE_UNAVAILABLE (fail closed)", async () => {
   const r = await call(deps({ phase: null }), makeRequest());
   assertEqual(r.status, 503, "status");
