@@ -378,6 +378,36 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect("budgetType" in out.lastRentalQuery).toBe(false);
   });
 
+  it("strips padded numeric/enum rental fields so a blank monthly budget cannot fail validation", () => {
+    const parsed = conciergeMemoryInput.safeParse({
+      lastRentalQuery: {
+        neighborhood: "",
+        minBedrooms: null,
+        maxPricePerNight: "",
+        maxPriceMonthly: " ",
+        budgetCurrency: "",
+        budgetType: "",
+        genericAskPending: null,
+        checkIn: "",
+        checkOut: null,
+      },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.lastRentalQuery : undefined).toEqual({});
+  });
+
+  it("keeps real rental values, including 0 and a real currency", () => {
+    const parsed = conciergeMemoryInput.safeParse({
+      lastRentalQuery: { minBedrooms: 0, maxPriceMonthly: 3_500_000, budgetCurrency: "COP" },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.lastRentalQuery : undefined).toEqual({
+      minBedrooms: 0,
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP",
+    });
+  });
+
   it("the strict canonical schema still rejects blanks (tolerance is at the tool boundary only)", () => {
     expect(conciergeWorkingMemorySchema.safeParse({ lastRentalQuery: { budgetType: "" } }).success).toBe(false);
   });

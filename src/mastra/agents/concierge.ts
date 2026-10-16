@@ -120,7 +120,20 @@ export const conciergeWorkingMemorySchema = z.object({
  */
 const PADDED_FIELDS = {
   root: ['selectedListingId', 'selectedEventId'],
-  lastRentalQuery: ['neighborhood', 'budgetType', 'checkIn', 'checkOut'],
+  // Every optional field on this object is padded by the model with ""/null at some
+  // point, so all of them are listed — a numeric field the model blanks must not reach
+  // z.number().positive(), or the whole memory update fails and the budget is lost.
+  lastRentalQuery: [
+    'neighborhood',
+    'minBedrooms',
+    'maxPricePerNight',
+    'maxPriceMonthly',
+    'budgetCurrency',
+    'budgetType',
+    'genericAskPending',
+    'checkIn',
+    'checkOut',
+  ],
   lastEventQuery: ['category', 'neighborhood', 'dateWindow'],
   lastRestaurantQuery: ['neighborhood', 'cuisine', 'vibe', 'priceTier'],
 } as const;

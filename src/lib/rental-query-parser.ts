@@ -240,6 +240,20 @@ function parseDateRange(text: string): { label?: string; checkIn?: string; check
   return {};
 }
 
+/**
+ * True for a thousands-grouped integer such as "3.500.000" or "3,500,000".
+ * Scans each separator-delimited part once, so it is linear and cannot backtrack —
+ * the previous nested-quantifier form was flagged by static analysis as a ReDoS
+ * candidate.
+ */
+function isThousandsGroupedInteger(value: string): boolean {
+  const parts = value.split(/[.,]/);
+  if (parts.length < 2 || parts.length > 6) return false;
+  if (parts[0].length < 1 || parts[0].length > 3) return false;
+  for (const part of parts) if (!/^\d+$/.test(part)) return false;
+  return parts.slice(1).every((part) => part.length === 3);
+}
+
 /** Parse explicit monthly amounts in a *named currency* without guessing USD↔COP FX.
  * Digits with 3-digit groupings are integer prices; decimal "3,5"/"3.5" only
  * scales when the renter wrote million/M. Unstated currencies remain unfiltered.
@@ -258,7 +272,7 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   const currency: "COP" | "USD" = /^(cop|peso)/.test(currencyToken) ? "COP" : "USD";
   const rawAmount = prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "";
   const magnitudeToken = (prefix ? prefix[3] : dollars ? dollars[2] : suffix?.[2] ?? "")?.toLowerCase() ?? "";
-  const grouped = /^(?:\d{1,3}[.,]){1,5}\d{3}$/.test(rawAmount);
+  const grouped = isThousandsGroupedInteger(rawAmount);
   const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
   const multiple = /^(m|millones?|mill[oó]n|millions?)$/.test(magnitudeToken)
     ? 1_000_000 : /^(mil|k)$/.test(magnitudeToken) ? 1_000 : 1;

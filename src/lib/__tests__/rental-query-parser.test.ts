@@ -28,6 +28,11 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(second?.budgetCurrency).toBe("COP");
   });
 
+  it("never mis-groups a malformed thousands amount", () => {
+    const params = buildRentalSearchParams("apartments in Laureles up to COP 3.50.000 per month", {});
+    expect(params?.maxPriceMonthly).not.toBe(3_500_000);
+  });
+
   it("does not turn USD nightly or vague cheap into COP monthly caps", () => {
     expect(buildRentalSearchParams("2BR Laureles under $80/night", {})?.maxPriceMonthly).toBeUndefined();
     expect(buildRentalSearchParams("cheap rentals in Laureles", {})?.maxPriceMonthly).toBeUndefined();
