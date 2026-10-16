@@ -103,4 +103,22 @@ describe("mapApartmentRowToDetail availability", () => {
   it("keeps a stated date", () => {
     expect(mapApartmentRowToDetail(row(stated)).availableFrom).toBe("2026-10-14");
   });
+
+  // The label is display only. Whether a renter may ask for a viewing is the database's call
+  // (`rental_can_request_viewing`), and a placeholder date must not flip it either way.
+  it("leaves the database's viewing decision untouched", () => {
+    const yes = mapApartmentRowToDetail({ ...row(unconfirmed), rental_can_request_viewing: true });
+    const no = mapApartmentRowToDetail({ ...row(unconfirmed), rental_can_request_viewing: false });
+    expect(yes.availableFrom).toBeNull();
+    expect(yes.canScheduleViewing).toBe(true);
+    expect(no.canScheduleViewing).toBe(false);
+  });
+
+  it("keeps the not-independently-verified disclosure for a disclosed third-party ad", () => {
+    const detail = mapApartmentRowToDetail(
+      row({ ...unconfirmed, source_record_type: "third_party_advertisement" }),
+    );
+    expect(detail.availableFrom).toBeNull();
+    expect(detail.isNotIndependentlyVerified).toBe(true);
+  });
 });
