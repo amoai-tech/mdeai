@@ -12,8 +12,8 @@ Project ref: `zkwcbyxiwklihegjhuql`. Secrets are never pasted into chat, tickets
 | # | Requirement | How to check | STOP if |
 |---|---|---|---|
 | 0.1 | PR #341 has one human approval, `floor`, `supabase-acl`, `mastra-schema-init`, `deterministic chromium` green on the exact head, and is **merged to `main`** | `gh pr view 341 --json state,mergeStateStatus,reviewDecision` | not `MERGED` |
-| 0.2 | **`main` contains every migration production already applied.** `supabase db push` refuses to run when production's history has versions missing locally ("Remote migration versions not found in local migrations directory"). At the time of writing production holds SAN-1502 `20261016162000`, `180000`, `190000`, `210000` (PR #342) and `20261016200000` (PR #351), none of which are on `main` until those PRs merge. | step 2.3 below | any `REMOTE`-only version. Merge the owning PR; do **not** `migration repair` production history to get around it |
-| 0.3 | `20261016230000` is later than every applied version | step 2.3 | it sorts before a remote version (needs `--include-all`; re-number instead) |
+| 0.2 | **`main` contains every migration production already applied.** `supabase db push` refuses to run when production's history has versions missing locally ("Remote migration versions not found in local migrations directory"). Production was last read (2026-10-16) as holding SAN-1502 `20261016162000`, `180000`, `190000`, `210000` (PR #342), `20261016200000` (PR #351) and `20261016230000_vote_my_receipt` (PR #345). #342 and #351 are on `main`; **#345 is not until it merges** — it was applied from its branch, and #341 originally collided with it, which is why this migration is `20261017010000`. | step 2.3 below | any `REMOTE`-only version. Merge the owning PR; do **not** `migration repair` production history to get around it |
+| 0.3 | `20261017010000` is later than every applied version | step 2.3 | it sorts before a remote version (needs `--include-all`; re-number instead) |
 | 0.4 | The database password that was exposed in an earlier session has been rotated and `SUPABASE_DB_URL` uses the new one | owner confirms | not rotated |
 
 ## 1. Read-only baseline (record the numbers; compare after the apply)
@@ -56,8 +56,8 @@ npm run preflight:migration             # exit 0 required: branch main, clean tr
 npx supabase migration list --db-url "$SUPABASE_DB_URL"
 ```
 
-Expected: every row has both LOCAL and REMOTE **except** `20261016230000`, which is LOCAL only.
-**STOP** on any REMOTE-only row (see 0.2) or any LOCAL-only row other than `20261016230000`.
+Expected: every row has both LOCAL and REMOTE **except** `20261017010000`, which is LOCAL only.
+**STOP** on any REMOTE-only row (see 0.2) or any LOCAL-only row other than `20261017010000`.
 
 2.4 Dry run (read-only, applies nothing):
 
@@ -65,7 +65,7 @@ Expected: every row has both LOCAL and REMOTE **except** `20261016230000`, which
 npm run migration:dry-run
 ```
 
-Expected manifest: **exactly one** file, `20261016230000_embedding_worker_pipeline.sql`.
+Expected manifest: **exactly one** file, `20261017010000_embedding_worker_pipeline.sql`.
 **STOP** if anything else is listed. This is the check that stops an unreviewed migration reaching production.
 
 ## 3. What the migration changes (so the apply is not a surprise)
@@ -92,7 +92,7 @@ MDEAI_CONFIRM_PUSH=1 npm run push:migration
 
 ```bash
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
-select version from supabase_migrations.schema_migrations where version = '20261016230000';           -- 1 row
+select version from supabase_migrations.schema_migrations where version = '20261017010000';           -- 1 row
 select column_name from information_schema.columns
  where table_schema='public' and table_name='embedding_jobs' and column_name in ('lease_token','lease_expires_at','next_attempt_at'); -- 3 rows
 select p.proname,
