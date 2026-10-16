@@ -57,6 +57,14 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const goToLogin = useCallback(() => {
     router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants"));
   }, [pathname, router]);
+  // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
+  const startVote = useCallback(async () => {
+    setMessage(null);
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) { goToLogin(); return; }
+    setState("confirming");
+  }, [goToLogin]);
   const contestId = voteTarget?.contestId;
   const entityId = voteTarget?.entityId;
 
@@ -168,6 +176,13 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       if (castRes.status === 401) { goToLogin(); setState("idle"); return; }
       const saved = castRes.ok ? parseReceipt(body, target) : null;
       if (saved) { setReceipt(saved); setState("receipt"); return; }
+      // One vote per account per contest: a ballot for ANOTHER restaurant is legitimate
+      // history, not a broken vote. Say so without claiming this restaurant's receipt.
+      if (castRes.ok && body.data?.status === "already_voted") {
+        setMessage("You already voted in this contest for another restaurant. One vote per account per contest.");
+        setState("error");
+        return;
+      }
       if (castRes.status === 410 || code === "CONTEST_CLOSED") { setState("closed"); return; }
       if (castRes.status === 429) {
         const seconds = Math.max(1, Number(castRes.headers.get("Retry-After")) || 60);
