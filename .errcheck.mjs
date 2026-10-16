@@ -1,0 +1,14 @@
+import { chromium } from "@playwright/test";
+const C = "/restaurants/ade2d416-1250-4edb-b131-59691910e8e1";
+const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+const p = await ctx.newPage();
+const errs = [];
+p.on("pageerror", (e) => errs.push("PAGEERROR: " + e.message));
+p.on("console", (m) => { if (m.type() === "error") errs.push("CONSOLE: " + m.text().slice(0, 300)); });
+await p.goto("http://127.0.0.1:3001" + C, { waitUntil: "networkidle", timeout: 90000 });
+await p.waitForTimeout(2500);
+console.log("--- errors (" + errs.length + ") ---");
+for (const e of errs.slice(0, 6)) console.log(e);
+console.log("--- vote panel present? ---", await p.getByTestId("vote-cta").count());
+await b.close();

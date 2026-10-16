@@ -84,6 +84,25 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         const session = data.session;
         if (!session) { setState("idle"); return; }
         const user = session.user;
+        // Cross-device first: ask the server which ballot THIS account already has.
+        try {
+          const r = await fetch("/api/restaurants/my-vote?contest_id=" + target.contestId, { cache: "no-store" });
+          if (r.ok) {
+            const body = (await r.json()) as { receipt?: { vote_id?: string; entity_id?: string; created_at?: string; restaurant_name?: string | null } | null };
+            const rec = body.receipt;
+            if (rec && rec.vote_id && rec.entity_id) {
+              if (rec.entity_id === target.entityId) {
+                setReceipt({ voteId: rec.vote_id, createdAt: rec.created_at ?? null, status: "cast", entityId: rec.entity_id });
+                setState("receipt");
+                return;
+              }
+              // A real ballot for ANOTHER restaurant in this contest: say so truthfully.
+              setMessage("You already voted in this contest for " + (rec.restaurant_name ?? "another restaurant") + ". One vote per account per contest.");
+              setState("error");
+              return;
+            }
+          }
+        } catch { /* fall through to the local key */ }
         const storageKey = "mde:restaurant-vote:" + target.contestId + ":" + target.entityId + ":" + user.id;
         const key = window.localStorage.getItem(storageKey);
         if (!key || !UUID_RE.test(key)) { setState("idle"); return; }
