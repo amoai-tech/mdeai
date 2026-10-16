@@ -233,7 +233,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         className="min-h-11 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground disabled:opacity-60"
         data-testid="vote-cta"
         disabled={state === "casting" || state === "checking" || state === "closed"}
-        onClick={() => { if (inFlight.current) return; setMessage(null); setState("confirming"); }}
+        onClick={() => { if (inFlight.current) return; void startVote(); }}
         type="button"
       >
         {state === "casting" ? "Saving your vote…" : state === "checking" ? "Checking saved vote…" : "Vote for " + restaurantName}
