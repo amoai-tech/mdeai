@@ -55,8 +55,8 @@ select set_config('request.jwt.claims',
 select is((select count(*)::int from public.apartments
  where id=current_setting('mde.san1502_phase_fixture')::uuid),1,
  'signed-in renter can see fixture without a test grant');
-select is((select count(*)::int from public.rental_runtime_settings),0,
- 'signed-in user cannot read server-controlled phase table');
+select is(has_table_privilege('authenticated','public.rental_runtime_settings','select'),false,
+ 'signed-in user lacks SELECT on server-controlled phase table');
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
