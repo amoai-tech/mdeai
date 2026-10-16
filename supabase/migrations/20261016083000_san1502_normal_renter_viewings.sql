@@ -459,17 +459,26 @@ SET search_path TO ''
 AS $rental_booking_trigger$
 DECLARE
   v_renter_id uuid;
+  v_old_apartment_id uuid;
 BEGIN
-  -- Writes to existing bookings are governed by leads/showings RLS and action
-  -- RPCs. The trigger must not prevent the assigned broker updating statuses.
-  IF TG_OP <> 'INSERT' THEN
-    RETURN NEW;
+  IF TG_OP = 'UPDATE' THEN
+    v_old_apartment_id := OLD.apartment_id;
+    -- Normal status/contact edits keep the original booking identity.
+    -- Apartment or renter/lead reassignment must pass the authorization check.
+    IF NEW.apartment_id IS NOT DISTINCT FROM OLD.apartment_id
+       AND (
+         (TG_TABLE_NAME = 'leads' AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id)
+         OR (TG_TABLE_NAME = 'showings' AND NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id)
+       ) THEN
+      RETURN NEW;
+    END IF;
   END IF;
 
-  IF NEW.apartment_id IS NOT NULL
-     AND EXISTS (
+  -- Inspect both old and new apartment associations: a changed identity must
+  -- not escape the fixture guard by pointing the row at a different apartment.
+  IF EXISTS (
        SELECT 1 FROM public.apartments a
-       WHERE a.id = NEW.apartment_id
+       WHERE a.id IN (NEW.apartment_id, v_old_apartment_id)
          AND lower(coalesce(a.metadata->>'is_test_fixture','false')) = 'true'
      ) THEN
     IF TG_TABLE_NAME = 'leads' THEN
@@ -495,3 +504,15 @@ BEGIN
   RETURN NEW;
 END;
 $rental_booking_trigger$;
+
+-- Reattach the identity-column triggers; the previous UPDATE OF apartment_id
+-- trigger never fired when only a lead's user_id or a showing's lead_id changed.
+DROP TRIGGER IF EXISTS block_nonadmin_test_lead ON public.leads;
+CREATE TRIGGER block_nonadmin_test_lead
+BEFORE INSERT OR UPDATE OF apartment_id, user_id ON public.leads
+FOR EACH ROW EXECUTE FUNCTION public.block_nonadmin_test_viewing();
+
+DROP TRIGGER IF EXISTS block_nonadmin_test_showing ON public.showings;
+CREATE TRIGGER block_nonadmin_test_showing
+BEFORE INSERT OR UPDATE OF apartment_id, lead_id ON public.showings
+FOR EACH ROW EXECUTE FUNCTION public.block_nonadmin_test_viewing();
