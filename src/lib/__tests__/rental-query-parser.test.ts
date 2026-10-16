@@ -1,6 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { scoreRentalQuery, buildRentalSearchParams } from "@/lib/rental-query-parser";
 
+describe("SAN-1502 postmerge — real COP monthly budget", () => {
+  it.each([
+    ["Furnished 2BR in Laureles under COP 3.5 million per month", 3_500_000],
+    ["2BR Laureles under COP 4M/month", 4_000_000],
+    ["apartments in Laureles up to 3.500.000 pesos/mes", 3_500_000],
+    ["2BR Laureles bajo COP 3,5 millones por mes", 3_500_000],
+  ])("preserves exact monthly COP budget: %s", (query, amount) => {
+    const signals = scoreRentalQuery(query);
+    expect(signals.maxPriceMonthly).toBe(amount);
+    expect(signals.budgetCurrency).toBe("COP");
+    const params = buildRentalSearchParams(query, {});
+    expect(params?.maxPriceMonthly).toBe(amount);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("retains budget across neighborhood refinements", () => {
+    const first = buildRentalSearchParams("2BR apartments in Laureles under COP 3.5 million per month", {});
+    expect(first?.maxPriceMonthly).toBe(3_500_000);
+    const second = buildRentalSearchParams("also in El Poblado", {
+      lastRentalQuery: { ...first, genericAskPending: false },
+    });
+    expect(second?.maxPriceMonthly).toBe(3_500_000);
+    expect(second?.budgetCurrency).toBe("COP");
+  });
+
+  it("never mis-groups a malformed thousands amount", () => {
+    const params = buildRentalSearchParams("apartments in Laureles up to COP 3.50.000 per month", {});
+    expect(params?.maxPriceMonthly).not.toBe(3_500_000);
+  });
+
+  it("does not turn USD nightly or vague cheap into COP monthly caps", () => {
+    expect(buildRentalSearchParams("2BR Laureles under $80/night", {})?.maxPriceMonthly).toBeUndefined();
+    expect(buildRentalSearchParams("cheap rentals in Laureles", {})?.maxPriceMonthly).toBeUndefined();
+  });
+});
+
 describe("rental-query-parser — budget wording", () => {
   it("parses '$80/night' as nightly with neighborhood + bedrooms", () => {
     const s = scoreRentalQuery("1BR in Laureles under $80/night");

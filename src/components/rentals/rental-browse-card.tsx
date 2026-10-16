@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 import { formatRentalPrices } from "@/lib/rental-display";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
@@ -59,16 +60,14 @@ export function isExternalAd(rental: Rental): boolean {
   return rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source");
 }
 
-/** The advertiser's own listing, only for an external ad whose URL is on the approved domain. */
+/**
+ * The advertiser's own listing, only for an external ad whose URL is on the approved host
+ * allowlist. A blocklist of MDE's own domains would accept any other HTTPS URL, so a bad record
+ * could redirect a renter off-site to a phishing page through MDE's UI.
+ */
 export function externalSourceUrlFor(rental: Rental): string | null {
   if (!isExternalAd(rental)) return null;
-  try {
-    const url = new URL(rental.source_url);
-    if (url.protocol !== "https:" || url.hostname === "mdeai.co" || url.hostname === "www.mdeai.co") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
+  return approvedExternalSourceUrl(rental.source_url);
 }
 
 type RentalBrowseCardProps = {
