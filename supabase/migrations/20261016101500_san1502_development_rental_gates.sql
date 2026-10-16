@@ -370,6 +370,16 @@ BEGIN
 END;
 $function$;
 
+-- Existing guards only watched apartment_id; renter/lead reassignment did not
+-- fire them. Keep the existing trigger/function, expand the watched columns so
+-- an authenticated outsider cannot steal a saved viewing or reassign its lead.
+CREATE OR REPLACE TRIGGER block_nonadmin_test_lead
+BEFORE INSERT OR UPDATE OF apartment_id, user_id ON public.leads
+FOR EACH ROW EXECUTE FUNCTION public.block_nonadmin_test_viewing();
+
+CREATE OR REPLACE TRIGGER block_nonadmin_test_showing
+BEFORE INSERT OR UPDATE OF apartment_id, lead_id ON public.showings
+FOR EACH ROW EXECUTE FUNCTION public.block_nonadmin_test_viewing();
 
 CREATE OR REPLACE FUNCTION public.p1_schedule_tour_atomic(p_listing_id text, p_user_id uuid, p_idempotency_key text, p_source text, p_email text, p_name text, p_phone text, p_trip_id uuid, p_scheduled_at timestamp with time zone, p_lead_metadata jsonb, p_showing_metadata jsonb)
  RETURNS jsonb
