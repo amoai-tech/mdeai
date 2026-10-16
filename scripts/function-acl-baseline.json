@@ -89,11 +89,6 @@
     "anon": false,
     "authenticated": true
   },
-  "block_nonadmin_test_viewing()": {
-    "public": false,
-    "anon": false,
-    "authenticated": false
-  },
   "book_new_project_consultation(p_project_id uuid, p_registration_id uuid, p_start_date date, p_start_time time without time zone, p_idempotency_key text, p_end_time time without time zone, p_notes text)": {
     "public": false,
     "anon": false,
@@ -282,6 +277,16 @@
   "register_new_project_buyer(p_project_id uuid, p_idempotency_key text, p_qualification jsonb, p_email text, p_phone text, p_name text)": {
     "public": false,
     "anon": false,
+    "authenticated": true
+  },
+  "rental_can_request_viewing(a apartments)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "rental_development_active()": {
+    "public": false,
+    "anon": true,
     "authenticated": true
   },
   "rental_enrichment_is_readable(p_apartment_id uuid)": {
