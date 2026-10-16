@@ -240,14 +240,13 @@ describe("onAgentSend for a signed-out visitor", () => {
       expect(promptShown).toBe(false);
     });
 
-    it("lets the server decide when the check itself fails (network down)", async () => {
+    it("keeps the sign-in offer when the check itself fails (network down), rather than guessing an account", async () => {
       supa.getUser.mockRejectedValue(new Error("Failed to fetch"));
-      chat.appendMessage.mockResolvedValue(true);
       await act(async () => {
         await handlers.onAgentSend("tell me about Laureles");
       });
-      expect(chat.appendMessage).toHaveBeenCalled();
-      expect(promptShown).toBe(false);
+      expect(chat.appendMessage).not.toHaveBeenCalled();
+      expect(promptShown).toBe(true);
     });
   });
 });

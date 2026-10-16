@@ -53,15 +53,16 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const onAgentSend = useCallback(
     async (text: string) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
-      // letting that send reach the protected runtime (401 -> "try again"). Only a thrown error
-      // (network down) leaves it unknown, and then the server decides, as before.
+      // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
+      // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
+      // itself for a signed-in visitor (/login sends them straight back to /chat).
       let hasAccount = signedIn;
       if (sessionLoading) {
         try {
           const { data } = await createClient().auth.getUser();
           hasAccount = Boolean(data.user);
         } catch {
-          hasAccount = true;
+          // keep `signedIn`
         }
       }
       if (!hasAccount) {
