@@ -17,6 +17,11 @@ describe("parseReceipt", () => {
     expect(parseReceipt({ data: { vote_id: VOTE, contest_id: CONTEST, entity_id: ENTITY, status: "pending" } }, target)).toBeNull();
   });
 
+  it("refuses a receipt for a different restaurant in the same contest", () => {
+    const otherEntity = "55555555-5555-5555-5555-555555555555";
+    expect(parseReceipt({ data: { vote_id: VOTE, contest_id: CONTEST, entity_id: otherEntity, status: "cast" } }, target)).toBeNull();
+  });
+
   it("refuses a receipt for a different contest or a malformed vote id", () => {
     expect(parseReceipt({ data: { vote_id: VOTE, contest_id: "44444444-4444-4444-4444-444444444444", entity_id: ENTITY, status: "cast" } }, target)).toBeNull();
     expect(parseReceipt({ data: { vote_id: "nope", contest_id: CONTEST, entity_id: ENTITY, status: "cast" } }, target)).toBeNull();

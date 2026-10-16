@@ -29,7 +29,7 @@ const RECEIPT_STATUSES = new Set(["cast", "replayed", "already_voted"]);
 export function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | null {
   const data = body.data;
   if (!data || !data.vote_id || !UUID_RE.test(data.vote_id)) return null;
-  if (data.contest_id !== target.contestId || !data.entity_id || !UUID_RE.test(data.entity_id)) return null;
+  if (data.contest_id !== target.contestId || data.entity_id !== target.entityId || !data.entity_id || !UUID_RE.test(data.entity_id)) return null;
   // Never show a "cast" receipt without an explicit, recognised server status.
   if (!data.status || !RECEIPT_STATUSES.has(data.status)) return null;
   return { voteId: data.vote_id, createdAt: data.created_at ?? null, status: data.status, entityId: data.entity_id };
@@ -120,16 +120,17 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       // Persist before sending: recover after lost response, navigation, or reload.
       window.localStorage.setItem(storageKey, idempotencyKey);
       const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token };
-      // Retry recovers an already committed ballot BEFORE asking for a new ticket: vote-cast
-      // looks up the receipt by idempotency key before it validates a nonce, so a lost
-      // response or a failed nonce request can never hide a vote that was saved.
-      const priorRes = await fetch(functionsUrl + "/vote-cast", {
-        method: "POST", headers,
-        body: JSON.stringify({ contest_id: target.contestId, entity_id: target.entityId, idempotency_key: idempotencyKey }),
-      });
-      const priorJson = (await priorRes.json().catch(() => ({}))) as VoteResponse;
-      const prior = priorRes.ok ? parseReceipt(priorJson, target) : null;
-      if (prior) { setReceipt(prior); setState("receipt"); return; }
+      // Only a STORED key can map to a committed ballot. A brand-new key has nothing to
+      // recover, so skip the round trip and never create a vote without confirming.
+      if (existingKey && UUID_RE.test(existingKey)) {
+        const priorRes = await fetch(functionsUrl + "/vote-cast", {
+          method: "POST", headers,
+          body: JSON.stringify({ contest_id: target.contestId, entity_id: target.entityId, idempotency_key: idempotencyKey }),
+        });
+        const priorJson = (await priorRes.json().catch(() => ({}))) as VoteResponse;
+        const prior = priorRes.ok ? parseReceipt(priorJson, target) : null;
+        if (prior) { setReceipt(prior); setState("receipt"); return; }
+      }
       const nonceRes = await fetch(functionsUrl + "/vote-nonce", {
         method: "POST", headers, body: JSON.stringify({ contest_id: target.contestId }),
       });

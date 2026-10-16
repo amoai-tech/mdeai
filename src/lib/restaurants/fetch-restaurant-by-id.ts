@@ -62,7 +62,12 @@ export async function fetchRestaurantVoteTarget(
   if (!supabase) return null;
 
   const { data, error } = await supabase.rpc("vote_restaurant_target", { p_restaurant_id: restaurantId });
-  if (error || !data) return null;
+  if (error) {
+    // Never silently hide a broken lookup: operators need the signal, the page still renders.
+    console.error("[restaurant] vote_restaurant_target failed:", error.message);
+    return null;
+  }
+  if (!data) return null;
 
   const row = data as { contest_id?: string; entity_id?: string };
   if (!row.contest_id || !row.entity_id) return null;

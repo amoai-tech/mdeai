@@ -28,7 +28,13 @@ export default async function RestaurantDetailPage({ params }: { params: Promise
   const hasRating = typeof restaurant.rating === "number" && restaurant.rating > 0;
   const hasCoords = restaurant.latitude != null && restaurant.longitude != null;
   // SAN-1483 supplies the canonical contest entry; null keeps the honest not-open state.
-  const voteTarget = await fetchRestaurantVoteTarget(restaurant.id);
+  // A failing vote lookup must never take down the whole restaurant page.
+  let voteTarget: { contestId: string; entityId: string } | null = null;
+  try {
+    voteTarget = await fetchRestaurantVoteTarget(restaurant.id);
+  } catch (err) {
+    console.error("[restaurant] vote target lookup threw:", err instanceof Error ? err.message : err);
+  }
   const mapHref =
     restaurant.mapsUrl ??
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
