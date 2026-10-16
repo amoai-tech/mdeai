@@ -61,9 +61,14 @@ export function isExternalAd(rental: Rental): boolean {
 
 /** The advertiser's own listing, only for an external ad whose URL is on the approved domain. */
 export function externalSourceUrlFor(rental: Rental): string | null {
-  return isExternalAd(rental) && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
-    ? rental.source_url
-    : null;
+  if (!isExternalAd(rental)) return null;
+  try {
+    const url = new URL(rental.source_url);
+    if (url.protocol !== "https:" || url.hostname === "mdeai.co" || url.hostname === "www.mdeai.co") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 type RentalBrowseCardProps = {
@@ -158,7 +163,7 @@ export function RentalBrowseCard({
   // ponytail: a listing with BOTH a stored nightly and monthly price also shows only the monthly on
   // this long-stay page; add a `nightly_is_derived` flag to Rental if short-stay cards come back.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    isExternalAd(rental) || rental.price_monthly != null ? null : rental.nightly_price,
+    isExternalAd(rental) || rental.price_monthly != null || rental.nightly_price <= 0 ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
@@ -171,7 +176,7 @@ export function RentalBrowseCard({
   // an action the database will reject — and with no handler there is nothing to open.
   // Fail closed like the Details panel: an advertiser's listing is never requestable on MDE,
   // whatever its flag says.
-  const showScheduleCta = !isExternalAd(rental) && rental.can_schedule_viewing === true && Boolean(onSchedule);
+  const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
   const externalSourceUrl = externalSourceUrlFor(rental);
   const preview = () => (onPreview ?? onSelect)?.();
@@ -253,8 +258,16 @@ export function RentalBrowseCard({
               }}
             >
               <Calendar data-icon="inline-start" aria-hidden />
-              Schedule viewing
+              {isExternalAd(rental) ? 'Request MDE follow-up' : 'Schedule viewing'}
             </Button>
+          ) : null}
+          {isExternalAd(rental) && rental.source_provider ? (
+            <span
+              data-testid={`rental-card-source-label-${rental.id}`}
+              className="self-center text-[11px] text-muted-foreground"
+            >
+              Source: {rental.source_provider}
+            </span>
           ) : null}
           {externalSourceUrl ? (
             <a
@@ -350,6 +363,8 @@ export function RentalBrowseCard({
 
       {monthlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">{monthlyLabel}</p>
+      ) : !nightlyLabel ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
       ) : null}
 
       {rental.availability ? (

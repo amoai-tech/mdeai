@@ -57,6 +57,14 @@ describe("/rentals page", () => {
     expect(props.maxPrice).toBeUndefined();
   });
 
+  it("requests enough results to show the whole development catalogue", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await render({});
+    const call = searchRentals.mock.calls[0]?.[0] as Record<string, unknown>;
+    // The old 24-result cap hid ten published Rentberry development listings.
+    expect(call.limit).toBeGreaterThanOrEqual(50);
+  });
+
   it("reports an outage as an error with no results and no count", async () => {
     searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
     const props = await render({});

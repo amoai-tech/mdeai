@@ -195,12 +195,13 @@ describe("/rentals Details panel — desktop", () => {
     expect(source.href).toContain("fincaraiz.com.co");
   });
 
-  it("keeps unknown values unknown and never offers a viewing for an external ad", async () => {
+  it("keeps unknown values unknown and follows the database flag for an external ad", async () => {
     await mount();
     await click(detailsButton(MAPPED_SLUG)); // index 0: bedrooms not stated
     expect(byId("rental-details-bedrooms")?.textContent).toBe("Bedrooms unknown");
     expect(byId("rental-details-bedrooms")?.textContent).not.toMatch(/studio/i);
-    expect(byId("rental-details-external-note")?.textContent).toMatch(/cannot schedule a viewing/);
+    expect(byId("rental-details-external-note")?.textContent).toMatch(/not a confirmed viewing/);
+    // The database says this ad is not requestable, so there is no CTA: the flag decides, not `external`.
     expect(byId("rental-details-schedule-cta")).toBeNull();
     expect(byId("rental-details-availability")?.textContent).toMatch(/unverified/i);
     expect(q('[data-testid="rental-details-panel"] a[href*="fincaraiz.com.co"]')?.textContent).toContain(
@@ -383,7 +384,7 @@ describe("RentalDetailsPanel — states", () => {
     expect(byId("rental-details-photo-1-unavailable")?.textContent).toContain("Photo unavailable");
   });
 
-  it("offers Schedule viewing only for a server-approved listing, and never for an external ad", async () => {
+  it("offers one CTA decided by the database flag, labeled a follow-up for an external ad", async () => {
     const onSchedule = vi.fn();
     const owned: Rental = {
       ...baseRentalOf(),
@@ -400,13 +401,14 @@ describe("RentalDetailsPanel — states", () => {
 
     await renderPanel({ ...owned, can_schedule_viewing: false }, onSchedule);
     expect(byId("rental-details-schedule-cta")).toBeNull();
-    await renderPanel({ ...baseRentalOf(), can_schedule_viewing: true }, onSchedule); // external ad, even if mis-flagged
+    await renderPanel({ ...baseRentalOf(), can_schedule_viewing: true }, onSchedule); // external, DB-requestable
     expect(byId("rental-details-external-note")).not.toBeNull();
-    expect(byId("rental-details-schedule-cta")).toBeNull();
+    expect(byId("rental-details-schedule-cta")?.textContent).toContain("Request MDE follow-up");
+    expect(byId("rental-details-schedule-cta")?.textContent).not.toContain("Schedule viewing");
   });
 
-  it("states a missing price as pending instead of showing zero", async () => {
+  it("states a missing price as not provided instead of showing zero", async () => {
     await renderPanel({ ...baseRentalOf(), price_monthly: undefined });
-    expect(byId("rental-details-price")?.textContent).toBe("Price data pending");
+    expect(byId("rental-details-price")?.textContent).toBe("Price not provided");
   });
 });

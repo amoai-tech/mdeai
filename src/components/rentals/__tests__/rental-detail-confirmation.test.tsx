@@ -45,6 +45,8 @@ const detail = mapApartmentRowToDetail({
   moderation_status: "approved",
   listing_workflow_status: "published",
   landlord_id: "landlord-1",
+  // SAN-1502: the database's computed requestability decides the CTA.
+  rental_can_request_viewing: true,
   // A known move-in date, as the viewing RPC requires (SAN-486); without one the page offers no viewing.
   available_from: "2000-01-01",
 });

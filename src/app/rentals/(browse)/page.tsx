@@ -15,6 +15,15 @@ interface Props {
 
 const SEARCH_UNAVAILABLE_MESSAGE = "Rental search is temporarily unavailable.";
 
+/**
+ * Render the whole active catalogue on one page. The previous cap of 24 hid the
+ * Rentberry development batch behind "34 apartments (showing 24)", so a listing that
+ * was published and bookable could not be reached by scrolling.
+ * ponytail: a single large page is fine while the development catalogue is ~44 rows;
+ * the upgrade path is cursor pagination once the catalogue grows past a few hundred.
+ */
+const BROWSE_RESULT_LIMIT = 100;
+
 /** REAL-011 / SAN-478 — /rentals browse page. */
 export default async function RentalsPage({ searchParams }: Props) {
   // One parser for the whole browse state (neighborhood, bedrooms, From/Through dates).
@@ -41,7 +50,7 @@ export default async function RentalsPage({ searchParams }: Props) {
         minBedrooms,
         checkIn: filters.from ?? undefined,
         checkOut: filters.through ?? undefined,
-        limit: 24,
+        limit: BROWSE_RESULT_LIMIT,
       }, { client: supabase });
 
       results = data.results;

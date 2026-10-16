@@ -332,7 +332,7 @@ export async function getLocalPreviewRentals(): Promise<Rental[]> {
       amenities: c.amenities ?? [],
       image,
       source_url: c.metadata?.original_listing_url ?? c.source_url,
-      can_schedule_viewing: false,
+      can_schedule_viewing: false, // source-only preview: no persisted MDE booking target
       schedule_viewing_url: null,
       host_name: "External advertiser — unverified",
       availability: listing?.availableFrom
@@ -380,5 +380,7 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
     canScheduleViewing: false,
     isNotIndependentlyVerified: false,
     sourceUrl: c.metadata?.original_listing_url ?? c.source_url,
+    sourceProvider: null,
+    isExternalSource: false,
   };
 }

@@ -44,6 +44,7 @@ function apartment(metadata: unknown, availableFrom = "2026-10-14"): ApartmentRo
     status: "active",
     moderation_status: "approved",
     listing_workflow_status: "published",
+    rental_can_request_viewing: true,
     metadata,
   };
 }
