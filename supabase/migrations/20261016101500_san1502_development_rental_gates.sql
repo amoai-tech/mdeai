@@ -337,8 +337,6 @@ BEGIN
        WHERE a.id IN (NEW.apartment_id, v_old_apartment_id)
          AND lower(coalesce(a.metadata->>'is_test_fixture','false')) = 'true'
      ) THEN
-    -- Phase A skips tester grants; authenticated identity and broker RLS remain.
-    IF public.rental_development_active() THEN RETURN NEW; END IF;
     IF TG_TABLE_NAME = 'leads' THEN
       v_renter_id := NEW.user_id;
     ELSIF TG_TABLE_NAME = 'showings' THEN
@@ -348,6 +346,19 @@ BEGIN
         AND l.apartment_id = NEW.apartment_id;
     END IF;
 
+    -- No Phase A business grant; retain the immutable renter/lead identity.
+    -- Ordinary updates that do not change an identity returned earlier above.
+    IF public.rental_development_active() THEN
+      IF TG_OP = 'UPDATE' AND NOT coalesce(public.is_admin(),false) THEN
+        RAISE EXCEPTION 'viewing identity changes require administrator'
+          USING ERRCODE = '42501';
+      END IF;
+      IF v_renter_id IS NULL AND NOT coalesce(public.is_admin(),false) THEN
+        RAISE EXCEPTION 'authenticated renter identity required'
+          USING ERRCODE = '42501';
+      END IF;
+      RETURN NEW;
+    END IF;
     IF NOT (
       coalesce(public.is_admin(), false)
       OR (
