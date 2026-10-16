@@ -16,6 +16,11 @@ const run = (opts: { checkIn?: string; checkOut?: string }) => {
   applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13" });
   return calls;
 };
+const runDev = (opts: { checkIn?: string; checkOut?: string }) => {
+  const { builder, calls } = recorder();
+  applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13", developmentMode: true });
+  return calls;
+};
 
 describe("applyAvailabilityFilters — one rule for every search path (SAN-486)", () => {
   it("requires a known move-in date only when the user requests a dated stay", () => {
@@ -45,6 +50,32 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
       "or(available_from.lte.2026-11-01)",
       "or(available_to.is.null,available_to.gte.2026-11-01)",
     ]);
+  });
+});
+
+describe("applyAvailabilityFilters — development phase still honours explicit dates (SAN-486)", () => {
+  it("a full stay keeps only known dates that cover it, plus unknown-availability listings", () => {
+    expect(runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" })).toEqual([
+      "or(and(available_from.not.is.null,available_from.lte.2026-11-01,or(available_to.is.null,available_to.gte.2026-11-30),or(minimum_stay_days.is.null,minimum_stay_days.lte.30),or(maximum_stay_days.is.null,maximum_stay_days.gte.30)),available_from.is.null)",
+    ]);
+  });
+
+  it("a single day keeps the same shape without the length rules", () => {
+    expect(runDev({ checkIn: "2026-11-01" })).toEqual([
+      "or(and(available_from.not.is.null,available_from.lte.2026-11-01,or(available_to.is.null,available_to.gte.2026-11-01)),available_from.is.null)",
+    ]);
+  });
+
+  it("a rejected date still throws before adding any filter", () => {
+    const { builder, calls } = recorder();
+    expect(() =>
+      applyAvailabilityFilters(builder, { checkIn: "2026-02-31", today: "2026-10-13", developmentMode: true }),
+    ).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("with no dates development only excludes expired listings", () => {
+    expect(runDev({})).toEqual(["or(available_to.is.null,available_to.gte.2026-10-13)"]);
   });
 });
 

@@ -45,14 +45,21 @@ describe("searchRentals structured path — availability filter", () => {
     expect(mocks.state.filters.some((f) => f.includes("available_from.is.null"))).toBe(false);
   });
 
-  it("does not exclude unconfirmed move-in dates from development searches", async () => {
+  it("still honours explicit dates in development while keeping unconfirmed move-in dates discoverable", async () => {
     mocks.state.development = true;
     const { searchRentals } = await import("../search-rentals");
     await searchRentals({ neighborhood: "Laureles", checkIn: "2099-11-01",
       checkOut: "2099-11-30", limit: 5 });
+    const availability = mocks.state.filters.join(" | ");
+    // Unknown move-in dates stay discoverable (the card labels them "Availability unconfirmed") ...
     expect(mocks.state.filters).not.toContain("not(available_from,is,null)");
-    expect(mocks.state.filters.some((f) => f.includes("available_from."))).toBe(false);
-    expect(mocks.state.filters.some((f) => f.includes("available_to."))).toBe(false);
+    expect(availability).toContain("available_from.is.null");
+    // ... but a KNOWN date must still cover the whole requested stay (1–30 Nov = 30 days).
+    expect(availability).toContain("available_from.not.is.null");
+    expect(availability).toContain("available_from.lte.2099-11-01");
+    expect(availability).toContain("available_to.gte.2099-11-30");
+    expect(availability).toContain("minimum_stay_days.lte.30");
+    expect(availability).toContain("maximum_stay_days.gte.30");
   });
 
   it("shows unexpired listings without requiring move-in documentation when no dates are requested", async () => {
