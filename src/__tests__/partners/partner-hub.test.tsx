@@ -36,7 +36,6 @@ const DEAD_HUB_ROUTES = [
   "/partners/restaurants",
   "/partners/cafes",
   "/partners/nightlife",
-  "/contact",
 ] as const;
 
 // Hub is slotted into the reusable MarketingPageShell (SAN-692), which owns the
@@ -122,10 +121,11 @@ const LIVE_FOOTER_ROUTES = [
   "/me/tickets",
   "/partners",
   "/partners/signup",
+  "/contact",
   "/host/event/new",
 ];
 
-const DEAD_ROUTES = ["/about", "/contact", "/legal/privacy"];
+const DEAD_ROUTES = ["/about", "/legal/privacy"];
 
 describe("MarketingFooter — live routes only", () => {
   it("links none of the removed dead routes", () => {
