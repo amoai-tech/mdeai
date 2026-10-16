@@ -122,6 +122,14 @@ describe("SAN-1504 chat map column", () => {
     expect(q('[data-testid="chat-map"]')).not.toBeNull();
   });
 
+  it("the column is named for what it shows: the map, then the rental details", () => {
+    mount(<ChatMapPanel />);
+    expect(q('[data-testid="map-panel"]')?.getAttribute("aria-label")).toBe("Medellín map");
+    ui.venueDetail = detail();
+    mount(<ChatMapPanel />);
+    expect(q('[data-testid="map-panel"]')?.getAttribute("aria-label")).toBe("Rental details");
+  });
+
   it("Close returns to the map through the shared close handler", () => {
     ui.venueDetail = detail();
     mount(<ChatMapPanel />);

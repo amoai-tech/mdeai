@@ -86,7 +86,7 @@ export function ChatMapPanel() {
     <section
       data-testid="map-panel"
       data-right-column-mode={rentalPanel ? "detail" : "map"}
-      aria-label="Medellín map"
+      aria-label={rentalPanel ? "Rental details" : "Medellín map"}
       className="relative hidden h-full min-h-0 w-full min-w-0 lg:flex lg:flex-col"
     >
       <div className="relative min-h-0 flex-1 lg:sticky lg:top-0 lg:h-full">
