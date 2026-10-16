@@ -76,24 +76,23 @@ select throws_ok(
  $q$update public.leads
     set user_id = 'f1505000-0000-4000-8000-000000000003'
     where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
- '42501', 'development rental viewing requires an authorized renter',
+ '42501', 'viewing identity changes require administrator',
  'lead renter reassignment to an ungranted actor is denied');
 select throws_ok(
  $q$update public.showings
     set lead_id = 'f1505000-0000-4000-8000-000000000099'
     where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
- '42501', 'development rental viewing requires an authorized renter',
+ '42501', 'viewing identity changes require administrator',
  'showing lead reassignment without authorized matching lead is denied');
 
-select throws_ok(
+select lives_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000003',
      'san1502-ungranted-renter-booking', 'form',
      'ordinary-san1502-booking@example.com','Ordinary user',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- '42501','development rental viewing requires an authorized renter',
- 'ordinary ungranted account cannot book');
+ 'ordinary authenticated user books without a business approval grant');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
@@ -102,15 +101,14 @@ select public.admin_revoke_rental_test_access('f1505000-0000-4000-8000-000000000
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
-select throws_ok(
+select lives_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000002',
      'san1502-normal-renter-booking-1', 'form',
      'renter-san1502-booking@example.com','Renter 1502',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- '42501','development rental viewing requires an authorized renter',
- 'revoking access denies even a committed booking replay');
+ 'revoke grant does not block prelaunch idempotent viewing replay');
 
 select * from finish();
 rollback;

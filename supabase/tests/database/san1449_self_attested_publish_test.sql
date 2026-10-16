@@ -2,6 +2,11 @@
 -- self-attested apartment and receive viewings without admin approval.
 -- Run with: supabase test db
 begin;
+-- Explicitly exercise the public-LAUNCH contract. Normal Phase A journeys have
+-- separate pgTAP coverage and must not inherit these business requirements.
+-- This mode change is rolled back with this test; it does not touch live settings.
+UPDATE public.rental_runtime_settings SET phase='launch' WHERE singleton;
+
 
 select plan(15);
 

@@ -16,6 +16,7 @@ import {
   rentalAvailabilityDate,
   rentalBudgetPredicate,
   rowToRental,
+  readRentalDevelopmentPhase,
   sortForMonthlyStay,
 } from "../tools/search-rentals";
 
@@ -144,6 +145,8 @@ export async function searchRentalsIntelligent(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
+  const developmentMode = await readRentalDevelopmentPhase(client);
+
   /**
    * The canonical keyword/list query, shared by the normal path and the
    * "hybrid produced nothing eligible" fallback. Returns both the search-shaped
@@ -156,11 +159,8 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
-      .eq("status", "active")
-      // RLS applies customer eligibility and authorized development visibility.
-      .not("landlord_id", "is", null)
       // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
       // which listings are priced or how a nightly budget applies across currencies.
       .or(
@@ -171,6 +171,7 @@ export async function searchRentalsIntelligent(
       )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
+    if (!developmentMode) q = q.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
@@ -179,6 +180,7 @@ export async function searchRentalsIntelligent(
       checkIn: query.checkIn,
       checkOut: query.checkOut,
       today: rentalAvailabilityDate(),
+      developmentMode,
     });
     const { data, error } = await q;
     if (error) {
@@ -272,13 +274,11 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
       .in("id", ids)
       // RLS applies customer eligibility and authorized development visibility.
       // Preserve the shared status and budget filters without reimposing publication gates.
-      .eq("status", "active")
-      .not("landlord_id", "is", null)
       // One shared budget predicate with the structured path, so a hybrid result
       // can never bypass the caller's price filter.
       .or(
@@ -287,6 +287,7 @@ export async function searchRentalsIntelligent(
           monthlyBudgetFromQuery(query),
         ),
       );
+    if (!developmentMode) aptQ = aptQ.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
@@ -295,6 +296,7 @@ export async function searchRentalsIntelligent(
       checkIn: query.checkIn,
       checkOut: query.checkOut,
       today: rentalAvailabilityDate(),
+      developmentMode,
     });
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {

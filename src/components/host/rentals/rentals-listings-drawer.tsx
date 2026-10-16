@@ -257,7 +257,7 @@ export function RentalsListingsDrawer({
             listing.listingWorkflowStatus !== "rejected" ? (
               <div className="space-y-2 rounded-lg border border-border p-3">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Publish now — not independently verified
+                  Publish for development — not independently verified
                 </p>
                 <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-advertising">
                   <input
@@ -269,7 +269,7 @@ export function RentalsListingsDrawer({
                     className="mt-1 size-4 rounded border-border"
                   />
                   <span>
-                    I am authorised to advertise this apartment and accept inquiries for it.
+                    Optional: I can confirm advertising authority. Not required for development.
                   </span>
                 </label>
                 <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-photos">
@@ -281,13 +281,13 @@ export function RentalsListingsDrawer({
                     onChange={(e) => setPhotoRights(e.target.checked)}
                     className="mt-1 size-4 rounded border-border"
                   />
-                  <span>I have the right to let MDE display the photos I supplied.</span>
+                  <span>Optional: I can confirm photo-use rights. Not required for development.</span>
                 </label>
                 <Button
                   type="button"
                   variant="outline"
                   data-testid="lx-publish-self-attested"
-                  disabled={!advertisingAuthority || !photoRights || selfAttestedPublishing}
+                  disabled={selfAttestedPublishing}
                   onClick={() =>
                     void onSelfAttestedPublish(listing, { advertisingAuthority, photoRights })
                   }

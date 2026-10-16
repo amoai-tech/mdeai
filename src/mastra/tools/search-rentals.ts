@@ -120,6 +120,17 @@ function getSupabaseClient() {
  */
 export const RENTAL_SUPABASE_KEY = 'rentalSupabase';
 
+/** The DB phase is authoritative, never NODE_ENV or a browser-editable flag. */
+export async function readRentalDevelopmentPhase(client: SupabaseClient): Promise<boolean> {
+  // A light test stub may omit RPC; actual Supabase clients always expose it.
+  if (typeof client.rpc !== 'function') return false;
+  const { data, error } = await client.rpc('rental_development_active');
+  if (error) {
+    throw new RentalSearchUnavailableError(`phase_query_failed${error.code ? `:${error.code}` : ''}`);
+  }
+  return data === true;
+}
+
 /**
  * Optional per-request client. Omit it for the shared anonymous client; pass the
  * caller's user-scoped client to let RLS decide what they may read.
@@ -169,6 +180,8 @@ export interface ApartmentRow {
   moderation_status: string;
   listing_workflow_status: string;
   status: string;
+  /** PostgreSQL computed column; canonical phase-aware requestability. */
+  rental_can_request_viewing?: boolean | null;
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -386,7 +399,8 @@ export function monthlyBudgetFromQuery(
 }
 
 export function rowToRental(r: ApartmentRow): Rental {
-  const canScheduleViewing = isRentalRequestable(r);
+  const canScheduleViewing = typeof r.rental_can_request_viewing === 'boolean'
+    ? r.rental_can_request_viewing : isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
   return rentalSchema.parse({
     id: r.id,
@@ -426,10 +440,9 @@ export function rowToRental(r: ApartmentRow): Rental {
 }
 
 function formatAvailability(from: string | null, to: string | null): string {
-  if (!from && !to) return 'Availability unconfirmed';
-  if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
-  if (from) return `Available from ${formatDateOnly(from)}`;
-  return 'Available now';
+  if (!from) return 'Availability unconfirmed';
+  if (to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  return `Available from ${formatDateOnly(from)}`;
 }
 
 function deriveTags(row: {
@@ -473,6 +486,7 @@ async function searchRentalsFromSupabase(
   }
 
   const limit = query.limit ?? 8;
+  const developmentMode = await readRentalDevelopmentPhase(client);
   // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
@@ -482,13 +496,9 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
       { count: 'exact' },
     )
-    .eq('status', 'active')
-    // RLS is authoritative: public users still require approved/published,
-    // while authorized MDE users can develop active fixtures without those gates.
-    .not('landlord_id', 'is', null)
     .or(rentalBudgetPredicate(maxNightly, monthlyBudget))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
     // every nightly-priced row and two different currencies are never meaningfully ordered
@@ -498,6 +508,10 @@ async function searchRentalsFromSupabase(
     // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
     .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
+
+  if (!developmentMode) {
+    q = q.eq('status', 'active').not('landlord_id', 'is', null);
+  }
 
   if (query.neighborhood) {
     q = q.ilike('neighborhood', `%${query.neighborhood}%`);
@@ -512,6 +526,7 @@ async function searchRentalsFromSupabase(
     checkIn: query.checkIn,
     checkOut: query.checkOut,
     today: rentalAvailabilityDate(),
+    developmentMode,
   });
 
   const { data, error, count } = await q;

@@ -115,7 +115,7 @@ const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
       <Users className="size-3.5" aria-hidden />{" "}
       {detail.maxGuests != null ? `${detail.maxGuests} guests` : <Pending />}
     </Badge>
-    {detail.isSelfAttested ? (
+    {detail.isNotIndependentlyVerified ? (
       <Badge
         variant="outline"
         className="font-normal"
@@ -347,7 +347,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {detail.status === "development-preview" && detail.sourceUrl ? (
+              {(detail.status === "development-preview" || detail.isNotIndependentlyVerified) && detail.sourceUrl?.startsWith("https://") && !/^https:\/\/(?:www\.)?mdeai\.co(?:[/:]|$)/i.test(detail.sourceUrl) ? (
                 <a
                   href={detail.sourceUrl}
                   target="_blank"

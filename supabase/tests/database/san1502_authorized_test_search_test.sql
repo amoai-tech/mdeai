@@ -1,5 +1,5 @@
--- SAN-1502 PR2 — only an authorized test actor may read a published test fixture.
--- Ordinary authenticated customers and anonymous visitors are unaffected.
+-- SAN-1502 · During development any signed-in renter may view active fixtures.
+-- Anonymous visitors remain blocked; grants are operational but not booking prerequisites.
 -- Run with: supabase test db
 begin;
 
@@ -61,8 +61,8 @@ reset role;
 -- A2/A3: an ordinary authenticated user and anon do not.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000003","role":"authenticated"}', true);
-select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 0,
-  'A2: an ordinary authenticated user cannot see the fixture');
+select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 1,
+  'A2: ordinary authenticated users may work with development inventory');
 reset role;
 set local role anon;
 select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 0,
@@ -78,8 +78,8 @@ select lives_ok(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000002","role":"authenticated"}', true);
-select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 0,
-  'A4: a revoked tester cannot see the fixture');
+select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 1,
+  'A4: grant revocation does not block development search');
 reset role;
 
 -- A5: re-granting restores visibility.
