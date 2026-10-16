@@ -18,13 +18,13 @@ export interface ServiceLike {
   from(table: string): { insert(row: Record<string, unknown>): PromiseLike<{ error: unknown }> };
 }
 export type TurnstileOutcome = "ok" | "invalid" | "unavailable" | "misconfigured";
-export interface NonceResult { valid: boolean; payload?: { jti: string }; reason?: string }
+export interface NonceResult { valid: boolean; payload?: { jti: string; sub?: string }; reason?: string }
 export interface RateResult { allowed: boolean; retry_after_seconds: number }
 
 export interface VoteCastDeps {
   service: ServiceLike;
   verifyTurnstile: (token: string | undefined, ip: string) => Promise<TurnstileOutcome>;
-  verifyNonce: (token: string | undefined, contestId?: string) => Promise<NonceResult>;
+  verifyNonce: (token: string | undefined, contestId?: string, userId?: string) => Promise<NonceResult>;
   getUserId: (authHeader: string) => Promise<string | null>;
   allowRate: (key: string, max: number, windowSeconds: number) => Promise<RateResult>;
 }
@@ -115,17 +115,21 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
     if (turnstile === "unavailable") return err(503, "TURNSTILE_UNAVAILABLE", "Bot protection is temporarily unavailable", req);
     if (turnstile !== "ok") return err(403, "TURNSTILE_FAILED", "Bot challenge failed", req);
 
-    const nonceResult = await deps.verifyNonce(nonce, contest_id);
+    // Resolve the identity first so the nonce is bound to this exact account.
+    const userId = authHeader ? await deps.getUserId(authHeader) : null;
+    if (!userId) return err(401, "AUTH_REQUIRED", "Sign in to vote", req);
+
+    const nonceResult = await deps.verifyNonce(nonce, contest_id, userId);
     if (!nonceResult.valid) {
       if (nonceResult.reason === "nonce_not_configured") return err(503, "NONCE_UNAVAILABLE", "Vote protection is not configured", req);
       return err(403, "NONCE_INVALID", nonceResult.reason ?? "invalid nonce", req);
     }
+    if (nonceResult.payload?.sub && nonceResult.payload.sub !== userId) {
+      return err(403, "NONCE_INVALID", "user_mismatch", req);
+    }
 
     const rlIp = await deps.allowRate("vote-cast-ip:" + ip, 10, 60);
     if (!rlIp.allowed) return rateLimited(rlIp.retry_after_seconds, req);
-
-    const userId = authHeader ? await deps.getUserId(authHeader) : null;
-    if (!userId) return err(401, "AUTH_REQUIRED", "Sign in to vote", req);
 
     const rlUser = await deps.allowRate("vote-cast-user:" + userId, 20, 60);
     if (!rlUser.allowed) return rateLimited(rlUser.retry_after_seconds, req);
@@ -149,10 +153,12 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
       console.error("vote_contest_context error:", ctx.error);
       return err(500, "VOTE_FAILED", "Failed to load contest", req);
     }
-    const context = ctx.data as { kind?: string; is_open?: boolean } | null;
+    const context = ctx.data as { kind?: string; is_open?: boolean; voting_available?: boolean } | null;
     if (!context) return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
     if (context.kind !== "restaurant") return err(409, "NOT_A_RESTAURANT_CONTEST", "Not a restaurant contest", req);
-    if (!context.is_open) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
+    // The database decides whether voting is available for this phase; launch keeps the gates.
+    const votingAvailable = context.voting_available ?? context.is_open ?? false;
+    if (!votingAvailable) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
 
     const ipHash = await sha256(ip + ":" + dailySalt());
     const cast = await deps.service.rpc("cast_restaurant_vote", {

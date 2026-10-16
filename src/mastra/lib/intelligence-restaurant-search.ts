@@ -218,7 +218,6 @@ export async function searchRestaurantsIntelligent(
       .select(
         "id, name, description, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, ambiance, google_place_id, maps_url, ai_summary",
       )
-      .eq("is_active", true)
       .order("rating", { ascending: false, nullsFirst: false })
       .limit(48);
     if (neighborhood) {

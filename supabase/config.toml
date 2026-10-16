@@ -394,6 +394,15 @@ deno_version = 2
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+# SAN-1521 — the restaurant voting endpoints require a real signed-in user. The platform
+# verifies the project JWT (defence in depth) and the handler then resolves and authorizes
+# the actual user. Recorded here so the requirement replays from Git, not a deploy flag.
+[functions.vote-cast]
+verify_jwt = true
+
+[functions.vote-nonce]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54627

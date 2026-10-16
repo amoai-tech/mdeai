@@ -32,10 +32,13 @@ Deno.test("nonce fails closed when the secret is missing outside dev/test", asyn
   assertEqual(r.reason, "nonce_not_configured", "reason must be explicit");
 });
 
-Deno.test("nonce binds the contest and round-trips", async () => {
+Deno.test("nonce is signed, binds contest and user, and rejects unsigned tokens", async () => {
   Deno.env.set("VOTE_NONCE_SECRET", "test-secret");
-  const token = await issueNonce("c1");
-  assertEqual((await verifyNonce(token, "c1")).valid, true, "valid nonce accepted");
-  assertEqual((await verifyNonce(token, "other")).valid, false, "contest mismatch rejected");
+  const token = await issueNonce("c1", "user-1");
+  assertEqual((await verifyNonce(token, "c1", "user-1")).valid, true, "valid nonce accepted");
+  assertEqual((await verifyNonce(token, "other", "user-1")).valid, false, "contest mismatch rejected");
+  assertEqual((await verifyNonce(token, "c1", "user-2")).valid, false, "another account cannot use the nonce");
+  assertEqual((await verifyNonce("a.b.unsigned", "c1", "user-1")).valid, false, "unsigned token rejected");
+  assertEqual((await verifyNonce(undefined, "c1", "user-1")).valid, false, "missing nonce rejected");
   Deno.env.delete("VOTE_NONCE_SECRET");
 });

@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { isRentalRequestable, readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
-import { isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
+import { isAvailabilityUnconfirmed, isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -101,7 +101,8 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     description: str(row.description),
     houseRules: str(row.house_rules),
     hostName: str(row.host_name),
-    availableFrom: str(row.available_from),
+    // A placeholder date is not shown as a move-in date; the calendar then says availability is pending.
+    availableFrom: isAvailabilityUnconfirmed(row.metadata) ? null : str(row.available_from),
     availableTo: str(row.available_to),
     minimumStayDays: num(row.minimum_stay_days),
     maximumStayDays: num(row.maximum_stay_days),
