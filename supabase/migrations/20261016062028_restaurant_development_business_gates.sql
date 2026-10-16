@@ -5,10 +5,10 @@
 -- contest, and see development counts — WITHOUT approval/verification/publication gates.
 -- At public-launch certification the gates return automatically.
 --
--- ONE canonical phase source, server-controlled and NOT client-writable:
---   public.app_runtime_config('application_phase') -> public.mde_application_phase()
--- Default is 'launch' (production-safe). Enabling development is an explicit owner action:
---   update public.app_runtime_config set value='development', updated_at=now()
+-- ONE canonical phase source, server-controlled, in an UNEXPOSED schema:
+--   public.app_runtime_config('application_phase') -> private.mde_application_phase()
+-- Default is 'development' (owner development-now policy). Flip to launch with:
+--   update public.app_runtime_config set value='launch', updated_at=now()
 --    where key='application_phase';
 --
 -- Preserved in BOTH phases: authentication (real auth.users), private vote.* schema,
@@ -17,7 +17,11 @@
 --
 -- Applied migration 20261015222928 is NOT edited; the three functions are replaced here.
 
--- ── 1. Canonical phase ────────────────────────────────────────────────────────
+-- ── 1. Unexposed phase owner ──────────────────────────────────────────────────
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to anon, authenticated, service_role;
+
 create table if not exists public.app_runtime_config (
   key        text primary key,
   value      text not null,
@@ -25,13 +29,13 @@ create table if not exists public.app_runtime_config (
 );
 
 insert into public.app_runtime_config (key, value)
-values ('application_phase', 'launch')
+values ('application_phase', 'development')
 on conflict (key) do nothing;
 
 alter table public.app_runtime_config enable row level security;
 revoke all on public.app_runtime_config from public, anon, authenticated;
 
-create or replace function public.mde_application_phase()
+create or replace function private.mde_application_phase()
 returns text
 language sql
 security definer
@@ -44,20 +48,20 @@ as $$
   );
 $$;
 
--- Read-only, non-sensitive phase string: anon/authenticated need it for RLS predicates.
-revoke all on function public.mde_application_phase() from public;
-grant execute on function public.mde_application_phase() to anon, authenticated, service_role;
+revoke all on function private.mde_application_phase() from public;
+grant execute on function private.mde_application_phase() to anon, authenticated, service_role;
+drop function if exists public.mde_application_phase();
 
 -- ── 2. Restaurant visibility + Super Admin writes (phase-aware) ───────────────
 drop policy if exists anon_can_view_active_restaurants on public.restaurants;
 create policy anon_can_view_active_restaurants on public.restaurants
   for select to anon
-  using (is_active = true or public.mde_application_phase() = 'development');
+  using (is_active = true or (select private.mde_application_phase()) = 'development');
 
 drop policy if exists authenticated_can_view_active_restaurants on public.restaurants;
 create policy authenticated_can_view_active_restaurants on public.restaurants
   for select to authenticated
-  using (is_active = true or public.mde_application_phase() = 'development');
+  using (is_active = true or (select private.mde_application_phase()) = 'development');
 
 drop policy if exists moderators_can_insert_restaurants on public.restaurants;
 create policy moderators_can_insert_restaurants on public.restaurants
@@ -90,8 +94,8 @@ declare
   v_entity     vote.entities;
   v_vote       vote.votes;
   v_now        timestamptz := now();
-  v_phase      text := public.mde_application_phase();
-  v_dev        boolean := (public.mde_application_phase() = 'development');
+  v_phase      text := private.mde_application_phase();
+  v_dev        boolean := (private.mde_application_phase() = 'development');
   v_suspicious boolean := false;
   v_devices    integer;
 begin
@@ -235,7 +239,7 @@ as $$
     'ends_at', c.ends_at,
     'free_votes_per_user_per_day', c.free_votes_per_user_per_day,
     'paid_votes_enabled', c.paid_votes_enabled,
-    'application_phase', public.mde_application_phase(),
+    'application_phase', private.mde_application_phase(),
     'is_open', (
       c.status = 'live'
       and (c.starts_at is null or now() >= c.starts_at)
@@ -245,7 +249,7 @@ as $$
       (c.status = 'live'
        and (c.starts_at is null or now() >= c.starts_at)
        and (c.ends_at is null or now() < c.ends_at))
-      or public.mde_application_phase() = 'development'
+      or private.mde_application_phase() = 'development'
     )
   )
   from vote.contests c
@@ -262,14 +266,11 @@ stable
 as $$
   select jsonb_build_object(
     'entity_id', p_entity_id,
-    'application_phase', public.mde_application_phase(),
-    'audience_accepted', count(*) filter (
-      where v.source = 'audience'
-        and (v.fraud_status = 'clean'
-             or (public.mde_application_phase() = 'development' and v.fraud_status <> 'blocked'))
-    ),
+    'application_phase', private.mde_application_phase(),
+    'audience_accepted', count(*) filter (where v.source = 'audience' and v.fraud_status = 'clean'),
     'audience_pending',  count(*) filter (where v.source = 'audience' and v.fraud_status in ('pending', 'suspicious')),
-    'audience_total',    count(*) filter (where v.source = 'audience' and v.fraud_status <> 'blocked')
+    'audience_total',    count(*) filter (where v.source = 'audience' and v.fraud_status <> 'blocked'),
+    'development_test_total', count(*) filter (where v.source = 'audience' and v.fraud_status <> 'blocked')
   )
   from vote.votes v
   where v.entity_id = p_entity_id;
