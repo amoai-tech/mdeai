@@ -91,7 +91,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     }
     void recover();
     return () => { active = false; };
-  }, [anonKey, functionsUrl, voteTarget?.contestId, voteTarget?.entityId]);
+  }, [anonKey, functionsUrl, voteTarget]);
 
   const castVote = useCallback(async () => {
     if (!voteTarget || inFlight.current) return;
