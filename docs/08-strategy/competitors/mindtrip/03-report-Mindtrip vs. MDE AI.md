@@ -1,7 +1,9 @@
 # Mindtrip vs. MDE AI — Rental Experience Report
 
-**Review date:** October 15, 2026  
-**Reference:** [https://mindtrip.ai/](https://mindtrip.ai/)  
+**Review date:** October 15, 2026
+
+**Reference:** [https://mindtrip.ai/](https://mindtrip.ai/)
+
 **MDE AI:** [https://github.com/amoai-tech/mdeai/](https://github.com/amoai-tech/mdeai/)
 
 ## 1. Executive summary
@@ -9,15 +11,15 @@
 The screenshots show five important UI states:
 
 1. AI chat with rental recommendations and a synchronized map.
-    
+
 2. Property details displayed in the right column.
-    
+
 3. A dedicated room-selection page.
-    
+
 4. An integrated guest and payment checkout.
-    
+
 5. Checkout form validation.
-    
+
 
 **Key discovery:** Mindtrip supports an in-app hotel checkout, not exclusively external booking links. The Loft 32 checkout shows a payment form, a price summary, and a **Confirm & Pay** button.
 
@@ -42,19 +44,19 @@ The layout has three sections: a narrow navigation rail, the AI conversation/res
 Important features:
 
 - AI explains the user's search requirements.
-    
+
 - **Best Option** highlights the leading recommendation.
-    
+
 - **Other Options That Could Work** provides alternatives.
-    
+
 - **Not a Good Fit** explains why some properties were rejected.
-    
+
 - Listing cards include photographs, prices, ratings when available, and actions.
-    
+
 - The composer remains available at the bottom of chat.
-    
+
 - The map places recommendations in geographic context.
-    
+
 
 **Best feature to adopt:** Show not only matching apartments, but also why they matched or were excluded.
 
@@ -69,19 +71,19 @@ Selecting a property changes the right column from the main map to an informatio
 Visible features:
 
 - Property title and photo gallery.
-    
+
 - Overview, Amenities, Reviews, Location tabs.
-    
+
 - Price and availability actions.
-    
+
 - Property description and location map.
-    
+
 - Similar stays.
-    
+
 - Nearby restaurants and attractions.
-    
+
 - Save and trip-related actions.
-    
+
 
 **Best feature to adopt:** Keep the AI conversation visible while users inspect a property.
 
@@ -96,21 +98,21 @@ MDE should reuse its existing right-column architecture rather than introduce an
 The Loft 32 room page includes a large room card with:
 
 - Image carousel.
-    
+
 - Room type: Double Room.
-    
+
 - Room size: 258 sq ft.
-    
+
 - Bed information and guest capacity.
-    
+
 - Flexible cancellation information.
-    
+
 - Price per night and total stay estimate.
-    
+
 - **More details** and **Book** actions.
-    
+
 - Toggle to show the total including taxes and fees.
-    
+
 
 The screenshot shows a rate around **$60/night** and **$180 for three nights**. These are historical screenshot values, not verified current availability.
 
@@ -129,23 +131,23 @@ Mindtrip presents a structured three-stage journey:
 The checkout screen includes:
 
 - Property and room summary.
-    
+
 - Check-in/check-out dates.
-    
+
 - Traveler information.
-    
+
 - Optional special requests.
-    
+
 - Payment address.
-    
+
 - Card, Google Pay, and Amazon Pay options.
-    
+
 - Separate price summary and cancellation information.
-    
+
 - **Confirm & Pay** action.
-    
+
 - Important hotel policies.
-    
+
 
 The page states that payment is processed by Nuvei; the screenshots do not independently verify the backend payment integration.
 
@@ -205,15 +207,15 @@ The screenshots support this interface sequence, but do not reveal the underlyin
 The screenshots cannot establish:
 
 - Mindtrip's internal AI agents, model providers, prompts, or tool orchestration.
-    
+
 - API endpoint implementations or database structure.
-    
+
 - Server-side price verification or booking inventory locking.
-    
+
 - Payment idempotency, webhook handling, or fraud controls.
-    
+
 - Streaming protocol, request latency, or cache architecture.
-    
+
 
 Those questions require authorized network observations or other direct technical evidence.
 
