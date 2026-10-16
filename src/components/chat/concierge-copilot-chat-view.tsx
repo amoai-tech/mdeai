@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   CopilotChatMessageView,
   CopilotChatView,
@@ -12,6 +12,8 @@ import {
   useTranscriptTailHasContent,
 } from "@/components/chat/concierge-transcript-tail";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useSession } from "@/hooks/use-session";
+import { takeConciergeDraft } from "@/lib/concierge-draft-store";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 
@@ -114,6 +116,17 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
     () => conciergeComposerInput(props.input, onSubmitMessage, hydrated),
     [onSubmitMessage, props.input, hydrated],
   );
+  // SAN-1507: a visitor who asked the AI while signed out and then signed in gets that question back
+  // in the composer, editable and NOT sent. CopilotChat already owns the composer text and passes
+  // its setter down, so the normal typing path is untouched. The draft is read once, and only once
+  // there is a signed-in user, so going back from /login without signing in keeps it.
+  const { user } = useSession();
+  const setComposerText = props.onInputChange;
+  useEffect(() => {
+    if (!user || !setComposerText) return;
+    const draft = takeConciergeDraft();
+    if (draft) setComposerText(draft);
+  }, [user, setComposerText]);
 
   return (
     <div data-testid="concierge-chat-view-mounted" className="contents">

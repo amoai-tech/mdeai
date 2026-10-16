@@ -17,6 +17,7 @@ vi.mock("@copilotkit/react-core/v2", () => {
   );
   return { CopilotChatView, CopilotChatMessageView: () => null };
 });
+vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: null, loading: false }) }));
 vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({ useConciergeSendHandlers: () => ({}) }));
 vi.mock("@/components/chat/concierge-transcript-tail", () => ({
   ConciergeTranscriptTail: () => null,
