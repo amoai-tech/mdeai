@@ -181,7 +181,7 @@ Stopping is safe: with no schedule the queue just waits. Jobs left `pending` cos
 ## 7. After the five-job proof
 
 - Record the evidence (HTTP bodies, the SQL results) on SAN-1523 · MDE AI — Process Embedding Jobs Reliably and Keep Semantic Search Current. Do not mark it Done: the schedule (PR 2) and the real search journey are still open.
-- Next in the agreed order: PR #347 (its own dry run, expecting exactly `20261016231000` and `20261016232000`), then PR #352 (`20261016233000`).
+- Next in the agreed order, each with its own dry run and its own owner go-ahead: PR #352 (expecting exactly `20261016233000`), then PR #356 (expecting exactly `20261016234000`). PR #347 was closed as redundant and is not part of this rollout.
 - Do **not** process the whole backlog by hand and do **not** enable cron here. PR 2 adds the named schedule and requires proof of scheduler success **and** HTTP 2xx **and** jobs reaching `done`.
 
 ## Rollback
