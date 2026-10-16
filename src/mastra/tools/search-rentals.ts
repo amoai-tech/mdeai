@@ -560,17 +560,25 @@ export async function searchRentals(
       });
       const external = await getOptionalExternalRentals(query);
       const mixed = mixRentalResults(intel.results, external, limit);
-      return {
-        results: mixed.results,
-        total: intel.total + mixed.distinctExternal,
-        budgetNote: budgetNoteFor(query),
-        source: intel.source,
-        hybridUsed: intel.hybridUsed,
-        embedStatus: intel.embedStatus,
-        embedFailureReason: intel.embedFailureReason,
-        embedHttpStatus: intel.embedHttpStatus,
-        rankExplanation: intel.rankExplanation,
-      };
+      // The intelligent path can succeed with NOTHING (e.g. no semantic hits for real inventory).
+      // Answering "no listings" there hides eligible apartments the structured query would find,
+      // so fall through to it. A NON-empty result is authoritative and returned as-is.
+      if (mixed.results.length > 0) {
+        return {
+          results: mixed.results,
+          total: intel.total + mixed.distinctExternal,
+          budgetNote: budgetNoteFor(query),
+          source: intel.source,
+          hybridUsed: intel.hybridUsed,
+          embedStatus: intel.embedStatus,
+          embedFailureReason: intel.embedFailureReason,
+          embedHttpStatus: intel.embedHttpStatus,
+          rankExplanation: intel.rankExplanation,
+        };
+      }
+      console.warn(
+        "[search-rentals] intelligent search returned no results — falling back to structured search",
+      );
     } catch (err) {
       console.warn(
         '[search-rentals] intelligent search failed, falling back to structured search:',
