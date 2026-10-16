@@ -1,11 +1,14 @@
 -- SAN-1502 · development discovery excludes explicit test fixtures
--- Proves: ordinary signed-in users read ordinary development listings (including external candidates) but not
--- explicit test fixtures or private/internal records; the authorized tester and an administrator still read the
--- fixture; the owner keeps their own; launch grants nothing extra.
+-- Proves: ordinary signed-in users read ordinary development listings (including imported external
+-- candidates and test_mode MDE-managed development inventory) but not explicit test fixtures,
+-- private or internal records; the authorized tester and an administrator still read the fixture;
+-- anonymous visitors see ordinary development inventory only; launch grants nothing extra.
+--
+-- The rule lives in ONE place: rental_listing_is_public() via anyone_can_view_active_apartments.
 -- Run with: supabase test db
 begin;
 
-select plan(11);
+select plan(13);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('f1523000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin-fx@example.com'),
@@ -32,7 +35,9 @@ insert into public.apartments (id, title, slug, neighborhood, description, bedro
 values ('00000000-0000-4000-8000-00000053a001', 'FX ordinary dev listing', 'fx-ordinary', 'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{}'),
        ('00000000-0000-4000-8000-00000053a002', 'FX imported candidate',    'fx-candidate', 'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"inventory_kind":"external_candidate"}'),
        ('00000000-0000-4000-8000-00000053a003', 'FX kind-marked fixture',   'fx-kindfix',   'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"inventory_kind":"test_fixture"}'),
-       ('00000000-0000-4000-8000-00000053a004', 'FX private record',        'fx-private',   'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"visibility":"private"}');
+       ('00000000-0000-4000-8000-00000053a004', 'FX private record',        'fx-private',   'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"visibility":"private"}'),
+       ('00000000-0000-4000-8000-00000053a005', 'FX internal record',       'fx-internal',  'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"visibility":"internal"}'),
+       ('00000000-0000-4000-8000-00000053a006', 'FX test_mode dev listing', 'fx-testmode',  'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"test_mode":"true","inventory_kind":"mde_managed"}');
 
 select is((select phase from public.rental_runtime_settings where singleton), 'development', 'setup: the rental phase is development');
 
@@ -48,7 +53,11 @@ select is((select count(*)::int from public.apartments where id = current_settin
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a003'), 0,
   'development: nor a record marked inventory_kind = test_fixture');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a004'), 0,
-  'development: nor a private/internal record (existing safeguard preserved)');
+  'development: nor a private record');
+select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a005'), 0,
+  'development: nor an internal record');
+select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a006'), 1,
+  'development: test_mode MDE-managed development inventory is NOT excluded');
 reset role;
 
 -- ── the people who manage fixtures still read them -----------------------------------------------------------
@@ -63,14 +72,13 @@ select is((select count(*)::int from public.apartments where id = current_settin
   'development: an administrator still reads the fixture');
 reset role;
 
--- ── anonymous visitors: ordinary development listings are public by the development eligibility rule
--- (rental_listing_is_public, SAN-1502); fixtures and private records are not -----------------------------------
+-- ── anonymous visitors: ordinary development listings are public through the canonical rule -----------------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002')), 2,
-  'development: an anonymous visitor reads ordinary development listings (existing development eligibility, unchanged here)');
-select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004') or id = current_setting('mde.fx_fixture')::uuid), 0,
-  'development: but never a test fixture, a kind-marked fixture or a private record');
+select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006')), 3,
+  'development: an anonymous visitor reads ordinary and test_mode development listings');
+select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004', '00000000-0000-4000-8000-00000053a005') or id = current_setting('mde.fx_fixture')::uuid), 0,
+  'development: but never a test fixture, a kind-marked fixture, a private or an internal record');
 reset role;
 
 -- ── launch grants nothing extra ------------------------------------------------------------------------------
