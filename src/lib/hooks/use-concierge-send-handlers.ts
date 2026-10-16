@@ -12,16 +12,30 @@ import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fa
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
+import { useSession } from "@/hooks/use-session";
 
 /** Shown in the transcript when the AI runtime cannot take a free-form question. */
 export const AGENT_UNAVAILABLE_MESSAGE =
   "The assistant can't answer right now. Please try again in a moment — searches for rentals, events, restaurants and cafés still work.";
+
+/**
+ * Shown when a signed-out visitor asks the AI a free-form question. The AI runtime answers 401 to
+ * anyone without an account on purpose (per-user thread isolation, SAN-547), so "try again" would
+ * never work. The link uses the existing validated `?next=` return path of /login. The searches
+ * that need no account (rentals, events, restaurants, cafés) never reach this: they use the
+ * fast paths. The visitor's own question stays visible above this line.
+ */
+export const SIGN_IN_REQUIRED_MESSAGE =
+  "To ask the AI concierge a question, please [sign in](/login?next=%2Fchat) — it only takes a moment. Searches for rentals, events, restaurants and cafés work without an account.";
 
 /** Fast-path + agent handlers for sendConciergeUserMessage (CopilotChat + ?q=). */
 export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { appendMessage, isRuntimeUnavailable } = useConciergeChat();
   const { showExchange, showNotice } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  const { user, loading: sessionLoading } = useSession();
+  // Unknown while loading: keep the old behaviour then rather than telling a signed-in user to sign in.
+  const signedOut = !sessionLoading && !user;
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
@@ -47,6 +61,12 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   const onAgentSend = useCallback(
     async (text: string) => {
+      if (signedOut) {
+        // No agent run: the runtime would answer 401, and no thread may be created for a guest.
+        showExchange(text, SIGN_IN_REQUIRED_MESSAGE);
+        clearConciergePendingSend();
+        return true;
+      }
       try {
         if (!isRuntimeUnavailable() && (await appendMessage(text))) {
           if (getConciergeErrorVersion() === 0) return true;
@@ -62,7 +82,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, showExchange, showNotice],
+    [appendMessage, isRuntimeUnavailable, showExchange, showNotice, signedOut],
   );
 
   useEffect(() => {

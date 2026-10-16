@@ -10,6 +10,8 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
+vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable }),
@@ -27,7 +29,7 @@ vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchF
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
-import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { AGENT_UNAVAILABLE_MESSAGE, SIGN_IN_REQUIRED_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,6 +53,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   chat.runtimeUnavailable = false;
   coagent.state = {};
+  session.user = { id: "u1" };
+  session.loading = false;
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
   container = document.createElement("div");
@@ -153,5 +157,56 @@ describe("SAN-407 · INT-004 — is the conversation in a rental search?", () =>
     coagent.state = state;
     rerender();
     expect(handlers.inRentalSearch).toBe(expected);
+  });
+});
+
+// SAN-1507 — a signed-out visitor's AI question got "The assistant can't answer right now. Please try
+// again", although the runtime refuses guests on purpose and a retry can never work.
+describe("onAgentSend for a signed-out visitor", () => {
+  const rerender = () =>
+    act(() =>
+      root.render(
+        <EventLocalChatProvider>
+          <Harness />
+        </EventLocalChatProvider>,
+      ),
+    );
+
+  it("keeps the question visible and asks them to sign in, without calling the agent", async () => {
+    session.user = null;
+    rerender();
+    let handled: boolean | undefined;
+    await act(async () => {
+      handled = await handlers.onAgentSend("What is a good day trip from Medellín?");
+    });
+    expect(handled).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown.map((m) => [m.role, m.content])).toEqual([
+      ["user", "What is a good day trip from Medellín?"],
+      ["assistant", SIGN_IN_REQUIRED_MESSAGE],
+    ]);
+    expect(SIGN_IN_REQUIRED_MESSAGE).toContain("/login?next=%2Fchat");
+    expect(SIGN_IN_REQUIRED_MESSAGE).not.toMatch(/try again/i);
+  });
+
+  it("does not tell a signed-in visitor to sign in", async () => {
+    chat.appendMessage.mockResolvedValue(true);
+    await act(async () => {
+      await handlers.onAgentSend("tell me about Laureles");
+    });
+    expect(chat.appendMessage).toHaveBeenCalled();
+    expect(shown.map((m) => m.content)).not.toContain(SIGN_IN_REQUIRED_MESSAGE);
+  });
+
+  it("does not guess while the session is still loading", async () => {
+    session.user = null;
+    session.loading = true;
+    rerender();
+    chat.appendMessage.mockResolvedValue(true);
+    await act(async () => {
+      await handlers.onAgentSend("tell me about Laureles");
+    });
+    expect(chat.appendMessage).toHaveBeenCalled();
+    expect(shown.map((m) => m.content)).not.toContain(SIGN_IN_REQUIRED_MESSAGE);
   });
 });
