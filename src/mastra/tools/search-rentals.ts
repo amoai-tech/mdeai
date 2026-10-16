@@ -5,6 +5,7 @@ import { formatDateOnly } from '@/lib/rentals/date-only';
 import {
   isAvailabilityUnconfirmed,
   isSelfAttested,
+  externalSourceAttribution,
   isExternalSourceListing,
   externalSourceProvider,
 } from '@/lib/rentals/provenance';
@@ -48,6 +49,12 @@ export const rentalSchema = z.object({
   source_url: z.string(),
   /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
   source_provider: z.string().optional(),
+  /**
+   * SAN-1235 — when MDE last genuinely checked this listing's source, from the import's own audit
+   * metadata. Absent means "Not yet checked"; it is never inferred from a flag or a timestamp of
+   * convenience.
+   */
+  source_last_checked: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -385,7 +392,12 @@ export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
   const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
-  const externalProvider = externalSourceProvider(r.metadata);
+  // Attribution is independent of MDE management: a development-managed import still shows the
+  // advertiser it came from, while requestability stays with can_schedule_viewing.
+  const externalProvider = externalSourceAttribution(r.metadata).provider ?? externalSourceProvider(r.metadata);
+  const meta = (r.metadata ?? null) as Record<string, unknown> | null;
+  const sourceLastChecked =
+    typeof meta?.['source_checked_at'] === 'string' ? (meta['source_checked_at'] as string) : undefined;
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -403,6 +415,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     source_provider: externalProvider ?? undefined,
+    source_last_checked: sourceLastChecked,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`

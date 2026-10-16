@@ -66,7 +66,8 @@ export function isExternalAd(rental: Rental): boolean {
  * could redirect a renter off-site to a phishing page through MDE's UI.
  */
 export function externalSourceUrlFor(rental: Rental): string | null {
-  if (!isExternalAd(rental)) return null;
+  // SAN-1235: the allowlist is the gate, not the external-ad tag. A development-managed import
+  // shows its genuine advertiser link while keeping its MDE viewing action.
   return approvedExternalSourceUrl(rental.source_url);
 }
 
@@ -260,12 +261,20 @@ export function RentalBrowseCard({
               {isExternalAd(rental) ? 'Request MDE follow-up' : 'Schedule viewing'}
             </Button>
           ) : null}
-          {isExternalAd(rental) && rental.source_provider ? (
+          {rental.source_provider ? (
             <span
               data-testid={`rental-card-source-label-${rental.id}`}
               className="self-center text-[11px] text-muted-foreground"
             >
               Source: {rental.source_provider}
+            </span>
+          ) : null}
+          {rental.source_provider ? (
+            <span
+              data-testid={`rental-card-freshness-${rental.id}`}
+              className="self-center text-[11px] text-muted-foreground"
+            >
+              {rental.source_last_checked ? `Last checked ${rental.source_last_checked}` : 'Not yet checked'}
             </span>
           ) : null}
           {externalSourceUrl ? (
