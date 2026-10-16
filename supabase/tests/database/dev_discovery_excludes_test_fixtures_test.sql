@@ -5,7 +5,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(10);
+select plan(11);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('f1523000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin-fx@example.com'),
@@ -63,11 +63,14 @@ select is((select count(*)::int from public.apartments where id = current_settin
   'development: an administrator still reads the fixture');
 reset role;
 
--- ── anonymous visitors still get nothing ----------------------------------------------------------------------
+-- ── anonymous visitors: ordinary development listings are public by the development eligibility rule
+-- (rental_listing_is_public, SAN-1502); fixtures and private records are not -----------------------------------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select is((select count(*)::int from public.apartments where id::text like '00000000-0000-4000-8000-00000053a%' or id = current_setting('mde.fx_fixture')::uuid), 0,
-  'development: an anonymous visitor reads none of them');
+select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002')), 2,
+  'development: an anonymous visitor reads ordinary development listings (existing development eligibility, unchanged here)');
+select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004') or id = current_setting('mde.fx_fixture')::uuid), 0,
+  'development: but never a test fixture, a kind-marked fixture or a private record');
 reset role;
 
 -- ── launch grants nothing extra ------------------------------------------------------------------------------
