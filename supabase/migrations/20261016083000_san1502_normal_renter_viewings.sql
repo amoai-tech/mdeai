@@ -466,10 +466,16 @@ BEGIN
     -- Normal status/contact edits keep the original booking identity.
     -- Apartment or renter/lead reassignment must pass the authorization check.
     IF NEW.apartment_id IS NOT DISTINCT FROM OLD.apartment_id THEN
-      IF TG_TABLE_NAME = 'leads' AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id THEN
-        RETURN NEW;
-      ELSIF TG_TABLE_NAME = 'showings' AND NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id THEN
-        RETURN NEW;
+      -- Keep table-specific record fields in separate branches. Evaluating
+      -- NEW.lead_id on leads (or NEW.user_id on showings) raises SQLSTATE 42703.
+      IF TG_TABLE_NAME = 'leads' THEN
+        IF NEW.user_id IS NOT DISTINCT FROM OLD.user_id THEN
+          RETURN NEW;
+        END IF;
+      ELSIF TG_TABLE_NAME = 'showings' THEN
+        IF NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id THEN
+          RETURN NEW;
+        END IF;
       END IF;
     END IF;
   END IF;
