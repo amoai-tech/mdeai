@@ -487,13 +487,15 @@ async function searchRentalsFromSupabase(
   const monthlyBudget = monthlyBudgetFromQuery(query);
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
-  const baseQuery = () => {
+  const APARTMENT_SELECT =
+    'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing';
+
+  // `head` asks PostgREST for the exact count without shipping the rows, so the alternatives'
+  // total is still reported when the confirmed group already filled the page.
+  const baseQuery = (columns: string = APARTMENT_SELECT, head = false) => {
     let b = client
       .from('apartments')
-      .select(
-        'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
-        { count: 'exact' },
-      );
+      .select(columns, head ? { count: 'exact', head: true } : { count: 'exact' });
     if (!developmentMode) {
       b = b.eq('status', 'active').not('landlord_id', 'is', null);
     }
@@ -523,7 +525,8 @@ async function searchRentalsFromSupabase(
     return { rows: (data ?? []) as ApartmentRow[], count: count ?? 0 };
   };
 
-  let rows: ApartmentRow[];
+  let confirmedRows: ApartmentRow[] = [];
+  let alternativeRows: ApartmentRow[] = [];
   let total: number;
   if (monthlyBudget || maxNightly !== null) {
     // A budget is only comparable inside its own currency, so rows that CONFIRM it must not be
@@ -544,9 +547,20 @@ async function searchRentalsFromSupabase(
         .limit(limit),
     );
     const remaining = Math.max(0, limit - confirmed.rows.length);
+    // The alternatives' exact count is independent of how many of them fit on this page, so a full
+    // confirmed page still reports the true total instead of dropping the alternatives from it.
+    const countAlternatives = async () => {
+      const { count, error } = await baseQuery('id', true)
+        .neq('currency', budgetCurrency)
+        .or(predicate);
+      if (error) {
+        throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
+      }
+      return count ?? 0;
+    };
     const alternatives =
       remaining === 0
-        ? { rows: [] as ApartmentRow[], count: 0 }
+        ? { rows: [] as ApartmentRow[], count: await countAlternatives() }
         : await runQuery(
             baseQuery()
               .neq('currency', budgetCurrency)
@@ -554,20 +568,22 @@ async function searchRentalsFromSupabase(
               .order('price_daily', { ascending: true, nullsFirst: false })
               .limit(remaining),
           );
-    rows = [...confirmed.rows, ...alternatives.rows];
+    confirmedRows = confirmed.rows;
+    alternativeRows = alternatives.rows;
     total = confirmed.count + alternatives.count;
   } else {
     const all = await runQuery(
       baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).limit(limit),
     );
-    rows = all.rows;
+    confirmedRows = all.rows;
     total = all.count;
   }
 
-  let results = rows.map(rowToRental);
-  if (query.stayType === 'monthly') {
-    results = sortForMonthlyStay(results);
-  }
+  // Group order is the contract: confirmed matches first, labelled alternatives after. Monthly
+  // ordering runs INSIDE each group, so it can never move an alternative above a match.
+  const toRentals = (list: ApartmentRow[]) =>
+    query.stayType === 'monthly' ? sortForMonthlyStay(list.map(rowToRental)) : list.map(rowToRental);
+  const results = [...toRentals(confirmedRows), ...toRentals(alternativeRows)];
   return { results, total, source: 'supabase' };
 }
 

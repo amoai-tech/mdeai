@@ -56,7 +56,7 @@ const apartmentRows = [
     available_to: null,
     pet_friendly: false,
     parking_included: false,
-    minimum_stay_days: 1,
+    minimum_stay_days: 30,
     slug: `usd-${i + 1}`,
     latitude: 6.25,
     longitude: -75.58,
@@ -144,5 +144,35 @@ describe("a monthly budget never lets another currency crowd out the confirmed m
     // The uncomparable alternatives remain visible, after the confirmed matches.
     expect(results.filter((r) => r.currency === "USD").length).toBeGreaterThan(0);
     expect(total).toBe(COP_COUNT + USD_COUNT);
+  });
+
+  it("reports the true total even when the confirmed matches fill the whole page", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    // Only 3 slots: the confirmed group fills the page, so the alternatives contribute no rows —
+    // their exact count must still be included in the total (5 COP + 8 USD = 13, not 5).
+    const { results, total } = await searchRentals({
+      neighborhood: "Laureles",
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      limit: 3,
+    });
+    expect(results).toHaveLength(3);
+    expect(results.every((r) => r.currency === "COP")).toBe(true);
+    expect(total).toBe(COP_COUNT + USD_COUNT);
+  });
+
+  it("keeps the confirmed group first when the monthly ranking is applied", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    // Both groups share the long-stay tag and USD carries the lower derived nightly price, so one
+    // global sortForMonthlyStay would move USD ahead of the COP matches. Ranking stays per group.
+    const { results } = await searchRentals({
+      neighborhood: "Laureles",
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+      limit: 8,
+    });
+    expect(results.slice(0, COP_COUNT).every((r) => r.currency === "COP")).toBe(true);
+    expect(results.filter((r) => r.currency === "COP")).toHaveLength(COP_COUNT);
   });
 });
