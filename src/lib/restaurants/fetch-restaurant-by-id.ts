@@ -15,12 +15,21 @@ const SELECT_FIELDS =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function fetchRestaurantById(id: string): Promise<Restaurant | null> {
-  // A non-uuid (legacy slug, typo) must 404 cleanly, not raise a PostgREST error.
-  if (!UUID_RE.test(id)) return null;
+/**
+ * A lookup result must distinguish "this restaurant does not exist" from "the catalog
+ * could not be reached": showing a 404 during an outage tells the visitor the wrong story.
+ */
+export type RestaurantLookup =
+  | { status: "found"; restaurant: Restaurant }
+  | { status: "not_found" }
+  | { status: "error" };
+
+export async function fetchRestaurantById(id: string): Promise<RestaurantLookup> {
+  // A non-uuid (legacy slug, typo) is a clean miss, not a PostgREST error.
+  if (!UUID_RE.test(id)) return { status: "not_found" };
 
   const env = getSupabaseServerAnonEnv();
-  if (!env) return null;
+  if (!env) return { status: "error" };
 
   const client = createClient(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -32,6 +41,7 @@ export async function fetchRestaurantById(id: string): Promise<Restaurant | null
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return rowToRestaurant(data as unknown as RestaurantRow);
+  if (error) return { status: "error" };
+  if (!data) return { status: "not_found" };
+  return { status: "found", restaurant: rowToRestaurant(data as unknown as RestaurantRow) };
 }
