@@ -38,6 +38,9 @@ env:
 
 jobs:
   authenticated-vote:
+    # workflow_dispatch lets a user pick ANY branch. Without this guard, selecting a feature
+    # branch would run that branch's code with production-wide credentials. Only main runs.
+    if: github.ref == 'refs/heads/main'
     name: authenticated restaurant vote
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -113,8 +116,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: voting-failure-${{ github.run_id }}
+          # Playwright warns that HTML reports and traces can contain credentials and access
+          # tokens. Masking one screenshot does not sanitize a report, so reports are NOT
+          # auto-published; retrieve them through a trusted, access-controlled process.
           path: |
             test-results/*.png
-            tmp/playwright-report/**
           if-no-files-found: ignore
           retention-days: 3
