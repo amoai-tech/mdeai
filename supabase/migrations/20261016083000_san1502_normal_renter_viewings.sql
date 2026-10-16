@@ -1,0 +1,497 @@
+-- SAN-1502 · authorized renter access to the existing atomic viewing flow.
+-- Retain SAN-1286 / SAN-486 atomic idempotency, ownership, move-in checks,
+-- and lead/showing inserts without modifying their contract.
+-- Source-linked external ads and test-fixture requests must be denied BEFORE
+-- the early committed replay return (no insertion trigger fires on replay).
+-- This definition is copied from the latest 20261012090000_san486_future_move_in
+-- function with only the guarded block below added.
+-- No grant changes: CREATE OR REPLACE preserves the original service_role ACL.
+
+CREATE OR REPLACE FUNCTION public.p1_schedule_tour_atomic(p_listing_id text, p_user_id uuid, p_idempotency_key text, p_source text, p_email text, p_name text, p_phone text, p_trip_id uuid, p_scheduled_at timestamp with time zone, p_lead_metadata jsonb, p_showing_metadata jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_apartment public.apartments%ROWTYPE;
+  v_lead public.leads%ROWTYPE;
+  v_showing public.showings%ROWTYPE;
+  v_listing_id text := nullif(btrim(p_listing_id), '');
+  v_idempotency_key text := nullif(btrim(p_idempotency_key), '');
+  v_email text := nullif(lower(btrim(p_email)), '');
+  v_name text := nullif(btrim(p_name), '');
+  v_phone text := nullif(btrim(p_phone), '');
+  v_source text := coalesce(nullif(btrim(p_source), ''), 'form');
+  v_viewing_identity jsonb;
+  v_identity_apartment_id uuid;
+  v_replay boolean := false;
+BEGIN
+  IF v_listing_id IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: listing_id required'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_idempotency_key IS NULL OR length(v_idempotency_key) < 8 THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency_key required (min 8 chars)'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_user_id IS NULL AND v_email IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: guest email required for idempotency'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Idempotency is stronger than volatile new-request validation. If this exact
+  -- logical request already committed, return the existing pair even when the
+  -- requested time has since passed or the listing is no longer requestable.
+  IF p_user_id IS NOT NULL THEN
+    SELECT l.* INTO v_lead
+    FROM public.leads AS l
+    WHERE l.user_id = p_user_id
+      AND l.idempotency_key = v_idempotency_key;
+  ELSE
+    SELECT l.* INTO v_lead
+    FROM public.leads AS l
+    WHERE l.user_id IS NULL
+      AND l.idempotency_key = v_idempotency_key;
+  END IF;
+
+  -- A published third-party source advertisement is discoverable via the
+  -- original source link, but is never MDE-requestable. Do not rely on UI
+  -- can_schedule_viewing=false: reject both new requests and early replays.
+  IF EXISTS (
+    SELECT 1 FROM public.apartments a
+     WHERE (
+       a.id::text = lower(v_listing_id)
+       OR a.slug = v_listing_id
+       OR a.id = v_lead.apartment_id
+       OR a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
+     )
+       AND (
+         lower(coalesce(a.metadata->>'inventory_kind', '')) = 'external_candidate'
+         OR lower(coalesce(a.metadata->>'inventory_type', '')) = 'external'
+         OR lower(coalesce(a.metadata->>'allowed_action', '')) = 'view_original_listing'
+       )
+  ) THEN
+    RAISE EXCEPTION 'source-linked rental is not requestable'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- An existing viewing is normally replayable after listing changes,
+  -- but development viewing access still requires an authorized renter grant.
+  -- Resolve the requested UUID/slug AND the saved immutable apartment ID:
+  -- a fixture may have been renamed since its original guest request.
+  -- This must run before the early idempotent-replay return above all writes.
+  IF (
+    EXISTS (
+      SELECT 1 FROM public.apartments a
+       WHERE (a.id::text = lower(v_listing_id) OR a.slug = v_listing_id)
+         AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.apartments a
+       WHERE a.id = v_lead.apartment_id
+         AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.apartments a
+       WHERE a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
+         AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+    )
+  ) AND NOT (coalesce(public.is_admin(), false) OR (p_user_id IS NOT NULL AND public.is_authorized_test_actor(p_user_id, 'renter'))) THEN
+    RAISE EXCEPTION 'development rental viewing requires an authorized renter'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_lead.id IS NOT NULL THEN
+    -- Replay against the immutable request snapshot, never mutable CRM columns.
+    -- This keeps one idempotency key bound to one logical viewing even when the
+    -- renter later edits their lead profile or preferred time.
+    v_viewing_identity := v_lead.metadata -> 'schedule_viewing_identity';
+    v_identity_apartment_id := nullif(v_viewing_identity ->> 'apartment_id', '')::uuid;
+
+    IF v_viewing_identity IS NULL OR v_identity_apartment_id IS NULL THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: committed viewing identity snapshot missing'
+        USING ERRCODE = 'P1286';
+    END IF;
+
+    IF nullif(v_viewing_identity ->> 'user_id', '')::uuid IS DISTINCT FROM p_user_id
+      OR (v_viewing_identity ->> 'listing_id') IS DISTINCT FROM v_listing_id
+      OR nullif(v_viewing_identity ->> 'scheduled_at', '')::timestamptz IS DISTINCT FROM p_scheduled_at
+      OR nullif(v_viewing_identity ->> 'trip_id', '')::uuid IS DISTINCT FROM p_trip_id
+      OR nullif(v_viewing_identity ->> 'email', '') IS DISTINCT FROM v_email
+      OR nullif(v_viewing_identity ->> 'name', '') IS DISTINCT FROM lower(v_name)
+      OR nullif(v_viewing_identity ->> 'phone', '') IS DISTINCT FROM v_phone
+    THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT s.* INTO v_showing
+    FROM public.showings AS s
+    WHERE s.lead_id = v_lead.id
+      AND s.apartment_id = v_identity_apartment_id
+      AND s.scheduled_at = p_scheduled_at;
+
+    IF v_showing.id IS NOT NULL THEN
+      RETURN jsonb_build_object(
+        'lead', to_jsonb(v_lead),
+        'showing', to_jsonb(v_showing),
+        'idempotent_replay', true
+      );
+    END IF;
+  END IF;
+
+  IF p_scheduled_at IS NULL OR p_scheduled_at <= now() THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: future scheduled_at required'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Resolve UUID or slug inside the same database transaction that performs the write.
+  -- Production customer listings keep their normal approval and availability
+  -- contract. Development fixtures need only active status and an owner. The
+  -- ownership requirement is what makes a lead/showing reachable by exactly one broker;
+  -- without it a request strands on a listing nobody can be held responsible for.
+  IF v_listing_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
+    SELECT a.* INTO v_apartment
+    FROM public.apartments AS a
+    WHERE a.id = v_listing_id::uuid
+      AND a.status = 'active'
+      AND (
+        lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+        OR (a.moderation_status = 'approved' AND a.listing_workflow_status = 'published')
+      )
+      AND a.landlord_id IS NOT NULL
+      -- SAN-486: viewing eligibility mirrors the publication contract — a known
+      -- move-in date, not an expired or reversed window. It is independent of the
+      -- move-in date itself, so a tour can be booked before move-in. The row is locked
+      -- so a concurrent withdrawal serializes with the lead/showing inserts below.
+      AND (
+        lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+        OR (
+          a.available_from IS NOT NULL
+          AND (a.available_to IS NULL OR a.available_from <= a.available_to)
+          AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
+        )
+      )
+    FOR UPDATE;
+  ELSE
+    SELECT a.* INTO v_apartment
+    FROM public.apartments AS a
+    WHERE a.slug = v_listing_id
+      AND a.status = 'active'
+      AND (
+        lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+        OR (a.moderation_status = 'approved' AND a.listing_workflow_status = 'published')
+      )
+      AND a.landlord_id IS NOT NULL
+      -- SAN-486: viewing eligibility mirrors the publication contract — a known
+      -- move-in date, not an expired or reversed window. It is independent of the
+      -- move-in date itself, so a tour can be booked before move-in. The row is locked
+      -- so a concurrent withdrawal serializes with the lead/showing inserts below.
+      AND (
+        lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
+        OR (
+          a.available_from IS NOT NULL
+          AND (a.available_to IS NULL OR a.available_from <= a.available_to)
+          AND (a.available_to IS NULL OR a.available_to >= (p_scheduled_at AT TIME ZONE 'America/Bogota')::date)
+        )
+      )
+    FOR UPDATE;
+  END IF;
+
+  IF v_apartment.id IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: listing is not requestable'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- A browser-provided trip id must never attach a rental lead to another
+  -- user's trip. Anonymous viewing requests therefore cannot carry trip_id.
+  IF p_trip_id IS NOT NULL THEN
+    IF p_user_id IS NULL OR NOT EXISTS (
+      SELECT 1
+      FROM public.trips AS t
+      WHERE t.id = p_trip_id
+        AND t.user_id = p_user_id
+    ) THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: trip does not belong to user'
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  IF p_user_id IS NOT NULL THEN
+    INSERT INTO public.leads (
+      user_id,
+      source,
+      email,
+      phone,
+      name,
+      apartment_id,
+      preferred_showing_at,
+      trip_id,
+      intent,
+      status,
+      pipeline_stage,
+      metadata,
+      idempotency_key
+    )
+    VALUES (
+      p_user_id,
+      v_source,
+      v_email,
+      v_phone,
+      v_name,
+      v_apartment.id,
+      p_scheduled_at,
+      p_trip_id,
+      'rental',
+      'new',
+      'showing_scheduled',
+      coalesce(p_lead_metadata, '{}'::jsonb)
+        || jsonb_build_object(
+          'listing_id', v_listing_id,
+          'preferred_at', p_scheduled_at,
+          'schedule_viewing_identity', jsonb_build_object(
+            'user_id', p_user_id,
+            'listing_id', v_listing_id,
+            'apartment_id', v_apartment.id,
+            'scheduled_at', p_scheduled_at,
+            'trip_id', p_trip_id,
+            'email', v_email,
+            'name', lower(v_name),
+            'phone', v_phone
+          )
+        ),
+      v_idempotency_key
+    )
+    ON CONFLICT (user_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL
+    DO NOTHING
+    RETURNING * INTO v_lead;
+
+    IF v_lead.id IS NULL THEN
+      v_replay := true;
+      SELECT l.* INTO v_lead
+      FROM public.leads AS l
+      WHERE l.user_id = p_user_id
+        AND l.idempotency_key = v_idempotency_key;
+    END IF;
+  ELSE
+    INSERT INTO public.leads (
+      user_id,
+      source,
+      email,
+      phone,
+      name,
+      apartment_id,
+      preferred_showing_at,
+      trip_id,
+      intent,
+      status,
+      pipeline_stage,
+      metadata,
+      idempotency_key
+    )
+    VALUES (
+      NULL,
+      v_source,
+      v_email,
+      v_phone,
+      v_name,
+      v_apartment.id,
+      p_scheduled_at,
+      NULL,
+      'rental',
+      'new',
+      'showing_scheduled',
+      coalesce(p_lead_metadata, '{}'::jsonb)
+        || jsonb_build_object(
+          'listing_id', v_listing_id,
+          'preferred_at', p_scheduled_at,
+          'schedule_viewing_identity', jsonb_build_object(
+            'user_id', p_user_id,
+            'listing_id', v_listing_id,
+            'apartment_id', v_apartment.id,
+            'scheduled_at', p_scheduled_at,
+            'trip_id', p_trip_id,
+            'email', v_email,
+            'name', lower(v_name),
+            'phone', v_phone
+          )
+        ),
+      v_idempotency_key
+    )
+    ON CONFLICT (idempotency_key)
+      WHERE user_id IS NULL
+        AND idempotency_key IS NOT NULL
+    DO NOTHING
+    RETURNING * INTO v_lead;
+
+    IF v_lead.id IS NULL THEN
+      v_replay := true;
+      SELECT l.* INTO v_lead
+      FROM public.leads AS l
+      WHERE l.user_id IS NULL
+        AND l.idempotency_key = v_idempotency_key;
+    END IF;
+  END IF;
+
+  IF v_lead.id IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency conflict could not be resolved'
+      USING ERRCODE = 'P1286';
+  END IF;
+
+  -- Reusing an idempotency key for a different logical viewing is an error.
+  -- Compare the immutable commit snapshot, not mutable CRM lead fields.
+  v_viewing_identity := v_lead.metadata -> 'schedule_viewing_identity';
+  v_identity_apartment_id := nullif(v_viewing_identity ->> 'apartment_id', '')::uuid;
+
+  IF v_viewing_identity IS NULL OR v_identity_apartment_id IS NULL THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: committed viewing identity snapshot missing'
+      USING ERRCODE = 'P1286';
+  END IF;
+
+  IF nullif(v_viewing_identity ->> 'user_id', '')::uuid IS DISTINCT FROM p_user_id
+    OR (v_viewing_identity ->> 'listing_id') IS DISTINCT FROM v_listing_id
+    OR v_identity_apartment_id IS DISTINCT FROM v_apartment.id
+    OR nullif(v_viewing_identity ->> 'scheduled_at', '')::timestamptz IS DISTINCT FROM p_scheduled_at
+    OR nullif(v_viewing_identity ->> 'trip_id', '')::uuid IS DISTINCT FROM p_trip_id
+    OR nullif(v_viewing_identity ->> 'email', '') IS DISTINCT FROM v_email
+    OR nullif(v_viewing_identity ->> 'name', '') IS DISTINCT FROM lower(v_name)
+    OR nullif(v_viewing_identity ->> 'phone', '') IS DISTINCT FROM v_phone
+    OR v_lead.intent IS DISTINCT FROM 'rental'
+  THEN
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: idempotency key reused for different viewing request'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT s.* INTO v_showing
+  FROM public.showings AS s
+  WHERE s.lead_id = v_lead.id
+    AND s.apartment_id = v_apartment.id
+    AND s.scheduled_at = p_scheduled_at;
+
+  IF v_showing.id IS NULL THEN
+    INSERT INTO public.showings (
+      lead_id,
+      apartment_id,
+      scheduled_at,
+      status,
+      trip_id,
+      metadata
+    )
+    VALUES (
+      v_lead.id,
+      v_apartment.id,
+      p_scheduled_at,
+      'scheduled',
+      p_trip_id,
+      coalesce(p_showing_metadata, '{}'::jsonb)
+        || jsonb_build_object('listing_id', v_listing_id)
+    )
+    ON CONFLICT (
+      lead_id,
+      apartment_id,
+      ((scheduled_at AT TIME ZONE 'America/Bogota')::date)
+    ) DO NOTHING
+    RETURNING * INTO v_showing;
+
+    IF v_showing.id IS NULL THEN
+      SELECT s.* INTO v_showing
+      FROM public.showings AS s
+      WHERE s.lead_id = v_lead.id
+        AND s.apartment_id = v_apartment.id
+        AND s.scheduled_at = p_scheduled_at;
+    END IF;
+  END IF;
+
+  IF v_showing.id IS NULL THEN
+    IF EXISTS (
+      SELECT 1
+      FROM public.showings AS s
+      WHERE s.lead_id = v_lead.id
+        AND s.apartment_id = v_apartment.id
+        AND (s.scheduled_at AT TIME ZONE 'America/Bogota')::date
+          = (p_scheduled_at AT TIME ZONE 'America/Bogota')::date
+    ) THEN
+      RAISE EXCEPTION 'p1_schedule_tour_atomic: a showing already exists this calendar day for this lead and apartment'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    RAISE EXCEPTION 'p1_schedule_tour_atomic: showing not created or resolved'
+      USING ERRCODE = 'P1286';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'lead', to_jsonb(v_lead),
+    'showing', to_jsonb(v_showing),
+    'idempotent_replay', v_replay
+  );
+END;
+$function$;
+
+
+-- Authorized developer visibility no longer depends on moderation, publication
+-- approval, photo rights or third-party documents. A fixture still needs to be
+-- ACTIVE for normal renter discovery. Public RLS stays unchanged.
+CREATE OR REPLACE FUNCTION public.rental_test_listing_is_available(
+  p_status text,
+  p_moderation_status text,
+  p_listing_workflow_status text,
+  p_metadata jsonb
+) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+SET search_path = ''
+AS $rental_dev$
+  SELECT lower(coalesce(p_metadata->>'is_test_fixture', 'false')) = 'true'
+     AND p_status = 'active';
+$rental_dev$;
+
+-- The existing BEFORE INSERT/UPDATE trigger on leads and showings was an
+-- independent administrator-only gate. Permit authenticated renter bookings
+-- through the same transactional RPC, without changing ordinary RLS or
+-- preventing legitimate broker status updates.
+CREATE OR REPLACE FUNCTION public.block_nonadmin_test_viewing()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $rental_booking_trigger$
+DECLARE
+  v_renter_id uuid;
+BEGIN
+  -- Writes to existing bookings are governed by leads/showings RLS and action
+  -- RPCs. The trigger must not prevent the assigned broker updating statuses.
+  IF TG_OP <> 'INSERT' THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.apartment_id IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM public.apartments a
+       WHERE a.id = NEW.apartment_id
+         AND lower(coalesce(a.metadata->>'is_test_fixture','false')) = 'true'
+     ) THEN
+    IF TG_TABLE_NAME = 'leads' THEN
+      v_renter_id := NEW.user_id;
+    ELSIF TG_TABLE_NAME = 'showings' THEN
+      SELECT l.user_id INTO v_renter_id
+      FROM public.leads l
+      WHERE l.id = NEW.lead_id
+        AND l.apartment_id = NEW.apartment_id;
+    END IF;
+
+    IF NOT (
+      coalesce(public.is_admin(), false)
+      OR (
+        v_renter_id IS NOT NULL
+        AND public.is_authorized_test_actor(v_renter_id, 'renter')
+      )
+    ) THEN
+      RAISE EXCEPTION 'development rental viewing requires an authorized renter'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$rental_booking_trigger$;

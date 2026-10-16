@@ -179,6 +179,7 @@ export type RentalRequestabilityInput = {
   listing_workflow_status?: string | null;
   available_from?: string | null;
   available_to?: string | null;
+  metadata?: unknown;
 };
 
 /**
@@ -234,6 +235,15 @@ export function isRentalRequestable(
   today: Date = new Date(),
 ): boolean {
   if (!row.landlord_id) return false;
+  // Development fixtures are bookable through the SAME RPC without external
+  // moderation, publishing, photo or move-in paperwork. RLS selects who can see
+  // these rows; the RPC independently checks the authorized renter grant.
+  const md = row.metadata;
+  if (
+    typeof md === 'object' && md !== null &&
+    !Array.isArray(md) &&
+    (md as Record<string, unknown>).is_test_fixture === true
+  ) return row.status === 'active';
   // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
   if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
@@ -412,7 +422,7 @@ export function rowToRental(r: ApartmentRow): Rental {
 }
 
 function formatAvailability(from: string | null, to: string | null): string {
-  if (!from && !to) return 'Available now';
+  if (!from && !to) return 'Availability unconfirmed';
   if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
   if (from) return `Available from ${formatDateOnly(from)}`;
   return 'Available now';
@@ -472,12 +482,8 @@ async function searchRentalsFromSupabase(
       { count: 'exact' },
     )
     .eq('status', 'active')
-    // SAN-468 §4.2 / SAN-386 canonical public eligibility. status alone is not
-    // enough: a listing must also be approved, published and canonically owned.
-    // RLS enforces this at the database boundary; these filters keep the intent
-    // explicit and protect the query if the policy or client role changes.
-    .eq('moderation_status', 'approved')
-    .eq('listing_workflow_status', 'published')
+    // RLS is authoritative: public users still require approved/published,
+    // while authorized MDE users can develop active fixtures without those gates.
     .not('landlord_id', 'is', null)
     .or(rentalBudgetPredicate(maxNightly, monthlyBudget))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after

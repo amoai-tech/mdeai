@@ -99,6 +99,14 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       ).toBe(false);
     });
 
+    it("allows an active development fixture even without approval paperwork or move-in date", () => {
+      const fixture = { ...ownedRow, metadata: { is_test_fixture: true },
+        moderation_status: "pending", listing_workflow_status: "draft",
+        available_from: null, available_to: null };
+      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(true);
+      expect(mapApartmentRowToDetail({ ...fixture, status: "inactive" }).canScheduleViewing).toBe(false);
+    });
+
     it("fails closed when the ownership columns are absent from the row", () => {
       expect(mapApartmentRowToDetail({ id: "x", title: "Studio", neighborhood: "El Poblado" }).canScheduleViewing).toBe(false);
     });

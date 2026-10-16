@@ -6,11 +6,11 @@
  * date through (`available_from.is.null`) although the RPC refuses it, so renters were shown
  * listings they could not request. Rules, identical for every caller:
  *
- *  - a listing must have a known move-in date (`available_from` not null);
+ *  - a listing with a requested stay date must have a known move-in date;
  *  - with dates (From = first day, Through = last day, both inclusive): it must start on or before
  *    the first day and stay open through the last day, and the stay length in days (Nov 1–30 = 30)
  *    must satisfy its minimum/maximum stay;
- *  - without dates: it must not have expired (`available_to` open or on/after today, Bogotá date).
+ *  - without dates: move-in may be unknown; the listing must not have expired (`available_to` open or on/after today, Bogotá date).
  *
  * A future move-in is still discoverable with no dates: it is shown as upcoming and can be toured.
  */
@@ -45,8 +45,9 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
       throw new RangeError(`applyAvailabilityFilters: ${name} must be a real YYYY-MM-DD date`);
     }
   }
-  let q = (query as unknown as FilterChain).not("available_from", "is", null);
+  let q = (query as unknown as FilterChain);
   if (checkIn || checkOut) {
+    q = q.not("available_from", "is", null);
     const stayStart = checkIn ?? checkOut!;
     const stayEnd = checkOut ?? checkIn!;
     q = q.or(`available_from.lte.${stayStart}`);

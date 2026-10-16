@@ -104,8 +104,8 @@ select lives_ok(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000002","role":"authenticated"}', true);
-select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 0,
-  'A6: withdrawn publishing hides the fixture from an authorized tester');
+select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 1,
+  'A6: publishing paperwork does not hide development fixtures');
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -128,8 +128,8 @@ select lives_ok(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000002","role":"authenticated"}', true);
-select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 0,
-  'A8: withdrawn photo rights hide the fixture from an authorized tester');
+select is((select count(*)::int from public.apartments where id = current_setting('mde.san1502_pr2_fixture')::uuid), 1,
+  'A8: photo paperwork does not hide development fixtures');
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1503000-0000-4000-8000-000000000001","role":"authenticated"}', true);
