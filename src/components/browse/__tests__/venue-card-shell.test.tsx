@@ -51,6 +51,23 @@ describe("VenueCardShell", () => {
     expect(html).not.toContain('data-testid="footer"');
   });
 
+  it("stacks rental media above details on mobile without changing standard cards", () => {
+    const html = renderToStaticMarkup(
+      <VenueCardShell
+        testId="rental-card"
+        resultKind="rental"
+        layout="rental"
+        media={<div data-testid="rental-media">photo</div>}
+      >
+        <p>Details</p>
+      </VenueCardShell>,
+    );
+
+    expect(html).toContain("flex-col sm:flex-row");
+    expect(html).toContain("sm:order-first");
+    expect(html.indexOf('data-testid="rental-media"')).toBeLessThan(html.indexOf("<p>Details</p>"));
+  });
+
   it("renders nova Card composition when requested", () => {
     const html = renderToStaticMarkup(
       <VenueCardShell

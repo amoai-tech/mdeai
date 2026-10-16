@@ -118,14 +118,14 @@ export function RentalCard({
   const showScheduleCta = canScheduleViewing === true && Boolean(onSchedule);
 
   const media = photoUrl ? (
-    <div className="hidden w-[200px] shrink-0 sm:block">
+    <div className="w-full shrink-0 sm:w-[200px]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={photoUrl}
         alt={photoAlt}
         width={200}
         height={120}
-        className="h-[120px] w-[200px] rounded-md object-cover"
+        className="aspect-[16/10] w-full rounded-md object-cover sm:aspect-auto sm:h-[120px] sm:w-[200px]"
         loading="lazy"
       />
     </div>
