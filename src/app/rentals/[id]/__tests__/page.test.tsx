@@ -28,7 +28,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import RentalDetailPage from "../page";
+import RentalDetailPage, { generateMetadata } from "../page";
 
 function textOf(node: unknown): string {
   if (node == null || typeof node === "boolean") return "";
@@ -117,5 +117,28 @@ describe("/rentals/[id] status code", () => {
       expect(existsSync(resolve(rentalsDir, name))).toBe(false);
     }
     expect(existsSync(resolve(rentalsDir, "(browse)", "loading.tsx"))).toBe(true);
+  });
+});
+
+// SAN-1503 — backstop: the title lookup also raises not-found for a missing listing, but must not turn a
+// database outage into a 404 (notFound() throws, so it has to sit outside the lookup's try/catch).
+describe("/rentals/[id] generateMetadata", () => {
+  const props = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  it("raises not-found for a listing that does not exist or is not public", async () => {
+    getRentalDetail.mockResolvedValue(null);
+    await expect(generateMetadata(props("no-such-listing"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("titles a real listing", async () => {
+    getRentalDetail.mockResolvedValue({ title: "WE Home", neighborhood: "El Poblado" });
+    await expect(generateMetadata(props("mde-we-home"))).resolves.toEqual({ title: "WE Home · El Poblado · mdeai" });
+  });
+
+  it("keeps the default title, not a 404, when the database cannot be read", async () => {
+    getRentalDetail.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
+    getRentalDetail.mockRejectedValue(new Error("boom"));
+    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
   });
 });
