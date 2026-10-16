@@ -377,7 +377,6 @@ export async function searchRestaurants(
     .select(
       'id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary',
     )
-    .eq('is_active', true)
     .order('rating', { ascending: false, nullsFirst: false })
     .limit(48);
 

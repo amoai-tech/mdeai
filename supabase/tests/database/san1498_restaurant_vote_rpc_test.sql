@@ -10,6 +10,10 @@
 
 begin;
 
+-- SAN-1521: this file pins the LAUNCH contract; the app default is development.
+update public.app_runtime_config set value = 'launch', updated_at = now()
+ where key = 'application_phase';
+
 select plan(42);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
