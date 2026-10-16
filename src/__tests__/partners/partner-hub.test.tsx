@@ -122,10 +122,11 @@ const LIVE_FOOTER_ROUTES = [
   "/me/tickets",
   "/partners",
   "/partners/signup",
+  "/contact",
   "/host/event/new",
 ];
 
-const DEAD_ROUTES = ["/about", "/contact", "/legal/privacy"];
+const DEAD_ROUTES = ["/about", "/legal/privacy"];
 
 describe("MarketingFooter — live routes only", () => {
   it("links none of the removed dead routes", () => {
