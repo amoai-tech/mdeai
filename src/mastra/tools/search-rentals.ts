@@ -440,10 +440,9 @@ export function rowToRental(r: ApartmentRow): Rental {
 }
 
 function formatAvailability(from: string | null, to: string | null): string {
-  if (!from && !to) return 'Availability unconfirmed';
-  if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
-  if (from) return `Available from ${formatDateOnly(from)}`;
-  return 'Available now';
+  if (!from) return 'Availability unconfirmed';
+  if (to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  return `Available from ${formatDateOnly(from)}`;
 }
 
 function deriveTags(row: {

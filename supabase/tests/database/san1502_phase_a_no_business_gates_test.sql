@@ -1,11 +1,19 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(16);
+select plan(18);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
-          true, 'public active non-fixture catalog is not gated by business approvals in Phase A');
+          false, 'anonymous public catalog never exposes draft apartments');
+select is(public.rental_listing_is_public('active','approved','published',
+  'f1506000-0000-4000-8000-000000000011'::uuid,
+  '{"inventory_kind":"external_candidate"}'::jsonb),false,
+  'anonymous public catalog never exposes external source candidates');
+select is(public.rental_listing_is_public('active','approved','published',
+  'f1506000-0000-4000-8000-000000000011'::uuid,
+  '{"allowed_action":"view_original_listing"}'::jsonb),false,
+  'source-link-only listings remain outside the anonymous catalog');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"is_test_fixture":true}'::jsonb),false,'anonymous fixture boundary remains');

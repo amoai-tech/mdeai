@@ -347,7 +347,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {detail.status === "development-preview" && detail.sourceUrl ? (
+              {detail.sourceUrl?.startsWith("https://") ? (
                 <a
                   href={detail.sourceUrl}
                   target="_blank"

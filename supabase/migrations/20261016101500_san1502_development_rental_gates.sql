@@ -24,18 +24,15 @@ create or replace function public.rental_listing_is_public(
   p_status text,p_moderation_status text,p_listing_workflow_status text,p_landlord_id uuid,p_metadata jsonb)
 returns boolean language sql stable set search_path = ''
 as $function$
-  select case when public.rental_development_active() then
-    p_status='active'
-    and coalesce(lower(p_metadata->>'is_test_fixture'),'false') <> 'true'
-    and coalesce(lower(p_metadata->>'inventory_kind'),'') <> 'test_fixture'
-  else
-    p_status='active' and p_moderation_status='approved'
+  -- The anonymous public catalog MUST NOT inherit Phase A access: app
+  -- developers/renters get their Phase A access through authenticated RLS.
+  -- Source-linked candidates are viewable there, never silently public.
+  select p_status='active' and p_moderation_status='approved'
     and p_listing_workflow_status='published' and p_landlord_id is not null
     and coalesce(lower(p_metadata->>'is_test_fixture'),'false') <> 'true'
     and coalesce(lower(p_metadata->>'inventory_kind'),'') not in ('test_fixture','external_candidate')
     and coalesce(lower(p_metadata->>'inventory_type'),'') <> 'external'
-    and coalesce(lower(p_metadata->>'allowed_action'),'') <> 'view_original_listing'
-  end;
+    and coalesce(lower(p_metadata->>'allowed_action'),'') <> 'view_original_listing';
 $function$;
 
 -- Database-owned requestability projection shared by cards, Details, AI and the
