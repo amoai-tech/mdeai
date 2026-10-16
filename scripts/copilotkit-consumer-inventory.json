@@ -166,6 +166,11 @@
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
     },
     {
+      "file": "src/components/chat/__tests__/concierge-draft-restore.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1507: factory-mocks @copilotkit/react-core/v2 CopilotChatView so the REAL ConciergeChatView wrapper can be rendered: proves a stashed question is put in the composer through the onInputChange setter once the visitor is signed in, and is never sent."
+    },
+    {
       "file": "src/components/chat/__tests__/concierge-composer-ready.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks @copilotkit/react-core/v2 CopilotChatView with a plain textarea so the REAL ConciergeChatView wrapper can be rendered: proves the composer is disabled in the server HTML and enabled after hydration."
