@@ -11,7 +11,7 @@ test.describe("SAN-1469 canonical restaurant detail", () => {
 
   test("opens a real restaurant and fits mobile", async ({ page }) => {
     const admin = await getSupabaseAdmin();
-    const { data, error } = await admin.from("restaurants").select("id,name").order("name").limit(1);
+    const { data, error } = await admin.from("restaurants").select("id,name").eq("is_active", true).order("name").limit(1);
     expect(error).toBeNull();
     const restaurant = data?.[0];
     expect(restaurant).toBeTruthy();

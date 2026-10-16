@@ -148,17 +148,24 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         expect(hasOverflow).toBe(false);
       }
     } finally {
-      if (userId) {
-        // Only delete this run's development-test ballot. Never touch real votes.
-        await db.query(
-          "delete from vote.votes where voter_user_id=$1 and contest_id=$2 and development_test=true",
-          [userId, contestId],
-        );
-        const admin = await getSupabaseAdmin();
-        const { error } = await admin.auth.admin.deleteUser(userId);
-        if (error) throw error;
+      // Cleanup must never replace the test's real result: log failures and keep going.
+      try {
+        if (userId) {
+          // Only delete this run's development-test ballot. Never touch real votes.
+          await db.query(
+            "delete from vote.votes where voter_user_id=$1 and contest_id=$2 and development_test=true",
+            [userId, contestId],
+          );
+          const admin = await getSupabaseAdmin();
+          const { error } = await admin.auth.admin.deleteUser(userId);
+          if (error) throw error;
+        }
+      } catch (cleanupError) {
+        console.error("[san1469] cleanup failed:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
+      } finally {
+        // Always close the connection, even when cleanup threw.
+        await db.end().catch(() => {});
       }
-      await db.end();
     }
   });
 });

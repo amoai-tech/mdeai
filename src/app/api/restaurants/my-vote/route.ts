@@ -10,9 +10,14 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
  * the request; the privileged RPC is called server-side and the service-role key never leaves
  * the server.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request: Request) {
   const contestId = new URL(request.url).searchParams.get("contest_id");
-  if (!contestId) return NextResponse.json({ error: "missing_contest" }, { status: 400 });
+  // Reject malformed input here: a non-UUID must never reach the RPC as a query.
+  if (!contestId || !UUID_RE.test(contestId)) {
+    return NextResponse.json({ error: "invalid_contest" }, { status: 400 });
+  }
 
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();

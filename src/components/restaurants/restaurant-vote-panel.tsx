@@ -1,7 +1,12 @@
 "use client";
 
 /** Restaurant contest voting: confirmed user action, durable idempotency, server receipt. */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+// Hydration marker: server snapshot false, client snapshot true. Stable no-op subscription.
+const subscribeNever = () => () => {};
+const hydratedOnClient = () => true;
+const hydratedOnServer = () => false;
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -55,8 +60,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   // Hydration marker. React only runs effects after it has attached event handlers, so this
   // flipping to true is proof the button is live. Without it a test (or a fast user) can click
   // server-rendered HTML that has no onClick yet and see nothing happen.
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => { setHydrated(true); }, []);
+  const hydrated = useSyncExternalStore(subscribeNever, hydratedOnClient, hydratedOnServer);
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
   const goToLogin = useCallback(() => {
