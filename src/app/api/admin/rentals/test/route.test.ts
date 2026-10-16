@@ -335,6 +335,7 @@ describe("POST /api/admin/rentals/test development access (SAN-1502)", () => {
       { action: "grant-test-access", userId: "not-a-uuid", accessRole: "renter" },
       { action: "grant-test-access", accessRole: "renter" },
       { action: "grant-test-access", userId, accessRole: "renter", expiresAt: "not-a-date" },
+      { action: "grant-test-access", userId, accessRole: "renter", expiresAt: "2001-01-01T00:00:00Z" },
     ]) {
       expect((await POST(request(payload))).status).toBe(400);
     }

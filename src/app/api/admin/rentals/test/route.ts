@@ -354,6 +354,11 @@ export async function POST(request: Request) {
       if (!Number.isFinite(parsed.getTime())) {
         return NextResponse.json({ error: "expiresAt must be a valid timestamp" }, { status: 400 });
       }
+      // Fail fast with a clear 400 instead of letting the RPC reject a past
+      // expiry; the database remains the authority.
+      if (parsed.getTime() <= Date.now()) {
+        return NextResponse.json({ error: "expiresAt must be in the future" }, { status: 400 });
+      }
       expiresAt = parsed.toISOString();
     }
     if (!isUuid(userId)) return NextResponse.json({ error: "userId must be a UUID" }, { status: 400 });
