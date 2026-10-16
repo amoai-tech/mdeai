@@ -40,13 +40,13 @@ const rental = (id: string, coords?: { latitude: number; longitude: number }) =>
 
 let root: Root;
 let container: HTMLElement;
-function render() {
-  act(() => root.render(
-    <RentalResults result={{
-      source: "supabase",
-      results: [rental("mapped", { latitude: 6.24, longitude: -75.59 }), rental("unmapped")],
-    }} />,
-  ));
+function render(result: unknown = {
+  source: "supabase",
+  results: [rental("mapped", { latitude: 6.24, longitude: -75.59 }), rental("unmapped")],
+}) {
+  act(() => {
+    root.render(<RentalResults result={result} />);
+  });
 }
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,6 +62,22 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe("rental budget mismatch explanation", () => {
+  const note = "External advertisements priced in COP/month are excluded from USD/night budget searches.";
+
+  it("shows the mismatch once and omits ranking for an empty result", () => {
+    render({ source: "supabase", results: [], budgetNote: note,
+      rankExplanation: [{ factor: "neighborhood", score: 1, note: "Laureles filter" }] });
+    expect(container.textContent?.split(note).length - 1).toBe(1);
+    expect(container.textContent).not.toContain("Why these rentals");
+  });
+
+  it("keeps the comparison note visible when other listings matched", () => {
+    render({ source: "supabase", results: [rental("one")], budgetNote: note });
+    expect(container.textContent?.split(note).length - 1).toBe(1);
+  });
 });
 
 describe("SAN-472 chat rental card/map parity", () => {
