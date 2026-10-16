@@ -188,6 +188,7 @@ describe("searchRentals — date params pass-through to intelligent path", () =>
         stayType: "monthly",
         queryText: "digital nomad rental Laureles june 1 to 30",
       }),
+      undefined,
     );
   });
 

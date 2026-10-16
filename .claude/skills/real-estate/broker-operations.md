@@ -34,7 +34,7 @@ Do not invent a second owner ID, broker mapping, lead store, or showing path.
 Schedule Viewing is a compound business outcome, not two unrelated inserts:
 
 ```text
-authenticated renter
+renter/guest identity resolved according to the canonical viewing contract
 → requestable owned apartment
 → authorized typed business capability
 → canonical atomic mutation

@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { getSupabaseAdmin, hasE2eEnv, signInAsOnOrigin } from "./helpers/auth";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  getSupabaseAdmin,
+  hasE2eEnv,
+  signInAsOnOrigin,
+} from "./helpers/auth";
 import { nextMedellinTestViewingWallClock } from "@/lib/leads/schedule-viewing-time";
 
 /**
@@ -126,3 +132,87 @@ test("admin test rental: create, publish, view, retry, cleanup without duplicate
     }
   }
 });
+
+/**
+ * SAN-1502 PR 1 — the new development controls through the real admin UI, at a
+ * desktop and a mobile viewport: grant access -> approve -> withdraw publishing
+ * -> audit trail -> revoke. Opt-in for the same reason as the journey above.
+ *
+ * The audit trail is append-only by design, so the events these runs create are
+ * intentionally retained; every fixture, lead and showing is removed.
+ */
+const DEVELOPMENT_VIEWPORTS = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "mobile", width: 390, height: 844 },
+] as const;
+
+for (const viewport of DEVELOPMENT_VIEWPORTS) {
+  test(`admin development controls: grant, approve, revoke and audit (${viewport.name})`, async ({ page }) => {
+    test.skip(!optIn, "Intentional DB writes require MDE_ADMIN_RENTAL_E2E=1");
+    if (!email || !hasE2eEnv()) throw new Error("Admin E2E requires admin email and Supabase test credentials");
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await signInAsOnOrigin(page, origin, email);
+    const admin = await getSupabaseAdmin();
+    const tester = await createThrowawayIdentity(`san1502-${viewport.name}`);
+    let fixtureId: string | undefined;
+    const fixtureTitle = `E2E dev controls ${viewport.name} ${Date.now()}`;
+    try {
+      await page.goto("/admin/rentals");
+      await expect(page.getByTestId("admin-rental-test-panel")).toBeVisible();
+      await page.getByTestId("admin-test-title").fill(fixtureTitle);
+      await page.getByTestId("admin-test-availableFrom").fill(nextMedellinTestViewingWallClock().slice(0, 10));
+      await page.getByTestId("admin-test-imageUrl").fill("https://example.com/authorized-test-photo.jpg");
+
+      const createResponse = page.waitForResponse((res) => res.url().endsWith("/api/admin/rentals/test") && res.request().method() === "POST");
+      await page.getByTestId("admin-test-create").click();
+      fixtureId = (await (await createResponse).json() as { rental?: { id?: string } }).rental?.id;
+      expect(fixtureId).toBeTruthy();
+
+      // Grant a distinct test identity development access through the UI.
+      await page.getByTestId("admin-test-access-userId").fill(tester.userId);
+      await page.getByTestId("admin-test-access-role").selectOption("renter");
+      await page.getByTestId("admin-test-access-grant").click();
+      await expect(page.getByTestId("admin-test-message")).toContainText("granted");
+      await expect(page.getByTestId(`admin-test-access-revoke-${tester.userId}-renter`)).toBeVisible();
+
+      // Approve, then withdraw publishing so it is no longer offered to testers.
+      await page.getByTestId(`admin-test-approve-${fixtureId}`).click();
+      await expect(page.getByTestId("admin-test-message")).toContainText("approved");
+      await expect(page.getByTestId(`admin-test-publish-right-${fixtureId}`)).toContainText("Withdraw publishing");
+      await page.getByTestId(`admin-test-publish-right-${fixtureId}`).click();
+      await expect(page.getByTestId("admin-test-message")).toContainText("no longer offered");
+
+      // The audit trail records both transitions, in the database and on screen.
+      const events = await admin.from("rental_test_events").select("event_type").eq("apartment_id", fixtureId!);
+      expect(events.error).toBeNull();
+      const types = (events.data ?? []).map((row) => row.event_type);
+      expect(types).toContain("listing_approved");
+      expect(types).toContain("publishing_rights_set");
+      await expect(page.getByTestId("admin-test-events").getByText("listing_approved")).toBeVisible();
+
+      await page.getByTestId(`admin-test-access-revoke-${tester.userId}-renter`).click();
+      await expect(page.getByTestId("admin-test-message")).toContainText("revoked");
+    } finally {
+      try {
+        if (fixtureId) {
+          await page.request.post("/api/admin/rentals/test", {
+            data: { action: "cleanup", apartmentId: fixtureId },
+          });
+          // Never delete based on a returned UUID alone: prove this run owns the row.
+          const { data: owned, error: lookupError } = await admin.from("apartments")
+            .select("id,title,metadata,status,listing_workflow_status")
+            .eq("id", fixtureId).maybeSingle();
+          if (lookupError || !owned || owned.title !== fixtureTitle
+            || String((owned.metadata as Record<string, unknown> | null)?.is_test_fixture) !== "true"
+            || owned.status !== "inactive" || owned.listing_workflow_status !== "draft") {
+            throw new Error(`Fixture ${fixtureId} failed ownership/draft verification; no deletion performed`);
+          }
+          const { error: deleteError } = await admin.from("apartments").delete().eq("id", fixtureId);
+          if (deleteError) throw deleteError;
+        }
+      } finally {
+        await deleteThrowawayIdentity(tester);
+      }
+    }
+  });
+}

@@ -12,7 +12,7 @@ This is the canonical implementation guide for current MDE rental work. `RENTV2`
 Before implementing:
 
 1. Read the exact Linear issue, relations, status, labels, and acceptance criteria.
-2. If the change affects the end-to-end rental journey, read **SAN-1315 · SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing**.
+2. If the change affects the end-to-end rental journey, read **SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing**.
 3. Inspect current `main`; reuse existing contracts, `RentalSearchEngine`, map state, viewing path, and tests.
 4. When schema/RLS/runtime data matters, inspect live Supabase and compare it with migrations on `main`.
 5. Read root `mvp.md` for launch scope. Linear is live execution state; GitHub/Supabase are implementation/runtime truth.
@@ -33,7 +33,8 @@ renter intent
 → RentalResult
 → synchronized card + pin
 → Schedule Viewing
-→ authenticated + authorized business capability
+→ renter/guest identity resolved according to the canonical viewing contract
+→ authorized business capability
 → atomic lead + showing
 → owning broker sees it
 → unrelated broker denied
@@ -67,13 +68,17 @@ Hard requirements always run before AI/vector/soft ranking. AI may rank eligible
 Use the existing `RentalSearchEngine`; do not create another search engine.
 
 ```text
-MDE/Supabase inventory first
-→ external discovery only for shortfall
+MDE/Supabase candidates
+→ deterministic eligibility
+→ eligible MDE results
+→ if eligible supply is insufficient, external discovery
 → Gemini Google Search for candidate discovery
 → URL Context for selected pages
 → Firecrawl only for unresolved extraction gaps
-→ deterministic eligibility
+→ verify/extract external facts
+→ deterministic eligibility for external candidates
 → conservative trust/dedupe
+→ merge eligible results
 → soft ranking
 → Maps/Places/Routes only for bounded finalists
 ```
@@ -102,7 +107,18 @@ Next.js / CopilotKit UI
 
 Use an Edge Function only for a real external or security/runtime boundary such as public ingress, provider secrets, webhooks, or cron. Do not insert one between Mastra and an RPC merely because the operation is backend.
 
+Schedule Viewing currently uses the existing `/api/leads/schedule-viewing` → `chat-lead-capture` Edge Function → atomic `p1_schedule_tour_atomic` RPC path because it is a public/guest security boundary; do not bypass or replace it unless the owning task explicitly changes that contract.
+
 Authentication is not authorization. Service-role/admin success does not prove a user is authorized.
+
+## Runtime phase (development vs launch)
+
+`rental_runtime_settings.phase` is the single DB-owned switch (default `development`; `launch` only through an explicit server-side migration). Read the current phase; never infer it from UI behavior.
+
+- **Development** — authorized MDE actors can discover and open `active` fixtures without moderation, publish, photo-rights, or move-in paperwork, and the canonical `p1_schedule_tour_atomic` accepts granted renters. Anonymous fixture exclusion still applies: it is a technical privacy boundary, not a business approval gate.
+- **Launch** — `rental_listing_is_public()` and `rental_can_request_viewing()` apply without the development bypass.
+
+Do not re-add approval, publish, photo-rights, or move-in-date business gates to unblock development work; use the phase switch the database already owns. Third-party source advertisements stay read-only (`View Original Listing`) in either phase and never become requestable MDE inventory.
 
 ## Production truth rules
 

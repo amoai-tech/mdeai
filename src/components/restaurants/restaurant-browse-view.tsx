@@ -33,6 +33,8 @@ type RestaurantBrowseViewProps = {
   error: string | null;
   neighborhood: string | null;
   cuisine: string | null;
+  /** True when results are the curated sample set, not live restaurant inventory. */
+  isSample?: boolean;
 };
 
 function RestaurantBrowseViewInner({
@@ -40,6 +42,7 @@ function RestaurantBrowseViewInner({
   error,
   neighborhood,
   cuisine,
+  isSample = false,
 }: RestaurantBrowseViewProps) {
   const { selectedPinId, setSelectedPinId } = useMapContext();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
@@ -61,7 +64,11 @@ function RestaurantBrowseViewInner({
       <BrowseLayout
         testId="restaurants-browse"
         title="Restaurants"
-        subtitle="Food & dining in Medellín — browse without chat"
+        subtitle={
+          isSample
+            ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
+            : "Food & dining in Medellín — browse without chat"
+        }
         filterBar={
           <RestaurantBrowseFilters
             neighborhood={neighborhood}

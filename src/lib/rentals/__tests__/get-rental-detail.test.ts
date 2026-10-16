@@ -36,6 +36,23 @@ afterEach(() => {
 });
 
 describe("SAN-1202 · mapApartmentRowToDetail", () => {
+  it("discloses a third-party advertisement as unverified without blocking Phase A viewing", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "external-001",
+      status: "active",
+      title: "Laureles apartment",
+      source_url: "https://www.fincaraiz.com.co/example",
+      metadata: { source_record_type: "third_party_advertisement", availability_status: "unconfirmed" },
+      available_from: null,
+      rental_can_request_viewing: true,
+    });
+    expect(detail.isNotIndependentlyVerified).toBe(true);
+    expect(detail.sourceUrl).toBe("https://www.fincaraiz.com.co/example");
+    expect(detail.availableFrom).toBeNull();
+    expect(detail.canScheduleViewing).toBe(true);
+  });
+
+
   it("maps a full apartments row to the detail view-model", () => {
     const rentalDetail = mapApartmentRowToDetail({
       id: "abc",
@@ -86,6 +103,15 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       expect(mapApartmentRowToDetail(ownedRow).canScheduleViewing).toBe(true);
     });
 
+    it("trusts the DB-computed phase eligibility, including unconfirmed availability", () => {
+      const development = { ...ownedRow, available_from: null,
+        moderation_status: "pending", listing_workflow_status: "draft",
+        rental_can_request_viewing: true };
+      expect(mapApartmentRowToDetail(development).canScheduleViewing).toBe(true);
+      expect(mapApartmentRowToDetail({ ...ownedRow, rental_can_request_viewing: false })
+        .canScheduleViewing).toBe(false);
+    });
+
     it("is false when the listing has no canonical owner", () => {
       expect(mapApartmentRowToDetail({ ...ownedRow, landlord_id: null }).canScheduleViewing).toBe(false);
     });
@@ -97,6 +123,27 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       expect(
         mapApartmentRowToDetail({ ...ownedRow, listing_workflow_status: "draft" }).canScheduleViewing,
       ).toBe(false);
+    });
+
+    it("allows an active development fixture even without approval paperwork or move-in date", () => {
+      const fixture = { ...ownedRow, metadata: { is_test_fixture: true },
+        moderation_status: "pending", listing_workflow_status: "draft",
+        available_from: null, available_to: null };
+      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(true);
+      expect(mapApartmentRowToDetail({ ...fixture, status: "inactive" }).canScheduleViewing).toBe(false);
+    });
+
+    it("does not advertise expired development apartments as requestable", () => {
+      const fixture = {
+        ...ownedRow,
+        metadata: { is_test_fixture: true },
+        moderation_status: "pending",
+        listing_workflow_status: "draft",
+        available_from: null,
+        available_to: "2020-01-01",
+      };
+      // Expired fixtures must be denied in Details just as in rental search.
+      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(false);
     });
 
     it("fails closed when the ownership columns are absent from the row", () => {

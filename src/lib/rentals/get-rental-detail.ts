@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
-import { isRentalRequestable } from "@/mastra/tools/search-rentals";
-import { isSelfAttested } from "@/lib/rentals/provenance";
+import { isRentalRequestable, readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
+import { isAvailabilityUnconfirmed, isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -44,10 +44,10 @@ export type RentalDetail = {
    */
   canScheduleViewing: boolean;
   /**
-   * SAN-1449 — true when the landlord published through the self-attested path. The
-   * detail page shows "Not independently verified" rather than implying a review.
+   * Display an honest provenance notice for self-attested and third-party ads,
+   * without changing their development eligibility or booking permissions.
    */
-  isSelfAttested: boolean;
+  isNotIndependentlyVerified: boolean;
 };
 
 const UUID_RE =
@@ -101,7 +101,8 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     description: str(row.description),
     houseRules: str(row.house_rules),
     hostName: str(row.host_name),
-    availableFrom: str(row.available_from),
+    // A placeholder date is not shown as a move-in date; the calendar then says availability is pending.
+    availableFrom: isAvailabilityUnconfirmed(row.metadata) ? null : str(row.available_from),
     availableTo: str(row.available_to),
     minimumStayDays: num(row.minimum_stay_days),
     maximumStayDays: num(row.maximum_stay_days),
@@ -111,15 +112,17 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     sourceUrl: str(row.source_url),
     // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
     // treats as unproven rather than as a reason to offer the CTA.
-    canScheduleViewing: isRentalRequestable({
+    canScheduleViewing: typeof row.rental_can_request_viewing === "boolean"
+      ? row.rental_can_request_viewing : isRentalRequestable({
       landlord_id: str(row.landlord_id),
       status: str(row.status),
       moderation_status: str(row.moderation_status),
       listing_workflow_status: str(row.listing_workflow_status),
       available_from: str(row.available_from),
       available_to: str(row.available_to),
+      metadata: row.metadata,
     }),
-    isSelfAttested: isSelfAttested(row.metadata),
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isUnverifiedExternalSource(row.metadata),
   };
 }
 
@@ -129,14 +132,20 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
  * RentalSearchUnavailableError; there are no demo detail pages (SAN-1089).
  */
 // skipcq: JS-0067, JS-R1005 - ES module export; intentional db-path + mock-fallback branching, not a bug
-export async function getRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
-  const client = getClient();
+export async function getRentalDetail(
+  idOrSlug: string,
+  options?: { client?: SupabaseClient | null },
+): Promise<RentalDetail | null> {
+  const client = options?.client ?? getClient();
   if (!client) {
     // SAN-1089: no demo detail pages. The page renders its "couldn't load" state for this.
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const apartmentsQuery = client.from("apartments").select("*").eq("status", "active").limit(1);
+  const developmentMode = await readRentalDevelopmentPhase(client);
+  let apartmentsQuery = client.from("apartments")
+    .select("*, rental_can_request_viewing").limit(1);
+  if (!developmentMode) apartmentsQuery = apartmentsQuery.eq("status", "active");
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {

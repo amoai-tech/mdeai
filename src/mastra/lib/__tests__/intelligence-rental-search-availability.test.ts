@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => {
     neighborhoodRow: null as { id: string; name: string } | null,
     profileRow: null as Record<string, unknown> | null,
     rpcError: null as { message: string; code: string } | null,
+    filterCalls: [] as unknown[][],
+    apartmentCalls: 0,
+    hybridReloadEmpty: false,
   };
 
   const activeApartment = {
@@ -77,11 +80,12 @@ const mocks = vi.hoisted(() => {
         return chain;
       }),
       in: pass,
-      or: pass,
-      eq: pass,
-      not: pass,
+      or: vi.fn((...args: unknown[]) => { state.filterCalls.push(["or", ...args]); return chain; }),
+      eq: vi.fn((...args: unknown[]) => { state.filterCalls.push(["eq", ...args]); return chain; }),
+      not: vi.fn((...args: unknown[]) => { state.filterCalls.push(["not", ...args]); return chain; }),
       order: pass,
-      ilike: pass,
+      ilike: vi.fn((...args: unknown[]) => { state.filterCalls.push(["ilike", ...args]); return chain; }),
+      gte: vi.fn((...args: unknown[]) => { state.filterCalls.push(["gte", ...args]); return chain; }),
       limit: pass,
       maybeSingle: vi.fn(async () => {
         if (state.errorTable === table) {
@@ -102,14 +106,21 @@ const mocks = vi.hoisted(() => {
   };
 
   const client = {
-    rpc: vi.fn(async () =>
-      mocks.state.rpcError
-        ? { data: null, error: mocks.state.rpcError }
-        : { data: hybridRows, error: null },
+    rpc: vi.fn(async (name: string) =>
+      name === "rental_development_active"
+        ? { data: false, error: null }
+        : mocks.state.rpcError
+          ? { data: null, error: mocks.state.rpcError }
+          : { data: hybridRows, error: null },
     ),
     from: vi.fn((table: string) => {
       if (table === "apartments") {
+        state.apartmentCalls += 1;
+        const callIndex = state.apartmentCalls;
         return makeThenable(table, () => {
+          // The hybrid reload is the first apartments call. When the flag is set,
+          // every hybrid candidate is filtered out so the keyword fallback must run.
+          if (state.hybridReloadEmpty && callIndex === 1) return [];
           const row = state.apartmentProjection.includes("price_monthly")
             ? activeApartment
             : { ...activeApartment, price_monthly: undefined };
@@ -140,6 +151,9 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.neighborhoodRow = null;
     mocks.state.profileRow = null;
     mocks.state.rpcError = null;
+    mocks.state.filterCalls.length = 0;
+    mocks.state.apartmentCalls = 0;
+    mocks.state.hybridReloadEmpty = false;
   });
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
@@ -154,6 +168,45 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     expect(result.results[0]?.price_monthly).toBe(650);
   });
 
+  it("re-applies active status, budget and location filters to the hybrid reload without development approval gates", async () => {
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    await searchRentalsIntelligent({
+      queryText: "digital nomad rental",
+      neighborhood: "Laureles",
+      minBedrooms: 1,
+      maxPricePerNight: 80,
+      limit: 5,
+    });
+
+    // RLS owns public/development visibility. The hybrid reload must preserve
+    // application filters without reintroducing moderation or publication gates.
+    expect(mocks.state.filterCalls).toEqual(
+      expect.arrayContaining([
+        ["eq", "status", "active"],
+        ["not", "landlord_id", "is", null],
+        ["or", expect.any(String)],
+        ["ilike", "neighborhood", "%Laureles%"],
+        ["gte", "bedrooms", 1],
+      ]),
+    );
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "moderation_status", "approved"]);
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "listing_workflow_status", "published"]);
+  });
+
+
+  it("falls back to the canonical keyword search when every hybrid candidate is filtered out", async () => {
+    mocks.state.hybridReloadEmpty = true;
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({ queryText: "digital nomad rental", limit: 5 });
+
+    expect(result.hybridUsed).toBe(false);
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(result.rankExplanation).toEqual(
+      expect.arrayContaining([expect.objectContaining({ factor: "hybrid_filtered_empty" })]),
+    );
+  });
 
   it("falls back to keyword search when the hybrid RPC is unavailable", async () => {
     mocks.state.rpcError = { message: "temporary RPC outage", code: "503" };

@@ -1,9 +1,9 @@
 import { createTool } from '@mastra/core/tools';
 import { formatWhatsAppRentalReply } from './whatsapp-rental-reply';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
-import { isSelfAttested } from '@/lib/rentals/provenance';
+import { isAvailabilityUnconfirmed, isSelfAttested } from '@/lib/rentals/provenance';
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -34,8 +34,13 @@ export const rentalSchema = z.object({
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
-  /** Public photos for the Details panel (max 5); `image` is always the first. Absent = just `image`. */
+  /**
+   * Public photos for the Details panel (at most `RENTAL_PANEL_PHOTO_LIMIT`); `image` is always the
+   * first. Absent = just `image`.
+   */
   images: z.array(z.string()).optional(),
+  /** Total photos the listing has, when more than `images` carries (the panel links to the rest). */
+  photo_count: z.number().int().optional(),
   source_url: z.string(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
@@ -68,6 +73,14 @@ export const rentalSchema = z.object({
 });
 
 export type Rental = z.infer<typeof rentalSchema>;
+
+/**
+ * How many of an apartment's stored photos travel with each search result for the Details panel.
+ * A managed listing can hold dozens (one has 76); the panel needs a gallery, not the whole set, and
+ * every result is serialized into the page, so the list stays bounded. The panel links to the
+ * listing's own page (`photo_count` says how many there are), which shows every photo.
+ */
+export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 
 export type RentalQuery = {
   neighborhood?: string;
@@ -113,6 +126,31 @@ function getSupabaseClient() {
   return _client;
 }
 
+/**
+ * SAN-1502 PR2 — RequestContext key the /api/copilotkit route uses to hand rental
+ * tools the caller's OWN user-scoped, RLS-governed client. Read back by
+ * searchRentalsTool so an authorized test actor's search sees development
+ * fixtures while an anonymous or ordinary caller never does.
+ */
+export const RENTAL_SUPABASE_KEY = 'rentalSupabase';
+
+/** The DB phase is authoritative, never NODE_ENV or a browser-editable flag. */
+export async function readRentalDevelopmentPhase(client: SupabaseClient): Promise<boolean> {
+  // A light test stub may omit RPC; actual Supabase clients always expose it.
+  if (typeof client.rpc !== 'function') return false;
+  const { data, error } = await client.rpc('rental_development_active');
+  if (error) {
+    throw new RentalSearchUnavailableError(`phase_query_failed${error.code ? `:${error.code}` : ''}`);
+  }
+  return data === true;
+}
+
+/**
+ * Optional per-request client. Omit it for the shared anonymous client; pass the
+ * caller's user-scoped client to let RLS decide what they may read.
+ */
+export type RentalSearchOptions = { client?: SupabaseClient | null };
+
 export interface ApartmentRow {
   id: string;
   title: string;
@@ -156,6 +194,8 @@ export interface ApartmentRow {
   moderation_status: string;
   listing_workflow_status: string;
   status: string;
+  /** PostgreSQL computed column; canonical phase-aware requestability. */
+  rental_can_request_viewing?: boolean | null;
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -166,6 +206,7 @@ export type RentalRequestabilityInput = {
   listing_workflow_status?: string | null;
   available_from?: string | null;
   available_to?: string | null;
+  metadata?: unknown;
 };
 
 /**
@@ -221,6 +262,19 @@ export function isRentalRequestable(
   today: Date = new Date(),
 ): boolean {
   if (!row.landlord_id) return false;
+  // Development fixtures are bookable through the SAME RPC without external
+  // moderation, publishing, photo or move-in paperwork. RLS selects who can see
+  // these rows; the RPC independently checks the authorized renter grant.
+  const md = row.metadata;
+  if (
+    typeof md === 'object' && md !== null &&
+    !Array.isArray(md) &&
+    (md as Record<string, unknown>).is_test_fixture === true
+  ) {
+    // An active development apartment is not requestable after its end date.
+    if (row.available_to && row.available_to < rentalAvailabilityDate(today)) return false;
+    return row.status === 'active';
+  }
   // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
   if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
@@ -358,39 +412,38 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
-/** @internal Mastra key for the channel render context (channels/output-processor). */
+/** @internal Mastra key for the channel render context. */
 const CHAT_CHANNEL_RENDER_CONTEXT_KEY = '__mastra_chat_channel_render';
 
 /**
  * Is this agent run serving WhatsApp?
  *
- * A Mastra tool receives `{ requestContext, ... }`; the channel framework also stashes a public
- * `channel` value and an internal render context on that RequestContext. Read all of them
- * defensively so a framework shape change degrades to "no WhatsApp reply" instead of a crash,
- * and so the end-to-end test is what catches a rename.
+ * A Mastra tool receives `{ requestContext, ... }`; the channel framework stashes a public
+ * `channel` value and an internal render context on that RequestContext. Read both defensively so
+ * a framework shape change degrades to "no WhatsApp reply" rather than a crash, and the
+ * end-to-end test is what catches a rename.
  */
 export function isWhatsAppRun(context: unknown): boolean {
   const outer = context as { requestContext?: unknown } | undefined;
   const requestContext = outer?.requestContext ?? context;
   const get = (requestContext as { get?: (key: string) => unknown } | undefined)?.get;
   if (typeof get !== 'function') return false;
-  const keys = ['channel', CHAT_CHANNEL_RENDER_CONTEXT_KEY];
-  for (const key of keys) {
+  for (const key of ['channel', CHAT_CHANNEL_RENDER_CONTEXT_KEY]) {
     const value = get.call(requestContext, key) as
       | { platform?: unknown; name?: unknown; id?: unknown }
       | undefined;
     for (const candidate of [value?.platform, value?.name, value?.id]) {
-      if (typeof candidate === 'string' && candidate.toLowerCase().includes('whatsapp')) {
-        return true;
-      }
+      if (typeof candidate === 'string' && candidate.toLowerCase().includes('whatsapp')) return true;
     }
   }
   return false;
 }
 
 export function rowToRental(r: ApartmentRow): Rental {
-  const canScheduleViewing = isRentalRequestable(r);
+  const canScheduleViewing = typeof r.rental_can_request_viewing === 'boolean'
+    ? r.rental_can_request_viewing : isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
+  const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -402,14 +455,19 @@ export function rowToRental(r: ApartmentRow): Rental {
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
-    image: (r.images ?? [])[0] ?? '',
+    image: photos[0] ?? '',
+    // The Details panel shows `images`; without it a managed listing showed only its cover photo.
+    images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
+    photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
-    availability: formatAvailability(r.available_from, r.available_to),
+    availability: isAvailabilityUnconfirmed(r.metadata)
+      ? 'Availability unconfirmed'
+      : formatAvailability(r.available_from, r.available_to),
     tags: (() => {
       const tags = deriveTags({
         amenities: r.amenities ?? [],
@@ -429,10 +487,9 @@ export function rowToRental(r: ApartmentRow): Rental {
 }
 
 function formatAvailability(from: string | null, to: string | null): string {
-  if (!from && !to) return 'Available now';
-  if (from && to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
-  if (from) return `Available from ${formatDateOnly(from)}`;
-  return 'Available now';
+  if (!from) return 'Availability unconfirmed';
+  if (to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  return `Available from ${formatDateOnly(from)}`;
 }
 
 function deriveTags(row: {
@@ -468,13 +525,15 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
 
 async function searchRentalsFromSupabase(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<{ results: Rental[]; total: number; source: 'supabase' }> {
-  const client = getSupabaseClient();
+  const client = options?.client ?? getSupabaseClient();
   if (!client) {
     throw new RentalSearchUnavailableError('client_unavailable');
   }
 
   const limit = query.limit ?? 8;
+  const developmentMode = await readRentalDevelopmentPhase(client);
   // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
@@ -484,17 +543,9 @@ async function searchRentalsFromSupabase(
   let q = client
     .from('apartments')
     .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
+      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
       { count: 'exact' },
     )
-    .eq('status', 'active')
-    // SAN-468 §4.2 / SAN-386 canonical public eligibility. status alone is not
-    // enough: a listing must also be approved, published and canonically owned.
-    // RLS enforces this at the database boundary; these filters keep the intent
-    // explicit and protect the query if the policy or client role changes.
-    .eq('moderation_status', 'approved')
-    .eq('listing_workflow_status', 'published')
-    .not('landlord_id', 'is', null)
     .or(rentalBudgetPredicate(maxNightly, monthlyBudget))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
     // every nightly-priced row and two different currencies are never meaningfully ordered
@@ -504,6 +555,10 @@ async function searchRentalsFromSupabase(
     // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
     .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
+
+  if (!developmentMode) {
+    q = q.eq('status', 'active').not('landlord_id', 'is', null);
+  }
 
   if (query.neighborhood) {
     q = q.ilike('neighborhood', `%${query.neighborhood}%`);
@@ -518,6 +573,7 @@ async function searchRentalsFromSupabase(
     checkIn: query.checkIn,
     checkOut: query.checkOut,
     today: rentalAvailabilityDate(),
+    developmentMode,
   });
 
   const { data, error, count } = await q;
@@ -537,13 +593,14 @@ async function searchRentalsFromSupabase(
 // internally async — callers that need real DB data should await searchRentals())
 export async function searchRentals(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<RentalSearchResult> {
   const limit = query.limit ?? 8;
 
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
-      const intel = await searchRentalsIntelligent(query);
+      const intel = await searchRentalsIntelligent(query, options);
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText: query.queryText,
@@ -560,25 +617,17 @@ export async function searchRentals(
       });
       const external = await getOptionalExternalRentals(query);
       const mixed = mixRentalResults(intel.results, external, limit);
-      // The intelligent path can succeed with NOTHING (e.g. no semantic hits for real inventory).
-      // Answering "no listings" there hides eligible apartments the structured query would find,
-      // so fall through to it. A NON-empty result is authoritative and returned as-is.
-      if (mixed.results.length > 0) {
-        return {
-          results: mixed.results,
-          total: intel.total + mixed.distinctExternal,
-          budgetNote: budgetNoteFor(query),
-          source: intel.source,
-          hybridUsed: intel.hybridUsed,
-          embedStatus: intel.embedStatus,
-          embedFailureReason: intel.embedFailureReason,
-          embedHttpStatus: intel.embedHttpStatus,
-          rankExplanation: intel.rankExplanation,
-        };
-      }
-      console.warn(
-        "[search-rentals] intelligent search returned no results — falling back to structured search",
-      );
+      return {
+        results: mixed.results,
+        total: intel.total + mixed.distinctExternal,
+        budgetNote: budgetNoteFor(query),
+        source: intel.source,
+        hybridUsed: intel.hybridUsed,
+        embedStatus: intel.embedStatus,
+        embedFailureReason: intel.embedFailureReason,
+        embedHttpStatus: intel.embedHttpStatus,
+        rankExplanation: intel.rankExplanation,
+      };
     } catch (err) {
       console.warn(
         '[search-rentals] intelligent search failed, falling back to structured search:',
@@ -588,7 +637,7 @@ export async function searchRentals(
   }
 
   try {
-    const { results, total, source } = await searchRentalsFromSupabase(query);
+    const { results, total, source } = await searchRentalsFromSupabase(query, options);
     const external = await getOptionalExternalRentals(query);
     const mixed = mixRentalResults(results, external, limit);
     return {
@@ -640,11 +689,7 @@ export const searchRentalsTool = createTool({
     ),
     source: z.literal('supabase'),
     budgetNote: z.string().optional(),
-    /**
-     * A ready-to-send WhatsApp answer built from these exact listings. Present only on WhatsApp
-     * runs; the concierge sends it verbatim so the customer sees real prices and links that the
-     * web cards would otherwise render.
-     */
+    /** A ready-to-send WhatsApp answer built from these exact listings; WhatsApp runs only. */
     whatsapp_reply: z.string().optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
@@ -668,14 +713,22 @@ export const searchRentalsTool = createTool({
       limit = 8,
       queryText,
     } = inputData;
+    // SAN-1502 PR2: use the caller's own RLS-governed client when the runtime
+    // supplied one, so an authorized test actor sees development fixtures and
+    // everyone else is unchanged.
+    const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
+      | SupabaseClient
+      | undefined;
+    const options = rentalClient ? { client: rentalClient } : undefined;
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
-      searchRentals,
+      (q: RentalQuery) => searchRentals(q, options),
       { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText },
       context,
     );
 
-    const mapped = results.map((r) => ({
+    return {
+      results: results.map((r) => ({
         id: r.id,
         title: r.title,
         neighborhood: r.neighborhood,
@@ -696,16 +749,13 @@ export const searchRentalsTool = createTool({
         longitude: r.longitude,
         rankScore: "rankScore" in r ? (r as { rankScore?: number }).rankScore : undefined,
         evidenceText: "evidenceText" in r ? (r as { evidenceText?: string | null }).evidenceText : undefined,
-      }));
-
-    return {
-      results: mapped,
+      })),
       source,
       budgetNote,
       hybridUsed,
       rankExplanation,
       whatsapp_reply: isWhatsAppRun(context)
-        ? formatWhatsAppRentalReply(mapped, monthlyBudgetFromQuery(inputData))
+        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
         : undefined,
     };
   },

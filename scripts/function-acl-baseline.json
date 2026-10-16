@@ -4,12 +4,22 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_approve_test_listing(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_assign_rental_test_operator(p_apartment_id uuid, p_enabled boolean)": {
     "public": false,
     "anon": false,
     "authenticated": true
   },
-  "admin_clone_rental_for_testing(p_source_apartment_id uuid, p_available_from date, p_test_image_url text, p_fallback_price_monthly numeric)": {
+  "admin_assign_test_listing_broker(p_apartment_id uuid, p_broker_user_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_assign_test_listing_owner(p_apartment_id uuid, p_owner_user_id uuid)": {
     "public": false,
     "anon": false,
     "authenticated": true
@@ -19,7 +29,17 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_clone_rental_for_testing(p_source_apartment_id uuid, p_available_from date, p_test_image_url text, p_fallback_price_monthly numeric)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_create_test_rental(p_title text, p_neighborhood text, p_address text, p_price_monthly numeric, p_currency text, p_available_from date, p_image_url text, p_landlord_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_grant_rental_test_access(p_user_id uuid, p_access_role text, p_expires_at timestamp with time zone, p_note text)": {
     "public": false,
     "anon": false,
     "authenticated": true
@@ -29,7 +49,27 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_reject_test_listing(p_apartment_id uuid, p_reason text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_reopen_test_listing(p_apartment_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_request_test_viewing(p_apartment_id uuid, p_scheduled_at timestamp with time zone, p_email text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_revoke_rental_test_access(p_user_id uuid, p_access_role text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "admin_set_test_rights(p_apartment_id uuid, p_right text, p_state text)": {
     "public": false,
     "anon": false,
     "authenticated": true
@@ -53,11 +93,6 @@
     "public": false,
     "anon": false,
     "authenticated": true
-  },
-  "block_nonadmin_test_viewing()": {
-    "public": false,
-    "anon": false,
-    "authenticated": false
   },
   "broker_owns_apartment(p_apartment_id uuid)": {
     "public": true,
@@ -154,6 +189,11 @@
     "anon": true,
     "authenticated": true
   },
+  "is_authorized_test_actor()": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "is_moderator()": {
     "public": true,
     "anon": true,
@@ -239,6 +279,21 @@
     "anon": false,
     "authenticated": true
   },
+  "rental_can_request_viewing(a apartments)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "rental_development_active()": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "rental_enrichment_is_readable(p_apartment_id uuid)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
   "rental_listing_is_public(p_status text, p_moderation_status text, p_listing_workflow_status text, p_landlord_id uuid, p_metadata jsonb)": {
     "public": false,
     "anon": true,
@@ -247,6 +302,11 @@
   "rental_listing_launch_blockers(p_apartment_id uuid, p_include_state boolean)": {
     "public": false,
     "anon": true,
+    "authenticated": true
+  },
+  "rental_test_listing_is_available(p_status text, p_moderation_status text, p_listing_workflow_status text, p_metadata jsonb)": {
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "request_listing_publish(p_apartment_id uuid)": {

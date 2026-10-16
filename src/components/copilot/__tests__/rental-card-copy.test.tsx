@@ -124,3 +124,61 @@ describe("external source rental cards", () => {
     expect(html).not.toContain("Schedule viewing");
   });
 });
+
+// SAN-1503 — WE Home rents for COP 14,500,000 a month. Its "nightly" figure is only rent ÷ 30, so the
+// chat card must lead with the monthly rent and not offer "COP 483,333/night".
+describe("SAN-1503 rental card shows the stored monthly rent, not a derived nightly price", () => {
+  const base = { id: "r1", listingId: "a1", title: "WE Home", neighborhood: "El Poblado", bedrooms: 2, onSelect: () => undefined };
+
+  it("hides the derived nightly label when a monthly rent is stored", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...base} nightly_price={483333} price_monthly={14500000} currency="COP" />,
+    );
+    expect(html).toContain("COP 14,500,000/mo");
+    expect(html).not.toContain("/night");
+  });
+
+  it("still shows the nightly price when the listing has no monthly rent", () => {
+    const html = renderToStaticMarkup(<RentalCard {...base} nightly_price={75} />);
+    expect(html).toContain("$75/night");
+  });
+});
+
+describe("SAN-1505 mobile rental photo presentation", () => {
+  const card = {
+    id: "external-1",
+    listingId: "external-1",
+    title: "Laureles apartment",
+    neighborhood: "Laureles",
+    nightly_price: 0,
+    price_monthly: 3_000_000,
+    currency: "COP",
+    bedrooms: 2,
+    tags: ["external-source", "not-verified"],
+    canScheduleViewing: false,
+  } as const;
+
+  it("displays authorized media on phone width without unlocking Schedule viewing", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        {...card}
+        tags={[...card.tags]}
+        photoUrl="https://example.com/approved-apartment.webp"
+        onSchedule={() => undefined}
+      />,
+    );
+    expect(html).toContain('alt="Laureles apartment rental photo in Laureles"');
+    expect(html).toContain("approved-apartment.webp");
+    expect(html).toMatch(/aspect-\[16\/10\]/);
+    expect(html).not.toMatch(/class="hidden[^"]*"[^>]*>\s*<img/);
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("keeps no-photo mobile cards text-only while retaining the desktop fallback", () => {
+    const html = renderToStaticMarkup(<RentalCard {...card} tags={[...card.tags]} />);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("sm:flex");
+    expect(html).toContain("Photo");
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+});

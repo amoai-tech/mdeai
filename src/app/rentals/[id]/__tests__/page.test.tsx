@@ -3,6 +3,8 @@
  * database cannot be read, show its generic error for anything else, and never write a raw driver
  * message to the server log.
  */
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
@@ -11,6 +13,11 @@ const getRentalDetail = vi.fn();
 
 vi.mock("@/lib/rentals/get-rental-detail", () => ({
   getRentalDetail: (...args: unknown[]) => getRentalDetail(...args),
+}));
+const createServerClient = vi.fn();
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: (...args: unknown[]) => createServerClient(...args),
 }));
 vi.mock("@/components/rentals/rental-detail-view", () => ({
   RentalDetailView: () => null,
@@ -21,7 +28,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import RentalDetailPage from "../page";
+import RentalDetailPage, { generateMetadata } from "../page";
 
 function textOf(node: unknown): string {
   if (node == null || typeof node === "boolean") return "";
@@ -40,6 +47,7 @@ async function render(id = "rnt_lau_001", searchParams?: Record<string, string>)
 
 beforeEach(() => {
   getRentalDetail.mockReset();
+  createServerClient.mockReset().mockResolvedValue({});
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -93,5 +101,44 @@ describe("/rentals/[id]", () => {
       getRentalDetail.mockResolvedValue(detail);
       expect((await render("abc")).props.backHref).toBe("/rentals");
     });
+  });
+});
+
+// SAN-1503 — an unknown slug answered HTTP 200 with a "not found" page. Cause: a `loading.tsx` directly
+// under `app/rentals/` wrapped this page in a Suspense boundary; Next.js sends 200 once a loading
+// boundary starts streaming, so the page's own notFound() could no longer change the status. The
+// skeleton now lives in `app/rentals/(browse)/` and covers only the list. Guard the file layout, because
+// nothing in a unit render would notice it coming back.
+// https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes
+describe("/rentals/[id] status code", () => {
+  it("has no loading boundary above it, so an unknown listing can answer 404", () => {
+    const rentalsDir = resolve(__dirname, "../..");
+    for (const name of ["loading.tsx", "loading.ts", "loading.jsx", "loading.js"]) {
+      expect(existsSync(resolve(rentalsDir, name))).toBe(false);
+    }
+    expect(existsSync(resolve(rentalsDir, "(browse)", "loading.tsx"))).toBe(true);
+  });
+});
+
+// SAN-1503 — backstop: the title lookup also raises not-found for a missing listing, but must not turn a
+// database outage into a 404 (notFound() throws, so it has to sit outside the lookup's try/catch).
+describe("/rentals/[id] generateMetadata", () => {
+  const props = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  it("raises not-found for a listing that does not exist or is not public", async () => {
+    getRentalDetail.mockResolvedValue(null);
+    await expect(generateMetadata(props("no-such-listing"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("titles a real listing", async () => {
+    getRentalDetail.mockResolvedValue({ title: "WE Home", neighborhood: "El Poblado" });
+    await expect(generateMetadata(props("mde-we-home"))).resolves.toEqual({ title: "WE Home · El Poblado · mdeai" });
+  });
+
+  it("keeps the default title, not a 404, when the database cannot be read", async () => {
+    getRentalDetail.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
+    getRentalDetail.mockRejectedValue(new Error("boom"));
+    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
   });
 });

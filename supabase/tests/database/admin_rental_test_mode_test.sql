@@ -1,6 +1,11 @@
 -- Admin rental test mode — admin-gated, test-marked, customer-invisible, auditable.
 -- Run with: supabase test db
 begin;
+-- Explicitly exercise the public-LAUNCH contract. Normal Phase A journeys have
+-- separate pgTAP coverage and must not inherit these business requirements.
+-- This mode change is rolled back with this test; it does not touch live settings.
+UPDATE public.rental_runtime_settings SET phase='launch' WHERE singleton;
+
 
 select plan(58);
 
@@ -141,7 +146,7 @@ select throws_ok(
   $q$select public.p1_schedule_tour_atomic(current_setting('mde.admin_test_id'), null::uuid,
   'admin-test-guest-should-fail', 'form', 'guest@example.com', 'Guest', null, null::uuid,
   (now() + interval '2 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'test rental viewing requires administrator',
+  '42501', 'development rental viewing requires an authorized renter',
   'A43: guest cannot schedule an internal fixture through normal atomic RPC');
 reset role;
 
@@ -183,15 +188,16 @@ select throws_ok(
   'A46: non-admin cannot call internal fixture viewing RPC');
 reset role;
 
--- A48: direct service-role showing inserts also cannot target fixtures.
-set local role service_role;
+-- A48: an anonymous outside caller may not bypass the server booking bridge
+-- by inserting a showing directly. The service role is intentionally trusted.
+set local role anon;
 select set_config('request.jwt.claims', '{}', true);
 select throws_ok(
   $q$insert into public.showings (lead_id, apartment_id, scheduled_at, status)
   values ((select id from public.leads where apartment_id=current_setting('mde.admin_test_id')::uuid limit 1),
           current_setting('mde.admin_test_id')::uuid, now()+interval '3 day', 'scheduled')$q$,
-  '42501', 'test rental viewing requires administrator',
-  'A48: guest cannot insert a fixture showing directly');
+  '42501', null,
+  'A48: anonymous caller cannot insert a fixture showing directly');
 reset role;
 
 -- A49/A50: model a pre-existing guest fixture booking created before the
@@ -219,7 +225,7 @@ select throws_ok(
   $q$select public.p1_schedule_tour_atomic(current_setting('mde.admin_test_id'), null::uuid,
     'admin-test-old-guest-replay', 'form', 'oldguest@example.com', 'Old Guest', null, null::uuid,
     (now() + interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'test rental viewing requires administrator',
+  '42501', 'development rental viewing requires an authorized renter',
   'A51: existing guest fixture viewing cannot be replayed by non-admin');
 reset role;
 
@@ -232,7 +238,7 @@ select throws_ok(
     null::uuid, 'admin-test-guest-slug-deny', 'form', 'slugguest@example.com',
     'Slug Guest', null, null::uuid, (now() + interval '3 day')::timestamptz,
     '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'test rental viewing requires administrator',
+  '42501', 'development rental viewing requires an authorized renter',
   'A52: guest fixture viewing denied by listing slug too');
 reset role;
 
@@ -261,7 +267,7 @@ select throws_ok(
  $q$select public.p1_schedule_tour_atomic(current_setting('mde.old_fixture_slug'), null::uuid,
   'admin-test-old-slug-replay', 'form', 'oldslug@example.com', 'Old Slug Guest',
   null, null::uuid, (now()+interval '4 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)$q$,
- '42501', 'test rental viewing requires administrator',
+ '42501', 'development rental viewing requires an authorized renter',
  'A53: immutable snapshot blocks guest replay after slug and mutable CRM ID change');
 reset role;
 

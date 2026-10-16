@@ -34,6 +34,23 @@
 -- Run with: supabase test db
 
 begin;
+-- Explicitly exercise the public-LAUNCH contract. Normal Phase A journeys have
+-- separate pgTAP coverage and must not inherit these business requirements.
+-- This mode change is rolled back with this test; it does not touch live settings.
+UPDATE public.rental_runtime_settings SET phase='launch' WHERE singleton;
+
+-- The original owner CHECK is deliberately absent during development. For
+-- this historical Phase B suite only, restore its exact former shape, validate
+-- it, and roll it back afterward. The real launch will require a separate
+-- owner-initiated migration after correcting development data.
+ALTER TABLE public.apartments
+  ADD CONSTRAINT apartments_owner_required_when_published
+  CHECK (NOT (status = 'active' AND moderation_status = 'approved'
+             AND listing_workflow_status = 'published') OR landlord_id IS NOT NULL)
+  NOT VALID;
+ALTER TABLE public.apartments VALIDATE CONSTRAINT apartments_owner_required_when_published;
+
+
 
 select plan(32);
 
