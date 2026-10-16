@@ -18,6 +18,11 @@ async function gotoRentals(page: Page) {
     .waitFor({ timeout: 20_000 })
     .then(() => true)
     .catch(() => false);
+  // Against production (or any environment that must have the approved ads) set
+  // E2E_REQUIRE_RENTAL_DATA=1: no cards is then a failure, not a silent skip.
+  if (!hasCards && process.env.E2E_REQUIRE_RENTAL_DATA === "1") {
+    throw new Error("E2E_REQUIRE_RENTAL_DATA=1 but /rentals showed no rental cards");
+  }
   test.skip(!hasCards, "no rental cards on /rentals (outage or empty catalogue): nothing to open");
 }
 
@@ -96,6 +101,31 @@ test.describe("/rentals Details — desktop 1440px", () => {
     expect(await cards(page).count()).toBe(total);
     expect(Math.abs((await page.evaluate(() => window.scrollY)) - scrollWhenOpen)).toBeLessThan(5);
     expect(new URL(page.url()).pathname).toBe("/rentals");
+  });
+
+  test("keyboard: Tab and Shift+Tab never land on the map behind the panel; Escape returns focus to the opener", async ({ page }) => {
+    await gotoRentals(page);
+    const slug = await cardSlug(page, 0);
+    const opener = detailsFor(page, slug);
+    await openDetails(opener, page.getByTestId("rental-details-panel"));
+    await expect(page.getByTestId("rental-details-close")).toBeFocused();
+
+    // The map is inert while Details is open, so no key press may focus anything inside it.
+    const insideInert = () => page.evaluate(() => Boolean(document.activeElement?.closest("[inert]")));
+    for (let i = 0; i < 8; i += 1) {
+      await page.keyboard.press("Tab");
+      expect(await insideInert(), `Tab press ${i + 1} focused something inside the inert map`).toBe(false);
+    }
+    for (let i = 0; i < 8; i += 1) {
+      await page.keyboard.press("Shift+Tab");
+      expect(await insideInert(), `Shift+Tab press ${i + 1} focused something inside the inert map`).toBe(false);
+    }
+
+    // From anywhere inside the panel, Escape closes it and focus goes back to the opener.
+    await page.getByTestId("rental-details-close").focus();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("rental-details-panel")).toBeHidden();
+    await expect(opener).toBeFocused();
   });
 
   test("an ad with no coordinates opens Details with no map link and no invented pin", async ({ page }) => {
