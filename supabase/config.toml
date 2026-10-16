@@ -403,6 +403,11 @@ verify_jwt = true
 [functions.vote-nonce]
 verify_jwt = true
 
+# SAN-1523 — process-embedding-jobs is called by pg_cron/pg_net and by an operator, never with a user JWT.
+# It authenticates every request itself with the X-Cron-Secret header (constant-time compare).
+[functions.process-embedding-jobs]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54627
