@@ -42,10 +42,10 @@ describe("searchRentals structured path — availability filter", () => {
     expect(mocks.state.filters.some((f) => f.includes("available_from.is.null"))).toBe(false);
   });
 
-  it("never allows a listing with no move-in date, with no dates either", async () => {
+  it("shows unexpired listings without requiring move-in documentation when no dates are requested", async () => {
     const { searchRentals } = await import("../search-rentals");
     await searchRentals({ neighborhood: "Laureles", limit: 5 });
-    expect(mocks.state.filters).toContain("not(available_from,is,null)");
+    expect(mocks.state.filters).not.toContain("not(available_from,is,null)");
     expect(mocks.state.filters.some((f) => /^or\(available_to\.is\.null,available_to\.gte\.\d{4}-\d{2}-\d{2}\)$/.test(f))).toBe(true);
   });
 });

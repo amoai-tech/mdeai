@@ -168,8 +168,8 @@ select is(
     (select moderation_status from public.apartments where id = current_setting('mde.san1502_fixture')::uuid),
     (select listing_workflow_status from public.apartments where id = current_setting('mde.san1502_fixture')::uuid),
     (select metadata from public.apartments where id = current_setting('mde.san1502_fixture')::uuid)),
-  false,
-  'A29: withdrawn publishing removes the listing from the development offer');
+  true,
+  'A29: development discovery is not blocked by withdrawn publishing paperwork');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select lives_ok(

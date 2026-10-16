@@ -118,6 +118,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
       listing_workflow_status: str(row.listing_workflow_status),
       available_from: str(row.available_from),
       available_to: str(row.available_to),
+      metadata: row.metadata,
     }),
     isSelfAttested: isSelfAttested(row.metadata),
   };

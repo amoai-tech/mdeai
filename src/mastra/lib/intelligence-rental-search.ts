@@ -159,10 +159,7 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .eq("status", "active")
-      // SAN-468 §4.2 / SAN-386 canonical public eligibility, shared with the
-      // structured path. RLS enforces the same contract at the database boundary.
-      .eq("moderation_status", "approved")
-      .eq("listing_workflow_status", "published")
+      // RLS applies customer eligibility and authorized development visibility.
       .not("landlord_id", "is", null)
       // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
       // which listings are priced or how a nightly budget applies across currencies.
@@ -278,13 +275,9 @@ export async function searchRentalsIntelligent(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
       .in("id", ids)
-      // The hybrid RPC filters only status='active'. Re-apply the structured
-      // path's canonical eligibility here, so the two paths cannot disagree
-      // about which listings are eligible. RLS still enforces the same contract
-      // at the database boundary first.
+      // RLS applies customer eligibility and authorized development visibility.
+      // Preserve the shared status and budget filters without reimposing publication gates.
       .eq("status", "active")
-      .eq("moderation_status", "approved")
-      .eq("listing_workflow_status", "published")
       .not("landlord_id", "is", null)
       // One shared budget predicate with the structured path, so a hybrid result
       // can never bypass the caller's price filter.

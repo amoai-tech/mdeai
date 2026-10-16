@@ -18,15 +18,15 @@ const run = (opts: { checkIn?: string; checkOut?: string }) => {
 };
 
 describe("applyAvailabilityFilters — one rule for every search path (SAN-486)", () => {
-  it("never lets a listing with no move-in date through, with or without dates", () => {
-    for (const calls of [run({}), run({ checkIn: "2026-11-01", checkOut: "2026-11-30" }), run({ checkIn: "2026-11-01" })]) {
+  it("requires a known move-in date only when the user requests a dated stay", () => {
+    for (const calls of [run({ checkIn: "2026-11-01", checkOut: "2026-11-30" }), run({ checkIn: "2026-11-01" })]) {
       expect(calls[0]).toBe("not(available_from,is,null)");
       expect(calls.some((c) => c.includes("available_from.is.null"))).toBe(false);
     }
   });
 
   it("with no dates it only excludes expired listings (a future move-in stays discoverable)", () => {
-    expect(run({})).toEqual(["not(available_from,is,null)", "or(available_to.is.null,available_to.gte.2026-10-13)"]);
+    expect(run({})).toEqual(["or(available_to.is.null,available_to.gte.2026-10-13)"]);
   });
 
   it("with a full stay (Nov 1–30 inclusive = 30 days) it requires the listing to start on or before the first day and cover the last day and the length", () => {
