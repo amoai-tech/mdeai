@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { resolveSavedVote, type SavedVote } from "./vote-panel-recovery";
 
 // Hydration marker: server snapshot false, client snapshot true. Stable no-op subscription.
 // Declared AFTER every import: ES modules require imports to precede other statements.
@@ -23,7 +24,11 @@ const hydratedOnServer = () => false;
 
 export type VoteTarget = { contestId: string; entityId: string };
 type Receipt = { voteId: string; createdAt: string | null; status: string; entityId: string };
-type PanelState = "idle" | "checking" | "confirming" | "casting" | "receipt" | "closed" | "error";
+type PanelState =
+  | "idle" | "checking" | "confirming" | "casting"
+  | "receipt" | "closed" | "error"
+  | "unknown"          // saved-vote check failed — offer retry, never invite a vote
+  | "already-voted";   // this account voted for another restaurant — hide the CTA
 type VoteResponse = {
   data?: { vote_id?: string; created_at?: string; status?: string; entity_id?: string; contest_id?: string; nonce?: string };
   error?: { code?: string };
@@ -58,6 +63,9 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const [state, setState] = useState<PanelState>("idle");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [alreadyVotedName, setAlreadyVotedName] = useState<string | null>(null);
+  // recover() lives inside the effect, so Retry re-runs the effect instead of calling it.
+  const [retryNonce, setRetryNonce] = useState(0);
   // Hydration marker. React only runs effects after it has attached event handlers, so this
   // flipping to true is proof the button is live. Without it a test (or a fast user) can click
   // server-rendered HTML that has no onClick yet and see nothing happen.
@@ -101,27 +109,34 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         if (!session) { setState("idle"); return; }
         const user = session.user;
         // Cross-device first: ask the server which ballot THIS account already has.
-        try {
-          const r = await fetch("/api/restaurants/my-vote?contest_id=" + target.contestId, { cache: "no-store" });
-          if (r.ok) {
-            const body = (await r.json()) as { receipt?: { vote_id?: string; entity_id?: string; created_at?: string; restaurant_name?: string | null } | null };
-            const rec = body.receipt;
-            if (rec && rec.vote_id && rec.entity_id) {
-              if (rec.entity_id === target.entityId) {
-                setReceipt({ voteId: rec.vote_id, createdAt: rec.created_at ?? null, status: "cast", entityId: rec.entity_id });
-                setState("receipt");
-                return;
-              }
-              // A real ballot for ANOTHER restaurant in this contest: say so truthfully.
-              setMessage("You already voted in this contest for " + (rec.restaurant_name ?? "another restaurant") + ". One vote per account per contest.");
-              setState("error");
-              return;
-            }
-          }
-        } catch { /* fall through to the local key */ }
         const storageKey = "mde:restaurant-vote:" + target.contestId + ":" + target.entityId + ":" + user.id;
-        const key = window.localStorage.getItem(storageKey);
-        if (!key || !UUID_RE.test(key)) { setState("idle"); return; }
+        const localKey = window.localStorage.getItem(storageKey);
+        const hasLocalKey = Boolean(localKey && UUID_RE.test(localKey));
+
+        let outcome: SavedVote = { kind: "unknown" };
+        try {
+          const res = await fetch("/api/restaurants/my-vote?contest_id=" + target.contestId, { cache: "no-store" });
+          // Only a 2xx carries a payload to classify; anything else is unproven, not absent.
+          const payload = res.ok ? await res.json().catch(() => undefined) : undefined;
+          outcome = resolveSavedVote(res.status, payload, target.entityId);
+        } catch (err) {
+          console.error("[vote] saved-vote check failed:", err instanceof Error ? err.message : err);
+          outcome = { kind: "unknown" };
+        }
+        if (!active) return;
+
+        if (outcome.kind === "sign-in") { setState("idle"); return; }
+        if (outcome.kind === "receipt") { setReceipt(outcome.receipt); setState("receipt"); return; }
+        if (outcome.kind === "already-voted") {
+          setAlreadyVotedName(outcome.restaurantName);
+          setState("already-voted");
+          return;
+        }
+        // A failed read is NOT proof that no ballot exists. Only give up when there is no local
+        // key either; otherwise fall through and try the original-key recovery.
+        if (outcome.kind === "unknown" && !hasLocalKey) { setState("unknown"); return; }
+        if (outcome.kind === "none" && !hasLocalKey) { setState("idle"); return; }
+        const key = localKey as string;
         const response = await fetch(functionsUrl + "/vote-cast", {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token },
@@ -148,7 +163,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     }
     void recover();
     return () => { active = false; };
-  }, [anonKey, contestId, entityId, functionsUrl]);
+  }, [anonKey, contestId, entityId, functionsUrl, retryNonce]);
 
   const castVote = useCallback(async () => {
     if (!voteTarget || inFlight.current) return;
@@ -246,6 +261,28 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-not-open">
         <p className="font-medium">Voting is not available for this restaurant yet.</p>
         <p className="mt-1">The restaurant needs to be connected to its contest entry before voting can be displayed.</p>
+      </div>
+    );
+  }
+
+  if (state === "unknown") {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-check-failed" role="alert">
+        <p className="font-medium">Could not check your saved vote.</p>
+        <p className="mt-1">Reconnect and try again before voting, so you do not cast a second ballot.</p>
+        <button className="mt-3 min-h-11 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium"
+                data-testid="vote-retry-check" onClick={() => setRetryNonce((n) => n + 1)} type="button">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (state === "already-voted") {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-already-voted">
+        <p className="font-medium">You already voted in this contest{alreadyVotedName ? " for " + alreadyVotedName : ""}.</p>
+        <p className="mt-1">One vote per account per contest, so voting is closed for this account.</p>
       </div>
     );
   }
