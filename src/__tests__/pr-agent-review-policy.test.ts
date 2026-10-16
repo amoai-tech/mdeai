@@ -52,7 +52,11 @@ function envelopedCanonical(options: ReviewEnvelopeOptions = {}) {
   return `${envelope}
 ## MDE PR Review 🔍
 ${marker}
-review body`;
+review body
+
+<!-- pr-agent-review-state:v1
+${JSON.stringify({ findings: [], schema_version: 1, last_run: { complete: true, excluded_files: [], head_sha: options.headSha ?? HEAD_A } })}
+-->`;
 }
 
 function envelopedStandalone(options: ReviewEnvelopeOptions = {}) {
@@ -306,6 +310,64 @@ describe("PR-Agent review policy", () => {
     expect(selectReviewCommand({ action: "synchronize", certificationBodies: [], baseSha: BASE_A })).toBe("/review");
   });
 
+  it("rejects the actual PR #342 false-green: partial review excluded 17 of 20 changed files", () => {
+    const body = envelopedCanonical().replace(
+      /<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/,
+      `<!-- pr-agent-review-state:v1
+${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A, complete: false, excluded_files: Array.from({ length: 17 }, (_, i) => `src/file-${i}.ts`) } })}
+-->`,
+    );
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("excluded_files=17");
+  });
+
+  it("rejects a newer partial review instead of falling back to an older complete review from the same run", () => {
+    const complete = envelopedCanonical();
+    const partial = complete.replace('"complete":true', '"complete":false');
+    const result = verifyReviewResult({
+      comments: [
+        comment(complete, "2026-09-20T01:00:05Z"),
+        comment(partial, "2026-09-20T01:00:10Z"),
+      ],
+      startedAt: RUN_STARTED,
+      reviewCommand: "/review",
+      baseSha: BASE_A,
+      headSha: HEAD_A,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
+  it("rejects excluded files even when an LLM incorrectly marks complete true", () => {
+    const body = envelopedCanonical().replace('"excluded_files":[]', '"excluded_files":["src/unreviewed.ts"]');
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
+  it("keeps state-free clean PR-Agent reviews working without claiming complete diff coverage", () => {
+    const body = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+    expect(result).toHaveProperty("coverageConfirmed", false);
+    expect(result.reason).toContain("full coverage unconfirmed");
+  });
+
+  it("rejects a persisted coverage record for a different PR head", () => {
+    const body = envelopedCanonical().replace(`"head_sha":"${HEAD_A}"`, `"head_sha":"${HEAD_B}"`);
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("STALE_HEAD");
+  });
+
+  it("rejects duplicate persistent state markers", () => {
+    const body = envelopedCanonical() + `\n<!-- pr-agent-review-state:v1
+${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A, complete: true, excluded_files: [] } })}
+-->`;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INVALID_REVIEW_STATE");
+  });
+
   it("accepts a fresh canonical review", () => {
     const result = verifyReviewResult({
       comments: [comment(envelopedCanonical({ command: "/review -i" }), "2026-09-20T01:00:05Z")],
@@ -418,6 +480,7 @@ describe("PR-Agent review policy", () => {
     });
     expect(result.ok).toBe(true);
     expect(result.code).toBe("OK");
+    expect(result).toHaveProperty("coverageConfirmed", true);
   });
 
   it("accepts an exact-head standalone fallback with a trusted envelope", () => {
