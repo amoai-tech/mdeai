@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import type { Browser } from "@playwright/test";
 import { Client } from "pg";
 import {
   createThrowawayIdentity,
@@ -20,6 +21,43 @@ const contestId = process.env.SAN1469_TEST_CONTEST_ID;
 const entityId = process.env.SAN1469_TEST_ENTITY_ID;
 const dbUrl = process.env.SUPABASE_DB_URL;
 const configured = Boolean(hasE2eEnv() && dbUrl && restaurantId && contestId && entityId);
+
+/**
+ * A second browser context has NO localStorage key. It must still recover the original
+ * receipt through the account-scoped server read — that is what makes voting cross-device.
+ * Extracted so the journey test stays readable and under the complexity limit.
+ */
+async function proveSecondBrowserRecovery(
+  browser: Browser,
+  session: Awaited<ReturnType<typeof getTestSession>>,
+  ids: { restaurantId: string; contestId: string; entityId: string; userId: string },
+  receipt: string,
+  countBallots: () => Promise<unknown[]>,
+): Promise<void> {
+  const secondContext = await browser.newContext({
+    baseURL: test.info().project.use.baseURL as string,
+  });
+  try {
+    await injectSession(secondContext, session);
+    const secondPage = await secondContext.newPage();
+    await secondPage.goto("/restaurants/" + ids.restaurantId);
+    const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
+      localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
+      { contest: ids.contestId, entity: ids.entityId, user: ids.userId },
+    );
+    expect(secondKey).toBeNull();
+    // Prove the new context can authenticate against the server read boundary
+    // independently of the React panel or any first-browser localStorage.
+    const secondRead = await secondPage.request.get("/api/restaurants/my-vote?contest_id=" + ids.contestId);
+    expect(secondRead.status(), "second browser must authenticate to my-vote").toBe(200);
+    const secondPayload = await secondRead.json() as { receipt?: { vote_id?: string } | null };
+    expect(secondPayload.receipt?.vote_id).toBe(receipt);
+    await expect(secondPage.getByTestId("vote-receipt-id")).toContainText(receipt, { timeout: 20_000 });
+    expect(await countBallots()).toHaveLength(1);
+  } finally {
+    await secondContext.close();
+  }
+}
 
 test.describe("SAN-1469 real restaurant vote / database receipt", () => {
   // The dedicated voting gate sets SAN1469_VOTE_E2E=required: missing configuration must FAIL
@@ -104,31 +142,15 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       await expect(page.getByTestId("vote-receipt-id")).toContainText(receipt);
       expect(await countBallots()).toHaveLength(1);
 
-      // A second browser has NO original localStorage: it must recover the
-      // original receipt from the account-scoped server read, not from that key.
-      const secondContext = await browser.newContext({
-        baseURL: test.info().project.use.baseURL as string,
-      });
-      try {
-        await injectSession(secondContext, session);
-        const secondPage = await secondContext.newPage();
-        await secondPage.goto("/restaurants/" + restaurantId);
-        const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
-          localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
-          { contest: contestId!, entity: entityId!, user: userId! },
-        );
-        expect(secondKey).toBeNull();
-        // Prove the new context can authenticate against the server read boundary
-        // independently of the React panel or any first-browser localStorage.
-        const secondRead = await secondPage.request.get("/api/restaurants/my-vote?contest_id=" + contestId);
-        expect(secondRead.status(), "second browser must authenticate to my-vote").toBe(200);
-        const secondPayload = await secondRead.json() as { receipt?: { vote_id?: string } | null };
-        expect(secondPayload.receipt?.vote_id).toBe(receipt);
-        await expect(secondPage.getByTestId("vote-receipt-id")).toContainText(receipt, { timeout: 20_000 });
-        expect(await countBallots()).toHaveLength(1);
-      } finally {
-        await secondContext.close();
-      }
+      // A second browser has NO original localStorage: it must recover the same receipt from
+      // the account-scoped server read, not from that key.
+      await proveSecondBrowserRecovery(
+        browser,
+        session,
+        { restaurantId: restaurantId!, contestId: contestId!, entityId: entityId!, userId: userId! },
+        receipt,
+        countBallots,
+      );
 
       // Hit the deployed service directly with the exact saved idempotency key.
       // No nonce means a NEW ballot cannot be created, but a committed receipt can be replayed.
