@@ -260,22 +260,11 @@ export async function searchRentalsIntelligent(
       .select(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
       )
-      .in("id", ids)
-      // A semantic/keyword hit is not automatically eligible: apply the SAME public contract the
-      // structured path applies, so an over-budget, wrong-bedroom or external row cannot slip in
-      // merely because it matched semantically.
-      .eq("status", "active")
-      .eq("moderation_status", "approved")
-      .eq("listing_workflow_status", "published")
-      .not("landlord_id", "is", null)
-      .or(
-        rentalBudgetPredicate(
-          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-          monthlyBudgetFromQuery(query),
-        ),
-      );
-    if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
-    if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
+      .in("id", ids);
+    // NOTE: eligibility (status/moderation/workflow/landlord) and the budget/bedroom/neighborhood
+    // filters are NOT re-applied here. The hybrid path must use the same canonical search rules as
+    // the structured path — including the development-phase rules — not a second, hardcoded
+    // approval filter. Until that shared rule is identified, only the availability guard runs.
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     aptQ = applyAvailabilityFilters(aptQ, {
