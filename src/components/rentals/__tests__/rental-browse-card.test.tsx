@@ -335,7 +335,9 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
 
   // SAN-1502 Phase A: an imported record activated as MDE-managed development inventory is
   // presented as an ordinary MDE listing; provenance stays in metadata for pre-launch cleanup.
-  it("treats an activated development import as ordinary MDE-managed inventory", () => {
+  // SAN-1235: attribution is not requestability. An activated development import keeps the MDE
+  // viewing action AND shows the genuine advertiser it came from.
+  it("shows an activated development import's advertiser while keeping Schedule viewing", () => {
     const rental = rowToRental(
       apartmentRow({
         id: "candidate-fincaraiz-194104380",
@@ -349,12 +351,14 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
         },
       }),
     );
+    // Not tagged as an external ad, so the CTA stays the MDE viewing action.
     expect(rental.tags).not.toContain("external-source");
-    expect(rental.source_provider).toBeUndefined();
+    expect(rental.source_provider).toBe("Fincaraíz");
     const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
-    expect(html).not.toContain("Source: Fincaraíz");
-    expect(html).not.toContain("View original listing");
+    expect(html).toContain("Source: Fincaraíz");
+    expect(html).toContain("View original listing");
     expect(html).toContain("Schedule viewing");
+    expect(html).toContain("Not yet checked");
   });
 });
 
