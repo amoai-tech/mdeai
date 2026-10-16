@@ -57,6 +57,12 @@ describe("rowToRental — gallery photos for the Details panel", () => {
     expect(rental.images).toEqual(urls.slice(0, RENTAL_PANEL_PHOTO_LIMIT));
   });
 
+  it("reports the total photo count only when the gallery was cut short", () => {
+    expect(rowToRental(apartmentRow(photoUrls(76))).photo_count).toBe(76);
+    expect(rowToRental(apartmentRow(photoUrls(RENTAL_PANEL_PHOTO_LIMIT))).photo_count).toBeUndefined();
+    expect(rowToRental(apartmentRow(photoUrls(3))).photo_count).toBeUndefined();
+  });
+
   it("keeps `image` as the first photo of the gallery", () => {
     const urls = photoUrls(5);
     const rental = rowToRental(apartmentRow(urls));

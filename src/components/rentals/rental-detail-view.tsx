@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +34,10 @@ const specLabel = (count: number | null, one: string, many: string): React.React
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
-  const images = detail.images.slice(0, 5);
+  const [showAll, setShowAll] = useState(false);
+  // Every stored photo is reachable: the mosaic leads with five, the rest sit behind "Show all".
+  const allImages = detail.images;
+  const images = allImages.slice(0, 5);
   const cover = images[0];
   if (!cover) {
     return (
@@ -75,6 +79,35 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
         ) : null}
       </div>
 
+      {/* Desktop: the photos beyond the first five, on demand. */}
+      {allImages.length > images.length ? (
+        <div className="hidden sm:block">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="rental-detail-show-all-photos"
+            aria-expanded={showAll}
+            onClick={() => setShowAll((open) => !open)}
+          >
+            {showAll ? "Show fewer photos" : `Show all ${allImages.length} photos`}
+          </Button>
+          {showAll ? (
+            <div data-testid="rental-detail-all-photos" className="mt-3 grid grid-cols-3 gap-2">
+              {allImages.map((src, index) => (
+                <GalleryImage
+                  key={src}
+                  src={src}
+                  alt={`${detail.title} photo ${index + 1} of ${allImages.length}`}
+                  className="aspect-[4/3] w-full rounded-lg bg-muted object-cover"
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Mobile: every photo reachable by swipe or the next/previous controls. */}
       <Carousel
         className="sm:hidden"
@@ -82,7 +115,7 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
         opts={{ loop: false, align: "start" }}
       >
         <CarouselContent>
-          {images.map((src, index) => (
+          {allImages.map((src, index) => (
             <CarouselItem key={src}>
               <GalleryImage
                 src={src}

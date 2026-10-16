@@ -110,4 +110,32 @@ describe("RentalDetailsPanel — managed listing gallery", () => {
 
     expect(photos()).toHaveLength(1);
   });
+
+  it("says how many photos exist and links to all of them when the gallery was cut short", () => {
+    const rental = rowToRental(managedRow(76));
+    act(() => {
+      root.render(
+        <div className="relative">
+          <RentalDetailsPanel rental={rental} onClose={() => undefined} />
+        </div>,
+      );
+    });
+
+    const link = container.querySelector<HTMLAnchorElement>('[data-testid="rental-details-all-photos-link"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain("12 of 76 photos");
+    expect(link?.getAttribute("href")).toBe(`/rentals/${rental.id}`);
+  });
+
+  it("shows no link when every photo is already in the carousel", () => {
+    act(() => {
+      root.render(
+        <div className="relative">
+          <RentalDetailsPanel rental={rowToRental(managedRow(5))} onClose={() => undefined} />
+        </div>,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="rental-details-all-photos-link"]')).toBeNull();
+  });
 });

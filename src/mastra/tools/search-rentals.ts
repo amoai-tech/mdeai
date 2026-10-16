@@ -38,6 +38,8 @@ export const rentalSchema = z.object({
    * first. Absent = just `image`.
    */
   images: z.array(z.string()).optional(),
+  /** Total photos the listing has, when more than `images` carries (the panel links to the rest). */
+  photo_count: z.number().int().optional(),
   source_url: z.string(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
@@ -74,8 +76,8 @@ export type Rental = z.infer<typeof rentalSchema>;
 /**
  * How many of an apartment's stored photos travel with each search result for the Details panel.
  * A managed listing can hold dozens (one has 76); the panel needs a gallery, not the whole set, and
- * every result is serialized into the page, so the list stays bounded. The full set is on the
- * listing's own page.
+ * every result is serialized into the page, so the list stays bounded. The panel links to the
+ * listing's own page (`photo_count` says how many there are), which shows every photo.
  */
 export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 
@@ -414,6 +416,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     image: photos[0] ?? '',
     // The Details panel shows `images`; without it a managed listing showed only its cover photo.
     images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
+    photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
