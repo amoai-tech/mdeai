@@ -116,7 +116,11 @@ function rentalSignalBoost(slots: RentalIntelligenceSlots, s: RentalSignalRow): 
 }
 
 /** SAN-1502 PR2: optional per-request, RLS-governed client. */
-export type IntelligenceSearchOptions = { client?: SupabaseClient | null };
+export type IntelligenceSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
 
 export async function searchRentalsIntelligent(
   query: RentalQuery & { queryText?: string },
@@ -145,7 +149,7 @@ export async function searchRentalsIntelligent(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const developmentMode = await readRentalDevelopmentPhase(client);
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
 
   /**
    * The canonical keyword/list query, shared by the normal path and the
@@ -161,16 +165,11 @@ export async function searchRentalsIntelligent(
       .select(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
-      // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
-      // which listings are priced or how a nightly budget applies across currencies.
-      .or(
-        rentalBudgetPredicate(
-          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-          monthlyBudgetFromQuery(query),
-        ),
-      )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      q = q.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
+    }
     if (!developmentMode) q = q.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
@@ -216,7 +215,15 @@ export async function searchRentalsIntelligent(
   let embedFailureReason: EmbedFailureReason | undefined;
   let embedHttpStatus: number | undefined;
 
-  if (queryText) {
+  if (queryText && developmentMode) {
+    embedStatus = "skipped";
+    rankExplanation.push({
+      factor: "development_keyword",
+      score: 0,
+      note: "phase-aware canonical keyword search; no legacy hybrid eligibility filter",
+    });
+  }
+  if (queryText && !developmentMode) {
     const embedResult = await embedQueryTextDetailed(queryText);
     if (embedResult.ok) {
       embedStatus = "ok";
@@ -279,14 +286,10 @@ export async function searchRentalsIntelligent(
       .in("id", ids)
       // RLS applies customer eligibility and authorized development visibility.
       // Preserve the shared status and budget filters without reimposing publication gates.
-      // One shared budget predicate with the structured path, so a hybrid result
-      // can never bypass the caller's price filter.
-      .or(
-        rentalBudgetPredicate(
-          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-          monthlyBudgetFromQuery(query),
-        ),
-      );
+;
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      aptQ = aptQ.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
+    }
     if (!developmentMode) aptQ = aptQ.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
