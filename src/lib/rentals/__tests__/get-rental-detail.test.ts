@@ -107,6 +107,20 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       expect(mapApartmentRowToDetail({ ...fixture, status: "inactive" }).canScheduleViewing).toBe(false);
     });
 
+    it("does not advertise expired development apartments as requestable", () => {
+      const fixture = {
+        ...ownedRow,
+        metadata: { is_test_fixture: true },
+        moderation_status: "pending",
+        listing_workflow_status: "draft",
+        available_from: null,
+        available_to: "2026-10-14",
+      };
+      // These assertions use the calendar date of 2026-10-16 in Bogotá.
+      // Expired fixture must be denied in Details just as in rental search.
+      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(false);
+    });
+
     it("fails closed when the ownership columns are absent from the row", () => {
       expect(mapApartmentRowToDetail({ id: "x", title: "Studio", neighborhood: "El Poblado" }).canScheduleViewing).toBe(false);
     });
