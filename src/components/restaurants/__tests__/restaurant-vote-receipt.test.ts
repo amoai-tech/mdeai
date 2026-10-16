@@ -6,14 +6,21 @@ const ENTITY = "22222222-2222-2222-2222-222222222222";
 const VOTE = "33333333-3333-3333-3333-333333333333";
 const target = { contestId: CONTEST, entityId: ENTITY };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 describe("nextIdempotencyKey", () => {
   it("reuses the stored key so a reload recovers the same ballot", () => {
     const stored = "33333333-3333-3333-3333-333333333333";
     expect(nextIdempotencyKey(stored)).toBe(stored);
   });
 
-  it("mints a new key only when nothing usable is stored", () => {
-    expect(nextIdempotencyKey(null)).not.toBeNull();
+  it("mints a fresh, well-formed UUID when nothing usable is stored", () => {
+    expect(nextIdempotencyKey(null)).toMatch(UUID_PATTERN);
+    expect(nextIdempotencyKey("")).toMatch(UUID_PATTERN);
+    expect(nextIdempotencyKey("not-a-uuid")).toMatch(UUID_PATTERN);
+  });
+
+  it("never reuses a stored value that is not a valid UUID", () => {
     expect(nextIdempotencyKey("not-a-uuid")).not.toBe("not-a-uuid");
   });
 });

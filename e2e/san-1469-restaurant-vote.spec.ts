@@ -47,7 +47,8 @@ test.describe("SAN-1469 real restaurant vote / database receipt", () => {
       const session = await getTestSession(identity.email);
       await injectSession(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
-      await expect(page).toHaveURL(new RegExp("/restaurants/" + restaurantId));
+      // Predicate instead of a constructed RegExp: no dynamic pattern to backtrack on.
+      await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
 
       await page.getByTestId("vote-cta").click();
