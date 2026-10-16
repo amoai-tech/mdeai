@@ -38,7 +38,7 @@ const skills = [
 
 describe("SAN-1312 PR-Agent review contract", () => {
   it("delegates runtime to the immutable shared core and keeps the caller trust boundary", () => {
-    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@263f5fb347128538ed8ecc267fc5cfc8fced22a2");
+    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@eeb437f851af0b69ec7ac0c4bb69a1ee65071312");
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(workflow).toContain('NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
     expect(workflow).toContain('GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}');
