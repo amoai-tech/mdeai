@@ -36,6 +36,8 @@ export const conciergeWorkingMemorySchema = z.object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
       maxPricePerNight: z.number().optional(),
+      maxPriceMonthly: z.number().positive().optional(),
+      budgetCurrency: z.enum(['COP', 'USD']).optional(),
       budgetType: z.enum(['nightly', 'monthly', 'total_trip']).optional(),
       genericAskPending: z.boolean().optional(),
       checkIn: z.string().optional().describe('ISO date YYYY-MM-DD'),

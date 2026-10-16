@@ -59,6 +59,19 @@ describe("POST /api/rentals/search", () => {
     );
   });
 
+  it("forwards a precise COP monthly ceiling to existing search", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const res = await POST(post({
+      neighborhood: "Laureles", minBedrooms: 2,
+      maxPriceMonthly: 3_500_000, budgetCurrency: "COP", stayType: "monthly",
+    }));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ maxPriceMonthly: 3_500_000, budgetCurrency: "COP" }),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
   it("returns 503 rental_search_unavailable when the database cannot be read", async () => {
     searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
     const res = await POST(post({ limit: 8 }));
