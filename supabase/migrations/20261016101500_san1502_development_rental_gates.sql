@@ -1037,6 +1037,129 @@ end;
 $function$
 
 
+-- Publish operational development listings without falsifying legal evidence.
+CREATE OR REPLACE FUNCTION public.publish_verified_rental(p_apartment_id uuid, p_actor_id uuid DEFAULT NULL::uuid)
+ RETURNS apartments
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_row public.apartments;
+  v_uid uuid := auth.uid();
+  v_actor uuid;
+  v_missing text[];
+begin
+  if v_uid is null
+     and coalesce(current_setting('role', true), '') <> 'service_role' then
+    raise exception 'authenticated publisher or trusted service required'
+      using errcode = '42501';
+  end if;
+
+  -- Lock first and authorize against the locked row only. There is no separate
+  -- pre-lock decision to reason about, so no stale-read race and no dead branch.
+  select a.* into v_row from public.apartments a where a.id = p_apartment_id for update;
+  if not found then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+
+  -- rental_listing_is_public() is a READ-path predicate. Here it only chooses which
+  -- exception a non-owner sees: a publicly visible row yields 42501, a hidden row
+  -- stays indistinguishable from a missing id (P0002). It is never sufficient to
+  -- publish — the next check requires admin or the owning landlord.
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())
+              or public.rental_listing_is_public(
+                   v_row.status, v_row.moderation_status, v_row.listing_workflow_status,
+                   v_row.landlord_id, v_row.metadata)) then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())) then
+    raise exception 'not authorized to publish this listing' using errcode = '42501';
+  end if;
+
+  -- SAN-1349: a rejected listing must return to draft before publication.
+  if v_row.listing_workflow_status = 'rejected' and not public.rental_development_active() then
+    raise exception 'rejected listings must return to draft before publication'
+      using errcode = 'check_violation';
+  end if;
+
+  v_missing := public.rental_listing_launch_blockers(p_apartment_id, false);
+  if array_length(v_missing, 1) > 0 then
+    raise exception 'listing is not launch-ready: missing %', array_to_string(v_missing, ', ')
+      using errcode = 'check_violation';
+  end if;
+
+  v_actor := coalesce(v_uid, p_actor_id);
+  if v_actor is null then
+    raise exception 'publisher attribution required: authenticate or pass p_actor_id'
+      using errcode = '42501';
+  end if;
+
+  -- Phase A publishes an operational MDE record without pretending the
+  -- external owner, move-in date, photos or verification have been confirmed.
+  if public.rental_development_active() then
+    if v_row.listing_workflow_status = 'published' and v_row.status = 'active' then
+      return v_row;
+    end if;
+    update public.apartments a
+       set status = 'active',
+           verified = false,
+           moderation_status = 'approved',
+           listing_workflow_status = 'published',
+           published_at = now(),
+           published_by = v_actor,
+           workflow_changed_by = v_uid,
+           workflow_changed_at = now()
+     where a.id = p_apartment_id
+     returning a.* into v_row;
+    return v_row;
+  end if;
+
+  if v_row.listing_workflow_status = 'published' then
+    if v_row.status = 'active'
+       and v_row.moderation_status = 'approved'
+       and v_row.verified is true then
+      return v_row;
+    end if;
+    raise exception 'published listing has inconsistent state'
+      using errcode = '23514';
+  end if;
+
+  update public.apartments a
+     set status = 'active',
+         verified = true,
+         freshness_status = 'active',
+         moderation_status = 'approved',
+         listing_workflow_status = 'published',
+         published_at = now(),
+         published_by = v_actor,
+         -- Deliberate (gate test A11): workflow_changed_by is the AUTHENTICATED user
+         -- only. A trusted service publish records published_by but leaves this NULL
+         -- rather than attributing the workflow to a caller-supplied id.
+         workflow_changed_by = v_uid,
+         workflow_changed_at = now(),
+         metadata = coalesce(a.metadata, '{}'::jsonb)
+           || jsonb_build_object(
+                'inventory_kind', 'mde_controlled',
+                'inventory_type', 'mde_controlled',
+                'allowed_action', 'schedule_viewing',
+                'owner_control_status', 'verified',
+                'availability_status', 'verified',
+                'coordinates_status', 'verified',
+                'photo_rights_status', 'authorized'
+              )
+   where a.id = p_apartment_id
+   returning a.* into v_row;
+
+  return v_row;
+end;
+$function$
+
+
 do $check$
 begin
   if has_function_privilege('anon','public.p1_schedule_tour_atomic(text,uuid,text,text,text,text,text,uuid,timestamptz,jsonb,jsonb)','execute')
