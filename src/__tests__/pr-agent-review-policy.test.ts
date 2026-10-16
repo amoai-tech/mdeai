@@ -329,10 +329,12 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.code).toBe("INCOMPLETE_REVIEW");
   });
 
-  it("rejects a missing persistent state instead of approving a bare LLM review", () => {
+  it("keeps state-free clean PR-Agent reviews working without claiming complete diff coverage", () => {
     const body = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
-    expect(result.code).toBe("INVALID_REVIEW_STATE");
+    expect(result.ok).toBe(true);
+    expect(result.coverageConfirmed).toBe(false);
+    expect(result.reason).toContain("full coverage unconfirmed");
   });
 
   it("rejects a persisted coverage record for a different PR head", () => {
@@ -461,6 +463,7 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     });
     expect(result.ok).toBe(true);
     expect(result.code).toBe("OK");
+    expect(result.coverageConfirmed).toBe(true);
   });
 
   it("accepts an exact-head standalone fallback with a trusted envelope", () => {

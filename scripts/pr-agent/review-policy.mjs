@@ -294,12 +294,14 @@ export function findFreshReviewCandidates({ comments, startedAt }) {
 
 // PR-Agent's own authoritative coverage state must agree with the trusted envelope.
 // A successful LLM request is not a complete review when files were pruned.
-// Require exactly one state outside quoted examples; treat missing or malformed
-// coverage metadata as unverified, never as a green review.
+// PR-Agent v0.46 can omit the persistent state on clean reviews. Its absence
+// is NOT evidence of completeness, but it also is not an incomplete review.
+// When it publishes coverage state, reject incomplete or misleading values.
 function coverageFailure(body, headSha) {
   const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
+  if (markers.length === 0) return null; // Clean reviews may have no persisted findings.
   if (markers.length !== 1) {
-    return { ok: false, code: "INVALID_REVIEW_STATE", reason: `expected one PR-Agent coverage state; found ${markers.length}` };
+    return { ok: false, code: "INVALID_REVIEW_STATE", reason: `expected at most one PR-Agent coverage state; found ${markers.length}` };
   }
   let state;
   try {
@@ -382,7 +384,8 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
       return {
         ok: true,
         code: "OK",
-        reason: `fresh ${candidate.kind} review verified for exact base/head`,
+        reason: `fresh ${candidate.kind} review verified for exact base/head${candidate.kind === "canonical" && candidate.envelope.body.includes("<!-- pr-agent-review-state:v1\n") ? " with complete recorded coverage" : "; full coverage unconfirmed (no persistent coverage state)"}`,
+        coverageConfirmed: candidate.kind === "canonical" && candidate.envelope.body.includes("<!-- pr-agent-review-state:v1\n"),
         comment: candidate.comment,
         type: candidate.kind,
       };
