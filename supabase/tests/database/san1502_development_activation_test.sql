@@ -2,7 +2,7 @@
 -- the MDE administrator; test fixtures and other landlords' records are never touched;
 -- the flag is never silently asserted or reverted; and end users cannot call it.
 begin;
-select plan(13);
+select plan(14);
 
 insert into auth.users (id,instance_id,aud,role,email) values
  ('f1509000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','dev-owner-san1502@example.com'),
@@ -64,6 +64,8 @@ select is(has_function_privilege('authenticated',
 select is(has_function_privilege('service_role',
   'public._san1502_activate_development_inventory(text)', 'execute'), true,
   'service_role retains execute for the admin console');
+select is(to_regprocedure('public.admin_activate_development_inventory(text)'), null,
+  'the legacy administrator wrapper no longer exists');
 
 update public.rental_runtime_settings set phase='launch',changed_at=now() where singleton;
 select is(public._san1502_activate_development_inventory('dev-owner-san1502@example.com'), 0,
