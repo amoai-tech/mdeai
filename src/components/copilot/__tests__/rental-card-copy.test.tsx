@@ -123,6 +123,65 @@ describe("external source rental cards", () => {
     expect(html).not.toContain("0 BR");
     expect(html).not.toContain("Schedule viewing");
   });
+
+  it("SAN-1502: never links an approved host smuggled behind userinfo", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-1"
+        listingId="candidate-evil-1"
+        title="Phishing"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://attacker@fincaraiz.com.co/phishing"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+    expect(html).not.toContain("attacker@");
+  });
+
+  it("SAN-1502: links the validated, normalized URL rather than the raw value", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-fincaraiz-193916988"
+        listingId="candidate-fincaraiz-193916988"
+        title="Conquistadores"
+        neighborhood="Conquistadores"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://WWW.FINCARAIZ.COM.CO/property/123"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).toContain("View original listing");
+    expect(html).toContain('href="https://www.fincaraiz.com.co/property/123"');
+  });
+
+  it("SAN-1502: never links an arbitrary host", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-2"
+        listingId="candidate-evil-2"
+        title="Bad"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://evil.example.com/fake"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+  });
 });
 
 // SAN-1503 — WE Home rents for COP 14,500,000 a month. Its "nightly" figure is only rent ÷ 30, so the
