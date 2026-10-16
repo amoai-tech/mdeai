@@ -120,6 +120,16 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       // Persist before sending: recover after lost response, navigation, or reload.
       window.localStorage.setItem(storageKey, idempotencyKey);
       const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token };
+      // Retry recovers an already committed ballot BEFORE asking for a new ticket: vote-cast
+      // looks up the receipt by idempotency key before it validates a nonce, so a lost
+      // response or a failed nonce request can never hide a vote that was saved.
+      const priorRes = await fetch(functionsUrl + "/vote-cast", {
+        method: "POST", headers,
+        body: JSON.stringify({ contest_id: target.contestId, entity_id: target.entityId, idempotency_key: idempotencyKey }),
+      });
+      const priorJson = (await priorRes.json().catch(() => ({}))) as VoteResponse;
+      const prior = priorRes.ok ? parseReceipt(priorJson, target) : null;
+      if (prior) { setReceipt(prior); setState("receipt"); return; }
       const nonceRes = await fetch(functionsUrl + "/vote-nonce", {
         method: "POST", headers, body: JSON.stringify({ contest_id: target.contestId }),
       });
