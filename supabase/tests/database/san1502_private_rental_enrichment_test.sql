@@ -3,7 +3,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(9);
+select plan(11);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('f1504000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin-enrich@example.com'),
@@ -53,13 +53,14 @@ select is((select count(*)::int from public.rental_signals), 1,
   'A2: anon sees only publicly eligible signals');
 reset role;
 
--- A3/A4: an ordinary authenticated user sees only the public listing's enrichment.
+-- A3/A4: DEVELOPMENT (product-owner decision, 20261016200000): an ordinary signed-in user reads the
+-- enrichment of every apartment they can read, including the fixture.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1504000-0000-4000-8000-000000000003","role":"authenticated"}', true);
-select is((select count(*)::int from public.listing_embeddings), 1,
-  'A3: an ordinary user sees only publicly eligible embeddings');
-select is((select count(*)::int from public.rental_signals), 1,
-  'A4: an ordinary user sees only publicly eligible signals');
+select is((select count(*)::int from public.listing_embeddings), 2,
+  'A3: in development an ordinary signed-in user sees the embeddings of every readable listing');
+select is((select count(*)::int from public.rental_signals), 2,
+  'A4: in development an ordinary signed-in user sees the signals of every readable listing');
 reset role;
 
 -- A5/A6: the authorized tester sees the fixture and the public listing.
@@ -71,17 +72,28 @@ select is((select count(*)::int from public.rental_signals), 2,
   'A6: an authorized tester sees the fixture signals');
 reset role;
 
--- A7/A8: revoking the grant immediately removes the fixture enrichment.
+-- A7/A8: revoking the grant immediately removes the fixture enrichment. In development every signed-in
+-- user reads it anyway, so the revoke is proven in the LAUNCH phase, where the private rule applies.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1504000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select public.admin_revoke_rental_test_access('f1504000-0000-4000-8000-000000000002', 'renter');
 reset role;
+update public.rental_runtime_settings set phase = 'launch' where singleton;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1504000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 select is((select count(*)::int from public.listing_embeddings), 1,
-  'A7: a revoked tester loses the fixture embedding');
+  'A7: in launch a revoked tester loses the fixture embedding');
 select is((select count(*)::int from public.rental_signals), 1,
-  'A8: a revoked tester loses the fixture signals');
+  'A8: in launch a revoked tester loses the fixture signals');
+reset role;
+
+-- A3L/A4L: LAUNCH — an ordinary signed-in user is back to publicly eligible enrichment only.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1504000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+select is((select count(*)::int from public.listing_embeddings), 1,
+  'A3L: in launch an ordinary user sees only publicly eligible embeddings');
+select is((select count(*)::int from public.rental_signals), 1,
+  'A4L: in launch an ordinary user sees only publicly eligible signals');
 reset role;
 
 -- A9: an unknown apartment is never readable.
