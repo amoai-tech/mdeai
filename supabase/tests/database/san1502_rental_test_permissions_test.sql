@@ -4,7 +4,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(64);
+select plan(65);
 
 -- Fixtures: one admin, one revoked renter, one owner, one broker, one observer.
 insert into auth.users (id, instance_id, aud, role, email)
@@ -332,6 +332,11 @@ select lives_ok(
   $q$select public.admin_assign_test_listing_broker((current_setting('mde.san1502_fixture'))::uuid, 'f1502000-0000-4000-8000-000000000004')$q$,
   'A60: reassignment succeeds after the viewings are resolved');
 reset role;
+
+-- A61: an audited fixture can be deleted; the audit trail retains its id.
+select lives_ok(
+  $q$delete from public.apartments where id = current_setting('mde.san1502_fixture')::uuid$q$,
+  'A61: an audited fixture can be deleted without the append-only trigger blocking it');
 
 select * from finish();
 rollback;

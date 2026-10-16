@@ -100,7 +100,11 @@ revoke insert, update, delete on public.rental_test_access from anon, authentica
 -- §2 — append-only development audit trail ----------------------------------
 create table if not exists public.rental_test_events (
   id bigint generated always as identity primary key,
-  apartment_id uuid references public.apartments (id) on delete set null,
+  -- Deliberately NOT a foreign key. Audit history must retain the listing id
+  -- even after the listing is removed, and an ON DELETE action would issue an
+  -- UPDATE that the append-only trigger below (correctly) rejects — which would
+  -- make deleting an audited fixture fail.
+  apartment_id uuid,
   actor_id uuid,
   event_type text not null,
   details jsonb not null default '{}'::jsonb,
@@ -109,7 +113,12 @@ create table if not exists public.rental_test_events (
 );
 
 comment on table public.rental_test_events is
-  'SAN-1502: append-only history of development authorization and test-listing transitions. UPDATE and DELETE are blocked by trigger.';
+  'SAN-1502: append-only history of development authorization and test-listing transitions. UPDATE and DELETE are blocked by trigger; apartment_id is intentionally not a foreign key so history survives a deleted listing.';
+
+-- Replay safety: a database that already created the earlier foreign key must
+-- drop it, because "create table if not exists" skips the corrected definition.
+alter table public.rental_test_events
+  drop constraint if exists rental_test_events_apartment_id_fkey;
 
 create index if not exists rental_test_events_apartment_created_idx
   on public.rental_test_events (apartment_id, created_at desc);
