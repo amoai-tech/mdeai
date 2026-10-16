@@ -1,19 +1,19 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(20);
+select plan(24);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
-          false, 'anonymous public catalog never exposes draft apartments');
+          true, 'Phase A exposes active draft-status inventory without moderation review');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
-  '{"inventory_kind":"external_candidate"}'::jsonb),false,
-  'anonymous public catalog never exposes external source candidates');
+  '{"inventory_kind":"external_candidate"}'::jsonb),true,
+  'Phase A permits source-linked development inventory');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
-  '{"allowed_action":"view_original_listing"}'::jsonb),false,
-  'source-link-only listings remain outside the anonymous catalog');
+  '{"allowed_action":"view_original_listing"}'::jsonb),true,
+  'Phase A permits discovery while preserving source-only provenance');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"is_test_fixture":true}'::jsonb),false,'anonymous fixture boundary remains');
@@ -41,6 +41,19 @@ select lives_ok(
  'admin can publish before real-world approval');
 -- A normal development publisher can use the existing RPC without creating
 -- false ownership/photo authorization or verified-availability assertions.
+select set_config('mde.san1502_unpriced_fixture',
+ (public.admin_create_test_rental('Unpriced QA fixture','Laureles','Calle 18',
+  2400000,'COP',(now() at time zone 'America/Bogota')::date+1,
+  'https://example.com/qa.jpg')).id::text,true);
+update public.apartments set price_monthly=null,available_from=null,
+ address=null,images=array[]::text[]
+where id=current_setting('mde.san1502_unpriced_fixture')::uuid;
+select lives_ok(
+ $q$select public.admin_publish_test_rental(current_setting('mde.san1502_unpriced_fixture')::uuid)$q$,
+ 'admin test publisher can publish without price, date, address or photo in development');
+select is((select verified from public.apartments
+ where id=current_setting('mde.san1502_unpriced_fixture')::uuid),false,
+ 'unpriced development fixture is never falsely verified');
 select set_config('mde.san1502_development_publish',
   (public.admin_create_test_rental('Development publish status','Laureles','Calle 14',
    2300000,'COP',(now() at time zone 'America/Bogota')::date+2,
@@ -97,6 +110,23 @@ select is((select count(*)::int from public.apartments
  where id=current_setting('mde.san1502_phase_fixture')::uuid),0,
  'anonymous visitor cannot see fixture');
 reset role;
+
+-- Direct RLS proof: active development source is visible without publication paperwork.
+insert into public.apartments (id,title,neighborhood,slug,status,
+ moderation_status,listing_workflow_status,metadata,verified)
+values ('f1506000-0000-4000-8000-000000000097',
+ 'QA source apartment','Laureles','san1502-source-qa',
+ 'active','pending','draft',
+ '{"inventory_kind":"external_candidate"}'::jsonb,false);
+set local role anon;
+select is((select count(*)::integer from public.apartments where slug='san1502-source-qa'),1,
+ 'anonymous catalog can browse active source candidate in development');
+reset role;
+
+select matches(pg_get_triggerdef((select oid from pg_trigger
+ where tgname='trg_enqueue_embed_apartment' and tgrelid='public.apartments'::regclass)),
+ 'rental_development_active',
+ 'embedding queue uses development phase instead of approval prerequisite');
 
 -- Explicit launch switch restores the previous public eligibility gates.
 update public.rental_runtime_settings set phase='launch',changed_at=now() where singleton;

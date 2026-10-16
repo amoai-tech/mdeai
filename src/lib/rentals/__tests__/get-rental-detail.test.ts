@@ -83,70 +83,23 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(rentalDetail.images).toHaveLength(2);
   });
 
-  // SAN-1349 — the detail page must not offer a viewing request for a listing the database
-  // would reject. Requestability is derived from the same ownership + workflow + availability
-  // proof, and fails closed when any part of it is missing.
+  // SAN-1502 — requestability has exactly ONE owner: the database's computed
+  // `rental_can_request_viewing` column, evaluated under the server-controlled phase.
+  // Details must not re-derive it from ownership/workflow/availability columns, and it
+  // fails closed when the projection did not return the column.
   describe("canScheduleViewing", () => {
-    const ownedRow = {
-      id: "abc",
-      title: "Bright Laureles 2BR",
-      neighborhood: "Laureles",
-      status: "active",
-      moderation_status: "approved",
-      listing_workflow_status: "published",
-      landlord_id: "11111111-1111-4111-8111-111111111111",
-      available_from: "2026-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
-      available_to: null,
-    };
+    const someRow = { id: "abc", title: "Bright Laureles 2BR", neighborhood: "Laureles" };
 
-    it("is true for an owned, active, approved, published, available listing", () => {
-      expect(mapApartmentRowToDetail(ownedRow).canScheduleViewing).toBe(true);
+    it("is true only when the database computed the row requestable", () => {
+      expect(mapApartmentRowToDetail({ ...someRow, rental_can_request_viewing: true }).canScheduleViewing).toBe(true);
     });
 
-    it("trusts the DB-computed phase eligibility, including unconfirmed availability", () => {
-      const development = { ...ownedRow, available_from: null,
-        moderation_status: "pending", listing_workflow_status: "draft",
-        rental_can_request_viewing: true };
-      expect(mapApartmentRowToDetail(development).canScheduleViewing).toBe(true);
-      expect(mapApartmentRowToDetail({ ...ownedRow, rental_can_request_viewing: false })
-        .canScheduleViewing).toBe(false);
+    it("is false when the database computed it not requestable", () => {
+      expect(mapApartmentRowToDetail({ ...someRow, rental_can_request_viewing: false }).canScheduleViewing).toBe(false);
     });
 
-    it("is false when the listing has no canonical owner", () => {
-      expect(mapApartmentRowToDetail({ ...ownedRow, landlord_id: null }).canScheduleViewing).toBe(false);
-    });
-
-    it("is false when the listing is unapproved or unpublished", () => {
-      expect(
-        mapApartmentRowToDetail({ ...ownedRow, moderation_status: "pending" }).canScheduleViewing,
-      ).toBe(false);
-      expect(
-        mapApartmentRowToDetail({ ...ownedRow, listing_workflow_status: "draft" }).canScheduleViewing,
-      ).toBe(false);
-    });
-
-    it("allows an active development fixture even without approval paperwork or move-in date", () => {
-      const fixture = { ...ownedRow, metadata: { is_test_fixture: true },
-        moderation_status: "pending", listing_workflow_status: "draft",
-        available_from: null, available_to: null };
-      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(true);
-      expect(mapApartmentRowToDetail({ ...fixture, status: "inactive" }).canScheduleViewing).toBe(false);
-    });
-
-    it("does not advertise expired development apartments as requestable", () => {
-      const fixture = {
-        ...ownedRow,
-        metadata: { is_test_fixture: true },
-        moderation_status: "pending",
-        listing_workflow_status: "draft",
-        available_from: null,
-        available_to: "2020-01-01",
-      };
-      // Expired fixtures must be denied in Details just as in rental search.
-      expect(mapApartmentRowToDetail(fixture).canScheduleViewing).toBe(false);
-    });
-
-    it("fails closed when the ownership columns are absent from the row", () => {
+    it("fails closed when the computed column is absent from the row", () => {
+      expect(mapApartmentRowToDetail(someRow).canScheduleViewing).toBe(false);
       expect(mapApartmentRowToDetail({ id: "x", title: "Studio", neighborhood: "El Poblado" }).canScheduleViewing).toBe(false);
     });
   });
