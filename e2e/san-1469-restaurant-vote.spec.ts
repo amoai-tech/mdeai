@@ -109,6 +109,12 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
           { contest: contestId!, entity: entityId!, user: userId! },
         );
         expect(secondKey).toBeNull();
+        // Prove the new context can authenticate against the server read boundary
+        // independently of the React panel or any first-browser localStorage.
+        const secondRead = await secondPage.request.get("/api/restaurants/my-vote?contest_id=" + contestId);
+        expect(secondRead.status(), "second browser must authenticate to my-vote").toBe(200);
+        const secondPayload = await secondRead.json() as { receipt?: { vote_id?: string } | null };
+        expect(secondPayload.receipt?.vote_id).toBe(receipt);
         await expect(secondPage.getByTestId("vote-receipt-id")).toContainText(receipt, { timeout: 20_000 });
         expect(await countBallots()).toHaveLength(1);
       } finally {
