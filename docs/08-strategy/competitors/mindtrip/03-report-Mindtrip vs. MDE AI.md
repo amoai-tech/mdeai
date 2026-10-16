@@ -149,7 +149,7 @@ The checkout screen includes:
 - Important hotel policies.
 
 
-The page states that payment is processed by Nuvei; the screenshots do not independently verify the backend payment integration.
+The locally held screenshot states that Mindtrip's payment is processed by **Nuitee**; no backend transaction or payment-provider integration was independently verified. **MDE uses Stripe for implemented payment flows (event tickets); rental checkout is not implemented and should not be implied.**
 
 The final screenshot demonstrates inline validation for incomplete card information.
 
@@ -298,7 +298,7 @@ This is a design judgment, not a measured benchmark or booking success rate.
 
 The requested sample search was for **November 6–9, 2026, two adults**, but the room and checkout screenshots show **October 20–23, 2026, one adult**. They should not be treated as proof of availability for the requested dates.
 
-The checkout screenshots also show personal contact and payment-address information; these should be redacted before sharing the screenshots outside the project.
+The checkout screenshots contain personal contact and payment-address information. They are intentionally excluded from this repository, so screenshot-only claims cannot be independently checked on GitHub. Never share originals; only consider permission-cleared, redacted copies in a separate review.
 
 Mobile, tablet, accessibility, live API traffic, payment completion, and actual agent internals remain unverified.
 

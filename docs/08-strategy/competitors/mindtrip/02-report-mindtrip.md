@@ -18,7 +18,7 @@ Overall, in our judgement: Mindtrip **89**, MDE **71** out of 100. See the score
 
 ## What we looked at
 
-Two sources. **(1) Our own session** in your signed-in browser: a search for "apartment for 3 nights in Poblado, 2 guests, under $120", cards, pins, a save, then "Check availability" (we stopped before any payment). **(2) Your six saved screenshots** in docs/competitors/mindtrip: a Laureles search, the room page, and the checkout. We read the screenshots only; we did not run that flow. Then we read MDE's current code and screenshotted mdeai.co.
+Two sources. **(1) Our own session** in your signed-in browser: a search for "apartment for 3 nights in Poblado, 2 guests, under $120", cards, pins, a save, then "Check availability" (we stopped before any payment). **(2) Six private, locally held screenshots** (not available in this GitHub PR; see `README.md`): a Laureles search, the room page, and the checkout. We read the screenshots only; we did not run that flow. Then we read MDE's current code and screenshotted mdeai.co.
 
 Done
 
@@ -137,43 +137,43 @@ Floating "Open map (N)" button and a map sheet already work. Missing: the card p
 
 ## What it looks like
 
-*[Screenshot omitted from this copy: Mindtrip: chat on the left, map on the right, after a follow-up question. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip: chat on the left, map on the right, after a follow-up question. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Mindtrip, desktop.** Menu, chat and map. Stay pins carry the place name.
 
-*[Screenshot omitted from this copy: Mindtrip: clicking a pin opens a detail panel next to the chat. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip: clicking a pin opens a detail panel next to the chat. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Click a pin:** a detail panel opens in place of the map, with photos, tabs and a booking box.
 
-*[Screenshot omitted from this copy: Mindtrip: the assistant's step-by-step trace while searching. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip: the assistant's step-by-step trace while searching. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **While waiting:** specific steps, such as "Considering 4 hotels out of 275".
 
-*[Screenshot omitted from this copy: Mindtrip: booking options listing Expedia, Hotels.com and Direct. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip: booking options listing Expedia, Hotels.com and Direct. Original locally held capture; intentionally not in this GitHub PR.]*
 
-**Booking:** three outside options. No payment on Mindtrip.
+**Booking:** three outside options with no Mindtrip payment on this outbound path. Other properties show a separate in-app checkout; no payment was completed in this study.
 
-*[Screenshot omitted from this copy: MDE chat page on desktop: menu, chat prompt and map. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: MDE chat page on desktop: menu, chat prompt and map. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **MDE, desktop.** Same three-part layout. The map says "Map is ready" until a search runs.
 
-*[Screenshot omitted from this copy: Mindtrip: Cloudflare verification box shown to automated visitors. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip: Cloudflare verification box shown to automated visitors. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Blocked:** Mindtrip asks anonymous automated visitors to "Verify you are human". We left it alone.
 
-*[Screenshot omitted from this copy: Mindtrip on a phone: chat with Not a Good Fit table and a Map button. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip on a phone: chat with Not a Good Fit table and a Map button. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Mindtrip phone:** chat plus a floating Map button.
 
-*[Screenshot omitted from this copy: Mindtrip on a phone: detail sheet with fixed price and Check availability bar. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip on a phone: detail sheet with fixed price and Check availability bar. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Detail sheet** with a fixed booking bar.
 
-*[Screenshot omitted from this copy: MDE on a phone: chat prompt with filter chips and an Open map button. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: MDE on a phone: chat prompt with filter chips and an Open map button. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **MDE phone:** chat, filter chips and "Open map".
 
-*[Screenshot omitted from this copy: MDE rentals page on a phone: filters and the first rental. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: MDE rentals page on a phone: filters and the first rental. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **MDE /rentals phone:** this page does show the photo.
 
@@ -191,11 +191,11 @@ Card "Choose room" → "Your recommended room" → "Book" → "Guest and Payment
 
 Detail panel "Check availability" → "Booking options" → "View deal" to Expedia or Hotels.com, or "Visit site" for the hotel. Seen on Soul Lifestyle Apartments (our session). Why a property gets one path or the other is not known.
 
-*[Screenshot omitted from this copy: Mindtrip room page: recommended room card with price and Book button. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip room page: recommended room card with price and Book button. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Screen 8, room page** (your screenshot, sidebar cropped out): one recommended room, specs, refund date, Book.
 
-*[Screenshot omitted from this copy: Mindtrip checkout price summary with Confirm and Pay and payment processor note. The live artifact and the files in `own-captures/` have the images.]*
+*[Screenshot omitted from this copy: Mindtrip checkout price summary with Confirm and Pay and payment processor note. Original locally held capture; intentionally not in this GitHub PR.]*
 
 **Screen 9, checkout summary** (cropped): total, free-cancellation date, "Confirm & Pay", and a line saying the card is processed by Nuitee.
 
@@ -407,7 +407,7 @@ Screens
 
 Trips, Saved, Agents, Explore, Chats list, Updates, Inspiration, Create, the onboarding interview, the price-alert dialog, "More details" on a room, the flights, eats, experiences and events verticals, account settings, and error and empty states.
 
-**Privacy:** the checkout screenshots in docs/competitors/mindtrip show a real name, email, phone number and home address. None of that was copied into this page. That folder is not yet tracked by git; keep it that way or redact first.
+**Privacy and evidence:** the locally held checkout images include personal contact and payment-address information. This Markdown report is committed at `docs/08-strategy/competitors/mindtrip/`, but the images and `own-captures/` are deliberately not committed and are unavailable to GitHub reviewers. Observations based only on those private screenshots are not independently reproducible from this PR. Do not share unredacted captures.
 
 ## What to fix, in order
 
@@ -537,7 +537,7 @@ Ideas
 
 Focused 3-step checkout page with sticky summary (events first) · nearby-places rows on details · shareable link to a selected rental · name or price labels on map pins · map inside /rentals/[id] · price watch · trip "Ideas" and "Bookings" tabs.
 
-**Booking advice (revised):** keep the viewing request for rentals now. MDE's rentals are long stays listed by brokers, so payment in the app is a separate decision about deposits, refunds and who holds the money. If you decide to add it later, copy Mindtrip's checkout shape: three steps, one sticky price summary, a "You pay today" line, a free-cancellation date, a plain line saying who processes the card, and errors under each field. MDE's event checkout, which already uses Stripe, is the place to try that first. For rentals today, a "Contact options" sheet (schedule a viewing, WhatsApp the broker, see the original listing) is the closest match to Mindtrip's booking pop-up.
+**Booking advice (revised):** MDE uses **Stripe** for payment processing where payments are implemented (currently event tickets); Mindtrip's screenshot *states* Nuitee processes its own checkout, which is not a verified integration and is not MDE's provider. Keep the viewing request for rentals now. MDE's rentals are long stays listed by brokers, so payment in the app is a separate decision about deposits, refunds and who holds the money. If you decide to add it later, copy Mindtrip's checkout shape: three steps, one sticky price summary, a "You pay today" line, a free-cancellation date, a plain line saying who processes the card, and errors under each field. MDE's event checkout, which already uses Stripe, is the place to try that first. For rentals today, a "Contact options" sheet (schedule a viewing, WhatsApp the broker, see the original listing) is the closest match to Mindtrip's booking pop-up.
 
 ## Scores
 

@@ -17,11 +17,20 @@ We do not claim to know Mindtrip's backend, models, prompts, database or agent f
 | Source | What it covers |
 | --- | --- |
 | Own session (REA + Playwright on a signed-in Chrome tab, 2026-10-15) | Home, chat, results, map, detail panel, save dialog, booking options (Path B), phone emulation at 390 px |
-| User screenshots in this folder (full-page, 2x) | Laureles search, room page, checkout step 2 (see map below) |
-| Own captures in `own-captures/` | Selected stills from the session above |
+| Private, locally held screenshots (not committed; some contain personal data) | Laureles search, room page, checkout step 2 (see map below); descriptions only are available to GitHub reviewers |
+| Private local `own-captures/` (not committed) | Selected stills from the session above; cannot be inspected or reproduced from this PR |
 | Static bundle analysis (REA `analyze_web_bundle`) | Framework, endpoint names in JavaScript (strings only, not observed live) |
 
 Not crawled. `robots.txt` disallows `/chat`, `/api/` and `/saved/*` for bots and everything for ClaudeBot/GPTBot. Signed-in flows were run in the owner's own browser session at the owner's request. Anonymous app pages sit behind a Cloudflare "Verify you are human" box; it was not bypassed.
+
+## What reviewers can and cannot verify
+
+- **In this repository:** the written screen observations, caveats, screenshots' descriptive filenames, source paths, MDE code references, and proposed fixes. MDE code claims can be checked against the recorded `main` commit.
+- **Outside this repository:** the original Mindtrip screenshots and browser-session captures. Image files are intentionally excluded because some contain personally identifying and payment-address information. Screenshot-only claims are **author-observed evidence**, not independently verifiable from GitHub.
+- **Unknown:** successful booking/payment, confirmation page, underlying Mindtrip provider integration, and unobserved flows. The processor name below is transcribed from an on-screen statement, not independently verified from a payment transaction.
+- **Optional follow-up:** produce redacted, permission-cleared copies in a separate reviewed change if independent visual inspection becomes necessary; never commit unredacted source captures.
+
+**Payment-provider distinction:** Mindtrip's observed checkout *states* that Nuitee processes card data. This study does not verify Mindtrip's backend integration. **MDE will use Stripe for payment flows**; its current rental MVP remains a viewing-request flow, not a rental checkout. Do not copy Mindtrip's processor or imply that MDE rental payments are already live.
 
 ## Screenshot map
 
@@ -59,7 +68,7 @@ Home ─▶ Chat + agent steps ─▶ Results + map ─▶ Detail panel ─┬�
                                                                └─▶ Path B: Check availability ─▶ Booking options ─▶ Expedia / Hotels.com / hotel site
 ```
 
-- **Path A (in-app)** was seen on Loft 32 Medellín Living (screenshots). Card is paid in Mindtrip's checkout; the page says the card is processed by Nuitee and Mindtrip does not see or store it (V).
+- **Path A (in-app)** was seen on Loft 32 Medellín Living (screenshots). Mindtrip offers an in-app checkout; its page says Nuitee processes the card and Mindtrip does not see or store its details (V for on-screen wording; payment was not completed).
 - **Path B (outbound)** was seen on Soul Lifestyle Apartments (own session). All three rows leave Mindtrip (V).
 - Why a property gets A or B is unknown (U). Likely depends on the supplier (I).
 
@@ -84,7 +93,7 @@ Booking confirmation, Trips, Saved, Agents, Explore, Chats list, Updates, Inspir
 
 ## Privacy
 
-The checkout screenshots (`2894aaf7-…`, `3-…`, `4-…`) and some others show a real name, email, phone number and home address. They are **git-ignored** (see `../.gitignore`). Do not commit them. Redact before sharing. Nothing in these docs repeats those details.
+The checkout screenshots (`2894aaf7-…`, `3-…`, `4-…`) and some others show personal contact and payment-address information. They are **not committed** and image types are git-ignored by `docs/08-strategy/competitors/.gitignore`. GitHub reviewers cannot open them. Do not commit originals; redact and review consent before any separate sharing. The study does not reproduce those personal details.
 
 ## Where this lives
 

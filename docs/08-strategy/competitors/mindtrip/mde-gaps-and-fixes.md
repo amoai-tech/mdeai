@@ -29,7 +29,7 @@ Plans only; no code was changed. Every file path below exists on `origin/main` @
 
 ## Booking recommendation
 
-Keep the viewing request for rentals now. In-app payment for long stays is a separate decision (deposits, refunds, who holds the money). Closest match to Mindtrip's booking pop-up: a "Contact options" sheet (schedule a viewing, WhatsApp the broker, view the original listing) reusing `ScheduleViewingModal`. If payment is added later, copy the checkout shape in [screen 09](screens/09-checkout-guest-and-payment.md).
+Keep the viewing request for rentals now. In-app payment for long stays is a separate decision (deposits, refunds, who holds the money). Closest match to Mindtrip's booking pop-up: a "Contact options" sheet (schedule a viewing, WhatsApp the broker, view the original listing) reusing `ScheduleViewingModal`. If rental payment is added later, use **Stripe** (MDE's payment provider), not Mindtrip's on-screen processor; adapt only the checkout UX shape in [screen 09](screens/09-checkout-guest-and-payment.md).
 
 ## Scores (/100)
 
