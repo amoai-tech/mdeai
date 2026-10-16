@@ -32,6 +32,7 @@ export async function getOptionalExternalRentals(query: RentalQuery): Promise<Re
 
 function identityKeys(rental: Rental): string[] {
   const keys = [`id:${rental.id}`];
+  if (rental.source_import_key?.trim()) keys.push(`import:${rental.source_import_key.trim()}`);
   if (rental.source_url) {
     try {
       const uri = new URL(rental.source_url);
@@ -57,7 +58,9 @@ export function mixRentalResults(
   const canonical = [];
   for (const r of verified) {
     const keys = identityKeys(r);
-    if (keys.some((key) => seen.has(key))) continue;
+    // Different units may share an advertiser search URL. Only stable import identity or ID
+    // is proof of a duplicate canonical apartment; retain source keys for external dedup.
+    if (keys.filter((key) => !key.startsWith("source:")).some((key) => seen.has(key))) continue;
     keys.forEach((key) => seen.add(key));
     canonical.push(r);
   }

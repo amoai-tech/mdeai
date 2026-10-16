@@ -52,6 +52,23 @@ describe("mixed verified and source-linked rentals", () => {
     expect(mixed.distinctExternal).toBe(1);
   });
 
+  it("keeps two distinct units sharing a real provider search-results page", () => {
+    const url = "https://rentberry.com/co/apartments/s/antioquia-colombia/3-bed?page=8";
+    const results = mixRentalResults([
+      rental("telaviv-1204", url),
+      rental("el-laurel-201", url),
+    ], [], 8).results;
+    expect(results.map((r) => r.id)).toEqual(["telaviv-1204", "el-laurel-201"]);
+  });
+
+  it("collapses exact repeated import identities without merging different units", () => {
+    const first = { ...rental("first", "https://fincaraiz.com.co/unit/1"), source_import_key: "san1503:unit1" };
+    const repeat = { ...rental("repeat", "https://fincaraiz.com.co/unit/1?ref=x"), source_import_key: "san1503:unit1" };
+    const nextUnit = { ...rental("next", "https://fincaraiz.com.co/unit/2"), source_import_key: "san1503:unit2" };
+    expect(mixRentalResults([first, repeat, nextUnit], [], 8).results.map((r) => r.id))
+      .toEqual(["first", "next"]);
+  });
+
   it("keeps all external entries when canonical search returns no inventory", () => {
     expect(mixRentalResults([], Array.from({ length: 9 }, (_, i) => external(i)), 8).results).toHaveLength(8);
   });
