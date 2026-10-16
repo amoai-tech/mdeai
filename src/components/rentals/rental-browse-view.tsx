@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
@@ -113,8 +113,9 @@ function RentalBrowseViewInner({
 
   return (
     <>
-      <BrowseLayout
+      <DiscoveryWorkspace
         testId="rentals-browse"
+        activeSlug="rentals"
         title="Rentals in Medellín"
         subtitle={subtitle}
         filterBar={
@@ -130,8 +131,9 @@ function RentalBrowseViewInner({
             />
           )
         }
-        mapSlot={
+        rightPanel={
           <BrowseMapPanel
+            fill
             overlay={
               detailsRental && isLgUp ? (
                 <RentalDetailsPanel
@@ -144,7 +146,7 @@ function RentalBrowseViewInner({
           />
         }
       >
-        <section className="mt-6" aria-label="Rental listings">
+        <section className="mt-4" aria-label="Rental listings">
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
@@ -215,7 +217,7 @@ function RentalBrowseViewInner({
             </div>
           ) : null}
         </section>
-      </BrowseLayout>
+      </DiscoveryWorkspace>
 
       <BrowseMapSheet />
       {detailsRental && !isLgUp ? (

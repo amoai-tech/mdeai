@@ -48,6 +48,13 @@ async function cardSlug(page: Page, index: number): Promise<string> {
   return testId.replace("rental-card-", "");
 }
 
+/**
+ * SAN-1421: on a desktop the results column scrolls, not the page, so that is the scroll position to
+ * compare. (The page itself must not scroll; the map and menu stay put.)
+ */
+const listScroll = (page: Page) =>
+  page.evaluate(() => document.querySelector('[data-testid="workspace-results-column"]')?.scrollTop ?? -1);
+
 test.describe("/rentals Details — desktop 1440px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -62,7 +69,10 @@ test.describe("/rentals Details — desktop 1440px", () => {
     const button = detailsFor(page, slug);
     const panel = page.getByTestId("rental-details-panel");
     await openDetails(button, panel);
-    const scrollWhenOpen = await page.evaluate(() => window.scrollY);
+    const scrollWhenOpen = await listScroll(page);
+    // A card well down the list means the column really has scrolled; 0 would make this check empty.
+    if (total > 4) expect(scrollWhenOpen).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
     // In the page: same URL, no new tab.
     expect(new URL(page.url()).pathname).toBe("/rentals");
@@ -99,7 +109,7 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await expect(panel).toBeHidden();
     await expect(button).toBeFocused();
     expect(await cards(page).count()).toBe(total);
-    expect(Math.abs((await page.evaluate(() => window.scrollY)) - scrollWhenOpen)).toBeLessThan(5);
+    expect(Math.abs((await listScroll(page)) - scrollWhenOpen)).toBeLessThan(5);
     expect(new URL(page.url()).pathname).toBe("/rentals");
   });
 
