@@ -56,13 +56,13 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
 describe("applyAvailabilityFilters — development phase still honours explicit dates (SAN-486)", () => {
   it("a full stay keeps only known dates that cover it, plus unknown-availability listings", () => {
     expect(runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" })).toEqual([
-      "or(and(available_from.not.is.null,available_from.lte.2026-11-01,or(available_to.is.null,available_to.gte.2026-11-30),or(minimum_stay_days.is.null,minimum_stay_days.lte.30),or(maximum_stay_days.is.null,maximum_stay_days.gte.30)),available_from.is.null)",
+      "or(and(or(available_from.is.null,available_from.lte.2026-11-01),or(available_to.is.null,available_to.gte.2026-11-30),or(minimum_stay_days.is.null,minimum_stay_days.lte.30),or(maximum_stay_days.is.null,maximum_stay_days.gte.30)))",
     ]);
   });
 
   it("a single day keeps the same shape without the length rules", () => {
     expect(runDev({ checkIn: "2026-11-01" })).toEqual([
-      "or(and(available_from.not.is.null,available_from.lte.2026-11-01,or(available_to.is.null,available_to.gte.2026-11-01)),available_from.is.null)",
+      "or(and(or(available_from.is.null,available_from.lte.2026-11-01),or(available_to.is.null,available_to.gte.2026-11-01)))",
     ]);
   });
 
@@ -76,6 +76,17 @@ describe("applyAvailabilityFilters — development phase still honours explicit 
 
   it("with no dates development only excludes expired listings", () => {
     expect(runDev({})).toEqual(["or(available_to.is.null,available_to.gte.2026-10-13)"]);
+  });
+
+  it("an unknown start date must still respect a known end date and the stay length", () => {
+    const expr = runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" }).join(" ");
+    // The unknown-start case is INSIDE the and(...) with the end-date and length coverage, so a
+    // listing that ends on 15 Nov is excluded even though its move-in date is unknown.
+    expect(expr).not.toContain(",available_from.is.null)");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01)");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-30)");
+    expect(expr).toContain("minimum_stay_days.lte.30");
+    expect(expr).toContain("maximum_stay_days.gte.30");
   });
 });
 
