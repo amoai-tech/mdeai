@@ -111,6 +111,15 @@ Schedule Viewing currently uses the existing `/api/leads/schedule-viewing` → `
 
 Authentication is not authorization. Service-role/admin success does not prove a user is authorized.
 
+## Runtime phase (development vs launch)
+
+`rental_runtime_settings.phase` is the single DB-owned switch (default `development`; `launch` only through an explicit server-side migration). Read the current phase; never infer it from UI behavior.
+
+- **Development** — authorized MDE actors can discover and open `active` fixtures without moderation, publish, photo-rights, or move-in paperwork, and the canonical `p1_schedule_tour_atomic` accepts granted renters. Anonymous fixture exclusion still applies: it is a technical privacy boundary, not a business approval gate.
+- **Launch** — `rental_listing_is_public()` and `rental_can_request_viewing()` apply without the development bypass.
+
+Do not re-add approval, publish, photo-rights, or move-in-date business gates to unblock development work; use the phase switch the database already owns. Third-party source advertisements stay read-only (`View Original Listing`) in either phase and never become requestable MDE inventory.
+
 ## Production truth rules
 
 - Production must never present mock/demo/test inventory as real supply.
