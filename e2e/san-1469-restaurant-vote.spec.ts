@@ -22,7 +22,15 @@ const dbUrl = process.env.SUPABASE_DB_URL;
 const configured = Boolean(hasE2eEnv() && dbUrl && restaurantId && contestId && entityId);
 
 test.describe("SAN-1469 real restaurant vote / database receipt", () => {
-  test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
+  // The dedicated voting gate sets SAN1469_VOTE_E2E=required: missing configuration must FAIL
+// there rather than silently skip. Other suites keep the opt-in skip.
+if (!configured && process.env.SAN1469_VOTE_E2E === "required") {
+  throw new Error(
+    "SAN-1469 voting gate requires SAN1469_TEST_RESTAURANT_ID, SAN1469_TEST_CONTEST_ID, " +
+      "SAN1469_TEST_ENTITY_ID, E2E auth keys and SUPABASE_DB_URL",
+  );
+}
+test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
 
   test("confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page }) => {
     const db = new Client({ connectionString: dbUrl });
