@@ -25,7 +25,7 @@ export function BrowseMapSheet() {
       <Sheet open={open} onOpenChange={setOpen}>
         {/* The default close button is 28px; rentals and restaurants use this shared
             browse map sheet, with a 44px phone target (SAN-524). */}
-        <SheetContent side="bottom" className="h-[70vh] p-0" showCloseButton={false}>
+        <SheetContent side="bottom" className="p-0" showCloseButton={false}>
           <SheetClose
             render={
               <Button
@@ -43,9 +43,14 @@ export function BrowseMapSheet() {
           <SheetHeader className="sr-only">
             <SheetTitle>Map view</SheetTitle>
           </SheetHeader>
-          <div className="h-full w-full">
+          {/* The sheet's own `data-[side=bottom]:h-auto` beats any height class set on SheetContent, so the
+              sheet is only as tall as its content. Google's map sizes itself as 100% of its parent, and a
+              percentage of an auto height is 0, which left this map blank on phones. The holder therefore
+              owns a definite height (the chat map sheet does the same), and the resize signal redraws the
+              map once the sheet has finished sliding in. */}
+          <div className="relative h-[70vh] w-full">
             <MapsShell>
-              <ChatMap mapDomId="browse-map-sheet" />
+              <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
             </MapsShell>
           </div>
         </SheetContent>

@@ -8,7 +8,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 vi.mock("@/components/maps/MapProvider", () => ({ MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-vi.mock("@/components/maps/ChatMap", () => ({ ChatMap: () => <div data-testid="chat-map-stub" /> }));
+vi.mock("@/components/maps/ChatMap", () => ({
+  ChatMap: ({ mapResizeSignal }: { mapResizeSignal?: number }) => (
+    <div data-testid="chat-map-stub" data-resize-signal={String(mapResizeSignal)} />
+  ),
+}));
 
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 
@@ -16,6 +20,27 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 
 afterEach(() => {
   document.body.innerHTML = "";
+});
+
+describe("BrowseMapSheet map holder", () => {
+  it("gives the map a definite height and a redraw signal, so it is not blank on phones", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<BrowseMapSheet />));
+    await act(async () => {
+      (document.querySelector('[data-testid="browse-map-fab"]') as HTMLButtonElement).click();
+    });
+
+    const stub = document.querySelector('[data-testid="chat-map-stub"]') as HTMLElement;
+    expect(stub).not.toBeNull();
+    // Google's map is 100% of its parent; the sheet is `h-auto`, so the holder must carry the height itself.
+    const holder = stub.closest("div.relative") as HTMLElement | null;
+    expect(holder?.className).toMatch(/\bh-\[70vh\]/);
+    // Same redraw signal as the working chat map sheet.
+    expect(stub.getAttribute("data-resize-signal")).toBe("1");
+    await act(async () => root.unmount());
+  });
 });
 
 describe("BrowseMapSheet close control", () => {
