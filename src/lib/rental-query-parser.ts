@@ -7,6 +7,9 @@ export type RentalSearchApiParams = {
   neighborhood?: string;
   minBedrooms?: number;
   maxPricePerNight?: number;
+  /** Exact monthly ceiling, never a guessed nightly conversion. */
+  maxPriceMonthly?: number;
+  budgetCurrency?: "COP" | "USD";
   limit?: number;
   /** Natural-language query for hybrid_search_listings + rental_signals. */
   queryText?: string;
@@ -27,6 +30,7 @@ function attachQueryText(
     ...(s.checkIn && { checkIn: s.checkIn }),
     ...(s.checkOut && { checkOut: s.checkOut }),
     ...(s.budgetType && { stayType: s.budgetType }),
+    ...(s.maxPriceMonthly != null && { maxPriceMonthly: s.maxPriceMonthly, budgetCurrency: s.budgetCurrency }),
   };
   // SAN-407: a monthly or whole-trip budget is not a nightly cap. `parseBudget` still derives a
   // per-night figure for display and routing signals, but sending it as a search filter would
@@ -54,6 +58,8 @@ export type RentalQuerySignals = {
   neighborhood?: string;
   minBedrooms?: number;
   maxPricePerNight?: number;
+  maxPriceMonthly?: number;
+  budgetCurrency?: "COP" | "USD";
   budgetType?: "nightly" | "monthly" | "total_trip";
   dateRangeLabel?: string;
   checkIn?: string;
@@ -234,6 +240,47 @@ function parseDateRange(text: string): { label?: string; checkIn?: string; check
   return {};
 }
 
+/**
+ * True for a thousands-grouped integer such as "3.500.000" or "3,500,000".
+ * Scans each separator-delimited part once, so it is linear and cannot backtrack —
+ * the previous nested-quantifier form was flagged by static analysis as a ReDoS
+ * candidate.
+ */
+function isThousandsGroupedInteger(value: string): boolean {
+  const parts = value.split(/[.,]/);
+  if (parts.length < 2 || parts.length > 6) return false;
+  if (parts[0].length < 1 || parts[0].length > 3) return false;
+  for (const part of parts) if (!/^\d+$/.test(part)) return false;
+  return parts.slice(1).every((part) => part.length === 3);
+}
+
+/** Parse explicit monthly amounts in a *named currency* without guessing USD↔COP FX.
+ * Digits with 3-digit groupings are integer prices; decimal "3,5"/"3.5" only
+ * scales when the renter wrote million/M. Unstated currencies remain unfiltered.
+ */
+function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP" | "USD" } | null {
+  if (!MONTHLY_RE.test(text)) return null;
+  const magnitude = "(millones?|mill[oó]n|million|millions|m|mil|k)";
+  const number = "(\\d[\\d.,]{0,16})";
+  // Named currency before price, a dollar symbol, or currency after price.
+  const prefix = text.match(new RegExp(`\\b(cop|usd|pesos?|dollars?)\\s*${number}\\s*${magnitude}?`, "i"));
+  const dollars = text.match(new RegExp(`\\$\\s*${number}\\s*${magnitude}?`, "i"));
+  const suffix = text.match(new RegExp(`${number}\\s*${magnitude}?\\s*(cop|usd|pesos?|dollars?)\\b`, "i"));
+  const match = prefix ?? dollars ?? suffix;
+  if (!match) return null;
+  const currencyToken = (prefix ? prefix[1] : dollars ? "$" : suffix?.[3] ?? "").toLowerCase();
+  const currency: "COP" | "USD" = /^(cop|peso)/.test(currencyToken) ? "COP" : "USD";
+  const rawAmount = prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "";
+  const magnitudeToken = (prefix ? prefix[3] : dollars ? dollars[2] : suffix?.[2] ?? "")?.toLowerCase() ?? "";
+  const grouped = isThousandsGroupedInteger(rawAmount);
+  const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
+  const multiple = /^(m|millones?|mill[oó]n|millions?)$/.test(magnitudeToken)
+    ? 1_000_000 : /^(mil|k)$/.test(magnitudeToken) ? 1_000 : 1;
+  const ceiling = amount * multiple;
+  return Number.isSafeInteger(ceiling) && ceiling > 0
+    ? { amount: ceiling, currency } : null;
+}
+
 function parseBudget(text: string): {
   maxPricePerNight?: number;
   budgetType?: "nightly" | "monthly" | "total_trip";
@@ -301,7 +348,10 @@ export function looksLikeNonRentalSearch(text: string): boolean {
 
 export function scoreRentalQuery(text: string): RentalQuerySignals {
   const normalized = text.trim();
-  const { maxPricePerNight, budgetType } = parseBudget(normalized);
+  const exactMonthly = parseExactMonthlyBudget(normalized);
+  const { maxPricePerNight, budgetType } = exactMonthly
+    ? { maxPricePerNight: Math.round(exactMonthly.amount / 30), budgetType: "monthly" as const }
+    : parseBudget(normalized);
   const minBedrooms = parseBedrooms(normalized);
   const explicitLimit = parseExplicitLimit(normalized);
 
@@ -356,6 +406,8 @@ export function scoreRentalQuery(text: string): RentalQuerySignals {
     neighborhood,
     minBedrooms,
     maxPricePerNight,
+    maxPriceMonthly: exactMonthly?.amount,
+    budgetCurrency: exactMonthly?.currency,
     budgetType,
     dateRangeLabel,
     checkIn,
@@ -420,6 +472,8 @@ export function buildRentalSearchParams(
     return {
       minBedrooms: lastQuery.minBedrooms,
       maxPricePerNight: lastQuery.maxPricePerNight,
+      maxPriceMonthly: lastQuery.maxPriceMonthly,
+      budgetCurrency: lastQuery.budgetCurrency,
       checkIn: lastQuery.checkIn,
       checkOut: lastQuery.checkOut,
       stayType: lastQuery.budgetType,
@@ -432,6 +486,8 @@ export function buildRentalSearchParams(
       neighborhood: s.neighborhood ?? q.neighborhood,
       minBedrooms: s.minBedrooms ?? q.minBedrooms,
       maxPricePerNight: s.maxPricePerNight ?? q.maxPricePerNight,
+      maxPriceMonthly: s.maxPriceMonthly ?? q.maxPriceMonthly,
+      budgetCurrency: s.budgetCurrency ?? q.budgetCurrency,
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
       stayType: s.budgetType ?? q.budgetType,
@@ -455,6 +511,8 @@ export function buildRentalSearchParams(
         neighborhood: s.neighborhood ?? q?.neighborhood,
         minBedrooms: s.minBedrooms ?? q?.minBedrooms,
         maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
+        maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
+        budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
         stayType: q?.budgetType,
@@ -503,6 +561,8 @@ export function buildRentalSearchParams(
         neighborhood: q.neighborhood,
         minBedrooms: q.minBedrooms,
         maxPricePerNight: q.maxPricePerNight,
+        maxPriceMonthly: q.maxPriceMonthly,
+        budgetCurrency: q.budgetCurrency,
         checkIn: q.checkIn,
         checkOut: q.checkOut,
         stayType: q.budgetType,
