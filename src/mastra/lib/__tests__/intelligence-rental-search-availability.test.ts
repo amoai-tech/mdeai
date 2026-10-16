@@ -166,7 +166,7 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     expect(result.results[0]?.price_monthly).toBe(650);
   });
 
-  it("re-applies the structured eligibility, budget and location filters to the hybrid reload", async () => {
+  it("re-applies active status, budget and location filters to the hybrid reload without development approval gates", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
 
     await searchRentalsIntelligent({
@@ -177,19 +177,19 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
       limit: 5,
     });
 
-    // The hybrid RPC filters only status='active'; the reload must re-check the
-    // canonical contract and the caller's own filters, exactly like the keyword path.
+    // RLS owns public/development visibility. The hybrid reload must preserve
+    // application filters without reintroducing moderation or publication gates.
     expect(mocks.state.filterCalls).toEqual(
       expect.arrayContaining([
         ["eq", "status", "active"],
-        ["eq", "moderation_status", "approved"],
-        ["eq", "listing_workflow_status", "published"],
         ["not", "landlord_id", "is", null],
         ["or", expect.any(String)],
         ["ilike", "neighborhood", "%Laureles%"],
         ["gte", "bedrooms", 1],
       ]),
     );
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "moderation_status", "approved"]);
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "listing_workflow_status", "published"]);
   });
 
 
