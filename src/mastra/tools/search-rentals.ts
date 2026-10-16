@@ -55,6 +55,8 @@ export const rentalSchema = z.object({
    * convenience.
    */
   source_last_checked: z.string().optional(),
+  /** Exact imported unit identity for deduplication; never based on address. */
+  source_import_key: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -388,6 +390,25 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
+/**
+ * SAN-1235 — collapse exact re-imports of the SAME source record so a renter does not see the same
+ * advert twice. Only a stable identity key qualifies: the import's own `san1503_import_key`, or the
+ * record id. Never a shared address, building, price or coordinate — those can genuinely describe
+ * different units. Result-level only: no apartment row is deleted or rewritten.
+ */
+export function dedupeBySourceIdentity<T extends { id: string; metadata?: unknown }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const meta = (row.metadata ?? null) as Record<string, unknown> | null;
+    const importKey = meta?.['san1503_import_key'];
+    const key =
+      typeof importKey === 'string' && importKey.trim() ? `import:${importKey.trim()}` : `id:${row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
@@ -413,9 +434,12 @@ export function rowToRental(r: ApartmentRow): Rental {
     // The Details panel shows `images`; without it a managed listing showed only its cover photo.
     images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
     photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
-    source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
+    source_url: r.source_url ?? externalSourceAttribution(r.metadata).originalUrl ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     source_provider: externalProvider ?? undefined,
     source_last_checked: sourceLastChecked,
+    source_import_key: typeof meta?.['san1503_import_key'] === 'string' && (meta['san1503_import_key'] as string).trim()
+      ? (meta['san1503_import_key'] as string).trim()
+      : undefined,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
@@ -544,7 +568,7 @@ async function searchRentalsFromSupabase(
     throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
   }
 
-  let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
+  let results = dedupeBySourceIdentity((data ?? []) as ApartmentRow[]).map(rowToRental);
   if (query.stayType === 'monthly') {
     results = sortForMonthlyStay(results);
   }
