@@ -9,5 +9,5 @@ Deno.serve(createVoteNonceHandler({
   service,
   getUserId,
   issueNonce,
-  allowRate: (key, max, windowSeconds) => allowRateDurable(service, key, max, windowSeconds),
+  allowRate: (key, max, windowSeconds) => allowRateDurable(service, key, max, windowSeconds, { failClosed: true }),
 }));
