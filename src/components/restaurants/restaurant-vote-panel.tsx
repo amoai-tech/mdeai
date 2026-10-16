@@ -52,6 +52,11 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const [state, setState] = useState<PanelState>("idle");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Hydration marker. React only runs effects after it has attached event handlers, so this
+  // flipping to true is proof the button is live. Without it a test (or a fast user) can click
+  // server-rendered HTML that has no onClick yet and see nothing happen.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
   const goToLogin = useCallback(() => {
@@ -257,6 +262,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       <button
         className="min-h-11 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground disabled:opacity-60"
         data-testid="vote-cta"
+        data-hydrated={hydrated ? "true" : "false"}
         disabled={state === "casting" || state === "checking" || state === "closed"}
         onClick={() => { if (inFlight.current) return; void startVote(); }}
         type="button"

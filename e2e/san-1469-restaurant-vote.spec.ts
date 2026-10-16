@@ -32,7 +32,7 @@ if (!configured && process.env.SAN1469_VOTE_E2E === "required") {
 }
 test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
 
-  test("confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page }) => {
+  test("confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
@@ -47,12 +47,21 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       await page.goto("/restaurants/" + restaurantId);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.getByTestId("vote-cta")).toBeVisible();
+      // Wait for hydration BEFORE clicking. A click on server-rendered HTML has no handler
+      // attached yet and silently does nothing, which is exactly how this test failed in CI.
+      await expect(page.getByTestId("vote-cta")).toHaveAttribute("data-hydrated", "true");
 
       // Sign-in now comes FIRST: an unsigned click goes to /login and must NOT open the
       // confirmation dialog. This test follows the real journey, not the old order.
       await page.getByTestId("vote-cta").click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
-      await expect(page).toHaveURL(/\/login\?next=%2Frestaurants%2F/);
+      // CI starts a cold Next.js dev server: the first /login navigation may compile
+      // that route after the click. The trace shows it completing AFTER the default
+      // 5-second URL assertion. Still require the exact safe return URL.
+      await expect(page).toHaveURL(
+        (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId,
+        { timeout: 30_000 },
+      );
       const session = await getTestSession(identity.email);
       await injectSession(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
@@ -85,6 +94,26 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       await page.reload();
       await expect(page.getByTestId("vote-receipt-id")).toContainText(receipt);
       expect(await countBallots()).toHaveLength(1);
+
+      // A second browser has NO original localStorage: it must recover the
+      // original receipt from the account-scoped server read, not from that key.
+      const secondContext = await browser.newContext({
+        baseURL: test.info().project.use.baseURL as string,
+      });
+      try {
+        await injectSession(secondContext, session);
+        const secondPage = await secondContext.newPage();
+        await secondPage.goto("/restaurants/" + restaurantId);
+        const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
+          localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
+          { contest: contestId!, entity: entityId!, user: userId! },
+        );
+        expect(secondKey).toBeNull();
+        await expect(secondPage.getByTestId("vote-receipt-id")).toContainText(receipt, { timeout: 20_000 });
+        expect(await countBallots()).toHaveLength(1);
+      } finally {
+        await secondContext.close();
+      }
 
       // Hit the deployed service directly with the exact saved idempotency key.
       // No nonce means a NEW ballot cannot be created, but a committed receipt can be replayed.
