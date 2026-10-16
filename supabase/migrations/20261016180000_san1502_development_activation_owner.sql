@@ -44,6 +44,9 @@ begin
     return 0;
   end if;
 
+  -- Note: `verified` is deliberately NOT touched here. The owner-directed development
+  -- verification flag is owned by the SAN-1502 operator migration; activation is an
+  -- operational state and must not silently revert or assert verification either way.
   update public.apartments a
      set landlord_id = v_profile,
          status = 'active',
@@ -54,7 +57,7 @@ begin
          workflow_changed_by = v_uid,
          workflow_changed_at = now(),
          updated_at = now(),
-         verified = false,
+         host_name = coalesce(nullif(a.host_name, ''), 'MDE AI (Development)'),
          metadata = coalesce(a.metadata, '{}'::jsonb)
            || jsonb_build_object(
                 'mde_managed_development', true,
@@ -64,6 +67,7 @@ begin
    where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true'
      and (
        a.slug like 'candidate-%'
+       or a.slug like 'external-%'
        or lower(coalesce(a.metadata->>'inventory_kind', '')) = 'mde_managed'
        or a.landlord_id = v_profile
      );
