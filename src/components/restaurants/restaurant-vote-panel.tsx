@@ -2,11 +2,6 @@
 
 /** Restaurant contest voting: confirmed user action, durable idempotency, server receipt. */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-
-// Hydration marker: server snapshot false, client snapshot true. Stable no-op subscription.
-const subscribeNever = () => () => {};
-const hydratedOnClient = () => true;
-const hydratedOnServer = () => false;
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -19,6 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Hydration marker: server snapshot false, client snapshot true. Stable no-op subscription.
+// Declared AFTER every import: ES modules require imports to precede other statements.
+const subscribeNever = () => () => {};
+const hydratedOnClient = () => true;
+const hydratedOnServer = () => false;
 
 export type VoteTarget = { contestId: string; entityId: string };
 type Receipt = { voteId: string; createdAt: string | null; status: string; entityId: string };
