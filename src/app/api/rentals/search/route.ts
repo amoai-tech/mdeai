@@ -17,6 +17,8 @@ const bodySchema = z.object({
   neighborhood: z.string().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   maxPricePerNight: z.number().positive().optional(),
+  maxPriceMonthly: z.number().positive().safe().optional(),
+  budgetCurrency: z.enum(["COP", "USD"]).optional(),
   limit: z.number().int().min(1).max(20).optional().default(8),
   queryText: z.string().optional(),
   checkIn: z.string().refine(isRealCalendarDate, "checkIn must be a real date, YYYY-MM-DD").optional(),
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, minBedrooms, maxPricePerNight, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
+  const { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
   try {
     // SAN-1502 PR2: the caller's own RLS-governed client, so an authorized test
     // actor's results include published development fixtures and no one else's do.
@@ -66,6 +68,8 @@ export async function POST(req: Request) {
       neighborhood,
       minBedrooms,
       maxPricePerNight,
+      maxPriceMonthly,
+      budgetCurrency,
       limit,
       queryText,
       checkIn,
