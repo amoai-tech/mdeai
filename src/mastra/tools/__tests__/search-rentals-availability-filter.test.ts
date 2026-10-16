@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { filters: [] as string[] };
+  const state = { filters: [] as string[], development: false };
   const chain: Record<string, unknown> = {};
   const pass = vi.fn(() => chain);
   Object.assign(chain, {
@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => {
     then: (resolve: (v: unknown) => unknown, reject?: (r: unknown) => unknown) =>
       Promise.resolve({ data: [], error: null, count: 0 }).then(resolve, reject),
   });
-  return { state, createClient: vi.fn(() => ({ from: vi.fn(() => chain) })) };
+  return { state, createClient: vi.fn(() => ({
+    from: vi.fn(() => chain),
+    rpc: vi.fn(async () => ({ data: state.development, error: null })),
+  })) };
 });
 
 // These tests exercise the canonical verified-inventory path only.
@@ -31,7 +34,7 @@ vi.mock("@/lib/supabase/server-env", () => ({
 vi.mock("../../lib/intelligence-rental-search", () => ({ searchRentalsIntelligent: vi.fn() }));
 
 describe("searchRentals structured path — availability filter", () => {
-  beforeEach(() => { mocks.state.filters = []; });
+  beforeEach(() => { mocks.state.filters = []; mocks.state.development = false; });
 
   it("never allows a listing with no move-in date, with a dated search", async () => {
     const { searchRentals } = await import("../search-rentals");
@@ -40,6 +43,16 @@ describe("searchRentals structured path — availability filter", () => {
     expect(mocks.state.filters).toContain("or(available_from.lte.2099-11-01)");
     expect(mocks.state.filters).toContain("or(available_to.is.null,available_to.gte.2099-11-30)");
     expect(mocks.state.filters.some((f) => f.includes("available_from.is.null"))).toBe(false);
+  });
+
+  it("does not exclude unconfirmed move-in dates from development searches", async () => {
+    mocks.state.development = true;
+    const { searchRentals } = await import("../search-rentals");
+    await searchRentals({ neighborhood: "Laureles", checkIn: "2099-11-01",
+      checkOut: "2099-11-30", limit: 5 });
+    expect(mocks.state.filters).not.toContain("not(available_from,is,null)");
+    expect(mocks.state.filters.some((f) => f.includes("available_from."))).toBe(false);
+    expect(mocks.state.filters.some((f) => f.includes("available_to."))).toBe(false);
   });
 
   it("shows unexpired listings without requiring move-in documentation when no dates are requested", async () => {
