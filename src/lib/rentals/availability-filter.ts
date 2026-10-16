@@ -69,12 +69,24 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
       coverage.push(`or(minimum_stay_days.is.null,minimum_stay_days.lte.${days})`);
       coverage.push(`or(maximum_stay_days.is.null,maximum_stay_days.gte.${days})`);
     }
+    // A stored move-in date is only CONFIRMED when its metadata does not flag it as simulated or
+    // unverified (15 live development rows carry such a date; all are active and requestable).
+    // Flagged rows stay discoverable and are labelled "Availability unconfirmed" instead of being
+    // treated as a proven whole-stay match.
+    // ponytail: the launch phase still requires a known date; apply the same flag exclusion there
+    // when the launch gates are armed, so an unconfirmed date is never a launch claim either.
+    const unconfirmedDate = [
+      "metadata->>test_available_from_simulated.eq.true",
+      "metadata->>availability_status.eq.unconfirmed",
+      "metadata->>availability_status.eq.source_claim_unverified",
+      "metadata->>available_from_basis.eq.source_for_rent_dates_unconfirmed",
+    ].join(",");
     if (developmentMode) {
-      // A development listing with no confirmed move-in date stays discoverable and is labelled
-      // "Availability unconfirmed" — but an unknown start is not a free pass: a KNOWN end date or
-      // stay-length conflict still excludes it, so it is never shown for a stay it cannot cover.
+      // An unknown or unconfirmed move-in date stays discoverable and is labelled "Availability
+      // unconfirmed" — but it is not a free pass: a KNOWN end date or stay-length conflict still
+      // excludes it, and a confirmed date still has to start on or before the requested day.
       q = q.or(
-        `and(or(available_from.is.null,available_from.lte.${stayStart}),${coverage.join(",")})`,
+        `and(or(available_from.is.null,available_from.lte.${stayStart},${unconfirmedDate}),${coverage.join(",")})`,
       );
       return q as unknown as Q;
     }

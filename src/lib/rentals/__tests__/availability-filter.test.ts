@@ -54,16 +54,24 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
 });
 
 describe("applyAvailabilityFilters — development phase still honours explicit dates (SAN-486)", () => {
-  it("a full stay keeps only known dates that cover it, plus unknown-availability listings", () => {
-    expect(runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" })).toEqual([
-      "or(and(or(available_from.is.null,available_from.lte.2026-11-01),or(available_to.is.null,available_to.gte.2026-11-30),or(minimum_stay_days.is.null,minimum_stay_days.lte.30),or(maximum_stay_days.is.null,maximum_stay_days.gte.30)))",
-    ]);
+  it("a full stay keeps known dates that cover it, plus unknown and metadata-flagged dates", () => {
+    const expr = runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" }).join(" ");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
+    // A stored date flagged by metadata must not be treated as a confirmed date.
+    expect(expr).toContain("metadata->>test_available_from_simulated.eq.true");
+    expect(expr).toContain("metadata->>availability_status.eq.unconfirmed");
+    expect(expr).toContain("metadata->>availability_status.eq.source_claim_unverified");
+    expect(expr).toContain("metadata->>available_from_basis.eq.source_for_rent_dates_unconfirmed");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-30)");
+    expect(expr).toContain("minimum_stay_days.lte.30");
+    expect(expr).toContain("maximum_stay_days.gte.30");
   });
 
   it("a single day keeps the same shape without the length rules", () => {
-    expect(runDev({ checkIn: "2026-11-01" })).toEqual([
-      "or(and(or(available_from.is.null,available_from.lte.2026-11-01),or(available_to.is.null,available_to.gte.2026-11-01)))",
-    ]);
+    const expr = runDev({ checkIn: "2026-11-01" }).join(" ");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-01)");
+    expect(expr).not.toContain("minimum_stay_days");
   });
 
   it("a rejected date still throws before adding any filter", () => {
@@ -83,7 +91,7 @@ describe("applyAvailabilityFilters — development phase still honours explicit 
     // The unknown-start case is INSIDE the and(...) with the end-date and length coverage, so a
     // listing that ends on 15 Nov is excluded even though its move-in date is unknown.
     expect(expr).not.toContain(",available_from.is.null)");
-    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01)");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
     expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-30)");
     expect(expr).toContain("minimum_stay_days.lte.30");
     expect(expr).toContain("maximum_stay_days.gte.30");
