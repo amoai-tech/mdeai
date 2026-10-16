@@ -493,14 +493,16 @@ async function searchRentalsFromSupabase(
       'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
       { count: 'exact' },
     )
-    // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
-    // every nightly-priced row and two different currencies are never meaningfully ordered
-    // against each other. Comparing 80,000 COP to 78 USD is the same unit error the predicate
-    // above refuses to make, so a normalised sort would be a lie dressed as a feature.
-    // Upgrade path: once a canonical currency (or an FX source) exists, order by a single
-    // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
-    .order('price_daily', { ascending: true, nullsFirst: false })
-    .limit(limit);
+    ;
+  // Ordering must not truncate the rows the caller asked for. With a monthly budget the matching
+  // rows are monthly-priced, whose `price_daily` is null, so a nightly-first sort pushes them past
+  // `.limit()` and silently drops the requested matches. Order the monthly figure first when a
+  // monthly budget applies; otherwise keep the stored nightly order (ponytail: a normalised
+  // cross-currency sort would be a lie until a canonical currency or FX source exists).
+  if (monthlyBudget) {
+    q = q.order('price_monthly', { ascending: true, nullsFirst: false });
+  }
+  q = q.order('price_daily', { ascending: true, nullsFirst: false }).limit(limit);
 
   if (monthlyBudget || maxNightly !== null) {
     q = q.or(rentalBudgetPredicate(maxNightly, monthlyBudget));
