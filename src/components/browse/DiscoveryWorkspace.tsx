@@ -30,16 +30,8 @@ export type DiscoveryWorkspaceProps = {
  * It carries no chat session and no provider. The Ask MDE box is added later, once there is one
  * shared conversation per browser tab (SAN-1088).
  */
-export function DiscoveryWorkspace({
-  testId,
-  activeSlug,
-  title,
-  subtitle,
-  filterBar,
-  notice,
-  children,
-  rightPanel,
-}: DiscoveryWorkspaceProps) {
+export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
+  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel } = props;
   return (
     <div
       data-testid={testId}
