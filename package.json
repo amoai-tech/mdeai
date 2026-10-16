@@ -176,7 +176,8 @@
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "yaml": "2.9.1"
   },
   "overrides": {
     "prismjs": ">=1.30.0",
