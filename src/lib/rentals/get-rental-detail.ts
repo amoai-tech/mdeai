@@ -44,6 +44,8 @@ export type RentalDetail = {
   sourceUrl: string | null;
   /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
   sourceProvider: string | null;
+  /** External-source listing (Phase A keeps it requestable, but the CTA must be truthful). */
+  isExternalSource: boolean;
   /**
    * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
    * ownership + workflow + availability proof the database enforces. Every scheduling
@@ -118,6 +120,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     status: str(row.status),
     sourceUrl: str(row.source_url),
     sourceProvider: externalSourceProvider(row.metadata),
+    isExternalSource: isExternalSourceListing(row.metadata),
     // Computed by Supabase under the server-controlled phase, not mirrored in UI.
     canScheduleViewing: row.rental_can_request_viewing === true,
     isNotIndependentlyVerified: isSelfAttested(row.metadata) || isExternalSourceListing(row.metadata),

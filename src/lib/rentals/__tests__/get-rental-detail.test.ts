@@ -50,6 +50,19 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(detail.sourceUrl).toBe("https://www.fincaraiz.com.co/example");
     expect(detail.availableFrom).toBeNull();
     expect(detail.canScheduleViewing).toBe(true);
+    // SAN-1502 — the detail CTA must read as an MDE follow-up for an external source.
+    expect(detail.isExternalSource).toBe(true);
+  });
+
+  it("does not treat an activated development import as an external source", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "ca000000-0000-4000-8000-000000000001",
+      status: "active",
+      title: "Activated import",
+      metadata: { mde_managed_development: true, source_record_type: "third_party_advertisement" },
+      rental_can_request_viewing: true,
+    });
+    expect(detail.isExternalSource).toBe(false);
   });
 
 

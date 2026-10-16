@@ -381,5 +381,6 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
     isNotIndependentlyVerified: false,
     sourceUrl: c.metadata?.original_listing_url ?? c.source_url,
     sourceProvider: null,
+    isExternalSource: false,
   };
 }

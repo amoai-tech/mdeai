@@ -116,7 +116,11 @@ function rentalSignalBoost(slots: RentalIntelligenceSlots, s: RentalSignalRow): 
 }
 
 /** SAN-1502 PR2: optional per-request, RLS-governed client. */
-export type IntelligenceSearchOptions = { client?: SupabaseClient | null };
+export type IntelligenceSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
 
 export async function searchRentalsIntelligent(
   query: RentalQuery & { queryText?: string },
@@ -145,7 +149,7 @@ export async function searchRentalsIntelligent(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const developmentMode = await readRentalDevelopmentPhase(client);
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
 
   /**
    * The canonical keyword/list query, shared by the normal path and the

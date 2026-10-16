@@ -168,6 +168,7 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
@@ -175,6 +176,8 @@ const RentalPriceSidebar = ({
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
   isDevelopmentPreview?: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
@@ -190,7 +193,7 @@ const RentalPriceSidebar = ({
         </div>
         {canRequestViewing ? (
           <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
-            Request viewing
+            {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
         {!isDevelopmentPreview ? (
@@ -219,12 +222,15 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
   /** Preview details must not imply that payment is handled with an unverified host. */
   isDevelopmentPreview?: boolean;
 }) => (
@@ -243,7 +249,7 @@ const RentalMobileCta = ({
       </div>
       {canRequestViewing ? (
         <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
-          Request viewing
+          {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
         </Button>
       ) : null}
     </div>
@@ -405,6 +411,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isExternalSource={detail.isExternalSource}
           isDevelopmentPreview={detail.status === "development-preview"}
         />
       </div>
@@ -413,6 +420,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isExternalSource={detail.isExternalSource}
         isDevelopmentPreview={detail.status === "development-preview"}
       />
     </main>

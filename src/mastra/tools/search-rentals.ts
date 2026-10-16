@@ -155,7 +155,11 @@ export async function readRentalDevelopmentPhase(client: SupabaseClient): Promis
  * Optional per-request client. Omit it for the shared anonymous client; pass the
  * caller's user-scoped client to let RLS decide what they may read.
  */
-export type RentalSearchOptions = { client?: SupabaseClient | null };
+export type RentalSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
 
 export interface ApartmentRow {
   id: string;
@@ -475,7 +479,8 @@ async function searchRentalsFromSupabase(
   }
 
   const limit = query.limit ?? 8;
-  const developmentMode = await readRentalDevelopmentPhase(client);
+  // Reuse the caller's already-resolved phase instead of a second RPC round-trip.
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
   // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
@@ -548,7 +553,7 @@ export async function searchRentals(
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
-      const intel = await searchRentalsIntelligent(query, options);
+      const intel = await searchRentalsIntelligent(query, { ...options, developmentPhase: developmentMode });
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText: query.queryText,
@@ -585,7 +590,10 @@ export async function searchRentals(
   }
 
   try {
-    const { results, total, source } = await searchRentalsFromSupabase(query, options);
+    const { results, total, source } = await searchRentalsFromSupabase(query, {
+      ...options,
+      developmentPhase: developmentMode,
+    });
     const external = developmentMode ? [] : await getOptionalExternalRentals(query);
     const mixed = mixRentalResults(results, external, limit);
     return {
