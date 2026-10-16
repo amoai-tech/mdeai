@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => {
     profileRow: null as Record<string, unknown> | null,
     rpcError: null as { message: string; code: string } | null,
     filterCalls: [] as unknown[][],
+    apartmentCalls: 0,
+    hybridReloadEmpty: false,
   };
 
   const activeApartment = {
@@ -111,7 +113,12 @@ const mocks = vi.hoisted(() => {
     ),
     from: vi.fn((table: string) => {
       if (table === "apartments") {
+        state.apartmentCalls += 1;
+        const callIndex = state.apartmentCalls;
         return makeThenable(table, () => {
+          // The hybrid reload is the first apartments call. When the flag is set,
+          // every hybrid candidate is filtered out so the keyword fallback must run.
+          if (state.hybridReloadEmpty && callIndex === 1) return [];
           const row = state.apartmentProjection.includes("price_monthly")
             ? activeApartment
             : { ...activeApartment, price_monthly: undefined };
@@ -143,6 +150,8 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.profileRow = null;
     mocks.state.rpcError = null;
     mocks.state.filterCalls.length = 0;
+    mocks.state.apartmentCalls = 0;
+    mocks.state.hybridReloadEmpty = false;
   });
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
@@ -183,6 +192,19 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     );
   });
 
+
+  it("falls back to the canonical keyword search when every hybrid candidate is filtered out", async () => {
+    mocks.state.hybridReloadEmpty = true;
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    const result = await searchRentalsIntelligent({ queryText: "digital nomad rental", limit: 5 });
+
+    expect(result.hybridUsed).toBe(false);
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(result.rankExplanation).toEqual(
+      expect.arrayContaining([expect.objectContaining({ factor: "hybrid_filtered_empty" })]),
+    );
+  });
 
   it("falls back to keyword search when the hybrid RPC is unavailable", async () => {
     mocks.state.rpcError = { message: "temporary RPC outage", code: "503" };
