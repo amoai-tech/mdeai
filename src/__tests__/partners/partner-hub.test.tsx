@@ -25,14 +25,13 @@ vi.mock("next/link", () => ({
 // SAN-692 · D-PTR-01 link strategy: venue verticals route to the LIVE /venues
 // landing (?v= variant, shipped SAN-661 · D-PTR-02); the rest route to the LIVE
 // typed signup wizard until their landings ship. No card points at a 404.
-const SIGNUP_TYPES = ["host", "broker", "sponsor", "agency"] as const;
+const SIGNUP_TYPES = ["host", "sponsor", "agency"] as const;
 
 // Routes with no page.tsx on disk (verified 2026-06-11) — the hub must not link
 // any of them. /venues is now LIVE, so it is intentionally absent here.
 const DEAD_HUB_ROUTES = [
   "/sponsors",
   "/business/ai",
-  "/partners/rentals",
   "/partners/restaurants",
   "/partners/cafes",
   "/partners/nightlife",
@@ -68,6 +67,7 @@ describe("PartnerHub (/partners)", () => {
     expect(hrefOf("cafes")).toBe("/venues?v=cafe");
     expect(hrefOf("nightlife")).toBe("/venues?v=nightclub");
     expect(hrefOf("spaces")).toBe("/venues?v=space");
+    expect(hrefOf("rentals")).toBe("/partners/rentals");
     expect(html).toContain('href="/venues?v=restaurant"');
   });
 
@@ -121,6 +121,7 @@ const LIVE_FOOTER_ROUTES = [
   "/me/tickets",
   "/partners",
   "/partners/signup",
+  "/contact",
   "/contact",
   "/host/event/new",
 ];

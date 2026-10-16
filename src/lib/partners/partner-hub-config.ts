@@ -29,9 +29,8 @@ export type PartnerHubCard = {
  * 404, see sitemap.md):
  *  - Venue verticals route to the LIVE /venues landing with its ?v= variant
  *    (shipped in SAN-661 · D-PTR-02), so each card lands on a rich, sold page.
- *  - Rentals / Business AI / Sponsors route to the LIVE typed signup wizard
- *    (/partners/signup?type=…) until their landings ship (SAN-691 / SAN-663 /
- *    SAN-664). Repoint the href to the landing route once each is live.
+ *  - Rentals uses its dedicated landing and existing broker signup flow.
+ *    Business AI / Sponsors continue to use typed signup until their pages ship.
  *  - Event hosts route to the wizard because /host is the auth-gated dashboard
  *    (307 when logged out), not a marketing page.
  */
@@ -72,7 +71,7 @@ export const PARTNER_HUB_CARDS: PartnerHubCard[] = [
     key: "rentals",
     label: "Rentals & brokers",
     description: "Turn rental searches into qualified viewing requests you control.",
-    href: "/partners/signup?type=broker",
+    href: "/partners/rentals",
     cta: "For brokers",
     Icon: Home,
   },

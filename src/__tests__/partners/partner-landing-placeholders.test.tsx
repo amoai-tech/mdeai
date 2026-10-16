@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * Route smoke + contract tests for the partner landing placeholders
- * (SAN-691 /partners/rentals · SAN-664 /sponsors · SAN-663 /business/ai),
+ * (SAN-664 /sponsors · SAN-663 /business/ai),
  * created to prevent dead links from the SAN-692 partner hub cards.
  *
  * Asserts each page: renders without throwing, has "Coming soon" copy,
@@ -35,18 +35,11 @@ type PageCase = {
   name: string;
   Page: () => React.JSX.Element;
   heading: string;
-  signupType: "broker" | "sponsor" | "agency";
+  signupType: "sponsor" | "agency";
   linearId: string;
 };
 
 const CASES: PageCase[] = [
-  {
-    name: "/partners/rentals",
-    Page: PartnersRentalsPage,
-    heading: "For brokers &amp; rental hosts",
-    signupType: "broker",
-    linearId: "SAN-691",
-  },
   {
     name: "/sponsors",
     Page: SponsorsPage,
@@ -108,4 +101,18 @@ describe("partner landing placeholders", () => {
       });
     });
   }
+});
+
+// SAN-691 is now a real acquisition page; its old placeholder assertions no longer apply.
+describe("SAN-691 · Rentals partner landing", () => {
+  const html = renderToStaticMarkup(<PartnersRentalsPage />);
+  it("renders the rental proposition instead of Coming soon/internal Linear copy", () => {
+    expect(html).toContain("Be there when renters start looking.");
+    expect(html).not.toContain("Coming soon");
+    expect(html).not.toContain("SAN-691");
+  });
+  it("links to typed broker signup and contact intake", () => {
+    expect(html).toContain('href="/partners/signup?type=broker"');
+    expect(html).toContain('href="/contact?type=broker"');
+  });
 });
