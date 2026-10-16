@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 20261017020000_dev_enrichment_follows_listing_visibility.sql
+-- Migration: 20261016235000_dev_enrichment_follows_listing_visibility.sql
 -- Task:      SAN-1502 · MDE Rentals — Enable Full Development Journeys and
 --            Defer Real-World Approval Gates
 -- Also unblocks SAN-1523 · MDE AI — Process Embedding Jobs Reliably and Keep
