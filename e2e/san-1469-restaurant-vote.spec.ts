@@ -36,6 +36,11 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
+    // Real network + database work, and CI cold starts are slow. An explicit budget keeps a
+    // slow run a slow run instead of a flaky one; CI runs with --retries=0 so a retry can
+    // never disguise a real failure.
+    test.setTimeout(120_000);
+    let cleanupError: unknown = null;
     try {
       const phase = await db.query<{ application_phase: string }>(
         "select private.mde_application_phase() as application_phase",
@@ -160,12 +165,15 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
           const { error } = await admin.auth.admin.deleteUser(userId);
           if (error) throw error;
         }
-      } catch (cleanupError) {
-        console.error("[san1469] cleanup failed:", cleanupError instanceof Error ? cleanupError.message : cleanupError);
+      } catch (err) {
+        cleanupError = err;
+        console.error("[san1469] cleanup failed:", err instanceof Error ? err.message : err);
       } finally {
         // Always close the connection, even when cleanup threw.
         await db.end().catch(() => {});
       }
     }
+    // Visible, but never a substitute for the real failure: rethrow only if the test passed.
+    if (cleanupError) throw cleanupError;
   });
 });

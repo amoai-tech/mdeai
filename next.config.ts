@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "picsum.photos" },
       // Supabase Storage (restaurant and listing photos).
       ...(supabaseStorageHost
-        ? [{ protocol: "https" as const, hostname: supabaseStorageHost }]
+        ? [{ protocol: "https" as const, hostname: supabaseStorageHost, pathname: "/storage/v1/object/public/**" }]
         : []),
     ],
   },

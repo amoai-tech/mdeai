@@ -82,7 +82,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: npx playwright test e2e/san-1469-restaurant-vote.spec.ts
+        run: npx playwright test e2e/san-1469-restaurant-vote.spec.ts --retries=0
 
       - name: Upload failure artifacts
         if: failure()
