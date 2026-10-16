@@ -105,3 +105,12 @@ export async function processEmbeddingBatch(
   }
   return summary;
 }
+
+/**
+ * The HTTP status the scheduler will see. 200 means every outcome was recorded; a run that could not record
+ * a failure (502) or was stopped by a configuration problem (503) must not look like a success.
+ */
+export function statusForSummary(summary: BatchSummary): number {
+  if (summary.halted) return 503;
+  return summary.unrecorded > 0 ? 502 : 200;
+}

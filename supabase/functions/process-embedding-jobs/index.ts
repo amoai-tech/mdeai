@@ -10,7 +10,7 @@
  * SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (provided by Supabase).
  */
 import { getServiceClient } from "../_shared/supabase-clients.ts";
-import { ClaimFailedError, processEmbeddingBatch } from "../_shared/embedding-batch.ts";
+import { ClaimFailedError, processEmbeddingBatch, statusForSummary } from "../_shared/embedding-batch.ts";
 import { constantTimeEqual } from "../_shared/embedding-worker.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -39,8 +39,9 @@ Deno.serve(async (req: Request) => {
   try {
     const summary = await processEmbeddingBatch(getServiceClient(), geminiKey, limit);
     console.log("[process-embedding-jobs]", JSON.stringify(summary));
-    // 503 when the run stopped on a configuration problem, so the scheduler's HTTP result shows it.
-    return json(summary, summary.halted ? 503 : 200);
+    // 503 when the run stopped on a configuration problem, 502 when an outcome could not be recorded:
+    // the scheduler's HTTP result must never report success for either.
+    return json(summary, statusForSummary(summary));
   } catch (error) {
     if (error instanceof ClaimFailedError) {
       console.error("[process-embedding-jobs] claim failed", error.message);

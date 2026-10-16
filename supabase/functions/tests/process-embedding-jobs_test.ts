@@ -94,7 +94,7 @@ Deno.test("constantTimeEqual / isRetryableStatus / sanitizeReason / clampLimit",
 });
 
 // ── the batch loop, with a fake database and a fake Gemini ───────────────────────────────────────────────────
-import { ClaimFailedError, processEmbeddingBatch, type RpcClient } from "../_shared/embedding-batch.ts";
+import { ClaimFailedError, processEmbeddingBatch, statusForSummary, type RpcClient } from "../_shared/embedding-batch.ts";
 import { EMBED_MODEL } from "../_shared/embedding-worker.ts";
 
 const job = (id: string, over: Record<string, unknown> = {}) => ({
@@ -200,4 +200,22 @@ Deno.test("processEmbeddingBatch — a failure that cannot be recorded is counte
   const summary = await processEmbeddingBatch(broken, "k", 5, () => Promise.resolve({ ok: false as const, retryable: true, reason: "Gemini HTTP 503" }));
   assertEquals(summary.unrecorded, 1);
   assertEquals(summary.failed + summary.retry + summary.done, 0);
+});
+
+Deno.test("statusForSummary — success only when every outcome was recorded", async () => {
+  const base = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0 };
+  assertEquals(statusForSummary(base), 200);
+  assertEquals(statusForSummary({ ...base, failed: 2, retry: 1 }), 200); // recorded failures are normal operation
+  assertEquals(statusForSummary({ ...base, unrecorded: 1 }), 502);
+  assertEquals(statusForSummary({ ...base, halted: "gemini_auth" }), 503);
+  assertEquals(statusForSummary({ ...base, halted: "gemini_auth", unrecorded: 1 }), 503);
+
+  // end to end through the loop: a failure the database could not record produces a non-2xx status
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb([job("a")], { "e-a": [{ content_text: "t" }] }, calls);
+  const broken: RpcClient = {
+    rpc: (fn, args) => fn === "fail_embedding_job" ? Promise.resolve({ data: null, error: { code: "57014" } }) : db.rpc(fn, args),
+  };
+  const summary = await processEmbeddingBatch(broken, "k", 5, () => Promise.resolve({ ok: false as const, retryable: true, reason: "Gemini HTTP 503" }));
+  assertEquals(statusForSummary(summary), 502);
 });

@@ -90,6 +90,10 @@ BEGIN
   IF v_text IS NULL THEN
     RETURN; -- no such row, or nothing factual to embed
   END IF;
+  -- gemini-embedding-001 reads at most 2048 tokens per text. 6000 characters stays under that even at
+  -- ~3 characters per token, so an unusually long description can never turn into a failed request.
+  -- ponytail: a plain character cap; switch to a token-aware cut only if real records need the tail.
+  v_text := left(v_text, 6000);
   -- model, dimensions and document version are part of the hash: changing any of them re-embeds everything.
   RETURN QUERY SELECT v_text, md5(v_text || E'\n' || 'gemini-embedding-001:768:v1');
 END

@@ -8,7 +8,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(40);
+select plan(41);
 
 -- ── fixtures: unapproved, unpublished development rows --------------------------------------------------
 insert into public.apartments (id, title, neighborhood, description, bedrooms, amenities)
@@ -203,6 +203,13 @@ reset role;
 select is(
   (select attempts from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'pending' limit 1),
   2, 'and the attempt is given back (3 claimed, 1 refunded)');
+
+-- ── H. an unusually long description cannot exceed the embedding model's input limit --------------------------
+update public.apartments set description = repeat('quiet bright airy ', 2000)
+ where id = '00000000-0000-4000-8000-0000000a0001';
+select cmp_ok(
+  (select length(content_text) from public.embedding_document_for_entity('apartment', '00000000-0000-4000-8000-0000000a0001')),
+  '<=', 6000, 'a 36,000-character description is cut to 6000 characters before embedding');
 
 select * from finish();
 rollback;
