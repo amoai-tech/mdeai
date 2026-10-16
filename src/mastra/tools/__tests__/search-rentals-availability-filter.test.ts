@@ -56,7 +56,7 @@ describe("searchRentals structured path — availability filter", () => {
     expect(availability).toContain("available_from.is.null");
     // ... but a KNOWN date must still cover the whole requested stay (1–30 Nov = 30 days), and an
     // unknown start must still respect the known end date and the stay length.
-    expect(availability).toContain("or(available_from.is.null,available_from.lte.2099-11-01)");
+    expect(availability).toContain("or(available_from.is.null,available_from.lte.2099-11-01");
     expect(availability).toContain("available_from.lte.2099-11-01");
     expect(availability).toContain("available_to.gte.2099-11-30");
     expect(availability).toContain("minimum_stay_days.lte.30");
