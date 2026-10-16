@@ -122,3 +122,4 @@ __pycache__/
 *.py[cod]
 deno.lock
 .shots/
+.pr-*
