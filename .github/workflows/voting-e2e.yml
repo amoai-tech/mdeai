@@ -33,7 +33,6 @@ jobs:
     name: authenticated restaurant vote
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ github.event_name == "workflow_dispatch" || vars.SAN1469_VOTE_E2E_ENABLED == "true" }}
     steps:
       - uses: actions/checkout@v4
 

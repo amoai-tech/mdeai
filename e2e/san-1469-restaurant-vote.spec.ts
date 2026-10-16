@@ -48,9 +48,10 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.getByTestId("vote-cta")).toBeVisible();
 
-      // Real unsigned browser -> confirmation -> existing /login return path.
+      // Sign-in now comes FIRST: an unsigned click goes to /login and must NOT open the
+      // confirmation dialog. This test follows the real journey, not the old order.
       await page.getByTestId("vote-cta").click();
-      await page.getByTestId("vote-confirm").click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page).toHaveURL(/\/login\?next=%2Frestaurants%2F/);
       const session = await getTestSession(identity.email);
       await injectSession(page.context(), session);
