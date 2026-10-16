@@ -292,7 +292,40 @@ export function findFreshReviewCandidates({ comments, startedAt }) {
     .filter(Boolean);
 }
 
-function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publishedCommand }) {
+// PR-Agent's own authoritative coverage state must agree with the trusted envelope.
+// A successful LLM request is not a complete review when files were pruned.
+// PR-Agent v0.46 can omit the persistent state on clean reviews. Its absence
+// is NOT evidence of completeness, but it also is not an incomplete review.
+// When it publishes coverage state, reject incomplete or misleading values.
+function coverageFailure(body, headSha) {
+  const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
+  if (markers.length === 0) return null; // Clean reviews may have no persisted findings.
+  if (markers.length !== 1) {
+    return { ok: false, code: "INVALID_REVIEW_STATE", reason: `expected at most one PR-Agent coverage state; found ${markers.length}` };
+  }
+  let state;
+  try {
+    state = JSON.parse(markers[0][1]);
+  } catch {
+    return { ok: false, code: "INVALID_REVIEW_STATE", reason: "PR-Agent coverage state is not valid JSON" };
+  }
+  if (state?.schema_version !== 1 || !Array.isArray(state?.findings) || !state?.last_run) {
+    return { ok: false, code: "INVALID_REVIEW_STATE", reason: "PR-Agent coverage state is missing required fields" };
+  }
+  if (state.last_run.head_sha?.toLowerCase() !== headSha.toLowerCase()) {
+    return { ok: false, code: "STALE_HEAD", reason: "PR-Agent coverage head does not match the trusted envelope head" };
+  }
+  const excluded = state.last_run.excluded_files;
+  if (!Array.isArray(excluded)) {
+    return { ok: false, code: "INVALID_REVIEW_STATE", reason: "PR-Agent coverage state lacks an excluded_files array" };
+  }
+  if (state.last_run.complete !== true || excluded.length > 0) {
+    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review is incomplete: excluded_files=${excluded.length}, complete=${state.last_run.complete}` };
+  }
+  return null;
+}
+
+function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publishedCommand, incrementalSkipped = false }) {
   if (!envelope.valid) return { ok: false, code: envelope.code, reason: envelope.reason };
   if (envelope.baseSha !== baseSha.toLowerCase()) {
     return { ok: false, code: "WRONG_BASE", reason: `ReviewEnvelope base ${envelope.baseSha} does not match expected ${baseSha.toLowerCase()}` };
@@ -308,6 +341,11 @@ function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publ
   }
   if (!envelope.body.trim()) {
     return { ok: false, code: "EMPTY_REVIEW", reason: "ReviewEnvelope contains no review body" };
+  }
+  // A legitimate incremental skip is separately bound to a prior same-base
+  // certification. All other canonical reviews must prove complete coverage.
+  if (kind === "canonical" && !incrementalSkipped) {
+    return coverageFailure(envelope.body, headSha);
   }
   return null;
 }
@@ -340,12 +378,24 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
       reviewCommand,
       kind: candidate.kind,
       publishedCommand: candidate.publishedCommand,
+      incrementalSkipped: candidate.incrementalSkipped,
     });
+    // A newer review of this same base/head must not be superseded by an
+    // older green review if the new publication explicitly records partial
+    // or invalid coverage. The previous loop silently skipped such failures.
+    if (failure && candidate.kind === "canonical" && candidate.envelope.valid &&
+        candidate.envelope.baseSha === baseSha.toLowerCase() &&
+        candidate.envelope.headSha === headSha.toLowerCase() &&
+        candidate.envelope.command === reviewCommand &&
+        ["INCOMPLETE_REVIEW", "INVALID_REVIEW_STATE", "STALE_HEAD"].includes(failure.code)) {
+      return failure;
+    }
     if (!failure) {
       return {
         ok: true,
         code: "OK",
-        reason: `fresh ${candidate.kind} review verified for exact base/head`,
+        reason: `fresh ${candidate.kind} review verified for exact base/head${candidate.kind === "canonical" && candidate.envelope.body.includes("<!-- pr-agent-review-state:v1\n") ? " with complete recorded coverage" : "; full coverage unconfirmed (no persistent coverage state)"}`,
+        coverageConfirmed: candidate.kind === "canonical" && candidate.envelope.body.includes("<!-- pr-agent-review-state:v1\n"),
         comment: candidate.comment,
         type: candidate.kind,
       };
@@ -362,5 +412,6 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
     reviewCommand,
     kind: candidate.kind,
     publishedCommand: candidate.publishedCommand,
+    incrementalSkipped: candidate.incrementalSkipped,
   }) ?? { ok: false, code: "INVALID_ENVELOPE", reason: "review result is ambiguous" };
 }
