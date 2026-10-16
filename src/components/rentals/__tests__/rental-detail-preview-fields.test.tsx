@@ -86,6 +86,17 @@ describe("rental detail — external preview fields", () => {
     expect(link?.getAttribute("rel")).toContain("nofollow");
   });
 
+  it("links to the original advertisement on an active, attributed external listing", async () => {
+    const external = mapApartmentRowToDetail({
+      ...row, status: "active", source_url: "https://www.fincaraiz.com.co/apartaestudio/193916988",
+      metadata: { source_record_type: "third_party_advertisement" },
+      rental_can_request_viewing: true,
+    });
+    await render(external);
+    expect(document.querySelector('[data-testid="rental-detail-source-link"]')?.getAttribute("href"))
+      .toBe("https://www.fincaraiz.com.co/apartaestudio/193916988");
+  });
+
   it("keeps a real bedroom count", async () => {
     await render(preview({ bedrooms: 2 }));
     expect(document.querySelector('[data-testid="rental-detail-specs"]')?.textContent).toContain("2 beds");

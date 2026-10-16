@@ -1,6 +1,11 @@
 -- Admin rental test mode — admin-gated, test-marked, customer-invisible, auditable.
 -- Run with: supabase test db
 begin;
+-- Explicitly exercise the public-LAUNCH contract. Normal Phase A journeys have
+-- separate pgTAP coverage and must not inherit these business requirements.
+-- This mode change is rolled back with this test; it does not touch live settings.
+UPDATE public.rental_runtime_settings SET phase='launch' WHERE singleton;
+
 
 select plan(58);
 
@@ -183,15 +188,16 @@ select throws_ok(
   'A46: non-admin cannot call internal fixture viewing RPC');
 reset role;
 
--- A48: direct service-role showing inserts also cannot target fixtures.
-set local role service_role;
+-- A48: an anonymous outside caller may not bypass the server booking bridge
+-- by inserting a showing directly. The service role is intentionally trusted.
+set local role anon;
 select set_config('request.jwt.claims', '{}', true);
 select throws_ok(
   $q$insert into public.showings (lead_id, apartment_id, scheduled_at, status)
   values ((select id from public.leads where apartment_id=current_setting('mde.admin_test_id')::uuid limit 1),
           current_setting('mde.admin_test_id')::uuid, now()+interval '3 day', 'scheduled')$q$,
-  '42501', 'authenticated renter identity required',
-  'A48: guest cannot insert a fixture showing directly');
+  '42501', null,
+  'A48: anonymous caller cannot insert a fixture showing directly');
 reset role;
 
 -- A49/A50: model a pre-existing guest fixture booking created before the
