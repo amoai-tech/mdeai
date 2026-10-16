@@ -8,7 +8,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(37);
+select plan(40);
 
 -- ── fixtures: unapproved, unpublished development rows --------------------------------------------------
 insert into public.apartments (id, title, neighborhood, description, bedrooms, amenities)
@@ -75,7 +75,7 @@ select is(
 select is(has_function_privilege('anon', 'public.claim_embedding_jobs(integer)', 'execute'), false, 'anon cannot claim');
 select is(has_function_privilege('authenticated', 'public.claim_embedding_jobs(integer)', 'execute'), false, 'authenticated cannot claim');
 select is(has_function_privilege('authenticated', 'public.complete_embedding_job(uuid,uuid,double precision[])', 'execute'), false, 'authenticated cannot complete');
-select is(has_function_privilege('authenticated', 'public.fail_embedding_job(uuid,uuid,text,boolean,boolean)', 'execute'), false, 'authenticated cannot fail');
+select is(has_function_privilege('authenticated', 'public.fail_embedding_job(uuid,uuid,text,boolean,boolean,boolean)', 'execute'), false, 'authenticated cannot fail');
 select is(has_function_privilege('anon', 'public.embedding_document_for_entity(text,uuid)', 'execute'), false, 'anon cannot read documents');
 select is(has_function_privilege('service_role', 'public.claim_embedding_jobs(integer)', 'execute'), true, 'service_role can claim');
 
@@ -180,13 +180,29 @@ select ok(
 select is(
   (select count(*)::int from (select * from public.claim_embedding_jobs(5)) x), 0, 'it is not claimed again until the wait is over');
 -- a worker that died holding the job: its lease expires and the job is reclaimed with another attempt
-update public.embedding_jobs set status = 'processing', lease_token = gen_random_uuid(),
+update public.embedding_jobs set status = 'processing', lease_token = '00000000-0000-4000-8000-00000000eeee',
        lease_expires_at = now() - interval '1 minute', attempts = 2
  where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'pending';
 set local role service_role;
 select is((select attempts from public.claim_embedding_jobs(5) where entity_id = '00000000-0000-4000-8000-0000000a0001'), 3,
   'an expired lease is reclaimed and the attempt is counted');
+-- the first worker wakes up late: its token no longer owns the job, so its result is discarded
+select is(
+  public.complete_embedding_job(
+    (select id from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'processing' limit 1),
+    '00000000-0000-4000-8000-00000000eeee', (select v from vec)),
+  'lost_lease', 'a worker whose lease was reclaimed cannot complete the job');
+-- a configuration failure (bad Gemini key) hands the attempt back instead of spending it
+select is(
+  public.fail_embedding_job(
+    (select id from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'processing' limit 1),
+    (select lease_token from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'processing' limit 1),
+    'Gemini rejected the API key', true, false, true),
+  'retry', 'a refunded failure goes back to pending');
 reset role;
+select is(
+  (select attempts from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'pending' limit 1),
+  2, 'and the attempt is given back (3 claimed, 1 refunded)');
 
 select * from finish();
 rollback;

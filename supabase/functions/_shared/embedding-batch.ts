@@ -19,6 +19,10 @@ export type ClaimedJob = {
 
 export type BatchSummary = {
   claimed: number; done: number; retry: number; failed: number; skipped: number; superseded: number; lost_lease: number;
+  /** the database call that records a failure itself failed: the lease will expire and the job be reclaimed */
+  unrecorded: number;
+  /** set when the whole run stopped because of a configuration problem, not a bad record */
+  halted?: "gemini_auth";
 };
 
 export class ClaimFailedError extends Error {}
@@ -29,26 +33,32 @@ export async function processEmbeddingBatch(
   rawLimit: unknown,
   embed: (text: string, key: string) => Promise<EmbedOutcome> = embedDocument,
 ): Promise<BatchSummary> {
-  const summary: BatchSummary = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0 };
+  const summary: BatchSummary = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0 };
+  const OUTCOMES = ["done", "retry", "failed", "skipped", "superseded", "lost_lease"] as const;
   const count = (outcome: unknown) => {
-    const key = String(outcome) as keyof BatchSummary;
-    summary[key in summary && key !== "claimed" ? key : "failed"]++;
+    const key = OUTCOMES.find((o) => o === outcome);
+    if (key) summary[key]++;
+    else summary.unrecorded++; // an unexpected answer is not a success and not a recorded failure
   };
 
   const { data: jobs, error: claimError } = await db.rpc("claim_embedding_jobs", { p_limit: clampLimit(rawLimit) });
   if (claimError) throw new ClaimFailedError(claimError.code ?? "claim_failed");
 
-  for (const job of (jobs ?? []) as ClaimedJob[]) {
-    summary.claimed++;
-    const fail = async (reason: string, retryable: boolean, skip = false) => {
-      const { data } = await db.rpc("fail_embedding_job", {
-        p_job_id: job.job_id,
-        p_lease_token: job.lease_token,
+  const claimedJobs = (jobs ?? []) as ClaimedJob[];
+  summary.claimed = claimedJobs.length;
+  for (const [index, job] of claimedJobs.entries()) {
+    // refund: the attempt was spent on a configuration problem, not on this record
+    const fail = async (reason: string, retryable: boolean, skip = false, refund = false, target = job) => {
+      const { data, error } = await db.rpc("fail_embedding_job", {
+        p_job_id: target.job_id,
+        p_lease_token: target.lease_token,
         p_reason: sanitizeReason(reason),
         p_retryable: retryable,
         p_skip: skip,
+        p_refund_attempt: refund,
       });
-      count(data ?? "failed");
+      if (error) summary.unrecorded++;
+      else count(data);
     };
 
     if (job.model !== EMBED_MODEL || job.dimensions !== EMBED_DIM) {
@@ -71,6 +81,12 @@ export async function processEmbeddingBatch(
     }
 
     const embedded = await embed(doc.content_text, geminiKey);
+    if (!embedded.ok && embedded.fatal) {
+      // A bad key hits every record the same way. Stop, hand back this job and the rest unspent, and say why.
+      summary.halted = "gemini_auth";
+      for (const waiting of claimedJobs.slice(index)) await fail(embedded.reason, true, false, true, waiting);
+      break;
+    }
     if (!embedded.ok) {
       await fail(embedded.reason, embedded.retryable);
       continue;

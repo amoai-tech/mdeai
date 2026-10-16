@@ -279,7 +279,7 @@ $fn$;
 
 CREATE OR REPLACE FUNCTION public.fail_embedding_job(
   p_job_id uuid, p_lease_token uuid, p_reason text,
-  p_retryable boolean DEFAULT true, p_skip boolean DEFAULT false)
+  p_retryable boolean DEFAULT true, p_skip boolean DEFAULT false, p_refund_attempt boolean DEFAULT false)
 RETURNS text
 LANGUAGE plpgsql
 SET search_path = ''
@@ -301,6 +301,14 @@ BEGIN
            processed_at = now(), updated_at = now()
      WHERE id = j.id;
     RETURN 'skipped';
+  ELSIF p_refund_attempt THEN
+    -- a configuration problem (for example a bad Gemini key), not this record's fault: give the attempt back
+    UPDATE public.embedding_jobs
+       SET status = 'pending', last_error = v_reason, lease_token = NULL, lease_expires_at = NULL,
+           attempts = greatest(j.attempts - 1, 0), next_attempt_at = now() + interval '1 minute',
+           updated_at = now()
+     WHERE id = j.id;
+    RETURN 'retry';
   ELSIF p_retryable AND j.attempts < 5 THEN
     UPDATE public.embedding_jobs
        SET status = 'pending', last_error = v_reason, lease_token = NULL, lease_expires_at = NULL,
@@ -322,11 +330,11 @@ $fn$;
 REVOKE ALL ON FUNCTION public.embedding_document_for_entity(text, uuid)                       FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.claim_embedding_jobs(integer)                                   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.complete_embedding_job(uuid, uuid, double precision[])          FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.fail_embedding_job(uuid, uuid, text, boolean, boolean)          FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.fail_embedding_job(uuid, uuid, text, boolean, boolean, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.embedding_document_for_entity(text, uuid)                    TO service_role;
 GRANT EXECUTE ON FUNCTION public.claim_embedding_jobs(integer)                                TO service_role;
 GRANT EXECUTE ON FUNCTION public.complete_embedding_job(uuid, uuid, double precision[])       TO service_role;
-GRANT EXECUTE ON FUNCTION public.fail_embedding_job(uuid, uuid, text, boolean, boolean)       TO service_role;
+GRANT EXECUTE ON FUNCTION public.fail_embedding_job(uuid, uuid, text, boolean, boolean, boolean) TO service_role;
 
 -- 5 · one-time queue rebuild --------------------------------------------------------------------------------
 -- The existing pending jobs carry the old md5(title||description||id) fingerprint, so none of them

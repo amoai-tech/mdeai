@@ -41,6 +41,19 @@ Deno.test("embedDocument — 400 is permanent, 429 and 500 are retried", async (
   assertEquals(!down.ok && down.retryable, true);
 });
 
+Deno.test("embedDocument — a rejected key is a configuration failure, even when Google reports it as HTTP 400", async () => {
+  const invalidKey = { error: { code: 400, status: "INVALID_ARGUMENT", details: [{ reason: "API_KEY_INVALID" }] } };
+  for (const [status, body] of [[400, invalidKey], [401, {}], [403, {}], [403, { error: { status: "PERMISSION_DENIED" } }]] as const) {
+    const out = await embedDocument("x", "k", reply(status, body));
+    assertEquals(!out.ok && out.fatal, true, `HTTP ${status} is fatal`);
+    assertEquals(!out.ok && out.reason.includes("API_KEY_INVALID"), false); // the body is never copied into the reason
+  }
+  // an ordinary 400 about one record stays a permanent, non-fatal failure
+  const plain = await embedDocument("x", "k", reply(400, { error: { status: "INVALID_ARGUMENT", details: [] } }));
+  assertEquals(!plain.ok && plain.fatal, undefined);
+  assertEquals(!plain.ok && plain.retryable, false);
+});
+
 Deno.test("embedDocument — empty values and a wrong-size vector are refused", async () => {
   assertEquals((await embedDocument("x", "k", reply(200, { embedding: { values: [] } }))).ok, false);
   const small = await embedDocument("x", "k", reply(200, { embedding: { values: vec(3) } }));
@@ -116,7 +129,7 @@ Deno.test("processEmbeddingBatch — stores a good vector, retries a 429, skips 
         : { ok: true as const, values: vec(EMBED_DIM) },
     );
   const summary = await processEmbeddingBatch(db, "k", 5, embed);
-  assertEquals(summary, { claimed: 4, done: 1, retry: 1, failed: 1, skipped: 1, superseded: 0, lost_lease: 0 });
+  assertEquals(summary, { claimed: 4, done: 1, retry: 1, failed: 1, skipped: 1, superseded: 0, lost_lease: 0, unrecorded: 0 });
   const completed = calls.filter((c) => c.fn === "complete_embedding_job");
   assertEquals(completed.length, 1);
   assertEquals((completed[0].args.p_values as number[]).length, EMBED_DIM);
@@ -154,4 +167,37 @@ Deno.test("processEmbeddingBatch — a storage error is reported as a retry, not
   const summary = await processEmbeddingBatch(broken, "k", 5, () => Promise.resolve({ ok: true as const, values: vec(EMBED_DIM) }));
   assertEquals(summary.done, 0);
   assertEquals(summary.retry, 1);
+});
+
+Deno.test("processEmbeddingBatch — a rejected key stops the run and hands every job back unspent", async () => {
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb(
+    [job("a"), job("b"), job("c")],
+    { "e-a": [{ content_text: "1" }], "e-b": [{ content_text: "2" }], "e-c": [{ content_text: "3" }] },
+    calls,
+  );
+  let embedCalls = 0;
+  const embed = () => {
+    embedCalls++;
+    return Promise.resolve({ ok: false as const, retryable: true, fatal: true as const, reason: "Gemini rejected the API key (HTTP 400)" });
+  };
+  const summary = await processEmbeddingBatch(db, "k", 5, embed);
+  assertEquals(embedCalls, 1); // the other two records were never sent to Gemini
+  assertEquals(summary.halted, "gemini_auth");
+  assertEquals(summary.retry, 3);
+  assertEquals(summary.failed, 0);
+  const failures = calls.filter((c) => c.fn === "fail_embedding_job");
+  assertEquals(failures.length, 3);
+  assertEquals(failures.every((c) => c.args.p_refund_attempt === true && c.args.p_retryable === true), true);
+});
+
+Deno.test("processEmbeddingBatch — a failure that cannot be recorded is counted as unrecorded, never as failed", async () => {
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb([job("a")], { "e-a": [{ content_text: "t" }] }, calls);
+  const broken: RpcClient = {
+    rpc: (fn, args) => fn === "fail_embedding_job" ? Promise.resolve({ data: null, error: { code: "57014" } }) : db.rpc(fn, args),
+  };
+  const summary = await processEmbeddingBatch(broken, "k", 5, () => Promise.resolve({ ok: false as const, retryable: true, reason: "Gemini HTTP 503" }));
+  assertEquals(summary.unrecorded, 1);
+  assertEquals(summary.failed + summary.retry + summary.done, 0);
 });

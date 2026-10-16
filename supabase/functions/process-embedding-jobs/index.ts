@@ -39,7 +39,8 @@ Deno.serve(async (req: Request) => {
   try {
     const summary = await processEmbeddingBatch(getServiceClient(), geminiKey, limit);
     console.log("[process-embedding-jobs]", JSON.stringify(summary));
-    return json(summary);
+    // 503 when the run stopped on a configuration problem, so the scheduler's HTTP result shows it.
+    return json(summary, summary.halted ? 503 : 200);
   } catch (error) {
     if (error instanceof ClaimFailedError) {
       console.error("[process-embedding-jobs] claim failed", error.message);

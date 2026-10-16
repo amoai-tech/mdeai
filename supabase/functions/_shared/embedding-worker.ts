@@ -12,7 +12,7 @@ export const DEFAULT_BATCH = 5;
 
 export type EmbedOutcome =
   | { ok: true; values: number[] }
-  | { ok: false; retryable: boolean; reason: string };
+  | { ok: false; retryable: boolean; reason: string; fatal?: true };
 
 /** Compare two secrets without leaking where they differ. */
 export function constantTimeEqual(a: string, b: string): boolean {
@@ -25,9 +25,21 @@ export function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** 400 means this text will never embed; everything else (429, 5xx, 401/403 misconfig, network) is retried. */
+/** 400 means this text will never embed; everything else (429, 5xx, network) is retried. Auth is handled by isAuthFailure first. */
 export function isRetryableStatus(status: number): boolean {
   return status !== 400;
+}
+
+/**
+ * The key (not the record) is the problem. Google reports a wrong or revoked key as HTTP 400 with reason
+ * API_KEY_INVALID — not 401 — so the status alone would wrongly mark every job as permanently unembeddable.
+ * Only the machine-readable reason is read from the body; the body itself is never stored or logged.
+ */
+export function isAuthFailure(status: number, body: unknown): boolean {
+  if (status === 401 || status === 403) return true;
+  const error = (body as { error?: { status?: string; details?: { reason?: string }[] } } | null)?.error;
+  return error?.status === "UNAUTHENTICATED" || error?.status === "PERMISSION_DENIED" ||
+    (error?.details ?? []).some((d) => d?.reason === "API_KEY_INVALID");
 }
 
 /** A reason that is safe to store and show: no response body, no key, no text of the record. */
@@ -77,6 +89,10 @@ export async function embedDocument(
       },
     );
     if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      if (isAuthFailure(res.status, body)) {
+        return { ok: false, retryable: true, fatal: true, reason: `Gemini rejected the API key (HTTP ${res.status}) — check GOOGLE_GENERATIVE_AI_API_KEY` };
+      }
       return { ok: false, retryable: isRetryableStatus(res.status), reason: `Gemini HTTP ${res.status}` };
     }
     const json = (await res.json()) as { embedding?: { values?: unknown } };
