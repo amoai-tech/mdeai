@@ -36,7 +36,14 @@ describe("BrowseMapSheet map holder", () => {
     expect(stub).not.toBeNull();
     // Google's map is 100% of its parent; the sheet is `h-auto`, so the holder must carry the height itself.
     const holder = stub.closest("div.relative") as HTMLElement | null;
-    expect(holder?.className).toMatch(/\bh-\[70vh\]/);
+    // Capped like the chat map sheet, with a floor so a short phone still gets a usable map.
+    expect(holder?.className).toMatch(/\bh-\[min\(70vh,520px\)\]/);
+    expect(holder?.className).toMatch(/\bmin-h-\[280px\]/);
+    // `vh`, not `dvh`: on a browser without `dvh` the whole height declaration is dropped, the holder
+    // falls back to auto, and the map is blank again. The safe area is handled on the sheet instead.
+    expect(holder?.className).not.toMatch(/dvh/);
+    const sheet = holder?.closest('[data-slot="sheet-content"]') as HTMLElement | null;
+    expect(sheet?.className).toContain("pb-[env(safe-area-inset-bottom,0px)]");
     // Same redraw signal as the working chat map sheet.
     expect(stub.getAttribute("data-resize-signal")).toBe("1");
     await act(async () => root.unmount());
