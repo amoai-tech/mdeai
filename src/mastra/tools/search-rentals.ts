@@ -500,10 +500,6 @@ async function searchRentalsFromSupabase(
       'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing',
       { count: 'exact' },
     )
-    .eq('status', 'active')
-    // RLS is authoritative: public users still require approved/published,
-    // while authorized MDE users can develop active fixtures without those gates.
-    .not('landlord_id', 'is', null)
     .or(rentalBudgetPredicate(maxNightly, monthlyBudget))
     // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
     // every nightly-priced row and two different currencies are never meaningfully ordered
@@ -513,6 +509,10 @@ async function searchRentalsFromSupabase(
     // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
     .order('price_daily', { ascending: true, nullsFirst: false })
     .limit(limit);
+
+  if (!developmentMode) {
+    q = q.eq('status', 'active').not('landlord_id', 'is', null);
+  }
 
   if (query.neighborhood) {
     q = q.ilike('neighborhood', `%${query.neighborhood}%`);

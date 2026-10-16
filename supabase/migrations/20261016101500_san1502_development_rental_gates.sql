@@ -43,7 +43,7 @@ $function$;
 create or replace function public.rental_can_request_viewing(a public.apartments)
 returns boolean language sql stable set search_path = ''
 as $function$
-  select coalesce(a.status='active' and a.landlord_id is not null and (
+  select coalesce((public.rental_development_active() OR (a.status='active' and a.landlord_id is not null)) and (
     public.rental_development_active()
     or (
       a.moderation_status='approved'
@@ -75,7 +75,10 @@ CREATE OR REPLACE FUNCTION public.enforce_apartment_initial_state()
  SET search_path TO ''
 AS $function$
 begin
-  if public.rental_development_active() then return NEW; end if;
+  if public.rental_development_active() then
+    NEW.verified := false;
+    return NEW;
+  end if;
   if public.is_admin() or current_user in ('postgres', 'supabase_admin', 'service_role') then
     return new;
   end if;
@@ -89,7 +92,7 @@ begin
   new.published_by := null;
   return new;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.apartments_material_edit_guard()
@@ -254,7 +257,7 @@ begin
   end if;
   return NEW;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.demote_published_listing_for_review(p_apartment_id uuid, p_reason text)
@@ -298,7 +301,7 @@ begin
      where id = p_apartment_id;
   end if;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.block_nonadmin_test_viewing()
@@ -353,10 +356,6 @@ BEGIN
         RAISE EXCEPTION 'viewing identity changes require administrator'
           USING ERRCODE = '42501';
       END IF;
-      IF v_renter_id IS NULL AND NOT coalesce(public.is_admin(),false) THEN
-        RAISE EXCEPTION 'authenticated renter identity required'
-          USING ERRCODE = '42501';
-      END IF;
       RETURN NEW;
     END IF;
     IF NOT (
@@ -372,7 +371,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.p1_schedule_tour_atomic(p_listing_id text, p_user_id uuid, p_idempotency_key text, p_source text, p_email text, p_name text, p_phone text, p_trip_id uuid, p_scheduled_at timestamp with time zone, p_lead_metadata jsonb, p_showing_metadata jsonb)
@@ -467,7 +466,7 @@ BEGIN
        WHERE a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
          AND lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
     )
-  ) AND NOT (public.rental_development_active() AND p_user_id IS NOT NULL)
+  ) AND NOT public.rental_development_active()
     AND NOT (coalesce(public.is_admin(), false) OR (p_user_id IS NOT NULL AND public.is_authorized_test_actor(p_user_id, 'renter'))) THEN
     RAISE EXCEPTION 'development rental viewing requires an authorized renter'
       USING ERRCODE = '42501';
@@ -526,13 +525,13 @@ BEGIN
     SELECT a.* INTO v_apartment
     FROM public.apartments AS a
     WHERE a.id = v_listing_id::uuid
-      AND a.status = 'active'
+      AND (a.status = 'active' OR (public.rental_development_active() AND (public.is_admin() OR a.created_by=p_user_id)))
       AND (
         public.rental_development_active()
         OR lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
         OR (a.moderation_status = 'approved' AND a.listing_workflow_status = 'published')
       )
-      AND a.landlord_id IS NOT NULL
+      AND (public.rental_development_active() OR a.landlord_id IS NOT NULL)
       -- SAN-486: viewing eligibility mirrors the publication contract — a known
       -- move-in date, not an expired or reversed window. It is independent of the
       -- move-in date itself, so a tour can be booked before move-in. The row is locked
@@ -551,13 +550,13 @@ BEGIN
     SELECT a.* INTO v_apartment
     FROM public.apartments AS a
     WHERE a.slug = v_listing_id
-      AND a.status = 'active'
+      AND (a.status = 'active' OR (public.rental_development_active() AND (public.is_admin() OR a.created_by=p_user_id)))
       AND (
         public.rental_development_active()
         OR lower(coalesce(a.metadata->>'is_test_fixture', 'false')) = 'true'
         OR (a.moderation_status = 'approved' AND a.listing_workflow_status = 'published')
       )
-      AND a.landlord_id IS NOT NULL
+      AND (public.rental_development_active() OR a.landlord_id IS NOT NULL)
       -- SAN-486: viewing eligibility mirrors the publication contract — a known
       -- move-in date, not an expired or reversed window. It is independent of the
       -- move-in date itself, so a tour can be booked before move-in. The row is locked
@@ -624,6 +623,7 @@ BEGIN
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
           'listing_id', v_listing_id,
+          'routing_status', CASE WHEN v_apartment.landlord_id IS NULL THEN 'admin_triage' ELSE 'assigned_landlord' END,
           'preferred_at', p_scheduled_at,
           'schedule_viewing_identity', jsonb_build_object(
             'user_id', p_user_id,
@@ -681,6 +681,7 @@ BEGIN
       coalesce(p_lead_metadata, '{}'::jsonb)
         || jsonb_build_object(
           'listing_id', v_listing_id,
+          'routing_status', CASE WHEN v_apartment.landlord_id IS NULL THEN 'admin_triage' ELSE 'assigned_landlord' END,
           'preferred_at', p_scheduled_at,
           'schedule_viewing_identity', jsonb_build_object(
             'user_id', p_user_id,
@@ -1034,7 +1035,7 @@ begin
   end if;
   return b;
 end;
-$function$
+$function$;
 
 
 -- Publish operational development listings without falsifying legal evidence.
@@ -1077,7 +1078,8 @@ begin
   end if;
   if v_uid is not null
      and not (public.is_admin()
-              or v_row.landlord_id in (select public.acting_landlord_ids())) then
+              or v_row.landlord_id in (select public.acting_landlord_ids())
+              or (public.rental_development_active() and v_row.created_by=v_uid)) then
     raise exception 'not authorized to publish this listing' using errcode = '42501';
   end if;
 
@@ -1157,7 +1159,7 @@ begin
 
   return v_row;
 end;
-$function$
+$function$;
 
 
 do $check$
@@ -1168,3 +1170,142 @@ begin
   end if;
 end
 $check$;
+
+-- Phase A: a lead without assigned broker is routed for administrator triage.
+-- This does not claim verified ownership and must be reconciled before launch.
+ALTER TABLE public.apartments DROP CONSTRAINT IF EXISTS apartments_owner_required_when_published;
+
+-- Existing authenticated landlord/admin publishing RPC, with Phase A business gates disabled.
+create or replace function public.publish_self_attested_rental(
+  p_apartment_id uuid,
+  p_advertising_authority boolean,
+  p_photo_rights boolean
+)
+returns public.apartments
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_row public.apartments;
+  v_uid uuid := auth.uid();
+  v_missing text[];
+begin
+  if v_uid is null
+     and coalesce(current_setting('role', true), '') <> 'service_role' then
+    raise exception 'authenticated publisher or trusted service required' using errcode = '42501';
+  end if;
+
+  select a.* into v_row from public.apartments a where a.id = p_apartment_id for update;
+  if not found then
+    raise exception 'apartment % not found', p_apartment_id using errcode = 'P0002';
+  end if;
+
+  -- Ownership boundary first: a foreign broker gets a denial and never a forged
+  -- attestation. listing ownership is the one authorization fact this path keeps.
+  if v_uid is not null
+     and not (public.is_admin()
+              or v_row.landlord_id in (select public.acting_landlord_ids())
+              or (public.rental_development_active() and v_row.created_by=v_uid)) then
+    raise exception 'not authorized to publish this listing' using errcode = '42501';
+  end if;
+
+  IF public.rental_development_active() THEN
+    -- Development publish is only an operational state change. Never fabricate
+    -- self-attestation, copyrights, availability, or independent verification.
+    UPDATE public.apartments a SET
+      status='active', moderation_status='approved',
+      listing_workflow_status='published', verified=false,
+      published_at=now(), published_by=v_uid,
+      workflow_changed_by=v_uid, workflow_changed_at=now(),
+      metadata=coalesce(a.metadata,'{}'::jsonb) ||
+        jsonb_build_object('development_published',true)
+    WHERE a.id=p_apartment_id
+    RETURNING a.* INTO v_row;
+    RETURN v_row;
+  END IF;
+
+  if v_row.listing_workflow_status = 'rejected' then
+    raise exception 'rejected listings must return to draft before publication'
+      using errcode = 'check_violation';
+  end if;
+
+  if not (coalesce(p_advertising_authority, false) and coalesce(p_photo_rights, false)) then
+    raise exception 'self-attestation required: advertising authority and photo rights'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Same-state retry is a true no-op and preserves every timestamp.
+  if v_row.listing_workflow_status = 'published' then
+    if v_row.status = 'active' and v_row.moderation_status = 'approved' then
+      return v_row;
+    end if;
+    raise exception 'published listing has inconsistent state' using errcode = '23514';
+  end if;
+
+  v_missing := public.self_attested_listing_blockers(p_apartment_id);
+  if array_length(v_missing, 1) > 0 then
+    raise exception 'listing is not self-attestation-ready: missing %', array_to_string(v_missing, ', ')
+      using errcode = 'check_violation';
+  end if;
+
+  update public.apartments a
+     set status = 'active',
+         -- Publication is cleared automatically for a self-attested listing, and the
+         -- independent-verification marker is explicitly cleared: choosing the
+         -- self-attested path must never leave a row presenting as verified.
+         moderation_status = 'approved',
+         verified = false,
+         listing_workflow_status = 'published',
+         published_at = now(),
+         published_by = v_uid,
+         workflow_changed_by = v_uid,
+         workflow_changed_at = now(),
+         updated_at = now(),
+         metadata = coalesce(a.metadata, '{}'::jsonb)
+           || jsonb_build_object(
+                'inventory_kind', 'self_attested',
+                'inventory_type', 'self_attested',
+                'allowed_action', 'schedule_viewing',
+                'provenance', 'self_attested',
+                'trust_level', 'self_attested',
+                'owner_control_status', 'self_attested',
+                'availability_status', 'self_attested',
+                'photo_rights_status', 'self_attested',
+                'self_attestation', jsonb_build_object(
+                  'advertising_authority', true,
+                  'photo_rights', true,
+                  'attested_by', v_uid,
+                  'attested_at', now()
+                )
+              )
+   where a.id = p_apartment_id
+   returning a.* into v_row;
+
+  return v_row;
+end;
+$function$;
+
+
+-- AI enrichment is private derived metadata: expanding *listing* discoverability
+-- during development must not expose private vectors/scores to anonymous users.
+CREATE OR REPLACE FUNCTION public.rental_enrichment_is_readable(p_apartment_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=''
+AS $enrichment$
+ SELECT p_apartment_id IS NOT NULL AND EXISTS (
+   SELECT 1 FROM public.apartments a WHERE a.id=p_apartment_id
+   AND (
+     (a.status='active' AND a.moderation_status='approved'
+      AND a.listing_workflow_status='published' AND a.landlord_id IS NOT NULL
+      AND coalesce(lower(a.metadata->>'is_test_fixture'),'false')<>'true'
+      AND coalesce(lower(a.metadata->>'inventory_kind'),'') NOT IN ('test_fixture','external_candidate')
+      AND coalesce(lower(a.metadata->>'inventory_type'),'')<>'external'
+      AND coalesce(lower(a.metadata->>'allowed_action'),'')<>'view_original_listing')
+     OR (public.is_authorized_test_actor()
+         AND public.rental_test_listing_is_available(a.status,a.moderation_status,a.listing_workflow_status,a.metadata))
+   )
+ );
+$enrichment$;
+REVOKE ALL ON FUNCTION public.rental_enrichment_is_readable(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rental_enrichment_is_readable(uuid)
+  TO anon, authenticated, service_role;

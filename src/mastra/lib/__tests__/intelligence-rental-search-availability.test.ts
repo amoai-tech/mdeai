@@ -106,10 +106,12 @@ const mocks = vi.hoisted(() => {
   };
 
   const client = {
-    rpc: vi.fn(async () =>
-      mocks.state.rpcError
-        ? { data: null, error: mocks.state.rpcError }
-        : { data: hybridRows, error: null },
+    rpc: vi.fn(async (name: string) =>
+      name === "rental_development_active"
+        ? { data: false, error: null }
+        : mocks.state.rpcError
+          ? { data: null, error: mocks.state.rpcError }
+          : { data: hybridRows, error: null },
     ),
     from: vi.fn((table: string) => {
       if (table === "apartments") {

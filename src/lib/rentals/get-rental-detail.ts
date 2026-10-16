@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
-import { isRentalRequestable } from "@/mastra/tools/search-rentals";
+import { isRentalRequestable, readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
 import { isSelfAttested } from "@/lib/rentals/provenance";
 
 /**
@@ -141,8 +141,10 @@ export async function getRentalDetail(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const apartmentsQuery = client.from("apartments")
-    .select("*, rental_can_request_viewing").eq("status", "active").limit(1);
+  const developmentMode = await readRentalDevelopmentPhase(client);
+  let apartmentsQuery = client.from("apartments")
+    .select("*, rental_can_request_viewing").limit(1);
+  if (!developmentMode) apartmentsQuery = apartmentsQuery.eq("status", "active");
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {
