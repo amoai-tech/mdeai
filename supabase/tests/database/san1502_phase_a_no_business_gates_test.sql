@@ -1,7 +1,7 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(18);
+select plan(20);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
@@ -64,6 +64,17 @@ select is((select status || '/' || moderation_status || '/' || listing_workflow_
 select is((select public.rental_can_request_viewing(a) from public.apartments a
  where a.id=current_setting('mde.san1502_phase_fixture')::uuid),
  true,'DB-computed requestability allows unknown move-in date in Phase A');
+-- PostgreSQL resolves composite-row function notation as a virtual field.
+-- PostgREST includes this field when .select('* ,rental_can_request_viewing')
+-- requests it. No physical or immutable GENERATED column is needed.
+select is((select a.rental_can_request_viewing from public.apartments a
+ where a.id=current_setting('mde.san1502_phase_fixture')::uuid),
+ true, 'PostgREST computed viewing field resolves through row notation');
+
+select is((select count(*)::integer from information_schema.columns
+ where table_schema='public' and table_name='apartments'
+   and column_name='rental_can_request_viewing'),
+ 0, 'viewing eligibility remains a virtual computed field, not a physical column');
 
 insert into public.rental_listing_images (listing_id,storage_path,rights_status,sort_order)
 values(current_setting('mde.san1502_phase_fixture')::uuid,'phase-a/fixture.jpg','unverified',1);
