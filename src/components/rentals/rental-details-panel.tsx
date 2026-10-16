@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { Building2, Calendar, ExternalLink, MapPin, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +94,15 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
   return (
     <div className="space-y-4">
       <PhotoCarousel rental={rental} />
+      {rental.photo_count != null && rental.photo_count > photosOf(rental).length ? (
+        <Link
+          href={`/rentals/${rental.id}`}
+          data-testid="rental-details-all-photos-link"
+          className="block text-xs font-medium text-primary underline-offset-2 hover:underline"
+        >
+          Showing {photosOf(rental).length} of {rental.photo_count} photos — see all photos
+        </Link>
+      ) : null}
 
       <div>
         <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
