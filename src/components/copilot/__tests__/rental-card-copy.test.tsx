@@ -124,3 +124,22 @@ describe("external source rental cards", () => {
     expect(html).not.toContain("Schedule viewing");
   });
 });
+
+// SAN-1503 — WE Home rents for COP 14,500,000 a month. Its "nightly" figure is only rent ÷ 30, so the
+// chat card must lead with the monthly rent and not offer "COP 483,333/night".
+describe("SAN-1503 rental card shows the stored monthly rent, not a derived nightly price", () => {
+  const base = { id: "r1", listingId: "a1", title: "WE Home", neighborhood: "El Poblado", bedrooms: 2, onSelect: () => undefined };
+
+  it("hides the derived nightly label when a monthly rent is stored", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...base} nightly_price={483333} price_monthly={14500000} currency="COP" />,
+    );
+    expect(html).toContain("COP 14,500,000/mo");
+    expect(html).not.toContain("/night");
+  });
+
+  it("still shows the nightly price when the listing has no monthly rent", () => {
+    const html = renderToStaticMarkup(<RentalCard {...base} nightly_price={75} />);
+    expect(html).toContain("$75/night");
+  });
+});
