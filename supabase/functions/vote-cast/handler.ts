@@ -110,14 +110,43 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
     }
     const { contest_id, entity_id, nonce, turnstile_token, fingerprint, idempotency_key } = body;
 
-    const turnstile = await deps.verifyTurnstile(turnstile_token, ip);
-    if (turnstile === "misconfigured") return err(503, "TURNSTILE_UNAVAILABLE", "Bot protection is not configured", req);
-    if (turnstile === "unavailable") return err(503, "TURNSTILE_UNAVAILABLE", "Bot protection is temporarily unavailable", req);
-    if (turnstile !== "ok") return err(403, "TURNSTILE_FAILED", "Bot challenge failed", req);
-
     // Resolve the identity first so the nonce is bound to this exact account.
     const userId = authHeader ? await deps.getUserId(authHeader) : null;
     if (!userId) return err(401, "AUTH_REQUIRED", "Sign in to vote", req);
+
+    // Phase, kind and availability come from the database — the single server-controlled owner.
+    const ctx = await deps.service.rpc("vote_contest_context", { p_contest_id: contest_id });
+    if (ctx.error) {
+      console.error("vote_contest_context error:", ctx.error);
+      return err(500, "VOTE_FAILED", "Failed to load contest", req);
+    }
+    const context = ctx.data as {
+      kind?: string;
+      is_open?: boolean;
+      voting_available?: boolean;
+      application_phase?: string;
+    } | null;
+    if (!context) return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
+    if (context.kind !== "restaurant") return err(409, "NOT_A_RESTAURANT_CONTEST", "Not a restaurant contest", req);
+
+    const phase = context.application_phase;
+    if (phase !== "development" && phase !== "launch") {
+      // Fail closed: an unknown phase must never be treated as development.
+      console.error("vote_contest_context returned no usable phase:", phase);
+      return err(503, "PHASE_UNAVAILABLE", "Voting is temporarily unavailable", req);
+    }
+
+    const votingAvailable = context.voting_available ?? context.is_open ?? false;
+    if (!votingAvailable) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
+
+    // Launch requires bot protection. Development skips Turnstile only (SAN-1498); real auth,
+    // the user-bound nonce, rate limits and one-ballot uniqueness stay enforced in both phases.
+    if (phase === "launch") {
+      const turnstile = await deps.verifyTurnstile(turnstile_token, ip);
+      if (turnstile === "misconfigured") return err(503, "TURNSTILE_UNAVAILABLE", "Bot protection is not configured", req);
+      if (turnstile === "unavailable") return err(503, "TURNSTILE_UNAVAILABLE", "Bot protection is temporarily unavailable", req);
+      if (turnstile !== "ok") return err(403, "TURNSTILE_FAILED", "Bot challenge failed", req);
+    }
 
     const nonceResult = await deps.verifyNonce(nonce, contest_id, userId);
     if (!nonceResult.valid) {
@@ -147,18 +176,6 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
       if (!existing.error && existing.data) return ok(existing.data as Record<string, unknown>, req);
       return err(409, "NONCE_REPLAYED", "This vote link was already used. Refresh the page for a new one.", req);
     }
-
-    const ctx = await deps.service.rpc("vote_contest_context", { p_contest_id: contest_id });
-    if (ctx.error) {
-      console.error("vote_contest_context error:", ctx.error);
-      return err(500, "VOTE_FAILED", "Failed to load contest", req);
-    }
-    const context = ctx.data as { kind?: string; is_open?: boolean; voting_available?: boolean } | null;
-    if (!context) return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
-    if (context.kind !== "restaurant") return err(409, "NOT_A_RESTAURANT_CONTEST", "Not a restaurant contest", req);
-    // The database decides whether voting is available for this phase; launch keeps the gates.
-    const votingAvailable = context.voting_available ?? context.is_open ?? false;
-    if (!votingAvailable) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
 
     const ipHash = await sha256(ip + ":" + dailySalt());
     const cast = await deps.service.rpc("cast_restaurant_vote", {

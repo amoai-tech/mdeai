@@ -32,11 +32,21 @@ function deps(opts: {
   userId?: string | null;
   allowed?: boolean;
   logError?: unknown;
-} = {}): VoteCastDeps {
+  phase?: string | null;
+} = {}): VoteCastDeps & { turnstileCalls: () => number } {
+  const calls = { n: 0 };
   const base: Record<string, RpcFn> = {
     vote_consume_nonce: () => ({ data: true, error: null }),
     vote_receipt: () => ({ data: null, error: null }),
-    vote_contest_context: () => ({ data: { kind: "restaurant", is_open: true }, error: null }),
+    vote_contest_context: () => ({
+      data: {
+        kind: "restaurant",
+        is_open: true,
+        voting_available: true,
+        application_phase: opts.phase === undefined ? "development" : opts.phase,
+      },
+      error: null,
+    }),
     cast_restaurant_vote: () => ({ data: { status: "cast", vote_id: "v1", contest_id: C, entity_id: E }, error: null }),
     vote_tally: () => ({ data: { audience_total: 1, audience_accepted: 0, audience_pending: 1 }, error: null }),
   };
@@ -46,10 +56,11 @@ function deps(opts: {
       rpc: async (name: string, args?: Record<string, unknown>) => rpc[name] ? rpc[name](args ?? {}) : { data: null, error: null },
       from: () => ({ insert: async () => ({ error: opts.logError ?? null }) }),
     },
-    verifyTurnstile: async () => (opts.turnstile ?? "ok") as "ok",
+    verifyTurnstile: async () => { calls.n++; return (opts.turnstile ?? "ok") as "ok"; },
     verifyNonce: async () => (opts.nonce ?? { valid: true, payload: { jti: "jti-1" } }) as { valid: boolean },
     getUserId: async () => (opts.userId === undefined ? USER : opts.userId),
     allowRate: async () => (opts.allowed === false ? { allowed: false, retry_after_seconds: 5 } : { allowed: true, retry_after_seconds: 0 }),
+    turnstileCalls: () => calls.n,
   };
 }
 
@@ -76,7 +87,7 @@ Deno.test("unapproved restaurant -> 409 RESTAURANT_NOT_APPROVED", async () => {
 });
 
 Deno.test("closed contest -> 410 CONTEST_CLOSED", async () => {
-  const r = await call(deps({ rpc: { vote_contest_context: () => ({ data: { kind: "restaurant", is_open: false }, error: null }) } }), makeRequest());
+  const r = await call(deps({ rpc: { vote_contest_context: () => ({ data: { kind: "restaurant", is_open: false, voting_available: false, application_phase: "development" }, error: null }) } }), makeRequest());
   assertEqual(r.status, 410, "status");
   assertEqual(codeOf(r.json), "CONTEST_CLOSED", "code");
 });
@@ -87,15 +98,49 @@ Deno.test("rate limit exceeded -> 429 RATE_LIMITED", async () => {
   assertEqual(codeOf(r.json), "RATE_LIMITED", "code");
 });
 
-Deno.test("turnstile unavailable -> 503", async () => {
-  const r = await call(deps({ turnstile: "unavailable" }), makeRequest());
+Deno.test("launch: turnstile unavailable -> 503", async () => {
+  const r = await call(deps({ phase: "launch", turnstile: "unavailable" }), makeRequest());
   assertEqual(r.status, 503, "status");
   assertEqual(codeOf(r.json), "TURNSTILE_UNAVAILABLE", "code");
 });
 
-Deno.test("turnstile misconfigured -> 503", async () => {
-  const r = await call(deps({ turnstile: "misconfigured" }), makeRequest());
+Deno.test("launch: turnstile misconfigured (missing secret) -> 503", async () => {
+  const r = await call(deps({ phase: "launch", turnstile: "misconfigured" }), makeRequest());
   assertEqual(r.status, 503, "status");
+});
+
+Deno.test("launch: invalid turnstile token -> 403", async () => {
+  const r = await call(deps({ phase: "launch", turnstile: "invalid" }), makeRequest());
+  assertEqual(r.status, 403, "status");
+  assertEqual(codeOf(r.json), "TURNSTILE_FAILED", "code");
+});
+
+Deno.test("launch: valid token votes when otherwise eligible -> 200", async () => {
+  const r = await call(deps({ phase: "launch", turnstile: "ok" }), makeRequest());
+  assertEqual(r.status, 200, "status");
+});
+
+Deno.test("development: Turnstile is never called and voting succeeds -> 200", async () => {
+  const d = deps({ phase: "development" });
+  const r = await call(d, makeRequest());
+  assertEqual(r.status, 200, "status");
+  assertEqual(d.turnstileCalls(), 0, "turnstile must not be called in development");
+});
+
+Deno.test("development: anonymous user -> 401", async () => {
+  const r = await call(deps({ phase: "development", userId: null }), makeRequest({ auth: false }));
+  assertEqual(r.status, 401, "status");
+});
+
+Deno.test("development: invalid nonce -> 403 (nonce still enforced)", async () => {
+  const r = await call(deps({ phase: "development", nonce: { valid: false, reason: "invalid_signature" } }), makeRequest());
+  assertEqual(r.status, 403, "status");
+});
+
+Deno.test("unknown/missing phase -> 503 PHASE_UNAVAILABLE (fail closed)", async () => {
+  const r = await call(deps({ phase: null }), makeRequest());
+  assertEqual(r.status, 503, "status");
+  assertEqual(codeOf(r.json), "PHASE_UNAVAILABLE", "code");
 });
 
 Deno.test("replayed nonce with no committed ballot -> 409 NONCE_REPLAYED", async () => {
