@@ -95,8 +95,76 @@ const STATUS_LABEL_RE = /(?:^|\n)[ \t]*(?:status|merge status)[ \t]*[:=][ \t]*["
 const VERIFICATION_LABEL_RE =
   /(?:^|\n)[ \t]*verification(?:[ \t]+state)?[ \t]*[:=][ \t]*["'`*]*[ \t]*([^\n]*)/i;
 
+const FLATTENED_STATE_FIELD_NAMES = [
+  "Severity",
+  "Technical",
+  "Plain English",
+  "Real-world example",
+  "Fix",
+  "Verify",
+  "Verification state",
+  "Status",
+];
+
+/**
+ * PR-Agent v0.45.0 flattens persistent findings; v0.46.0 preserves line breaks.
+ * Require line-leading fields for modern multiline state and exact bold labels for
+ * historical flattened state; never infer labels from embedded prose.
+ */
+function stateFieldValue(body, label) {
+  const text = String(body ?? "");
+  if (text.includes("\n")) {
+    const prefixes = [label + ":", "**" + label + ":**", "**" + label + "**:"];
+    let fence = null;
+    const matches = [];
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      // A closing fence must use the opener's character and at least its length;
+      // trailing info text is allowed on openers, but never on closers.
+      const run = /^(\x60{3,}|~{3,})(.*)$/.exec(trimmed);
+      if (fence !== null) {
+        if (run && run[1][0] === fence.char && run[1].length >= fence.length && run[2].trim() === "") {
+          fence = null;
+        }
+        continue;
+      }
+      if (run) {
+        fence = { char: run[1][0], length: run[1].length };
+        continue;
+      }
+      const fieldLine = trimmed.replace(/^[-*]\s+/, "");
+      const prefix = prefixes.find((value) => fieldLine.toLowerCase().startsWith(value.toLowerCase()));
+      if (prefix) matches.push(fieldLine.slice(prefix.length).trim());
+    }
+    // Fail closed when there is no label or the model repeats a field.
+    return matches.length === 1 && matches[0].length > 0 ? matches[0] : null;
+  }
+  const lower = text.toLowerCase();
+  const marker = `**${label.toLowerCase()}:**`;
+  const start = lower.indexOf(marker);
+  // A repeated historical label makes the field ambiguous; never credit the first value.
+  if (start < 0 || lower.indexOf(marker, start + marker.length) !== -1) return null;
+
+  const valueStart = start + marker.length;
+  const nextStarts = FLATTENED_STATE_FIELD_NAMES
+    .map((name) => lower.indexOf(`**${name.toLowerCase()}:**`, valueStart))
+    .filter((index) => index >= 0);
+  const valueEnd = nextStarts.length > 0 ? Math.min(...nextStarts) : text.length;
+  const value = text.slice(valueStart, valueEnd).trim();
+  return value.length > 0 ? value : null;
+}
+
+function stateEnumValue(body, label, values) {
+  const raw = stateFieldValue(body, label);
+  if (raw === null) return null;
+  return values.find((value) => raw.toLowerCase() === value.toLowerCase()) ?? null;
+}
+
 /** The declared status, or null when the finding does not declare one. */
-function readStatus(body) {
+function readStatus(body, source = "unknown") {
+  if (source === "state") {
+    return stateEnumValue(body, "Status", ["changes_required", "advisory"])?.toLowerCase() ?? null;
+  }
   const raw = (STATUS_LABEL_RE.exec(body)?.[1] ?? "").trim();
   if (/^changes_required\b/i.test(raw)) return "changes_required";
   if (/^advisory\b/i.test(raw)) return "advisory";
@@ -108,7 +176,12 @@ function readStatus(body) {
  * NEEDS VERIFICATION, not null: a merge gate must fail closed on an ambiguous claim, and
  * "Verification state: NOT VERIFIED" must never be read as proof.
  */
-function readVerification(body) {
+function readVerification(body, source = "unknown") {
+  if (source === "state") {
+    const raw = stateFieldValue(body, "Verification state");
+    if (raw === null) return null;
+    return stateEnumValue(body, "Verification state", ["VERIFIED", "NEEDS VERIFICATION"]) ?? "NEEDS VERIFICATION";
+  }
   const match = VERIFICATION_LABEL_RE.exec(body);
   if (!match) return null;
   const raw = match[1].trim();
@@ -126,9 +199,12 @@ function toFinding(rawBody, meta = {}) {
   return {
     title: firstLine(body),
     body,
-    severity: SEVERITY_LABEL_RE.exec(body)?.[1]?.toUpperCase() ?? null,
-    status: readStatus(body),
-    verification: readVerification(body),
+    severity:
+      meta.source === "state"
+        ? stateEnumValue(body, "Severity", ["BLOCKER", "HIGH", "MEDIUM", "LOW"])?.toUpperCase() ?? null
+        : SEVERITY_LABEL_RE.exec(body)?.[1]?.toUpperCase() ?? null,
+    status: readStatus(body, meta.source),
+    verification: readVerification(body, meta.source),
     hasEvidence: /\bevidence\s*:/i.test(body),
     hasFailureScenario: /\bfailure scenario\s*:/i.test(body),
     state: String(meta.state ?? "").toUpperCase() || null,
@@ -163,8 +239,32 @@ const FINDING_FORMAT_FIELDS = [
 /** Report whether one finding follows MDE's complete eight-field dual-audience review format. */
 export function checkFindingFormat(finding) {
   const body = String(finding?.body ?? "");
-  const present = FINDING_FORMAT_FIELDS.filter(([, pattern]) => pattern.test(body)).map(([name]) => name);
-  const missing = FINDING_FORMAT_FIELDS.map(([name]) => name).filter((name) => !present.includes(name));
+  let present;
+
+  if (finding?.source === "state") {
+    present = FLATTENED_STATE_FIELD_NAMES.filter((name) => {
+      if (name === "Severity") {
+        return stateEnumValue(body, name, ["BLOCKER", "HIGH", "MEDIUM", "LOW"]) !== null;
+      }
+      if (name === "Verification state") {
+        return stateEnumValue(body, name, ["VERIFIED", "NEEDS VERIFICATION"]) !== null;
+      }
+      if (name === "Status") {
+        return stateEnumValue(body, name, ["changes_required", "advisory"]) !== null;
+      }
+      return stateFieldValue(body, name) !== null;
+    });
+  } else {
+    present = FINDING_FORMAT_FIELDS.filter(([name, pattern]) => {
+      if (!pattern.test(body)) return false;
+      if (["Technical", "Plain English", "Real-world example", "Fix", "Verify"].includes(name)) {
+        return stateFieldValue(body, name) !== null;
+      }
+      return true;
+    }).map(([name]) => name);
+  }
+
+  const missing = FLATTENED_STATE_FIELD_NAMES.filter((name) => !present.includes(name));
   return {
     complete: missing.length === 0,
     present,

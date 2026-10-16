@@ -96,6 +96,22 @@ blank line between fields. For example:
 The scorer validates the eight-field contract, not cosmetic Markdown, so older unbolded but complete
 findings remain measurable while the prompt and skill enforce the more readable layout going forward.
 
+Upstream version behavior differs. PR-Agent v0.45.0 normalizes stored finding bodies to a
+single line; PR-Agent v0.46.0 preserves the original line breaks in normalize_finding()
+and normalizes whitespace only for fingerprinting. The scorer supports both:
+plain or bold **line-leading labels** in multiline v0.46 findings, and exact
+**bold-labelled boundaries** in historical flattened v0.45 findings.
+Quoted labels inside prose or fenced code do not count for multiline findings; fences
+close only with the same character, at least the opener's length, and no trailing info text.
+Duplicate line-leading labels and repeated historical bold labels are ambiguous; explanatory
+fields must have nonempty content, and enum fields require one allowed value.
+The exact historical PR #274 review remains a regression fixture.
+
+Versioned upstream source:
+- https://github.com/The-PR-Agent/pr-agent/blob/v0.45.0/pr_agent/algo/review_finding_state.py
+- https://github.com/The-PR-Agent/pr-agent/blob/v0.46.0/pr_agent/algo/review_finding_state.py
+- https://docs.pr-agent.ai/tools/review/
+
 When a credited finding carries its own `Severity`/`Status`, the score reports
 `detectionQuality: "labelled"` — evidence, severity, and verdict all come from that one finding. When
 it does not, the score reports `"unlabelled"`: the evidence still came from one finding, but the
