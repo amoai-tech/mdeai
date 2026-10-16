@@ -3,13 +3,14 @@ import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
 const evidenceBuilder = readFileSync("scripts/pr-agent/build-evidence.mjs", "utf8");
-const sharedSha = "528518ebb0f53a87a3af86d884cf56f6c22be074";
+const sharedSha = "025960729623b90992829c3c5e149a597b8956f8";
 
 describe("IPI-1246 shared PR-Agent caller contract", () => {
   it("pins MDE to the immutable shared workflow", () => {
     expect(workflow).toContain(`amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@${sharedSha}`);
     expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(workflow).toContain("NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}");
+    expect(workflow).toContain("GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}");
   });
 
   it("keeps the caller security boundary explicit", () => {

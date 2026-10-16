@@ -22,8 +22,9 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@528518ebb0f53a87a3af86d884cf56f6c22be074
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@025960729623b90992829c3c5e149a597b8956f8
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
