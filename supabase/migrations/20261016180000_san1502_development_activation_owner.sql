@@ -1,13 +1,17 @@
 -- SAN-1502 · Development activation owner.
 --
--- `_san1502_activate_development_inventory` is the internal implementation (no client
--- access; used by the migration and the admin wrapper). `admin_activate_development_inventory`
--- is the administrator-gated RPC.
+-- One idempotent, development-only operation that makes designated development
+-- inventory fully operable under the MDE development administrator:
+--   * assigns the canonical MDE landlord/operator profile,
+--   * activates and publishes it,
+--   * records operational readiness in metadata (`mde_managed_development`).
 --
--- Both are development-only. They assign the canonical MDE landlord/operator profile,
--- activate and publish designated development inventory, record operational readiness in
--- metadata, and keep `verified = false` (readiness is not independent verification).
--- Explicit test fixtures are never touched; provenance keys are preserved.
+-- Ownership is NEVER taken from another principal: a row is only claimed when it is
+-- unassigned or already owned by the operator. `verified` is not touched here — the
+-- owner-directed development verification flag is owned by 20261016140000.
+--
+-- End users cannot execute it (service_role / migration owner only), and outside the
+-- development phase it is a no-op rather than an error.
 create or replace function public._san1502_activate_development_inventory(p_admin_email text)
 returns integer
 language plpgsql
@@ -21,8 +25,8 @@ declare
   v_changed integer;
 begin
   if not public.rental_development_active() then
-    raise exception 'development activation is only allowed in the development phase'
-      using errcode = '42501';
+    raise notice 'development activation skipped: phase is not development';
+    return 0;
   end if;
   if v_email = '' then
     raise exception 'administrator email required' using errcode = '22023';
@@ -44,13 +48,6 @@ begin
     return 0;
   end if;
 
-  -- Note: `verified` is deliberately NOT touched here. The owner-directed development
-  -- verification flag is owned by the SAN-1502 operator migration; activation is an
-  -- operational state and must not silently revert or assert verification either way.
-  -- Only designated development inventory, unassigned records, and rows already owned
-  -- by this operator are touched. Ownership is NEVER taken from another principal, so a
-  -- shared or copied environment cannot have unrelated inventory reassigned. Explicit
-  -- test fixtures are excluded and never published.
   update public.apartments a
      set landlord_id = v_profile,
          status = 'active',
@@ -70,35 +67,29 @@ begin
               )
    where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true'
      and (
-       a.landlord_id is null
-       or a.landlord_id = v_profile
-       or a.slug like 'candidate-%'
+       a.slug like 'candidate-%'
        or a.slug like 'external-%'
        or lower(coalesce(a.metadata->>'inventory_kind', '')) = 'mde_managed'
+       or a.landlord_id = v_profile
+     )
+     -- Never claim a record that belongs to another principal.
+     and (a.landlord_id is null or a.landlord_id = v_profile)
+     -- Idempotent: skip rows already active/owned/marked, so repeat runs do not rewrite
+     -- the update or audit timestamps.
+     and (
+       a.status <> 'active'
+       or a.moderation_status <> 'approved'
+       or a.listing_workflow_status <> 'published'
+       or a.landlord_id is distinct from v_profile
+       or coalesce(a.metadata->>'mde_managed_development', '') <> 'true'
      );
   get diagnostics v_changed = row_count;
   return v_changed;
 end
 $fn$;
 
--- Internal implementation: no client roles may call it directly.
+-- Internal operation: no end-user role may execute it.
 revoke all on function public._san1502_activate_development_inventory(text)
   from public, anon, authenticated;
-
-create or replace function public.admin_activate_development_inventory(p_admin_email text)
-returns integer
-language plpgsql
-security definer
-set search_path = ''
-as $admin$
-begin
-  if not public.is_admin() then
-    raise exception 'administrator required' using errcode = '42501';
-  end if;
-  return public._san1502_activate_development_inventory(p_admin_email);
-end
-$admin$;
-
-revoke all on function public.admin_activate_development_inventory(text) from public, anon;
-grant execute on function public.admin_activate_development_inventory(text)
-  to authenticated, service_role;
+grant execute on function public._san1502_activate_development_inventory(text)
+  to service_role;

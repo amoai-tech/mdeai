@@ -1,15 +1,16 @@
 -- SAN-1502 · Development activation: designated inventory becomes fully operable under
--- the MDE administrator, never touches test fixtures, and never silently asserts OR reverts
--- the owner-directed development verification flag.
+-- the MDE administrator; test fixtures and other landlords' records are never touched;
+-- the flag is never silently asserted or reverted; and end users cannot call it.
 begin;
-select plan(11);
+select plan(13);
 
 insert into auth.users (id,instance_id,aud,role,email) values
  ('f1509000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','dev-owner-san1502@example.com'),
  ('f1509000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','outsider-san1502@example.com');
 insert into public.user_roles(user_id,role) values ('f1509000-0000-4000-8000-000000000001','admin');
-insert into public.landlord_profiles(id,user_id,display_name)
-values ('f1509000-0000-4000-8000-000000000011','f1509000-0000-4000-8000-000000000001','MDE Dev Owner');
+insert into public.landlord_profiles(id,user_id,display_name) values
+ ('f1509000-0000-4000-8000-000000000011','f1509000-0000-4000-8000-000000000001','MDE Dev Owner'),
+ ('f1509000-0000-4000-8000-000000000012','f1509000-0000-4000-8000-000000000002','Other Landlord');
 
 insert into public.apartments (id,title,neighborhood,slug,status,moderation_status,
  listing_workflow_status,verified,metadata,landlord_id)
@@ -23,6 +24,9 @@ values
  ('f1509000-0000-4000-8000-000000000024','External staged candidate','Envigado',
   'external-san1502-qa','inactive','pending','draft',false,
   '{"inventory_kind":"external_candidate"}'::jsonb,null),
+ ('f1509000-0000-4000-8000-000000000025','Another landlord candidate','Laureles',
+  'candidate-other-qa','inactive','pending','draft',false,
+  '{}'::jsonb,'f1509000-0000-4000-8000-000000000012'),
  ('f1509000-0000-4000-8000-000000000023','Explicit test fixture','Laureles',
   'san1502-fixture-qa','inactive','pending','draft',false,
   '{"is_test_fixture":"true","inventory_kind":"test_fixture"}'::jsonb,null);
@@ -34,7 +38,7 @@ select is((select count(*)::int from public.apartments where slug='candidate-san
   and listing_workflow_status='published'), 1, 'imported candidate is activated and published');
 select is((select count(*)::int from public.apartments where slug='candidate-san1502-qa'
   and landlord_id='f1509000-0000-4000-8000-000000000011'::uuid), 1,
-  'imported candidate is owned by the MDE administrator profile');
+  'unassigned candidate is owned by the MDE administrator profile');
 select is((select verified from public.apartments where slug='candidate-san1502-qa'), true,
   'activation never silently reverts the owner-directed development verification flag');
 select is((select metadata->>'mde_managed_development' from public.apartments
@@ -48,23 +52,22 @@ select is((select status||'/'||moderation_status||'/'||listing_workflow_status
 select is((select status||'/'||moderation_status||'/'||listing_workflow_status
   from public.apartments where slug='external-san1502-qa'), 'active/approved/published',
   'a staged external candidate is activated and published');
+select is((select landlord_id::text||'/'||status||'/'||moderation_status||'/'||listing_workflow_status
+  from public.apartments where slug='candidate-other-qa'),
+  'f1509000-0000-4000-8000-000000000012/inactive/pending/draft',
+  'a candidate owned by another landlord is never reassigned or activated');
 select is(public._san1502_activate_development_inventory('nobody-san1502@example.com'), 0,
   'an unknown administrator is a safe no-op');
-
-set local role authenticated;
-select set_config('request.jwt.claims',
- '{"sub":"f1509000-0000-4000-8000-000000000002","role":"authenticated"}', true);
-select throws_ok(
- $q$select public.admin_activate_development_inventory('dev-owner-san1502@example.com')$q$,
- '42501', 'administrator required', 'a non-administrator cannot activate development inventory');
-reset role;
-select set_config('request.jwt.claims','{}',true);
+select is(has_function_privilege('authenticated',
+  'public._san1502_activate_development_inventory(text)', 'execute'), false,
+  'an end-user role cannot execute the activation function');
+select is(has_function_privilege('service_role',
+  'public._san1502_activate_development_inventory(text)', 'execute'), true,
+  'service_role retains execute for the admin console');
 
 update public.rental_runtime_settings set phase='launch',changed_at=now() where singleton;
-select throws_ok(
- $q$select public._san1502_activate_development_inventory('dev-owner-san1502@example.com')$q$,
- '42501', 'development activation is only allowed in the development phase',
- 'activation is refused outside the development phase');
+select is(public._san1502_activate_development_inventory('dev-owner-san1502@example.com'), 0,
+  'outside the development phase activation is a no-op, not an error');
 
 select * from finish();
 rollback;

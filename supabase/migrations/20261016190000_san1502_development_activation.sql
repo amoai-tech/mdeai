@@ -1,19 +1,21 @@
 -- SAN-1502 · Phase A: activate designated development inventory under the MDE
--- development administrator, without claiming real-world verification.
+-- development administrator.
 --
--- Imported development listings (the Fincaraíz/Rentberry candidates and the
--- MDE-managed imports) must be fully operable for Phase A testing, and 19 of them
--- currently carry `verified = true`, which asserts verification that never happened.
--- `verified` stays `false`; operational readiness is recorded in metadata instead.
+-- `verified` is NOT changed here. The owner directed full development access, and
+-- 20261016140000 ("give the MDE AI development operator full rights and verify the 19
+-- test listings") sets `verified = true` for the live development batch as a
+-- development-phase operational flag. This migration records operational readiness in
+-- metadata (`mde_managed_development`) instead of touching that flag.
 --
--- Development-only, idempotent, and a no-op on any environment without the account.
--- Provenance (`source_*`) is preserved; nothing here is asserted as launch truth.
+-- Development-only and idempotent: outside the development phase it is a no-op with a
+-- notice, so it can never abort a `db push`.
 do $activation$
 declare
   v_changed integer;
 begin
   if not public.rental_development_active() then
-    raise exception 'SAN-1502 development activation is only allowed during development';
+    raise notice 'SAN-1502: phase is not development; activation skipped';
+    return;
   end if;
   select public._san1502_activate_development_inventory('ai@socialmediaville.ca') into v_changed;
   raise notice 'SAN-1502: % designated development listing(s) activated', v_changed;
