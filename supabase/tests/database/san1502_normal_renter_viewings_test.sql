@@ -1,7 +1,7 @@
 -- SAN-1502: real normal booking works before external approval paperwork.
 -- This test is rollback-only; no rows remain after pgTAP completes.
 begin;
-select plan(8);
+select plan(12);
 
 insert into auth.users (id,instance_id,aud,role,email)
 values
@@ -60,6 +60,30 @@ select lives_ok(
 select is((select count(*)::int from public.showings
   where apartment_id=current_setting('mde.san1502_booking_fixture')::uuid),1,
   'retry did not create another showing');
+
+-- UPDATEs that keep the booking identity are normal status bookkeeping.
+select lives_ok(
+ $q$update public.leads set user_id = user_id
+    where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
+ 'unchanged lead identity is not blocked by the development fixture guard');
+select lives_ok(
+ $q$update public.showings set lead_id = lead_id
+    where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
+ 'unchanged showing identity is not blocked');
+
+-- An identity edit has to pass the same fixture authorization rule.
+select throws_ok(
+ $q$update public.leads
+    set user_id = 'f1505000-0000-4000-8000-000000000003'
+    where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
+ '42501', 'development rental viewing requires an authorized renter',
+ 'lead renter reassignment to an ungranted actor is denied');
+select throws_ok(
+ $q$update public.showings
+    set lead_id = 'f1505000-0000-4000-8000-000000000099'
+    where apartment_id = current_setting('mde.san1502_booking_fixture')::uuid$q$,
+ '42501', 'development rental viewing requires an authorized renter',
+ 'showing lead reassignment without authorized matching lead is denied');
 
 select throws_ok(
  $q$select public.p1_schedule_tour_atomic(
