@@ -42,7 +42,7 @@ afterEach(() => {
   container.remove();
 });
 
-const mount = (onInputChange: (v: string) => void) =>
+const mount = (onInputChange?: (v: string) => void) =>
   act(() => root.render(<ConciergeChatView onInputChange={onInputChange} />));
 
 describe("restoring a stashed question after sign-in", () => {
@@ -62,6 +62,18 @@ describe("restoring a stashed question after sign-in", () => {
     mount(onInputChange);
     expect(onInputChange).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem("mde.concierge.draft")).not.toBeNull();
+  });
+
+  it("does not consume a draft until the composer setter is available", () => {
+    stashConciergeDraft("Editable draft survives delayed composer");
+    session.user = { id: "u1" };
+    mount(undefined);
+    expect(window.sessionStorage.getItem("mde.concierge.draft")).not.toBeNull();
+
+    const onInputChange = vi.fn();
+    mount(onInputChange);
+    expect(onInputChange).toHaveBeenCalledExactlyOnceWith("Editable draft survives delayed composer");
+    expect(window.sessionStorage.getItem("mde.concierge.draft")).toBeNull();
   });
 
   it("does nothing when there is no stashed question", () => {

@@ -141,13 +141,15 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
     [publishOrQueue],
   );
 
-  const showSignInPrompt = useCallback(
-    (userText: string) => {
-      showExchange(userText, "");
-      setSignInPrompt(true);
-    },
-    [showExchange],
-  );
+  const showSignInPrompt = useCallback((userText: string) => {
+    // This is a guest-only display message, not part of an authenticated AG-UI thread.
+    // Do not call showExchange: it publishes/queues messages into the CopilotKit agent,
+    // which could later be attached to a signed-in user's thread.
+    setClarifyPending(false);
+    setClarifyKind(null);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: userText }]);
+    setSignInPrompt(true);
+  }, []);
 
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];

@@ -123,9 +123,9 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
   const { user } = useSession();
   const setComposerText = props.onInputChange;
   useEffect(() => {
-    if (!user) return;
+    if (!user || !setComposerText) return;
     const draft = takeConciergeDraft();
-    if (draft) setComposerText?.(draft);
+    if (draft) setComposerText(draft);
   }, [user, setComposerText]);
 
   return (
