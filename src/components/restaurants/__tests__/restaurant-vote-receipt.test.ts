@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { parseReceipt } from "../restaurant-vote-panel";
+import { nextIdempotencyKey, parseReceipt } from "../restaurant-vote-panel";
 
 const CONTEST = "11111111-1111-1111-1111-111111111111";
 const ENTITY = "22222222-2222-2222-2222-222222222222";
 const VOTE = "33333333-3333-3333-3333-333333333333";
 const target = { contestId: CONTEST, entityId: ENTITY };
+
+describe("nextIdempotencyKey", () => {
+  it("reuses the stored key so a reload recovers the same ballot", () => {
+    const stored = "33333333-3333-3333-3333-333333333333";
+    expect(nextIdempotencyKey(stored)).toBe(stored);
+  });
+
+  it("mints a new key only when nothing usable is stored", () => {
+    expect(nextIdempotencyKey(null)).not.toBeNull();
+    expect(nextIdempotencyKey("not-a-uuid")).not.toBe("not-a-uuid");
+  });
+});
 
 describe("parseReceipt", () => {
   it("refuses a receipt with no status instead of claiming cast", () => {

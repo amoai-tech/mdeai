@@ -26,6 +26,15 @@ type VoteResponse = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECEIPT_STATUSES = new Set(["cast", "replayed", "already_voted"]);
 
+/**
+ * Reuse the stored idempotency key; mint a new one ONLY when there is nothing to recover.
+ * A reload must therefore send the original key, so vote-cast can return the committed
+ * ballot instead of treating the request as a new vote.
+ */
+export function nextIdempotencyKey(existing: string | null): string {
+  return existing && UUID_RE.test(existing) ? existing : crypto.randomUUID();
+}
+
 export function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | null {
   const data = body.data;
   if (!data || !data.vote_id || !UUID_RE.test(data.vote_id)) return null;
@@ -116,7 +125,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       const target = voteTarget;
       const storageKey = "mde:restaurant-vote:" + target.contestId + ":" + target.entityId + ":" + session.user.id;
       const existingKey = window.localStorage.getItem(storageKey);
-      const idempotencyKey = existingKey && UUID_RE.test(existingKey) ? existingKey : crypto.randomUUID();
+      const idempotencyKey = nextIdempotencyKey(existingKey);
       // Persist before sending: recover after lost response, navigation, or reload.
       window.localStorage.setItem(storageKey, idempotencyKey);
       const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token };
