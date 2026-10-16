@@ -31,18 +31,25 @@ interface Props {
 // skipcq: JS-0067 - Next.js App Router metadata export; not browser global scope
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
+  let detail: Awaited<ReturnType<typeof getRentalDetail>> | null = null;
   try {
     const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
     // SAN-1502 PR2: read Details with the caller's own RLS-governed client.
     const supabase = preview ? null : await createClient();
-    const detail = preview
+    detail = preview
       ? await getLocalPreviewDetail(id)
       : await getRentalDetail(id, supabase ? { client: supabase } : undefined);
-    if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
-    /* fall through to default */
+    // The database could not be read: keep the default title. The page itself shows the outage.
+    return { title: "Rental · mdeai" };
   }
-  return { title: "Rental · mdeai" };
+  // SAN-1503: a listing that does not exist (or is not public) must answer HTTP 404. This sits OUTSIDE
+  // the try/catch on purpose: notFound() works by throwing, and the catch above would swallow it.
+  // It is a backstop; the status is decided by there being no `loading.tsx` above this route
+  // (see the layout guard in __tests__/page.test.tsx) because Next.js sends 200 once a loading
+  // boundary starts streaming: https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes
+  if (!detail) notFound();
+  return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
 }
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page `/rentals/[id]`. */
