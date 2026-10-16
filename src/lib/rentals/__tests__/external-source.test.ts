@@ -20,6 +20,19 @@ describe("approvedExternalSourceUrl — external-source allowlist (SAN-1502)", (
     expect(approvedExternalSourceUrl("https://fincaraiz.com.co.evil.example.com/x")).toBeNull();
   });
 
+  it("rejects embedded credentials that would make the approved host look safe", () => {
+    // `new URL()` reports hostname fincaraiz.com.co while carrying "attacker" as the username.
+    expect(approvedExternalSourceUrl("https://attacker@fincaraiz.com.co/phishing")).toBeNull();
+    expect(approvedExternalSourceUrl("https://user:pass@www.fincaraiz.com.co/x")).toBeNull();
+  });
+
+  it("rejects an approved host on a non-default port", () => {
+    expect(approvedExternalSourceUrl("https://fincaraiz.com.co:8443/x")).toBeNull();
+    expect(approvedExternalSourceUrl("https://fincaraiz.com.co:443/x")).toBe(
+      "https://fincaraiz.com.co/x",
+    );
+  });
+
   it("rejects non-HTTPS, MDE's own hosts, blanks and junk", () => {
     expect(approvedExternalSourceUrl("http://www.fincaraiz.com.co/property/123")).toBeNull();
     expect(approvedExternalSourceUrl("https://mdeai.co/rentals/x")).toBeNull();

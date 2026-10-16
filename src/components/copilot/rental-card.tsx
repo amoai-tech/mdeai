@@ -77,6 +77,9 @@ export function RentalCard({
     price_monthly,
     currency,
   );
+  // SAN-1502: the validated, normalized URL is BOTH the guard and the destination. Rendering the
+  // raw `source_url` would let the checked value and the linked value differ.
+  const externalSourceUrl = approvedExternalSourceUrl(source_url);
   const benefits = rentalBenefitBadges({
     id,
     title,
@@ -249,9 +252,9 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
-        {tags?.includes("external-source") && approvedExternalSourceUrl(source_url) ? (
+        {tags?.includes("external-source") && externalSourceUrl ? (
           <a
-            href={source_url}
+            href={externalSourceUrl}
             target="_blank"
             rel="nofollow noopener noreferrer"
             data-testid="rental-original-listing-cta"

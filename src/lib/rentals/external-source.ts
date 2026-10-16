@@ -29,6 +29,12 @@ export function approvedExternalSourceUrl(value: string | null | undefined): str
     return null;
   }
   if (url.protocol !== "https:") return null;
+  // Reject embedded credentials. `new URL("https://attacker@fincaraiz.com.co/x")` reports the
+  // approved hostname while carrying "attacker" as a username, so a link could look like the
+  // approved advertiser and still send credentials to an attacker-controlled account.
+  if (url.username !== "" || url.password !== "") return null;
+  // An approved advertiser is only ever reached on the default HTTPS port.
+  if (url.port !== "" && url.port !== "443") return null;
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
   const approved = APPROVED_EXTERNAL_SOURCE_HOSTS.some(
     (domain) => host === domain || host.endsWith(`.${domain}`),
