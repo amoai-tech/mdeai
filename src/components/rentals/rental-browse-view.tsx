@@ -20,6 +20,7 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
+import { RENTAL_RESULTS_GRID } from "@/lib/rentals/browse-grid";
 import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { buildRentalsUrl, rentalsQueryString } from "@/lib/rentals/browse-filters";
@@ -190,7 +191,7 @@ function RentalBrowseViewInner({
 
           {!error && !dateError && results.length > 0 ? (
             <div
-              className="grid gap-4 sm:grid-cols-2"
+              className={RENTAL_RESULTS_GRID}
               aria-label={`${results.length} rentals`}
               data-testid="rentals-grid"
             >
