@@ -10,6 +10,11 @@ const searchRentals = vi.fn();
 vi.mock("@/mastra/tools/search-rentals", () => ({
   searchRentals: (...args: unknown[]) => searchRentals(...args),
 }));
+const createServerClient = vi.fn();
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: (...args: unknown[]) => createServerClient(...args),
+}));
 vi.mock("@/lib/api-ip-rate-limit", () => ({
   checkSearchFastPathRateLimit: () => null,
 }));
@@ -26,6 +31,7 @@ function post(body: unknown): Request {
 
 beforeEach(() => {
   searchRentals.mockReset();
+  createServerClient.mockReset().mockResolvedValue({});
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -49,6 +55,7 @@ describe("POST /api/rentals/search", () => {
     expect(json.budgetNote).toBe(budgetNote);
     expect(searchRentals).toHaveBeenCalledWith(
       expect.objectContaining({ maxPricePerNight: 80 }),
+      expect.objectContaining({ client: expect.anything() }),
     );
   });
 
@@ -88,7 +95,10 @@ describe("POST /api/rentals/search", () => {
       searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
       const res = await POST(post({ limit: 8, checkIn: "2026-11-01", checkOut: "2026-11-30" }));
       expect(res.status).toBe(200);
-      expect(searchRentals).toHaveBeenCalledWith(expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30" }));
+      expect(searchRentals).toHaveBeenCalledWith(
+        expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30" }),
+        expect.objectContaining({ client: expect.anything() }),
+      );
     });
   });
 });

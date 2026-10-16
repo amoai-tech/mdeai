@@ -12,6 +12,11 @@ const getRentalDetail = vi.fn();
 vi.mock("@/lib/rentals/get-rental-detail", () => ({
   getRentalDetail: (...args: unknown[]) => getRentalDetail(...args),
 }));
+const createServerClient = vi.fn();
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: (...args: unknown[]) => createServerClient(...args),
+}));
 vi.mock("@/components/rentals/rental-detail-view", () => ({
   RentalDetailView: () => null,
 }));
@@ -40,6 +45,7 @@ async function render(id = "rnt_lau_001", searchParams?: Record<string, string>)
 
 beforeEach(() => {
   getRentalDetail.mockReset();
+  createServerClient.mockReset().mockResolvedValue({});
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 

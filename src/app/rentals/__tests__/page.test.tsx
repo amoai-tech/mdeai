@@ -12,6 +12,11 @@ const searchRentals = vi.fn();
 vi.mock("@/mastra/tools/search-rentals", () => ({
   searchRentals: (...args: unknown[]) => searchRentals(...args),
 }));
+const createServerClient = vi.fn();
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: (...args: unknown[]) => createServerClient(...args),
+}));
 vi.mock("@/components/rentals/rental-browse-view", () => ({
   RentalBrowseView: () => null,
 }));
@@ -37,6 +42,7 @@ async function render(params: Record<string, string>) {
 
 beforeEach(() => {
   searchRentals.mockReset();
+  createServerClient.mockReset().mockResolvedValue({});
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -77,7 +83,10 @@ describe("/rentals page", () => {
     it("forwards a real stay to the search as checkIn/checkOut and echoes it to the view", async () => {
       searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
       const props = await render({ from: "2026-11-01", through: "2026-11-30", neighborhood: "Laureles" });
-      expect(searchRentals).toHaveBeenCalledWith(expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30", neighborhood: "Laureles" }));
+      expect(searchRentals).toHaveBeenCalledWith(
+        expect.objectContaining({ checkIn: "2026-11-01", checkOut: "2026-11-30", neighborhood: "Laureles" }),
+        expect.objectContaining({ client: expect.anything() }),
+      );
       expect(props).toMatchObject({ from: "2026-11-01", through: "2026-11-30", dateError: null });
     });
 

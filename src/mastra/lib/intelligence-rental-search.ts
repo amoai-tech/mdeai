@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { applyAvailabilityFilters } from "@/lib/rentals/availability-filter";
 import { RentalSearchUnavailableError } from "./rental-search-unavailable";
@@ -114,8 +114,12 @@ function rentalSignalBoost(slots: RentalIntelligenceSlots, s: RentalSignalRow): 
   return boost;
 }
 
+/** SAN-1502 PR2: optional per-request, RLS-governed client. */
+export type IntelligenceSearchOptions = { client?: SupabaseClient | null };
+
 export async function searchRentalsIntelligent(
   query: RentalQuery & { queryText?: string },
+  options?: IntelligenceSearchOptions,
 ): Promise<{
   results: IntelligenceRentalResult[];
   total: number;
@@ -132,7 +136,7 @@ export async function searchRentalsIntelligent(
   const slots = queryText ? parseRentalIntelligenceSlots(queryText) : {};
   const neighborhood = query.neighborhood ?? slots.neighborhood;
   const rankExplanation: RankExplanationEntry[] = [];
-  const client = getAnonClient();
+  const client = options?.client ?? getAnonClient();
 
   if (!client) {
     // SAN-1089: a missing client is an outage, not an empty marketplace. It used to return

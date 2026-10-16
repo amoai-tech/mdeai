@@ -7,6 +7,7 @@ import {
   isRentalSearchUnavailable,
 } from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals } from "@/mastra/tools/search-rentals";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,9 @@ export async function POST(req: Request) {
 
   const { neighborhood, minBedrooms, maxPricePerNight, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
   try {
+    // SAN-1502 PR2: the caller's own RLS-governed client, so an authorized test
+    // actor's results include published development fixtures and no one else's do.
+    const supabase = await createClient();
     const {
       results,
       total,
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
       checkIn,
       checkOut,
       stayType,
-    });
+    }, { client: supabase });
     return NextResponse.json({
       results,
       total,

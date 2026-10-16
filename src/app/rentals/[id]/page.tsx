@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getRentalDetail } from "@/lib/rentals/get-rental-detail";
+import { createClient } from "@/lib/supabase/server";
 import {
   describeRentalSearchError,
   isRentalSearchUnavailable,
@@ -32,7 +33,11 @@ export async function generateMetadata({ params }: Props) {
   const { id } = await params;
   try {
     const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
-    const detail = preview ? await getLocalPreviewDetail(id) : await getRentalDetail(id);
+    // SAN-1502 PR2: read Details with the caller's own RLS-governed client.
+    const supabase = preview ? null : await createClient();
+    const detail = preview
+      ? await getLocalPreviewDetail(id)
+      : await getRentalDetail(id, supabase ? { client: supabase } : undefined);
     if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
     /* fall through to default */
@@ -50,7 +55,11 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
 
   let detail;
   try {
-    detail = preview ? await getLocalPreviewDetail(id) : await getRentalDetail(id);
+    // SAN-1502 PR2: read Details with the caller's own RLS-governed client.
+    const supabase = preview ? null : await createClient();
+    detail = preview
+      ? await getLocalPreviewDetail(id)
+      : await getRentalDetail(id, supabase ? { client: supabase } : undefined);
   } catch (err) {
     console.error("[/rentals/[id]] load failed:", describeRentalSearchError(err));
     const unavailable = isRentalSearchUnavailable(err);

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { isRentalRequestable } from "@/mastra/tools/search-rentals";
@@ -129,8 +129,11 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
  * RentalSearchUnavailableError; there are no demo detail pages (SAN-1089).
  */
 // skipcq: JS-0067, JS-R1005 - ES module export; intentional db-path + mock-fallback branching, not a bug
-export async function getRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
-  const client = getClient();
+export async function getRentalDetail(
+  idOrSlug: string,
+  options?: { client?: SupabaseClient | null },
+): Promise<RentalDetail | null> {
+  const client = options?.client ?? getClient();
   if (!client) {
     // SAN-1089: no demo detail pages. The page renders its "couldn't load" state for this.
     throw new RentalSearchUnavailableError("client_unavailable");

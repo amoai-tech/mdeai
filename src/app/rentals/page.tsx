@@ -1,6 +1,7 @@
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
 import { describeRentalSearchError } from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals, type Rental } from "@/mastra/tools/search-rentals";
+import { createClient } from "@/lib/supabase/server";
 import { parseBrowseFilters, type RentalBrowseSearchParams } from "@/lib/rentals/browse-filters";
 
 interface Props {
@@ -29,6 +30,10 @@ export default async function RentalsPage({ searchParams }: Props) {
     try {
       const minBedrooms = filters.beds != null ? parseInt(filters.beds, 10) : undefined;
 
+      // SAN-1502 PR2: search with the caller's own RLS-governed client, so an
+      // authorized test actor also sees published development fixtures.
+      const supabase = await createClient();
+
       // No price cap is sent. The old USD/night chips compared a nightly dollar figure with
       // monthly-COP stock; SAN-386 owns the validated amount + currency + period budget.
       const data = await searchRentals({
@@ -37,7 +42,7 @@ export default async function RentalsPage({ searchParams }: Props) {
         checkIn: filters.from ?? undefined,
         checkOut: filters.through ?? undefined,
         limit: 24,
-      });
+      }, { client: supabase });
 
       results = data.results;
       total   = data.total;
