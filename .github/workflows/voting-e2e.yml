@@ -4,8 +4,9 @@ name: Restaurant voting E2E
 # is missing (the spec runs with SAN1469_VOTE_E2E=required), so a green run always means a real
 # ballot was persisted and read back from PostgreSQL — never a skipped test.
 #
-# It runs on demand, and on a pull request once the owner enables it with the repository
-# variable SAN1469_VOTE_E2E_ENABLED=true and provisions the secrets it names.
+# It runs on demand, and on pushes to main that touch the voting surface. It deliberately does
+# NOT run on pull requests: the job holds production-wide credentials, so PR code must never
+# execute with them (see the note on the `on:` block).
 
 on:
   # This job holds production-wide Supabase credentials (service-role bypasses RLS), so it must
@@ -22,6 +23,9 @@ on:
       - "src/app/api/restaurants/my-vote/**"
       - "src/lib/restaurants/**"
       - "supabase/functions/vote-*/**"
+      # Migration-only pushes matter: a change that breaks vote.votes must not reach main
+      # without the real ballot journey being exercised at least once.
+      - "supabase/migrations/**"
       - "e2e/san-1469-restaurant-vote.spec.ts"
       - "e2e/helpers/auth.ts"
       - ".github/workflows/voting-e2e.yml"
