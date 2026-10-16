@@ -120,3 +120,4 @@ playwright/.auth/
 # Python bytecode
 __pycache__/
 *.py[cod]
+deno.lock
