@@ -36,6 +36,10 @@ export const conciergeWorkingMemorySchema = z.object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
       maxPricePerNight: z.number().optional(),
+      /** Monthly ceiling in the listing's own currency (e.g. COP 3500000). Never converted. */
+      maxPriceMonthly: z.number().optional(),
+      /** Currency for maxPriceMonthly, e.g. COP. */
+      budgetCurrency: z.string().optional(),
       budgetType: z.enum(['nightly', 'monthly', 'total_trip']).optional(),
       genericAskPending: z.boolean().optional(),
       checkIn: z.string().optional().describe('ISO date YYYY-MM-DD'),
@@ -118,7 +122,14 @@ export const conciergeWorkingMemorySchema = z.object({
  */
 const PADDED_FIELDS = {
   root: ['selectedListingId', 'selectedEventId'],
-  lastRentalQuery: ['neighborhood', 'budgetType', 'checkIn', 'checkOut'],
+  lastRentalQuery: [
+    'neighborhood',
+    'budgetType',
+    'maxPriceMonthly',
+    'budgetCurrency',
+    'checkIn',
+    'checkOut',
+  ],
   lastEventQuery: ['category', 'neighborhood', 'dateWindow'],
   lastRestaurantQuery: ['neighborhood', 'cuisine', 'vibe', 'priceTier'],
 } as const;
@@ -181,10 +192,11 @@ export const conciergeAgent = new Agent({
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType, and for a monthly budget maxPriceMonthly plus budgetCurrency) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- "Show cheaper options" / "más baratos": LOWER the saved budget in the SAME unit and currency. When lastRentalQuery.budgetType is monthly (or maxPriceMonthly is set), reduce maxPriceMonthly and keep budgetCurrency unchanged (e.g. COP 3,500,000 → COP 3,000,000). Never convert it to maxPricePerNight. When the budget was nightly, lower maxPricePerNight instead.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:
@@ -303,8 +315,14 @@ Restaurant listing rules (critical):
 - If the user asks again to show cards after a search, call search-restaurants again — do not answer from memory alone.
 - Reply in at most 2 short sentences: (1) how many matches and which area, (2) optional one short next-action (e.g. "Refine by cuisine", "Show more options") when results exist, or a recovery hint when empty.
 
+# Monthly rental budgets (critical)
+When the renter states a MONTHLY budget (e.g. "under COP 3.5 million per month", "máximo 3 millones mensuales"), call search-rentals with maxPriceMonthly set to that number (3500000) and budgetCurrency set to its currency (COP). Never convert currencies and never compare a monthly budget to a nightly price.
+
+# WhatsApp rentals (when a tool result includes whatsapp_reply)
+Both rules below are web rules. On WhatsApp the tool returns whatsapp_reply: send that text verbatim as your answer — it already lists up to three real eligible listings with their own monthly prices, amenities and links. You may add ONE short follow-up question on a new line, and you must never re-price, re-order or invent a listing.
+
 # Output formatting (events + rentals — UI renders cards)
-After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
+On the web, after search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.

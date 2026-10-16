@@ -1,4 +1,5 @@
 import { createTool } from '@mastra/core/tools';
+import { formatWhatsAppRentalReply } from './whatsapp-rental-reply';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
@@ -411,6 +412,33 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
+/** @internal Mastra key for the channel render context. */
+const CHAT_CHANNEL_RENDER_CONTEXT_KEY = '__mastra_chat_channel_render';
+
+/**
+ * Is this agent run serving WhatsApp?
+ *
+ * A Mastra tool receives `{ requestContext, ... }`; the channel framework stashes a public
+ * `channel` value and an internal render context on that RequestContext. Read both defensively so
+ * a framework shape change degrades to "no WhatsApp reply" rather than a crash, and the
+ * end-to-end test is what catches a rename.
+ */
+export function isWhatsAppRun(context: unknown): boolean {
+  const outer = context as { requestContext?: unknown } | undefined;
+  const requestContext = outer?.requestContext ?? context;
+  const get = (requestContext as { get?: (key: string) => unknown } | undefined)?.get;
+  if (typeof get !== 'function') return false;
+  for (const key of ['channel', CHAT_CHANNEL_RENDER_CONTEXT_KEY]) {
+    const value = get.call(requestContext, key) as
+      | { platform?: unknown; name?: unknown; id?: unknown }
+      | undefined;
+    for (const candidate of [value?.platform, value?.name, value?.id]) {
+      if (typeof candidate === 'string' && candidate.toLowerCase().includes('whatsapp')) return true;
+    }
+  }
+  return false;
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = typeof r.rental_can_request_viewing === 'boolean'
     ? r.rental_can_request_viewing : isRentalRequestable(r);
@@ -661,6 +689,8 @@ export const searchRentalsTool = createTool({
     ),
     source: z.literal('supabase'),
     budgetNote: z.string().optional(),
+    /** A ready-to-send WhatsApp answer built from these exact listings; WhatsApp runs only. */
+    whatsapp_reply: z.string().optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -724,6 +754,9 @@ export const searchRentalsTool = createTool({
       budgetNote,
       hybridUsed,
       rankExplanation,
+      whatsapp_reply: isWhatsAppRun(context)
+        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
+        : undefined,
     };
   },
 });
