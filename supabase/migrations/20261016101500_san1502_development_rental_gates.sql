@@ -1309,3 +1309,34 @@ $enrichment$;
 REVOKE ALL ON FUNCTION public.rental_enrichment_is_readable(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.rental_enrichment_is_readable(uuid)
   TO anon, authenticated, service_role;
+
+-- A developer may create/edit their OWN listing without a landlord/broker
+-- assignment or third-party ownership documents. This is creator-based access,
+-- not a legal-ownership assertion. Keep unrelated tenant writes forbidden.
+DROP POLICY IF EXISTS apartments_insert_broker ON public.apartments;
+CREATE POLICY apartments_insert_broker ON public.apartments
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_admin()
+    OR landlord_id IN (SELECT public.acting_landlord_ids())
+    OR (public.rental_development_active() AND created_by=auth.uid())
+  );
+
+DROP POLICY IF EXISTS apartments_update_broker ON public.apartments;
+CREATE POLICY apartments_update_broker ON public.apartments
+  FOR UPDATE TO authenticated
+  USING (
+    public.is_admin()
+    OR landlord_id IN (SELECT public.acting_landlord_ids())
+    OR (public.rental_development_active() AND created_by=auth.uid())
+  )
+  WITH CHECK (
+    public.is_admin()
+    OR landlord_id IN (SELECT public.acting_landlord_ids())
+    OR (public.rental_development_active() AND created_by=auth.uid())
+  );
+
+DROP POLICY IF EXISTS apartments_select_development_creator ON public.apartments;
+CREATE POLICY apartments_select_development_creator ON public.apartments
+  FOR SELECT TO authenticated
+  USING (public.rental_development_active() AND created_by=auth.uid());
