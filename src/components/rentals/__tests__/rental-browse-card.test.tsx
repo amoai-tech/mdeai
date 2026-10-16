@@ -316,6 +316,30 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
     expect(html).toContain("Source: Fincaraíz");
     expect(html).toContain("View original listing");
   });
+
+  // SAN-1502 Phase A: an imported record activated as MDE-managed development inventory is
+  // presented as an ordinary MDE listing; provenance stays in metadata for pre-launch cleanup.
+  it("treats an activated development import as ordinary MDE-managed inventory", () => {
+    const rental = rowToRental(
+      apartmentRow({
+        id: "candidate-fincaraiz-194104380",
+        slug: "candidate-fincaraiz-194104380",
+        source_url: "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        metadata: {
+          mde_managed_development: true,
+          source_record_type: "third_party_advertisement",
+          source_provider: "Fincaraíz",
+          inventory_kind: "external_candidate",
+        },
+      }),
+    );
+    expect(rental.tags).not.toContain("external-source");
+    expect(rental.source_provider).toBeUndefined();
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).not.toContain("Source: Fincaraíz");
+    expect(html).not.toContain("View original listing");
+    expect(html).toContain("Schedule viewing");
+  });
 });
 
 describe("External rental title navigation", () => {

@@ -32,6 +32,10 @@ export function isUnverifiedExternalSource(metadata: unknown): boolean {
 export function isExternalSourceListing(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
   const meta = metadata as Record<string, unknown>;
+  // SAN-1502 Phase A: an imported record activated as MDE-managed development inventory
+  // is presented as an ordinary MDE listing. Its provenance stays in the source_* keys
+  // for internal traceability and pre-launch cleanup, but it is not shown as external.
+  if (meta.mde_managed_development === true) return false;
   if (meta.source_record_type === "third_party_advertisement") return true;
   return (
     meta.inventory_kind === "external_candidate" ||
