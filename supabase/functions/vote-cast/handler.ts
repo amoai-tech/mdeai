@@ -149,10 +149,12 @@ export function createVoteCastHandler(deps: VoteCastDeps) {
       console.error("vote_contest_context error:", ctx.error);
       return err(500, "VOTE_FAILED", "Failed to load contest", req);
     }
-    const context = ctx.data as { kind?: string; is_open?: boolean } | null;
+    const context = ctx.data as { kind?: string; is_open?: boolean; voting_available?: boolean } | null;
     if (!context) return err(404, "CONTEST_NOT_FOUND", "Contest not found", req);
     if (context.kind !== "restaurant") return err(409, "NOT_A_RESTAURANT_CONTEST", "Not a restaurant contest", req);
-    if (!context.is_open) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
+    // The database decides whether voting is available for this phase; launch keeps the gates.
+    const votingAvailable = context.voting_available ?? context.is_open ?? false;
+    if (!votingAvailable) return err(410, "CONTEST_CLOSED", "This contest is not accepting votes", req);
 
     const ipHash = await sha256(ip + ":" + dailySalt());
     const cast = await deps.service.rpc("cast_restaurant_vote", {

@@ -147,8 +147,6 @@ export async function fetchLiveRestaurants(
   const { data, error } = await supabase
     .from("restaurants")
     .select(RESTAURANT_SELECT)
-    .eq("is_active", true)
-    .gte("rating", 4.3)
     .not("primary_image_url", "is", null)
     .order("rating", { ascending: false, nullsFirst: false })
     .limit(4);
@@ -168,7 +166,6 @@ export async function fetchLiveCafes(
   const { data, error } = await supabase
     .from("restaurants")
     .select(RESTAURANT_SELECT)
-    .eq("is_active", true)
     .not("primary_image_url", "is", null)
     .or(
       `cuisine_types.ov.{${CAFE_CUISINE_TYPES.join(",")}},tags.ov.{${CAFE_TAGS.join(",")}}`,
