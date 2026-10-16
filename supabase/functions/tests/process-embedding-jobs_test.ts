@@ -129,7 +129,7 @@ Deno.test("processEmbeddingBatch — stores a good vector, retries a 429, skips 
         : { ok: true as const, values: vec(EMBED_DIM) },
     );
   const summary = await processEmbeddingBatch(db, "k", 5, embed);
-  assertEquals(summary, { claimed: 4, done: 1, retry: 1, failed: 1, skipped: 1, superseded: 0, lost_lease: 0, unrecorded: 0 });
+  assertEquals(summary, { claimed: 4, done: 1, retry: 1, failed: 1, skipped: 1, superseded: 0, lost_lease: 0, unrecorded: 0, deferred: 0 });
   const completed = calls.filter((c) => c.fn === "complete_embedding_job");
   assertEquals(completed.length, 1);
   assertEquals((completed[0].args.p_values as number[]).length, EMBED_DIM);
@@ -203,7 +203,7 @@ Deno.test("processEmbeddingBatch — a failure that cannot be recorded is counte
 });
 
 Deno.test("statusForSummary — success only when every outcome was recorded", async () => {
-  const base = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0 };
+  const base = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0, deferred: 0 };
   assertEquals(statusForSummary(base), 200);
   assertEquals(statusForSummary({ ...base, failed: 2, retry: 1 }), 200); // recorded failures are normal operation
   assertEquals(statusForSummary({ ...base, unrecorded: 1 }), 502);
@@ -218,4 +218,35 @@ Deno.test("statusForSummary — success only when every outcome was recorded", a
   };
   const summary = await processEmbeddingBatch(broken, "k", 5, () => Promise.resolve({ ok: false as const, retryable: true, reason: "Gemini HTTP 503" }));
   assertEquals(statusForSummary(summary), 502);
+});
+
+Deno.test("processEmbeddingBatch — at the time budget it stops starting jobs and hands the rest back unspent", async () => {
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb(
+    [job("a"), job("b"), job("c")],
+    { "e-a": [{ content_text: "1" }], "e-b": [{ content_text: "2" }], "e-c": [{ content_text: "3" }] },
+    calls,
+  );
+  let clock = 0;
+  // every embed "takes" 60 s of fake time, so the 90 s budget is gone after the second job
+  const embed = () => {
+    clock += 60_000;
+    return Promise.resolve({ ok: true as const, values: vec(EMBED_DIM) });
+  };
+  const summary = await processEmbeddingBatch(db, "k", 5, embed, () => clock, 90_000);
+  assertEquals(summary.done, 2);
+  assertEquals(summary.deferred, 1);
+  assertEquals(summary.retry, 1); // the deferred job went back as a retry...
+  const handedBack = calls.filter((c) => c.fn === "fail_embedding_job");
+  assertEquals(handedBack.length, 1);
+  assertEquals(handedBack[0].args.p_refund_attempt, true); // ...with its attempt refunded
+  assertEquals(statusForSummary(summary), 200); // running out of time is normal, not an error
+});
+
+Deno.test("processEmbeddingBatch — the first job always runs, even with a zero budget", async () => {
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb([job("a"), job("b")], { "e-a": [{ content_text: "1" }], "e-b": [{ content_text: "2" }] }, calls);
+  const summary = await processEmbeddingBatch(db, "k", 5, () => Promise.resolve({ ok: true as const, values: vec(EMBED_DIM) }), () => 0, -1);
+  assertEquals(summary.done, 1);
+  assertEquals(summary.deferred, 1);
 });

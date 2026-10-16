@@ -23,7 +23,15 @@ export type BatchSummary = {
   unrecorded: number;
   /** set when the whole run stopped because of a configuration problem, not a bad record */
   halted?: "gemini_auth";
+  /** claimed jobs handed back unspent because the run reached its time budget (normal, they run next tick) */
+  deferred: number;
 };
+
+/**
+ * Supabase Edge Functions must answer within 150 s (docs: Limits, request idle timeout). A job can take up to
+ * the 20 s Gemini timeout, so stop STARTING new jobs after 90 s: the last one still ends well inside the limit.
+ */
+export const TIME_BUDGET_MS = 90_000;
 
 export class ClaimFailedError extends Error {}
 
@@ -32,8 +40,13 @@ export async function processEmbeddingBatch(
   geminiKey: string,
   rawLimit: unknown,
   embed: (text: string, key: string) => Promise<EmbedOutcome> = embedDocument,
+  now: () => number = Date.now,
+  budgetMs: number = TIME_BUDGET_MS,
 ): Promise<BatchSummary> {
-  const summary: BatchSummary = { claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0 };
+  const started = now();
+  const summary: BatchSummary = {
+    claimed: 0, done: 0, retry: 0, failed: 0, skipped: 0, superseded: 0, lost_lease: 0, unrecorded: 0, deferred: 0,
+  };
   const OUTCOMES = ["done", "retry", "failed", "skipped", "superseded", "lost_lease"] as const;
   const count = (outcome: unknown) => {
     const key = OUTCOMES.find((o) => o === outcome);
@@ -60,6 +73,13 @@ export async function processEmbeddingBatch(
       if (error) summary.unrecorded++;
       else count(data);
     };
+
+    if (index > 0 && now() - started > budgetMs) {
+      // Out of time: give the rest back with their attempt refunded; the next tick picks them up.
+      summary.deferred = claimedJobs.length - index;
+      for (const waiting of claimedJobs.slice(index)) await fail("run time budget reached", true, false, true, waiting);
+      break;
+    }
 
     if (job.model !== EMBED_MODEL || job.dimensions !== EMBED_DIM) {
       await fail(`job asks for ${job.model}/${job.dimensions}, this worker serves ${EMBED_MODEL}/${EMBED_DIM}`, false);
