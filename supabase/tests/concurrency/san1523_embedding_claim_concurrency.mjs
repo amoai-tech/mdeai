@@ -77,6 +77,8 @@ try {
   await b.query("rollback");
 
   // Round 2 — a crashed worker: A claims and commits, then vanishes. Its lease runs out.
+  // Round 1's rolled-back jobs are still pending and equally old, so remove them first or A could claim those.
+  await seed.query("delete from public.embedding_jobs where entity_id = any($1::uuid[])", [entityIds]);
   await insertJobs(secondRoundIds);
   const first = await a.query("select job_id, lease_token, attempts from public.claim_embedding_jobs(2)");
   const heldIds = (

@@ -32,7 +32,7 @@ describe("embedding contract: documents (Edge worker) and queries (Next.js) agre
   });
 
   it("match the model and dimension baked into the database document hash and queue defaults", () => {
-    const sql = read("supabase/migrations/20261016160000_embedding_worker_pipeline.sql");
+    const sql = read("supabase/migrations/20261016210000_embedding_worker_pipeline.sql");
     expect(sql).toContain("gemini-embedding-001:768:v1");
     const queue = read("supabase/migrations/20260601120200_data040_embedding_jobs.sql");
     expect(queue).toContain("DEFAULT 'gemini-embedding-001'");
