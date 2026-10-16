@@ -52,7 +52,7 @@ function VenueCardBody({
   const bodyClass = cn("min-w-0 flex-1", fill && "flex flex-col");
 
   return (
-    <div className={cn("flex gap-3", fill && "flex-1 items-stretch")}>
+    <div className={cn("flex gap-3", layout === "rental" && "flex-col sm:flex-row", fill && "flex-1 items-stretch")}>
       {layout === "standard" ? (
         <>
           {media}
@@ -62,10 +62,10 @@ function VenueCardBody({
         </>
       ) : (
         <>
-          <div className={bodyClass} {...bodyProps}>
+          {media}
+          <div className={cn(bodyClass, "sm:order-first")} {...bodyProps}>
             {children}
           </div>
-          {media}
         </>
       )}
     </div>

@@ -143,3 +143,42 @@ describe("SAN-1503 rental card shows the stored monthly rent, not a derived nigh
     expect(html).toContain("$75/night");
   });
 });
+
+describe("SAN-1505 mobile rental photo presentation", () => {
+  const card = {
+    id: "external-1",
+    listingId: "external-1",
+    title: "Laureles apartment",
+    neighborhood: "Laureles",
+    nightly_price: 0,
+    price_monthly: 3_000_000,
+    currency: "COP",
+    bedrooms: 2,
+    tags: ["external-source", "not-verified"],
+    canScheduleViewing: false,
+  } as const;
+
+  it("displays authorized media on phone width without unlocking Schedule viewing", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        {...card}
+        tags={[...card.tags]}
+        photoUrl="https://example.com/approved-apartment.webp"
+        onSchedule={() => undefined}
+      />,
+    );
+    expect(html).toContain('alt="Laureles apartment rental photo in Laureles"');
+    expect(html).toContain("approved-apartment.webp");
+    expect(html).toMatch(/aspect-\[16\/10\]/);
+    expect(html).not.toMatch(/class="hidden[^"]*"[^>]*>\s*<img/);
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("keeps no-photo mobile cards text-only while retaining the desktop fallback", () => {
+    const html = renderToStaticMarkup(<RentalCard {...card} tags={[...card.tags]} />);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("sm:flex");
+    expect(html).toContain("Photo");
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+});
