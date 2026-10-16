@@ -1,7 +1,7 @@
 "use client";
 
-/** Restaurant detail vote panel (SAN-1469). */
-import { useCallback, useMemo, useState } from "react";
+/** Restaurant contest voting: confirmed user action, durable idempotency, server receipt. */
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -16,95 +16,173 @@ import {
 } from "@/components/ui/dialog";
 
 export type VoteTarget = { contestId: string; entityId: string };
-type Receipt = { voteId: string; createdAt: string | null; status: string };
-type PanelState = "idle" | "confirming" | "casting" | "receipt" | "closed" | "error";
+type Receipt = { voteId: string; createdAt: string | null; status: string; entityId: string };
+type PanelState = "idle" | "checking" | "confirming" | "casting" | "receipt" | "closed" | "error";
+type VoteResponse = {
+  data?: { vote_id?: string; created_at?: string; status?: string; entity_id?: string; contest_id?: string; nonce?: string };
+  error?: { code?: string };
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | null {
+  const data = body.data;
+  if (!data || !data.vote_id || !UUID_RE.test(data.vote_id)) return null;
+  if (data.contest_id !== target.contestId || !data.entity_id || !UUID_RE.test(data.entity_id)) return null;
+  return { voteId: data.vote_id, createdAt: data.created_at ?? null, status: data.status ?? "cast", entityId: data.entity_id };
+}
 
 export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurantName: string; voteTarget: VoteTarget | null }) {
   const router = useRouter();
   const pathname = usePathname();
+  const inFlight = useRef(false);
+  const retryAfter = useRef(0);
   const [state, setState] = useState<PanelState>("idle");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
-  const { url: supabaseUrl, anonKey } = useMemo(() => getSupabaseEnv(), []);
+  const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
+  const goToLogin = useCallback(() => {
+    router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants"));
+  }, [pathname, router]);
+
+  // Store only the idempotency key, not a vote receipt or auth credential.
+  // On reload the server re-reads the committed ballot. This lookup has no nonce
+  // and cannot create a new ballot; vote-cast checks the existing key first.
+  useEffect(() => {
+    if (!voteTarget) return;
+    let active = true;
+    const target = voteTarget;
+    async function recover() {
+      setState("checking");
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        const session = data.session;
+        if (!session) { setState("idle"); return; }
+        const user = session.user;
+        const storageKey = "mde:restaurant-vote:" + target.contestId + ":" + target.entityId + ":" + user.id;
+        const key = window.localStorage.getItem(storageKey);
+        if (!key || !UUID_RE.test(key)) { setState("idle"); return; }
+        const response = await fetch(functionsUrl + "/vote-cast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token },
+          body: JSON.stringify({ contest_id: target.contestId, entity_id: target.entityId, idempotency_key: key }),
+        });
+        const body = (await response.json().catch(() => ({}))) as VoteResponse;
+        if (!active) return;
+        const saved = response.ok ? parseReceipt(body, target) : null;
+        if (saved) { setReceipt(saved); setState("receipt"); return; }
+        if (response.status === 401) { setState("idle"); return; }
+        if (!response.ok && response.status >= 500) {
+          setMessage("Could not check your saved vote. Try again to recover the original receipt.");
+          setState("error");
+          return;
+        }
+        // A pending attempt may not have reached the database. Keep the same key for retry.
+        setState("idle");
+      } catch {
+        if (active) {
+          setMessage("Could not check your saved vote. Reconnect and try again.");
+          setState("error");
+        }
+      }
+    }
+    void recover();
+    return () => { active = false; };
+  }, [anonKey, functionsUrl, voteTarget?.contestId, voteTarget?.entityId]);
 
   const castVote = useCallback(async () => {
-    if (!voteTarget) return;
+    if (!voteTarget || inFlight.current) return;
+    if (Date.now() < retryAfter.current) {
+      setMessage("Please wait before retrying your vote.");
+      setState("error");
+      return;
+    }
+    inFlight.current = true;
     setState("casting");
     setMessage(null);
-    const goToLogin = () => { router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants")); };
-    const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "" };
     try {
       const supabase = createClient();
       const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) { goToLogin(); return; }
-      const authHeaders = { ...headers, Authorization: "Bearer " + token };
+      const session = sessionData.session;
+      if (!session) { goToLogin(); setState("idle"); return; }
+      const target = voteTarget;
+      const storageKey = "mde:restaurant-vote:" + target.contestId + ":" + target.entityId + ":" + session.user.id;
+      const existingKey = window.localStorage.getItem(storageKey);
+      const idempotencyKey = existingKey && UUID_RE.test(existingKey) ? existingKey : crypto.randomUUID();
+      // Persist before sending: recover after lost response, navigation, or reload.
+      window.localStorage.setItem(storageKey, idempotencyKey);
+      const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + session.access_token };
       const nonceRes = await fetch(functionsUrl + "/vote-nonce", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ contest_id: voteTarget.contestId }),
+        method: "POST", headers, body: JSON.stringify({ contest_id: target.contestId }),
       });
-      const nonceJson = (await nonceRes.json().catch(() => ({}))) as { data?: { nonce?: string } };
-      if (nonceRes.status === 401) { goToLogin(); return; }
+      const nonceJson = (await nonceRes.json().catch(() => ({}))) as VoteResponse;
+      if (nonceRes.status === 401) { goToLogin(); setState("idle"); return; }
+      if (nonceRes.status === 410) { setState("closed"); return; }
+      if (nonceRes.status === 429) {
+        const seconds = Math.max(1, Number(nonceRes.headers.get("Retry-After")) || 60);
+        retryAfter.current = Date.now() + seconds * 1000;
+        setMessage("Too many requests. Try again in " + seconds + " seconds.");
+        setState("error"); return;
+      }
       if (!nonceRes.ok || !nonceJson.data?.nonce) {
-        setState("error");
-        setMessage("We could not start your vote. Please try again.");
-        return;
+        setMessage("Could not start your vote. Try again.");
+        setState("error"); return;
       }
       const castRes = await fetch(functionsUrl + "/vote-cast", {
-        method: "POST",
-        headers: authHeaders,
+        method: "POST", headers,
         body: JSON.stringify({
-          contest_id: voteTarget.contestId,
-          entity_id: voteTarget.entityId,
-          nonce: nonceJson.data.nonce,
-          idempotency_key: idempotencyKey,
+          contest_id: target.contestId, entity_id: target.entityId,
+          nonce: nonceJson.data.nonce, idempotency_key: idempotencyKey,
         }),
       });
-      const castJson = (await castRes.json().catch(() => ({}))) as { data?: Record<string, unknown>; error?: { code?: string } };
-      const code = castJson.error?.code ?? "";
-      if (castRes.status === 401) { goToLogin(); return; }
+      const body = (await castRes.json().catch(() => ({}))) as VoteResponse;
+      const code = body.error?.code ?? "";
+      if (castRes.status === 401) { goToLogin(); setState("idle"); return; }
+      const saved = castRes.ok ? parseReceipt(body, target) : null;
+      if (saved) { setReceipt(saved); setState("receipt"); return; }
       if (castRes.status === 410 || code === "CONTEST_CLOSED") { setState("closed"); return; }
-      if (castRes.status === 429 || code === "RATE_LIMITED") {
-        setState("error"); setMessage("Too many attempts. Please wait a moment and try again."); return;
-      }
-      if (castRes.status === 409 && code === "NONCE_REPLAYED") {
-        setState("error"); setMessage("This vote link was already used. Try again for a fresh one — if your vote was saved you will see the same receipt."); return;
-      }
-      const data = castJson.data;
-      if (castRes.ok && data?.vote_id) {
-        setReceipt({ voteId: String(data.vote_id), createdAt: (data.created_at as string | undefined) ?? null, status: String(data.status ?? "cast") });
-        setState("receipt");
-        return;
+      if (castRes.status === 429) {
+        const seconds = Math.max(1, Number(castRes.headers.get("Retry-After")) || 60);
+        retryAfter.current = Date.now() + seconds * 1000;
+        setMessage("Too many attempts. Try again in " + seconds + " seconds.");
+      } else if (code === "NONCE_REPLAYED" || code === "NONCE_INVALID") {
+        setMessage("The vote confirmation expired or was used. Try again for a fresh one.");
+      } else {
+        setMessage("Could not confirm your vote. Retry to recover the same receipt if it was saved.");
       }
       setState("error");
-      setMessage("We could not confirm your vote. Try again — if it was saved you will see the same receipt.");
     } catch {
-      // The request may have reached the server: never claim nothing was recorded.
+      // A request may have committed even if the network response never arrived.
+      setMessage("Connection interrupted. Retry to recover your original vote — do not assume it failed.");
       setState("error");
-      setMessage("Your connection dropped before we could confirm. Try again — if your vote was saved you will see the same receipt.");
+    } finally {
+      inFlight.current = false;
     }
-  }, [anonKey, functionsUrl, idempotencyKey, pathname, router, voteTarget]);
+  }, [anonKey, functionsUrl, goToLogin, voteTarget]);
 
   if (!voteTarget) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-not-open">
-        <p className="font-medium">Voting is not open for this restaurant yet.</p>
-        <p className="mt-1">Once the contest entry is linked to this restaurant, the vote button appears here.</p>
+        <p className="font-medium">Voting is not available for this restaurant yet.</p>
+        <p className="mt-1">The restaurant needs to be connected to its contest entry before voting can be displayed.</p>
       </div>
     );
   }
 
   if (state === "receipt" && receipt) {
+    const isThisRestaurant = receipt.entityId === voteTarget.entityId;
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4" data-testid="vote-receipt">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4" data-testid="vote-receipt" role="status">
         <p className="font-semibold text-emerald-900">Voto recibido</p>
-        <p className="mt-1 text-sm text-emerald-900">Your vote for {restaurantName} is saved.</p>
-        <p className="mt-2 font-mono text-xs text-emerald-800" data-testid="vote-receipt-id">Receipt {receipt.voteId}</p>
+        <p className="mt-1 text-sm text-emerald-900">
+          {isThisRestaurant ? "Your vote for " + restaurantName + " is saved." : "You have already voted for another restaurant in this contest."}
+        </p>
+        <p className="mt-2 break-all font-mono text-xs text-emerald-800" data-testid="vote-receipt-id">Receipt {receipt.voteId}</p>
         {receipt.createdAt ? <p className="mt-1 text-xs text-emerald-800">{new Date(receipt.createdAt).toLocaleString()}</p> : null}
-        <Link className="mt-3 inline-block text-sm font-medium underline" href="/restaurants">Back to restaurants</Link>
+        <Link className="mt-3 inline-block min-h-11 text-sm font-medium underline" href="/restaurants">Back to restaurants</Link>
       </div>
     );
   }
@@ -112,29 +190,29 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   return (
     <div data-testid="vote-panel">
       <button
-        className="w-full rounded-lg bg-emerald-700 px-4 py-3 font-medium text-white disabled:opacity-60"
+        className="min-h-11 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground disabled:opacity-60"
         data-testid="vote-cta"
-        disabled={state === "casting"}
-        onClick={() => { setMessage(null); setState("confirming"); }}
+        disabled={state === "casting" || state === "checking" || state === "closed"}
+        onClick={() => { if (inFlight.current) return; setMessage(null); setState("confirming"); }}
         type="button"
       >
-        {state === "casting" ? "Saving your vote…" : "Vote for " + restaurantName}
+        {state === "casting" ? "Saving your vote…" : state === "checking" ? "Checking saved vote…" : "Vote for " + restaurantName}
       </button>
-      <p className="mt-2 text-xs text-neutral-600">Provisional · one vote per account</p>
-      <Dialog open={state === "confirming"} onOpenChange={(open) => { if (!open) setState("idle"); }}>
+      <p className="mt-2 text-xs text-muted-foreground">Provisional · one vote per account</p>
+      <Dialog open={state === "confirming"} onOpenChange={(open) => { if (!open && !inFlight.current) setState("idle"); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Vote for {restaurantName}?</DialogTitle>
-            <DialogDescription>You can vote once. This cannot be changed.</DialogDescription>
+            <DialogDescription>Confirm your final vote. You can vote once per contest and cannot change it.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <button className="rounded-md border px-3 py-2 text-sm" data-testid="vote-cancel" onClick={() => setState("idle")} type="button">Cancel</button>
-            <button className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white" data-testid="vote-confirm" onClick={castVote} type="button">Confirm vote</button>
+            <button className="min-h-11 rounded-md border px-4 py-2 text-sm" data-testid="vote-cancel" onClick={() => setState("idle")} type="button">Cancel</button>
+            <button className="min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" data-testid="vote-confirm" onClick={() => void castVote()} type="button">Confirm vote</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {state === "closed" ? <p className="mt-3 text-sm text-neutral-700" data-testid="vote-closed">Voting for this contest is closed.</p> : null}
-      {state === "error" && message ? <p className="mt-3 text-sm text-red-700" data-testid="vote-error" role="alert">{message}</p> : null}
+      {state === "closed" ? <p className="mt-3 text-sm text-muted-foreground" data-testid="vote-closed">Voting for this contest is closed.</p> : null}
+      {state === "error" && message ? <p className="mt-3 text-sm text-destructive" data-testid="vote-error" role="alert">{message}</p> : null}
     </div>
   );
 }

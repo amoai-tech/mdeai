@@ -114,19 +114,13 @@ function RestaurantBrowseViewInner({
               {results.map((r) => {
                 const pinId = `restaurant-${r.id}`;
                 return (
-                  <Link
-                    key={r.id}
-                    href={"/restaurants/" + r.id}
-                    className="block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    data-testid={`restaurant-detail-link-${r.id}`}
-                  >
+                  <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
                     key={r.id}
                     title={r.name}
                     neighborhood={r.neighborhood}
                     cuisine={r.cuisine}
                     priceTier={r.priceTier}
-                    avgPricePerPerson={r.avgPricePerPerson}
                     rating={r.rating}
                     imageUrl={r.imageUrl}
                     mapsUrl={r.mapsUrl}
@@ -138,7 +132,14 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="cover"
                   />
+                  <Link
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    data-testid={`restaurant-detail-link-${r.id}`}
+                    href={"/restaurants/" + r.id}
+                  >
+                    View details
                   </Link>
+                  </div>
                 );
               })}
             </div>
