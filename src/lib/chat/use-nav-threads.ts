@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NavThread } from "@/app/api/threads/route";
+import { subscribeThreadListChanged } from "@/lib/chat/thread-list-events";
 
 export type { NavThread };
 
@@ -11,8 +12,10 @@ export function useNavThreads() {
   const [error, setError] = useState(false);
   const fetchedRef = useRef(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  // `quiet`: refresh the list without blanking it with the loading skeleton. Used when the list
+  // changed because of the chat the user is in (a new title, a new message).
+  const refresh = useCallback(async (options?: { quiet?: boolean }) => {
+    if (!options?.quiet) setLoading(true);
     setError(false);
     try {
       const r = await fetch("/api/threads");
@@ -20,7 +23,8 @@ export function useNavThreads() {
       const d = (await r.json()) as { threads: NavThread[] };
       setThreads(d.threads ?? []);
     } catch {
-      setError(true);
+      // A failed quiet refresh keeps the list the user already sees instead of replacing it with an error.
+      if (!options?.quiet) setError(true);
     } finally {
       setLoading(false);
     }
@@ -31,6 +35,9 @@ export function useNavThreads() {
     fetchedRef.current = true;
     refresh();
   }, [refresh]);
+
+  // SAN-1412: a chat got a title or a new message → refetch. No polling.
+  useEffect(() => subscribeThreadListChanged(() => void refresh({ quiet: true })), [refresh]);
 
   return { threads, loading, error, refresh };
 }
