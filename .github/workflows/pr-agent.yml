@@ -22,7 +22,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@263f5fb347128538ed8ecc267fc5cfc8fced22a2
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@eeb437f851af0b69ec7ac0c4bb69a1ee65071312
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:

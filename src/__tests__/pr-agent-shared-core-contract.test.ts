@@ -4,7 +4,7 @@ import { parseDocument } from "yaml";
 
 const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
 const evidenceBuilder = readFileSync("scripts/pr-agent/build-evidence.mjs", "utf8");
-const sharedSha = "263f5fb347128538ed8ecc267fc5cfc8fced22a2";
+const sharedSha = "eeb437f851af0b69ec7ac0c4bb69a1ee65071312";
 
 describe("IPI-1246 shared PR-Agent caller contract", () => {
   it("pins MDE to the immutable shared workflow", () => {
