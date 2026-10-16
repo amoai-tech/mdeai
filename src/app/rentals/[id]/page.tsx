@@ -31,22 +31,18 @@ interface Props {
 // skipcq: JS-0067 - Next.js App Router metadata export; not browser global scope
 export async function generateMetadata({ params }: Props) {
   const { id } = await params;
-  let detail: Awaited<ReturnType<typeof getRentalDetail>> | null = null;
   try {
     const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
     // SAN-1502 PR2: read Details with the caller's own RLS-governed client.
     const supabase = preview ? null : await createClient();
-    detail = preview
+    const detail = preview
       ? await getLocalPreviewDetail(id)
       : await getRentalDetail(id, supabase ? { client: supabase } : undefined);
+    if (detail) return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
   } catch {
-    /* the database could not be read: keep the default title; the page itself shows the outage */
-    return { title: "Rental · mdeai" };
+    /* fall through to default */
   }
-  // SAN-1503: an unknown or unpublished listing must answer HTTP 404. The page body streams, so by
-  // the time its own notFound() runs the 200 status is already sent; metadata resolves first.
-  if (!detail) notFound();
-  return { title: `${detail.title} · ${detail.neighborhood} · mdeai` };
+  return { title: "Rental · mdeai" };
 }
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page `/rentals/[id]`. */

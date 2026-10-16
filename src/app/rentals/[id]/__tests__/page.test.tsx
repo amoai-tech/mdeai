@@ -3,6 +3,8 @@
  * database cannot be read, show its generic error for anything else, and never write a raw driver
  * message to the server log.
  */
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
@@ -26,7 +28,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import RentalDetailPage, { generateMetadata } from "../page";
+import RentalDetailPage from "../page";
 
 function textOf(node: unknown): string {
   if (node == null || typeof node === "boolean") return "";
@@ -102,23 +104,18 @@ describe("/rentals/[id]", () => {
   });
 });
 
-// SAN-1503 — an unknown slug answered HTTP 200 with a "not found" page, because the body streams and
-// the status was already sent. The title lookup runs first, so it is where the 404 must be raised.
-describe("/rentals/[id] generateMetadata", () => {
-  const props = (id: string) => ({ params: Promise.resolve({ id }) });
-
-  it("raises not-found for a listing that does not exist or is not public", async () => {
-    getRentalDetail.mockResolvedValue(null);
-    await expect(generateMetadata(props("no-such-listing"))).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("titles a real listing", async () => {
-    getRentalDetail.mockResolvedValue({ title: "WE Home", neighborhood: "El Poblado" });
-    await expect(generateMetadata(props("mde-we-home"))).resolves.toEqual({ title: "WE Home · El Poblado · mdeai" });
-  });
-
-  it("does not turn a database outage into a 404", async () => {
-    getRentalDetail.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
-    await expect(generateMetadata(props("abc"))).resolves.toEqual({ title: "Rental · mdeai" });
+// SAN-1503 — an unknown slug answered HTTP 200 with a "not found" page. Cause: a `loading.tsx` directly
+// under `app/rentals/` wrapped this page in a Suspense boundary; Next.js sends 200 once a loading
+// boundary starts streaming, so the page's own notFound() could no longer change the status. The
+// skeleton now lives in `app/rentals/(browse)/` and covers only the list. Guard the file layout, because
+// nothing in a unit render would notice it coming back.
+// https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes
+describe("/rentals/[id] status code", () => {
+  it("has no loading boundary above it, so an unknown listing can answer 404", () => {
+    const rentalsDir = resolve(__dirname, "../..");
+    for (const name of ["loading.tsx", "loading.ts", "loading.jsx", "loading.js"]) {
+      expect(existsSync(resolve(rentalsDir, name))).toBe(false);
+    }
+    expect(existsSync(resolve(rentalsDir, "(browse)", "loading.tsx"))).toBe(true);
   });
 });
