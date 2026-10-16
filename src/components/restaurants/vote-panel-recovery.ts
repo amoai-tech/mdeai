@@ -47,7 +47,9 @@ export function resolveSavedVote(status: number, payload: unknown, targetEntityI
       voteId,
       entityId,
       createdAt: typeof r.created_at === "string" ? r.created_at : null,
-      status: typeof r.status === "string" ? r.status : "cast",
+      // vote_my_receipt returns a PERSISTED ballot and no status field, so trust the contract
+      // rather than accepting an arbitrary server-supplied string.
+      status: "cast",
     },
   };
 }

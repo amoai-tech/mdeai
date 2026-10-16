@@ -229,8 +229,10 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       // One vote per account per contest: a ballot for ANOTHER restaurant is legitimate
       // history, not a broken vote. Say so without claiming this restaurant's receipt.
       if (castRes.ok && body.data?.status === "already_voted") {
-        setMessage("You already voted in this contest for another restaurant. One vote per account per contest.");
-        setState("error");
+        // The account already holds a ballot for this contest. This is not an error: show the
+        // non-votable state so the CTA is hidden and no second ballot is invited.
+        setAlreadyVotedName(null);
+        setState("already-voted");
         return;
       }
       if (castRes.status === 410 || code === "CONTEST_CLOSED") { setState("closed"); return; }
