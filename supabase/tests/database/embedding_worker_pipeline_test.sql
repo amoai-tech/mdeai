@@ -8,7 +8,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(41);
+select plan(45);
 
 -- ── fixtures: unapproved, unpublished development rows --------------------------------------------------
 insert into public.apartments (id, title, neighborhood, description, bedrooms, amenities)
@@ -20,9 +20,9 @@ values ('00000000-0000-4000-8000-0000000b0001', 'SAN-1523 quiet cafe', 'Good for
 
 -- ── A. enqueue: no business gate ---------------------------------------------------------------------------
 select is(
-  (select moderation_status from public.apartments where id = '00000000-0000-4000-8000-0000000a0001'),
-  (select moderation_status from public.apartments where id = '00000000-0000-4000-8000-0000000a0001'),
-  'fixture apartment exists');
+  (select count(*)::int from public.apartments
+    where id = '00000000-0000-4000-8000-0000000a0001' and moderation_status is distinct from 'approved'),
+  1, 'fixture apartment exists and is not approved');
 select is(
   (select count(*)::int from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status = 'pending'),
   1, 'an apartment that is not approved or published still gets a pending job');
@@ -210,6 +210,34 @@ update public.apartments set description = repeat('quiet bright airy ', 2000)
 select cmp_ok(
   (select length(content_text) from public.embedding_document_for_entity('apartment', '00000000-0000-4000-8000-0000000a0001')),
   '<=', 6000, 'a 36,000-character description is cut to 6000 characters before embedding');
+
+-- ── I. a record left with no text must not keep a vector describing text that no longer exists ----------------
+insert into public.listing_embeddings (listing_id, embedding, model, content_hash)
+values ('00000000-0000-4000-8000-0000000a0001', (select v from vec)::extensions.vector, 'gemini-embedding-001', 'stale-hash');
+-- a worker is mid-embedding the old text (its own lease)
+create temp table inflight as
+  with i as (
+    insert into public.embedding_jobs (entity_type, entity_id, content_hash, status, attempts, lease_token, lease_expires_at)
+    values ('apartment', '00000000-0000-4000-8000-0000000a0001', 'inflight-hash', 'processing', 1,
+            '00000000-0000-4000-8000-00000000dddd', now() + interval '5 minutes')
+    returning id)
+  select id from i;
+grant select on inflight to public;
+update public.apartments
+   set title = '', neighborhood = '', city = null, description = null, bedrooms = null, amenities = '{}', furnished = false, pet_friendly = false
+ where id = '00000000-0000-4000-8000-0000000a0001';
+select is((select count(*)::int from public.listing_embeddings where listing_id = '00000000-0000-4000-8000-0000000a0001'), 0,
+  'emptying a record removes its now-false vector');
+select is((select count(*)::int from public.embedding_jobs where entity_id = '00000000-0000-4000-8000-0000000a0001' and status in ('pending', 'processing')), 0,
+  'and closes its open jobs (pending and running)');
+set local role service_role;
+select is(
+  public.complete_embedding_job(
+    (select id from inflight), '00000000-0000-4000-8000-00000000dddd', (select v from vec)),
+  'lost_lease', 'a worker that was mid-embedding cannot restore the vector afterwards');
+reset role;
+select is((select count(*)::int from public.listing_embeddings where listing_id = '00000000-0000-4000-8000-0000000a0001'), 0,
+  'the vector stays gone');
 
 select * from finish();
 rollback;

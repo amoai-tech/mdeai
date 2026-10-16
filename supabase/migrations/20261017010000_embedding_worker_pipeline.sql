@@ -122,6 +122,20 @@ BEGIN
 
   SELECT d.content_hash INTO v_hash FROM public.embedding_document_for_entity(v_type, NEW.id) d;
   IF v_hash IS NULL THEN
+    -- Nothing factual is left to embed. A stored vector would describe text that no longer exists, so remove it
+    -- and close any open job. A job already running loses its lease here, so its late result is discarded
+    -- ('lost_lease'); complete_embedding_job also re-checks the document hash before writing anything.
+    UPDATE public.embedding_jobs
+       SET status = 'skipped', last_error = 'entity has no text to embed',
+           lease_token = NULL, lease_expires_at = NULL, processed_at = now(), updated_at = now()
+     WHERE entity_type = v_type AND entity_id = NEW.id AND status IN ('pending', 'processing');
+    IF v_type = 'apartment' THEN
+      DELETE FROM public.listing_embeddings WHERE listing_id = NEW.id;
+    ELSIF v_type = 'event' THEN
+      DELETE FROM public.event_embeddings WHERE event_id = NEW.id;
+    ELSE
+      DELETE FROM public.restaurant_embeddings WHERE restaurant_id = NEW.id;
+    END IF;
     RETURN NEW;
   END IF;
 
