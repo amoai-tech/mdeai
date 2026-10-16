@@ -89,7 +89,7 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'vote' and c.relkind = 'i'),
-  44, 'vote has the expected forty-four indexes'
+  45, 'vote has the expected forty-five indexes'
 );
 select is(
   (select count(*)::int from pg_policies where schemaname = 'vote'),
