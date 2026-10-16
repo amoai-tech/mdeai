@@ -47,6 +47,10 @@ begin
   -- Note: `verified` is deliberately NOT touched here. The owner-directed development
   -- verification flag is owned by the SAN-1502 operator migration; activation is an
   -- operational state and must not silently revert or assert verification either way.
+  -- Only designated development inventory, unassigned records, and rows already owned
+  -- by this operator are touched. Ownership is NEVER taken from another principal, so a
+  -- shared or copied environment cannot have unrelated inventory reassigned. Explicit
+  -- test fixtures are excluded and never published.
   update public.apartments a
      set landlord_id = v_profile,
          status = 'active',
@@ -64,9 +68,14 @@ begin
                 'development_ready_at', now(),
                 'development_activated_by', v_email
               )
-   -- Every non-fixture record is designated development inventory while Phase A is
-   -- active; explicit test fixtures stay untouched and are never published.
-   where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true';
+   where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true'
+     and (
+       a.landlord_id is null
+       or a.landlord_id = v_profile
+       or a.slug like 'candidate-%'
+       or a.slug like 'external-%'
+       or lower(coalesce(a.metadata->>'inventory_kind', '')) = 'mde_managed'
+     );
   get diagnostics v_changed = row_count;
   return v_changed;
 end
