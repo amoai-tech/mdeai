@@ -111,7 +111,8 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     sourceUrl: str(row.source_url),
     // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
     // treats as unproven rather than as a reason to offer the CTA.
-    canScheduleViewing: isRentalRequestable({
+    canScheduleViewing: typeof row.rental_can_request_viewing === "boolean"
+      ? row.rental_can_request_viewing : isRentalRequestable({
       landlord_id: str(row.landlord_id),
       status: str(row.status),
       moderation_status: str(row.moderation_status),
@@ -140,7 +141,8 @@ export async function getRentalDetail(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const apartmentsQuery = client.from("apartments").select("*").eq("status", "active").limit(1);
+  const apartmentsQuery = client.from("apartments")
+    .select("*, rental_can_request_viewing").eq("status", "active").limit(1);
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {
