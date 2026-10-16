@@ -221,7 +221,15 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
 
   const builder = {
     select: () => builder,
-    eq: () => builder,
+    // Only the currency split matters to these tests; the other columns stay pass-through.
+    eq: (column: string, value: unknown) => {
+      if (column === "currency") filters.push((row) => String(row[column]) === String(value));
+      return builder;
+    },
+    neq: (column: string, value: unknown) => {
+      if (column === "currency") filters.push((row) => String(row[column]) !== String(value));
+      return builder;
+    },
     not: () => builder,
     gte: () => builder,
     lte: () => builder,
