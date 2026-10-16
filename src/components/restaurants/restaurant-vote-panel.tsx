@@ -6,33 +6,44 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type VoteTarget = { contestId: string; entityId: string };
 type Receipt = { voteId: string; createdAt: string | null; status: string };
 type PanelState = "idle" | "confirming" | "casting" | "receipt" | "closed" | "error";
 
 export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurantName: string; voteTarget: VoteTarget | null }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<PanelState>("idle");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const router = useRouter();
-  const pathname = usePathname();
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
-  const functionsUrl = useMemo(() => getSupabaseEnv().url + "/functions/v1", []);
+  const { url: supabaseUrl, anonKey } = useMemo(() => getSupabaseEnv(), []);
+  const functionsUrl = supabaseUrl + "/functions/v1";
 
   const castVote = useCallback(async () => {
     if (!voteTarget) return;
     setState("casting");
     setMessage(null);
     const goToLogin = () => { router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants")); };
+    const headers = { "Content-Type": "application/json", apikey: anonKey, Authorization: "" };
     try {
       const supabase = createClient();
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) { goToLogin(); return; }
+      const authHeaders = { ...headers, Authorization: "Bearer " + token };
       const nonceRes = await fetch(functionsUrl + "/vote-nonce", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: authHeaders,
         body: JSON.stringify({ contest_id: voteTarget.contestId }),
       });
       const nonceJson = (await nonceRes.json().catch(() => ({}))) as { data?: { nonce?: string } };
@@ -44,7 +55,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       }
       const castRes = await fetch(functionsUrl + "/vote-cast", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: authHeaders,
         body: JSON.stringify({
           contest_id: voteTarget.contestId,
           entity_id: voteTarget.entityId,
@@ -60,7 +71,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         setState("error"); setMessage("Too many attempts. Please wait a moment and try again."); return;
       }
       if (castRes.status === 409 && code === "NONCE_REPLAYED") {
-        setState("error"); setMessage("This vote link was already used. Please try again for a fresh one."); return;
+        setState("error"); setMessage("This vote link was already used. Try again for a fresh one — if your vote was saved you will see the same receipt."); return;
       }
       const data = castJson.data;
       if (castRes.ok && data?.vote_id) {
@@ -69,12 +80,13 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         return;
       }
       setState("error");
-      setMessage("Your vote could not be saved. Nothing was recorded — please try again.");
+      setMessage("We could not confirm your vote. Try again — if it was saved you will see the same receipt.");
     } catch {
+      // The request may have reached the server: never claim nothing was recorded.
       setState("error");
-      setMessage("Network problem. Nothing was recorded — check your connection and try again.");
+      setMessage("Your connection dropped before we could confirm. Try again — if your vote was saved you will see the same receipt.");
     }
-  }, [functionsUrl, idempotencyKey, pathname, router, voteTarget]);
+  }, [anonKey, functionsUrl, idempotencyKey, pathname, router, voteTarget]);
 
   if (!voteTarget) {
     return (
@@ -109,18 +121,18 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         {state === "casting" ? "Saving your vote…" : "Vote for " + restaurantName}
       </button>
       <p className="mt-2 text-xs text-neutral-600">Provisional · one vote per account</p>
-      {state === "confirming" ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Confirm your vote">
-          <div className="w-full max-w-sm rounded-lg bg-white p-5">
-            <h2 className="text-base font-semibold">Vote for {restaurantName}?</h2>
-            <p className="mt-2 text-sm text-neutral-700">You can vote once. This cannot be changed.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="rounded-md border px-3 py-2 text-sm" data-testid="vote-cancel" onClick={() => setState("idle")} type="button">Cancel</button>
-              <button className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white" data-testid="vote-confirm" onClick={castVote} type="button">Confirm vote</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Dialog open={state === "confirming"} onOpenChange={(open) => { if (!open) setState("idle"); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vote for {restaurantName}?</DialogTitle>
+            <DialogDescription>You can vote once. This cannot be changed.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button className="rounded-md border px-3 py-2 text-sm" data-testid="vote-cancel" onClick={() => setState("idle")} type="button">Cancel</button>
+            <button className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white" data-testid="vote-confirm" onClick={castVote} type="button">Confirm vote</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {state === "closed" ? <p className="mt-3 text-sm text-neutral-700" data-testid="vote-closed">Voting for this contest is closed.</p> : null}
       {state === "error" && message ? <p className="mt-3 text-sm text-red-700" data-testid="vote-error" role="alert">{message}</p> : null}
     </div>

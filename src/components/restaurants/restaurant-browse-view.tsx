@@ -114,6 +114,12 @@ function RestaurantBrowseViewInner({
               {results.map((r) => {
                 const pinId = `restaurant-${r.id}`;
                 return (
+                  <Link
+                    key={r.id}
+                    href={"/restaurants/" + r.id}
+                    className="block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    data-testid={`restaurant-detail-link-${r.id}`}
+                  >
                   <RestaurantCard
                     key={r.id}
                     title={r.name}
@@ -132,6 +138,7 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="cover"
                   />
+                  </Link>
                 );
               })}
             </div>
