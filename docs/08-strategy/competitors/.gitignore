@@ -1,0 +1,8 @@
+# Competitor screenshots: large (full-page, 2x) and some contain a real name,
+# email, phone number and home address from a signed-in session. Never commit.
+# Keep the markdown; ignore every image format.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
