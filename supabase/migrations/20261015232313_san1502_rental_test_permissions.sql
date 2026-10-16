@@ -77,6 +77,17 @@ create policy rental_test_access_select_self
   to authenticated
   using (user_id = (select auth.uid()));
 
+-- Explicit service-role access, matching the existing service_role_full_access_*
+-- pattern on other tables. service_role already has BYPASSRLS, so this records
+-- intent rather than changing behaviour.
+drop policy if exists rental_test_access_service_role on public.rental_test_access;
+create policy rental_test_access_service_role
+  on public.rental_test_access
+  for all
+  to service_role
+  using (true)
+  with check (true);
+
 -- There is deliberately NO insert/update/delete policy and no write privilege
 -- for end-user roles. A grant may only be created, changed or revoked through the
 -- audited SECURITY DEFINER RPCs below, so a direct table write cannot bypass the
@@ -115,6 +126,17 @@ create policy rental_test_events_select_admin
   for select
   to authenticated
   using ((select public.is_admin()));
+
+-- Explicit service-role access for audit reads/reporting. service_role has
+-- BYPASSRLS, so this documents intent; UPDATE/DELETE stay blocked by the
+-- append-only trigger regardless of role.
+drop policy if exists rental_test_events_service_role on public.rental_test_events;
+create policy rental_test_events_service_role
+  on public.rental_test_events
+  for all
+  to service_role
+  using (true)
+  with check (true);
 
 create or replace function public.rental_test_events_block_mutation()
 returns trigger
@@ -175,7 +197,7 @@ as $function$
 $function$;
 
 comment on function public.is_authorized_test_actor(uuid, text) is
-  'SAN-1502: internal, self-or-service scoped check. Not executable by end-user roles so a caller cannot ask about another user id.';
+  'SAN-1502: internal cross-user check. EXECUTE is revoked from anon/authenticated so an end user cannot ask about another user id; the revocation is deliberate defence in depth even though the no-arg form calls it internally as the owner.';
 
 -- The canonical, self-scoped predicate. Every RLS policy and search path must
 -- call this no-argument form: it can only ever answer about the authenticated
@@ -200,8 +222,9 @@ grant execute on function public.is_authorized_test_actor() to authenticated, se
 
 -- §4 — one canonical "can an authorized tester be offered this fixture?" -----
 -- Materialized once so PR 2 search/RLS and PR 3 viewing consume the same rule.
--- Absent rights keys default to *available* so existing published fixtures are
--- unchanged; an explicit rejected/revoked state withdraws the listing.
+-- Non-test listings are excluded by the is_test_fixture condition. For a TEST
+-- fixture, absent rights keys default to *available* so fixtures created before
+-- this migration stay available; an explicit rejected/revoked state withdraws it.
 create or replace function public.rental_test_listing_is_available(
   p_status text,
   p_moderation_status text,
@@ -854,6 +877,8 @@ begin
       -- SAN-1502 development keys without reopening an otherwise unchanged
       -- published rental. Other metadata, photo, ownership and material changes
       -- still fail closed.
+      -- WARNING: every new administrative test-metadata key MUST be added to the
+      -- two exemption lists below, or changing it will demote a live fixture.
       or (
         case when public.is_admin() then
           (coalesce(NEW.metadata, '{}'::jsonb)
