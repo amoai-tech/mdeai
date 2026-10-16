@@ -190,7 +190,7 @@ select throws_ok(
   $q$insert into public.showings (lead_id, apartment_id, scheduled_at, status)
   values ((select id from public.leads where apartment_id=current_setting('mde.admin_test_id')::uuid limit 1),
           current_setting('mde.admin_test_id')::uuid, now()+interval '3 day', 'scheduled')$q$,
-  '42501', 'development rental viewing requires an authorized renter',
+  '42501', 'authenticated renter identity required',
   'A48: guest cannot insert a fixture showing directly');
 reset role;
 
