@@ -38,6 +38,29 @@ as $function$
   end;
 $function$;
 
+-- Database-owned requestability projection shared by cards, Details, AI and the
+-- atomic viewing RPC. This is a PostgREST computed column on apartments.
+create or replace function public.rental_can_request_viewing(a public.apartments)
+returns boolean language sql stable set search_path = ''
+as $function$
+  select coalesce(a.status='active' and a.landlord_id is not null and (
+    public.rental_development_active()
+    or (
+      a.moderation_status='approved'
+      and a.listing_workflow_status='published'
+      and a.available_from is not null
+      and (a.available_to is null or a.available_to >= (now() at time zone 'America/Bogota')::date)
+      and coalesce(lower(a.metadata->>'is_test_fixture'),'false') <> 'true'
+      and coalesce(lower(a.metadata->>'inventory_kind'),'') not in ('external_candidate','test_fixture')
+      and coalesce(lower(a.metadata->>'inventory_type'),'') <> 'external'
+      and coalesce(lower(a.metadata->>'allowed_action'),'') <> 'view_original_listing'
+    )
+  ), false);
+$function$;
+revoke all on function public.rental_can_request_viewing(public.apartments) from public;
+grant execute on function public.rental_can_request_viewing(public.apartments)
+  to anon, authenticated, service_role;
+
 -- Any authenticated MDE renter may work with active fixtures in Phase A.
 -- Existing RLS on writes and all private-data isolation remain unchanged.
 drop policy if exists apartments_authenticated_development_access on public.apartments;
