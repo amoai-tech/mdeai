@@ -28,21 +28,24 @@ vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath:
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
+import { SIGN_IN_REQUIRED_MESSAGE } from "@/lib/concierge-sign-in-message";
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
-import { AGENT_UNAVAILABLE_MESSAGE, SIGN_IN_REQUIRED_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let handlers: ConciergeSendHandlers;
 let shown: Array<{ role: string; content: string }>;
+let promptShown = false;
 
 function Harness() {
   const h = useConciergeSendHandlers();
-  const { messages } = useEventLocalChat();
+  const { messages, signInPrompt } = useEventLocalChat();
   useEffect(() => {
     handlers = h;
     shown = messages;
+    promptShown = signInPrompt;
   });
   return null;
 }
@@ -183,9 +186,8 @@ describe("onAgentSend for a signed-out visitor", () => {
     expect(chat.appendMessage).not.toHaveBeenCalled();
     expect(shown.map((m) => [m.role, m.content])).toEqual([
       ["user", "What is a good day trip from Medellín?"],
-      ["assistant", SIGN_IN_REQUIRED_MESSAGE],
     ]);
-    expect(SIGN_IN_REQUIRED_MESSAGE).toContain("/login?next=%2Fchat");
+    expect(promptShown).toBe(true);
     expect(SIGN_IN_REQUIRED_MESSAGE).not.toMatch(/try again/i);
   });
 
@@ -195,7 +197,7 @@ describe("onAgentSend for a signed-out visitor", () => {
       await handlers.onAgentSend("tell me about Laureles");
     });
     expect(chat.appendMessage).toHaveBeenCalled();
-    expect(shown.map((m) => m.content)).not.toContain(SIGN_IN_REQUIRED_MESSAGE);
+    expect(promptShown).toBe(false);
   });
 
   it("does not guess while the session is still loading", async () => {
@@ -207,6 +209,6 @@ describe("onAgentSend for a signed-out visitor", () => {
       await handlers.onAgentSend("tell me about Laureles");
     });
     expect(chat.appendMessage).toHaveBeenCalled();
-    expect(shown.map((m) => m.content)).not.toContain(SIGN_IN_REQUIRED_MESSAGE);
+    expect(promptShown).toBe(false);
   });
 });

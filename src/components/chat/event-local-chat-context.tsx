@@ -35,6 +35,10 @@ type EventLocalChatContextValue = {
   showExchange: (userText: string, assistantText: string) => void;
   /** An assistant-only line, for when the renter's own message is already in the transcript. */
   showNotice: (assistantText: string) => void;
+  /** SAN-1507: true after a signed-out visitor asked the AI; the transcript then offers sign-in. */
+  signInPrompt: boolean;
+  /** Keep the visitor's question in the transcript and offer sign-in. No agent run is started. */
+  showSignInPrompt: (userText: string) => void;
   clearLocalMessages: () => void;
 };
 
@@ -51,6 +55,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
+  const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
   const agentRef = useRef(agent);
 
@@ -133,8 +138,17 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
     [publishOrQueue],
   );
 
+  const showSignInPrompt = useCallback(
+    (userText: string) => {
+      showExchange(userText, "");
+      setSignInPrompt(true);
+    },
+    [showExchange],
+  );
+
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];
+    setSignInPrompt(false);
     setMessages([]);
     setClarifyPending(false);
     setClarifyKind(null);
@@ -148,6 +162,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       showClarify,
       showExchange,
       showNotice,
+      signInPrompt,
+      showSignInPrompt,
       clearLocalMessages,
     }),
     [
@@ -157,6 +173,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       showClarify,
       showExchange,
       showNotice,
+      signInPrompt,
+      showSignInPrompt,
       clearLocalMessages,
     ],
   );
