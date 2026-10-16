@@ -77,9 +77,9 @@ select ok(to_regprocedure('public.fn_record_conversion(text,text,text,text,text,
           or not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                           where n.nspname='public' and p.proname='fn_record_conversion'),
           'dead fn_record_conversion is NOT recreated');
-select ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                       where n.nspname = 'public' and p.proname = 'hybrid_search_events'),
-          'fts-blocked hybrid_search_events stays deferred until fts_content is recovered');
+select ok(exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'public' and p.proname = 'hybrid_search_events'),
+          'hybrid_search_events is recovered by SAN-1305 once fts_content exists');
 select ok(not exists (select 1 from pg_trigger tg
                         join pg_class c on c.oid = tg.tgrelid
                         join pg_namespace n on n.oid = c.relnamespace
