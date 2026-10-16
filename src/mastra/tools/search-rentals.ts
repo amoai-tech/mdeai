@@ -1,5 +1,5 @@
 import { createTool } from '@mastra/core/tools';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
 import { isSelfAttested } from '@/lib/rentals/provenance';
@@ -111,6 +111,20 @@ function getSupabaseClient() {
   });
   return _client;
 }
+
+/**
+ * SAN-1502 PR2 — RequestContext key the /api/copilotkit route uses to hand rental
+ * tools the caller's OWN user-scoped, RLS-governed client. Read back by
+ * searchRentalsTool so an authorized test actor's search sees development
+ * fixtures while an anonymous or ordinary caller never does.
+ */
+export const RENTAL_SUPABASE_KEY = 'rentalSupabase';
+
+/**
+ * Optional per-request client. Omit it for the shared anonymous client; pass the
+ * caller's user-scoped client to let RLS decide what they may read.
+ */
+export type RentalSearchOptions = { client?: SupabaseClient | null };
 
 export interface ApartmentRow {
   id: string;
@@ -437,8 +451,9 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
 
 async function searchRentalsFromSupabase(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<{ results: Rental[]; total: number; source: 'supabase' }> {
-  const client = getSupabaseClient();
+  const client = options?.client ?? getSupabaseClient();
   if (!client) {
     throw new RentalSearchUnavailableError('client_unavailable');
   }
@@ -506,13 +521,14 @@ async function searchRentalsFromSupabase(
 // internally async — callers that need real DB data should await searchRentals())
 export async function searchRentals(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<RentalSearchResult> {
   const limit = query.limit ?? 8;
 
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
-      const intel = await searchRentalsIntelligent(query);
+      const intel = await searchRentalsIntelligent(query, options);
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText: query.queryText,
@@ -549,7 +565,7 @@ export async function searchRentals(
   }
 
   try {
-    const { results, total, source } = await searchRentalsFromSupabase(query);
+    const { results, total, source } = await searchRentalsFromSupabase(query, options);
     const external = await getOptionalExternalRentals(query);
     const mixed = mixRentalResults(results, external, limit);
     return {
@@ -623,9 +639,16 @@ export const searchRentalsTool = createTool({
       limit = 8,
       queryText,
     } = inputData;
+    // SAN-1502 PR2: use the caller's own RLS-governed client when the runtime
+    // supplied one, so an authorized test actor sees development fixtures and
+    // everyone else is unchanged.
+    const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
+      | SupabaseClient
+      | undefined;
+    const options = rentalClient ? { client: rentalClient } : undefined;
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
-      searchRentals,
+      (q: RentalQuery) => searchRentals(q, options),
       { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText },
       context,
     );

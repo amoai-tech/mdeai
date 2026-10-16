@@ -284,6 +284,11 @@
     "anon": false,
     "authenticated": true
   },
+  "rental_enrichment_is_readable(p_apartment_id uuid)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
   "rental_listing_is_public(p_status text, p_moderation_status text, p_listing_workflow_status text, p_landlord_id uuid, p_metadata jsonb)": {
     "public": false,
     "anon": true,
