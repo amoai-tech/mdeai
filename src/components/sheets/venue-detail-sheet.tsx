@@ -100,9 +100,13 @@ export function VenueDetailSheet() {
   const eventStep =
     venueDetail?.kind === "event" ? (venueDetail.step ?? "detail") : "detail";
 
+  // SAN-1504: a rental with the full payload is shown by the map column (desktop) or the rich
+  // rental sheet (phone). This reduced pop-up must not open beside it.
+  const showsRichRental = venueDetail?.kind === "rental" && venueDetail.rental != null;
+
   return (
     <Sheet
-      open={venueDetail != null}
+      open={venueDetail != null && !showsRichRental}
       onOpenChange={(open) => {
         if (!open) closeVenueDetail();
       }}

@@ -20,6 +20,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
@@ -321,12 +322,17 @@ export function RentalResults({
           {rows.map((r, index) => {
           const pinId = rentalPinId(r.id);
           const hasPin = mappedRentalIds.has(pinId);
+          // SAN-1504: the complete result, when this row is one, so the panel and phone sheet show
+          // monthly price, photos, source and coordinates instead of the reduced pop-up fields.
+          const detailRental = toDetailRental(r);
           const openDetail = () => {
             if (hasPin) panToPin(pinId);
             openVenueDetail({
               kind: "rental",
               listingId: r.id,
               pinId,
+              pinned: hasPin,
+              rental: detailRental ?? undefined,
               title: r.title,
               neighborhood: r.neighborhood,
               nightlyPrice: r.nightly_price,
@@ -361,7 +367,9 @@ export function RentalResults({
               searchParams={searchParams}
               selected={hasPin && selectedPinId === pinId}
               onSelect={hasPin ? () => panToPin(pinId) : undefined}
-              onOpenDetails={r.tags?.includes("external-source") ? undefined : openDetail}
+              // A source-linked ad gets the read-only details when it is a complete rental; the old
+              // reduced pop-up never offered it, and still does not.
+              onOpenDetails={r.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
               canScheduleViewing={r.can_schedule_viewing === true}
               onSchedule={() =>
                 openScheduleViewing({
