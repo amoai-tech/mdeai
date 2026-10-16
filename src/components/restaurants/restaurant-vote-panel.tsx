@@ -60,10 +60,16 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
     setMessage(null);
-    const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) { goToLogin(); return; }
-    setState("confirming");
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      if (data.session) { setState("confirming"); return; }
+    } catch (err) {
+      // A failed session check must not dead-end the button: fall through to sign-in.
+      console.error("[vote] session check failed:", err instanceof Error ? err.message : err);
+    }
+    // No session, or we could not tell: ask the visitor to sign in. Never open blind.
+    goToLogin();
   }, [goToLogin]);
   const contestId = voteTarget?.contestId;
   const entityId = voteTarget?.entityId;
