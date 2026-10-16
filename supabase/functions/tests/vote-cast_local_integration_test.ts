@@ -12,6 +12,7 @@
 // production and never reuses a real contest.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createVoteCastHandler } from "../vote-cast/handler.ts";
+import { createVoteNonceHandler } from "../vote-nonce/handler.ts";
 import { getUserId } from "../_shared/supabase-clients.ts";
 import { verifyTurnstile } from "../_shared/turnstile.ts";
 import { verifyNonce, issueNonce } from "../_shared/nonce.ts";
@@ -60,7 +61,32 @@ async function sql(q: string): Promise<string> {
 function assertEqual(a: unknown, b: unknown, m: string): void {
   if (a !== b) throw new Error(m + " — expected " + String(b) + ", got " + String(a));
 }
-function nonce(): Promise<string> { return issueNonce(CONTEST); }
+let _nonceHandler: ((req: Request) => Promise<Response>) | null = null;
+function getNonceHandler(): (req: Request) => Promise<Response> {
+  if (!_nonceHandler) {
+    const s = svc();
+    _nonceHandler = createVoteNonceHandler({
+      service: s,
+      getUserId,
+      issueNonce,
+      allowRate: (key: string, max: number, win: number) => allowRateDurable(s, key, max, win),
+    });
+  }
+  return _nonceHandler;
+}
+// Obtain the ticket the way a real client does: authenticated call to the issuer.
+async function nonce(jwt: string): Promise<string> {
+  const res = await getNonceHandler()(new Request("http://local.test/vote-nonce", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + jwt, "x-forwarded-for": IP },
+    body: JSON.stringify({ contest_id: CONTEST }),
+  }));
+  const json = await res.json() as { data?: { nonce?: string } };
+  if (res.status !== 200 || !json.data?.nonce) {
+    throw new Error("nonce issuer failed: " + res.status + " " + JSON.stringify(json));
+  }
+  return json.data.nonce;
+}
 function body(entity: string, key: string, n: string): string {
   return JSON.stringify({ contest_id: CONTEST, entity_id: entity, idempotency_key: key, nonce: n, turnstile_token: "t" });
 }
@@ -101,26 +127,26 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
     const userB = await makeUser("b");
     try {
       // 1. valid authenticated user casts exactly one ballot
-      const res1 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000001", await nonce(), userA.jwt));
+      const res1 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000001", await nonce(userA.jwt), userA.jwt));
       assertEqual(await statusOf(res1), 200, "first vote status");
       const j1 = await jsonOf(res1);
       assertEqual((j1.data as Record<string, unknown>).status, "cast", "first vote status field");
       assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + userA.id + "'"), "1", "one row for user A");
 
       // 2. retry with the same idempotency key returns the original receipt, no new row
-      const res2 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000001", await nonce(), userA.jwt));
+      const res2 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000001", await nonce(userA.jwt), userA.jwt));
       assertEqual(await statusOf(res2), 200, "retry status");
       assertEqual(((await jsonOf(res2)).data as Record<string, unknown>).status, "replayed", "retry returns original receipt");
       assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + userA.id + "'"), "1", "still one row after retry");
 
       // 3. same user, different restaurant, new key -> already_voted, no second ballot
-      const res3 = await getHandler()(request(ENTITY2, "11111111-0000-0000-0000-000000000002", await nonce(), userA.jwt));
+      const res3 = await getHandler()(request(ENTITY2, "11111111-0000-0000-0000-000000000002", await nonce(userA.jwt), userA.jwt));
       assertEqual(await statusOf(res3), 200, "second restaurant status");
       assertEqual(((await jsonOf(res3)).data as Record<string, unknown>).status, "already_voted", "no second ballot");
       assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + userA.id + "'"), "1", "still one row for user A");
 
       // 4. a different authenticated user is independent
-      const res4 = await getHandler()(request(ENTITY2, "11111111-0000-0000-0000-000000000003", await nonce(), userB.jwt));
+      const res4 = await getHandler()(request(ENTITY2, "11111111-0000-0000-0000-000000000003", await nonce(userB.jwt), userB.jwt));
       assertEqual(await statusOf(res4), 200, "user B status");
       assertEqual(((await jsonOf(res4)).data as Record<string, unknown>).status, "cast", "user B casts");
       assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + userB.id + "'"), "1", "one row for user B");
@@ -130,11 +156,11 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
       assertEqual(stolen.data, null, "cross-user receipt is not returned");
 
       // 6. missing JWT -> 401
-      const res6 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000004", await nonce(), null));
+      const res6 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000004", await nonce(userA.jwt), null));
       assertEqual(await statusOf(res6), 401, "missing JWT rejected");
 
       // 7. replayed nonce with no committed vote -> recoverable 409
-      const n7 = await nonce();
+      const n7 = await nonce(userB.jwt);
       await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000005", n7, userB.jwt));
       const res7 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000006", n7, userB.jwt));
       assertEqual(await statusOf(res7), 409, "replayed nonce without a committed vote");
