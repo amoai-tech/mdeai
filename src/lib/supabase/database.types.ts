@@ -7858,7 +7858,7 @@ export type Database = {
     }
     Functions: {
       vote_restaurant_target: {
-        Args: { p_restaurant_id: string }
+        Args: { p_restaurant_id: string; p_contest_id?: string }
         Returns: Json
       }
       _postgis_deprecate: {
