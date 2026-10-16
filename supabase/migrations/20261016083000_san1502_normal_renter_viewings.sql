@@ -465,12 +465,12 @@ BEGIN
     v_old_apartment_id := OLD.apartment_id;
     -- Normal status/contact edits keep the original booking identity.
     -- Apartment or renter/lead reassignment must pass the authorization check.
-    IF NEW.apartment_id IS NOT DISTINCT FROM OLD.apartment_id
-       AND (
-         (TG_TABLE_NAME = 'leads' AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id)
-         OR (TG_TABLE_NAME = 'showings' AND NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id)
-       ) THEN
-      RETURN NEW;
+    IF NEW.apartment_id IS NOT DISTINCT FROM OLD.apartment_id THEN
+      IF TG_TABLE_NAME = 'leads' AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id THEN
+        RETURN NEW;
+      ELSIF TG_TABLE_NAME = 'showings' AND NEW.lead_id IS NOT DISTINCT FROM OLD.lead_id THEN
+        RETURN NEW;
+      END IF;
     END IF;
   END IF;
 
