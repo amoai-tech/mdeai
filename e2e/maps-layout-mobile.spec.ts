@@ -5,6 +5,7 @@ import {
   RENTAL_QUERY,
   RESTAURANT_QUERY,
   restaurant,
+  rental,
   typeAndSubmit,
   waitForPost,
 } from "./helpers/deterministic-chat";
@@ -279,5 +280,75 @@ test.describe("SAN-524 mobile map interaction — 360×800 touch", () => {
     await sheet.getByRole("button", { name: "Close" }).tap();
     await expect(sheet).toBeHidden();
     await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible();
+  });
+});
+// SAN-1505 — real computed CSS + image decode proof. Static React markup can
+// contain a hidden <img>, so the component tests alone cannot certify phone media.
+test.describe("SAN-1505 rental photos on narrow chat cards", () => {
+  test.use({ isMobile: true, hasTouch: true });
+
+  for (const viewport of [PHONE_390, PHONE_360]) {
+    test(`approved rental image visibly loads at ${viewport.width}px without horizontal scroll`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await mockFastPaths(page);
+      await page.route("**/e2e-approved-rental.webp", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "image/png",
+          // Minimal valid PNG fixture — no third-party media or permissions required.
+          body: Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9uHAAAAABJRU5ErkJggg==",
+            "base64",
+          ),
+        }),
+      );
+      await page.route("**/api/rentals/search", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            results: [{
+              ...rental,
+              image: "/e2e-approved-rental.webp",
+              can_schedule_viewing: false,
+              schedule_viewing_url: null,
+              tags: ["external-source", "not-verified"],
+              source_url: "https://www.fincaraiz.com.co/example",
+            }],
+            total: 1,
+            source: "mock",
+          }),
+        }),
+      );
+      await gotoDeterministicChat(page);
+      const responsePromise = waitForPost(page, "/api/rentals/search");
+      await typeAndSubmit(page, RENTAL_QUERY);
+      expect((await responsePromise).ok()).toBe(true);
+
+      const card = page.getByTestId("rental-card").first();
+      await expect(card).toBeVisible();
+      const photo = card.locator("img");
+      await expect(photo).toBeVisible();
+      await expect.poll(() => photo.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+        .toBeGreaterThan(0);
+      const imageBox = await photo.boundingBox();
+      const cardBox = await card.boundingBox();
+      expect(imageBox).not.toBeNull();
+      expect(cardBox).not.toBeNull();
+      expect(imageBox!.width).toBeGreaterThan(0);
+      expect(imageBox!.x).toBeGreaterThanOrEqual(cardBox!.x - 1);
+      expect(imageBox!.x + imageBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 1);
+      await expect(card.getByTestId("rental-schedule-cta")).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+
+  test("a no-photo card shows no image or empty placeholder at 390px", async ({ page }) => {
+    await page.setViewportSize(PHONE_390);
+    await seedRentalPin(page);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card.locator("img")).toHaveCount(0);
+    await expect(card.getByText("Photo", { exact: true })).toBeHidden();
+    await expectNoHorizontalOverflow(page);
   });
 });
