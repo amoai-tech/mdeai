@@ -86,6 +86,15 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
       expect(mapApartmentRowToDetail(ownedRow).canScheduleViewing).toBe(true);
     });
 
+    it("trusts the DB-computed phase eligibility, including unconfirmed availability", () => {
+      const development = { ...ownedRow, available_from: null,
+        moderation_status: "pending", listing_workflow_status: "draft",
+        rental_can_request_viewing: true };
+      expect(mapApartmentRowToDetail(development).canScheduleViewing).toBe(true);
+      expect(mapApartmentRowToDetail({ ...ownedRow, rental_can_request_viewing: false })
+        .canScheduleViewing).toBe(false);
+    });
+
     it("is false when the listing has no canonical owner", () => {
       expect(mapApartmentRowToDetail({ ...ownedRow, landlord_id: null }).canScheduleViewing).toBe(false);
     });
