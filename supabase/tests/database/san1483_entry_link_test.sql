@@ -1,6 +1,6 @@
 -- SAN-1483 · contest entry -> canonical restaurant link. Self-contained; rolled back.
 begin;
-select plan(8);
+select plan(12);
 
 insert into auth.users (id, email) values ('f1483000-0000-0000-0000-000000000001','link-org@example.com');
 insert into public.profiles (id, email) values ('f1483000-0000-0000-0000-000000000001','link-org@example.com') on conflict do nothing;
@@ -15,11 +15,28 @@ select is((select count(*)::int from pg_indexes where schemaname='vote' and inde
 select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001')->>'entity_id', 'e1483000-0000-0000-0000-000000000001', 'target RPC returns the linked entry');
 select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001')->>'application_phase', 'development', 'target RPC reports the phase truthfully');
 select throws_ok($q$ insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values ('e1483000-0000-0000-0000-000000000002','c1483000-0000-0000-0000-000000000001','dup','Dup','a1483000-0000-0000-0000-000000000001') $q$, '23505', null, 'a second entry for the same restaurant in the same contest is rejected');
-select is(has_function_privilege('anon', 'public.vote_restaurant_target(uuid)', 'EXECUTE'), false, 'anon cannot execute the target RPC');
+select is(has_function_privilege('anon', 'public.vote_restaurant_target(uuid, uuid)', 'EXECUTE'), false, 'anon cannot execute the target RPC');
 set local role anon;
 select throws_ok($q$ select public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001') $q$, '42501', null, 'anon is denied at execution time, not just by the privilege flag');
 reset role;
-select is(has_function_privilege('service_role', 'public.vote_restaurant_target(uuid)', 'EXECUTE'), true, 'service_role can execute the target RPC');
+select is(has_function_privilege('service_role', 'public.vote_restaurant_target(uuid, uuid)', 'EXECUTE'), true, 'service_role can execute the target RPC');
+
+-- Ambiguity and deletion (SAN-1483 corrective)
+insert into vote.contests (id, slug, kind, title, org_id, starts_at, ends_at, status) values
+  ('c1483000-0000-0000-0000-000000000002','link-test-2','restaurant','Link Test 2','f1483000-0000-0000-0000-000000000001', now() - interval '1 day', now() + interval '1 day','draft');
+insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values
+  ('e1483000-0000-0000-0000-000000000003','c1483000-0000-0000-0000-000000000002','link-e2','[TEST] Link E2','a1483000-0000-0000-0000-000000000001');
+
+select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001'), null, 'two qualifying contests with no explicit contest is refused, not guessed');
+select is(
+  public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001','c1483000-0000-0000-0000-000000000002')->>'entity_id',
+  'e1483000-0000-0000-0000-000000000003',
+  'an explicit contest resolves deterministically');
+
+update vote.entities set restaurant_id = null where id = 'e1483000-0000-0000-0000-000000000003';
+select is(public.vote_restaurant_target('a1483000-0000-0000-0000-000000000001','c1483000-0000-0000-0000-000000000002'), null, 'a removed link returns no target');
+
+select is(has_function_privilege('authenticated', 'public.vote_restaurant_target(uuid, uuid)', 'EXECUTE'), false, 'authenticated cannot execute the corrective RPC');
 
 select * from finish();
 rollback;
