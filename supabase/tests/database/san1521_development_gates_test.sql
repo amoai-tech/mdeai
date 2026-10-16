@@ -2,7 +2,7 @@
 -- Rolled back entirely; production defaults to 'launch'.
 begin;
 
-select plan(25);
+select plan(30);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
@@ -86,6 +86,20 @@ set local role authenticated;
 select lives_ok($q$ insert into public.restaurants (name, is_active) values ('IT admin restaurant', false) $q$, 'super admin can create an inactive restaurant');
 select lives_ok($q$ update public.restaurants set is_verified = true where name = 'IT admin restaurant' $q$, 'super admin can update a restaurant');
 reset role;
+
+
+-- ── Phase config is not end-user readable or writable ────────────────────────
+set local role authenticated;
+select throws_ok($q$ select * from public.app_runtime_config $q$, '42501', null, 'authenticated cannot read the phase config');
+select throws_ok($q$ update public.app_runtime_config set value = 'launch' $q$, '42501', null, 'authenticated cannot change the phase');
+reset role;
+set local role anon;
+select throws_ok($q$ select * from public.app_runtime_config $q$, '42501', null, 'anon cannot read the phase config');
+reset role;
+
+-- ── Development provenance keeps test ballots out of the launch tally ────────
+select is((select development_test::text from vote.votes where idempotency_key = 'lkey-0001'), 'true', 'development cast is marked development_test');
+select is((select audience_votes::text from vote.entity_tally where entity_id = 'e1000000-0000-0000-0000-000000000002'), '0', 'launch tally excludes development test ballots');
 
 select * from finish();
 rollback;

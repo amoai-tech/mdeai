@@ -34,6 +34,14 @@ on conflict (key) do nothing;
 
 alter table public.app_runtime_config enable row level security;
 revoke all on public.app_runtime_config from public, anon, authenticated;
+-- Reviewed: no extra policy is needed. RLS default-denies anon/authenticated and the revoke
+-- removes their table privileges; service_role bypasses RLS and keeps its default privileges.
+-- has_table_privilege confirms service_role sel/upd = true, authenticated/anon sel = false.
+
+-- ── 1b. Development provenance on votes ──────────────────────────────────────
+-- Development test ballots are real rows but must never feed the shared launch projection.
+alter table vote.votes
+  add column if not exists development_test boolean not null default false;
 
 create or replace function private.mde_application_phase()
 returns text
@@ -187,12 +195,12 @@ begin
     insert into vote.votes (
       contest_id, entity_id, voter_user_id,
       weight, source, ip_hash, device_hash, user_agent, country,
-      fraud_status, idempotency_key, restaurant_ballot
+      fraud_status, idempotency_key, restaurant_ballot, development_test
     ) values (
       p_contest_id, p_entity_id, p_user_id,
       case when v_suspicious and not v_dev then 0 else 1.0 end, 'audience', p_ip_hash, p_device_hash,
       left(p_user_agent, 256), p_country,
-      case when v_suspicious and not v_dev then 'suspicious' else 'pending' end, p_idempotency_key, true
+      case when v_suspicious and not v_dev then 'suspicious' else 'pending' end, p_idempotency_key, true, v_dev
     )
     returning * into v_vote;
   exception when unique_violation then
@@ -276,7 +284,116 @@ as $$
   where v.entity_id = p_entity_id;
 $$;
 
--- ── 6. Grants unchanged: vote.* stays private, backend-only RPCs ──────────────
+-- ── 6. Launch tally excludes development-test ballots ─────────────────────────
+-- vote.trigger_recompute_on_vote fires on every vote insert and recounts all audience
+-- votes, so development test ballots would otherwise leak into vote.entity_tally.
+-- Provenance (development_test) keeps them out of that projection while public.vote_tally
+-- still reports them via development_test_total. Their pending status is preserved.
+create or replace function vote.recompute_entity_tally(p_entity_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = 'vote', 'public'
+as $function$
+DECLARE
+  v_contest_id      uuid;
+  v_formula         jsonb;
+  v_w_audience      numeric;
+  v_w_judges        numeric;
+  v_audience_votes  bigint;
+  v_paid_votes      bigint;
+  v_max_audience    bigint;
+  v_audience_norm   numeric;
+  v_judge_norm      numeric;
+  v_weighted        numeric;
+  v_trend_24h       numeric;
+BEGIN
+  SELECT e.contest_id, c.scoring_formula
+  INTO v_contest_id, v_formula
+  FROM vote.entities e
+  JOIN vote.contests c ON c.id = e.contest_id
+  WHERE e.id = p_entity_id;
+
+  IF v_contest_id IS NULL THEN RETURN; END IF;
+
+  v_w_audience := COALESCE((v_formula->>'audience')::numeric, 0.5);
+  v_w_judges   := COALESCE((v_formula->>'judges')::numeric, 0.3);
+
+  SELECT
+    COUNT(*) FILTER (WHERE source = 'audience' AND fraud_status <> 'blocked' AND NOT development_test),
+    COUNT(*) FILTER (WHERE source = 'paid')
+  INTO v_audience_votes, v_paid_votes
+  FROM vote.votes
+  WHERE entity_id = p_entity_id;
+
+  -- GREATEST(...,1) keeps the normalizer safe when development ballots are the only votes.
+  SELECT GREATEST(COALESCE(MAX(sub.cnt), 0), 1)
+  INTO v_max_audience
+  FROM (
+    SELECT COUNT(*) FILTER (WHERE source = 'audience' AND fraud_status <> 'blocked' AND NOT development_test) AS cnt
+    FROM vote.votes
+    WHERE contest_id = v_contest_id
+    GROUP BY entity_id
+  ) sub;
+
+  v_audience_norm := v_audience_votes::numeric / v_max_audience::numeric;
+
+  SELECT COALESCE(
+    SUM(js.score * sc.weight_pct::numeric / 100.0)
+    / NULLIF(SUM(sc.weight_pct::numeric / 100.0 * sc.max_score::numeric), 0),
+    0
+  )
+  INTO v_judge_norm
+  FROM vote.judge_scores js
+  JOIN vote.scoring_criteria sc ON sc.id = js.criterion_id
+  WHERE js.entity_id = p_entity_id;
+
+  v_weighted := (v_audience_norm * v_w_audience) + (v_judge_norm * v_w_judges);
+
+  SELECT COUNT(*) FILTER (
+    WHERE source = 'audience'
+      AND fraud_status <> 'blocked'
+      AND NOT development_test
+      AND created_at >= NOW() - interval '24 hours'
+  )
+  INTO v_trend_24h
+  FROM vote.votes
+  WHERE entity_id = p_entity_id;
+
+  INSERT INTO vote.entity_tally (
+    entity_id, contest_id,
+    audience_votes, paid_votes,
+    judge_score, weighted_total, trend_24h,
+    updated_at
+  ) VALUES (
+    p_entity_id, v_contest_id,
+    v_audience_votes, v_paid_votes,
+    v_judge_norm, v_weighted, v_trend_24h,
+    NOW()
+  )
+  ON CONFLICT (entity_id) DO UPDATE SET
+    audience_votes = EXCLUDED.audience_votes,
+    paid_votes     = EXCLUDED.paid_votes,
+    judge_score    = EXCLUDED.judge_score,
+    weighted_total = EXCLUDED.weighted_total,
+    trend_24h      = EXCLUDED.trend_24h,
+    updated_at     = NOW();
+
+  WITH ranked AS (
+    SELECT entity_id,
+           DENSE_RANK() OVER (ORDER BY weighted_total DESC) AS rnk
+    FROM vote.entity_tally
+    WHERE contest_id = v_contest_id
+  )
+  UPDATE vote.entity_tally et
+  SET rank = r.rnk
+  FROM ranked r
+  WHERE et.entity_id = r.entity_id
+    AND et.contest_id = v_contest_id;
+END;
+$function$;
+
+-- ── 7. Grants unchanged: vote.* stays private, backend-only RPCs ──────────────
 revoke all on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
   from public, anon, authenticated;
 grant execute on function public.cast_restaurant_vote(uuid, uuid, uuid, text, text, text, text, text)
