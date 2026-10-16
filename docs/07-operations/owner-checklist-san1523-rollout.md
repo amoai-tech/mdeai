@@ -13,20 +13,20 @@ A visitor searching "quiet apartment near a park" finds development listings by 
 
 - [ ] **1. Rotate the database password.** It was printed once by mistake in an earlier session. Supabase dashboard, project `zkwcbyxiwklihegjhuql`, Settings, Database, reset password. Put the new value only in your password manager, then update `SUPABASE_DB_URL` wherever you keep it. *Stop if:* you are unsure where the old password is still used. Ask me to list the places before you rotate.
 - [ ] **2. Get one reviewer to approve the pull requests in one sitting.** Order, small to large:
-  - [ ] #356, audit identity (listings cannot fake "who approved me")
+  - [x] #356, audit identity (listings cannot fake "who approved me"): merged 2026-10-16
   - [ ] #352, development search visibility (three small database rules, including: visitors keep read access only on the three search-fingerprint tables)
   - [ ] #357, event cards show city and map pin
   - [ ] #341, the embedding worker. Reviewer reads the 388-line migration with the guide: https://github.com/amoai-tech/mdeai/pull/341#issuecomment-6219327593
   - The required check is `floor`, already green. Codacy and `verify-review-result` are known false alarms and do not block.
-- [ ] **3. Confirm #345 (restaurant vote) merges.** Production already has its database change. The deploy refuses to run until its file is on `main`.
+- [x] **3. #345 (restaurant vote) is merged** (2026-10-16). Production already had its database change; its file is now on `main`, so the history check can pass.
 
 ## B. Production steps (each one needs your explicit go-ahead)
 
 Run from an up-to-date `main` after the pull requests above are merged.
 
-- [ ] **4. Apply #352 and #356 together, first.** Their version numbers are older than #341's, so they must go before it (otherwise `db push` refuses). The dry run must list exactly four files: `20261016233000`, `20261016234000`, `20261016235000`, `20261016235500`. *Stop if:* anything else is listed.
+- [ ] **4. Apply #352 and #356 together, first** (#356 is already on `main`; #352 must merge before this step). Their version numbers are older than #341's, so they must go before it (otherwise `db push` refuses). The dry run must list exactly four files: `20261016233000`, `20261016234000`, `20261016235000`, `20261016235500`. *Stop if:* anything else is listed.
 - [ ] **5. Put the two secrets in place, in your own terminal.** The worker password (`EMBEDDING_CRON_SECRET`, generated with `openssl rand -hex 32`) and the Google key (`GOOGLE_GENERATIVE_AI_API_KEY`). Commands are in runbook section 5. I never see these values.
-- [ ] **6. Apply #341.** The dry run must list exactly one file: `20261017010000_embedding_worker_pipeline.sql`. Then run the read-only checks in runbook section 4.1.
+- [ ] **6. Apply #341.** The dry run must list `20261017010000_embedding_worker_pipeline.sql`, plus `20261017020000_san1305_restore_fts_hybrid_search.sql` if #361 has merged. Nothing else. Then run the read-only checks in runbook section 4.1.
 - [ ] **7. Deploy the worker** with `--no-verify-jwt`, then the two smoke tests: GET must answer 405 and POST without the secret must answer 401.
 - [ ] **8. Process 1 listing, check it, then 5.** Required: HTTP 200, `failed` is 0, vectors are 768 numbers long, no listing handled twice. *Stop on any 502, 503, or a listing stuck in `processing` for more than 6 minutes.* Stopping is safe: with no schedule, the queue just waits.
 

@@ -15,7 +15,7 @@ Project ref: `zkwcbyxiwklihegjhuql`. Secrets are never pasted into chat, tickets
 | 0.2 | **`main` contains every migration production already applied.** `supabase db push` refuses to run when production's history has versions missing locally ("Remote migration versions not found in local migrations directory"). Production was last read (2026-10-16) as holding SAN-1502 `20261016162000`, `180000`, `190000`, `210000` (PR #342), `20261016200000` (PR #351) and `20261016230000_vote_my_receipt` (PR #345). #342 and #351 are on `main`; **#345 is not until it merges** — it was applied from its branch, and #341 originally collided with it, which is why this migration is `20261017010000`. | step 2.3 below | any `REMOTE`-only version. Merge the owning PR; do **not** `migration repair` production history to get around it |
 | 0.3 | `20261017010000` is later than every applied version | step 2.3 | it sorts before a remote version (needs `--include-all`; re-number instead) |
 | 0.4 | The database password that was exposed in an earlier session has been rotated and `SUPABASE_DB_URL` uses the new one | owner confirms | not rotated |
-| 0.5 | **PR #352 and PR #356 are applied first, in one push.** Their migrations (`20261016233000`, `20261016234000`, `20261016235000`, `20261016235500`) have *older* version numbers than `20261017010000`. Once `20261017010000` is on the server, `supabase db push` refuses them ("Found local migration files to be inserted before the last migration on remote database", see https://github.com/supabase/cli/issues/1323) unless `--include-all` is passed. Apply them first with their own dry run (manifest must list exactly those four files), each step with the owner's go-ahead | step 2.3 shows any LOCAL-only row other than `20261017010000` | do not run `--include-all` to get around it; apply the earlier-numbered PRs first |
+| 0.5 | **PR #352 and PR #356 are applied first, in one push.** (#356 is already on `main`; #352 must merge before this push.) Their migrations (`20261016233000`, `20261016234000`, `20261016235000`, `20261016235500`) have *older* version numbers than `20261017010000`. Once `20261017010000` is on the server, `supabase db push` refuses them ("Found local migration files to be inserted before the last migration on remote database", see https://github.com/supabase/cli/issues/1323) unless `--include-all` is passed. Apply them first with their own dry run (manifest must list exactly those four files), each step with the owner's go-ahead | step 2.3 shows any LOCAL-only row other than `20261017010000` | do not run `--include-all` to get around it; apply the earlier-numbered PRs first |
 
 ## 1. Read-only baseline (record the numbers; compare after the apply)
 
@@ -70,7 +70,7 @@ Expected: every row has both LOCAL and REMOTE **except** `20261017010000`, which
 npm run migration:dry-run
 ```
 
-Expected manifest: **exactly one** file, `20261017010000_embedding_worker_pipeline.sql`.
+Expected manifest: `20261017010000_embedding_worker_pipeline.sql`. **If PR #361 (search recovery, `20261017020000_san1305_restore_fts_hybrid_search.sql`) is already on `main`, expect exactly those two files**, in that order; it only recreates search objects production already has and removes the implicit PUBLIC execute right. Anything else is a STOP.
 **STOP** if anything else is listed. This is the check that stops an unreviewed migration reaching production.
 
 ## 3. What the migration changes (so the apply is not a surprise)
