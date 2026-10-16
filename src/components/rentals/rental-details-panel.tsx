@@ -80,16 +80,19 @@ function PhotoCarousel({ rental }: { rental: Rental }) {
 /** Facts, price, location and the allowed actions. The close control is supplied by the host. */
 function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSchedule">) {
   const external = isExternalAd(rental);
+  // One price rule everywhere: an external ad never shows a nightly price, a monthly price
+  // supersedes it, and a zero/nightly placeholder is unknown rather than a real rent.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    external ? null : rental.nightly_price,
+    external || rental.price_monthly != null || rental.nightly_price <= 0 ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
   const price = monthlyLabel ?? nightlyLabel;
   const sourceUrl = externalSourceUrlFor(rental);
   const hasCoordinates = rental.latitude != null && rental.longitude != null;
-  // Fail closed: an external ad is never requestable on MDE, whatever its flag says.
-  const showSchedule = !external && rental.can_schedule_viewing === true && Boolean(onSchedule);
+  // One rule everywhere: the database-computed requestability decides, external records included.
+  // An external record is labeled an MDE follow-up below and never implies a provider confirmation.
+  const showSchedule = rental.can_schedule_viewing === true && Boolean(onSchedule);
 
   return (
     <div className="space-y-4">
@@ -106,7 +109,7 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
 
       <div>
         <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
-          {price ?? <span className="text-muted-foreground">Price data pending</span>}
+          {price ?? <span className="text-muted-foreground">Price not provided</span>}
         </p>
         {rental.availability ? (
           <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-details-availability">
@@ -167,8 +170,10 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
           className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
           data-testid="rental-details-external-note"
         >
-          Listed by the original advertiser. MDE has not verified this listing and cannot schedule a
-          viewing for it.
+          Listed by the original advertiser
+          {rental.source_provider ? ` (${rental.source_provider})` : ""}. MDE has not independently
+          verified this listing, and no provider has confirmed an appointment. Requesting here
+          records your interest for MDE follow-up; it is not a confirmed viewing.
         </p>
       ) : null}
 
@@ -176,7 +181,7 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
         {showSchedule ? (
           <Button type="button" onClick={onSchedule} data-testid="rental-details-schedule-cta">
             <Calendar data-icon="inline-start" aria-hidden />
-            Schedule viewing
+            {external ? "Request MDE follow-up" : "Schedule viewing"}
           </Button>
         ) : null}
         {sourceUrl ? (

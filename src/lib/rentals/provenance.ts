@@ -20,6 +20,42 @@ export function isUnverifiedExternalSource(metadata: unknown): boolean {
 }
 
 /**
+ * SAN-1502 — is this a third-party-source listing?
+ *
+ * Source attribution must be independent of booking eligibility. The nine imported
+ * Fincaraíz listings lost their legacy `inventory_kind`/`allowed_action` classification
+ * markers, but kept the preserved provenance (`source_record_type`,
+ * `source_provider`, `source_original_url`). Recognition therefore reads the preserved
+ * provenance first and still accepts the legacy markers, so no listing silently
+ * becomes an "ordinary MDE listing".
+ */
+export function isExternalSourceListing(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+  const meta = metadata as Record<string, unknown>;
+  // SAN-1502 Phase A: an imported record activated as MDE-managed development inventory
+  // is presented as an ordinary MDE listing. Its provenance stays in the source_* keys
+  // for internal traceability and pre-launch cleanup, but it is not shown as external.
+  if (meta.mde_managed_development === true) return false;
+  if (meta.source_record_type === "third_party_advertisement") return true;
+  return (
+    meta.inventory_kind === "external_candidate" ||
+    meta.inventory_type === "external" ||
+    meta.allowed_action === "view_original_listing"
+  );
+}
+
+/** The advertiser's display name, when the import preserved one. */
+export function externalSourceProvider(metadata: unknown): string | null {
+  if (!isExternalSourceListing(metadata)) return null;
+  const meta = metadata as Record<string, unknown>;
+  for (const key of ["source_provider", "source_name"]) {
+    const value = meta[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/**
  * SAN-1503 — `available_from` is a placeholder, not a promise, when the import recorded that the
  * source never stated a future date ("for rent, dates unconfirmed", "available now", or a "rented
  * until" date that is already past). Cards, the Details panel, chat and the listing calendar must

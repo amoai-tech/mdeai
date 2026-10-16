@@ -1,0 +1,11 @@
+-- SAN-1502 · Remove the legacy administrator wrapper.
+--
+-- `admin_activate_development_inventory(text)` was replaced by the service_role-only
+-- internal `_san1502_activate_development_inventory(text)`. The wrapper is gone from the
+-- current migrations, but it still exists in databases migrated earlier, where it is
+-- executable by `authenticated` (it re-checks `is_admin()` internally, so it was never an
+-- access bypass — but the live schema must match Git).
+--
+-- Forward migration on purpose: editing an already-applied migration would drift the
+-- applied history. No application code, test or script references the wrapper.
+drop function if exists public.admin_activate_development_inventory(text);
