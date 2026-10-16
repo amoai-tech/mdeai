@@ -64,13 +64,9 @@ begin
                 'development_ready_at', now(),
                 'development_activated_by', v_email
               )
-   where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true'
-     and (
-       a.slug like 'candidate-%'
-       or a.slug like 'external-%'
-       or lower(coalesce(a.metadata->>'inventory_kind', '')) = 'mde_managed'
-       or a.landlord_id = v_profile
-     );
+   -- Every non-fixture record is designated development inventory while Phase A is
+   -- active; explicit test fixtures stay untouched and are never published.
+   where coalesce(lower(a.metadata->>'is_test_fixture'), 'false') <> 'true';
   get diagnostics v_changed = row_count;
   return v_changed;
 end
