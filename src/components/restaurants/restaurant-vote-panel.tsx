@@ -3,6 +3,7 @@
 /** Restaurant detail vote panel (SAN-1469). */
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
@@ -14,6 +15,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const [state, setState] = useState<PanelState>("idle");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
   const functionsUrl = useMemo(() => getSupabaseEnv().url + "/functions/v1", []);
 
@@ -21,7 +24,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     if (!voteTarget) return;
     setState("casting");
     setMessage(null);
-    const goToLogin = () => { window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname); };
+    const goToLogin = () => { router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants")); };
     try {
       const supabase = createClient();
       const { data: sessionData } = await supabase.auth.getSession();
@@ -71,7 +74,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       setState("error");
       setMessage("Network problem. Nothing was recorded — check your connection and try again.");
     }
-  }, [functionsUrl, idempotencyKey, voteTarget]);
+  }, [functionsUrl, idempotencyKey, pathname, router, voteTarget]);
 
   if (!voteTarget) {
     return (
