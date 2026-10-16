@@ -69,9 +69,10 @@ export function RentalCard({
   onOpenDetails,
   canScheduleViewing,
 }: RentalCardProps) {
-  // The listing's own currency — never assumed USD.
+  // The listing's own currency — never assumed USD. A stored monthly rent leads: the nightly figure
+  // would only be rent ÷ 30, so it is not shown as an offer (same rule as the /rentals browse card).
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    tags?.includes("external-source") ? null : nightly_price,
+    tags?.includes("external-source") || price_monthly != null ? null : nightly_price,
     price_monthly,
     currency,
   );
@@ -185,7 +186,15 @@ export function RentalCard({
             </span>
           ) : null}
           {monthlyLabel ? (
-            <span className="text-xs text-muted-foreground">{monthlyLabel}</span>
+            <span
+              className={
+                nightlyLabel
+                  ? "text-xs text-muted-foreground"
+                  : "inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary"
+              }
+            >
+              {monthlyLabel}
+            </span>
           ) : null}
         </div>
       ) : null}

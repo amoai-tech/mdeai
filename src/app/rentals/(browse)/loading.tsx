@@ -1,3 +1,7 @@
+// SAN-1503: this file lives in the `(browse)` route group so the skeleton wraps ONLY the /rentals list.
+// Next.js sends HTTP 200 as soon as a `loading.js` boundary starts streaming, so a loading.tsx directly
+// under `app/rentals/` also wrapped `/rentals/[id]` and made an unknown listing answer 200, not 404.
+// https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Stable keys for fixed-length skeleton lists (no array-index keys — JS-0437).
