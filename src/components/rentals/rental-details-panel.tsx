@@ -170,9 +170,10 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
           className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
           data-testid="rental-details-external-note"
         >
-          Listed by the original advertiser. MDE has not independently verified this listing, and no
-          provider has confirmed an appointment. Requesting here records your interest for MDE
-          follow-up; it is not a confirmed viewing.
+          Listed by the original advertiser
+          {rental.source_provider ? ` (${rental.source_provider})` : ""}. MDE has not independently
+          verified this listing, and no provider has confirmed an appointment. Requesting here
+          records your interest for MDE follow-up; it is not a confirmed viewing.
         </p>
       ) : null}
 

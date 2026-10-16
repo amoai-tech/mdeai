@@ -391,6 +391,11 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
                   <ExternalLink className="size-3.5" aria-hidden /> View original listing
                 </a>
               ) : null}
+              {detail.sourceProvider ? (
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-detail-source-label">
+                  Source: {detail.sourceProvider}
+                </p>
+              ) : null}
             </div>
           </section>
         </div>

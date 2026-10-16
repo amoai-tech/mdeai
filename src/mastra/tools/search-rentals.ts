@@ -2,7 +2,12 @@ import { createTool } from '@mastra/core/tools';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
-import { isAvailabilityUnconfirmed, isSelfAttested } from '@/lib/rentals/provenance';
+import {
+  isAvailabilityUnconfirmed,
+  isSelfAttested,
+  isExternalSourceListing,
+  externalSourceProvider,
+} from '@/lib/rentals/provenance';
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -41,6 +46,8 @@ export const rentalSchema = z.object({
   /** Total photos the listing has, when more than `images` carries (the panel links to the rest). */
   photo_count: z.number().int().optional(),
   source_url: z.string(),
+  /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
+  source_provider: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -374,6 +381,7 @@ export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
   const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
+  const externalProvider = externalSourceProvider(r.metadata);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -390,6 +398,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
     photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
+    source_provider: externalProvider ?? undefined,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
@@ -408,10 +417,9 @@ export function rowToRental(r: ApartmentRow): Rental {
         price_daily: nightlyPrice,
       });
       if (isSelfAttested(r.metadata)) tags.push('self-attested');
-      const meta = r.metadata && typeof r.metadata === 'object' && !Array.isArray(r.metadata)
-        ? r.metadata as Record<string, unknown> : {};
-      if (meta.inventory_kind === 'external_candidate' ||
-          meta.allowed_action === 'view_original_listing') tags.push('external-source');
+      // Source attribution is independent of eligibility: use the preserved provenance,
+      // not the removed inventory_kind/allowed_action markers.
+      if (isExternalSourceListing(r.metadata)) tags.push('external-source');
       return tags;
     })(),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,

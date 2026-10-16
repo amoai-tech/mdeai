@@ -380,5 +380,6 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
     canScheduleViewing: false,
     isNotIndependentlyVerified: false,
     sourceUrl: c.metadata?.original_listing_url ?? c.source_url,
+    sourceProvider: null,
   };
 }

@@ -292,6 +292,30 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
     expect(html).toContain("Request MDE follow-up");
     expect(html).toContain("View original listing");
   });
+
+  // SAN-1502: the nine imported Fincaraíz listings lost the legacy inventory_kind marker but
+  // kept their preserved provenance. Attribution must not depend on the removed marker.
+  it("attributes a Fincaraíz import from preserved provenance without the removed marker", () => {
+    const rental = rowToRental(
+      apartmentRow({
+        id: "candidate-fincaraiz-194104380",
+        slug: "candidate-fincaraiz-194104380",
+        source_url: "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        metadata: {
+          source_record_type: "third_party_advertisement",
+          source_provider: "Fincaraíz",
+          source_original_url:
+            "https://www.fincaraiz.com.co/apartamento-en-arriendo-en-el-poblado-medellin/194104380",
+        },
+      }),
+    );
+    expect(rental.tags).toContain("external-source");
+    expect(rental.source_provider).toBe("Fincaraíz");
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).toContain("Request MDE follow-up");
+    expect(html).toContain("Source: Fincaraíz");
+    expect(html).toContain("View original listing");
+  });
 });
 
 describe("External rental title navigation", () => {

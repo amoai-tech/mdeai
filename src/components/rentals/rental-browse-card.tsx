@@ -261,6 +261,14 @@ export function RentalBrowseCard({
               {isExternalAd(rental) ? 'Request MDE follow-up' : 'Schedule viewing'}
             </Button>
           ) : null}
+          {isExternalAd(rental) && rental.source_provider ? (
+            <span
+              data-testid={`rental-card-source-label-${rental.id}`}
+              className="self-center text-[11px] text-muted-foreground"
+            >
+              Source: {rental.source_provider}
+            </span>
+          ) : null}
           {externalSourceUrl ? (
             <a
               href={externalSourceUrl}

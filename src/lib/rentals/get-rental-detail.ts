@@ -2,7 +2,12 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
-import { isAvailabilityUnconfirmed, isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
+import {
+  isAvailabilityUnconfirmed,
+  isSelfAttested,
+  isExternalSourceListing,
+  externalSourceProvider,
+} from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -37,6 +42,8 @@ export type RentalDetail = {
   status: string | null;
   /** The advertiser's own listing, when this is an external candidate (never for MDE-owned rows). */
   sourceUrl: string | null;
+  /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
+  sourceProvider: string | null;
   /**
    * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
    * ownership + workflow + availability proof the database enforces. Every scheduling
@@ -110,9 +117,10 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     longitude: num(row.longitude),
     status: str(row.status),
     sourceUrl: str(row.source_url),
+    sourceProvider: externalSourceProvider(row.metadata),
     // Computed by Supabase under the server-controlled phase, not mirrored in UI.
     canScheduleViewing: row.rental_can_request_viewing === true,
-    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isUnverifiedExternalSource(row.metadata),
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isExternalSourceListing(row.metadata),
   };
 }
 
