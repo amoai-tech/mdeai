@@ -378,7 +378,7 @@ export async function getLocalPreviewDetail(id: string): Promise<RentalDetail | 
     longitude: listing?.longitude ?? null,
     status: "development-preview",
     canScheduleViewing: false,
-    isSelfAttested: false,
+    isNotIndependentlyVerified: false,
     sourceUrl: c.metadata?.original_listing_url ?? c.source_url,
   };
 }

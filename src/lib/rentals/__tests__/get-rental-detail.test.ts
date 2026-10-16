@@ -36,6 +36,23 @@ afterEach(() => {
 });
 
 describe("SAN-1202 · mapApartmentRowToDetail", () => {
+  it("discloses a third-party advertisement as unverified without blocking Phase A viewing", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "external-001",
+      status: "active",
+      title: "Laureles apartment",
+      source_url: "https://www.fincaraiz.com.co/example",
+      metadata: { source_record_type: "third_party_advertisement", availability_status: "unconfirmed" },
+      available_from: null,
+      rental_can_request_viewing: true,
+    });
+    expect(detail.isNotIndependentlyVerified).toBe(true);
+    expect(detail.sourceUrl).toBe("https://www.fincaraiz.com.co/example");
+    expect(detail.availableFrom).toBeNull();
+    expect(detail.canScheduleViewing).toBe(true);
+  });
+
+
   it("maps a full apartments row to the detail view-model", () => {
     const rentalDetail = mapApartmentRowToDetail({
       id: "abc",

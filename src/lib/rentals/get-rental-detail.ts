@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { isRentalRequestable, readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
-import { isSelfAttested } from "@/lib/rentals/provenance";
+import { isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -44,10 +44,10 @@ export type RentalDetail = {
    */
   canScheduleViewing: boolean;
   /**
-   * SAN-1449 — true when the landlord published through the self-attested path. The
-   * detail page shows "Not independently verified" rather than implying a review.
+   * Display an honest provenance notice for self-attested and third-party ads,
+   * without changing their development eligibility or booking permissions.
    */
-  isSelfAttested: boolean;
+  isNotIndependentlyVerified: boolean;
 };
 
 const UUID_RE =
@@ -121,7 +121,7 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
       available_to: str(row.available_to),
       metadata: row.metadata,
     }),
-    isSelfAttested: isSelfAttested(row.metadata),
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isUnverifiedExternalSource(row.metadata),
   };
 }
 

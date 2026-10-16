@@ -115,7 +115,7 @@ const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
       <Users className="size-3.5" aria-hidden />{" "}
       {detail.maxGuests != null ? `${detail.maxGuests} guests` : <Pending />}
     </Badge>
-    {detail.isSelfAttested ? (
+    {detail.isNotIndependentlyVerified ? (
       <Badge
         variant="outline"
         className="font-normal"
