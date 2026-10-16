@@ -7857,6 +7857,10 @@ export type Database = {
       }
     }
     Functions: {
+      vote_restaurant_target: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
