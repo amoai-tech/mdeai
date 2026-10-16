@@ -243,7 +243,11 @@ export function isRentalRequestable(
     typeof md === 'object' && md !== null &&
     !Array.isArray(md) &&
     (md as Record<string, unknown>).is_test_fixture === true
-  ) return row.status === 'active';
+  ) {
+    // An active development apartment is not requestable after its end date.
+    if (row.available_to && row.available_to < rentalAvailabilityDate(today)) return false;
+    return row.status === 'active';
+  }
   // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
   if (row.status !== 'active') return false;
   if (row.moderation_status !== 'approved') return false;
