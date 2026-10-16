@@ -76,6 +76,10 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
 
       await page.getByTestId("vote-cta").click();
       await expect(page.getByRole("dialog")).toBeVisible();
+      // CI captures the signed-in confirmation dialog, so the visual review is an artifact of a
+      // real authenticated run instead of a manual browser session.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: "test-results/vote-confirm-390.png" });
       await page.getByTestId("vote-cancel").click();
 
       const countBallots = async () => {
@@ -149,6 +153,7 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 850 });
         await expect(page.getByTestId("vote-receipt")).toBeVisible();
+        await page.screenshot({ path: "test-results/vote-receipt-" + width + ".png" });
         const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         expect(hasOverflow).toBe(false);
       }
