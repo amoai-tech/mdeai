@@ -4,7 +4,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(65);
+select plan(72);
 
 -- Fixtures: one admin, one revoked renter, one owner, one broker, one observer.
 insert into auth.users (id, instance_id, aud, role, email)
@@ -267,8 +267,9 @@ select is((select count(*)::int from public.rental_test_access), 1,
   'A46: a user sees only their own access row');
 reset role;
 set local role anon;
-select is((select count(*)::int from public.rental_test_events), 0,
-  'A48: anon sees no development history');
+select throws_ok(
+  $q$select count(*) from public.rental_test_events$q$,
+  '42501', null, 'A48: anon cannot read development history');
 reset role;
 
 -- A49: an expired grant is inactive even without a revoke.
@@ -337,6 +338,36 @@ reset role;
 select lives_ok(
   $q$delete from public.apartments where id = current_setting('mde.san1502_fixture')::uuid$q$,
   'A61: an audited fixture can be deleted without the append-only trigger blocking it');
+
+-- A62-A67: end-user roles are read-only; TRUNCATE (which RLS cannot protect) is gone.
+select is(has_table_privilege('anon', 'public.rental_test_events', 'select'), false,
+  'A62: anon has no read grant on the audit trail');
+select is(has_table_privilege('anon', 'public.rental_test_access', 'truncate'), false,
+  'A63: anon cannot TRUNCATE development grants');
+select is(has_table_privilege('authenticated', 'public.rental_test_access', 'truncate'), false,
+  'A64: authenticated cannot TRUNCATE development grants');
+select is(has_table_privilege('authenticated', 'public.rental_test_events', 'truncate'), false,
+  'A65: authenticated cannot TRUNCATE the audit trail');
+select is(has_table_privilege('authenticated', 'public.rental_test_access', 'select'), true,
+  'A66: authenticated keeps RLS-governed read access');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f1502000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+select throws_ok(
+  $q$truncate public.rental_test_access$q$,
+  '42501', null, 'A67: an authenticated admin cannot TRUNCATE grants');
+reset role;
+
+-- A68: the broker reassignment locks the apartment row before checking active
+-- viewings, so it serialises against the booking RPC instead of racing it. A true
+-- two-session race is not expressible in pgTAP's single-transaction harness
+-- (no dblink), so this guards the lock itself.
+select ok(
+  position('for update' in (
+    select prosrc from pg_proc
+     where proname = 'admin_assign_test_listing_broker'
+       and pronamespace = 'public'::regnamespace
+  )) > 0,
+  'A68: broker reassignment locks the apartment before checking active viewings');
 
 select * from finish();
 rollback;

@@ -95,7 +95,11 @@ create policy rental_test_access_service_role
 drop policy if exists rental_test_access_insert_admin on public.rental_test_access;
 drop policy if exists rental_test_access_update_admin on public.rental_test_access;
 drop policy if exists rental_test_access_delete_admin on public.rental_test_access;
-revoke insert, update, delete on public.rental_test_access from anon, authenticated;
+-- Read-only for end-user roles. TRUNCATE is table-wide and RLS does not
+-- protect it, so revoke everything and re-grant only the SELECT the read
+-- policies need. anon has no policy on this table, so it gets nothing.
+revoke all on public.rental_test_access from anon, authenticated;
+grant select on public.rental_test_access to authenticated;
 
 -- §2 — append-only development audit trail ----------------------------------
 create table if not exists public.rental_test_events (
@@ -178,7 +182,9 @@ create trigger rental_test_events_no_delete
 -- Defence in depth for append-only: even a future permissive RLS policy could
 -- not let an end-user role rewrite history, because the privilege is gone too.
 -- The SECURITY DEFINER RPCs run as the table owner and keep INSERT.
-revoke insert, update, delete on public.rental_test_events from anon, authenticated;
+-- Same for the audit trail: read-only for authenticated, nothing for anon.
+revoke all on public.rental_test_events from anon, authenticated;
+grant select on public.rental_test_events to authenticated;
 
 -- §3 — the authorization predicate ------------------------------------------
 -- SECURITY DEFINER so RLS on rental_test_access cannot recurse or hide the
@@ -519,10 +525,15 @@ begin
     raise exception 'broker has no landlord profile' using errcode = 'P0002';
   end if;
 
+  -- Lock the apartment first, exactly as p1_schedule_tour_atomic does. Without
+  -- it, a concurrent booking could insert a showing between the active-viewing
+  -- check below and the landlord_id update, silently moving an in-flight request
+  -- to a different broker. The lock makes the two serialise.
   select a.landlord_id into v_previous
     from public.apartments a
    where a.id = p_apartment_id
-     and lower(coalesce(a.metadata ->> 'is_test_fixture', 'false')) = 'true';
+     and lower(coalesce(a.metadata ->> 'is_test_fixture', 'false')) = 'true'
+   for update;
   if not found then
     raise exception 'test fixture not found' using errcode = 'P0002';
   end if;
