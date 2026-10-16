@@ -121,3 +121,4 @@ playwright/.auth/
 __pycache__/
 *.py[cod]
 deno.lock
+.shots/
