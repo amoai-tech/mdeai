@@ -36,7 +36,6 @@ const DEAD_HUB_ROUTES = [
   "/partners/restaurants",
   "/partners/cafes",
   "/partners/nightlife",
-  "/contact",
 ] as const;
 
 // Hub is slotted into the reusable MarketingPageShell (SAN-692), which owns the
