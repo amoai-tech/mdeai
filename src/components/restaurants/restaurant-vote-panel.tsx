@@ -125,7 +125,13 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         }
         if (!active) return;
 
-        if (outcome.kind === "sign-in") { setState("idle"); return; }
+        if (outcome.kind === "sign-in") {
+          // Session is not usable. If this browser holds a key, send the voter to sign in so
+          // they can recover their ballot; otherwise "idle" is correct and the CTA routes there.
+          if (hasLocalKey) goToLogin();
+          setState("idle");
+          return;
+        }
         if (outcome.kind === "receipt") { setReceipt(outcome.receipt); setState("receipt"); return; }
         if (outcome.kind === "already-voted") {
           setAlreadyVotedName(outcome.restaurantName);
@@ -148,22 +154,20 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         if (saved) { setReceipt(saved); setState("receipt"); return; }
         if (response.status === 401) { setState("idle"); return; }
         if (!response.ok && response.status >= 500) {
-          setMessage("Could not check your saved vote. Try again to recover the original receipt.");
-          setState("error");
+          // Unconfirmed: the ballot may already exist. Never fall back to a vote-enabled state.
+          setState("unknown");
           return;
         }
         // A pending attempt may not have reached the database. Keep the same key for retry.
         setState("idle");
       } catch {
-        if (active) {
-          setMessage("Could not check your saved vote. Reconnect and try again.");
-          setState("error");
-        }
+        // Same rule: a thrown request proves nothing about the ballot.
+        if (active) setState("unknown");
       }
     }
     void recover();
     return () => { active = false; };
-  }, [anonKey, contestId, entityId, functionsUrl, retryNonce]);
+  }, [anonKey, contestId, entityId, functionsUrl, retryNonce, goToLogin]);
 
   const castVote = useCallback(async () => {
     if (!voteTarget || inFlight.current) return;
