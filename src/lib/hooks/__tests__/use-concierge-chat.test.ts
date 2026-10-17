@@ -29,6 +29,7 @@ vi.mock("@copilotkit/react-core/v2", () => ({ useCopilotKit: () => ({ copilotkit
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent }),
 }));
+vi.mock("@/lib/chat/thread-nav-context", () => ({ useOptionalThreadNav: () => null }));
 
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 

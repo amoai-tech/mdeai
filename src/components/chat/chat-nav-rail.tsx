@@ -51,13 +51,14 @@ const LIBRARY_ITEMS: NavItem[] = [
   { slug: "profile", label: "Profile", href: null, Icon: User },
 ];
 
-function NavItemRow({ item }: { item: NavItem }) {
+function NavItemRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const { Icon, slug, label, href } = item;
   if (href) {
     return (
       <li>
         <Link
           href={href}
+          onClick={() => onNavigate?.()}
           data-testid={`nav-${slug}-link`}
           className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
@@ -97,12 +98,14 @@ function NavSectionLabel({ children }: { children: string }) {
 /** SCREEN-002 — chat nav rail with thread list + new chat + nav links. */
 export function ChatNavRail({
   testId = "nav-rail",
+  onNavigate,
 }: {
   testId?: string;
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
-  const { startNewChat, stopActiveRun } = useConciergeSession();
-  const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
+  const { startNewChat } = useConciergeSession();
+  const { activeThreadId, selectSavedThread, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
   const hasChats = !loading && !error && threads.length > 0;
 
@@ -110,16 +113,17 @@ export function ChatNavRail({
   // "/" from before the concierge moved, which dropped Sofia on the marketing
   // home and never reopened the chat she picked (SAN-1378).
   function onNewChat() {
-    clearActiveThread();
     startNewChat();
+    clearActiveThread();
+    onNavigate?.();
     router.push("/chat");
   }
 
   function onSelectThread(id: string) {
-    // New Chat stops a streaming reply inside startNewChat(); opening a saved
-    // chat must too, or the old answer streams into the chat being opened.
-    stopActiveRun();
-    setActiveThreadId(id);
+    // Also clear old map cards and detach an in-flight run before reopening.
+    startNewChat();
+    selectSavedThread(id);
+    onNavigate?.();
     router.push("/chat");
   }
 
@@ -192,6 +196,7 @@ export function ChatNavRail({
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground",
                   )}
+                  aria-current={activeThreadId === thread.id ? "true" : undefined}
                   title={label}
                 >
                   {label}
@@ -216,13 +221,13 @@ export function ChatNavRail({
         {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
         <NavSectionLabel>Explore</NavSectionLabel>
         {EXPLORE_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
+          <NavItemRow key={item.slug} item={item} onNavigate={onNavigate} />
         ))}
 
         {/* Library — personal pages */}
         <NavSectionLabel>Library</NavSectionLabel>
         {LIBRARY_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
+          <NavItemRow key={item.slug} item={item} onNavigate={onNavigate} />
         ))}
       </ul>
 

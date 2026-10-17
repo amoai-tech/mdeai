@@ -16,7 +16,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 // skipcq: JS-0067 - module-local helper; not browser global scope
 function CopilotKitWithThread({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { activeThreadId } = useThreadNav();
+  const { activeThreadId, sessionThreadId, hasPersistedThread } = useThreadNav();
   const deterministicE2E = isDeterministicE2E();
 
   // Deterministic browser tests exercise the real app/router with mocked
@@ -47,12 +47,10 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
       onError={reportConciergeError}
     >
       {/*
-        Non-chat pages (maps, cafés, events). Same thread rule as before the v2
-        move: a saved thread picked in the nav rail is explicit; with none
-        picked, the configuration provider mints one fresh thread per mount.
-        The /chat surface decides its own thread in ChatProvider.
+        The root per-tab thread is shared across discovery routes and /chat.
+        Saved/persisted threads reconnect explicitly; unused UUIDs do not.
       */}
-      <CopilotChatConfigurationProvider agentId="conciergeAgent" threadId={activeThreadId}>
+      <CopilotChatConfigurationProvider agentId="conciergeAgent" threadId={activeThreadId ?? sessionThreadId} hasExplicitThreadId={hasPersistedThread}>
         <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
