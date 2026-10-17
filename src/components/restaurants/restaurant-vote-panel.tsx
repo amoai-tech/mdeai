@@ -208,6 +208,12 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         const priorJson = (await priorRes.json().catch(() => ({}))) as VoteResponse;
         const prior = priorRes.ok ? parseReceipt(priorJson, target) : null;
         if (prior) { setReceipt(prior); setState("receipt"); return; }
+        if (!priorRes.ok && priorRes.status >= 500) {
+          // The earlier ballot may or may not exist. Do not request a fresh ticket while the
+          // previous outcome is unknown; ask the voter to retry instead.
+          setState("unknown");
+          return;
+        }
       }
       const nonceRes = await fetch(functionsUrl + "/vote-nonce", {
         method: "POST", headers, body: JSON.stringify({ contest_id: target.contestId }),
