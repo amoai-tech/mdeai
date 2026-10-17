@@ -102,8 +102,8 @@ set local role authenticated;
 select set_config('request.jwt.claims',
  '{"sub":"f1506000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 select is((select count(*)::int from public.apartments
- where id=current_setting('mde.san1502_phase_fixture')::uuid),1,
- 'signed-in renter can see fixture without a test grant');
+ where id=current_setting('mde.san1502_phase_fixture')::uuid),0,
+ 'signed-in renter without a test grant does not see an explicit test fixture (20261016233000)');
 select is(has_table_privilege('authenticated','public.rental_runtime_settings','select'),false,
  'signed-in user lacks SELECT on server-controlled phase table');
 reset role;
