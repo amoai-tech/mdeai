@@ -152,14 +152,21 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         if (!active) return;
         const saved = response.ok ? parseReceipt(body, target) : null;
         if (saved) { setReceipt(saved); setState("receipt"); return; }
-        if (response.status === 401) { setState("idle"); return; }
+        if (response.status === 401) {
+          // Expired session: send them to sign in rather than restoring a Vote button.
+          goToLogin();
+          setState("idle");
+          return;
+        }
         if (!response.ok && response.status >= 500) {
           // Unconfirmed: the ballot may already exist. Never fall back to a vote-enabled state.
           setState("unknown");
           return;
         }
-        // A pending attempt may not have reached the database. Keep the same key for retry.
-        setState("idle");
+        // 2xx without a parseable receipt, or an unexpected 4xx: the outcome is UNCONFIRMED.
+        // Restoring the Vote button here would invite a second ballot.
+        setState("unknown");
+        return;
       } catch {
         // Same rule: a thrown request proves nothing about the ballot.
         if (active) setState("unknown");
