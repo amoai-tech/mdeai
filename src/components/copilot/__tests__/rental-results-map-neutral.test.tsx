@@ -106,3 +106,84 @@ describe("SAN-472 chat rental card/map parity", () => {
     expect(card?.getAttribute("data-selected")).toBe("false");
   });
 });
+
+/** A row exactly as the rental search tool returns it (it validates against `rentalSchema`). */
+const fullRental = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  title: `Rental ${id}`,
+  neighborhood: "Laureles",
+  nightly_price: 0,
+  currency: "COP",
+  bedrooms: 2,
+  wifi: false,
+  amenities: ["workspace"],
+  image: "https://example.test/a.webp",
+  images: ["https://example.test/a.webp", "https://example.test/b.webp"],
+  photo_count: 2,
+  source_url: "https://www.fincaraiz.com.co/apartamento/1",
+  can_schedule_viewing: false,
+  schedule_viewing_url: null,
+  host_name: "Advertiser",
+  availability: "Availability unconfirmed",
+  tags: [] as string[],
+  price_monthly: 2_400_000,
+  ...extra,
+});
+
+const detailsButton = (id: string) => {
+  const card = Array.from(container.querySelectorAll('[data-testid="rental-card"]')).find((el) =>
+    el.textContent?.includes(`Rental ${id}`),
+  );
+  const button = Array.from(card?.querySelectorAll("button") ?? []).find((b) => /details/i.test(b.textContent ?? ""));
+  return button as HTMLButtonElement | undefined;
+};
+
+describe("SAN-1504 chat Details hands the full rental to the shared detail state", () => {
+  it("passes monthly price, photos, source link and coordinates, not the reduced sheet fields", () => {
+    render({
+      source: "supabase",
+      results: [fullRental("mapped", { latitude: 6.24, longitude: -75.59 })],
+    });
+    const button = detailsButton("mapped");
+    expect(button).toBeDefined();
+    act(() => button!.click());
+    expect(ui.openVenueDetail).toHaveBeenCalledTimes(1);
+    expect(ui.openVenueDetail.mock.calls[0][0]).toMatchObject({
+      kind: "rental",
+      listingId: "mapped",
+      pinId: "rental-mapped",
+      pinned: true,
+      rental: {
+        price_monthly: 2_400_000,
+        currency: "COP",
+        images: ["https://example.test/a.webp", "https://example.test/b.webp"],
+        source_url: "https://www.fincaraiz.com.co/apartamento/1",
+        latitude: 6.24,
+        longitude: -75.59,
+      },
+    });
+  });
+
+  it("a source-linked external ad now has Details (read-only), as the 2026-10-15 task correction says", () => {
+    render({ source: "supabase", results: [fullRental("ext", { tags: ["external-source"] })] });
+    const button = detailsButton("ext");
+    expect(button).toBeDefined();
+    act(() => button!.click());
+    expect(ui.openVenueDetail).toHaveBeenCalledTimes(1);
+    expect(ui.openVenueDetail.mock.calls[0][0].rental.can_schedule_viewing).toBe(false);
+  });
+
+  it("an apartment with no coordinates opens details with no pin selected", () => {
+    render({ source: "supabase", results: [fullRental("nocoords")] });
+    act(() => detailsButton("nocoords")!.click());
+    expect(ui.panToPin).not.toHaveBeenCalled();
+    expect(ui.openVenueDetail.mock.calls[0][0]).toMatchObject({ pinned: false });
+  });
+
+  it("a row that is not a complete rental keeps the old reduced detail, and an external one gets no Details", () => {
+    render({ source: "supabase", results: [rental("partial"), { ...rental("ext2"), tags: ["external-source"] }] });
+    act(() => detailsButton("partial")!.click());
+    expect(ui.openVenueDetail.mock.calls[0][0].rental).toBeUndefined();
+    expect(detailsButton("ext2")).toBeUndefined();
+  });
+});
