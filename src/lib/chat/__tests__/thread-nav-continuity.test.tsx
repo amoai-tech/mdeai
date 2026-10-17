@@ -110,6 +110,7 @@ describe("SAN-1413 · per-tab thread ownership", () => {
   });
 
   it("does not replay a never-sent UUID and tracks a successfully saved one", async () => {
+    auth.id = "sofia";
     await show();
     const original = nav.sessionThreadId!;
     expect(nav.hasPersistedThread).toBe(false);
@@ -118,6 +119,12 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     await show("return");
     expect(nav.hasPersistedThread).toBe(true);
     await change(() => nav.clearActiveThread());
+    expect(nav.hasPersistedThread).toBe(false);
+  });
+
+  it("does not claim anonymous chats are durably saved or owner-readable", async () => {
+    await show();
+    await change(() => nav.markThreadSaved(nav.sessionThreadId!));
     expect(nav.hasPersistedThread).toBe(false);
   });
 

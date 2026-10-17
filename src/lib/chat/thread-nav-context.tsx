@@ -141,7 +141,9 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   }, [owner, ready]);
 
   const markThreadSaved = useCallback((id: string) => {
-    if (!UUID.test(id)) return;
+    // Owned transcript replay is authenticated. A guest's local fast path or
+    // agent turn must never be advertised as a reloadable saved conversation.
+    if (owner === "anon" || !UUID.test(id)) return;
     setTab((old) => old?.owner === owner && old.sessionThreadId === id && !old.activeThreadId
       ? { ...old, savedThreadId: id } : old);
   }, [owner]);

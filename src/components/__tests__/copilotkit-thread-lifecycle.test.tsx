@@ -6,8 +6,9 @@ import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
 
 // The navigation owner waits for a verified auth identity. Test the anonymous path
 // without making Supabase network calls during provider lifecycle unit tests.
+const auth = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock("@/hooks/use-session", () => ({
-  useSession: () => ({ user: null, loading: false }),
+  useSession: () => ({ user: auth.userId ? { id: auth.userId } : null, loading: false }),
 }));
 
 import { HostEventProvider } from "@/components/host/host-event-provider";
@@ -80,6 +81,7 @@ async function render(node: React.ReactNode) {
 }
 
 beforeEach(() => {
+  auth.userId = null;
   window.sessionStorage.clear();
   window.history.replaceState(null, "", "/");
   for (const key of Object.keys(seen)) delete seen[key];
@@ -213,6 +215,7 @@ describe("ChatProvider — /chat saved chats and New Chat", () => {
   });
 
   it("does not replay a just-saved live answer; only replays after returning to chat", async () => {
+    auth.userId = "sofia";
     await render(chatPage());
     const id = seen.chat.threadId!;
     expect(seen.chat.explicit).toBe(false);
