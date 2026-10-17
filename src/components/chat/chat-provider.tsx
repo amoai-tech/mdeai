@@ -176,9 +176,8 @@ function SavedThreadHistory({
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
  *   continues that exact thread.
- * - Otherwise the chat runs on a fresh, NON-explicit thread: new on every visit
- *   to /chat and on every New Chat, so a new conversation never writes into an
- *   old one and does not try to reconnect to a thread that has never run.
+ * - Otherwise the chat uses the root per-tab thread, shared with other pages.
+ *   New Chat mints a fresh ID; only a persisted thread is reconnected.
  *
  * One `CopilotChatConfigurationProvider` owns that choice for every consumer on
  * the page (chat, map sync, tools), so they cannot drift onto different threads.
@@ -188,17 +187,14 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
-  const { activeThreadId, newChatCount } = useThreadNav();
-
-  // React's "adjust state when a prop changes" pattern: a new id the moment
-  // New Chat is pressed, with no intermediate render on the old thread.
-  const [fresh, setFresh] = useState(() => ({
-    newChatCount,
-    threadId: crypto.randomUUID(),
-  }));
-  if (fresh.newChatCount !== newChatCount) {
-    setFresh({ newChatCount, threadId: crypto.randomUUID() });
-  }
+  const { sessionThreadId, activeThreadId, hasPersistedThread } = useThreadNav();
+  const threadId = activeThreadId ?? sessionThreadId;
+  // A successfully saved live turn must NOT immediately reconnect/replay itself.
+  // Remember whether this tab's thread was already saved when /chat mounted;
+  // when the user returns after visiting Rentals, it is now safe to replay.
+  const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
+  const shouldReplay = Boolean(activeThreadId ||
+    (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
   return (
     <CopilotKitProvider
@@ -208,11 +204,11 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
-        threadId={activeThreadId ?? fresh.threadId}
-        hasExplicitThreadId={activeThreadId !== undefined}
+        threadId={threadId}
+        hasExplicitThreadId={shouldReplay}
       >
-        {activeThreadId !== undefined && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={activeThreadId}>{children}</SavedThreadHistory>
+        {threadId && shouldReplay && !isDeterministicE2E() ? (
+          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
         ) : (
           children
         )}

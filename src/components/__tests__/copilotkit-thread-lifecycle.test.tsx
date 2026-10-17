@@ -4,6 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
 
+// The navigation owner waits for a verified auth identity. Test the anonymous path
+// without making Supabase network calls during provider lifecycle unit tests.
+vi.mock("@/hooks/use-session", () => ({
+  useSession: () => ({ user: null, loading: false }),
+}));
+
 import { HostEventProvider } from "@/components/host/host-event-provider";
 import { HostOsShell } from "@/components/host/host-os-shell";
 import { ChatProvider } from "@/components/chat/chat-provider";
@@ -74,6 +80,8 @@ async function render(node: React.ReactNode) {
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
   for (const key of Object.keys(seen)) delete seen[key];
   // No runtime in a unit test: fail fast instead of hanging on a real fetch.
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
@@ -204,11 +212,23 @@ describe("ChatProvider — /chat saved chats and New Chat", () => {
     expect(seen.chat.threadId).not.toBe(before);
   });
 
-  it("a fresh visit to /chat gets a fresh thread", async () => {
+  it("does not replay a just-saved live answer; only replays after returning to chat", async () => {
+    await render(chatPage());
+    const id = seen.chat.threadId!;
+    expect(seen.chat.explicit).toBe(false);
+    await act$(() => nav!.markThreadSaved(id));
+    // No mid-turn reconnect or chat history installation while the current reply is visible.
+    expect(seen.chat.explicit).toBe(false);
+    await render(chatPage("return"));
+    expect(seen.chat.threadId).toBe(id);
+    expect(seen.chat.explicit).toBe(true);
+  });
+
+  it("a return to /chat in the same tab preserves its thread", async () => {
     await render(chatPage("first"));
     const first = seen.chat.threadId;
     await render(chatPage("second"));
-    expect(seen.chat.threadId).not.toBe(first);
+    expect(seen.chat.threadId).toBe(first);
   });
 });
 
@@ -238,6 +258,26 @@ describe("MdeCopilotKitProvider — root provider on non-chat pages", () => {
     await act(async () => nav!.setActiveThreadId(threadA));
     expect(seen.mapSync.threadId).toBe(threadA);
     expect(seen.mapSync.explicit).toBe(true);
+  });
+
+  it("keeps one conversation across Chat, Rentals, Cafés, Nightlife, Restaurants and Events", async () => {
+    const ids: string[] = [];
+    const routes = ["/chat", "/rentals", "/cafes", "/nightlife", "/restaurants", "/events", "/chat"];
+    for (const path of routes) {
+      navigation.pathname = path;
+      await render(
+        <MdeCopilotKitProvider>
+          {path === "/chat" ? (
+            <ChatProvider><Probe name="journey" /></ChatProvider>
+          ) : (
+            <Probe name="journey" />
+          )}
+        </MdeCopilotKitProvider>,
+      );
+      ids.push(seen.journey.threadId!);
+    }
+    expect(new Set(ids).size).toBe(1);
+    expect(seen.journey.explicit).toBe(false); // No saved turn yet.
   });
 
   it("leaves /chat to ChatProvider: no root thread configuration there", async () => {

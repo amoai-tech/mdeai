@@ -43,7 +43,7 @@ export function ChatNavDrawer() {
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>Concierge navigation menu</SheetDescription>
           </SheetHeader>
-          <ChatNavRail testId="nav-rail-drawer" />
+          <ChatNavRail testId="nav-rail-drawer" onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
     </>
