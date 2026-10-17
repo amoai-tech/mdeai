@@ -300,7 +300,7 @@ export function RentalResults({
           <ul className="mt-1 list-inside list-disc">
             {rankExplanation.map((entry) => (
               <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor} ({entry.score.toFixed(2)}): {entry.note}
+                {entry.factor}: {entry.note}
               </li>
             ))}
           </ul>

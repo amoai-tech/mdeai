@@ -92,7 +92,15 @@ export function buildMatchReason(
     parts.push(`In ${row.neighborhood}`);
   }
   if (params?.minBedrooms != null && row.bedrooms != null) {
-    parts.push(`${row.bedrooms} BR fits your bedroom ask`);
+    // The search asks for "at least N bedrooms", so a larger place can appear. Say what the
+    // renter is actually getting instead of calling a 3 BR a fit for a 1 BR request.
+    const size = row.bedrooms === 0 ? "Studio" : `${row.bedrooms} BR`;
+    if (row.bedrooms === params.minBedrooms) {
+      parts.push(`${size}, as you asked`);
+    } else if (row.bedrooms > params.minBedrooms) {
+      const asked = params.minBedrooms === 0 ? "studio" : `${params.minBedrooms} BR`;
+      parts.push(`${size} (bigger than the ${asked} you asked for)`);
+    }
   }
   if (params?.maxPricePerNight != null && row.nightly_price != null) {
     if (row.nightly_price <= params.maxPricePerNight) {
@@ -144,7 +152,32 @@ export const RENTAL_HANDOFF_FAILED_SUMMARY =
 export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
   "Rental search is temporarily unavailable. Please try again in a moment.";
 
+/**
+ * Things a renter may ask for that the rental search cannot filter on yet. The search only
+ * understands neighborhood, bedrooms, budget and dates, so anything here is dropped silently
+ * unless the answer says so.
+ */
+const UNAPPLIED_REQUESTS: Array<{ label: string; re: RegExp }> = [
+  { label: "pet-friendly", re: /\b(?:pet[- ]?friendly|pets?|dogs?|cats?)\b/i },
+  { label: "furnished", re: /\bfurnished\b/i },
+  { label: "unfurnished", re: /\bunfurnished\b/i },
+  { label: "parking", re: /\bparking\b/i },
+  { label: "pool", re: /\b(?:swimming )?pool\b/i },
+  { label: "gym", re: /\bgym\b/i },
+];
+
+export function unappliedRentalRequests(userText: string): string[] {
+  return UNAPPLIED_REQUESTS.filter(({ re }) => re.test(userText)).map(({ label }) => label);
+}
+
+function joinLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
 export type FastPathRentalSummaryOptions = {
+  /** Requests the search cannot filter on (pets, furnished, parking…) — name them, never drop them silently. */
+  unappliedRequests?: string[];
   /** The renter gave no neighborhood, size or budget — offer one optional refinement. */
   generic?: boolean;
   /** The renter named a budget the search did not apply — say so instead of implying it did. */
@@ -161,9 +194,11 @@ export function fastPathRentalSummary(
   options: FastPathRentalSummaryOptions = {},
 ): string {
   if (count === 0) {
-    const budgetNote = options.budgetNotApplied
-      ? " Your budget was not applied to this search."
-      : "";
+    const budgetNote =
+      (options.budgetNotApplied ? " Your budget was not applied to this search." : "") +
+      (options.unappliedRequests?.length
+        ? ` I can't filter by ${joinLabels(options.unappliedRequests)} yet.`
+        : "");
     // A broad search that finds nothing means there is nothing to show at all. A specific search
     // that finds nothing only says that THIS search matched nothing — other listings may exist.
     return options.generic
@@ -172,7 +207,10 @@ export function fastPathRentalSummary(
   }
   let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
   if (options.budgetNotApplied) {
-    text += " Your budget isn't applied yet, so these aren't filtered by price — check each card.";
+    text += " I can't filter by monthly budget yet, so check the price on each card.";
+  }
+  if (options.unappliedRequests?.length) {
+    text += ` I can't filter by ${joinLabels(options.unappliedRequests)} yet, so check each card.`;
   }
   if (options.generic) {
     text += " Want to narrow by neighborhood or monthly budget?";
