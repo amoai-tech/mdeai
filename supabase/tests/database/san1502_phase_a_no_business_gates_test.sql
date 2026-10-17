@@ -164,10 +164,12 @@ select is((select count(*)::int from public.apartments
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
-select matches(pg_get_triggerdef((select oid from pg_trigger
+-- SAN-1523 replaced the old WHEN-gated enqueue trigger: the queue now has NO gate at all (neither approval
+-- nor phase), so every semantic edit of any apartment is queued in development and in launch.
+select doesnt_match(pg_get_triggerdef((select oid from pg_trigger
  where tgname='trg_enqueue_embed_apartment' and tgrelid='public.apartments'::regclass)),
- 'rental_development_active',
- 'embedding queue uses development phase instead of approval prerequisite');
+ 'WHEN|rental_development_active|moderation|workflow|is_active|approved|published',
+ 'embedding queue has no approval or phase gate on the trigger');
 
 -- Explicit launch switch restores the previous public eligibility gates.
 update public.rental_runtime_settings set phase='launch',changed_at=now() where singleton;
