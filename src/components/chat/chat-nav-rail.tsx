@@ -51,7 +51,7 @@ const LIBRARY_ITEMS: NavItem[] = [
   { slug: "profile", label: "Profile", href: null, Icon: User },
 ];
 
-function NavItemRow({ item }: { item: NavItem }) {
+function NavItemRow({ item, active }: { item: NavItem; active: boolean }) {
   const { Icon, slug, label, href } = item;
   if (href) {
     return (
@@ -59,7 +59,11 @@ function NavItemRow({ item }: { item: NavItem }) {
         <Link
           href={href}
           data-testid={`nav-${slug}-link`}
-          className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted hover:text-foreground",
+            active ? "bg-muted text-foreground" : "text-muted-foreground",
+          )}
         >
           <Icon className="size-4 shrink-0" aria-hidden />
           {label}
@@ -91,6 +95,28 @@ function NavSectionLabel({ children }: { children: string }) {
         {children}
       </span>
     </li>
+  );
+}
+
+/**
+ * The Explore and Library link groups. Shared by the chat rail and the session-free rail on the
+ * discovery pages, so both list the same destinations. `activeSlug` marks the current page.
+ */
+export function ExploreLibraryNav({ activeSlug }: { activeSlug?: string }) {
+  return (
+    <ul className="flex shrink-0 flex-col gap-1 text-sm">
+      {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
+      <NavSectionLabel>Explore</NavSectionLabel>
+      {EXPLORE_ITEMS.map((item) => (
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+      ))}
+
+      {/* Library — personal pages */}
+      <NavSectionLabel>Library</NavSectionLabel>
+      {LIBRARY_ITEMS.map((item) => (
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+      ))}
+    </ul>
   );
 }
 
@@ -212,19 +238,7 @@ export function ChatNavRail({
         </ul>
       </div>
 
-      <ul className="flex shrink-0 flex-col gap-1 text-sm">
-        {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
-        <NavSectionLabel>Explore</NavSectionLabel>
-        {EXPLORE_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
-        ))}
-
-        {/* Library — personal pages */}
-        <NavSectionLabel>Library</NavSectionLabel>
-        {LIBRARY_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
-        ))}
-      </ul>
+      <ExploreLibraryNav />
 
       <p className="mt-auto shrink-0 text-xs text-muted-foreground">
         Ask for rentals, events, cafés, or map pins in Laureles and Poblado.

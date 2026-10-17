@@ -32,6 +32,8 @@ vi.mock("@/components/maps/ChatMap", async () => {
   };
 });
 vi.mock("@/components/modals/schedule-viewing-modal", () => ({ ScheduleViewingModal: () => null }));
+// The workspace header shows the sign-in status; it needs a Supabase client, which these tests do not use.
+vi.mock("@/components/auth/auth-status", () => ({ AuthStatus: () => null }));
 
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
 import { RentalDetailsPanel } from "@/components/rentals/rental-details-panel";
