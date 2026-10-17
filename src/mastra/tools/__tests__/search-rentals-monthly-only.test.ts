@@ -12,6 +12,7 @@
  * onboarding actually stores them.
  */
 import { describe, expect, it, vi } from "vitest";
+import type { ZodType } from "zod";
 
 /** USD-scale nightly budget used throughout, matching `maxPricePerNight`'s documented unit. */
 const mockApartmentRows = [
@@ -322,6 +323,56 @@ describe("rentalPricePredicate — budget is only applied within its own currenc
     expect(clause).toContain(
       "and(currency.eq.USD,price_daily.is.null,price_monthly.not.is.null,price_monthly.lte.2414)",
     );
+  });
+});
+
+describe("monthly budget PostgREST filter input safety", () => {
+  it.each([
+    "COP) or price_monthly.lte.999999999",
+    "COP,price_monthly.lte.999999999",
+    "COP.eq.USD",
+    "COP%29",
+    'COP"\\\\',
+    "COP XYZ",
+    "",
+  ])("rejects malformed budgetCurrency %j before composing a filter", async (currency) => {
+    const { rentalMonthlyBudgetPredicate, monthlyBudgetFromQuery, searchRentalsTool } =
+      await import("../search-rentals");
+    expect(() => rentalMonthlyBudgetPredicate(3_500_000, currency)).toThrow();
+    expect(() => monthlyBudgetFromQuery({ maxPriceMonthly: 3_500_000, budgetCurrency: currency })).toThrow();
+    // Mastra exposes its Zod input through a standard-schema type at compile time.
+    const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
+    expect(inputSchema.safeParse({
+      maxPriceMonthly: 3_500_000, budgetCurrency: currency,
+    }).success).toBe(false);
+  });
+
+  it("allows ordinary three-letter currencies and preserves the original COP comparison", async () => {
+    const { rentalMonthlyBudgetPredicate } = await import("../search-rentals");
+    expect(rentalMonthlyBudgetPredicate(3_500_000, "cop")).toBe(
+      "and(currency.neq.COP,price_daily.not.is.null)," +
+      "and(currency.neq.COP,price_monthly.not.is.null)," +
+      "and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3500000)",
+    );
+    expect(rentalMonthlyBudgetPredicate(1200, "USD")).toContain(
+      "and(currency.eq.USD,price_monthly.not.is.null,price_monthly.lte.1200)",
+    );
+  });
+
+  it("rejects malicious currency before attempting intelligent or structured search", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    await expect(searchRentals({
+      queryText: "two-bedroom rental",
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP) or price_monthly.lte.999999999",
+    })).rejects.toThrow();
+  });
+
+  it("rejects nonfinite or nonpositive monthly caps in the direct predicate", async () => {
+    const { rentalMonthlyBudgetPredicate } = await import("../search-rentals");
+    for (const amount of [Infinity, Number.NaN, -10, 0]) {
+      expect(() => rentalMonthlyBudgetPredicate(amount, "COP")).toThrow();
+    }
   });
 });
 

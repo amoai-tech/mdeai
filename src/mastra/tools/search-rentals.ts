@@ -290,6 +290,12 @@ export function nightlyPriceFrom(row: {
  */
 export const NIGHTLY_BUDGET_CURRENCY = 'USD';
 
+// A PostgREST .or() expression uses raw filter grammar. Reject all reserved
+// characters before inserting the currency into currency.eq/currency.neq.
+const monthlyBudgetCurrencySchema = z.string()
+  .regex(/^[A-Za-z]{3}$/, 'Budget currency must be a three-letter code')
+  .transform((currency) => currency.toUpperCase());
+
 /**
  * The monthly ceiling equivalent to `Math.round(monthly / 30) <= nightlyCap`.
  *
@@ -339,7 +345,10 @@ export function rentalPricePredicate(maxNightly: number | null): string {
  * are retained (their card shows their own currency) and never compared to this budget.
  */
 export function rentalMonthlyBudgetPredicate(maxMonthly: number, currency: string): string {
-  const budgetCurrency = currency.toUpperCase();
+  if (!Number.isFinite(maxMonthly) || maxMonthly <= 0) {
+    throw new RangeError('Monthly budget must be a finite positive number');
+  }
+  const budgetCurrency = monthlyBudgetCurrencySchema.parse(currency);
   const sameCurrency = `currency.eq.${budgetCurrency}`;
   const otherCurrency = `currency.neq.${budgetCurrency}`;
   return [
@@ -378,7 +387,10 @@ export function monthlyBudgetFromQuery(
   query: RentalQuery,
 ): { amount: number; currency: string } | null {
   if (typeof query.maxPriceMonthly !== 'number') return null;
-  return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
+  return {
+    amount: query.maxPriceMonthly,
+    currency: monthlyBudgetCurrencySchema.parse(query.budgetCurrency ?? 'COP'),
+  };
 }
 
 export function rowToRental(r: ApartmentRow): Rental {
@@ -544,6 +556,13 @@ export async function searchRentals(
   query: RentalQuery,
   options?: RentalSearchOptions,
 ): Promise<RentalSearchResult> {
+  // Direct search callers may bypass the Mastra input schema; validate before
+  // intelligent retrieval or a database filter is constructed.
+  if (query.budgetCurrency !== undefined) monthlyBudgetCurrencySchema.parse(query.budgetCurrency);
+  if (query.maxPriceMonthly !== undefined &&
+      (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
+    throw new RangeError('Monthly budget must be a finite positive number');
+  }
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.
@@ -626,10 +645,9 @@ export const searchRentalsTool = createTool({
       .describe(
         'Monthly rent ceiling in the listing currency, e.g. 3500000 with budgetCurrency COP. Applied only to listings already priced in that currency.',
       ),
-    budgetCurrency: z
-      .string()
+    budgetCurrency: monthlyBudgetCurrencySchema
       .optional()
-      .describe('Currency for maxPriceMonthly (ISO code, e.g. COP). Defaults to COP.'),
+      .describe('Three-letter budget currency code (e.g. COP). Defaults to COP.'),
     limit: z.number().int().min(1).max(20).default(8),
     queryText: z
       .string()
