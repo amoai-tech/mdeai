@@ -150,4 +150,26 @@ describe("useNavThreads refreshes on a list change (SAN-1412)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     root = createRoot(container); // so afterEach's unmount has something to unmount
   });
+
+  it("ignores an older response that arrives after a newer one, so a stale title never comes back", async () => {
+    const { useNavThreads } = await import("../use-nav-threads");
+    const { notifyThreadListChanged } = await import("../thread-list-events");
+    let latestTitle: string | null | undefined;
+    function Probe() {
+      const { threads } = useNavThreads();
+      latestTitle = threads[0]?.title;
+      return null;
+    }
+    let releaseSlow!: (value: ReturnType<typeof list>) => void;
+    const slow = new Promise<ReturnType<typeof list>>((resolve) => (releaseSlow = resolve));
+    // 1st request (on mount) is slow; the 2nd (after a new message) answers first with the newer list.
+    fetchMock.mockReturnValueOnce(slow).mockResolvedValueOnce(list("Newer title"));
+
+    await act(async () => root.render(<Probe />));
+    await act(async () => notifyThreadListChanged());
+    expect(latestTitle).toBe("Newer title");
+
+    await act(async () => releaseSlow(list("Older title")));
+    expect(latestTitle).toBe("Newer title");
+  });
 });
