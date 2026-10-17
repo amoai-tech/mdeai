@@ -5,6 +5,7 @@ import { formatDateOnly } from '@/lib/rentals/date-only';
 import {
   isAvailabilityUnconfirmed,
   isSelfAttested,
+  externalSourceAttribution,
   isExternalSourceListing,
   externalSourceProvider,
 } from '@/lib/rentals/provenance';
@@ -48,6 +49,12 @@ export const rentalSchema = z.object({
   source_url: z.string(),
   /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
   source_provider: z.string().optional(),
+  /**
+   * SAN-1235 — when MDE last genuinely checked this listing's source, from the import's own audit
+   * metadata. Absent means "Not yet checked"; it is never inferred from a flag or a timestamp of
+   * convenience.
+   */
+  source_last_checked: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -381,11 +388,35 @@ export function monthlyBudgetFromQuery(
   return { amount: query.maxPriceMonthly, currency: (query.budgetCurrency ?? 'COP').toUpperCase() };
 }
 
+/**
+ * SAN-1235 — collapse exact re-imports of the SAME source record so a renter does not see the same
+ * advert twice. Only a stable identity key qualifies: the import's own `san1503_import_key`, or the
+ * record id. Never a shared address, building, price or coordinate — those can genuinely describe
+ * different units. Result-level only: no apartment row is deleted or rewritten.
+ */
+export function dedupeBySourceIdentity<T extends { id: string; metadata?: unknown }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const meta = (row.metadata ?? null) as Record<string, unknown> | null;
+    const importKey = meta?.['san1503_import_key'];
+    const key =
+      typeof importKey === 'string' && importKey.trim() ? `import:${importKey.trim()}` : `id:${row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
   const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
-  const externalProvider = externalSourceProvider(r.metadata);
+  // Attribution is independent of MDE management: a development-managed import still shows the
+  // advertiser it came from, while requestability stays with can_schedule_viewing.
+  const externalProvider = externalSourceAttribution(r.metadata).provider ?? externalSourceProvider(r.metadata);
+  const meta = (r.metadata ?? null) as Record<string, unknown> | null;
+  const sourceLastChecked =
+    typeof meta?.['source_checked_at'] === 'string' ? (meta['source_checked_at'] as string) : undefined;
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
@@ -401,8 +432,9 @@ export function rowToRental(r: ApartmentRow): Rental {
     // The Details panel shows `images`; without it a managed listing showed only its cover photo.
     images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
     photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
-    source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
+    source_url: r.source_url ?? externalSourceAttribution(r.metadata).originalUrl ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
     source_provider: externalProvider ?? undefined,
+    source_last_checked: sourceLastChecked,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
@@ -531,7 +563,7 @@ async function searchRentalsFromSupabase(
     throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
   }
 
-  let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
+  let results = dedupeBySourceIdentity((data ?? []) as ApartmentRow[]).map(rowToRental);
   if (query.stayType === 'monthly') {
     results = sortForMonthlyStay(results);
   }

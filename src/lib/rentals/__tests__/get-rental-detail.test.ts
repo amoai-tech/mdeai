@@ -66,6 +66,35 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
   });
 
 
+  it("shows a managed import's provider and safe link while keeping viewing active", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "managed", title: "Managed apartment",
+      source_url: "https://fincaraiz.com.co/apartment/123",
+      metadata: { mde_managed_development: true,
+        source_record_type: "third_party_advertisement", source_provider: "Fincaraíz" },
+      rental_can_request_viewing: true,
+    });
+    expect(detail.sourceProvider).toBe("Fincaraíz");
+    expect(detail.sourceUrl).toBe("https://fincaraiz.com.co/apartment/123");
+    expect(detail.isExternalSource).toBe(false);
+    expect(detail.canScheduleViewing).toBe(true);
+    expect(detail.isNotIndependentlyVerified).toBe(true);
+  });
+
+  it("never links to unapproved domains or embedded-credential URLs", () => {
+    const metadata = { mde_managed_development: true, source_provider: "Fincaraíz" };
+    expect(mapApartmentRowToDetail({
+      id: "unsafe", source_url: "https://attacker@fincaraiz.com.co/x", metadata,
+    }).sourceUrl).toBeNull();
+    expect(mapApartmentRowToDetail({
+      id: "unapproved", source_url: "https://attacker.example/x", metadata,
+    }).sourceUrl).toBeNull();
+    expect(mapApartmentRowToDetail({
+      id: "from-meta", source_url: null,
+      metadata: { ...metadata, source_original_url: "https://www.fincaraiz.com.co/x" },
+    }).sourceUrl).toBe("https://www.fincaraiz.com.co/x");
+  });
+
   it("maps a full apartments row to the detail view-model", () => {
     const rentalDetail = mapApartmentRowToDetail({
       id: "abc",
