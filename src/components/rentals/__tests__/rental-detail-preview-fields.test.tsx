@@ -97,6 +97,27 @@ describe("rental detail — external preview fields", () => {
       .toBe("https://www.fincaraiz.com.co/apartaestudio/193916988");
   });
 
+  it("does not offer a fake AI question or inert Save action", async () => {
+    const managed = mapApartmentRowToDetail({
+      ...row,
+      status: "active",
+      available_from: "2026-10-01",
+      rental_can_request_viewing: true,
+    });
+    await render(managed);
+    const labels = Array.from(document.querySelectorAll("button")).map((button) => button.textContent ?? "");
+    expect(labels.some((label) => /ask a question/i.test(label))).toBe(false);
+    expect(labels.some((label) => /^\s*save\s*$/i.test(label))).toBe(false);
+    expect(labels.some((label) => /request viewing/i.test(label))).toBe(true);
+  });
+
+  it("reserves device safe-area space under the fixed mobile action", async () => {
+    await render(preview());
+    const bar = document.querySelector('[data-testid="rental-detail-mobile-cta"]');
+    expect(bar).not.toBeNull();
+    expect(bar?.className).toContain("pb-[calc(0.75rem+env(safe-area-inset-bottom))]");
+  });
+
   it("keeps a real bedroom count", async () => {
     await render(preview({ bedrooms: 2 }));
     expect(document.querySelector('[data-testid="rental-detail-specs"]')?.textContent).toContain("2 beds");
