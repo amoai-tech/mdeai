@@ -31,23 +31,30 @@ export function BrowseMapSheet() {
           className="p-0 pb-[env(safe-area-inset-bottom,0px)]"
           showCloseButton={false}
         >
-          <SheetClose
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="absolute right-3 top-3 z-10 size-11"
-                aria-label="Close"
-                data-testid="browse-map-close"
-              />
-            }
+          {/* Keep our close control in a separate toolbar. On Android, Google's
+              fullscreen button occupies the same top-right spot inside the map. */}
+          <div
+            data-testid="browse-map-toolbar"
+            className="flex h-14 shrink-0 items-center justify-between border-b px-3"
           >
-            <XIcon aria-hidden />
-          </SheetClose>
-          <SheetHeader className="sr-only">
-            <SheetTitle>Map view</SheetTitle>
-          </SheetHeader>
+            <SheetHeader className="p-0">
+              <SheetTitle className="text-sm">Map view</SheetTitle>
+            </SheetHeader>
+            <SheetClose
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="size-11"
+                  aria-label="Close"
+                  data-testid="browse-map-close"
+                />
+              }
+            >
+              <XIcon aria-hidden />
+            </SheetClose>
+          </div>
           {/* The sheet's own `data-[side=bottom]:h-auto` beats any height class set on SheetContent, so the
               sheet is only as tall as its content. Google's map sizes itself as 100% of its parent, and a
               percentage of an auto height is 0, which left this map blank on phones. The holder therefore
