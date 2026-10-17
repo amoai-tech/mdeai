@@ -47,7 +47,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # NO SUPABASE_SERVICE_ROLE_KEY. `floor` runs on pull_request, so this job executes the
+          # PR's checked-out code — scripts, configs, dependencies. Handing it a service-role key
+          # (which bypasses every RLS rule) meant any same-repository PR could use production-wide
+          # credentials. Nothing in the floor chain needs it: check:env:ci validates build-time
+          # variables, the unit suite mocks Supabase, and live integration tests have their own
+          # workflow. If a future gate genuinely needs privileged data, put it in a trusted
+          # post-merge job instead of here.
 
   # SAN-1321 — the version contract proves the *installed* adapter is paired
   # correctly; this proves that adapter actually provisions the committed schema.
