@@ -151,7 +151,7 @@ export async function POST(req: Request) {
     }
     return failure(
       "UPSTREAM_ERROR",
-      edgeJson.error?.message ?? "Lead capture failed",
+      edgeJson.error?.message ?? "We couldn't send your viewing request. Please try again.",
       edgeRes.status >= 400 ? edgeRes.status : 502,
     );
   }

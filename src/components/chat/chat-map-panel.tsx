@@ -6,6 +6,7 @@ import { CafeDetailPanel } from "@/components/cafe/cafe-detail-panel";
 import { NightlifeDetailPanel } from "@/components/nightlife/nightlife-detail-panel";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { EmptyState } from "@/components/empty/empty-state";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
 import { useMapContext } from "@/platform/maps/map-context";
 
 /** MAP-007 sticky map column (desktop). */
@@ -13,8 +14,10 @@ export function ChatMapPanel() {
   const { pins } = useMapContext();
   const { cafeDetail, cafeSiblings, nightlifeDetail, nightlifeSiblings } =
     useRentalUi();
+  const mapsStatus = useMapsStatus();
   const visiblePins = pins.filter((pin) => pin.source !== "mock");
-  const showEmpty = visiblePins.length === 0;
+  // A rejected map key already shows its own panel; "Map is ready" drawn on top of it overlapped.
+  const showEmpty = visiblePins.length === 0 && mapsStatus !== "auth-failed";
 
   if (nightlifeDetail) {
     return (
