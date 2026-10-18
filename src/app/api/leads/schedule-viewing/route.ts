@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   SCHEDULE_VIEWING_ACK_MESSAGE,
+  SCHEDULE_VIEWING_ERROR_MESSAGES,
   scheduleViewingInputSchema,
   type ScheduleViewingErrorCode,
 } from "@/lib/leads/schedule-viewing-schema";
@@ -12,8 +13,26 @@ import {
   getSupabaseFunctionsBaseUrl,
 } from "@/lib/supabase/edge-functions";
 
-function failure(code: ScheduleViewingErrorCode, message: string, status: number) {
+/**
+ * Every failure a renter sees is worded here from shared safe copy — never from the
+ * lead-capture edge function, which answers with raw Postgres/plpgsql prose
+ * (`p1_schedule_tour_atomic: …`, unique-violation details). `message` is only passed for
+ * this route's own zod issues, which are written for renters.
+ */
+function failure(
+  code: ScheduleViewingErrorCode,
+  status: number,
+  message: string = SCHEDULE_VIEWING_ERROR_MESSAGES[code],
+) {
   return NextResponse.json({ success: false, error: { code, message } }, { status });
+}
+
+/** Upstream technical detail is diagnostic, so it goes to the server log, not the response. */
+function logUpstreamFailure(
+  outcome: string,
+  detail: { status: number; code?: string; message?: string },
+) {
+  console.error("[api/leads/schedule-viewing] upstream failure", { outcome, ...detail });
 }
 
 /**
@@ -45,7 +64,7 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return failure("VALIDATION_ERROR", "Invalid JSON", 400);
+    return failure("VALIDATION_ERROR", 400);
   }
 
   const parsed = scheduleViewingInputSchema.safeParse(body);
@@ -55,7 +74,10 @@ export async function POST(req: Request) {
         success: false,
         error: {
           code: "VALIDATION_ERROR" satisfies ScheduleViewingErrorCode,
-          message: parsed.error.issues[0]?.message ?? "Validation failed",
+          // Our own schema issues — already written in renter language above.
+          message:
+            parsed.error.issues[0]?.message ??
+            SCHEDULE_VIEWING_ERROR_MESSAGES.VALIDATION_ERROR,
           details: parsed.error.flatten(),
         },
       },
@@ -69,11 +91,7 @@ export async function POST(req: Request) {
   // downstream is the canonical UTC instant rather than a browser wall clock.
   const preferredAtInstant = resolvePreferredAtInstant(data.preferredAt);
   if (!preferredAtInstant) {
-    return failure(
-      "VALIDATION_ERROR",
-      "preferredAt must be a valid Medellín-local date and time",
-      400,
-    );
+    return failure("VALIDATION_ERROR", 400);
   }
 
   const supabase = await createClient();
@@ -121,17 +139,22 @@ export async function POST(req: Request) {
   };
 
   if (edgeRes.status === 429) {
-    return failure(
-      "RATE_LIMITED",
-      edgeJson.error?.message ?? "Too many submissions — try again later",
-      429,
-    );
+    logUpstreamFailure("rate_limited", {
+      status: edgeRes.status,
+      code: edgeJson.error?.code,
+      message: edgeJson.error?.message,
+    });
+    return failure("RATE_LIMITED", 429);
   }
 
   if (!edgeRes.ok && edgeJson.error?.code === "VALIDATION_ERROR") {
+    logUpstreamFailure("validation_rejected", {
+      status: edgeRes.status,
+      code: edgeJson.error.code,
+      message: edgeJson.error.message,
+    });
     return failure(
       "VALIDATION_ERROR",
-      edgeJson.error.message ?? "Viewing request validation failed",
       edgeRes.status >= 400 && edgeRes.status < 500 ? edgeRes.status : 502,
     );
   }
@@ -142,18 +165,15 @@ export async function POST(req: Request) {
   // SAN-1203 — a request counts only when BOTH records committed. A lead-only
   // response is a server failure, never a partial success.
   if (!edgeRes.ok || !edgeJson.success || !leadId || !showingId) {
+    logUpstreamFailure(leadId && !showingId ? "showing_not_committed" : "upstream_error", {
+      status: edgeRes.status,
+      code: edgeJson.error?.code,
+      message: edgeJson.error?.message,
+    });
     if (leadId && !showingId) {
-      return failure(
-        "SHOWING_NOT_COMMITTED",
-        "The viewing was not committed — please try again.",
-        502,
-      );
+      return failure("SHOWING_NOT_COMMITTED", 502);
     }
-    return failure(
-      "UPSTREAM_ERROR",
-      edgeJson.error?.message ?? "We couldn't send your viewing request. Please try again.",
-      edgeRes.status >= 400 ? edgeRes.status : 502,
-    );
+    return failure("UPSTREAM_ERROR", edgeRes.status >= 400 ? edgeRes.status : 502);
   }
 
   return NextResponse.json({
