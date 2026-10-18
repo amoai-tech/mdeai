@@ -28,13 +28,12 @@ const SIGNUP_TYPES = ["host", "broker", "sponsor", "agency"] as const;
 
 // Pages that are still placeholders or absent must not become Hub destinations.
 // Existing placeholders may load but do not replace the actual signup funnel.
-// /partners/restaurants ships a real venue landing (SAN-713, merged in #370), so
-// it is a live destination and no longer belongs in this list.
+// Restaurant/Café/Nightlife have live landing pages, and /contact is now live.
+// Only genuinely unbuilt destinations belong in the dead-routes list.
 const DEAD_HUB_ROUTES = [
   "/sponsors",
   "/business/ai",
   "/partners/rentals",
-  "/contact",
 ] as const;
 
 // Hub is slotted into the reusable MarketingPageShell (SAN-692), which owns the
@@ -104,8 +103,8 @@ describe("PartnerHub (/partners)", () => {
   });
 });
 
-// PR #131 review (Cubic): the shared footer must link only to routes that
-// exist on disk. Replaces the dead /about, /contact, /legal/privacy links.
+// The shared footer links only to live routes. /contact is now implemented;
+// /about and /legal/privacy remain absent.
 const footerHtml = renderToStaticMarkup(<MarketingFooter />);
 
 // Routes with a real src/app/**/page.tsx (verified 2026-06-08).
@@ -120,10 +119,11 @@ const LIVE_FOOTER_ROUTES = [
   "/me/tickets",
   "/partners",
   "/partners/signup",
+  "/contact",
   "/host/event/new",
 ];
 
-const DEAD_ROUTES = ["/about", "/contact", "/legal/privacy"];
+const DEAD_ROUTES = ["/about", "/legal/privacy"];
 
 describe("MarketingFooter — live routes only", () => {
   it("links none of the removed dead routes", () => {
