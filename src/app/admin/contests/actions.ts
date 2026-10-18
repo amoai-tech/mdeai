@@ -82,31 +82,51 @@ const MAX_BULK_LINK = 60;
 /**
  * Add one or many catalog restaurants in a single submission.
  *
- * Linking is naturally idempotent per (contest, restaurant), so re-submitting after a partial
- * run is safe: already-linked rows come back as `already_linked` instead of creating a second
- * entry. The action reports what actually happened rather than assuming success.
+ * Each link is isolated. Linking is idempotent per (contest, restaurant), so a partial run is
+ * safe to re-submit — but only if the admin is told it was partial. One failing restaurant must
+ * never replace the page with an error while the ones before it are already committed.
  */
 export async function linkRestaurantsAction(formData: FormData): Promise<void> {
   const actorId = await requireAdminId();
   const contestId = text(formData, "contest_id");
   if (!contestId) throw new Error("Missing contest.");
 
-  const ids = normalizeRestaurantIds(formData.getAll("restaurant_ids").map(String));
-  if (ids.length === 0) throw new Error("Choose at least one restaurant.");
+  const { ids, rejected } = normalizeRestaurantIds(formData.getAll("restaurant_ids").map(String));
+  if (ids.length === 0) {
+    throw new Error(
+      rejected > 0 ? "None of those restaurant ids were valid." : "Choose at least one restaurant.",
+    );
+  }
   if (ids.length > MAX_BULK_LINK) {
     throw new Error("Add at most " + MAX_BULK_LINK + " restaurants at a time.");
   }
 
   let added = 0;
   let already = 0;
+  let failed = 0;
   for (const restaurantId of ids) {
-    const result = await linkAdminRestaurant(actorId, contestId, restaurantId);
-    if (result.already_linked) already += 1;
-    else added += 1;
+    try {
+      const result = await linkAdminRestaurant(actorId, contestId, restaurantId);
+      if (result.already_linked) already += 1;
+      else added += 1;
+    } catch (error) {
+      // Keep going: the earlier links are already committed, so the admin needs the whole
+      // picture (and a re-submit is safe) rather than a crash page.
+      failed += 1;
+      console.error(
+        "[admin] link failed for restaurant",
+        restaurantId,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 
   revalidatePath("/admin/contests/" + contestId);
-  redirect("/admin/contests/" + contestId + "?added=" + added + "&already=" + already);
+  redirect(
+    "/admin/contests/" +
+      contestId +
+      "?added=" + added + "&already=" + already + "&failed=" + failed + "&rejected=" + rejected,
+  );
 }
 
 export async function unlinkRestaurantAction(formData: FormData): Promise<void> {
