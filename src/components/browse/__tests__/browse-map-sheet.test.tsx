@@ -67,6 +67,14 @@ describe("BrowseMapSheet close control", () => {
     const close = closers[0] as HTMLButtonElement;
     expect(close.className).toMatch(/\bsize-11\b/); // 44px; jsdom has no layout to measure
 
+    // The close button must stay in a toolbar outside Google's map viewport:
+    // on live Android the 44px close otherwise overlaps the 40px fullscreen control.
+    const toolbar = document.querySelector('[data-testid="browse-map-toolbar"]') as HTMLElement | null;
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.className).toContain("h-14");
+    expect(toolbar?.contains(close)).toBe(true);
+    expect(toolbar?.nextElementSibling?.querySelector('[data-testid="chat-map-stub"]')).not.toBeNull();
+
     await act(async () => close.click());
     expect(document.querySelector('[data-testid="chat-map-stub"]')).toBeNull();
     await act(async () => root.unmount());

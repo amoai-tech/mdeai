@@ -75,7 +75,7 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   chip,
@@ -110,7 +110,7 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-beds-${value}`}
                 className={cn(
                   chip,

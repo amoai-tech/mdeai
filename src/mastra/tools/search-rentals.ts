@@ -18,6 +18,7 @@ import {
   describeRentalSearchError,
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
+import { unappliedRentalRequests } from '@/lib/rental-display';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
 
@@ -373,6 +374,16 @@ export function budgetNoteFor(query: RentalQuery): string | undefined {
   return query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined;
 }
 
+/**
+ * Requests this search cannot filter (pets, furnished, parking…), read from the renter's own
+ * words in `queryText`. The card renderer turns them into the same sentence the fast path uses,
+ * so no chat path can imply the filter was applied or drop the request silently.
+ */
+export function unappliedRequestsFor(query: Pick<RentalQuery, 'queryText'>): string[] {
+  const text = query.queryText?.trim();
+  return text ? unappliedRentalRequests(text) : [];
+}
+
 /** The monthly budget implied by a query, or null. */
 export function monthlyBudgetFromQuery(
   query: RentalQuery,
@@ -408,7 +419,9 @@ export function rowToRental(r: ApartmentRow): Rental {
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
-    availability: isAvailabilityUnconfirmed(r.metadata)
+    // Development discovery includes inactive records. A stored move-in date is
+    // not proof that an inactive listing can actually be rented.
+    availability: r.status !== 'active' || isAvailabilityUnconfirmed(r.metadata)
       ? 'Availability unconfirmed'
       : formatAvailability(r.available_from, r.available_to),
     tags: (() => {
@@ -645,6 +658,8 @@ export const searchRentalsTool = createTool({
     ),
     source: z.literal('supabase'),
     budgetNote: z.string().optional(),
+    /** Requests this search cannot filter (pets, furnished…); the cards must disclose them. */
+    unappliedRequests: z.array(z.string()).optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -706,6 +721,7 @@ export const searchRentalsTool = createTool({
       })),
       source,
       budgetNote,
+      unappliedRequests: unappliedRequestsFor({ queryText }),
       hybridUsed,
       rankExplanation,
     };
