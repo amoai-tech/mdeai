@@ -49,8 +49,8 @@ jobs:
       - name: Respect the hourly viewing-request limit
         id: guard
         env:
-          GH_TOKEN: ${ github.token }
-          GITHUB_RUN_ID: ${ github.run_id }
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           recent=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod-renter-journey.yml/runs?per_page=20" \
@@ -67,12 +67,12 @@ jobs:
       - name: Run the journey
         if: steps.guard.outputs.skip != 'true'
         env:
-          PROD_SMOKE_BASE_URL: ${ vars.PROD_BASE_URL || 'https://www.mdeai.co' }
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://www.mdeai.co' }}
           SAN1205_JOURNEY_E2E: "1"
           SAN1205_ALLOW_PRODUCTION_WRITES: "1"
-          SAN1205_CANDIDATE_SHA: ${ github.sha }
-          NEXT_PUBLIC_SUPABASE_URL: ${ secrets.NEXT_PUBLIC_SUPABASE_URL }
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }
-          SUPABASE_SERVICE_ROLE_KEY: ${ secrets.SUPABASE_SERVICE_ROLE_KEY }
+          SAN1205_CANDIDATE_SHA: ${{ github.sha }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke

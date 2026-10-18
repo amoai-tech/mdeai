@@ -19,7 +19,6 @@
  */
 import { chromium } from "@playwright/test";
 import { createHash } from "node:crypto";
-import fs from "node:fs";
 
 const BASE = (process.env.SMOKE_BASE_URL || "https://www.mdeai.co").replace(/\/$/, "");
 const REPO = process.env.GITHUB_REPOSITORY || "amoai-tech/mdeai";
@@ -116,25 +115,7 @@ async function rentalFastPath() {
   };
 }
 
-async function main() {
-  const served = await servedFingerprint();
-  record(
-    "served build fingerprint",
-    served.ok && served.chunks > 0,
-    "HTTP " + served.status + " etag=" + served.etag + " chunks=" + served.chunks + " fingerprint=" + served.fingerprint,
-  );
-
-  const api = await safeViewingError();
-  record("viewing errors stay safe and server-side", api.ok, api.detail);
-
-  const rentals = await rentalFastPath();
-  record("rental fast path answers", rentals.answered, "rental cards rendered: " + rentals.cards);
-  record(
-    "peso budget is disclosed, never silently capped",
-    rentals.disclosed,
-    "budget disclosure present: " + rentals.disclosed,
-  );
-
+async function deploymentDrift() {
   const deployments = await ghApi("/repos/" + REPO + "/deployments?environment=production&per_page=1");
   const mainCommit = await ghApi("/repos/" + REPO + "/commits/main");
   const deployedSha = Array.isArray(deployments) && deployments[0] ? deployments[0].sha : "";
@@ -159,24 +140,39 @@ async function main() {
       "drift: main is " + mainSha.slice(0, 9) + " (" + Math.round(mainAgeMin) + " min old) but production serves " + deployedSha.slice(0, 9),
     );
   }
+  return { deployedSha, mainSha };
+}
 
+function printSummary(served, shas) {
   for (const entry of results) {
     console.log((entry.ok ? "PASS " : "FAIL ") + entry.name + " — " + entry.detail);
   }
   console.log(
-    "served fingerprint=" + served.fingerprint + " etag=" + served.etag + " deployed=" + deployedSha.slice(0, 9) + " main=" + mainSha.slice(0, 9),
+    "served fingerprint=" + served.fingerprint + " etag=" + served.etag + " deployed=" + shas.deployedSha.slice(0, 9) + " main=" + shas.mainSha.slice(0, 9),
+  );
+}
+
+async function main() {
+  const served = await servedFingerprint();
+  record(
+    "served build fingerprint",
+    served.ok && served.chunks > 0,
+    "HTTP " + served.status + " etag=" + served.etag + " chunks=" + served.chunks + " fingerprint=" + served.fingerprint,
   );
 
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    const lines = ["## Production behaviour smoke", "", "| Check | Result | Evidence |", "| --- | --- | --- |"];
-    for (const entry of results) {
-      lines.push("| " + entry.name + " | " + (entry.ok ? "pass" : "**fail**") + " | " + entry.detail.replace(/\|/g, "\\|") + " |");
-    }
-    lines.push("");
-    lines.push("Served build: etag " + served.etag + ", chunk fingerprint " + served.fingerprint + ", " + served.chunks + " chunks.");
-    // The runner owns this path; it is never derived from input.
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n"); // nosemgrep
-  }
+  const api = await safeViewingError();
+  record("viewing errors stay safe and server-side", api.ok, api.detail);
+
+  const rentals = await rentalFastPath();
+  record("rental fast path answers", rentals.answered, "rental cards rendered: " + rentals.cards);
+  record(
+    "peso budget is disclosed, never silently capped",
+    rentals.disclosed,
+    "budget disclosure present: " + rentals.disclosed,
+  );
+
+  const shas = await deploymentDrift();
+  printSummary(served, shas);
 
   const failed = results.filter((entry) => !entry.ok);
   if (failed.length > 0) {

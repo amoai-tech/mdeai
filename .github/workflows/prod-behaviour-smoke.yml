@@ -45,7 +45,19 @@ jobs:
 
       - name: Check live behaviour
         env:
-          SMOKE_BASE_URL: ${ vars.PROD_BASE_URL || 'https://www.mdeai.co' }
-          GITHUB_TOKEN: ${ github.token }
+          SMOKE_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://www.mdeai.co' }}
+          GITHUB_TOKEN: ${{ github.token }}
           SHA_GRACE_MINUTES: "20"
-        run: node scripts/prod-behaviour-smoke.mjs
+        run: |
+          set -o pipefail
+          node scripts/prod-behaviour-smoke.mjs 2>&1 | tee /tmp/prod-smoke.log
+
+      - name: Publish the run in the job summary
+        if: always()
+        run: |
+          {
+            echo "## Production behaviour smoke"
+            echo '~~~'
+            cat /tmp/prod-smoke.log
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
