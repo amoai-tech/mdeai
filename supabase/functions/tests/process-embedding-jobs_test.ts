@@ -32,13 +32,22 @@ Deno.test("embedDocument — 200 with a good vector", async () => {
   assertEquals(out.ok, true);
 });
 
-Deno.test("embedDocument — 400 is permanent, 429 and 500 are retried", async () => {
-  const bad = await embedDocument("x", "k", reply(400, {}));
-  assertEquals(!bad.ok && bad.retryable, false);
-  const limited = await embedDocument("x", "k", reply(429, {}));
-  assertEquals(!limited.ok && limited.retryable, true);
-  const down = await embedDocument("x", "k", reply(500, {}));
-  assertEquals(!down.ok && down.retryable, true);
+Deno.test("embedDocument — retry transient HTTP failures, not permanent client errors", async () => {
+  for (const status of [400, 422]) {
+    const out = await embedDocument("x", "k", reply(status, {}));
+    assertEquals(!out.ok && out.retryable, false, `HTTP ${status} is not retryable`);
+  }
+  // 402/404 are *global* billing/model misconfiguration: refund attempts and halt the whole batch.
+  for (const status of [402, 404]) {
+    const out = await embedDocument("x", "k", reply(status, { error: { message: "secret-key-must-not-leak" } }));
+    assertEquals(!out.ok && out.fatal, true);
+    assertEquals(!out.ok && out.haltReason, "gemini_configuration");
+    assertEquals(!out.ok && out.reason.includes("secret-key-must-not-leak"), false);
+  }
+  for (const status of [408, 429, 500, 503, 504]) {
+    const out = await embedDocument("x", "k", reply(status, {}));
+    assertEquals(!out.ok && out.retryable, true, `HTTP ${status} is transient`);
+  }
 });
 
 Deno.test("embedDocument — a rejected key is a configuration failure, even when Google reports it as HTTP 400", async () => {
@@ -190,6 +199,25 @@ Deno.test("processEmbeddingBatch — a rejected key stops the run and hands ever
   const failures = calls.filter((c) => c.fn === "fail_embedding_job");
   assertEquals(failures.length, 3);
   assertEquals(failures.every((c) => c.args.p_refund_attempt === true && c.args.p_retryable === true), true);
+});
+
+Deno.test("processEmbeddingBatch — a missing Gemini model halts without consuming attempts", async () => {
+  const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  const db = fakeDb([job("a"), job("b")], { "e-a": [{ content_text: "t" }] }, calls);
+  const summary = await processEmbeddingBatch(
+    db,
+    "k",
+    5,
+    (text, key) => embedDocument(text, key, reply(404, {})),
+  );
+  assertEquals(summary.halted, "gemini_configuration");
+  assertEquals(summary.retry, 2);
+  assertEquals(summary.failed, 0);
+  assertEquals(statusForSummary(summary), 503);
+  assertEquals(
+    calls.filter((c) => c.fn === "fail_embedding_job").every((c) => c.args.p_refund_attempt === true),
+    true,
+  );
 });
 
 Deno.test("processEmbeddingBatch — a failure that cannot be recorded is counted as unrecorded, never as failed", async () => {

@@ -12,7 +12,7 @@ export const DEFAULT_BATCH = 5;
 
 export type EmbedOutcome =
   | { ok: true; values: number[] }
-  | { ok: false; retryable: boolean; reason: string; fatal?: true };
+  | { ok: false; retryable: boolean; reason: string; fatal?: true; haltReason?: "gemini_auth" | "gemini_configuration" };
 
 /** Compare two secrets without leaking where they differ. */
 export function constantTimeEqual(a: string, b: string): boolean {
@@ -25,9 +25,9 @@ export function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** 400 means this text will never embed; everything else (429, 5xx, network) is retried. Auth is handled by isAuthFailure first. */
+/** Retry only transient Gemini HTTP failures (408, 429, 5xx). Never waste attempts on permanent 4xx errors. */
 export function isRetryableStatus(status: number): boolean {
-  return status !== 400;
+  return status === 408 || status === 429 || (status >= 500 && status <= 599);
 }
 
 /**
@@ -91,7 +91,11 @@ export async function embedDocument(
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       if (isAuthFailure(res.status, body)) {
-        return { ok: false, retryable: true, fatal: true, reason: `Gemini rejected the API key (HTTP ${res.status}) — check GOOGLE_GENERATIVE_AI_API_KEY` };
+        return { ok: false, retryable: true, fatal: true, haltReason: "gemini_auth", reason: `Gemini rejected the API key (HTTP ${res.status}) — check GOOGLE_GENERATIVE_AI_API_KEY` };
+      }
+      if (res.status === 402 || res.status === 404) {
+        // Billing or a missing model affects every job. Halt and refund attempts until configuration is fixed.
+        return { ok: false, retryable: true, fatal: true, haltReason: "gemini_configuration", reason: `Gemini provider configuration error (HTTP ${res.status}) — check billing and model` };
       }
       return { ok: false, retryable: isRetryableStatus(res.status), reason: `Gemini HTTP ${res.status}` };
     }

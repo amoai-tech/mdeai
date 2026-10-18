@@ -22,7 +22,7 @@ export type BatchSummary = {
   /** the database call that records a failure itself failed: the lease will expire and the job be reclaimed */
   unrecorded: number;
   /** set when the whole run stopped because of a configuration problem, not a bad record */
-  halted?: "gemini_auth";
+  halted?: "gemini_auth" | "gemini_configuration";
   /** claimed jobs handed back unspent because the run reached its time budget (normal, they run next tick) */
   deferred: number;
 };
@@ -102,8 +102,8 @@ export async function processEmbeddingBatch(
 
     const embedded = await embed(doc.content_text, geminiKey);
     if (!embedded.ok && embedded.fatal) {
-      // A bad key hits every record the same way. Stop, hand back this job and the rest unspent, and say why.
-      summary.halted = "gemini_auth";
+      // A rejected key, billing problem or missing model affects every record: refund the claims and stop.
+      summary.halted = embedded.haltReason ?? "gemini_auth";
       for (const waiting of claimedJobs.slice(index)) await fail(embedded.reason, true, false, true, waiting);
       break;
     }
