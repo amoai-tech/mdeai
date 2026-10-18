@@ -51,16 +51,23 @@ beforeEach(() => {
   root = createRoot(container);
 });
 afterEach(() => {
-  act(() => root.unmount());
+  act(() => {
+    root.unmount();
+  });
   container.remove();
 });
 
-const open = (id: string) =>
-  act(() => (container.querySelector(`[data-thread-id="${id}"]`) as HTMLElement).click());
+const open = (id: string) => {
+  act(() => {
+    (container.querySelector(`[data-thread-id="${id}"]`) as HTMLElement).click();
+  });
+};
 
 describe("ChatNavRail opening a saved chat (SAN-1412)", () => {
   it("asks for a title when the chat has none, and still opens it straight away", () => {
-    act(() => root.render(<ChatNavRail />));
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
     open("untitled");
     expect(ui.ensure).toHaveBeenCalledWith("untitled");
     expect(ui.stopActiveRun).toHaveBeenCalledTimes(1);
@@ -72,22 +79,30 @@ describe("ChatNavRail opening a saved chat (SAN-1412)", () => {
     ui.threads = [
       { id: "placeholder", title: "Untitled Thread", updatedAt: "2026-10-16T12:00:00Z" },
     ];
-    act(() => root.render(<ChatNavRail />));
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
     open("placeholder");
     expect(ui.ensure).toHaveBeenCalledWith("placeholder");
     expect(ui.setActiveThreadId).toHaveBeenCalledWith("placeholder");
   });
 
   it("leaves a chat that already has a title alone", () => {
-    act(() => root.render(<ChatNavRail />));
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
     open("titled");
     expect(ui.ensure).not.toHaveBeenCalled();
     expect(ui.push).toHaveBeenCalledWith("/chat");
   });
 
   it("does not wait for the title: a title request that never answers cannot hold up opening", () => {
-    ui.ensure.mockReturnValue(new Promise(() => {}));
-    act(() => root.render(<ChatNavRail />));
+    ui.ensure.mockReturnValue(new Promise<never>(() => {
+      // Intentionally never resolves: opening a chat must not await a title request.
+    }));
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
     open("untitled");
     expect(ui.push).toHaveBeenCalledWith("/chat");
   });

@@ -15,7 +15,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const ok = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const ok = (body: unknown, status = 200) => {
+  return { ok: status >= 200 && status < 300, status, json: async () => body };
+};
 
 describe("thread-list-events (SAN-1412)", () => {
   it("tells every subscriber once, and stops after unsubscribe", async () => {
