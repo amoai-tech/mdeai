@@ -48,30 +48,31 @@ def load_case(skill: str, eval_id: int) -> dict:
     return case
 
 
-def read_trace(path: Path) -> list[dict]:
-    # Standard input lets local tests pass fixture events without writing
-    # dynamic paths. The compressed decoder is native on Python 3.14+.
-    limit = 64 * 1024 * 1024
+def trace_bytes(path: Path, limit: int) -> bytes:
+    """Read one bounded local trace, including stdin and Python 3.14+ zstd."""
     if str(path) == "-":
-        raw = sys.stdin.buffer.read(limit + 1)
-    else:
-        if not path.is_file():
-            raise ValueError(f"trace does not exist: {path}")
-        if path.name.endswith(".zstd"):
-            try:
-                from compression import zstd
-            except ImportError as exc:
-                raise ValueError("compressed traces require Python 3.14+; otherwise provide uncompressed JSONL") from exc
-            try:
-                with zstd.open(path, "rb") as stream:
-                    raw = stream.read(limit + 1)
-            except (OSError, ValueError) as exc:
-                raise ValueError("could not decode compressed session trace") from exc
-        elif path.name.endswith(".jsonl"):
-            with path.open("rb") as stream:
-                raw = stream.read(limit + 1)
-        else:
-            raise ValueError("trace must be .jsonl, .jsonl.zstd, or '-' for stdin")
+        return sys.stdin.buffer.read(limit + 1)
+    if not path.is_file():
+        raise ValueError(f"trace does not exist: {path}")
+    if path.name.endswith(".zstd"):
+        try:
+            from compression import zstd
+        except ImportError as exc:
+            raise ValueError("compressed traces require Python 3.14+; otherwise provide uncompressed JSONL") from exc
+        try:
+            with zstd.open(path, "rb") as stream:
+                return stream.read(limit + 1)
+        except (OSError, ValueError) as exc:
+            raise ValueError("could not decode compressed session trace") from exc
+    if path.name.endswith(".jsonl"):
+        with path.open("rb") as stream:
+            return stream.read(limit + 1)
+    raise ValueError("trace must be .jsonl, .jsonl.zstd, or '-' for stdin")
+
+
+def read_trace(path: Path) -> list[dict]:
+    limit = 64 * 1024 * 1024
+    raw = trace_bytes(path, limit)
     if len(raw) > limit:
         raise ValueError("session trace exceeds 64 MiB safety limit")
     lines = raw.splitlines()
