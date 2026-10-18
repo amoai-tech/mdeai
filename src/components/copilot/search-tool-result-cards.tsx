@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type RefObject } from "react";
+import Link from "next/link";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -267,6 +268,9 @@ export function RentalResults({
   const rankExplanation = filterCustomerVisibleRentalRankExplanation(
     envelope.rankExplanation ?? [],
   );
+  const totalMatches = typeof envelope.total === "number" &&
+    Number.isSafeInteger(envelope.total) && envelope.total >= rows.length
+      ? envelope.total : null;
   const searchParams = searchMeta?.params;
   // Use the same validated tool pins that the map receives; never select a phantom pin.
   const mappedRentalIds = useMemo(
@@ -286,6 +290,20 @@ export function RentalResults({
     <>
       <RichCardResultsRegistrar category="rental" count={rows.length} />
       <ToolPinsSync category="rental" result={result} />
+      {rows.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+          data-testid="rental-results-count">
+          <span className="text-muted-foreground">
+            {totalMatches != null && totalMatches > rows.length
+              ? `Showing ${rows.length} of ${totalMatches} matching apartments`
+              : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
+          </span>
+          <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
+            data-testid="rental-browse-all-link">
+            Browse all apartments
+          </Link>
+        </div>
+      ) : null}
       {rows.length > 0 && envelope.budgetNote ? (
         <p className="text-xs text-muted-foreground" data-testid="rental-budget-comparison-note">
           {envelope.budgetNote}
