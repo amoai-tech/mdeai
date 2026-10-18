@@ -8,8 +8,18 @@ import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder
 
 export const dynamic = "force-dynamic";
 
-export default async function RestaurantDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RestaurantDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ contest_id?: string | string[] }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
+  // A contest-aware link identifies the actual ballot. Never guess when the same
+  // restaurant participates in multiple development contests.
+  const selectedContestId = typeof query.contest_id === "string" ? query.contest_id : null;
   const lookup = await fetchRestaurantById(id);
   if (lookup.status === "not_found") notFound();
   if (lookup.status === "error") {
@@ -31,7 +41,7 @@ export default async function RestaurantDetailPage({ params }: { params: Promise
   // A failing vote lookup must never take down the whole restaurant page.
   let voteTarget: { contestId: string; entityId: string } | null = null;
   try {
-    voteTarget = await fetchRestaurantVoteTarget(restaurant.id);
+    voteTarget = await fetchRestaurantVoteTarget(restaurant.id, selectedContestId);
   } catch (err) {
     console.error("[restaurant] vote target lookup threw:", err instanceof Error ? err.message : err);
   }
