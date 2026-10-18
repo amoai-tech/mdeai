@@ -53,9 +53,9 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
+          # gh api --jq takes one filter string; it does not forward jq's --arg flag.
           recent=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod-renter-journey.yml/runs?per_page=20" \
-            --jq --arg run "$GITHUB_RUN_ID" \
-            '[.workflow_runs[] | select(.id != ($run | tonumber)) | select((.created_at | fromdateiso8601) > (now - 3300))] | length')
+            --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select((.created_at | fromdateiso8601) > (now - 3300))] | length")
           echo "journey runs in the last 55 minutes: $recent"
           if [ "$recent" -gt 0 ]; then
             echo "::notice::another journey run started within the last 55 minutes; skipping to stay inside the 20/hour viewing limit"
@@ -71,8 +71,12 @@ jobs:
           SAN1205_JOURNEY_E2E: "1"
           SAN1205_ALLOW_PRODUCTION_WRITES: "1"
           SAN1205_CANDIDATE_SHA: ${{ github.sha }}
+          # The journey targets production; never boot the local dev server for it.
+          PW_SKIP_WEBSERVER: "1"
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke
+        # A write journey must not retry: a retry duplicates fixtures, spends the hourly
+        # anonymous-viewing budget, and can strand rows when the first attempt half-succeeded.
+        run: npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --retries=0

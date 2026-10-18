@@ -24,6 +24,7 @@ const BASE = (process.env.SMOKE_BASE_URL || "https://www.mdeai.co").replace(/\/$
 const REPO = process.env.GITHUB_REPOSITORY || "amoai-tech/mdeai";
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const GRACE_MINUTES = Number(process.env.SHA_GRACE_MINUTES || "20");
+const RENTAL_QUERY = process.env.SMOKE_QUERY || "2BR in Laureles under 2 million pesos";
 
 const results = [];
 function record(name, ok, detail) {
@@ -84,6 +85,10 @@ async function safeViewingError() {
   return { ok: safe, detail: "HTTP " + res.status + " " + JSON.stringify(json) };
 }
 
+const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i;
+const EMPTY = /No rentals match|No rentals are available/i;
+const DISCLOSED = /can't filter by monthly budget|budget was not applied/i;
+
 async function rentalFastPath() {
   const browser = await chromium.launch({
     channel: process.env.SMOKE_CHANNEL || undefined,
@@ -96,10 +101,11 @@ async function rentalFastPath() {
     await page.goto(BASE + "/chat", { waitUntil: "domcontentloaded", timeout: 60_000 });
     const box = page.locator('[data-testid="copilot-chat-textarea"]');
     await box.waitFor({ state: "visible", timeout: 45_000 });
-    await box.fill("2BR in Laureles under 2 million pesos");
+    await box.fill(RENTAL_QUERY);
     await page.locator('[data-testid="copilot-send-button"]').click();
+    // Results and an honest empty state both count as an answer; a stalled page does not.
     await page.waitForFunction(
-      () => /Found \d+ rental|can't filter by monthly budget/i.test(document.body.innerText),
+      () => /Found \d+ rentals?|No rentals match|No rentals are available/i.test(document.body.innerText),
       null,
       { timeout: 45_000 },
     );
@@ -109,38 +115,58 @@ async function rentalFastPath() {
     await browser.close();
   }
   return {
-    answered: /Found \d+ rental/i.test(text),
-    disclosed: /can't filter by monthly budget/i.test(text),
+    answered: ANSWERED.test(text),
+    empty: EMPTY.test(text),
+    disclosed: DISCLOSED.test(text),
     cards,
   };
 }
 
+/** The newest production deployment whose latest GitHub status is success. */
+async function latestSuccessfulProductionDeployment() {
+  const deployments = await ghApi("/repos/" + REPO + "/deployments?environment=production&per_page=5");
+  if (!Array.isArray(deployments) || deployments.length === 0) {
+    return { sha: "", note: "no production deployment found" };
+  }
+  for (const deployment of deployments) {
+    const statuses = await ghApi("/repos/" + REPO + "/deployments/" + deployment.id + "/statuses?per_page=1");
+    const state = Array.isArray(statuses) && statuses[0] ? statuses[0].state : "unknown";
+    if (state === "success") return { sha: deployment.sha, note: "deployment " + deployment.id + " is success" };
+  }
+  return { sha: "", note: "none of the latest 5 production deployments is successful" };
+}
+
 async function deploymentDrift() {
-  const deployments = await ghApi("/repos/" + REPO + "/deployments?environment=production&per_page=1");
+  const deployed = await latestSuccessfulProductionDeployment();
   const mainCommit = await ghApi("/repos/" + REPO + "/commits/main");
-  const deployedSha = Array.isArray(deployments) && deployments[0] ? deployments[0].sha : "";
   const mainSha = mainCommit && mainCommit.sha ? mainCommit.sha : "";
-  const mainAgeMin = mainCommit && mainCommit.commit
+  if (!deployed.sha || !mainSha) {
+    record(
+      "production deployment is successful and matches main",
+      false,
+      deployed.note + "; main=" + (mainSha ? mainSha.slice(0, 9) : "unreadable"),
+    );
+    return { deployedSha: deployed.sha, mainSha };
+  }
+  const mainAgeMin = mainCommit.commit
     ? (Date.now() - new Date(mainCommit.commit.committer.date).getTime()) / 60_000
     : Number.POSITIVE_INFINITY;
-  if (!deployedSha || !mainSha) {
-    record("production deployment matches main", false, "could not read the GitHub deployment or main commit");
-  } else if (deployedSha === mainSha) {
-    record("production deployment matches main", true, deployedSha.slice(0, 9));
+  if (deployed.sha === mainSha) {
+    record("production deployment is successful and matches main", true, deployed.sha.slice(0, 9) + "; " + deployed.note);
   } else if (mainAgeMin < GRACE_MINUTES) {
     record(
-      "production deployment matches main",
+      "production deployment is successful and matches main",
       true,
-      "WARN main " + mainSha.slice(0, 9) + " is " + Math.round(mainAgeMin) + " min old; serving " + deployedSha.slice(0, 9) + " (inside the " + GRACE_MINUTES + "-minute merge grace window)",
+      "WARN main " + mainSha.slice(0, 9) + " is " + Math.round(mainAgeMin) + " min old; serving " + deployed.sha.slice(0, 9) + " (inside the " + GRACE_MINUTES + "-minute merge grace window)",
     );
   } else {
     record(
-      "production deployment matches main",
+      "production deployment is successful and matches main",
       false,
-      "drift: main is " + mainSha.slice(0, 9) + " (" + Math.round(mainAgeMin) + " min old) but production serves " + deployedSha.slice(0, 9),
+      "drift: main is " + mainSha.slice(0, 9) + " (" + Math.round(mainAgeMin) + " min old) but the newest successful deployment is " + deployed.sha.slice(0, 9),
     );
   }
-  return { deployedSha, mainSha };
+  return { deployedSha: deployed.sha, mainSha };
 }
 
 function printSummary(served, shas) {
@@ -164,7 +190,11 @@ async function main() {
   record("viewing errors stay safe and server-side", api.ok, api.detail);
 
   const rentals = await rentalFastPath();
-  record("rental fast path answers", rentals.answered, "rental cards rendered: " + rentals.cards);
+  record(
+    "rental fast path answers (results or honest empty state)",
+    rentals.answered,
+    rentals.empty ? "empty state shown" : "rental cards rendered: " + rentals.cards,
+  );
   record(
     "peso budget is disclosed, never silently capped",
     rentals.disclosed,

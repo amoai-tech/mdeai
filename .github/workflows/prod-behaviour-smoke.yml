@@ -8,7 +8,8 @@ name: Prod behaviour smoke
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # Off-minute on purpose: :00 and :30 are GitHub's busiest scheduler slots.
+    - cron: "7,37 * * * *"
   workflow_dispatch:
 
 permissions:
