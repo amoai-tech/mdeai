@@ -33,6 +33,9 @@ type PartnerSignupWizardProps = {
   initialCategory?: string;
   isAuthenticated: boolean;
   loginNextPath: string;
+  /** Optional controlled form state so the AI suggestion card can apply values. */
+  form?: PartnerSignupFormState;
+  onFormChange?: (next: PartnerSignupFormState) => void;
 };
 
 type ViewState =
@@ -60,15 +63,22 @@ export function PartnerSignupWizard({
   initialCategory,
   isAuthenticated,
   loginNextPath,
+  form: controlledForm,
+  onFormChange,
 }: PartnerSignupWizardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [view, setView] = useState<ViewState>({ kind: "form" });
-  const [form, setForm] = useState<PartnerSignupFormState>({
+  const [internalForm, setInternalForm] = useState<PartnerSignupFormState>({
     businessName: "",
     category: initialCategory ?? "",
     neighborhood: "",
   });
+  const form = controlledForm ?? internalForm;
+  const setForm = (next: PartnerSignupFormState) => {
+    if (onFormChange) onFormChange(next);
+    else setInternalForm(next);
+  };
 
   const typeLabel = PARTNER_TYPE_LABELS[partnerType];
   const loginHref = `/login?next=${encodeURIComponent(loginNextPath)}`;
@@ -77,7 +87,7 @@ export function PartnerSignupWizard({
     key: K,
     value: PartnerSignupFormState[K],
   ) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm({ ...form, [key]: value });
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {

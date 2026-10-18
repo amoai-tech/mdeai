@@ -1,0 +1,97 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { OnboardingAiSuggestionCard } from "../onboarding-ai-suggestion-card";
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+afterEach(() => {
+  if (mounted) {
+    act(() => {
+      mounted?.root.unmount();
+    });
+    mounted.container.remove();
+    mounted = null;
+  }
+});
+
+function mount(onAccept = vi.fn(), onIgnore = vi.fn()) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  let root!: Root;
+  act(() => {
+    root = createRoot(container);
+    root.render(
+      <OnboardingAiSuggestionCard
+        suggestion={{ businessName: "Café Central", category: "Café", neighborhood: "Laureles", reason: "From your message" }}
+        onAccept={onAccept}
+        onIgnore={onIgnore}
+      />,
+    );
+  });
+  mounted = { container, root };
+  return { container, onAccept, onIgnore };
+}
+
+function click(element: Element | null) {
+  expect(element).not.toBeNull();
+  act(() => {
+    (element as HTMLElement).click();
+  });
+}
+
+function setValue(input: HTMLInputElement, value: string) {
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+describe("OnboardingAiSuggestionCard (SAN-709)", () => {
+  it("accepts the proposal without writing anything itself", () => {
+    const { container, onAccept } = mount();
+    click(container.querySelector('[data-testid="onboarding-suggestion-accept"]'));
+    expect(onAccept).toHaveBeenCalledWith(
+      expect.objectContaining({ businessName: "Café Central", category: "Café" }),
+    );
+  });
+
+  it("ignores the proposal", () => {
+    const { container, onIgnore } = mount();
+    click(container.querySelector('[data-testid="onboarding-suggestion-ignore"]'));
+    expect(onIgnore).toHaveBeenCalledTimes(1);
+  });
+
+  it("edits, validates and applies the changed values", () => {
+    const { container, onAccept } = mount();
+    click(container.querySelector('[data-testid="onboarding-suggestion-edit"]'));
+    const input = container.querySelector(
+      '[data-testid="suggestion-edit-businessName"]',
+    ) as HTMLInputElement;
+    setValue(input, "Café Central Updated");
+    click(container.querySelector('[data-testid="onboarding-suggestion-save"]'));
+    expect(onAccept).toHaveBeenCalledWith(
+      expect.objectContaining({ businessName: "Café Central Updated" }),
+    );
+  });
+
+  it("shows a readable error and does not apply an invalid edit", () => {
+    const { container, onAccept } = mount();
+    click(container.querySelector('[data-testid="onboarding-suggestion-edit"]'));
+    const input = container.querySelector(
+      '[data-testid="suggestion-edit-businessName"]',
+    ) as HTMLInputElement;
+    setValue(input, "A");
+    click(container.querySelector('[data-testid="onboarding-suggestion-save"]'));
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('[data-testid="suggestion-error"]')?.textContent,
+    ).toContain("at least 2");
+  });
+});
