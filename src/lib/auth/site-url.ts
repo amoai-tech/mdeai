@@ -30,7 +30,7 @@ export function normalizeSiteOrigin(value: string): string {
  */
 export async function getSiteOrigin(): Promise<string> {
   if (process.env.VERCEL_ENV === "preview") {
-    const deploymentHost = process.env.VERCEL_URL ?? process.env.VERCEL_BRANCH_URL;
+    const deploymentHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_BRANCH_URL?.trim();
     if (!deploymentHost) {
       throw new Error("Missing VERCEL_URL for preview authentication callback");
     }

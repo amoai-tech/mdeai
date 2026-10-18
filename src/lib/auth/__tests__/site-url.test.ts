@@ -105,6 +105,13 @@ describe("authentication callback origin", () => {
     await expect(getSiteOrigin()).rejects.toThrow("Missing VERCEL_URL");
   });
 
+  it("falls back to the branch hostname when VERCEL_URL is empty", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "");
+    vi.stubEnv("VERCEL_BRANCH_URL", "mdeai-branch-amoco.vercel.app");
+    expect(await getSiteOrigin()).toBe("https://mdeai-branch-amoco.vercel.app");
+  });
+
   it("keeps localhost HTTP while requiring HTTPS for non-local domains", () => {
     expect(normalizeSiteOrigin("http://localhost:3001/")).toBe("http://localhost:3001");
     expect(normalizeSiteOrigin("https://mdeai.co/")).toBe("https://mdeai.co");
