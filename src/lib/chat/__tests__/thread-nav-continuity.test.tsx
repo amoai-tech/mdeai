@@ -96,7 +96,9 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     expect(nav.activeThreadId).toBeUndefined();
     expect(nav.newChatCount).toBe(1);
     auth.loading = false;
-    await show();
+    // An auth state update re-renders the existing provider; changing its React
+    // key here would simulate another page reload and discard in-memory state.
+    await show("pending-saved-restoration");
     expect(nav.ready).toBe(true);
     expect(nav.sessionThreadId).toBe(freshId);
     expect(nav.activeThreadId).toBeUndefined();
