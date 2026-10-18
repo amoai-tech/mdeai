@@ -203,7 +203,7 @@ export async function searchRentalsIntelligent(
       amenities: r.amenities as string[] | null,
       pet_friendly: null,
       furnished: null,
-      status: "active",
+      status: (r.status as string | null) ?? null,
       similarity: 0,
     }));
     return { rows, apartments };
@@ -215,15 +215,10 @@ export async function searchRentalsIntelligent(
   let embedFailureReason: EmbedFailureReason | undefined;
   let embedHttpStatus: number | undefined;
 
-  if (queryText && developmentMode) {
-    embedStatus = "skipped";
-    rankExplanation.push({
-      factor: "development_keyword",
-      score: 0,
-      note: "phase-aware canonical keyword search; no legacy hybrid eligibility filter",
-    });
-  }
-  if (queryText && !developmentMode) {
+  // Use the same hybrid RPC in both phases. Development visibility belongs to
+  // canonical Supabase RLS, not a second AI-only eligibility switch. When the
+  // embedding or RPC is unavailable, the shared keyword path still works.
+  if (queryText) {
     const embedResult = await embedQueryTextDetailed(queryText);
     if (embedResult.ok) {
       embedStatus = "ok";

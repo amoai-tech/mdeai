@@ -1,11 +1,13 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(30);
+select plan(31);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
           true, 'Phase A exposes active draft-status inventory without moderation review');
+select is(public.rental_listing_is_public('inactive','pending','draft',null,'{}'::jsonb),
+          true, 'Phase A also exposes inactive development inventory without business status gate');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"inventory_kind":"external_candidate"}'::jsonb),true,

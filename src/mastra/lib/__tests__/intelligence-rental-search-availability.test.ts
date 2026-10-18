@@ -154,7 +154,38 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.filterCalls.length = 0;
     mocks.state.apartmentCalls = 0;
     mocks.state.hybridReloadEmpty = false;
+    mocks.client.rpc.mockClear();
   });
+
+  it("uses existing hybrid ranking during development without an active/owner eligibility gate", async () => {
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+    const result = await searchRentalsIntelligent(
+      { queryText: "quiet Laureles apartment", limit: 5 },
+      { developmentPhase: true },
+    );
+    expect(mocks.client.rpc).toHaveBeenCalledWith("hybrid_search_listings", expect.any(Object));
+    expect(result.hybridUsed).toBe(true);
+    expect(result.embedStatus).toBe("ok");
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "status", "active"]);
+    expect(mocks.state.filterCalls).not.toContainEqual(["not", "landlord_id", "is", null]);
+  });
+
+  it("keeps keyword results when the development hybrid RPC fails", async () => {
+    mocks.state.rpcError = { message: "semantic RPC unavailable", code: "503" };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+    const result = await searchRentalsIntelligent(
+      { queryText: "quiet Laureles apartment", limit: 5 },
+      { developmentPhase: true },
+    );
+    expect(result.hybridUsed).toBe(false);
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(result.rankExplanation).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factor: "hybrid_rpc_error" }),
+    ]));
+    warn.mockRestore();
+  });
+
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
 

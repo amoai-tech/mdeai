@@ -8,7 +8,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(13);
+select plan(14);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('f1523000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin-fx@example.com'),
@@ -37,7 +37,8 @@ values ('00000000-0000-4000-8000-00000053a001', 'FX ordinary dev listing', 'fx-o
        ('00000000-0000-4000-8000-00000053a003', 'FX kind-marked fixture',   'fx-kindfix',   'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"inventory_kind":"test_fixture"}'),
        ('00000000-0000-4000-8000-00000053a004', 'FX private record',        'fx-private',   'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"visibility":"private"}'),
        ('00000000-0000-4000-8000-00000053a005', 'FX internal record',       'fx-internal',  'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"visibility":"internal"}'),
-       ('00000000-0000-4000-8000-00000053a006', 'FX test_mode dev listing', 'fx-testmode',  'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"test_mode":"true","inventory_kind":"mde_managed"}');
+       ('00000000-0000-4000-8000-00000053a006', 'FX test_mode dev listing', 'fx-testmode',  'Laureles', 'x', 1, 'active', 'pending', 'draft', null, '{"test_mode":"true","inventory_kind":"mde_managed"}'),
+       ('00000000-0000-4000-8000-00000053a007', 'FX inactive development listing', 'fx-inactive', 'Laureles', 'x', 1, 'inactive', 'pending', 'draft', null, '{}');
 
 select is((select phase from public.rental_runtime_settings where singleton), 'development', 'setup: the rental phase is development');
 
@@ -48,6 +49,8 @@ select is((select count(*)::int from public.apartments where id = '00000000-0000
   'development: an ordinary signed-in user reads an ordinary development listing (no moderation, owner, rights or verification needed)');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a002'), 1,
   'development: and an imported external candidate');
+select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a007'), 1,
+  'development: inactive ordinary inventory is not blocked from signed-in search');
 select is((select count(*)::int from public.apartments where id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but not an explicit test fixture');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a003'), 0,
@@ -75,8 +78,8 @@ reset role;
 -- ── anonymous visitors: ordinary development listings are public through the canonical rule -----------------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006')), 3,
-  'development: an anonymous visitor reads ordinary and test_mode development listings');
+select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006', '00000000-0000-4000-8000-00000053a007')), 4,
+  'development: an anonymous visitor reads active, inactive and test_mode development listings');
 select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004', '00000000-0000-4000-8000-00000053a005') or id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but never a test fixture, a kind-marked fixture, a private or an internal record');
 reset role;
