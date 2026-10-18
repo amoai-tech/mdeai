@@ -28,7 +28,7 @@ export function BrowseMapSheet() {
         {/* pb: keep the sheet's bottom edge clear of the home indicator on notched phones. */}
         <SheetContent
           side="bottom"
-          className="p-0 pb-[env(safe-area-inset-bottom,0px)]"
+          className="gap-0 p-0 pb-[env(safe-area-inset-bottom,0px)]"
           showCloseButton={false}
         >
           {/* Keep our close control in a separate toolbar. On Android, Google's
