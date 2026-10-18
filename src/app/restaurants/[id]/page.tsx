@@ -2,7 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UtensilsCrossed } from "lucide-react";
-import { fetchRestaurantById, fetchRestaurantVoteTarget } from "@/lib/restaurants/fetch-restaurant-by-id";
+import {
+  fetchRestaurantById,
+  fetchRestaurantContestOptions,
+  fetchRestaurantVoteTarget,
+  type RestaurantContestOption,
+} from "@/lib/restaurants/fetch-restaurant-by-id";
 import { RestaurantVotePanel } from "@/components/restaurants/restaurant-vote-panel";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 
@@ -40,8 +45,14 @@ export default async function RestaurantDetailPage({
   // SAN-1483 supplies the canonical contest entry; null keeps the honest not-open state.
   // A failing vote lookup must never take down the whole restaurant page.
   let voteTarget: { contestId: string; entityId: string } | null = null;
+  // SAN-1524 · when no contest is named and the target is ambiguous, offer the real choices
+  // instead of a blank panel. A failing lookup must never take down the whole page.
+  let contestOptions: RestaurantContestOption[] = [];
   try {
     voteTarget = await fetchRestaurantVoteTarget(restaurant.id, selectedContestId);
+    if (!voteTarget && !selectedContestId) {
+      contestOptions = await fetchRestaurantContestOptions(restaurant.id);
+    }
   } catch (err) {
     console.error("[restaurant] vote target lookup threw:", err instanceof Error ? err.message : err);
   }
@@ -83,7 +94,28 @@ export default async function RestaurantDetailPage({
         {/* SAN-1483 supplies the canonical contest entry for this restaurant. Until it
             lands there is no honest target, so the panel states that instead of inventing one. */}
         <div className="mt-3">
-          <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={voteTarget} />
+          {contestOptions.length > 1 ? (
+            <div data-testid="vote-contest-chooser">
+              <p className="text-sm text-foreground">
+                {restaurant.name} is competing in more than one contest. Choose where to vote.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {contestOptions.map((option) => (
+                  <li key={option.contestId}>
+                    <Link
+                      className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium"
+                      data-testid="vote-contest-option"
+                      href={"/restaurants/" + restaurant.id + "?contest_id=" + option.contestId}
+                    >
+                      Vote in {option.contestTitle}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={voteTarget} />
+          )}
         </div>
       </section>
     </main>
