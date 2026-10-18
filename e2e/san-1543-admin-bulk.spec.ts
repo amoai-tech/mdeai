@@ -19,15 +19,16 @@ const email = process.env.MDE_ADMIN_CONTEST_E2E_EMAIL;
 const contestId = process.env.MDE_ADMIN_CONTEST_E2E_CONTEST_ID;
 const origin = process.env.PROD_SMOKE_BASE_URL ?? process.env.SMOKE_BASE_URL ?? "http://localhost:3001";
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** The nominee row whose display name is exactly this restaurant. */
+/**
+ * The nominee row whose display name is exactly this restaurant.
+ *
+ * Uses getByText with exact:true (a string comparison) instead of building a RegExp from a
+ * variable — that pattern is a regular-expression injection surface for no benefit here.
+ */
 function entryRow(page: Page, name: string): Locator {
   return page
     .locator('[data-testid^="contest-entry-"]')
-    .filter({ has: page.locator("p").filter({ hasText: new RegExp("^" + escapeRegExp(name) + "$") }) })
+    .filter({ has: page.getByText(name, { exact: true }) })
     .first();
 }
 
