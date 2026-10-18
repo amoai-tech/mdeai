@@ -46,7 +46,8 @@ npm run test:e2e:qa-signin
 ```
 
 This **opt-in** smoke uses `e2e/fixtures.ts` and `e2e/helpers/auth.ts` to obtain a
-real Supabase email-OTP session for the existing read-only QA account. No
+real Supabase email-OTP session for the existing read-only QA account (and
+refuses auto-creating it if missing). No
 manual password, inbox, global `storageState` setup project, or `E2E_BYPASS_AUTH`
 is necessary. The script auto-starts the configured local Next.js server on
 `:3001` (unless `PW_SKIP_WEBSERVER=1`); a legitimate authenticated `/saved`
