@@ -91,6 +91,8 @@ function num(v: number | string | null | undefined): number | undefined {
 
 /** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
 const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+/** Bound the hybrid RPC wait separately from the Gemini embedding request. */
+const RENTAL_HYBRID_RPC_TIMEOUT_MS = 5000;
 
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
@@ -226,7 +228,7 @@ export async function searchRentalsIntelligent(
         query_text: queryText,
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
-      });
+      }).abortSignal(AbortSignal.timeout(RENTAL_HYBRID_RPC_TIMEOUT_MS));
       if (error) {
         // Supabase JS retries transient PostgREST failures. If the RPC still
         // fails, preserve search availability by degrading to the keyword path.
