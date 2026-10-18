@@ -65,6 +65,7 @@ test.describe("SAN-1543 admin nominee picker", () => {
     await page.goto("/admin/contests/" + contestId);
     await expect(page.getByTestId("restaurant-picker")).toBeVisible();
 
+    let bodyFailed = false;
     try {
       // 390px: the old <select multiple> needed Ctrl/Cmd and was unusable here.
       await page.setViewportSize({ width: 390, height: 844 });
@@ -90,13 +91,15 @@ test.describe("SAN-1543 admin nominee picker", () => {
       await checkbox(page, second).check();
       await expect(page.getByTestId("contest-picker-count")).toHaveText("2 selected");
 
+      // Tracked BEFORE the write: if the submission partially succeeds and an assertion below
+      // fails, cleanup still knows which nominees to restore.
+      linkedByTest.push(first, second);
       await page.getByTestId("contest-link-submit").click();
       await expect(page.getByTestId("contest-link-result-summary")).toContainText("2 added", {
         timeout: 30_000,
       });
 
       for (const name of [first, second]) {
-        linkedByTest.push(name);
         await expect.poll(() => isLinked(entryRow(page, name)), { timeout: 30_000 }).toBe(true);
       }
 
@@ -110,6 +113,10 @@ test.describe("SAN-1543 admin nominee picker", () => {
         await removeNominee(page, name);
         linkedByTest.splice(linkedByTest.indexOf(name), 1);
       }
+    } catch (error) {
+      // Remember that the body failed so cleanup cannot replace the real failure below.
+      bodyFailed = true;
+      throw error;
     } finally {
       // Guaranteed restoration: unlink anything this test left linked, and report if that fails.
       const cleanupFailures: string[] = [];
@@ -121,7 +128,10 @@ test.describe("SAN-1543 admin nominee picker", () => {
         }
       }
       if (cleanupFailures.length > 0) {
-        throw new Error("E2E cleanup failed — check these nominees by hand: " + cleanupFailures.join("; "));
+        const message = "E2E cleanup failed — check these nominees by hand: " + cleanupFailures.join("; ");
+        // The body failure is the one that explains the run; a cleanup error must not mask it.
+        if (bodyFailed) console.error(message);
+        else throw new Error(message);
       }
     }
   });
