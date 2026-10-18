@@ -253,3 +253,24 @@ describe("SAN-1503 · truthful natural-language rental result totals", () => {
     expect(container.querySelector('[data-testid="rental-browse-all-link"]')).toBeNull();
   });
 });
+
+describe("'Why these rentals' uses plain words", () => {
+  const rankExplanation = [
+    { factor: "hybrid_semantic", score: 0.9, note: "hybrid_search_listings RPC" },
+    { factor: "neighborhood", score: 1, note: "Laureles filter" },
+    { factor: "neighborhood_profile", score: 0.5, note: "Laureles" },
+    { factor: "digital_nomad_score", score: 0.8, note: "rental_signals join" },
+  ];
+
+  it("shows a sentence for each reason and never an internal name or technical note", () => {
+    render({ source: "supabase", results: [rental("one")], rankExplanation });
+    const text = container.textContent ?? "";
+    expect(text).toContain("Matched on the meaning of your request, not only keywords.");
+    expect(text).toContain("Limited to Laureles.");
+    expect(text).toContain("Used what we know about Laureles.");
+    expect(text).toContain("Ranked remote-work friendly places higher.");
+    for (const internal of ["hybrid_semantic", "hybrid_search_listings", "neighborhood_profile", "digital_nomad_score", "rental_signals", "Laureles filter"]) {
+      expect(text).not.toContain(internal);
+    }
+  });
+});
