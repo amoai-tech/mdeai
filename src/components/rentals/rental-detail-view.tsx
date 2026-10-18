@@ -17,6 +17,7 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { GalleryImage } from "@/components/rentals/gallery-image";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
@@ -168,6 +169,7 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isInteractive,
   isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
@@ -176,6 +178,8 @@ const RentalPriceSidebar = ({
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
   /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
   isExternalSource?: boolean;
   isDevelopmentPreview?: boolean;
@@ -192,7 +196,7 @@ const RentalPriceSidebar = ({
           ) : null}
         </div>
         {canRequestViewing ? (
-          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
+          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" disabled={!isInteractive} onClick={onRequest}>
             {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
@@ -202,6 +206,7 @@ const RentalPriceSidebar = ({
             variant="outline"
             className="w-full"
             data-testid="rental-detail-ask-cta"
+            disabled={!isInteractive}
             onClick={onRequest}
           >
             Ask a question
@@ -222,6 +227,7 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isInteractive,
   isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
@@ -229,6 +235,8 @@ const RentalMobileCta = ({
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
   /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
   isExternalSource?: boolean;
   /** Preview details must not imply that payment is handled with an unverified host. */
@@ -248,7 +256,7 @@ const RentalMobileCta = ({
         </div>
       </div>
       {canRequestViewing ? (
-        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
+        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" disabled={!isInteractive} onClick={onRequest}>
           {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
         </Button>
       ) : null}
@@ -307,6 +315,9 @@ function RentalDescription({ description }: { description?: string | null }) {
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
 function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
   const { openScheduleViewing } = useRentalUi();
+  // The HTML arrives before client event handlers do. Do not show a clickable
+  // action that silently loses a renter's first tap before hydration.
+  const isInteractive = useHydrated();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
   const requestViewing = () =>
@@ -411,6 +422,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isInteractive={isInteractive}
           isExternalSource={detail.isExternalSource}
           isDevelopmentPreview={detail.status === "development-preview"}
         />
@@ -420,6 +432,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isInteractive={isInteractive}
         isExternalSource={detail.isExternalSource}
         isDevelopmentPreview={detail.status === "development-preview"}
       />
