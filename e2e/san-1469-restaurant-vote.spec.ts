@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { Client } from "pg";
 import {
   createThrowawayIdentity,
@@ -59,6 +59,69 @@ async function proveSecondBrowserRecovery(
   }
 }
 
+/**
+ * Contest selection is the reason this screen exists. One restaurant can contest more
+ * than one event, so each contest link must resolve its own ballot, and a foreign or
+ * malformed selection must never borrow another contest's ballot.
+ */
+async function proveContestSelection(
+  page: Page,
+  db: Client,
+  ids: { restaurantId: string; contestId: string },
+): Promise<void> {
+  const { restaurantId, contestId } = ids;
+  // Read the sibling contest from the database rather than inventing it.
+  const sibling = await db.query<{ contest_id: string; entity_id: string }>(
+    "select e.contest_id, e.id as entity_id from vote.entities e " +
+      "join vote.contests c on c.id = e.contest_id " +
+      "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
+    [restaurantId, contestId],
+  );
+  if (sibling.rows[0]) {
+    await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
+    await expect(page.getByTestId("vote-cta")).toBeVisible();
+  }
+  // A well-formed contest id that is not this restaurant's contest. The sentinel below
+  // must never become a real contest id.
+  await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
+  await expect(page.getByTestId("vote-not-open")).toBeVisible();
+  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  // A malformed selection is rejected before any contest lookup happens.
+  await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
+  await expect(page.getByTestId("vote-not-open")).toBeVisible();
+  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+}
+
+/**
+ * Replay the exact saved idempotency key against the deployed service. No nonce means a
+ * NEW ballot cannot be created; a committed receipt must come back unchanged.
+ */
+async function proveIdempotentReplay(
+  page: Page,
+  session: Awaited<ReturnType<typeof getTestSession>>,
+  ids: { contestId: string; entityId: string; userId: string },
+  receipt: string,
+  countBallots: () => Promise<unknown[]>,
+): Promise<void> {
+  const key = await page.evaluate(({ contest, entity, user }) =>
+    localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
+    { contest: ids.contestId, entity: ids.entityId, user: ids.userId },
+  );
+  expect(key).toBeTruthy();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const apiKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const replay = await page.request.post(url + "/functions/v1/vote-cast", {
+    headers: { apikey: apiKey, Authorization: "Bearer " + session.access_token },
+    data: { contest_id: ids.contestId, entity_id: ids.entityId, idempotency_key: key },
+  });
+  expect(replay.status()).toBe(200);
+  const replayBody = await replay.json() as { data: { vote_id: string; status: string } };
+  expect(replayBody.data.vote_id).toBe(receipt);
+  expect(replayBody.data.status).toBe("replayed");
+  expect(await countBallots()).toHaveLength(1);
+}
+
 test.describe("SAN-1469 real restaurant vote / database receipt", () => {
   // The dedicated voting gate sets SAN1469_VOTE_E2E=required: missing configuration must FAIL
 // there rather than silently skip. Other suites keep the opt-in skip.
@@ -85,29 +148,9 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       );
       expect(phase.rows[0]?.application_phase).toBe("development");
 
-      // The same restaurant contests more than one event. Each contest-specific link must
-      // resolve its own ballot — the bare URL is the ambiguous case that hid the Vote
-      // button. Read the sibling contest from the database rather than inventing it.
-      const sibling = await db.query<{ contest_id: string; entity_id: string }>(
-        "select e.contest_id, e.id as entity_id from vote.entities e " +
-          "join vote.contests c on c.id = e.contest_id " +
-          "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
-        [restaurantId, contestId],
-      );
-      if (sibling.rows[0]) {
-        await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
-        await expect(page.getByTestId("vote-cta")).toBeVisible();
-      }
-      // Negative proof, before any account exists: a well-formed contest id that is not
-      // this restaurant's contest must show the honest not-open state, never a ballot
-      // borrowed from another contest. The sentinel below must never become a real id.
-      await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
-      await expect(page.getByTestId("vote-not-open")).toBeVisible();
-      await expect(page.getByTestId("vote-cta")).toHaveCount(0);
-      // A malformed selection is rejected before any contest lookup happens.
-      await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
-      await expect(page.getByTestId("vote-not-open")).toBeVisible();
-      await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+      // The same restaurant contests more than one event: each contest-specific link must
+      // resolve its own ballot, and a wrong one must not borrow another contest's ballot.
+      await proveContestSelection(page, db, { restaurantId: restaurantId!, contestId: contestId! });
 
       const identity = await createThrowawayIdentity("san1469-voter");
       userId = identity.userId;
@@ -176,25 +219,9 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         countBallots,
       );
 
-      // Hit the deployed service directly with the exact saved idempotency key.
-      // No nonce means a NEW ballot cannot be created, but a committed receipt can be replayed.
-      const key = await page.evaluate(({ contest, entity, user }) =>
-        localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
-        { contest: contestId!, entity: entityId!, user: userId! },
-      );
-      expect(key).toBeTruthy();
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const apiKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      const replay = await page.request.post(url + "/functions/v1/vote-cast", {
-        headers: { apikey: apiKey, Authorization: "Bearer " + session.access_token },
-        data: { contest_id: contestId, entity_id: entityId, idempotency_key: key },
-      });
-      expect(replay.status()).toBe(200);
-      const replayBody = await replay.json() as { data: { vote_id: string; status: string } };
-      expect(replayBody.data.vote_id).toBe(receipt);
-      expect(replayBody.data.status).toBe("replayed");
-      expect(await countBallots()).toHaveLength(1);
+      // Hit the deployed service directly with the exact saved idempotency key: no nonce
+      // means a NEW ballot cannot be created, but a committed receipt must replay.
+      await proveIdempotentReplay(page, session, { contestId: contestId!, entityId: entityId!, userId: userId! }, receipt, countBallots);
 
       for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 850 });
