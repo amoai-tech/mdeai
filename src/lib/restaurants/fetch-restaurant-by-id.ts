@@ -98,4 +98,50 @@ export async function fetchRestaurantVoteTarget(
   // UUIDs compare case-insensitively because callers may supply upper-case input.
   if (contestId !== null && row.contest_id.toLowerCase() !== contestId.toLowerCase()) return null;
   return { contestId: row.contest_id, entityId: row.entity_id };
+  
+}
+
+export type RestaurantContestOption = {
+  contestId: string;
+  entityId: string;
+  contestTitle: string;
+  status: string;
+};
+
+/**
+ * Every contest this restaurant can be voted in (SAN-1524).
+ *
+ * vote_restaurant_target refuses to pick a contest for the visitor. Refusing is right, but a
+ * blank panel is not: this read lets the page ASK. Same eligibility filter and the same
+ * service-role-only grant, so `vote` stays private.
+ */
+export async function fetchRestaurantContestOptions(
+  restaurantId: string,
+): Promise<RestaurantContestOption[]> {
+  if (!isUuid(restaurantId)) return [];
+  const supabase = createServiceRoleClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.rpc("vote_restaurant_contest_options", {
+    p_restaurant_id: restaurantId,
+  });
+  if (error) {
+    console.error("[restaurant] vote_restaurant_contest_options failed:", error.message);
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+
+  const options: RestaurantContestOption[] = [];
+  for (const raw of data) {
+    const row = raw as { contest_id?: string; entity_id?: string; contest_title?: string; status?: string };
+    if (!row.contest_id || !row.entity_id) continue;
+    if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) continue;
+    options.push({
+      contestId: row.contest_id,
+      entityId: row.entity_id,
+      contestTitle: row.contest_title ?? "Contest",
+      status: row.status ?? "unknown",
+    });
+  }
+  return options;
 }

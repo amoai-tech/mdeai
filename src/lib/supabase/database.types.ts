@@ -7920,6 +7920,10 @@ export type Database = {
         Args: { p_restaurant_id: string; p_contest_id?: string }
         Returns: Json
       }
+      vote_restaurant_contest_options: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
