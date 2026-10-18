@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 
+import { useHydrated } from "@/hooks/use-hydrated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,20 +16,11 @@ import { submitContactLead } from "@/lib/partners/submit-contact-lead";
 const FIELD = "h-11 text-base md:text-sm";
 const OPTIONS: Record<ContactPartnerType, string> = { general: "General question", ...PARTNER_TYPE_LABELS };
 
-const subscribeHydration = () => () => {};
-const hydratedSnapshot = () => true;
-const serverSnapshot = () => false;
-
-/** False during SSR/hydration, true once React owns the DOM. */
-function useHydrated() {
-  return useSyncExternalStore(subscribeHydration, hydratedSnapshot, serverSnapshot);
-}
-
 export function ContactLeadForm({ initialType = "general" }: { initialType?: ContactPartnerType }) {
   const requestId = useRef<string | null>(null);
   // Until React has hydrated, a submit would fall back to a native GET and put
   // the guest's name, email and message in the URL without saving anything.
-  const ready = useHydrated();
+  const hydrated = useHydrated();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [partnerType, setPartnerType] = useState<ContactPartnerType>(initialType);
@@ -105,7 +97,7 @@ export function ContactLeadForm({ initialType = "general" }: { initialType?: Con
         <Textarea id="contact-message" name="message" data-testid="contact-message" required minLength={10} maxLength={2000} rows={5} className="text-base md:text-sm" placeholder="Tell us about your business or your question…" value={message} onChange={e => setMessage(e.target.value)} disabled={submitting} />
       </div>
       {error && <p role="alert" data-testid="contact-error" className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" size="lg" className="w-full" data-testid="contact-submit" disabled={submitting || !ready}>
+      <Button type="submit" size="lg" className="w-full" data-testid="contact-submit" disabled={submitting || !hydrated}>
         {submitting ? "Sending inquiry…" : "Send inquiry"}
         {!submitting && <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />}
       </Button>
