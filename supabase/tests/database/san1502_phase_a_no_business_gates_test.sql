@@ -1,11 +1,13 @@
 -- SAN-1502 · Phase A does not impose approval or freshness gates.
 -- Genuine database writes are rolled back; RLS/auth, broker mapping and idempotency remain.
 begin;
-select plan(30);
+select plan(31);
 
 select is(public.rental_development_active(), true, 'Phase A is explicit in server-owned DB state');
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
           true, 'Phase A exposes active draft-status inventory without moderation review');
+select is(public.rental_listing_is_public('inactive','pending','draft',null,'{}'::jsonb),
+          false, 'Phase A keeps inactive internal drafts out of public search while management remains unrestricted');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"inventory_kind":"external_candidate"}'::jsonb),true,
@@ -102,8 +104,8 @@ set local role authenticated;
 select set_config('request.jwt.claims',
  '{"sub":"f1506000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 select is((select count(*)::int from public.apartments
- where id=current_setting('mde.san1502_phase_fixture')::uuid),1,
- 'signed-in renter can see fixture without a test grant');
+ where id=current_setting('mde.san1502_phase_fixture')::uuid),0,
+ 'signed-in renter without a test grant does not see an explicit test fixture (20261016233000)');
 select is(has_table_privilege('authenticated','public.rental_runtime_settings','select'),false,
  'signed-in user lacks SELECT on server-controlled phase table');
 reset role;
