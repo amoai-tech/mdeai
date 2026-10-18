@@ -32,7 +32,7 @@ test.describe("SAN-692 · Partner hub", () => {
     );
   });
 
-  test("venue vertical cards link to the live /venues ?v= variants", async ({
+  test("venue categories link to implemented landing routes", async ({
     page,
   }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
@@ -42,11 +42,11 @@ test.describe("SAN-692 · Partner hub", () => {
     );
     await expect(page.getByTestId("partner-card-cafes")).toHaveAttribute(
       "href",
-      "/venues?v=cafe",
+      "/partners/cafes",
     );
     await expect(page.getByTestId("partner-card-nightlife")).toHaveAttribute(
       "href",
-      "/venues?v=nightclub",
+      "/partners/nightlife",
     );
     await expect(page.getByTestId("partner-card-spaces")).toHaveAttribute(
       "href",

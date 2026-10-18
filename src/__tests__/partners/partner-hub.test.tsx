@@ -22,20 +22,18 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// SAN-692 · D-PTR-01 link strategy: venue verticals route to the LIVE /venues
-// landing (?v= variant, shipped SAN-661 · D-PTR-02); the rest route to the LIVE
-// typed signup wizard until their landings ship. No card points at a 404.
+// SAN-692 · Partner Hub links to functioning dedicated landings when present,
+// reusing the shared /venues UI. Remaining categories use typed signup.
 const SIGNUP_TYPES = ["host", "broker", "sponsor", "agency"] as const;
 
-// Routes with no page.tsx on disk (verified 2026-06-11) — the hub must not link
-// any of them. /venues is now LIVE, so it is intentionally absent here.
+// Pages that are still placeholders or absent must not become Hub destinations.
+// Existing placeholders may load but do not replace the actual signup funnel.
+// /partners/restaurants ships a real venue landing (SAN-713, merged in #370), so
+// it is a live destination and no longer belongs in this list.
 const DEAD_HUB_ROUTES = [
   "/sponsors",
   "/business/ai",
   "/partners/rentals",
-  "/partners/restaurants",
-  "/partners/cafes",
-  "/partners/nightlife",
   "/contact",
 ] as const;
 
@@ -62,12 +60,12 @@ describe("PartnerHub (/partners)", () => {
     }
   });
 
-  it("routes the four venue verticals to the live /venues ?v= variants", () => {
+  it("routes venue categories to the existing or dedicated landing", () => {
     const hrefOf = (key: string) =>
       PARTNER_HUB_CARDS.find((c) => c.key === key)?.href;
     expect(hrefOf("restaurants")).toBe("/venues?v=restaurant");
-    expect(hrefOf("cafes")).toBe("/venues?v=cafe");
-    expect(hrefOf("nightlife")).toBe("/venues?v=nightclub");
+    expect(hrefOf("cafes")).toBe("/partners/cafes");
+    expect(hrefOf("nightlife")).toBe("/partners/nightlife");
     expect(hrefOf("spaces")).toBe("/venues?v=space");
     expect(html).toContain('href="/venues?v=restaurant"');
   });
