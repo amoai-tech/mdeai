@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   activateErrorMessage,
   activatePartnerRequest,
@@ -271,6 +272,30 @@ export function PartnerSignupWizard({
                 placeholder="Provenza"
               />
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="website">Website</Label>
+            <Input
+              id="website"
+              name="website"
+              type="url"
+              data-testid="partner-signup-website"
+              value={form.website ?? ""}
+              onChange={(e) => updateField("website", e.target.value)}
+              placeholder="https://yourbusiness.com"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              data-testid="partner-signup-description"
+              value={form.description ?? ""}
+              onChange={(e) => updateField("description", e.target.value)}
+              placeholder="What makes your business worth visiting?"
+              rows={4}
+            />
           </div>
           <input type="hidden" name="type" value={partnerType} readOnly />
           {draftId ? (
