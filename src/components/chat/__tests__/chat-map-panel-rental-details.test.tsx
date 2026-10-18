@@ -12,6 +12,17 @@ const ui = vi.hoisted(() => ({
   lg: true,
 }));
 
+// This spec verifies the chat/details handoff, not Embla's async carousel engine.
+// Keep the real carousel covered by its own gallery tests; otherwise its ResizeObserver
+// callbacks update state outside this test's act() boundary and emit false warnings.
+vi.mock("@/components/ui/carousel", () => ({
+  Carousel: ({ children, ...props }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
+  CarouselContent: ({ children, ...props }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
+  CarouselItem: ({ children, ...props }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
+  CarouselPrevious: () => <button type="button" aria-label="Previous photo" />,
+  CarouselNext: () => <button type="button" aria-label="Next photo" />,
+}));
+
 vi.mock("@/components/maps/ChatMap", () => ({ ChatMap: () => <div data-testid="chat-map" /> }));
 vi.mock("@/components/cafe/cafe-detail-panel", () => ({ CafeDetailPanel: () => null }));
 vi.mock("@/components/nightlife/nightlife-detail-panel", () => ({ NightlifeDetailPanel: () => null }));
