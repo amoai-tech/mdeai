@@ -72,7 +72,7 @@ def read_trace(path: Path) -> list[dict]:
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ValueError(f"invalid JSONL event at line {index}") from exc
         if not isinstance(event, dict) or not isinstance(event.get("type"), str):
-            raise ValueError(f"invalid DSH event at line {index}")
+            raise TypeError(f"invalid DSH event at line {index}")
         events.append(event)
     return events
 
