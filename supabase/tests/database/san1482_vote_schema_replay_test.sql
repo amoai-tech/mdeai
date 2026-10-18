@@ -19,7 +19,7 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'vote' and c.relkind = 'r'),
-  10, 'vote has exactly ten tables'
+  11, 'vote has exactly eleven tables (ten recovered + contest_audit)'
 );
 
 select is(
@@ -47,7 +47,7 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'vote' and c.relkind = 'r' and c.relrowsecurity),
-  10, 'RLS is enabled on all ten vote tables'
+  11, 'RLS is enabled on all eleven vote tables'
 );
 
 -- SAN-1484 hardening must survive the fresh rebuild
@@ -89,7 +89,7 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'vote' and c.relkind = 'i'),
-  47, 'vote has the expected forty-seven indexes'
+  50, 'vote has the expected fifty indexes'
 );
 select is(
   (select count(*)::int from pg_policies where schemaname = 'vote'),
