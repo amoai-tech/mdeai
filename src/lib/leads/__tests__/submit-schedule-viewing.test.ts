@@ -3,6 +3,7 @@ import {
   ScheduleViewingError,
   submitScheduleViewing,
 } from "@/lib/leads/submit-schedule-viewing";
+import { SCHEDULE_VIEWING_ERROR_MESSAGES } from "@/lib/leads/schedule-viewing-schema";
 
 const VALID_INPUT = {
   listingId: "apt-laureles-001",
@@ -92,6 +93,18 @@ describe("submitScheduleViewing (SAN-1203 truthful success contract)", () => {
       code: "SHOWING_NOT_COMMITTED",
       message: "Showing was not committed",
     });
+  });
+
+  it("falls back to shared safe copy when the server sends no message", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(503, { success: false, error: { code: "UPSTREAM_ERROR" } }),
+    );
+
+    await expect(submitScheduleViewing(VALID_INPUT)).rejects.toMatchObject({
+      code: "UPSTREAM_ERROR",
+      message: SCHEDULE_VIEWING_ERROR_MESSAGES.UPSTREAM_ERROR,
+    });
+    expect(SCHEDULE_VIEWING_ERROR_MESSAGES.UPSTREAM_ERROR).toMatch(/try again/i);
   });
 
   it("rejects a missing viewing time before calling the API", async () => {

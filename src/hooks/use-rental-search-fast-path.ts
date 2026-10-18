@@ -16,7 +16,11 @@ import {
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
 import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
-import { RENTAL_HANDOFF_FAILED_SUMMARY, RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
+import {
+  RENTAL_HANDOFF_FAILED_SUMMARY,
+  RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
+  unappliedRentalRequests,
+} from "@/lib/rental-display";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -203,6 +207,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
               !sig.hasVibeOrUseCase,
             budgetNotApplied: params.maxPricePerNight == null && statesBudget(userText),
+            unappliedRequests: unappliedRentalRequests(userText),
           }),
         );
         return true;

@@ -81,6 +81,26 @@ describe("rental budget mismatch explanation", () => {
   });
 });
 
+describe("unapplied rental requests disclosure", () => {
+  const note = "I can't filter by pet-friendly yet, so check each card.";
+
+  it("shows the same sentence once when cards are rendered", () => {
+    render({ source: "supabase", results: [rental("one")], unappliedRequests: ["pet-friendly"] });
+    expect(container.textContent?.split(note).length - 1).toBe(1);
+  });
+
+  it("admits the request in an empty result instead of implying it applied", () => {
+    render({ source: "supabase", results: [], unappliedRequests: ["pet-friendly"] });
+    expect(container.textContent).toContain("I can't filter by pet-friendly yet.");
+    expect(container.textContent).not.toContain("so check each card");
+  });
+
+  it("adds nothing when the search applied every request", () => {
+    render({ source: "supabase", results: [rental("one")], unappliedRequests: [] });
+    expect(container.textContent).not.toMatch(/can't filter/);
+  });
+});
+
 describe("SAN-472 chat rental card/map parity", () => {
   it("mapped result shares canonical listing pin and focuses the map", () => {
     render();

@@ -40,7 +40,8 @@ describe("fastPathRentalSummary", () => {
   it("is honest that a monthly budget was not applied", () => {
     const text = fastPathRentalSummary(2, 0, { budgetNotApplied: true });
     expect(text).toMatch(/budget/i);
-    expect(text).toMatch(/not (yet )?(applied|filtered)|isn't (applied|filtered)/i);
+    expect(text).toMatch(/can't filter by monthly budget/i);
+    expect(text).not.toMatch(/isn't applied/i);
   });
 
   it("budget note also accompanies an empty answer without implying budget caused it", () => {

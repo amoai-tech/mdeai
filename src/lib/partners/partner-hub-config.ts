@@ -27,13 +27,14 @@ export type PartnerHubCard = {
  *
  * Link strategy (no dead links — prod validation found the dedicated landings
  * 404, see sitemap.md):
- *  - Venue verticals route to the LIVE /venues landing with its ?v= variant
- *    (shipped in SAN-661 · D-PTR-02), so each card lands on a rich, sold page.
+ *  - Restaurant and event-space cards use the existing /venues variants.
+ *  - Café and nightlife cards use dedicated routes that compose those same variants.
+ *    All routes reuse the existing venue landing; there is no separate template.
  *  - Rentals / Business AI / Sponsors route to the LIVE typed signup wizard
  *    (/partners/signup?type=…) until their landings ship (SAN-691 / SAN-663 /
  *    SAN-664). Repoint the href to the landing route once each is live.
- *  - Event hosts route to the wizard because /host is the auth-gated dashboard
- *    (307 when logged out), not a marketing page.
+ *  - Event hosts route directly to typed signup; /host also serves an existing
+ *    public marketing page, but signup is the primary conversion action.
  */
 export const PARTNER_HUB_CARDS: PartnerHubCard[] = [
   {
@@ -48,7 +49,7 @@ export const PARTNER_HUB_CARDS: PartnerHubCard[] = [
     key: "cafes",
     label: "Cafés",
     description: "Specialty coffee and work-friendly spots — found by Medellín's nomads.",
-    href: "/venues?v=cafe",
+    href: "/partners/cafes",
     cta: "For cafés",
     Icon: Coffee,
   },
@@ -56,7 +57,7 @@ export const PARTNER_HUB_CARDS: PartnerHubCard[] = [
     key: "nightlife",
     label: "Nightlife",
     description: "Clubs, bars, and live music surfaced in nightlife chat and ticketing.",
-    href: "/venues?v=nightclub",
+    href: "/partners/nightlife",
     cta: "For nightlife",
     Icon: Moon,
   },

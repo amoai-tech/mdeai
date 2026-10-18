@@ -33,7 +33,7 @@ test.describe("REAL-011 /rentals browse", () => {
     await expect(page).toHaveURL(/neighborhood=Laureles/, { timeout: 15_000 });
     await expect(
       neighborhoodGroup.getByRole("link", { name: "Laureles" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
   });
 
   test("bedroom filter chip sets URL param", async ({ page }) => {
