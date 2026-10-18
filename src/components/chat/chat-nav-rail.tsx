@@ -104,27 +104,43 @@ export function ChatNavRail({
   onNavigate?: () => void;
 }) {
   const router = useRouter();
-  const { startNewChat } = useConciergeSession();
-  const { activeThreadId, selectSavedThread, clearActiveThread } = useThreadNav();
+  const { startNewChat, stopActiveRun } = useConciergeSession();
+  const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
   const hasChats = !loading && !error && threads.length > 0;
 
   // Both stay on /chat, where the concierge lives (D-13). These used to push
   // "/" from before the concierge moved, which dropped Sofia on the marketing
   // home and never reopened the chat she picked (SAN-1378).
+  //
+  // The rail only exists on /chat, so a navigation is only needed when a test or
+  // future mount renders it elsewhere. Re-pushing the current URL is not just
+  // redundant: the App Router rewrites that history entry's state, which erased
+  // the saved-chat selection and made one Back press appear to do nothing.
+  function goToChat() {
+    // Read the live path at click time: this handler only runs in the browser,
+    // and it avoids depending on a router hook that unit tests do not provide.
+    if (typeof window !== "undefined" && window.location.pathname !== "/chat") {
+      router.push("/chat");
+    }
+  }
+
   function onNewChat() {
     startNewChat();
     clearActiveThread();
     onNavigate?.();
-    router.push("/chat");
+    goToChat();
   }
 
   function onSelectThread(id: string) {
-    // Also clear old map cards and detach an in-flight run before reopening.
+    // Clear old map cards and detach an in-flight run before reopening, then
+    // record the selected conversation. setActiveThreadId adds the Back/Forward
+    // step; re-pushing /chat would wipe that entry (SAN-1413).
     startNewChat();
-    selectSavedThread(id);
+    stopActiveRun();
+    setActiveThreadId(id);
     onNavigate?.();
-    router.push("/chat");
+    goToChat();
   }
 
   return (

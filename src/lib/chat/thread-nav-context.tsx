@@ -9,12 +9,16 @@ import { useSession } from "@/hooks/use-session";
 const STORAGE_KEY = "mde:thread-selection:v1";
 const HISTORY_KEY = "__mde_chat_selection";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** Owner of the client-minted thread before the verified session is known. */
+const PENDING = "pending";
 
 type TabThread = {
   owner: string;
   sessionThreadId: string;
   activeThreadId?: string;
   savedThreadId?: string;
+  /** Adopted from this tab's stored state on this page load (refresh/reopen). */
+  restored?: boolean;
 };
 type HistorySelection = { owner: string; threadId: string | null };
 
@@ -29,6 +33,7 @@ function parseTabThread(raw: string | null, owner: string): TabThread | null {
     return {
       owner,
       sessionThreadId: record.sessionThreadId,
+      // "restored" is derived on adoption, never trusted from storage.
       ...(typeof record.activeThreadId === "string" && UUID.test(record.activeThreadId) &&
         { activeThreadId: record.activeThreadId }),
       ...(typeof record.savedThreadId === "string" && UUID.test(record.savedThreadId) &&
@@ -55,11 +60,14 @@ function recordSelection(owner: string, threadId: string | null, push: boolean) 
 }
 
 type ThreadNavContextValue = {
+  /** The verified owner is known and this tab's conversation is resolved. */
   ready: boolean;
   sessionThreadId: string | undefined;
   activeThreadId: string | undefined;
   /** A persisted thread is explicit; an unused client-side UUID is not. */
   hasPersistedThread: boolean;
+  /** This tab loaded an existing saved conversation (refresh / reopen). */
+  restoredThread: boolean;
   setActiveThreadId: Dispatch<SetStateAction<string | undefined>>;
   selectSavedThread: (id: string) => void;
   markThreadSaved: (id: string) => void;
@@ -69,15 +77,32 @@ type ThreadNavContextValue = {
 
 const ThreadNavContext = createContext<ThreadNavContextValue | null>(null);
 
+/**
+ * One conversation identity per browser tab, shared by /chat and every discovery
+ * route. It must be available on the FIRST render: gating the app on the auth
+ * round-trip meant a slow session (or a cold route compile) held back the whole
+ * chat shell, including the server-rendered, disabled composer.
+ *
+ * Isolation is unchanged: a conversation is only reattached after the verified
+ * owner is known, and only when the stored selection belongs to that owner.
+ * Until then the tab gets a brand-new, non-explicit UUID that cannot replay
+ * anyone's history.
+ */
 export function ThreadNavProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
   const owner = user?.id ?? "anon";
-  const [tab, setTab] = useState<TabThread | null>(null);
+  // Client-minted so the chat has one stable id from its first paint. The
+  // server's value is never rendered, so hydration is unaffected; the client
+  // initializer value is the one the app keeps.
+  const [tab, setTab] = useState<TabThread>(() => ({
+    owner: PENDING,
+    sessionThreadId: crypto.randomUUID(),
+  }));
   const [newChatCount, setNewChatCount] = useState(0);
-  const ready = !loading && tab?.owner === owner;
+  const ready = !loading && tab.owner === owner;
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || tab.owner === owner) return;
     let stored: TabThread | null = null;
     try {
       // sessionStorage is per tab. An opener can copy it on first navigation,
@@ -87,23 +112,36 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
       stored = copiedFromOpener ? null : parseTabThread(sessionStorage.getItem(STORAGE_KEY), owner);
     } catch { /* Storage may be disabled; in-memory navigation still works. */ }
     const fromHistory = historySelection(owner);
-    const initial = stored ?? { owner, sessionThreadId: crypto.randomUUID() };
-    const next: TabThread = {
-      ...initial,
-      activeThreadId: fromHistory === undefined
-        ? initial.activeThreadId : fromHistory ?? undefined,
-    };
+    const next: TabThread = stored
+      ? {
+          ...stored,
+          restored: true,
+          activeThreadId: fromHistory === undefined
+            ? stored.activeThreadId : fromHistory ?? undefined,
+        }
+      : tab.owner === PENDING
+        // This tab's pre-auth id. Keep it so a new conversation never changes
+        // identity once the renter can type.
+        ? { ...tab, owner }
+        : { owner, sessionThreadId: crypto.randomUUID() };
+    // Deferred out of the effect body (react-hooks/set-state-in-effect): the
+    // resolved tab is committed on the next microtask. A re-run before that
+    // (owner changed again) cancels the stale update.
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) setTab(next);
     });
     recordSelection(owner, next.activeThreadId ?? null, false);
     return () => { cancelled = true; };
-  }, [owner, loading]);
+  }, [owner, loading, tab]);
 
   useEffect(() => {
-    if (!ready || !tab) return;
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tab)); } catch { /* no storage */ }
+    if (!ready) return;
+    try {
+      const stored: TabThread = { ...tab };
+      delete stored.restored;
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    } catch { /* no storage */ }
   }, [tab, ready]);
 
   useEffect(() => {
@@ -122,16 +160,24 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   }, [owner, ready, tab?.activeThreadId]);
 
   const setActiveThreadId = useCallback<Dispatch<SetStateAction<string | undefined>>>((value) => {
-    setTab((old) => old?.owner === owner
-      ? { ...old, activeThreadId: typeof value === "function" ? value(old.activeThreadId) : value }
-      : old);
-  }, [owner]);
+    if (!ready) return;
+    if (typeof value === "function") {
+      // Derived updates (and popstate) never add a history step of their own.
+      setTab((old) => old?.owner === owner
+        ? { ...old, activeThreadId: value(old.activeThreadId) } : old);
+      return;
+    }
+    // A direct selection becomes one Back/Forward step. Doing it here keeps the
+    // rail on the same public contract it had before SAN-1413 (setActiveThreadId
+    // + stopActiveRun), so both behaviours compose.
+    recordSelection(owner, value ?? null, true);
+    setTab((old) => old?.owner === owner ? { ...old, activeThreadId: value } : old);
+  }, [owner, ready]);
 
   const selectSavedThread = useCallback((id: string) => {
-    if (!ready || !UUID.test(id)) return;
-    recordSelection(owner, id, true);
+    if (!UUID.test(id)) return;
     setActiveThreadId(id);
-  }, [owner, ready, setActiveThreadId]);
+  }, [setActiveThreadId]);
 
   const clearActiveThread = useCallback(() => {
     if (!ready) return;
@@ -150,19 +196,18 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ThreadNavContextValue>(() => ({
     ready: Boolean(ready),
-    sessionThreadId: ready ? tab?.sessionThreadId : undefined,
-    activeThreadId: ready ? tab?.activeThreadId : undefined,
-    hasPersistedThread: Boolean(ready && (tab?.activeThreadId || tab?.savedThreadId === tab?.sessionThreadId)),
+    sessionThreadId: tab.sessionThreadId,
+    activeThreadId: ready ? tab.activeThreadId : undefined,
+    hasPersistedThread: Boolean(ready && (tab.activeThreadId || tab.savedThreadId === tab.sessionThreadId)),
+    restoredThread: Boolean(ready && tab.restored && tab.savedThreadId === tab.sessionThreadId),
     setActiveThreadId, selectSavedThread, markThreadSaved, clearActiveThread, newChatCount,
   }), [ready, tab, setActiveThreadId, selectSavedThread, markThreadSaved, clearActiveThread, newChatCount]);
 
+  // Never replace the app shell while auth loads: the server-rendered chat and
+  // its disabled composer must stay on screen (SAN-1413 / SAN-407).
   return (
     <ThreadNavContext.Provider value={value}>
-      {ready ? children : (
-        <main id="main-content" className="grid min-h-dvh place-items-center text-sm text-muted-foreground">
-          <p role="status">Restoring your workspace…</p>
-        </main>
-      )}
+      {children}
     </ThreadNavContext.Provider>
   );
 }

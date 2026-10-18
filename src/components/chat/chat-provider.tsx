@@ -187,13 +187,16 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
-  const { sessionThreadId, activeThreadId, hasPersistedThread } = useThreadNav();
+  const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
   // Remember whether this tab's thread was already saved when /chat mounted;
   // when the user returns after visiting Rentals, it is now safe to replay.
   const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
-  const shouldReplay = Boolean(activeThreadId ||
+  // A refresh/reopen adopts the stored conversation AFTER auth resolves, which
+  // is later than the mount-time capture above; that stored conversation is
+  // exactly what must be replayed.
+  const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
   return (

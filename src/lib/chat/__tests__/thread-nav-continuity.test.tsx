@@ -92,21 +92,44 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     expect(window.location.search).toBe("");
   });
 
-  it("auth-loading does not expose a previous user's selected saved chat", async () => {
+  it("keeps the chat shell mounted while auth loads without exposing a previous selection", async () => {
     auth.id = "sofia";
     await show();
     const savedA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     await change(() => nav.selectSavedThread(savedA));
     const oldId = nav.sessionThreadId;
     auth.loading = true;
-    await show();
-    expect(container.querySelector('[data-testid="thread"]')).toBeNull();
+    await show("cold-load");
+    // The shell must render before the session resolves. Gating the whole app on
+    // auth hid the server-rendered chat and its disabled composer (SAN-407) and
+    // delayed the mount marker until auth finished (SAN-966).
+    expect(container.querySelector('[data-testid="thread"]')).not.toBeNull();
+    // ...while nothing from the previous owner's selection is exposed.
+    expect(nav.activeThreadId).toBeUndefined();
+    expect(nav.hasPersistedThread).toBe(false);
+    expect(nav.restoredThread).toBe(false);
+    expect(nav.sessionThreadId).not.toBe(oldId);
     auth.loading = false;
     auth.id = "camila";
     await show();
     expect(nav.activeThreadId).toBeUndefined();
     expect(nav.sessionThreadId).not.toBe(oldId);
     expect(saved().owner).toBe("camila");
+  });
+
+  it("marks a stored saved conversation restorable after a refresh", async () => {
+    auth.id = "sofia";
+    await show();
+    const id = nav.sessionThreadId!;
+    await change(() => nav.markThreadSaved(id));
+    expect(nav.hasPersistedThread).toBe(true);
+    // A turn saved during this session must not immediately replay itself.
+    expect(nav.restoredThread).toBe(false);
+    // A refresh/reopen adopts the stored conversation and may replay it.
+    await show("reload");
+    expect(nav.sessionThreadId).toBe(id);
+    expect(nav.hasPersistedThread).toBe(true);
+    expect(nav.restoredThread).toBe(true);
   });
 
   it("does not replay a never-sent UUID and tracks a successfully saved one", async () => {

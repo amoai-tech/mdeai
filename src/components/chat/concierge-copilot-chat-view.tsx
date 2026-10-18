@@ -16,6 +16,7 @@ import { useSession } from "@/hooks/use-session";
 import { takeConciergeDraft } from "@/lib/concierge-draft-store";
 import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /**
  * SAN-966 — the `messageView` slot: the stock CopilotKit message list, then the latest-turn
@@ -112,9 +113,16 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
   // finishes loading — a renter's first message was silently lost. Keep it disabled until the
   // client has taken over.
   const hydrated = useHydrated();
+  // The tab's conversation id is minted before the verified session is known,
+  // but a saved conversation is only reattached once it is. Typing into the
+  // provisional thread would lose that message when it is replaced, so keep the
+  // composer locked until the thread is resolved. Outside the chat routes this
+  // context is absent and the composer behaves as before.
+  const threadNav = useOptionalThreadNav();
+  const composerReady = hydrated && (threadNav?.ready ?? true);
   const input = useMemo(
-    () => conciergeComposerInput(props.input, onSubmitMessage, hydrated),
-    [onSubmitMessage, props.input, hydrated],
+    () => conciergeComposerInput(props.input, onSubmitMessage, composerReady),
+    [onSubmitMessage, props.input, composerReady],
   );
   // SAN-1507: a visitor who asked the AI while signed out and then signed in gets that question back
   // in the composer, editable and NOT sent. CopilotChat already owns the composer text and passes
