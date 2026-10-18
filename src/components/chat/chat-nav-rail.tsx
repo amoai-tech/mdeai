@@ -20,6 +20,8 @@ import {
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { threadLabel } from "@/lib/chat/thread-label";
+import { isMeaningfulThreadTitle } from "@/lib/chat/thread-title";
+import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { useNavThreads } from "@/lib/chat/use-nav-threads";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -51,7 +53,7 @@ const LIBRARY_ITEMS: NavItem[] = [
   { slug: "profile", label: "Profile", href: null, Icon: User },
 ];
 
-function NavItemRow({ item }: { item: NavItem }) {
+function NavItemRow({ item, active }: { item: NavItem; active: boolean }) {
   const { Icon, slug, label, href } = item;
   if (href) {
     return (
@@ -59,7 +61,11 @@ function NavItemRow({ item }: { item: NavItem }) {
         <Link
           href={href}
           data-testid={`nav-${slug}-link`}
-          className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted hover:text-foreground",
+            active ? "bg-muted text-foreground" : "text-muted-foreground",
+          )}
         >
           <Icon className="size-4 shrink-0" aria-hidden />
           {label}
@@ -94,6 +100,28 @@ function NavSectionLabel({ children }: { children: string }) {
   );
 }
 
+/**
+ * The Explore and Library link groups. Shared by the chat rail and the session-free rail on the
+ * discovery pages, so both list the same destinations. `activeSlug` marks the current page.
+ */
+export function ExploreLibraryNav({ activeSlug }: { activeSlug?: string }) {
+  return (
+    <ul className="flex shrink-0 flex-col gap-1 text-sm">
+      {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
+      <NavSectionLabel>Explore</NavSectionLabel>
+      {EXPLORE_ITEMS.map((item) => (
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+      ))}
+
+      {/* Library — personal pages */}
+      <NavSectionLabel>Library</NavSectionLabel>
+      {LIBRARY_ITEMS.map((item) => (
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+      ))}
+    </ul>
+  );
+}
+
 /** SCREEN-002 — chat nav rail with thread list + new chat + nav links. */
 export function ChatNavRail({
   testId = "nav-rail",
@@ -121,6 +149,11 @@ export function ChatNavRail({
     stopActiveRun();
     setActiveThreadId(id);
     router.push("/chat");
+    // SAN-1412: a chat that still shows the dated fallback gets a real title from its first message.
+    // Background and fail-soft; opening is never held up by it.
+    if (!isMeaningfulThreadTitle(threads.find((thread) => thread.id === id)?.title)) {
+      void ensureThreadTitle(id);
+    }
   }
 
   return (
@@ -142,7 +175,7 @@ export function ChatNavRail({
           <button
             type="button"
             data-testid="nav-new-chat"
-            className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            className="inline-flex min-h-11 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8"
             onClick={onNewChat}
           >
             <MessageSquarePlus className="size-4 shrink-0" aria-hidden />
@@ -187,7 +220,7 @@ export function ChatNavRail({
                   data-thread-id={thread.id}
                   onClick={() => onSelectThread(thread.id)}
                   className={cn(
-                    "w-full truncate rounded-md px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
+                    "min-h-11 w-full truncate rounded-md px-3 py-2 text-left text-sm leading-snug hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8 lg:py-1.5",
                     activeThreadId === thread.id
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground",
@@ -212,19 +245,7 @@ export function ChatNavRail({
         </ul>
       </div>
 
-      <ul className="flex shrink-0 flex-col gap-1 text-sm">
-        {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
-        <NavSectionLabel>Explore</NavSectionLabel>
-        {EXPLORE_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
-        ))}
-
-        {/* Library — personal pages */}
-        <NavSectionLabel>Library</NavSectionLabel>
-        {LIBRARY_ITEMS.map((item) => (
-          <NavItemRow key={item.slug} item={item} />
-        ))}
-      </ul>
+      <ExploreLibraryNav />
 
       <p className="mt-auto shrink-0 text-xs text-muted-foreground">
         Ask for rentals, events, cafés, or map pins in Laureles and Poblado.

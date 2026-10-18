@@ -4,7 +4,11 @@ import { normalizeThreadTitle, threadLabel } from "../thread-label";
 describe("normalizeThreadTitle", () => {
   it("keeps a real title exactly as stored", () => {
     expect(normalizeThreadTitle("Apartment search in Laureles")).toBe("Apartment search in Laureles");
-    expect(normalizeThreadTitle("Untitled Thread")).toBe("Untitled Thread");
+  });
+
+  it("treats the placeholder 'Untitled Thread' as no title, so the dated fallback shows (SAN-1412)", () => {
+    expect(normalizeThreadTitle("Untitled Thread")).toBeNull();
+    expect(normalizeThreadTitle("  Untitled Thread ")).toBeNull();
   });
 
   it("returns null for a missing or blank title, never the text 'null'", () => {

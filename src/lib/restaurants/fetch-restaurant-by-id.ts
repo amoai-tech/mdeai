@@ -7,6 +7,7 @@
  * and the directory card can never disagree.
  */
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
@@ -14,7 +15,20 @@ import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/t
 const SELECT_FIELDS =
   "id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * UUID shape check for route and query values the visitor controls.
+ *
+ * Deliberately not a regular expression. The pattern would be anchored and
+ * fixed-length, but a regex applied to user-supplied input is a static-analysis
+ * ReDoS sink, so every future review has to re-prove the same negative. Reuse the
+ * validator the vote endpoints already enforce instead: one definition at every
+ * trust boundary, and a single anchored pass that stays linear on hostile input.
+ */
+const uuidSchema = z.string().uuid();
+
+function isUuid(value: string): boolean {
+  return uuidSchema.safeParse(value).success;
+}
 
 /**
  * A lookup result must distinguish "this restaurant does not exist" from "the catalog
@@ -27,7 +41,7 @@ export type RestaurantLookup =
 
 export async function fetchRestaurantById(id: string): Promise<RestaurantLookup> {
   // A non-uuid (legacy slug, typo) is a clean miss, not a PostgREST error.
-  if (!UUID_RE.test(id)) return { status: "not_found" };
+  if (!isUuid(id)) return { status: "not_found" };
 
   const env = getSupabaseServerAnonEnv();
   if (!env) return { status: "error" };
@@ -52,16 +66,22 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
  *
  * Server-only: public.vote_restaurant_target is granted to service_role alone, so this
  * never runs in the browser and vote.* stays private. Returns null when the restaurant is
- * not linked to a votable contest yet — the panel then shows its honest not-open state.
+ * not linked to a votable contest or its contest is ambiguous without an explicit ID.
  */
 export async function fetchRestaurantVoteTarget(
   restaurantId: string,
+  contestId: string | null = null,
 ): Promise<{ contestId: string; entityId: string } | null> {
-  if (!UUID_RE.test(restaurantId)) return null;
+  // An invalid or forged contest selection must never fall back to another
+  // contest's ballot. The existing service-role-only RPC validates the pair.
+  if (!isUuid(restaurantId) || (contestId !== null && !isUuid(contestId))) return null;
   const supabase = createServiceRoleClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase.rpc("vote_restaurant_target", { p_restaurant_id: restaurantId });
+  const args = contestId
+    ? { p_restaurant_id: restaurantId, p_contest_id: contestId }
+    : { p_restaurant_id: restaurantId };
+  const { data, error } = await supabase.rpc("vote_restaurant_target", args);
   if (error) {
     // Never silently hide a broken lookup: operators need the signal, the page still renders.
     console.error("[restaurant] vote_restaurant_target failed:", error.message);
@@ -69,7 +89,13 @@ export async function fetchRestaurantVoteTarget(
   }
   if (!data) return null;
 
-  const row = data as { contest_id?: string; entity_id?: string };
-  if (!row.contest_id || !row.entity_id) return null;
+  // The RPC returns jsonb, so treat its shape as untrusted until proven otherwise.
+  const row = data as { contest_id?: unknown; entity_id?: unknown };
+  if (typeof row.contest_id !== "string" || typeof row.entity_id !== "string") return null;
+  if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) return null;
+  // Defence in depth: the RPC already filters by contest, but the application must never
+  // hand back a target from a different contest than the one the visitor selected.
+  // UUIDs compare case-insensitively because callers may supply upper-case input.
+  if (contestId !== null && row.contest_id.toLowerCase() !== contestId.toLowerCase()) return null;
   return { contestId: row.contest_id, entityId: row.entity_id };
 }
