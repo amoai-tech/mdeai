@@ -174,6 +174,7 @@ export async function unlinkAdminRestaurant(
   if (error) throw new Error(error.message);
 }
 
+
 /**
  * Active catalog restaurants for the admin picker. Already-linked ids are excluded in SQL so an
  * unlinked restaurant beyond the row limit is never hidden from the selector.

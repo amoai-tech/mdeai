@@ -10,6 +10,7 @@ import {
   updateAdminContest,
   type ContestStatus,
 } from "@/lib/restaurants/contest-admin";
+import { normalizeRestaurantIds } from "@/lib/restaurants/contest-admin-ids";
 
 const STATUSES: readonly ContestStatus[] = ["draft", "live", "closed", "archived"];
 
@@ -75,14 +76,37 @@ export async function updateContestAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/contests");
 }
 
-export async function linkRestaurantAction(formData: FormData): Promise<void> {
+/** Upper bound for one submission; adding the whole catalog is ~43. */
+const MAX_BULK_LINK = 60;
+
+/**
+ * Add one or many catalog restaurants in a single submission.
+ *
+ * Linking is naturally idempotent per (contest, restaurant), so re-submitting after a partial
+ * run is safe: already-linked rows come back as `already_linked` instead of creating a second
+ * entry. The action reports what actually happened rather than assuming success.
+ */
+export async function linkRestaurantsAction(formData: FormData): Promise<void> {
   const actorId = await requireAdminId();
   const contestId = text(formData, "contest_id");
-  const restaurantId = text(formData, "restaurant_id");
-  if (!contestId || !restaurantId) throw new Error("Choose a restaurant to add.");
+  if (!contestId) throw new Error("Missing contest.");
 
-  await linkAdminRestaurant(actorId, contestId, restaurantId, "manual", text(formData, "request_id") || null);
+  const ids = normalizeRestaurantIds(formData.getAll("restaurant_ids").map(String));
+  if (ids.length === 0) throw new Error("Choose at least one restaurant.");
+  if (ids.length > MAX_BULK_LINK) {
+    throw new Error("Add at most " + MAX_BULK_LINK + " restaurants at a time.");
+  }
+
+  let added = 0;
+  let already = 0;
+  for (const restaurantId of ids) {
+    const result = await linkAdminRestaurant(actorId, contestId, restaurantId);
+    if (result.already_linked) already += 1;
+    else added += 1;
+  }
+
   revalidatePath("/admin/contests/" + contestId);
+  redirect("/admin/contests/" + contestId + "?added=" + added + "&already=" + already);
 }
 
 export async function unlinkRestaurantAction(formData: FormData): Promise<void> {
