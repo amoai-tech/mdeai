@@ -70,7 +70,7 @@ if (!configured && process.env.SAN1469_VOTE_E2E === "required") {
 }
 test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
 
-  test("confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+  test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
@@ -85,20 +85,25 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       );
       expect(phase.rows[0]?.application_phase).toBe("development");
 
-      // Negative proof, before any account exists: a contest that does not contain this
-      // restaurant must show the honest not-open state, never a ballot borrowed from
-      // another contest. The contest id is read from the database, not invented.
-      const foreign = await db.query<{ id: string }>(
-        "select c.id from vote.contests c where c.kind = 'restaurant' " +
-          "and not exists (select 1 from vote.entities e where e.contest_id = c.id and e.restaurant_id = $1) " +
-          "limit 1",
-        [restaurantId],
+      // The same restaurant contests more than one event. Each contest-specific link must
+      // resolve its own ballot — the bare URL is the ambiguous case that hid the Vote
+      // button. Read the sibling contest from the database rather than inventing it.
+      const sibling = await db.query<{ contest_id: string; entity_id: string }>(
+        "select e.contest_id, e.id as entity_id from vote.entities e " +
+          "join vote.contests c on c.id = e.contest_id " +
+          "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
+        [restaurantId, contestId],
       );
-      if (foreign.rows[0]) {
-        await page.goto("/restaurants/" + restaurantId + "?contest_id=" + foreign.rows[0].id);
-        await expect(page.getByTestId("vote-not-open")).toBeVisible();
-        await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+      if (sibling.rows[0]) {
+        await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
+        await expect(page.getByTestId("vote-cta")).toBeVisible();
       }
+      // Negative proof, before any account exists: a well-formed contest id that is not
+      // this restaurant's contest must show the honest not-open state, never a ballot
+      // borrowed from another contest. The sentinel below must never become a real id.
+      await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
+      await expect(page.getByTestId("vote-not-open")).toBeVisible();
+      await expect(page.getByTestId("vote-cta")).toHaveCount(0);
       // A malformed selection is rejected before any contest lookup happens.
       await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
       await expect(page.getByTestId("vote-not-open")).toBeVisible();
