@@ -55,6 +55,18 @@
     },
 
     {
+      "file": "src/components/partners/partner-signup-assistant.tsx",
+      "classification": "keep",
+      "note": "SAN-709: v2 CopilotKitProvider + one CopilotChatConfigurationProvider around the existing signup wizard; the frontend tool only proposes fields for review and never writes partner data."
+    },
+
+    {
+      "file": "src/components/onboarding/onboarding-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "SAN-709: publishes the current signup form via useAgentContext and exposes one review-only useFrontendTool (suggest_partner_profile). No persistence path."
+    },
+
+    {
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."
