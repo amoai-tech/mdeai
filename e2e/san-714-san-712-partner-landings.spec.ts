@@ -3,12 +3,14 @@ import { expect, test } from "@playwright/test";
 const categories = [
   {
     url: "/partners/cafes",
+    card: "partner-card-cafes",
     heading: /where medellín's nomads work next/i,
     category: "cafe",
     leadType: "cafe",
   },
   {
     url: "/partners/nightlife",
+    card: "partner-card-nightlife",
     heading: /slow tuesdays are a software problem/i,
     category: "nightclub",
     leadType: "nightclub",
@@ -34,6 +36,30 @@ test.describe("SAN-714 / SAN-712 · Partner landings reuse venue funnel", () => 
       await page.goto(category.url, { waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("venues-landing-primary-cta")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    });
+
+    test(`${category.url} keeps the ${category.category} category through the signup auth hand-off`, async ({ page }) => {
+      const typedPath = `/partners/signup?type=venue&category=${category.category}`;
+
+      // Partner Hub card → dedicated landing.
+      await page.goto("/partners", { waitUntil: "domcontentloaded" });
+      await page.getByTestId(category.card).click();
+      await expect(page).toHaveURL(category.url);
+
+      // Landing signup CTA → typed venue signup with the category on the URL.
+      await page.getByTestId("venues-landing-primary-cta").click();
+      await expect(page).toHaveURL(typedPath);
+      await expect(page.getByTestId("partner-signup-auth-gate")).toBeVisible();
+
+      // Signed-out hand-off keeps the full typed path as the post-login return.
+      const signInHref = await page
+        .getByTestId("partner-signup-auth-gate")
+        .locator('a[href^="/login?next="]')
+        .first()
+        .getAttribute("href");
+      expect(signInHref).toBe(
+        `/login?next=${encodeURIComponent(typedPath)}`,
+      );
     });
   }
 });

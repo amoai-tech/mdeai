@@ -28,11 +28,12 @@ const SIGNUP_TYPES = ["host", "broker", "sponsor", "agency"] as const;
 
 // Pages that are still placeholders or absent must not become Hub destinations.
 // Existing placeholders may load but do not replace the actual signup funnel.
+// /partners/restaurants ships a real venue landing (SAN-713, merged in #370), so
+// it is a live destination and no longer belongs in this list.
 const DEAD_HUB_ROUTES = [
   "/sponsors",
   "/business/ai",
   "/partners/rentals",
-  "/partners/restaurants",
   "/contact",
 ] as const;
 
