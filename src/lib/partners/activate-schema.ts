@@ -53,6 +53,7 @@ export function sanitizePartnerSettings(
     const max = PARTNER_SETTING_MAX_LENGTH[key] ?? 300;
     const trimmed = value.trim();
     if (!trimmed) continue;
+    if (key === "website" && !/^https?:\/\/[^\s]+$/i.test(trimmed)) continue;
     out[key] = trimmed.slice(0, max);
   }
   return out;

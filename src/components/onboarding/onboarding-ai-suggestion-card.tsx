@@ -34,6 +34,16 @@ export function OnboardingAiSuggestionCard({ suggestion, onAccept, onIgnore }: P
   const [draft, setDraft] = useState<PartnerProfileSuggestion>(suggestion);
   const [error, setError] = useState<string | null>(null);
 
+  function acceptSuggestion() {
+    const parsed = partnerProfileSuggestionSchema.safeParse(suggestion);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the suggested values");
+      return;
+    }
+    setError(null);
+    onAccept(parsed.data);
+  }
+
   function saveEdited() {
     const parsed = partnerProfileSuggestionSchema.safeParse(draft);
     if (!parsed.success) {
@@ -122,7 +132,7 @@ export function OnboardingAiSuggestionCard({ suggestion, onAccept, onIgnore }: P
           <Button
             type="button"
             size="sm"
-            onClick={() => onAccept(suggestion)}
+            onClick={acceptSuggestion}
             data-testid="onboarding-suggestion-accept"
           >
             Accept
