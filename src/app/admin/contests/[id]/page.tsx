@@ -11,17 +11,10 @@ export const dynamic = "force-dynamic";
 /** SAN-1526 · edit one contest. Sections live in their own components. */
 export default async function AdminContestDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ added?: string; already?: string; failed?: string; rejected?: string }>;
 }) {
   const { id } = await params;
-  const query = await searchParams;
-  const addedCount = Number(query.added ?? 0) || 0;
-  const alreadyCount = Number(query.already ?? 0) || 0;
-  const failedCount = Number(query.failed ?? 0) || 0;
-  const rejectedCount = Number(query.rejected ?? 0) || 0;
   const supabase = await createClient();
   const {
     data: { user },
@@ -66,23 +59,6 @@ export default async function AdminContestDetailPage({
           {detail.contest.status} · {detail.contest.slug}
         </p>
       </header>
-
-      {addedCount > 0 || alreadyCount > 0 || failedCount > 0 || rejectedCount > 0 ? (
-        <p
-          className={
-            failedCount > 0
-              ? "mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-              : "mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
-          }
-          data-testid="contest-link-result"
-          role="status"
-        >
-          Added {addedCount} restaurant{addedCount === 1 ? "" : "s"}.
-          {alreadyCount > 0 ? " " + alreadyCount + " already linked." : ""}
-          {failedCount > 0 ? " " + failedCount + " could not be added — re-submitting is safe." : ""}
-          {rejectedCount > 0 ? " " + rejectedCount + " invalid id skipped." : ""}
-        </p>
-      ) : null}
 
       <ContestDetailsForm contest={detail.contest} />
       <ContestEntries contestId={detail.contest.id} entries={detail.entries} available={available} />
