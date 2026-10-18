@@ -137,7 +137,7 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/60" />
                   <div className="absolute bottom-4 left-4 right-4 rounded-xl bg-background/95 p-3 shadow-lg backdrop-blur-sm">
                     <p className="text-xs font-semibold text-foreground">Parque Lleras · El Poblado</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">14 venues · open now</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Illustrative preview · Explore nearby</p>
                   </div>
                 </div>
                 {/* Chat preview */}
@@ -145,7 +145,7 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
                   <div className="flex gap-2">
                     <div className="size-6 shrink-0 rounded-full bg-accent flex items-center justify-center text-[10px] font-bold text-accent-foreground">✦</div>
                     <div className="rounded-2xl rounded-tl-none bg-muted px-3 py-2 text-[11px] text-foreground leading-relaxed">
-                      Here are the top rooftop bars near Parque Lleras open tonight…
+                      Ask MDE about rooftop bars near Parque Lleras.
                     </div>
                   </div>
                 </div>
