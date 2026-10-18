@@ -174,7 +174,8 @@ async function main() {
     }
     lines.push("");
     lines.push("Served build: etag " + served.etag + ", chunk fingerprint " + served.fingerprint + ", " + served.chunks + " chunks.");
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+    // The runner owns this path; it is never derived from input.
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n"); // nosemgrep
   }
 
   const failed = results.filter((entry) => !entry.ok);
