@@ -64,12 +64,15 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const hydrated = useSyncExternalStore(subscribeNever, hydratedOnClient, hydratedOnServer);
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
+  const contestId = voteTarget?.contestId;
+  const entityId = voteTarget?.entityId;
   const goToLogin = useCallback(() => {
-    // Keep the chosen contest across authentication; pathname alone drops
-    // ?contest_id and would produce the same ambiguous lookup after sign-in.
-    const safeReturn = (pathname ?? "/restaurants") + window.location.search;
+    // Reconstruct a same-origin return URL from the canonical resolved contest.
+    // Do not forward arbitrary query-string text into the login redirect.
+    const safeReturn = (pathname ?? "/restaurants") +
+      (contestId ? "?contest_id=" + encodeURIComponent(contestId) : "");
     router.push("/login?next=" + encodeURIComponent(safeReturn));
-  }, [pathname, router]);
+  }, [pathname, router, contestId]);
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
     setMessage(null);
@@ -84,9 +87,6 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     // No session, or we could not tell: ask the visitor to sign in. Never open blind.
     goToLogin();
   }, [goToLogin]);
-  const contestId = voteTarget?.contestId;
-  const entityId = voteTarget?.entityId;
-
   // Store only the idempotency key, not a vote receipt or auth credential.
   // On reload the server re-reads the committed ballot. This lookup has no nonce
   // and cannot create a new ballot; vote-cast checks the existing key first.
