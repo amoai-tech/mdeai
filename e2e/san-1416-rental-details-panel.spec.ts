@@ -187,3 +187,59 @@ test.describe("/rentals Details — phone 390px", () => {
     expect(new URL(page.url()).pathname).toBe("/rentals");
   });
 });
+
+
+test.describe("/rentals workspace — laptop 1024px", () => {
+  test.use({ viewport: { width: 1024, height: 768 } });
+
+  test("results scroll independently while the map stays in place and cards fit", async ({ page }) => {
+    await gotoRentals(page);
+    const results = page.getByTestId("workspace-results-column");
+    const map = page.getByTestId("browse-map-panel");
+    const grid = page.getByTestId("rentals-grid");
+
+    await expect(results).toBeVisible();
+    await expect(map).toBeVisible();
+    await expect(grid).toBeVisible();
+    // A laptop's middle column is too narrow for two apartment cards.
+    await expect.poll(() => grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length))
+      .toBe(1);
+
+    const before = await map.boundingBox();
+    expect(before).not.toBeNull();
+    // Scroll the results pane, not the outer page. A fixed map must not move.
+    await results.evaluate((el) => { el.scrollTop = Math.min(400, el.scrollHeight - el.clientHeight); });
+    await expect.poll(() => results.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    const after = await map.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    const firstCard = await cards(page).first().boundingBox();
+    const bounds = await results.boundingBox();
+    expect(firstCard).not.toBeNull();
+    expect(bounds).not.toBeNull();
+    expect(firstCard!.width).toBeLessThanOrEqual(bounds!.width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+});
+
+test.describe("/rentals workspace — tablet 768px", () => {
+  test.use({ viewport: { width: 768, height: 900 } });
+
+  test("navigation opens and closes on a tablet without losing the results", async ({ page }) => {
+    await gotoRentals(page);
+    const count = await cards(page).count();
+    const menu = page.getByTestId("nav-drawer-trigger");
+    const drawer = page.getByTestId("nav-drawer-content");
+    await expect(menu).toBeVisible();
+    await menu.click();
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId("nav-rentals-link")).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(menu).toBeFocused();
+    expect(await cards(page).count()).toBe(count);
+    expect(new URL(page.url()).pathname).toBe("/rentals");
+  });
+});
