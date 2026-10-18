@@ -52,6 +52,9 @@ const ANONYMOUS_RESOURCE_ID = "anonymous";
 const runMarker = `san547-${Date.now().toString(36)}`;
 /** Only User A's conversation contains this; no refused response may echo it. */
 const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
+// User B's rename attempt. It must be distinct from runMarker: User A's own first message
+// contains runMarker, and a saved chat is now titled from that message (SAN-1412).
+const attackerRename = `${runMarker}-attacker-rename`;
 
 /**
  * The exact request shape a real browser sends to `/api/copilotkit`, captured
@@ -330,7 +333,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       { path: `/api/copilotkit/threads/${threadId}/messages`, httpMethod: "GET" },
       { path: `/api/copilotkit/threads/${threadId}/events`, httpMethod: "GET" },
       { path: `/api/copilotkit/threads/${threadId}/state`, httpMethod: "GET" },
-      { path: `/api/copilotkit/threads/${threadId}`, httpMethod: "PATCH", body: { name: runMarker } },
+      { path: `/api/copilotkit/threads/${threadId}`, httpMethod: "PATCH", body: { name: attackerRename } },
       { path: `/api/copilotkit/threads/${threadId}/archive`, httpMethod: "POST" },
       { path: `/api/copilotkit/threads/${threadId}`, httpMethod: "DELETE" },
     ];
@@ -354,7 +357,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       .single();
     if (error) throw new Error(`thread re-read failed: ${error.message}`);
     expect(data.resourceId).toBe(userA.userId);
-    expect(data.title ?? "").not.toContain(runMarker);
+    expect(data.title ?? "", "User B's rename must not stick").not.toContain(attackerRename);
     expect(await messageCount([threadId])).toBeGreaterThanOrEqual(2);
   });
 
