@@ -38,7 +38,9 @@ export default async function AdminContestsPage() {
       </header>
 
       {!user ? (
-        <p className="text-sm text-muted-foreground">Sign in as an admin to manage contests.</p>
+        <p className="text-sm text-muted-foreground" data-testid="admin-sign-in-required">
+          Sign in as an admin to manage contests.
+        </p>
       ) : !isAdmin ? (
         <p data-testid="admin-not-authorized" className="text-sm text-muted-foreground">
           Admin access required.
@@ -86,7 +88,11 @@ export default async function AdminContestsPage() {
             ) : (
               <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
                 {contests.map((contest) => (
-                  <li key={contest.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <li
+                    key={contest.id}
+                    className="flex flex-wrap items-center justify-between gap-3 p-4"
+                    data-testid={"contest-row-" + contest.id}
+                  >
                     <div>
                       <Link className="font-medium underline" href={"/admin/contests/" + contest.id}>
                         {contest.title}
