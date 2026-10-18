@@ -1,6 +1,6 @@
 # Restaurant Contest UX — premium, responsive, source-backed
 
-Owner: [SAN-1467 · MDE Restaurants Contest — Design Contest Wireframes and Mobile States](https://linear.app/amo100/issue/SAN-1467)  
+Owner: [SAN-1467 · MDE Restaurants Contest — Design Contest Wireframes and Mobile States](https://linear.app/amo100/issue/SAN-1467)
 Artifact: design specification, **NOT a shipped feature**. As of October 16, 2026.
 
 ## Rules and sources
