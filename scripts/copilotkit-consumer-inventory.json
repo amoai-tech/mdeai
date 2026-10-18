@@ -49,6 +49,12 @@
     },
 
     {
+      "file": "src/components/partners/partner-workspace-chat.tsx",
+      "classification": "keep",
+      "note": "SAN-705: v2 CopilotKitProvider + one CopilotChatConfigurationProvider for the single shared partnerAgent. No threadId, so the partner workspace gets one shared, non-explicit thread per mount."
+    },
+
+    {
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."
