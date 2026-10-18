@@ -85,11 +85,13 @@ export function RestaurantPicker({
 
       <div className="flex flex-wrap gap-2">
         <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-select-visible" onClick={selectVisible} type="button">
-          Select {visible.length === available.length ? "all" : "visible"} ({visible.length})
+          Select visible ({visible.length})
         </button>
-        <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-select-all" onClick={selectAll} type="button">
-          Select all {available.length}
-        </button>
+        {visible.length < available.length ? (
+          <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-select-all" onClick={selectAll} type="button">
+            Select all {available.length}
+          </button>
+        ) : null}
         <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-clear" onClick={clear} type="button">
           Clear
         </button>
