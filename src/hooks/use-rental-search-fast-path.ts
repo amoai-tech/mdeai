@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
+import { budgetNotApplied, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -204,7 +204,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             generic:
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
               !sig.hasVibeOrUseCase,
-            budgetNotApplied: params.maxPricePerNight == null && statesBudget(userText),
+            budgetNotApplied: budgetNotApplied(userText, params),
             unappliedRequests: unappliedRentalRequests(userText),
           }),
         );
