@@ -333,14 +333,24 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       if (error) throw new Error(`thread re-read failed: ${error.message}`);
       return data as { resourceId: string; title: string | null };
     };
-    let before = await readThread();
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const title = (before.title ?? "").trim();
-      // Wait for the real title rather than Mastra's placeholder before taking the baseline.
-      if (title !== "" && title !== "Untitled Thread") break;
-      await page.waitForTimeout(500);
-      before = await readThread();
-    }
+    // Fail fast if the thread row is missing, then wait for its real title.
+    await readThread();
+    // Retrying assertion, not a fixed sleep: wait until the saved chat has its real title
+    // rather than Mastra's placeholder, then take that as the baseline.
+    await expect
+      .poll(
+        async () => {
+          const title = ((await readThread()).title ?? "").trim();
+          return title !== "" && title !== "Untitled Thread";
+        },
+        {
+          message: "User A's chat should have a real title before the unauthorized probes",
+          timeout: 15_000,
+          intervals: [500, 1_000, 2_000],
+        },
+      )
+      .toBe(true);
+    const before = await readThread();
 
     // SAN-1358 · D20: these arrive as `resource/request` with the thread id in
     // `params.path`, so the body-based gate never sees them; the runtime's
