@@ -73,6 +73,7 @@
     "graphify:path": "bash scripts/graphify-run.sh path",
     "graphify:tree": "bash scripts/graphify-run.sh tree",
     "test:veb-mvp-010-integration": "node scripts/verify-veb-mvp-010-integration.mjs",
+    "smoke:prod": "node scripts/prod-behaviour-smoke.mjs",
     "test:e2e": "playwright test",
     "test:e2e:desktop": "playwright test e2e/maps-layout-desktop.spec.ts",
     "test:e2e:mobile": "playwright test e2e/maps-layout-mobile.spec.ts",

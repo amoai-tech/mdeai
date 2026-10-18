@@ -1,0 +1,51 @@
+# Every 30 minutes: does www.mdeai.co actually behave correctly?
+#
+# "Deployment Ready" is a status, not evidence. This job drives the served chat in a real
+# browser, calls the viewing API, and prints the served build fingerprint (etag + chunk
+# hash) so a stale artifact is identifiable when a check fails. See
+# scripts/prod-behaviour-smoke.mjs for the exact checks.
+name: Prod behaviour smoke
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-behaviour-smoke
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  smoke:
+    name: live behaviour + served build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Check live behaviour
+        env:
+          SMOKE_BASE_URL: ${ vars.PROD_BASE_URL || 'https://www.mdeai.co' }
+          GITHUB_TOKEN: ${ github.token }
+          SHA_GRACE_MINUTES: "20"
+        run: node scripts/prod-behaviour-smoke.mjs
