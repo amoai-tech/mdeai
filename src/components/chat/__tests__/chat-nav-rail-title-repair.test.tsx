@@ -68,6 +68,16 @@ describe("ChatNavRail opening a saved chat (SAN-1412)", () => {
     expect(ui.push).toHaveBeenCalledWith("/chat");
   });
 
+  it("repairs the literal Mastra placeholder title when opening an older chat", () => {
+    ui.threads = [
+      { id: "placeholder", title: "Untitled Thread", updatedAt: "2026-10-16T12:00:00Z" },
+    ];
+    act(() => root.render(<ChatNavRail />));
+    open("placeholder");
+    expect(ui.ensure).toHaveBeenCalledWith("placeholder");
+    expect(ui.setActiveThreadId).toHaveBeenCalledWith("placeholder");
+  });
+
   it("leaves a chat that already has a title alone", () => {
     act(() => root.render(<ChatNavRail />));
     open("titled");

@@ -20,6 +20,7 @@ import {
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { threadLabel } from "@/lib/chat/thread-label";
+import { isMeaningfulThreadTitle } from "@/lib/chat/thread-title";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { useNavThreads } from "@/lib/chat/use-nav-threads";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -124,7 +125,9 @@ export function ChatNavRail({
     router.push("/chat");
     // SAN-1412: a chat that still shows the dated fallback gets a real title from its first message.
     // Background and fail-soft; opening is never held up by it.
-    if (threads.find((thread) => thread.id === id)?.title === null) void ensureThreadTitle(id);
+    if (!isMeaningfulThreadTitle(threads.find((thread) => thread.id === id)?.title)) {
+      void ensureThreadTitle(id);
+    }
   }
 
   return (
