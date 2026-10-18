@@ -22,20 +22,18 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// SAN-692 · D-PTR-01 link strategy: venue verticals route to the LIVE /venues
-// landing (?v= variant, shipped SAN-661 · D-PTR-02); the rest route to the LIVE
-// typed signup wizard until their landings ship. No card points at a 404.
+// SAN-692 · Partner Hub links to functioning dedicated landings when present,
+// reusing the shared /venues UI. Remaining categories use typed signup.
 const SIGNUP_TYPES = ["host", "broker", "sponsor", "agency"] as const;
 
-// Routes with no page.tsx on disk (verified 2026-06-11) — the hub must not link
-// any of them. /venues is now LIVE, so it is intentionally absent here.
+// Pages that are still placeholders or absent must not become Hub destinations.
+// Existing placeholders may load but do not replace the actual signup funnel.
+// Restaurant/Café/Nightlife have live landing pages, and /contact is now live.
+// Only genuinely unbuilt destinations belong in the dead-routes list.
 const DEAD_HUB_ROUTES = [
   "/sponsors",
   "/business/ai",
   "/partners/rentals",
-  "/partners/restaurants",
-  "/partners/cafes",
-  "/partners/nightlife",
 ] as const;
 
 // Hub is slotted into the reusable MarketingPageShell (SAN-692), which owns the
@@ -61,12 +59,12 @@ describe("PartnerHub (/partners)", () => {
     }
   });
 
-  it("routes the four venue verticals to the live /venues ?v= variants", () => {
+  it("routes venue categories to the existing or dedicated landing", () => {
     const hrefOf = (key: string) =>
       PARTNER_HUB_CARDS.find((c) => c.key === key)?.href;
     expect(hrefOf("restaurants")).toBe("/venues?v=restaurant");
-    expect(hrefOf("cafes")).toBe("/venues?v=cafe");
-    expect(hrefOf("nightlife")).toBe("/venues?v=nightclub");
+    expect(hrefOf("cafes")).toBe("/partners/cafes");
+    expect(hrefOf("nightlife")).toBe("/partners/nightlife");
     expect(hrefOf("spaces")).toBe("/venues?v=space");
     expect(html).toContain('href="/venues?v=restaurant"');
   });
@@ -105,8 +103,8 @@ describe("PartnerHub (/partners)", () => {
   });
 });
 
-// PR #131 review (Cubic): the shared footer must link only to routes that
-// exist on disk. Replaces the dead /about, /contact, /legal/privacy links.
+// The shared footer links only to live routes. /contact is now implemented;
+// /about and /legal/privacy remain absent.
 const footerHtml = renderToStaticMarkup(<MarketingFooter />);
 
 // Routes with a real src/app/**/page.tsx (verified 2026-06-08).
