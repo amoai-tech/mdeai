@@ -319,6 +319,29 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   test("User B is refused every CopilotKit thread route on User A's thread", async ({ page }) => {
     await signInWithDeploymentAccess(page, userB.email);
 
+    // A saved chat's title is legitimately derived from its owner's first message
+    // (SAN-1412), so "the title must not contain runMarker" cannot distinguish a rename
+    // from a real title: the owner's own message contains the marker. Capture the
+    // settled title first, then prove the unauthorized mutations left it untouched.
+    const admin = await getSupabaseAdmin();
+    const readThread = async () => {
+      const { data, error } = await admin
+        .from("mastra_threads")
+        .select("resourceId, title")
+        .eq("id", threadId)
+        .single();
+      if (error) throw new Error(`thread re-read failed: ${error.message}`);
+      return data as { resourceId: string; title: string | null };
+    };
+    let before = await readThread();
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const title = (before.title ?? "").trim();
+      // Wait for the real title rather than Mastra's placeholder before taking the baseline.
+      if (title !== "" && title !== "Untitled Thread") break;
+      await page.waitForTimeout(500);
+      before = await readThread();
+    }
+
     // SAN-1358 · D20: these arrive as `resource/request` with the thread id in
     // `params.path`, so the body-based gate never sees them; the runtime's
     // fail-closed route allowlist must refuse them. Read-only and per-thread
@@ -345,16 +368,10 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       expect(text).not.toContain(threadId);
     }
 
-    // The mutations changed nothing: A's thread is still there, still A's.
-    const admin = await getSupabaseAdmin();
-    const { data, error } = await admin
-      .from("mastra_threads")
-      .select("resourceId, title")
-      .eq("id", threadId)
-      .single();
-    if (error) throw new Error(`thread re-read failed: ${error.message}`);
-    expect(data.resourceId).toBe(userA.userId);
-    expect(data.title ?? "").not.toContain(runMarker);
+    // The mutations changed nothing: A's thread is still there, still A's, same title.
+    const after = await readThread();
+    expect(after.resourceId).toBe(userA.userId);
+    expect(after.title, "User B's probes must not rename User A's thread").toBe(before.title);
     expect(await messageCount([threadId])).toBeGreaterThanOrEqual(2);
   });
 
