@@ -89,15 +89,12 @@ const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i
 const EMPTY = /No rentals match|No rentals are available/i;
 const DISCLOSED = /can't filter by monthly budget|budget was not applied/i;
 
-async function rentalFastPath() {
-  const browser = await chromium.launch({
-    channel: process.env.SMOKE_CHANNEL || undefined,
-    headless: true,
-  });
-  let text = "";
-  let cards = 0;
+async function runRentalQuery(browser, contextOptions) {
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (err) => pageErrors.push(String(err).slice(0, 200)));
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(BASE + "/chat", { waitUntil: "domcontentloaded", timeout: 60_000 });
     const box = page.locator('[data-testid="copilot-chat-textarea"]');
     await box.waitFor({ state: "visible", timeout: 45_000 });
@@ -109,17 +106,27 @@ async function rentalFastPath() {
       null,
       { timeout: 45_000 },
     );
-    text = await page.locator("body").innerText();
-    cards = await page.locator('[data-testid="rental-card"]').count();
+    const text = await page.locator("body").innerText();
+    const cards = await page.locator('[data-testid="rental-card"]').count();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    return { text, cards, overflow, pageErrors };
   } finally {
-    await browser.close();
+    await context.close();
   }
-  return {
-    answered: ANSWERED.test(text),
-    empty: EMPTY.test(text),
-    disclosed: DISCLOSED.test(text),
-    cards,
-  };
+}
+
+function recordRentalResult(label, query) {
+  record(
+    label + ": rental fast path answers (results or honest empty state)",
+    ANSWERED.test(query.text),
+    EMPTY.test(query.text) ? "empty state shown" : "rental cards rendered: " + query.cards,
+  );
+  record(
+    label + ": peso budget is disclosed, never silently capped",
+    DISCLOSED.test(query.text),
+    "budget disclosure present: " + DISCLOSED.test(query.text),
+  );
+  record(label + ": no uncaught page exceptions", query.pageErrors.length === 0, query.pageErrors.join(" | ") || "none");
 }
 
 /** The newest production deployment whose latest GitHub status is success. */
@@ -189,17 +196,24 @@ async function main() {
   const api = await safeViewingError();
   record("viewing errors stay safe and server-side", api.ok, api.detail);
 
-  const rentals = await rentalFastPath();
-  record(
-    "rental fast path answers (results or honest empty state)",
-    rentals.answered,
-    rentals.empty ? "empty state shown" : "rental cards rendered: " + rentals.cards,
-  );
-  record(
-    "peso budget is disclosed, never silently capped",
-    rentals.disclosed,
-    "budget disclosure present: " + rentals.disclosed,
-  );
+  const browser = await chromium.launch({
+    channel: process.env.SMOKE_CHANNEL || undefined,
+    headless: true,
+  });
+  try {
+    const desktop = await runRentalQuery(browser, { viewport: { width: 1280, height: 900 } });
+    recordRentalResult("desktop", desktop);
+
+    const mobile = await runRentalQuery(browser, {
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    recordRentalResult("390px", mobile);
+    record("390px has no horizontal overflow", mobile.overflow <= 1, "overflow=" + mobile.overflow + "px");
+  } finally {
+    await browser.close();
+  }
 
   const shas = await deploymentDrift();
   printSummary(served, shas);
