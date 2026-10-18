@@ -12,10 +12,22 @@ vi.mock("@/lib/supabase/edge-functions", () => ({
 }));
 
 import { POST } from "./route";
+import { SCHEDULE_VIEWING_ERROR_MESSAGES } from "@/lib/leads/schedule-viewing-schema";
 
 const FUTURE_WALL_CLOCK = "2099-06-01T15:00";
 
 const fetchMock = vi.fn();
+
+/**
+ * The route is the last place upstream prose could reach a renter. These tests both assert
+ * the safe copy and assert the technical detail survived in the server log, so the fix cannot
+ * be "delete the detail" — it has to move it.
+ */
+const errorCalls: unknown[][] = [];
+
+function serverLog(): string {
+  return JSON.stringify(errorCalls);
+}
 
 function validBody(overrides: Record<string, unknown> = {}) {
   return {
@@ -52,9 +64,14 @@ beforeEach(() => {
   getSession.mockResolvedValue({ data: { session: null } });
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  errorCalls.length = 0;
+  vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    errorCalls.push(args);
+  });
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -94,6 +111,9 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(res.status).toBe(502);
     expect(json.success).toBe(false);
     expect(json.error.code).toBe("SHOWING_NOT_COMMITTED");
+    expect(json.error.message).toBe(
+      SCHEDULE_VIEWING_ERROR_MESSAGES.SHOWING_NOT_COMMITTED,
+    );
     expect(json.showingId).toBeUndefined();
   });
 
@@ -116,11 +136,14 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rejects a past viewing time before calling the edge", async () => {
+  it("rejects a past viewing time before calling the edge, in renter language", async () => {
     const res = await post(validBody({ preferredAt: "2020-01-01T10:00" }));
+    const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe("VALIDATION_ERROR");
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    // The field name `preferredAt` never reaches the renter as the whole message.
+    expect(json.error.message).toBe("Choose a viewing time in the future.");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -183,7 +206,7 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(first.idempotency_key).not.toBe(third.idempotency_key);
   });
 
-  it("preserves a typed validation error from the edge", async () => {
+  it("keeps the edge's technical validation prose out of the renter's response", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(400, {
         success: false,
@@ -199,9 +222,11 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
 
     expect(res.status).toBe(400);
     expect(json.error.code).toBe("VALIDATION_ERROR");
-    expect(json.error.message).toBe(
-      "p1_schedule_tour_atomic: listing is not requestable",
-    );
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.VALIDATION_ERROR);
+    // Whatever the renter would read — code, message, details — must not carry the SQL text.
+    expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
+    // …but the operator can still find it.
+    expect(serverLog()).toContain("p1_schedule_tour_atomic");
   });
 
   it("does not downgrade a 5xx edge validation response to a client 400", async () => {
@@ -220,19 +245,75 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
 
     expect(res.status).toBe(502);
     expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.VALIDATION_ERROR);
+    expect(JSON.stringify(json)).not.toContain("validation path failed upstream");
+    expect(serverLog()).toContain("validation path failed upstream");
   });
 
   it("maps a rate-limited edge response to a typed error", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(429, {
         success: false,
-        error: { message: "Too many submissions — try again later" },
+        error: { code: "RATE_LIMITED", message: "chat-lead-capture: per-IP limit 20/h" },
       }),
     );
 
     const res = await post(validBody());
+    const json = await res.json();
 
     expect(res.status).toBe(429);
-    expect((await res.json()).error.code).toBe("RATE_LIMITED");
+    expect(json.error.code).toBe("RATE_LIMITED");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.RATE_LIMITED);
+    expect(JSON.stringify(json)).not.toContain("per-IP limit");
+    expect(serverLog()).toContain("per-IP limit");
+  });
+
+  it("answers a database failure with renter copy while logging the real cause", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(500, {
+        success: false,
+        error: {
+          message:
+            'duplicate key value violates unique constraint "leads_idempotency_key_key"',
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error.code).toBe("UPSTREAM_ERROR");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.UPSTREAM_ERROR);
+    expect(json.error.message).not.toMatch(/duplicate key|constraint|postgres/i);
+    expect(serverLog()).toContain("duplicate key value violates unique constraint");
+  });
+
+  it("never returns a message outside the shared safe copy", async () => {
+    const cases: Array<{ status: number; payload: unknown }> = [
+      {
+        status: 400,
+        payload: {
+          success: false,
+          error: { code: "VALIDATION_ERROR", message: "p1_schedule_tour_atomic: no" },
+        },
+      },
+      {
+        status: 429,
+        payload: { success: false, error: { message: "edge rate limiter tripped" } },
+      },
+      {
+        status: 500,
+        payload: { success: false, error: { message: "null value in column \"email\"" } },
+      },
+      { status: 200, payload: { success: true, data: { lead_id: "lead-1" } } },
+    ];
+
+    for (const { status, payload } of cases) {
+      fetchMock.mockResolvedValueOnce(edgeResponse(status, payload));
+      const res = await post(validBody());
+      const json = await res.json();
+      expect(Object.values(SCHEDULE_VIEWING_ERROR_MESSAGES)).toContain(json.error.message);
+    }
   });
 });

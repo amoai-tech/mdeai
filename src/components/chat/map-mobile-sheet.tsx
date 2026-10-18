@@ -13,12 +13,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
 import { useMapContext } from "@/platform/maps/map-context";
 
 function MapSheetBody({ open }: { open: boolean }) {
   const { pins } = useMapContext();
+  const mapsStatus = useMapsStatus();
   const visiblePins = pins.filter((pin) => pin.source !== "mock");
-  const showEmpty = visiblePins.length === 0;
+  const showEmpty = visiblePins.length === 0 && mapsStatus !== "auth-failed";
 
   return (
     <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
