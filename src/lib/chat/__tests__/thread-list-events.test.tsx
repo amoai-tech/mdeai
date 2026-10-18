@@ -15,10 +15,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function ok(body: unknown, status = 200) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body };
-}
-
 describe("thread-list-events (SAN-1412)", () => {
   it("tells every subscriber once, and stops after unsubscribe", async () => {
     const { notifyThreadListChanged, subscribeThreadListChanged } = await import("../thread-list-events");
@@ -175,3 +171,9 @@ describe("useNavThreads refreshes on a list change (SAN-1412)", () => {
     expect(latestTitle).toBe("Newer title");
   });
 });
+
+// Kept below the describe blocks: the analyzer otherwise misattributes the entire
+// test suite to this small helper and reports a false >100-line method.
+function ok(body: unknown, status = 200) {
+  return { ok: status >= 200 && status < 300, status, json: async () => body };
+}
