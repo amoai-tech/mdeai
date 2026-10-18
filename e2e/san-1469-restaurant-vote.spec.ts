@@ -85,6 +85,25 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       );
       expect(phase.rows[0]?.application_phase).toBe("development");
 
+      // Negative proof, before any account exists: a contest that does not contain this
+      // restaurant must show the honest not-open state, never a ballot borrowed from
+      // another contest. The contest id is read from the database, not invented.
+      const foreign = await db.query<{ id: string }>(
+        "select c.id from vote.contests c where c.kind = 'restaurant' " +
+          "and not exists (select 1 from vote.entities e where e.contest_id = c.id and e.restaurant_id = $1) " +
+          "limit 1",
+        [restaurantId],
+      );
+      if (foreign.rows[0]) {
+        await page.goto("/restaurants/" + restaurantId + "?contest_id=" + foreign.rows[0].id);
+        await expect(page.getByTestId("vote-not-open")).toBeVisible();
+        await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+      }
+      // A malformed selection is rejected before any contest lookup happens.
+      await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
+      await expect(page.getByTestId("vote-not-open")).toBeVisible();
+      await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+
       const identity = await createThrowawayIdentity("san1469-voter");
       userId = identity.userId;
       await page.goto("/restaurants/" + restaurantId + "?contest_id=" + contestId);

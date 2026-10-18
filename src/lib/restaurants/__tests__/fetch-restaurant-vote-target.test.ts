@@ -36,11 +36,46 @@ describe("restaurant vote target: explicit contest", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it("rejects a malformed or oversized restaurant id without querying", async () => {
+    // The id comes straight from the route. Validation must be a single linear pass,
+    // so a megabyte of hostile input is rejected before any database work.
+    expect(await fetchRestaurantVoteTarget("a".repeat(1_000_000))).toBeNull();
+    expect(await fetchRestaurantVoteTarget("not-a-uuid")).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("accepts an upper-case contest and compares the response case-insensitively", async () => {
+    rpc.mockResolvedValue({ data: { contest_id: contest, entity_id: entity }, error: null });
+    expect(await fetchRestaurantVoteTarget(restaurant, contest.toUpperCase())).toEqual({
+      contestId: contest, entityId: entity,
+    });
+    expect(rpc).toHaveBeenCalledWith("vote_restaurant_target", {
+      p_restaurant_id: restaurant, p_contest_id: contest.toUpperCase(),
+    });
+  });
+
   it("does not swap to a different contest when the server rejects a mismatched pair", async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     expect(await fetchRestaurantVoteTarget(restaurant, otherContest)).toBeNull();
     expect(rpc).toHaveBeenCalledWith("vote_restaurant_target", {
       p_restaurant_id: restaurant, p_contest_id: otherContest,
     });
+  });
+
+  it("refuses a target from another contest even if the server returns one", async () => {
+    rpc.mockResolvedValue({ data: { contest_id: otherContest, entity_id: entity }, error: null });
+    expect(await fetchRestaurantVoteTarget(restaurant, contest)).toBeNull();
+  });
+
+  it("refuses a malformed RPC payload", async () => {
+    rpc.mockResolvedValue({ data: { contest_id: 42, entity_id: entity }, error: null });
+    expect(await fetchRestaurantVoteTarget(restaurant, contest)).toBeNull();
+    rpc.mockResolvedValue({ data: { contest_id: contest, entity_id: "not-a-uuid" }, error: null });
+    expect(await fetchRestaurantVoteTarget(restaurant, contest)).toBeNull();
+  });
+
+  it("surfaces an RPC error as no target without throwing", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    expect(await fetchRestaurantVoteTarget(restaurant, contest)).toBeNull();
   });
 });
