@@ -83,6 +83,15 @@ export function PartnerHub() {
               </li>
             ))}
           </ul>
+          <p className="text-sm text-muted-foreground">
+            Already a partner?{" "}
+            <Link
+              href="/partners/profile"
+              className="font-medium text-accent underline-offset-4 hover:underline"
+            >
+              Edit your business profile
+            </Link>
+          </p>
         </div>
       </section>
 
