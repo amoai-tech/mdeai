@@ -10,6 +10,7 @@ import {
 
 import { OnboardingAiSuggestionCard } from "@/components/onboarding/onboarding-ai-suggestion-card";
 import { OnboardingCopilotBridge } from "@/components/onboarding/onboarding-copilot-bridge";
+import { BusinessUrlImportCard } from "@/components/onboarding/business-url-import-card";
 import { PartnerSignupWizard } from "@/components/partners/partner-signup-wizard";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import {
@@ -107,6 +108,11 @@ export function PartnerSignupAssistant({
           className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start"
         >
           <div className="flex min-w-0 flex-col gap-4">
+            <BusinessUrlImportCard
+              onApply={(accepted) =>
+                setForm((current) => applySuggestionToForm(current, accepted))
+              }
+            />
             {suggestion ? (
               suggestion.formRevision !== draftState.revision ? (
                 <div

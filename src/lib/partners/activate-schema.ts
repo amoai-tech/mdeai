@@ -15,7 +15,17 @@ const ALLOWED_PARTNER_SIGNUP_SETTING_KEYS = new Set([
   "businessName",
   "category",
   "neighborhood",
+  "website",
+  "description",
 ]);
+
+const PARTNER_SETTING_MAX_LENGTH: Record<string, number> = {
+  businessName: 160,
+  category: 80,
+  neighborhood: 80,
+  website: 300,
+  description: 1000,
+};
 
 export function assertAllowedSignupSettings(
   settings: Record<string, unknown> | undefined,
@@ -39,7 +49,11 @@ export function sanitizePartnerSettings(
   for (const [key, value] of Object.entries(settings)) {
     if (BLOCKED_PARTNER_SETTING_KEYS.has(key.toLowerCase())) continue;
     if (!ALLOWED_PARTNER_SIGNUP_SETTING_KEYS.has(key)) continue;
-    out[key] = value;
+    if (typeof value !== "string") continue;
+    const max = PARTNER_SETTING_MAX_LENGTH[key] ?? 300;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    out[key] = trimmed.slice(0, max);
   }
   return out;
 }

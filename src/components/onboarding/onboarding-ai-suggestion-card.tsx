@@ -18,9 +18,11 @@ type Props = {
 };
 
 const FIELDS = [
-  { key: "businessName", label: "Business name" },
-  { key: "category", label: "Category" },
-  { key: "neighborhood", label: "Neighborhood" },
+  { key: "businessName", label: "Business name", maxLength: 160 },
+  { key: "category", label: "Category", maxLength: 80 },
+  { key: "neighborhood", label: "Neighborhood", maxLength: 80 },
+  { key: "website", label: "Website", maxLength: 300 },
+  { key: "description", label: "Description", maxLength: 1000 },
 ] as const;
 
 /**
@@ -89,7 +91,7 @@ export function OnboardingAiSuggestionCard({ suggestion, onAccept, onIgnore }: P
                     [field.key]: event.target.value,
                   }))
                 }
-                maxLength={field.key === "businessName" ? 160 : 80}
+                maxLength={field.maxLength}
               />
             </div>
           ))}
