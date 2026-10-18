@@ -109,16 +109,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # Failure: restricted diagnostics. Traces and error contexts can contain authentication
-      # data, so they are NOT auto-published; only screenshots plus the HTML report are.
+      # Failure: restricted diagnostics. Only the screenshot files produced by the spec are
+      # published. Playwright warns that HTML reports and traces can contain credentials and
+      # access tokens, and masking one element does not sanitize a report, so neither is
+      # auto-published; retrieve them through a trusted, access-controlled process.
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: voting-failure-${{ github.run_id }}
-          # Playwright warns that HTML reports and traces can contain credentials and access
-          # tokens. Masking one screenshot does not sanitize a report, so reports are NOT
-          # auto-published; retrieve them through a trusted, access-controlled process.
           path: |
             test-results/*.png
           if-no-files-found: ignore
