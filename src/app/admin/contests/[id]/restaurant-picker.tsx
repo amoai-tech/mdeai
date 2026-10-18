@@ -28,6 +28,120 @@ function SubmitButton({ count }: { count: number }) {
   );
 }
 
+function SelectionToolbar({
+  visibleCount,
+  totalCount,
+  onSelectVisible,
+  onSelectAll,
+  onClear,
+}: {
+  visibleCount: number;
+  totalCount: number;
+  onSelectVisible: () => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+}) {
+  const cls = "min-h-11 rounded-md border border-border/60 px-3 text-sm";
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button className={cls} data-testid="contest-picker-select-visible" onClick={onSelectVisible} type="button">
+        Select visible ({visibleCount})
+      </button>
+      {visibleCount < totalCount ? (
+        <button className={cls} data-testid="contest-picker-select-all" onClick={onSelectAll} type="button">
+          Select all {totalCount}
+        </button>
+      ) : null}
+      <button className={cls} data-testid="contest-picker-clear" onClick={onClear} type="button">
+        Clear
+      </button>
+    </div>
+  );
+}
+
+function RestaurantOptions({
+  visible,
+  selected,
+  onToggle,
+}: {
+  visible: PickerRestaurant[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60">
+      {visible.length === 0 ? (
+        <li className="p-3 text-sm text-muted-foreground">No restaurant matches that search.</li>
+      ) : (
+        visible.map((restaurant) => (
+          <li key={restaurant.id}>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm">
+              <input
+                checked={selected.includes(restaurant.id)}
+                className="h-5 w-5"
+                data-restaurant-name={restaurant.name}
+                data-testid="contest-picker-option"
+                onChange={() => onToggle(restaurant.id)}
+                type="checkbox"
+              />
+              <span>
+                {restaurant.name}
+                {restaurant.neighborhood ? (
+                  <span className="text-muted-foreground"> · {restaurant.neighborhood}</span>
+                ) : null}
+              </span>
+            </label>
+          </li>
+        ))
+      )}
+    </ul>
+  );
+}
+
+/**
+ * The result of a bulk add. A rejected id is shown as a warning, never as a clean success: the
+ * admin asked for something that did not happen.
+ */
+function BulkLinkResult({
+  state,
+  nameById,
+}: {
+  state: BulkLinkState;
+  nameById: Map<string, string>;
+}) {
+  if (state.status === "idle") return null;
+  const clean = state.status === "success" && state.rejected === 0;
+  return (
+    <div
+      className={
+        clean
+          ? "rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+          : "rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+      }
+      data-testid="contest-link-result"
+      role="status"
+    >
+      {state.message ? <p>{state.message}</p> : null}
+      {state.status !== "error" ? (
+        <p data-testid="contest-link-result-summary">
+          {state.added} added · {state.already} already linked
+          {state.failed.length > 0 ? " · " + state.failed.length + " failed" : ""}
+          {state.rejected > 0 ? " · " + state.rejected + " invalid id skipped" : ""}
+        </p>
+      ) : null}
+      {state.failed.length > 0 ? (
+        <ul className="mt-2 list-disc pl-5" data-testid="contest-link-failures">
+          {state.failed.map((failure) => (
+            <li key={failure.id}>
+              {(nameById.get(failure.id) ?? failure.id) + " — " + failure.reason}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function RestaurantPicker({
   contestId,
   available,
@@ -83,50 +197,19 @@ export function RestaurantPicker({
         />
       </label>
 
-      <div className="flex flex-wrap gap-2">
-        <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-select-visible" onClick={selectVisible} type="button">
-          Select visible ({visible.length})
-        </button>
-        {visible.length < available.length ? (
-          <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-select-all" onClick={selectAll} type="button">
-            Select all {available.length}
-          </button>
-        ) : null}
-        <button className="min-h-11 rounded-md border border-border/60 px-3 text-sm" data-testid="contest-picker-clear" onClick={clear} type="button">
-          Clear
-        </button>
-      </div>
+      <SelectionToolbar
+        onClear={clear}
+        onSelectAll={selectAll}
+        onSelectVisible={selectVisible}
+        totalCount={available.length}
+        visibleCount={visible.length}
+      />
 
       <p className="text-sm text-muted-foreground" data-testid="contest-picker-count" role="status">
         {effectiveSelected.length} selected
       </p>
 
-      <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60">
-        {visible.length === 0 ? (
-          <li className="p-3 text-sm text-muted-foreground">No restaurant matches that search.</li>
-        ) : (
-          visible.map((restaurant) => (
-            <li key={restaurant.id}>
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm">
-                <input
-                  checked={selected.includes(restaurant.id)}
-                  className="h-5 w-5"
-                  data-restaurant-name={restaurant.name}
-                  data-testid="contest-picker-option"
-                  onChange={() => toggle(restaurant.id)}
-                  type="checkbox"
-                />
-                <span>
-                  {restaurant.name}
-                  {restaurant.neighborhood ? (
-                    <span className="text-muted-foreground"> · {restaurant.neighborhood}</span>
-                  ) : null}
-                </span>
-              </label>
-            </li>
-          ))
-        )}
-      </ul>
+      <RestaurantOptions onToggle={toggle} selected={effectiveSelected} visible={visible} />
 
       <form action={formAction}>
         <input name="contest_id" type="hidden" value={contestId} />
@@ -136,35 +219,7 @@ export function RestaurantPicker({
         <SubmitButton count={effectiveSelected.length} />
       </form>
 
-      {state.status !== "idle" ? (
-        <div
-          className={
-            state.status === "success" && state.rejected === 0
-              ? "rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
-              : "rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-          }
-          data-testid="contest-link-result"
-          role="status"
-        >
-          {state.message ? <p>{state.message}</p> : null}
-          {state.status !== "error" ? (
-            <p data-testid="contest-link-result-summary">
-              {state.added} added · {state.already} already linked
-              {state.failed.length > 0 ? " · " + state.failed.length + " failed" : ""}
-              {state.rejected > 0 ? " · " + state.rejected + " invalid id skipped" : ""}
-            </p>
-          ) : null}
-          {state.failed.length > 0 ? (
-            <ul className="mt-2 list-disc pl-5" data-testid="contest-link-failures">
-              {state.failed.map((failure) => (
-                <li key={failure.id}>
-                  {(nameById.get(failure.id) ?? failure.id) + " — " + failure.reason}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
+      <BulkLinkResult nameById={nameById} state={state} />
     </div>
   );
 }
