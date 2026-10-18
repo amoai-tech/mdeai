@@ -12,22 +12,22 @@ values ('00000000-0000-4000-8000-0000000a0099', 'SAN-1523 grants fixture', 'Laur
 -- A. exact privilege set per role and table: none
 select is(
   (select coalesce(string_agg(p, ',' order by p), '(none)')
-     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p
     where has_table_privilege('anon', 'public.embedding_jobs', p)),
   '(none)', 'A1: anon holds no privilege on embedding_jobs');
 select is(
   (select coalesce(string_agg(p, ',' order by p), '(none)')
-     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p
     where has_table_privilege('authenticated', 'public.embedding_jobs', p)),
   '(none)', 'A2: authenticated holds no privilege on embedding_jobs');
 select is(
   (select coalesce(string_agg(p, ',' order by p), '(none)')
-     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p
     where has_table_privilege('anon', 'public.query_embedding_cache', p)),
   '(none)', 'A3: anon holds no privilege on query_embedding_cache');
 select is(
   (select coalesce(string_agg(p, ',' order by p), '(none)')
-     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+     from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) p
     where has_table_privilege('authenticated', 'public.query_embedding_cache', p)),
   '(none)', 'A4: authenticated holds no privilege on query_embedding_cache');
 
@@ -70,11 +70,11 @@ set local role service_role;
 create temp table claimed as select * from public.claim_embedding_jobs(1);
 select is((select count(*)::int from claimed), 1, 'D2: service_role can still claim a job');
 select is(
-  public.complete_embedding_job((select job_id from claimed), (select lease_token from claimed), (select v from vec)),
+  public.complete_embedding_job((select c.job_id from claimed as c), (select c.lease_token from claimed as c), (select v from vec)),
   'done', 'D3: service_role can still complete a job with a 768-number vector');
 reset role;
 select is(
-  (select status from public.embedding_jobs where id = (select job_id from claimed)),
+  (select status from public.embedding_jobs where id = (select c.job_id from claimed as c)),
   'done', 'D4: the job is recorded as done');
 
 select * from finish();
