@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { budgetNotApplied, buildRentalSearchParams } from "@/lib/rental-query-parser";
 import {
   buildMatchReason,
   fastPathRentalSummary,
@@ -61,6 +62,28 @@ describe("fastPathRentalSummary — requests the search cannot apply", () => {
     const text = fastPathRentalSummary(0, 0, { unappliedRequests: ["pet-friendly"] });
     expect(text).toMatch(/no rentals/i);
     expect(text).toContain("I can't filter by pet-friendly yet.");
+  });
+});
+
+describe("budget honesty", () => {
+  it("keeps an applied monthly budget out of the 'not applied' warning", () => {
+    const text = "Furnished 2BR in Laureles under COP 3.5 million per month";
+    const params = buildRentalSearchParams(text, {})!;
+    const summary = fastPathRentalSummary(2, 2, {
+      budgetNotApplied: budgetNotApplied(text, params),
+    });
+
+    expect(params.maxPriceMonthly).toBe(3_500_000);
+    expect(summary).not.toMatch(/can't filter by monthly budget/i);
+    expect(summary).not.toMatch(/budget was not applied/i);
+  });
+
+  it("still warns when the renter named an amount the search did not apply", () => {
+    const text = "2BR in Laureles under $80/night";
+    const summary = fastPathRentalSummary(2, 2, {
+      budgetNotApplied: budgetNotApplied(text, {}),
+    });
+    expect(summary).toMatch(/can't filter by monthly budget/i);
   });
 });
 
