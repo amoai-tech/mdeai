@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMatchReason,
   fastPathRentalSummary,
+  unappliedRentalNotice,
   unappliedRentalRequests,
   type RentalResultRow,
 } from "@/lib/rental-display";
@@ -60,5 +61,21 @@ describe("fastPathRentalSummary — requests the search cannot apply", () => {
     const text = fastPathRentalSummary(0, 0, { unappliedRequests: ["pet-friendly"] });
     expect(text).toMatch(/no rentals/i);
     expect(text).toContain("I can't filter by pet-friendly yet.");
+  });
+});
+
+describe("unappliedRentalNotice — one sentence for every rental answer path", () => {
+  it("is exactly the sentence the fast path appends after results", () => {
+    const labels = ["pet-friendly", "furnished"];
+    expect(unappliedRentalNotice(labels)).toBe(
+      "I can't filter by pet-friendly and furnished yet, so check each card.",
+    );
+    expect(fastPathRentalSummary(2, 2, { unappliedRequests: labels })).toContain(
+      unappliedRentalNotice(labels),
+    );
+  });
+
+  it("says nothing when the search applied every request", () => {
+    expect(unappliedRentalNotice([])).toBeUndefined();
   });
 });

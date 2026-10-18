@@ -175,6 +175,24 @@ function joinLabels(labels: string[]): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
+function unappliedClause(labels: string[]): string {
+  return `I can't filter by ${joinLabels(labels)} yet`;
+}
+
+/**
+ * The one sentence a rental answer uses to admit a request it cannot apply. The fast path and
+ * the `search-rentals` tool both call this, so a renter who asks for pets or furnishing hears
+ * the same thing whichever chat path answers instead of having the request dropped silently.
+ */
+export function unappliedRentalNotice(labels: string[]): string | undefined {
+  return labels.length ? `${unappliedClause(labels)}, so check each card.` : undefined;
+}
+
+/** The same disclosure for an empty result, where there is no card to check. */
+export function emptyRentalNotice(labels: string[]): string {
+  return labels.length ? `${unappliedClause(labels)}.` : "";
+}
+
 export type FastPathRentalSummaryOptions = {
   /** Requests the search cannot filter on (pets, furnished, parking…) — name them, never drop them silently. */
   unappliedRequests?: string[];
@@ -197,7 +215,7 @@ export function fastPathRentalSummary(
     const budgetNote =
       (options.budgetNotApplied ? " Your budget was not applied to this search." : "") +
       (options.unappliedRequests?.length
-        ? ` I can't filter by ${joinLabels(options.unappliedRequests)} yet.`
+        ? ` ${emptyRentalNotice(options.unappliedRequests)}`
         : "");
     // A broad search that finds nothing means there is nothing to show at all. A specific search
     // that finds nothing only says that THIS search matched nothing — other listings may exist.
@@ -209,9 +227,8 @@ export function fastPathRentalSummary(
   if (options.budgetNotApplied) {
     text += " I can't filter by monthly budget yet, so check the price on each card.";
   }
-  if (options.unappliedRequests?.length) {
-    text += ` I can't filter by ${joinLabels(options.unappliedRequests)} yet, so check each card.`;
-  }
+  const unapplied = unappliedRentalNotice(options.unappliedRequests ?? []);
+  if (unapplied) text += ` ${unapplied}`;
   if (options.generic) {
     text += " Want to narrow by neighborhood or monthly budget?";
   }

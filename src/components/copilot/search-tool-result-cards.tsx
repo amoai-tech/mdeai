@@ -20,6 +20,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
@@ -264,6 +265,14 @@ export function RentalResults({
     can_schedule_viewing?: boolean;
     schedule_viewing_url?: string | null;
   }>;
+  const unappliedRequests = envelope.unappliedRequests ?? [];
+  // With results there are cards to check; with none, only the admission itself is truthful.
+  const unappliedNote = rows.length
+    ? unappliedRentalNotice(unappliedRequests)
+    : undefined;
+  const emptyUnappliedNote = rows.length
+    ? ""
+    : emptyRentalNotice(unappliedRequests);
   const rankExplanation = filterCustomerVisibleRentalRankExplanation(
     envelope.rankExplanation ?? [],
   );
@@ -291,6 +300,13 @@ export function RentalResults({
           {envelope.budgetNote}
         </p>
       ) : null}
+      {rows.length > 0 && unappliedNote ? (
+        // Same sentence the fast path appends, so an agent answer cannot leave a pet or
+        // furnishing request undisclosed.
+        <p className="text-xs text-muted-foreground" data-testid="rental-unapplied-requests-note">
+          {unappliedNote}
+        </p>
+      ) : null}
       {rows.length > 0 && rankExplanation.length > 0 ? (
         <div
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
@@ -310,7 +326,10 @@ export function RentalResults({
         <EmptyState
           testId="rentals-empty"
           title="No rentals matched"
-          description={envelope.budgetNote ?? "Try another neighborhood or fewer filters."}
+          description={
+            [envelope.budgetNote, emptyUnappliedNote].filter(Boolean).join(" ") ||
+            "Try another neighborhood or fewer filters."
+          }
           suggestions={[
             { label: "Rentals in Laureles", testId: "rentals-empty-suggest-laureles" },
             { label: "Poblado 2BR", testId: "rentals-empty-suggest-poblado" },
