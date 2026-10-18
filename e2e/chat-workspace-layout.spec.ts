@@ -295,6 +295,11 @@ test.describe("SAN-1414 /chat is a fixed workspace", { tag: ["@deterministic"] }
         sidewaysOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
+    // SAN-1412: high-value mobile actions are comfortable to tap without affecting desktop density.
+    const newChatHeight = await drawer.getByTestId("nav-new-chat").evaluate((el) => el.getBoundingClientRect().height);
+    const threadHeight = await drawer.getByTestId("nav-thread-item").first().evaluate((el) => el.getBoundingClientRect().height);
+    expect(newChatHeight).toBeGreaterThanOrEqual(44);
+    expect(threadHeight).toBeGreaterThanOrEqual(44);
     expect(state.listScrolls, "20 chats scroll inside the drawer's own list").toBe(true);
     expect(state.newChatTop, "New chat is near the top of the drawer").toBeLessThan(160);
     expect(state.sidewaysOverflow, "no sideways scrolling").toBeLessThanOrEqual(0);

@@ -209,7 +209,7 @@ export function ChatNavRail({
           <button
             type="button"
             data-testid="nav-new-chat"
-            className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            className="inline-flex min-h-11 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8"
             onClick={onNewChat}
           >
             <MessageSquarePlus className="size-4 shrink-0" aria-hidden />
@@ -254,7 +254,7 @@ export function ChatNavRail({
                   data-thread-id={thread.id}
                   onClick={() => onSelectThread(thread.id)}
                   className={cn(
-                    "w-full truncate rounded-md px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
+                    "min-h-11 w-full truncate rounded-md px-3 py-2 text-left text-sm leading-snug hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8 lg:py-1.5",
                     activeThreadId === thread.id
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground",

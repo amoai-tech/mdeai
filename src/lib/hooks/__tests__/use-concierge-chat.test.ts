@@ -38,6 +38,10 @@ vi.mock("@/lib/chat/ensure-thread-title", () => ({
   ensureThreadTitle: (id: string) => ensureMock(id),
 }));
 
+vi.mock("@/lib/chat/ensure-thread-title", () => ({
+  ensureThreadTitle: (id: string) => ensureMock(id),
+}));
+
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 
 beforeEach(() => {
