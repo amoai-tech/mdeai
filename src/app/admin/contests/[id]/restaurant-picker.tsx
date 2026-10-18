@@ -34,25 +34,28 @@ function SelectionToolbar({
   onSelectVisible,
   onSelectAll,
   onClear,
+  disabled,
 }: {
   visibleCount: number;
   totalCount: number;
   onSelectVisible: () => void;
   onSelectAll: () => void;
   onClear: () => void;
+  disabled: boolean;
 }) {
-  const cls = "min-h-11 rounded-md border border-border/60 px-3 text-sm";
+  const cls =
+    "min-h-11 rounded-md border border-border/60 px-3 text-sm disabled:opacity-60";
   return (
     <div className="flex flex-wrap gap-2">
-      <button className={cls} data-testid="contest-picker-select-visible" onClick={onSelectVisible} type="button">
+      <button className={cls} data-testid="contest-picker-select-visible" disabled={disabled} onClick={onSelectVisible} type="button">
         Select visible ({visibleCount})
       </button>
       {visibleCount < totalCount ? (
-        <button className={cls} data-testid="contest-picker-select-all" onClick={onSelectAll} type="button">
+        <button className={cls} data-testid="contest-picker-select-all" disabled={disabled} onClick={onSelectAll} type="button">
           Select all {totalCount}
         </button>
       ) : null}
-      <button className={cls} data-testid="contest-picker-clear" onClick={onClear} type="button">
+      <button className={cls} data-testid="contest-picker-clear" disabled={disabled} onClick={onClear} type="button">
         Clear
       </button>
     </div>
@@ -63,10 +66,12 @@ function RestaurantOptions({
   visible,
   selected,
   onToggle,
+  disabled,
 }: {
   visible: PickerRestaurant[];
   selected: string[];
   onToggle: (id: string) => void;
+  disabled: boolean;
 }) {
   return (
     <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60">
@@ -81,6 +86,7 @@ function RestaurantOptions({
                 className="h-5 w-5"
                 data-restaurant-name={restaurant.name}
                 data-testid="contest-picker-option"
+                disabled={disabled}
                 onChange={() => onToggle(restaurant.id)}
                 type="checkbox"
               />
@@ -151,7 +157,7 @@ export function RestaurantPicker({
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
-  const [state, formAction] = useActionState(async (previous: BulkLinkState, formData: FormData) => {
+  const [state, formAction, isPending] = useActionState(async (previous: BulkLinkState, formData: FormData) => {
     const result = await linkRestaurantsAction(previous, formData);
     // A completed submission removes successes immediately. Action-level errors cannot
     // identify individual failures, so leave the selection intact for a full retry.
@@ -209,6 +215,7 @@ export function RestaurantPicker({
         onClear={clear}
         onSelectAll={selectAll}
         onSelectVisible={selectVisible}
+        disabled={isPending}
         totalCount={available.length}
         visibleCount={visible.length}
       />
@@ -217,7 +224,12 @@ export function RestaurantPicker({
         {effectiveSelected.length} selected
       </p>
 
-      <RestaurantOptions onToggle={toggle} selected={effectiveSelected} visible={visible} />
+      <RestaurantOptions
+        disabled={isPending}
+        onToggle={toggle}
+        selected={effectiveSelected}
+        visible={visible}
+      />
 
       <form action={formAction}>
         <input name="contest_id" type="hidden" value={contestId} />

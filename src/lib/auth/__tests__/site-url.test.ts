@@ -120,5 +120,7 @@ describe("authentication callback origin", () => {
     expect(() => normalizeSiteOrigin("https://person:secret@mdeai.co")).toThrow();
     expect(() => normalizeSiteOrigin("https://mdeai.co?next=evil")).toThrow();
     expect(() => normalizeSiteOrigin("")).toThrow();
+    // Whitespace-only trims to the same thing and must fail deliberately, not via the URL parser.
+    expect(() => normalizeSiteOrigin("   ")).toThrow();
   });
 });

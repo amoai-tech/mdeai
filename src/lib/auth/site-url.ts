@@ -7,6 +7,9 @@ import { headers } from "next/headers";
  */
 export function normalizeSiteOrigin(value: string): string {
   const raw = value.trim();
+  // Fail deliberately on a blank value. `new URL("https://")` does throw, but that is the
+  // parser's error, not this function's contract — do not depend on it.
+  if (raw === "") throw new Error("Invalid authentication site origin configuration");
   const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
   const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (

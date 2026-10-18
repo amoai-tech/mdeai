@@ -5,9 +5,9 @@
  * These are the states a browser run cannot reach: the "already linked" and "invalid id" results,
  * because the UI never offers an already-linked restaurant.
  */
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { linkMock } = vi.hoisted(() => ({ linkMock: vi.fn() }));
 // The component imports "../actions" (contests/actions.ts); from __tests__/ that is ../../actions.
@@ -27,6 +27,7 @@ function renderPicker() {
 
 describe("RestaurantPicker", () => {
   beforeEach(() => linkMock.mockReset());
+  afterEach(() => cleanup());
 
   it("cannot submit an empty selection", () => {
     renderPicker();
@@ -182,5 +183,28 @@ describe("RestaurantPicker", () => {
     const formData = linkMock.mock.calls[0][1] as FormData;
     expect(formData.get("contest_id")).toBe("contest-1");
     expect(formData.getAll("restaurant_ids")).toEqual([RESTAURANTS[0].id]);
+  });
+
+  it("locks the selection controls while a submission is pending", async () => {
+    const user = userEvent.setup();
+    let resolveLink!: (value: unknown) => void;
+    linkMock.mockReturnValue(new Promise((resolve) => {
+      resolveLink = resolve;
+    }));
+    renderPicker();
+
+    await user.click(screen.getAllByTestId("contest-picker-option")[0]);
+    await user.click(screen.getByTestId("contest-link-submit"));
+
+    // While the action runs, the admin must not be able to change the selection that the
+    // result handler is about to replace with the failed ids.
+    const firstOption = () => screen.getAllByTestId("contest-picker-option")[0] as HTMLInputElement;
+    await waitFor(() => expect(firstOption().disabled).toBe(true), { timeout: 5_000 });
+    expect((screen.getByTestId("contest-picker-select-visible") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId("contest-picker-clear") as HTMLButtonElement).disabled).toBe(true);
+
+    resolveLink({ status: "success", added: 1, already: 0, failed: [], rejected: 0 });
+    await screen.findByTestId("contest-link-result-summary");
+    await waitFor(() => expect(firstOption().disabled).toBe(false), { timeout: 5_000 });
   });
 });
