@@ -7,8 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * streaming into the new chat and was then saved into the new thread.
  */
 const calls: string[] = [];
+const ensureMock = vi.fn();
 const agent = {
   isRunning: false,
+  threadId: "",
+  addMessage: vi.fn(),
   setMessages: vi.fn(() => calls.push("setMessages")),
   setState: vi.fn(() => calls.push("setState")),
   abortRun: vi.fn(() => calls.push("abortRun")),
@@ -31,12 +34,19 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 }));
 vi.mock("@/lib/chat/thread-nav-context", () => ({ useOptionalThreadNav: () => null }));
 
+vi.mock("@/lib/chat/ensure-thread-title", () => ({
+  ensureThreadTitle: (id: string) => ensureMock(id),
+}));
+
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 
 beforeEach(() => {
   calls.length = 0;
   vi.clearAllMocks();
   agent.isRunning = false;
+  agent.threadId = "";
+  ensureMock.mockReset();
+  ensureMock.mockResolvedValue(true);
 });
 
 describe("useConciergeChat — switching conversation mid-reply", () => {
@@ -68,5 +78,40 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
     const chat = useConciergeChat();
     chat.stopActiveRun();
     expect(agent.abortRun).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useConciergeChat — titling a saved chat (SAN-1412)", () => {
+  it("asks for a title for that chat after the agent turn succeeds", async () => {
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockResolvedValue(undefined);
+    const chat = useConciergeChat();
+    await expect(chat.appendMessage("2BR in Laureles")).resolves.toBe(true);
+    expect(ensureMock).toHaveBeenCalledTimes(1);
+    expect(ensureMock).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("does not wait for the title, so a slow or failing title request never delays or breaks the turn", async () => {
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockResolvedValue(undefined);
+    ensureMock.mockReturnValue(new Promise(() => {})); // never settles
+    const chat = useConciergeChat();
+    await expect(chat.appendMessage("hi")).resolves.toBe(true);
+  });
+
+  it("requests no title when the turn fails", async () => {
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockRejectedValue(new Error("run failed"));
+    const chat = useConciergeChat();
+    await expect(chat.appendMessage("hi")).rejects.toThrow("run failed");
+    expect(ensureMock).not.toHaveBeenCalled();
+  });
+
+  it("requests no title when the agent has no thread id", async () => {
+    agent.threadId = "";
+    copilotkit.runAgent.mockResolvedValue(undefined);
+    const chat = useConciergeChat();
+    await chat.appendMessage("hi");
+    expect(ensureMock).not.toHaveBeenCalled();
   });
 });

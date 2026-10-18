@@ -181,5 +181,17 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
     } finally {
       await anonContext.close();
     }
+
+    // ── Sign out: authenticated history must stop being accessible ───────────
+    const signOut = page.getByRole("button", { name: "Sign out" });
+    await expect(signOut, "the authenticated chat exposes a sign-out action").toBeVisible();
+    await signOut.click();
+    await expect(page, "sign-out returns the visitor home").toHaveURL(
+      new URL("/", baseUrl).toString(),
+      { timeout: 20_000 },
+    );
+    const afterSignOut = await page.request.get(historyUrl);
+    expect(afterSignOut.status(), "the former owner no longer has an authenticated session").toBe(401);
+    expect(await afterSignOut.text()).not.toContain(chatA.marker);
   });
 });
