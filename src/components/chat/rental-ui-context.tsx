@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
 import type { EventVenueOfferingsPayload } from "@/lib/venues/event-venue-offerings-types";
+import type { Rental } from "@/mastra/tools/search-rentals";
 
 export type ScheduleViewingTarget = {
   listingId: string;
@@ -48,6 +49,14 @@ export type RentalVenueDetail = {
    * Absent means unproven, and every scheduling surface must fail closed on it.
    */
   canScheduleViewing?: boolean;
+  /**
+   * SAN-1504 — the complete, server-grounded search result for this listing. When present, desktop
+   * shows the rich `RentalDetailsPanel` in the map column and phones show `RentalDetailsSheet`; the
+   * reduced fields above remain for a row that is not a complete rental (the old pop-up sheet).
+   */
+  rental?: Rental;
+  /** Whether the listing had a map pin when it was opened. Used to drop the panel if a new search removes it. */
+  pinned?: boolean;
 };
 
 export type EventVenueSheetStep = "detail" | "checkout";
