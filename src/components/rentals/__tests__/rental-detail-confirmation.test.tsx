@@ -105,10 +105,14 @@ async function requestViewing() {
 describe("rental detail page — first-interaction hydration safety", () => {
   it("renders request controls disabled in server HTML until event handlers are attached", () => {
     const html = renderToString(<RentalDetailView detail={detail} />);
+    // Parse SSR button markup using a fixed regex. Building a RegExp from
+    // interpolated strings is unnecessary in a regression test and triggers
+    // Codacy's dynamic-regex/XSS rules.
+    const buttons = [...html.matchAll(/<button\b[^>]*>/g)].map(([markup]) => markup);
     for (const testId of ["rental-detail-request-cta", "rental-detail-request-cta-mobile", "rental-detail-ask-cta"]) {
-      const match = html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`));
-      expect(match?.[0], `${testId} should be present in server HTML`).toBeDefined();
-      expect(match?.[0]).toContain("disabled");
+      const markup = buttons.find((button) => button.includes('data-testid="' + testId + '"'));
+      expect(markup, testId + ' should be present in server HTML').toBeDefined();
+      expect(markup).toContain("disabled");
     }
   });
 
