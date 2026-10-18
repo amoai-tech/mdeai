@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /** Shared concierge chat controller for v2 routes. */
@@ -54,6 +55,10 @@ function useLiveConciergeChat() {
         content,
       });
       await copilotkit.runAgent({ agent });
+      // SAN-1412: the turn is saved, so give the chat a real title and refresh the sidebar. Every
+      // agent send (the composer, chips, the café panel) comes through here. Not awaited and
+      // fail-soft: a title problem must never delay or break a chat turn.
+      if (agent.threadId) void ensureThreadTitle(agent.threadId);
       return true;
     },
     [agent, copilotkit],
