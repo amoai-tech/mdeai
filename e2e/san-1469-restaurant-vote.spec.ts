@@ -226,7 +226,8 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 850 });
         await expect(page.getByTestId("vote-receipt")).toBeVisible();
-        await page.screenshot({ path: "test-results/vote-receipt-" + width + ".png" });
+        // The receipt id is real data: mask it before publishing the artifact.
+        await page.screenshot({ path: "test-results/vote-receipt-" + width + ".png", mask: [page.getByTestId("vote-receipt-id")] });
         const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         expect(hasOverflow).toBe(false);
       }
