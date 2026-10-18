@@ -113,12 +113,33 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
     const chatA = await seedChat(sofia.userId, "Laureles apartment", `san1413-a-${randomUUID().slice(0, 8)}`);
     const chatB = await seedChat(sofia.userId, "Cafés in Poblado", `san1413-b-${randomUUID().slice(0, 8)}`);
 
+    // The existing Mastra placeholder and metadata must be repaired without
+    // replacing the original thread, leaking content or erasing metadata.
+    const admin = await getSupabaseAdmin();
+    const seededMetadata = { qaThreadPurpose: "title-repair-preserve-metadata" };
+    const placeholder = await admin.from("mastra_threads")
+      .update({ title: "Untitled Thread", metadata: seededMetadata })
+      .eq("id", chatA.threadId);
+    if (placeholder.error) throw new Error("seed placeholder: " + placeholder.error.message);
+
     await signInAsOnOrigin(page, baseUrl, sofia.email);
     await gotoConcierge(page);
 
     // ── Open saved chat A ────────────────────────────────────────────────────
     await openSaved(page, chatA.threadId);
     await expectOnlyThisChat(page, chatA, chatB);
+
+    await expect.poll(async () => {
+      const read = await admin.from("mastra_threads")
+        .select("title, metadata").eq("id", chatA.threadId).single();
+      if (read.error) throw new Error("read saved title: " + read.error.message);
+      return read.data?.title;
+    }, { timeout: 30_000, message: "the saved chat gets its persisted title" })
+      .toBe(chatA.marker);
+    const titled = await admin.from("mastra_threads")
+      .select("metadata").eq("id", chatA.threadId).single();
+    expect(titled.error).toBeNull();
+    expect(titled.data?.metadata).toEqual(seededMetadata);
 
     // ── Chat → Rentals → Chat (the same tab, real navigation) ────────────────
     await page.getByTestId("nav-rentals-link").first().click();

@@ -21,7 +21,7 @@ const serviceState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({ auth: { getUser: getUserMock } })),
+  createClient: vi.fn(() => Promise.resolve({ auth: { getUser: getUserMock } })),
 }));
 vi.mock("@/mastra/lib/storage", () => ({ getMastraStorage: () => ({}) }));
 vi.mock("@mastra/memory", () => ({
@@ -40,10 +40,11 @@ vi.mock("@/lib/supabase/service", () => ({
               const q = {
                 select: () => q,
                 eq: (_c: string, v: string) => ((id = v), q),
-                maybeSingle: async () =>
+                maybeSingle: () => Promise.resolve(
                   serviceState.threadError
                     ? { data: null, error: { message: serviceState.threadError } }
                     : { data: serviceState.threads.get(id) ?? null, error: null },
+                ),
               };
               return q;
             }
@@ -53,7 +54,7 @@ vi.mock("@/lib/supabase/service", () => ({
               select: () => q,
               eq: (_c: string, v: string) => ((threadId = v), q),
               order: () => q,
-              limit: async () => ({
+              limit: () => Promise.resolve({
                 data: serviceState.messages.filter((m) => m.thread_id === threadId),
                 error: null,
               }),
@@ -78,8 +79,10 @@ const userRow = (text: string, createdAt = "2026-10-01T10:00:00.000Z") => ({
   content: JSON.stringify({ format: 2, parts: [{ type: "text", text }] }),
 });
 
-const call = async (threadId: string, body?: unknown) =>
-  PATCH({ json: async () => body } as unknown as NextRequest, { params: Promise.resolve({ threadId }) });
+const call = (threadId: string, body?: unknown) =>
+  PATCH({ json: () => Promise.resolve(body) } as unknown as NextRequest, {
+    params: Promise.resolve({ threadId }),
+  });
 
 beforeEach(() => {
   getUserMock.mockReset();
