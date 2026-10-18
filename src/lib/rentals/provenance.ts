@@ -68,8 +68,6 @@ const UNCONFIRMED_DATE_BASES = new Set([
   "source_rented_until_past_recheck",
   "source_available_now",
 ]);
-/** A basis the source actually stated; these stay confirmed even when not independently verified. */
-const STATED_DATE_BASES = new Set(["source_explicit_date", "source_rented_until"]);
 /** Mirror of the markers the search filter in availability-filter.ts excludes from confirmed matches. */
 const UNCONFIRMED_AVAILABILITY_STATUSES = new Set(["unconfirmed", "source_claim_unverified"]);
 
