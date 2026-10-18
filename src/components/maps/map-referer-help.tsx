@@ -22,8 +22,24 @@ const DEV_REFERRERS = [
  * that size. Upgrade path if it ever matters: give MapRefererHelp a compact
  * size prop rather than copying its markup.
  */
+/** Renters cannot fix a Google Cloud key, so in production they get a plain notice, not setup steps. */
+function RenterMapNotice({ testId }: { testId: string }) {
+  return (
+    <div
+      data-testid={testId}
+      className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm"
+    >
+      <p className="font-medium text-foreground">The map isn&apos;t available right now</p>
+      <p className="max-w-sm text-muted-foreground">
+        Your results are still listed. Please try again in a moment.
+      </p>
+    </div>
+  );
+}
+
 export function MapsUnavailable({ reason }: { reason: MapsUnavailableReason }) {
   if (reason === "no-key") {
+    if (process.env.NODE_ENV === "production") return <RenterMapNotice testId="map-env-error" />;
     return (
       <div
         data-testid="map-env-error"
@@ -50,6 +66,9 @@ export function MapRefererHelp() {
   );
 
   const requiredReferrer = `${origin}/*`;
+
+  // Only a developer sees the setup steps.
+  if (process.env.NODE_ENV === "production") return <RenterMapNotice testId="map-referer-help" />;
 
   return (
     <div

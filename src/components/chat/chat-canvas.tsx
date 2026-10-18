@@ -6,6 +6,7 @@ import { ChatNavRail } from "@/components/chat/chat-nav-rail";
 import { CafeDetailMobileSheet } from "@/components/chat/cafe-detail-mobile-sheet";
 import { NightlifeDetailMobileSheet } from "@/components/chat/nightlife-detail-mobile-sheet";
 import { MapMobileSheet } from "@/components/chat/map-mobile-sheet";
+import { RentalDetailMobileSheet } from "@/components/chat/rental-detail-mobile-sheet";
 
 /** Mindtrip layout: nav, center chat, right map. */
 export function ChatCanvas() {
@@ -27,6 +28,7 @@ export function ChatCanvas() {
       <MapMobileSheet />
       <CafeDetailMobileSheet />
       <NightlifeDetailMobileSheet />
+      <RentalDetailMobileSheet />
     </>
   );
 }

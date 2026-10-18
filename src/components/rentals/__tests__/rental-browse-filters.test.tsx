@@ -23,6 +23,13 @@ describe("RentalBrowseFilters", () => {
     expect(html).toContain("rentals-filter-beds-2");
   });
 
+  it("marks the chosen chip with aria-current: filter chips are links, and aria-pressed is not allowed on a link", () => {
+    const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" />);
+    expect(chosen).not.toMatch(/\saria-pressed=/);
+    expect(chosen).toMatch(/aria-current="true"[^>]*data-testid="rentals-filter-neighborhood-laureles"|data-testid="rentals-filter-neighborhood-laureles"[^>]*aria-current="true"/);
+    expect(chosen.match(/aria-current="true"/g)?.length).toBe(2);
+  });
+
   it("never writes maxPrice into a filter link", () => {
     expect(html).not.toContain("maxPrice");
   });
@@ -80,5 +87,13 @@ describe("RentalBrowseFilters — stay dates (SAN-486)", () => {
     );
     const ids = [...twice.matchAll(/<p id="([^"]+)" role="alert"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(2); // two copies on one page never share an id
+  });
+});
+
+describe("RentalBrowseFilters — contrast (workspace background)", () => {
+  it("keeps the chosen chip and the Apply dates button readable: tint under 10% (text-primary on bg-primary/10 measured 4.4:1, needs 4.5:1)", () => {
+    const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" />);
+    expect(chosen).not.toContain("bg-primary/10");
+    expect(chosen.match(/bg-primary\/5/g)?.length).toBe(3); // chosen neighborhood, chosen bedrooms, Apply dates
   });
 });

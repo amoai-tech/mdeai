@@ -75,11 +75,11 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   chip,
-                  active && "border-primary bg-primary/10 text-primary",
+                  active && "border-primary bg-primary/5 text-primary",
                 )}
               >
                 {n}
@@ -110,11 +110,11 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-beds-${value}`}
                 className={cn(
                   chip,
-                  active && "border-primary bg-primary/10 text-primary",
+                  active && "border-primary bg-primary/5 text-primary",
                 )}
               >
                 {label}
@@ -164,7 +164,7 @@ export function RentalBrowseFilters({
           <button
             type="submit"
             data-testid="rentals-dates-apply"
-            className={cn(chip, "min-h-11 border-primary bg-primary/10 px-4 text-primary")}
+            className={cn(chip, "min-h-11 border-primary bg-primary/5 px-4 text-primary")}
           >
             Apply dates
           </button>

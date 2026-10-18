@@ -295,6 +295,11 @@ test.describe("SAN-1414 /chat is a fixed workspace", { tag: ["@deterministic"] }
         sidewaysOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
+    // SAN-1412: high-value mobile actions are comfortable to tap without affecting desktop density.
+    const newChatHeight = await drawer.getByTestId("nav-new-chat").evaluate((el) => el.getBoundingClientRect().height);
+    const threadHeight = await drawer.getByTestId("nav-thread-item").first().evaluate((el) => el.getBoundingClientRect().height);
+    expect(newChatHeight).toBeGreaterThanOrEqual(44);
+    expect(threadHeight).toBeGreaterThanOrEqual(44);
     expect(state.listScrolls, "20 chats scroll inside the drawer's own list").toBe(true);
     expect(state.newChatTop, "New chat is near the top of the drawer").toBeLessThan(160);
     expect(state.sidewaysOverflow, "no sideways scrolling").toBeLessThanOrEqual(0);
@@ -346,5 +351,114 @@ test.describe("SAN-1412 saved chat titles", { tag: ["@deterministic"] }, () => {
     await expect(item).toHaveText(TITLE);
     expect(patches).toEqual([{ method: "PATCH", body: null }]);
     expect(await page.evaluate(() => (window as unknown as { __noReload?: string }).__noReload)).toBe("same-page");
+  });
+});
+
+/**
+ * SAN-1504 · Open Rental Details Beside the Map in Chat Instead of a Pop-Up Sheet.
+ *
+ * On a desktop, Details on a chat rental card swaps the map column for the rental details panel and
+ * the conversation, cards and message box stay where they are; Close brings the map back. On a phone
+ * the same selection opens the rental sheet. Only one detail view exists at a time, and opening it
+ * starts no AI run and no extra request.
+ */
+const detailsButton = (page: Page) => page.getByTestId("rental-card").getByRole("button", { name: /details/i }).first();
+
+test.describe("SAN-1504 chat rental Details", { tag: ["@deterministic"] }, () => {
+  test.beforeEach(async ({ page }) => {
+    await mockFastPaths(page);
+  });
+
+  test("1440px: Details opens beside the chat, Close restores the map", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoDeterministicChat(page);
+    await askForRentals(page, 1);
+
+    const requests: string[] = [];
+    page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+    const mapPanel = page.getByTestId("map-panel");
+    await expect(mapPanel).toHaveAttribute("data-right-column-mode", "map");
+
+    await detailsButton(page).click();
+    await expect(mapPanel).toHaveAttribute("data-right-column-mode", "detail");
+    const panel = page.getByTestId("rental-details-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h2")).not.toBeEmpty();
+    // The conversation, the card and the message box are still on screen next to it.
+    await expect(page.getByTestId("rental-card")).toBeVisible();
+    await expect(page.getByTestId("copilot-chat-input")).toBeVisible();
+    // The old pop-up must not open beside the panel.
+    await expect(page.getByTestId("venue-detail-sheet")).toHaveCount(0);
+    expect(requests.filter((path) => path.startsWith("/api/")), "opening Details makes no request").toEqual([]);
+
+    await page.getByTestId("rental-details-close").click();
+    await expect(panel).toBeHidden();
+    await expect(mapPanel).toHaveAttribute("data-right-column-mode", "map");
+    await expect(page.getByTestId("chat-map")).toBeVisible();
+    await expect(page.getByTestId("rental-card")).toBeVisible();
+  });
+
+  test("1440px: a source-linked ad with no coordinates opens read-only details and no pin is invented", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const noCoords: Record<string, unknown> = { ...rental };
+    delete noCoords.latitude;
+    delete noCoords.longitude;
+    await page.route("**/api/rentals/search", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [
+            {
+              ...noCoords,
+              id: "rnt_external_001",
+              title: "Source-linked apartment in Laureles",
+              source_url: "https://www.fincaraiz.com.co/apartamento/1",
+              source_provider: "Fincaraíz",
+              tags: ["external-source"],
+              can_schedule_viewing: false,
+              schedule_viewing_url: null,
+              price_monthly: 2_400_000,
+              currency: "COP",
+            },
+          ],
+          total: 1,
+          source: "mock",
+        }),
+      }),
+    );
+    await gotoDeterministicChat(page);
+    await askForRentals(page, 1);
+
+    await detailsButton(page).click();
+    const panel = page.getByTestId("rental-details-panel");
+    await expect(panel).toBeVisible();
+    await expect(page.getByTestId("rental-details-price")).toContainText("2,400,000");
+    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveCount(0);
+    await expect(page.getByTestId("rental-details-source-link")).toHaveAttribute("href", /fincaraiz\.com\.co/);
+    await expect(page.getByTestId("rental-details-map-link")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+  });
+
+  test("390px: Details opens the rental sheet, only one detail view, and Close returns to the chat", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoDeterministicChat(page);
+    await askForRentals(page, 1);
+
+    await detailsButton(page).click();
+    const sheet = page.getByTestId("rental-details-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByTestId("venue-detail-sheet")).toHaveCount(0);
+    await expect(page.getByTestId("rental-details-panel")).toHaveCount(0);
+    const sideways = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(sideways, "no sideways scrolling").toBeLessThanOrEqual(0);
+
+    await page.getByTestId("rental-details-close").click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByTestId("rental-card")).toBeVisible();
+    await expect(page.getByTestId("copilot-chat-input")).toBeVisible();
   });
 });

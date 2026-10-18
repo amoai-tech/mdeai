@@ -15,8 +15,12 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
-import { RENTAL_HANDOFF_FAILED_SUMMARY, RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
+import { budgetNotApplied, scoreRentalQuery } from "@/lib/rental-query-parser";
+import {
+  RENTAL_HANDOFF_FAILED_SUMMARY,
+  RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
+  unappliedRentalRequests,
+} from "@/lib/rental-display";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -40,6 +44,7 @@ function buildRentalSlots(
 
 type RentalSearchResponse = {
   results: Rental[];
+  total?: number;
   budgetNote?: string;
   hybridUsed?: boolean;
   rankExplanation?: Array<{ factor: string; score: number; note: string }>;
@@ -121,6 +126,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       query: ConciergeWorkingMemory["lastRentalQuery"],
       memory: ConciergeWorkingMemory,
       meta?: {
+        total?: number;
         hybridUsed?: boolean;
         rankExplanation?: Array<{ factor: string; score: number; note: string }>;
         budgetNote?: string;
@@ -170,7 +176,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
-        const { results: cards, hybridUsed, rankExplanation, budgetNote } = response;
+        const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
@@ -193,14 +199,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           ts: new Date().toISOString(),
         });
         setSearchMeta({ userText, params });
-        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation, budgetNote });
+        const pinCount = applySearchResults(cards, query, memory, { total, hybridUsed, rankExplanation, budgetNote });
         showExchange(
           userText,
           fastPathRentalSummary(cards.length, pinCount, {
             generic:
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
               !sig.hasVibeOrUseCase,
-            budgetNotApplied: params.maxPricePerNight == null && statesBudget(userText),
+            budgetNotApplied: budgetNotApplied(userText, params),
+            unappliedRequests: unappliedRentalRequests(userText),
           }),
         );
         return true;
