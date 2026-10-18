@@ -1,5 +1,6 @@
 import {
   SCHEDULE_VIEWING_ACK_MESSAGE,
+  SCHEDULE_VIEWING_ERROR_MESSAGES,
   scheduleViewingErrorCodes,
   scheduleViewingInputSchema,
   type ScheduleViewingErrorCode,
@@ -57,9 +58,10 @@ export async function submitScheduleViewing(
   };
 
   if (!res.ok || !json.success || !json.leadId || !json.showingId) {
+    const code = toErrorCode(json.error?.code);
     throw new ScheduleViewingError(
-      toErrorCode(json.error?.code),
-      json.error?.message ?? "Could not schedule viewing",
+      code,
+      json.error?.message ?? SCHEDULE_VIEWING_ERROR_MESSAGES[code],
     );
   }
 

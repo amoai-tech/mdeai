@@ -216,6 +216,18 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
   const { error: userError } = await admin.auth.admin.deleteUser(identity.userId);
   if (userError) failures.push("delete identity: " + userError.message);
 
+  // Deleting the auth user leaves the public.profiles row behind (no cascade), so a run that
+  // trusted identity deletion alone left a real user profile in the database. Delete it and
+  // prove it is gone, like every other row this helper owns.
+  const { error: profileDeleteError } = await admin.from("profiles").delete().eq("id", identity.userId);
+  if (profileDeleteError) failures.push("delete profile: " + profileDeleteError.message);
+  const profileLeft = await admin.from("profiles").select("id").eq("id", identity.userId);
+  if (profileLeft.error) {
+    failures.push("verify profile: " + profileLeft.error.message);
+  } else if ((profileLeft.data ?? []).length > 0) {
+    failures.push("profile remains after cleanup");
+  }
+
   if (failures.length > 0) {
     throw new Error("cleanup failed for " + identity.email + " — " + failures.join("; "));
   }
