@@ -82,6 +82,16 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
     mocks.state.filters = [];
   });
 
+  it("does not claim an inactive development apartment is available for rent", () => {
+    const row = baseRow({
+      status: "inactive",
+      available_from: "2099-11-01",
+      rental_can_request_viewing: false,
+    });
+    const rental = rowToRental(row as unknown as ApartmentRow);
+    expect(rental.availability).toBe("Availability unconfirmed");
+  });
+
   it("shows a future move-in as upcoming, requestable, and identical to the structured mapper", async () => {
     const row = baseRow({ available_from: "2099-11-01" });
     mocks.state.aptRows = [row];

@@ -419,7 +419,9 @@ export function rowToRental(r: ApartmentRow): Rental {
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
-    availability: isAvailabilityUnconfirmed(r.metadata)
+    // Development discovery includes inactive records. A stored move-in date is
+    // not proof that an inactive listing can actually be rented.
+    availability: r.status !== 'active' || isAvailabilityUnconfirmed(r.metadata)
       ? 'Availability unconfirmed'
       : formatAvailability(r.available_from, r.available_to),
     tags: (() => {
