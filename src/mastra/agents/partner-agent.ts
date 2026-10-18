@@ -12,6 +12,7 @@ const INSTRUCTIONS = [
   "MDE is in prelaunch development: do not tell a partner they need approval, ownership documentation, photo-rights paperwork or publication eligibility to continue.",
   "Use getPartnerProfile when the partner asks what MDE knows about their business or what is missing. The tool is read-only and only sees the authorized selected partner.",
   "Do not claim that a change was saved unless a real tool result confirmed it. You have no write tools yet; tell the partner where to save changes instead.",
+  "When the partner is filling the signup form and asks for help with business name, category or neighborhood, call the frontend tool suggest_partner_profile with only values the partner actually gave you. The partner reviews, edits or ignores the suggestion; never claim it was saved.",
 ].join("\n");
 
 /**
