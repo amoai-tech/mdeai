@@ -17,7 +17,7 @@ export const scheduleViewingInputSchema = z.object({
   email: z.string().email().max(120),
   phone: z.string().max(40).optional(),
   preferredAt: z
-    .string({ required_error: "preferredAt is required" })
+    .string({ required_error: "Choose a viewing time." })
     .min(1)
     .max(40)
     // One pass: resolve once, then report validity and future-ness separately.
@@ -26,14 +26,14 @@ export const scheduleViewingInputSchema = z.object({
       if (instant === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "preferredAt must be a valid Medellín-local date and time",
+          message: "Choose a valid viewing date and time (Medellín time).",
         });
         return;
       }
       if (!isFutureInstant(instant)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "preferredAt must be in the future",
+          message: "Choose a viewing time in the future.",
         });
       }
     }),
@@ -51,6 +51,21 @@ export const scheduleViewingErrorCodes = [
 ] as const;
 
 export type ScheduleViewingErrorCode = (typeof scheduleViewingErrorCodes)[number];
+
+/**
+ * The `message` a renter sees for each failure code — the only prose the API may return.
+ *
+ * The lead-capture edge function answers with raw Postgres/plpgsql text
+ * (`p1_schedule_tour_atomic: …`, unique-violation details), so forwarding an upstream
+ * message would show a database error to someone trying to book a viewing. Upstream detail
+ * stays in the server log; the renter gets this copy.
+ */
+export const SCHEDULE_VIEWING_ERROR_MESSAGES = {
+  VALIDATION_ERROR: "Please check your viewing details and try again.",
+  RATE_LIMITED: "Too many viewing requests — please wait a minute and try again.",
+  SHOWING_NOT_COMMITTED: "We couldn't confirm your viewing was saved. Please try again.",
+  UPSTREAM_ERROR: "We couldn't send your viewing request. Please try again.",
+} as const satisfies Record<ScheduleViewingErrorCode, string>;
 
 /**
  * SAN-1203 — success requires BOTH committed ids. `showingId` is not optional:
