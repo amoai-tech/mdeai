@@ -172,6 +172,19 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("SMOKE_BASE_URL: http://localhost:3002");
   });
 
+  it("includes long-chat virtualization in the same deterministic PR browser run", () => {
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    expect(pkg.scripts["test:e2e:deterministic"]).toContain(
+      "e2e/chat-virtualization.spec.ts",
+    );
+    const workflow = fs.readFileSync(
+      ".github/workflows/playwright-deterministic.yml",
+      "utf8",
+    );
+    expect(workflow).toContain("run: npm run test:e2e:deterministic");
+    expect(workflow).not.toContain("run: npm run test:e2e:chat-virtualization");
+  });
+
   it("adds scheduled/manual critical cross-browser certification without slowing PRs", () => {
     const workflow = fs.readFileSync(
       ".github/workflows/playwright-cross-browser.yml",
