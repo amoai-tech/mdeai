@@ -123,6 +123,52 @@ describe("RestaurantPicker", () => {
     expect(screen.queryByTestId("contest-link-failures")).toBeNull();
   });
 
+  it("keeps only failed restaurants selected for an immediate retry", async () => {
+    const user = userEvent.setup();
+    linkMock
+      .mockResolvedValueOnce({
+        status: "partial",
+        added: 1,
+        already: 0,
+        failed: [{ id: RESTAURANTS[1].id, reason: "Temporarily unavailable" }],
+        rejected: 0,
+      })
+      .mockResolvedValueOnce({ status: "success", added: 1, already: 0, failed: [], rejected: 0 });
+
+    renderPicker();
+    const options = screen.getAllByTestId("contest-picker-option");
+    await user.click(options[0]);
+    await user.click(options[1]);
+    await user.click(screen.getByTestId("contest-link-submit"));
+
+    await screen.findByTestId("contest-link-result-summary");
+    // Successful rows must leave the retry payload, while the failed one stays ticked.
+    expect(screen.getByTestId("contest-picker-count").textContent).toContain("1 selected");
+    expect((options[0] as HTMLInputElement).checked).toBe(false);
+    expect((options[1] as HTMLInputElement).checked).toBe(true);
+
+    await user.click(screen.getByTestId("contest-link-submit"));
+    await screen.findByText(/1 added/);
+    expect(linkMock).toHaveBeenCalledTimes(2);
+    const retryPayload = linkMock.mock.calls[1][1] as FormData;
+    expect(retryPayload.getAll("restaurant_ids")).toEqual([RESTAURANTS[1].id]);
+    expect(screen.getByTestId("contest-picker-count").textContent).toContain("0 selected");
+  });
+
+  it("keeps selection when the server rejects the entire action", async () => {
+    const user = userEvent.setup();
+    linkMock.mockResolvedValue({
+      status: "error",
+      added: 0, already: 0, failed: [], rejected: 0,
+      message: "Unable to reach contest service",
+    });
+    renderPicker();
+    await user.click(screen.getAllByTestId("contest-picker-option")[0]);
+    await user.click(screen.getByTestId("contest-link-submit"));
+    await screen.findByText("Unable to reach contest service");
+    expect(screen.getByTestId("contest-picker-count").textContent).toContain("1 selected");
+  });
+
   it("submits exactly the selected ids and the contest", async () => {
     const user = userEvent.setup();
     linkMock.mockResolvedValue({ status: "success", added: 1, already: 0, failed: [], rejected: 0 });

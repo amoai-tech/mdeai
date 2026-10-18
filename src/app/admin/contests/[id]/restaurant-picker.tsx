@@ -6,7 +6,7 @@
  * Replaces a native `<select multiple>`, which needs Ctrl/Cmd and is unusable at 390px. Selection
  * is independent of the filter, so searching never clears what is already ticked.
  */
-import { useActionState, useMemo, useState } from "react";
+import { startTransition, useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { linkRestaurantsAction, type BulkLinkState } from "../actions";
 
@@ -149,9 +149,17 @@ export function RestaurantPicker({
   contestId: string;
   available: PickerRestaurant[];
 }) {
-  const [state, formAction] = useActionState(linkRestaurantsAction, INITIAL);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [state, formAction] = useActionState(async (previous: BulkLinkState, formData: FormData) => {
+    const result = await linkRestaurantsAction(previous, formData);
+    // A completed submission removes successes immediately. Action-level errors cannot
+    // identify individual failures, so leave the selection intact for a full retry.
+    if (result.status === "success" || result.status === "partial") {
+      startTransition(() => setSelected(result.failed.map(({ id }) => id)));
+    }
+    return result;
+  }, INITIAL);
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>();

@@ -1,7 +1,7 @@
 
 -- SAN-1524 · vote_restaurant_contest_options: the page can ASK when the target is ambiguous.
 begin;
-select plan(5);
+select plan(7);
 
 insert into auth.users (id, email) values
   ('f1524000-0000-4000-8000-000000000001','san1524-org@example.com');
@@ -38,6 +38,14 @@ select is(
 select is(
   has_function_privilege('authenticated', 'public.vote_restaurant_contest_options(uuid)', 'EXECUTE'),
   false, 'the browser cannot read contest options directly');
+
+select is(
+  has_function_privilege('anon', 'public.vote_restaurant_contest_options(uuid)', 'EXECUTE'),
+  false, 'anonymous callers cannot read the service-only contest options');
+
+select is(
+  has_function_privilege('service_role', 'public.vote_restaurant_contest_options(uuid)', 'EXECUTE'),
+  true, 'the authorized server-side service can read contest options');
 
 select * from finish();
 rollback;
