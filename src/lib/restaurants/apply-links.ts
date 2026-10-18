@@ -25,6 +25,24 @@ export type ApplyLinksResult = {
 
 export type BulkSelectionCheck = { ok: true; ids: string[] } | { ok: false; error: string };
 
+export type BulkLinkStatus = "success" | "partial" | "error";
+
+/**
+ * The one rule for how a bulk result is described.
+ *
+ * A rejected id is NOT a clean success: the admin asked for something that did not happen, so the
+ * result must read as partial even when every valid restaurant landed.
+ */
+export function summarizeBulkLink(
+  added: number,
+  already: number,
+  failedCount: number,
+  rejected: number,
+): BulkLinkStatus {
+  if (failedCount > 0) return added + already > 0 ? "partial" : "error";
+  return rejected > 0 ? "partial" : "success";
+}
+
 /** Reject an empty or oversized selection before any write is attempted. */
 export function checkBulkSelection(ids: string[], limit: number = MAX_BULK_LINK): BulkSelectionCheck {
   if (ids.length === 0) return { ok: false, error: "Choose at least one restaurant." };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyLinks, checkBulkSelection, describeLinkError } from "../apply-links";
+import { applyLinks, checkBulkSelection, describeLinkError, summarizeBulkLink } from "../apply-links";
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => "id-" + (i + 1));
 
@@ -83,6 +83,24 @@ describe("checkBulkSelection", () => {
   it("accepts exactly the limit", () => {
     const atLimit = ids(60);
     expect(checkBulkSelection(atLimit)).toEqual({ ok: true, ids: atLimit });
+  });
+});
+
+describe("summarizeBulkLink", () => {
+  it("is a success only when nothing failed and nothing was rejected", () => {
+    expect(summarizeBulkLink(5, 0, 0, 0)).toBe("success");
+  });
+
+  it("is partial when an id was rejected, even if every valid restaurant landed", () => {
+    expect(summarizeBulkLink(5, 0, 0, 1)).toBe("partial");
+  });
+
+  it("is partial when something failed after others were linked", () => {
+    expect(summarizeBulkLink(3, 1, 1, 0)).toBe("partial");
+  });
+
+  it("is an error when nothing succeeded", () => {
+    expect(summarizeBulkLink(0, 0, 2, 0)).toBe("error");
   });
 });
 

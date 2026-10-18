@@ -15,6 +15,7 @@ import {
   applyLinks,
   checkBulkSelection,
   describeLinkError,
+  summarizeBulkLink,
   type LinkFailure,
 } from "@/lib/restaurants/apply-links";
 
@@ -98,7 +99,7 @@ function toBulkState(
   failed: LinkFailure[],
   rejected: number,
 ): BulkLinkState {
-  const status = failed.length === 0 ? "success" : added + already > 0 ? "partial" : "error";
+  const status = summarizeBulkLink(added, already, failed.length, rejected);
   return { status, added, already, failed, rejected };
 }
 

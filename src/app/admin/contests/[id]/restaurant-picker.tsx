@@ -55,6 +55,10 @@ export function RestaurantPicker({
     );
   }, [available, query]);
 
+  // After a successful save the server re-renders a smaller catalog. Anything no longer offered
+  // cannot remain selected, so the count and the submitted ids always describe real options.
+  const effectiveSelected = selected.filter((id) => nameById.has(id));
+
   const toggle = (id: string) =>
     setSelected((current) =>
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
@@ -92,7 +96,7 @@ export function RestaurantPicker({
       </div>
 
       <p className="text-sm text-muted-foreground" data-testid="contest-picker-count" role="status">
-        {selected.length} selected
+        {effectiveSelected.length} selected
       </p>
 
       <ul className="max-h-72 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60">
@@ -105,6 +109,7 @@ export function RestaurantPicker({
                 <input
                   checked={selected.includes(restaurant.id)}
                   className="h-5 w-5"
+                  data-restaurant-name={restaurant.name}
                   data-testid="contest-picker-option"
                   onChange={() => toggle(restaurant.id)}
                   type="checkbox"
@@ -123,16 +128,16 @@ export function RestaurantPicker({
 
       <form action={formAction}>
         <input name="contest_id" type="hidden" value={contestId} />
-        {selected.map((id) => (
+        {effectiveSelected.map((id) => (
           <input key={id} name="restaurant_ids" type="hidden" value={id} />
         ))}
-        <SubmitButton count={selected.length} />
+        <SubmitButton count={effectiveSelected.length} />
       </form>
 
       {state.status !== "idle" ? (
         <div
           className={
-            state.status === "success"
+            state.status === "success" && state.rejected === 0
               ? "rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
               : "rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
           }
@@ -144,6 +149,7 @@ export function RestaurantPicker({
             <p data-testid="contest-link-result-summary">
               {state.added} added · {state.already} already linked
               {state.failed.length > 0 ? " · " + state.failed.length + " failed" : ""}
+              {state.rejected > 0 ? " · " + state.rejected + " invalid id skipped" : ""}
             </p>
           ) : null}
           {state.failed.length > 0 ? (
