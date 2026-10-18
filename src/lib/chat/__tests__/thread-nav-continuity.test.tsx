@@ -64,6 +64,45 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     expect(nav.sessionThreadId).not.toBe(original);
   });
 
+  it("New Chat immediately creates a new ID while a fresh tab waits for auth", async () => {
+    auth.loading = true;
+    await show();
+    const original = nav.sessionThreadId;
+    expect(nav.ready).toBe(false);
+    expect(nav.restoringSavedThread).toBe(false);
+    await change(() => nav.clearActiveThread());
+    const fresh = nav.sessionThreadId;
+    expect(fresh).not.toBe(original);
+    expect(nav.newChatCount).toBe(1);
+    auth.loading = false;
+    await show();
+    expect(nav.sessionThreadId).toBe(fresh);
+    expect(nav.ready).toBe(true);
+  });
+
+  it("New Chat cancels a saved history restore instead of reopening the old chat", async () => {
+    auth.id = "sofia";
+    await show();
+    const oldThread = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await change(() => nav.selectSavedThread(oldThread));
+    auth.loading = true;
+    await show("pending-saved-restoration");
+    expect(nav.restoringSavedThread).toBe(true);
+    const pendingId = nav.sessionThreadId;
+    await change(() => nav.clearActiveThread());
+    const freshId = nav.sessionThreadId;
+    expect(freshId).not.toBe(pendingId);
+    expect(nav.restoringSavedThread).toBe(false);
+    expect(nav.activeThreadId).toBeUndefined();
+    expect(nav.newChatCount).toBe(1);
+    auth.loading = false;
+    await show();
+    expect(nav.ready).toBe(true);
+    expect(nav.sessionThreadId).toBe(freshId);
+    expect(nav.activeThreadId).toBeUndefined();
+    expect(saved().activeThreadId).toBeUndefined();
+  });
+
   it("keeps saved selection after refresh, and Back/Forward restores A and B", async () => {
     await show();
     const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

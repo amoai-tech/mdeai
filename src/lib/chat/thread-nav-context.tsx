@@ -104,6 +104,8 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     sessionThreadId: crypto.randomUUID(),
   }));
   const [newChatCount, setNewChatCount] = useState(0);
+  // An explicit New Chat cancels any stored history awaiting authentication.
+  const [restoreDismissed, setRestoreDismissed] = useState(false);
   // Reading this is not a decision about ownership: it only decides whether the
   // UI must wait for the verified session before it can reattach a conversation.
   // A fresh tab has nothing to restore, so a slow auth call must not disable the
@@ -118,7 +120,7 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     } catch { return false; }
   });
   const ready = !loading && tab.owner === owner;
-  const restoringSavedThread = !ready && mayRestore;
+  const restoringSavedThread = !ready && mayRestore && !restoreDismissed;
 
   useEffect(() => {
     if (loading || tab.owner === owner) return;
@@ -128,7 +130,8 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
       // but must not copy the original tab's conversation.
       const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
       const copiedFromOpener = Boolean(window.opener && nav?.type === "navigate");
-      stored = copiedFromOpener ? null : parseTabThread(sessionStorage.getItem(STORAGE_KEY), owner);
+      stored = copiedFromOpener || restoreDismissed
+        ? null : parseTabThread(sessionStorage.getItem(STORAGE_KEY), owner);
     } catch { /* Storage may be disabled; in-memory navigation still works. */ }
     const fromHistory = historySelection(owner);
     const next: TabThread = stored
@@ -152,7 +155,7 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     });
     recordSelection(owner, next.activeThreadId ?? null, false);
     return () => { cancelled = true; };
-  }, [owner, loading, tab]);
+  }, [owner, loading, tab, restoreDismissed]);
 
   useEffect(() => {
     // Before the owner is resolved, only a selection the person just made may
@@ -212,9 +215,11 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   }, [setActiveThreadId]);
 
   const clearActiveThread = useCallback(() => {
-    if (!ready) return;
+    // New Chat is a deliberate discard, even if a stored selection is still
+    // waiting for auth. Never resurrect that conversation after auth settles.
+    setRestoreDismissed(true);
     recordSelection(owner, null, true);
-    setTab({ owner, sessionThreadId: crypto.randomUUID() });
+    setTab({ owner: ready ? owner : PENDING, sessionThreadId: crypto.randomUUID() });
     setNewChatCount((n) => n + 1);
   }, [owner, ready]);
 
