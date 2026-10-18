@@ -152,7 +152,7 @@ describe("rental detail page — viewing confirmation", () => {
   });
 
   it("shows NO confirmation when the request failed, and keeps the form open", async () => {
-    vi.mocked(submitScheduleViewing).mockRejectedValue(new Error("Lead capture failed"));
+    vi.mocked(submitScheduleViewing).mockRejectedValue(new Error("We couldn't send your viewing request. Please try again."));
     await requestViewing();
 
     expect(document.querySelector('[data-testid="lead-confirmation-card"]')).toBeNull();

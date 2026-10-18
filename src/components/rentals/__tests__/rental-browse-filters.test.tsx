@@ -23,6 +23,13 @@ describe("RentalBrowseFilters", () => {
     expect(html).toContain("rentals-filter-beds-2");
   });
 
+  it("marks the chosen chip with aria-current: filter chips are links, and aria-pressed is not allowed on a link", () => {
+    const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" />);
+    expect(chosen).not.toMatch(/\saria-pressed=/);
+    expect(chosen).toMatch(/aria-current="true"[^>]*data-testid="rentals-filter-neighborhood-laureles"|data-testid="rentals-filter-neighborhood-laureles"[^>]*aria-current="true"/);
+    expect(chosen.match(/aria-current="true"/g)?.length).toBe(2);
+  });
+
   it("never writes maxPrice into a filter link", () => {
     expect(html).not.toContain("maxPrice");
   });

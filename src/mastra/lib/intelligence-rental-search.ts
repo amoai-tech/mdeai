@@ -91,6 +91,8 @@ function num(v: number | string | null | undefined): number | undefined {
 
 /** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
 const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+/** Bound the hybrid RPC wait separately from the Gemini embedding request. */
+const RENTAL_HYBRID_RPC_TIMEOUT_MS = 5000;
 
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
@@ -203,7 +205,7 @@ export async function searchRentalsIntelligent(
       amenities: r.amenities as string[] | null,
       pet_friendly: null,
       furnished: null,
-      status: "active",
+      status: (r.status as string | null) ?? null,
       similarity: 0,
     }));
     return { rows, apartments };
@@ -215,15 +217,10 @@ export async function searchRentalsIntelligent(
   let embedFailureReason: EmbedFailureReason | undefined;
   let embedHttpStatus: number | undefined;
 
-  if (queryText && developmentMode) {
-    embedStatus = "skipped";
-    rankExplanation.push({
-      factor: "development_keyword",
-      score: 0,
-      note: "phase-aware canonical keyword search; no legacy hybrid eligibility filter",
-    });
-  }
-  if (queryText && !developmentMode) {
+  // Use the same hybrid RPC in both phases. Development visibility belongs to
+  // canonical Supabase RLS, not a second AI-only eligibility switch. When the
+  // embedding or RPC is unavailable, the shared keyword path still works.
+  if (queryText) {
     const embedResult = await embedQueryTextDetailed(queryText);
     if (embedResult.ok) {
       embedStatus = "ok";
@@ -231,7 +228,7 @@ export async function searchRentalsIntelligent(
         query_text: queryText,
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
-      });
+      }).abortSignal(AbortSignal.timeout(RENTAL_HYBRID_RPC_TIMEOUT_MS));
       if (error) {
         // Supabase JS retries transient PostgREST failures. If the RPC still
         // fails, preserve search availability by degrading to the keyword path.

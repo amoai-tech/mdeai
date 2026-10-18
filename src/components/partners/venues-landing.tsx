@@ -211,7 +211,13 @@ type VenuesLandingProps = {
  */
 export function VenuesLanding({ variant }: VenuesLandingProps) {
   const hero = HERO_COPY[variant];
-  const signupHref = "/partners/signup?type=venue";
+  // Preserve the venue subtype through signup and the authentication round-trip.
+  const category = variant === "restaurant" || variant === "cafe" || variant === "nightclub"
+    ? variant
+    : null;
+  const signupHref = category
+    ? `/partners/signup?type=venue&category=${category}`
+    : "/partners/signup?type=venue";
 
   return (
     <PartnerLandingShell
