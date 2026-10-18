@@ -118,7 +118,7 @@ export type RestaurantContestOption = {
 export async function fetchRestaurantContestOptions(
   restaurantId: string,
 ): Promise<RestaurantContestOption[]> {
-  if (!UUID_RE.test(restaurantId)) return [];
+  if (!isUuid(restaurantId)) return [];
   const supabase = createServiceRoleClient();
   if (!supabase) return [];
 
@@ -135,7 +135,7 @@ export async function fetchRestaurantContestOptions(
   for (const raw of data) {
     const row = raw as { contest_id?: string; entity_id?: string; contest_title?: string; status?: string };
     if (!row.contest_id || !row.entity_id) continue;
-    if (!UUID_RE.test(row.contest_id) || !UUID_RE.test(row.entity_id)) continue;
+    if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) continue;
     options.push({
       contestId: row.contest_id,
       entityId: row.entity_id,
