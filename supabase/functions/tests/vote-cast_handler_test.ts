@@ -74,6 +74,17 @@ function codeOf(json: Record<string, unknown>): unknown {
   return e?.code ?? (json.code as unknown);
 }
 
+Deno.test("CORS preflight returns bodyless 204 with allowed origin", async () => {
+  const request = new Request("https://x.test/vote-cast", {
+    method: "OPTIONS",
+    headers: { Origin: "https://mdeai.co", "Access-Control-Request-Method": "POST" },
+  });
+  const response = await createVoteCastHandler(deps())(request);
+  assertEqual(response.status, 204, "preflight status");
+  assertEqual(await response.text(), "", "204 response must not contain a body");
+  assertEqual(response.headers.get("Access-Control-Allow-Origin"), "https://mdeai.co", "allowed origin");
+});
+
 Deno.test("no/invalid JWT -> 401 AUTH_REQUIRED", async () => {
   const r = await call(deps({ userId: null }), makeRequest({ auth: false }));
   assertEqual(r.status, 401, "status");

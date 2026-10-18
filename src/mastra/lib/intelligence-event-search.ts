@@ -198,6 +198,48 @@ function hybridToEventCard(row: HybridEventRow, rankScore?: number, signalSource
   return hybridRowToEventCard(row, rankScore, signalSource);
 }
 
+/**
+ * hybrid_search_events returns only 11 columns: no coordinates, city, currency or maps link. A card built straight
+ * from it has no map pin and a guessed currency, even though the event has them. Re-read those columns for the ranked
+ * ids in ONE query and fill only what the RPC row did not carry (the ranking, price and text stay as returned).
+ * If the lookup fails the semantic results are kept as they are: no pin is better than no result.
+ */
+async function hydrateHybridEventRows(
+  client: NonNullable<ReturnType<typeof getAnonClient>>,
+  rows: HybridEventRow[],
+): Promise<HybridEventRow[]> {
+  if (rows.length === 0) return rows;
+  try {
+    const { data, error } = await client
+      .from("events")
+      .select("id, city, currency, latitude, longitude, maps_url")
+      .in("id", rows.map((r) => r.id));
+    if (error) {
+      console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
+      return rows;
+    }
+    const byId = new Map((data ?? []).map((e: Record<string, unknown>) => [String(e.id), e]));
+    return rows.map((row) => {
+      const e = byId.get(row.id);
+      if (!e) return row;
+      return {
+        ...row,
+        city: row.city ?? (e.city as string | null),
+        currency: row.currency ?? (e.currency as string | null),
+        latitude: row.latitude ?? (e.latitude as number | null),
+        longitude: row.longitude ?? (e.longitude as number | null),
+        maps_url: row.maps_url ?? (e.maps_url as string | null),
+      };
+    });
+  } catch (error) {
+    console.warn(
+      "[intelligence-event-search] event detail lookup rejected:",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return rows;
+  }
+}
+
 /** Maps hybrid RPC / structured rows to EventCard — venue = full address (matches search-events rowToCard). */
 // skipcq: JS-0067 - ES module export; not browser global scope
 // skipcq: JS-R1005 - card field mapping mirrors search-events rowToCard
@@ -262,7 +304,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
         match_count: Math.max(limit * 4, 20),
       });
       if (!error && data?.length) {
-        hybridRows = data as HybridEventRow[];
+        hybridRows = await hydrateHybridEventRows(client, data as HybridEventRow[]);
         hybridUsed = true;
         rankExplanation.push({
           factor: "hybrid_semantic",

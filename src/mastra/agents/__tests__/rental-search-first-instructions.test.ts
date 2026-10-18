@@ -38,4 +38,13 @@ describe.each([
     expect(text).toMatch(/only AFTER the results/i);
     expect(text).toMatch(/Never ask before searching/i); // exact rule, not an alternative that a contradictory prompt could also satisfy
   });
+
+  it("puts requests the search cannot filter into queryText, so the cards can disclose them", async () => {
+    const text = await instructionsOf(agent as unknown as { getInstructions: () => unknown });
+    // The card renderer reads the requests from queryText; words the model drops are
+    // never disclosed to the renter.
+    expect(text).toMatch(/pets, furnished, parking/i);
+    expect(text).toMatch(/queryText/i);
+    expect(text).toMatch(/never say or imply/i);
+  });
 });

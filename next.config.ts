@@ -1,5 +1,19 @@
 import type { NextConfig } from "next";
 
+// The Supabase project host that serves restaurant and listing photos. NEXT_PUBLIC_* is
+// inlined at build time, so this follows whichever project the build targets. Without it,
+// every next/image pointing at Supabase Storage throws "hostname is not configured" and the
+// page fails to render — restaurant photos are stored exactly there.
+const supabaseStorageHost = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+      : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
@@ -19,6 +33,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
       // Apartment seed images (SAN-718 live data)
       { protocol: "https", hostname: "picsum.photos" },
+      // Supabase Storage (restaurant and listing photos).
+      ...(supabaseStorageHost
+        ? [{ protocol: "https" as const, hostname: supabaseStorageHost, pathname: "/storage/v1/object/public/**" }]
+        : []),
     ],
   },
 };

@@ -1,0 +1,96 @@
+name: Restaurant voting E2E
+
+# SAN-1469: this is the dedicated authenticated voting gate. It FAILS when its configuration
+# is missing (the spec runs with SAN1469_VOTE_E2E=required), so a green run always means a real
+# ballot was persisted and read back from PostgreSQL — never a skipped test.
+#
+# It runs on demand, and on a pull request once the owner enables it with the repository
+# variable SAN1469_VOTE_E2E_ENABLED=true and provisions the secrets it names.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/components/restaurants/**"
+      - "src/app/restaurants/**"
+      - "src/app/api/restaurants/my-vote/**"
+      - "src/lib/restaurants/**"
+      - "supabase/functions/vote-*/**"
+      - "supabase/migrations/**"
+      - "e2e/san-1469-restaurant-vote.spec.ts"
+      - "e2e/helpers/auth.ts"
+      - ".github/workflows/voting-e2e.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  authenticated-vote:
+    name: authenticated restaurant vote
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+
+      # Fail (do not skip) when the gate is not configured. The spec adds a second guard.
+      - name: Require the voting configuration
+        env:
+          SAN1469_TEST_RESTAURANT_ID: ${{ secrets.SAN1469_TEST_RESTAURANT_ID }}
+          SAN1469_TEST_CONTEST_ID: ${{ secrets.SAN1469_TEST_CONTEST_ID }}
+          SAN1469_TEST_ENTITY_ID: ${{ secrets.SAN1469_TEST_ENTITY_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          missing=""
+          for v in SAN1469_TEST_RESTAURANT_ID SAN1469_TEST_CONTEST_ID SAN1469_TEST_ENTITY_ID NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_URL; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required voting gate configuration:$missing"
+            exit 1
+          fi
+
+      - name: Run the authenticated voting journey
+        env:
+          NODE_ENV: development
+          NEXT_TELEMETRY_DISABLED: 1
+          SAN1469_VOTE_E2E: required
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          SAN1469_TEST_RESTAURANT_ID: ${{ secrets.SAN1469_TEST_RESTAURANT_ID }}
+          SAN1469_TEST_CONTEST_ID: ${{ secrets.SAN1469_TEST_CONTEST_ID }}
+          SAN1469_TEST_ENTITY_ID: ${{ secrets.SAN1469_TEST_ENTITY_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: npx playwright test e2e/san-1469-restaurant-vote.spec.ts --retries=0
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voting-e2e-${{ github.run_id }}
+          path: |
+            test-results/**
+            tmp/playwright-report/**
+          if-no-files-found: ignore
+          retention-days: 7

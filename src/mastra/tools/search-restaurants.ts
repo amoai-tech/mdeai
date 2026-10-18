@@ -138,7 +138,7 @@ export type RestaurantQuery = {
 
 export type RestaurantSource = 'supabase' | 'fallback';
 
-interface RestaurantRow {
+export interface RestaurantRow {
   id: string;
   name: string;
   cuisine_types: string[] | null;
@@ -204,7 +204,7 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function rowToRestaurant(row: RestaurantRow): Restaurant {
+export function rowToRestaurant(row: RestaurantRow): Restaurant {
   const pl = typeof row.price_level === 'number' ? row.price_level : Number(row.price_level) || 2;
   const rating = num(row.rating) ?? 0;
   const lat = num(row.latitude);

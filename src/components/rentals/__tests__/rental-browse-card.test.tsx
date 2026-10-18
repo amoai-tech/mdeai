@@ -293,6 +293,22 @@ describe("External rental viewing CTA fails closed (SAN-1416)", () => {
     expect(html).toContain("View original listing");
   });
 
+  // SAN-1502 security: only approved advertiser hosts may be linked. A blocklist of MDE's own
+  // domains would accept any other HTTPS URL and let a bad record redirect a renter off-site.
+  it("never links an unapproved external host (open-redirect guard)", () => {
+    const rental = {
+      ...rowToRental(apartmentRow()),
+      id: "candidate-evil-1",
+      tags: ["external-source"],
+      source_url: "https://evil.example.com/fake-listing",
+      can_schedule_viewing: true,
+      schedule_viewing_url: null,
+    };
+    const html = renderToStaticMarkup(<RentalBrowseCard rental={rental} onSchedule={vi.fn()} />);
+    expect(html).not.toContain("View original listing");
+    expect(html).not.toContain("evil.example.com");
+  });
+
   // SAN-1502: the nine imported Fincaraíz listings lost the legacy inventory_kind marker but
   // kept their preserved provenance. Attribution must not depend on the removed marker.
   it("attributes a Fincaraíz import from preserved provenance without the removed marker", () => {
