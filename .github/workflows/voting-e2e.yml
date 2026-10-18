@@ -4,12 +4,18 @@ name: Restaurant voting E2E
 # is missing (the spec runs with SAN1469_VOTE_E2E=required), so a green run always means a real
 # ballot was persisted and read back from PostgreSQL — never a skipped test.
 #
-# It runs on demand, and on a pull request once the owner enables it with the repository
-# variable SAN1469_VOTE_E2E_ENABLED=true and provisions the secrets it names.
+# It runs on demand, and on pushes to main that touch the voting surface. It deliberately does
+# NOT run on pull requests: the job holds production-wide credentials, so PR code must never
+# execute with them (see the note on the `on:` block).
 
 on:
+  # This job holds production-wide Supabase credentials (service-role bypasses RLS), so it must
+  # never execute PULL REQUEST code. A path filter is not an authorization boundary, and an
+  # environment approval still runs the checked-out PR with those secrets. Privileged runs are
+  # therefore human-triggered, or run on already-merged main.
+  # Follow-up: move the test to a dedicated development Supabase project so per-PR runs can return.
   workflow_dispatch:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - "src/components/restaurants/**"
@@ -17,6 +23,8 @@ on:
       - "src/app/api/restaurants/my-vote/**"
       - "src/lib/restaurants/**"
       - "supabase/functions/vote-*/**"
+      # Migration-only pushes matter: a change that breaks vote.votes must not reach main
+      # without the real ballot journey being exercised at least once.
       - "supabase/migrations/**"
       - "e2e/san-1469-restaurant-vote.spec.ts"
       - "e2e/helpers/auth.ts"
@@ -30,6 +38,9 @@ env:
 
 jobs:
   authenticated-vote:
+    # workflow_dispatch lets a user pick ANY branch. Without this guard, selecting a feature
+    # branch would run that branch's code with production-wide credentials. Only main runs.
+    if: github.ref == 'refs/heads/main'
     name: authenticated restaurant vote
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -84,13 +95,30 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: npx playwright test e2e/san-1469-restaurant-vote.spec.ts --retries=0
 
-      - name: Upload failure artifacts
+      # Success: ONLY the sanitized screenshots, named explicitly.
+      - name: Upload sanitized voting screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voting-screenshots-${{ github.run_id }}
+          path: |
+            test-results/vote-confirm-390.png
+            test-results/vote-receipt-390.png
+            test-results/vote-receipt-768.png
+            test-results/vote-receipt-1440.png
+          if-no-files-found: error
+          retention-days: 7
+
+      # Failure: restricted diagnostics. Only the screenshot files produced by the spec are
+      # published. Playwright warns that HTML reports and traces can contain credentials and
+      # access tokens, and masking one element does not sanitize a report, so neither is
+      # auto-published; retrieve them through a trusted, access-controlled process.
+      - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: voting-e2e-${{ github.run_id }}
+          name: voting-failure-${{ github.run_id }}
           path: |
-            test-results/**
-            tmp/playwright-report/**
+            test-results/*.png
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3

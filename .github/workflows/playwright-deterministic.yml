@@ -14,7 +14,8 @@ jobs:
   deterministic-chromium:
     name: deterministic chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -79,3 +80,48 @@ jobs:
             tmp/playwright-report/**
           if-no-files-found: ignore
           retention-days: 7
+
+  # Run the existing real auth-route browser suite on every PR, in parallel with the
+  # long deterministic suite. No E2E_BYPASS_AUTH and NO privileged Supabase secrets:
+  # these tests assert anonymous guard and sanitized post-login return behavior.
+  auth-guard-chromium:
+    name: auth redirect + guard chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Prove safe login redirects and auth guards
+        env:
+          NODE_ENV: development
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: npm run test:e2e:auth
+
+      # This job has no production credentials, but limit retained diagnostics.
+      - name: Upload auth failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-guard-playwright-${{ github.run_id }}
+          path: test-results/**
+          if-no-files-found: ignore
+          retention-days: 3
