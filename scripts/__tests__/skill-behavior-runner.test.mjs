@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
 const root = process.cwd();
-const script = path.join(root, "scripts/run-skill-behavior-eval.py");
-const pack = JSON.parse(fs.readFileSync(path.join(root, ".claude/skills/errors/evals/evals.json"), "utf8"));
+const script = "scripts/run-skill-behavior-eval.py";
+const pack = JSON.parse(readFileSync(".claude/skills/errors/evals/evals.json", "utf8"));
 const goodPrompt = pack.evals[0].prompt;
 const negativePrompt = pack.evals[3].prompt;
 
@@ -32,17 +30,11 @@ function makeTrace(prompt, { catalog = true, called = true, result = true, compl
 }
 
 function grade(input, id = 1, skill = "errors") {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mde-skill-eval-"));
-  try {
-    const trace = path.join(dir, "session.v4.jsonl");
-    fs.writeFileSync(trace, input);
-    const proc = spawnSync("python3", [script, "--skill", skill, "--eval-id", String(id), "--trace", trace], {
-      cwd: root, encoding: "utf8", timeout: 10000,
-    });
-    return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  // Pass synthetic trace events through stdin: no temporary paths or cleanup.
+  const proc = spawnSync("python3", [script, "--skill", skill, "--eval-id", String(id), "--trace", "-"], {
+    cwd: root, input, encoding: "utf8", timeout: 10000,
+  });
+  return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
 }
 
 test("real trace grader passes only when native skill call, result and catalog are present", () => {

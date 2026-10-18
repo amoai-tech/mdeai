@@ -49,18 +49,32 @@ def load_case(skill: str, eval_id: int) -> dict:
 
 
 def read_trace(path: Path) -> list[dict]:
-    if not path.is_file():
-        raise ValueError(f"trace does not exist: {path}")
-    if path.name.endswith(".zstd"):
-        try:
-            raw = subprocess.run([shutil.which("zstd") or "/usr/bin/zstd", "-dc", "--", str(path.resolve())], capture_output=True, timeout=30, check=True).stdout
-        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            raise ValueError("could not decompress session trace with zstd") from exc
-        lines = raw.splitlines()
-    elif path.name.endswith(".jsonl"):
-        lines = path.read_bytes().splitlines()
+    # Standard input lets local tests pass fixture events without writing
+    # dynamic paths. The compressed decoder is native on Python 3.14+.
+    limit = 64 * 1024 * 1024
+    if str(path) == "-":
+        raw = sys.stdin.buffer.read(limit + 1)
     else:
-        raise ValueError("trace must be .jsonl or .jsonl.zstd (DSH v4 session events)")
+        if not path.is_file():
+            raise ValueError(f"trace does not exist: {path}")
+        if path.name.endswith(".zstd"):
+            try:
+                from compression import zstd
+            except ImportError as exc:
+                raise ValueError("compressed traces require Python 3.14+; otherwise provide uncompressed JSONL") from exc
+            try:
+                with zstd.open(path, "rb") as stream:
+                    raw = stream.read(limit + 1)
+            except (OSError, ValueError) as exc:
+                raise ValueError("could not decode compressed session trace") from exc
+        elif path.name.endswith(".jsonl"):
+            with path.open("rb") as stream:
+                raw = stream.read(limit + 1)
+        else:
+            raise ValueError("trace must be .jsonl, .jsonl.zstd, or '-' for stdin")
+    if len(raw) > limit:
+        raise ValueError("session trace exceeds 64 MiB safety limit")
+    lines = raw.splitlines()
     if not lines:
         raise ValueError("empty trace")
     events = []
@@ -199,7 +213,7 @@ def main() -> int:
     parser.add_argument("--skill", required=True, help="canonical MDE skill name")
     parser.add_argument("--eval-id", required=True, type=int, help="1-based eval id")
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--trace", type=Path, help="real persisted DSH session.v4.jsonl.zstd or JSONL trace")
+    mode.add_argument("--trace", type=Path, help="persisted DSH v4 .zstd or JSONL trace, or '-' for stdin")
     mode.add_argument("--run", action="store_true", help="actually run this eval via DSH headless; requires credentials")
     parser.add_argument("--dsh", default="dsh", help="installed DSH CLI (for --run)")
     parser.add_argument("--dsh-home", type=Path, default=Path.home() / ".dsh", help="DSH_HOME (for --run)")
@@ -207,17 +221,18 @@ def main() -> int:
     parser.add_argument("--output", type=Path, help="write machine-readable result to this file")
     args = parser.parse_args()
     report = {"skill": args.skill, "eval_id": args.eval_id, "timestamp": datetime.now(timezone.utc).isoformat(),
-              "pass": False, "status": "failed", "checks": [], "trace_path": None, "error": None}
+              "status": "failed", "checks": [], "trace_path": None, "error": None}
     try:
         case = load_case(args.skill, args.eval_id)
         trace = run_model(case, args.dsh, args.dsh_home, args.timeout) if args.run else args.trace
-        report["trace_path"] = str(trace.resolve())
+        report["trace_path"] = "-" if str(trace) == "-" else str(trace.resolve())
         events = read_trace(trace)
         report["checks"] = grade(case, events)
-        report["pass"] = bool(report["checks"]) and all(c["pass"] for c in report["checks"])
-        report["status"] = "passed" if report["pass"] else "failed"
+        report["status"] = ("passed" if report["checks"] and all(c["pass"] for c in report["checks"])
+                            else "failed")
     except (ValueError, KeyError, OSError, TypeError) as exc:
         report["error"] = str(exc)
+    report["pass"] = report["status"] == "passed"
     raw = json.dumps(report, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

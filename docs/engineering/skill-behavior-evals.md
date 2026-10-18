@@ -37,6 +37,11 @@ python3 scripts/run-skill-behavior-eval.py \
   --output /tmp/mde-errors-skill-eval.json
 ~~~
 
+The grader also supports --trace - for JSONL sent through stdin; compressed
+.zstd sessions use Python 3.14+ standard-library decompression. Input size is
+limited to 64 MiB to avoid accidental memory exhaustion. No temporary test
+files are needed.
+
 The grader isolates the turn containing the eval prompt; skill calls in older\nor later turns cannot satisfy it. The trace must contain the prompt as\nuser-authored input. A trace for
 another question fails, even if it loaded the same skill. The JSON report
 includes pass/fail for each check, trace path, and UTC timestamp. Nonzero
