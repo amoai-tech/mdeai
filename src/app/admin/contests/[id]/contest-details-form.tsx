@@ -1,13 +1,8 @@
 import type { AdminContestDetail } from "@/lib/restaurants/contest-admin";
 import { updateContestAction } from "../actions";
+import { ContestDateFields } from "./contest-date-fields";
 
 const STATUSES = ["draft", "live", "closed", "archived"] as const;
-
-function toLocalInput(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
-}
 
 /** SAN-1526 · contest fields, status and dates. */
 export function ContestDetailsForm({ contest }: { contest: AdminContestDetail["contest"] }) {
@@ -48,26 +43,7 @@ export function ContestDetailsForm({ contest }: { contest: AdminContestDetail["c
             ))}
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">Starts</span>
-          <input
-            className="min-h-11 w-full rounded-md border border-border/60 bg-background px-3"
-            type="datetime-local"
-            name="starts_at"
-            required
-            defaultValue={toLocalInput(contest.starts_at)}
-          />
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-muted-foreground">Ends</span>
-          <input
-            className="min-h-11 w-full rounded-md border border-border/60 bg-background px-3"
-            type="datetime-local"
-            name="ends_at"
-            required
-            defaultValue={toLocalInput(contest.ends_at)}
-          />
-        </label>
+        <ContestDateFields startsAt={contest.starts_at} endsAt={contest.ends_at} />
         <div className="sm:col-span-2">
           <button
             className="min-h-11 rounded-md bg-primary px-4 font-medium text-primary-foreground"

@@ -53,7 +53,7 @@ select (public.admin_contest_link_restaurant(
   (select id from vote.contests where title = '[TEST] San1526 Contest'),
   'a1526000-0000-4000-8000-000000000001')) ->> 'entity_id' as first_entity;
 
-select isnt((select first_entity from _ids), null, 'linking a catalog restaurant creates an entry');
+select isnt((select i.first_entity from _ids i), null, 'linking a catalog restaurant creates an entry');
 select is(
   (select count(*)::int from vote.entities e join vote.contests c on c.id = e.contest_id
     where c.title = '[TEST] San1526 Contest' and e.restaurant_id = 'a1526000-0000-4000-8000-000000000001'),
@@ -87,13 +87,13 @@ select is(
   (public.admin_contest_link_restaurant('f1526000-0000-4000-8000-000000000001',
      (select id from vote.contests where title = '[TEST] San1526 Contest'),
      'a1526000-0000-4000-8000-000000000001')) ->> 'entity_id',
-  (select first_entity from _ids),
+  (select i.first_entity from _ids i),
   're-linking restores the ORIGINAL entity instead of creating a new one');
 select is(
   (select count(*)::int from vote.entities e join vote.contests c on c.id = e.contest_id
     where c.title = '[TEST] San1526 Contest'
       and e.restaurant_id = 'a1526000-0000-4000-8000-000000000001'
-      and e.id = (select first_entity::uuid from _ids)
+      and e.id = (select i.first_entity::uuid from _ids i)
       and (select count(*) from vote.votes v where v.entity_id = e.id) = 1),
   1, 'the restored entity is the only one for that restaurant and still owns the ballot');
 
