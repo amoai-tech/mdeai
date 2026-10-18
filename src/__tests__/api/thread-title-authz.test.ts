@@ -170,12 +170,34 @@ describe("PATCH /api/threads/[threadId] (SAN-1412)", () => {
     expect(updateThreadMock).not.toHaveBeenCalled();
   });
 
+  it("does not leak private backend error details from a failed thread lookup", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: SOFIA } } });
+    serviceState.threadError = `query failure ${MARKER}`;
+    const logs = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const res = await call(THREAD_A);
+      expect(res.status).toBe(500);
+      expect(JSON.stringify(await res.json())).not.toContain(MARKER);
+      expect(JSON.stringify(logs.mock.calls)).not.toContain(MARKER);
+    } finally {
+      logs.mockRestore();
+    }
+  });
+
   it("answers a controlled 500 without thread or message content when the update fails", async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: SOFIA } } });
     updateThreadMock.mockRejectedValue(new Error(`db exploded ${MARKER}`));
-    const res = await call(THREAD_A);
-    expect(res.status).toBe(500);
-    expect(JSON.stringify(await res.json())).not.toContain(MARKER);
+    const logs = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const res = await call(THREAD_A);
+      expect(res.status).toBe(500);
+      expect(JSON.stringify(await res.json())).not.toContain(MARKER);
+      // Sensitive chat text must not escape into server logs either.
+      expect(logs).toHaveBeenCalled();
+      expect(JSON.stringify(logs.mock.calls)).not.toContain(MARKER);
+    } finally {
+      logs.mockRestore();
+    }
   });
 
   it("answers 503 when the server-side client is unavailable", async () => {

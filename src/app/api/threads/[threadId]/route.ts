@@ -52,7 +52,7 @@ export async function PATCH(
     .eq("id", threadId)
     .maybeSingle();
   if (threadError) {
-    console.error("[/api/threads/title] thread lookup", threadError.message);
+    console.error("[/api/threads/title] thread lookup failed");
     return NextResponse.json({ error: "Titles unavailable" }, { status: 500, headers: NO_STORE });
   }
   if (!thread) {
@@ -76,7 +76,7 @@ export async function PATCH(
     .order("id", { ascending: true })
     .limit(FIRST_MESSAGES_LIMIT);
   if (messagesError) {
-    console.error("[/api/threads/title] messages", messagesError.message);
+    console.error("[/api/threads/title] messages lookup failed");
     return NextResponse.json({ error: "Titles unavailable" }, { status: 500, headers: NO_STORE });
   }
 
@@ -90,8 +90,9 @@ export async function PATCH(
     // Title only: `updateThread` patches just the fields it is given, so resourceId, metadata and
     // messages are untouched.
     await new Memory({ storage: getMastraStorage() }).updateThread({ id: threadId, title });
-  } catch (error) {
-    console.error("[/api/threads/title] update", error instanceof Error ? error.message : "unknown");
+  } catch {
+    // Storage errors can include private user content. Keep logs categorical.
+    console.error("[/api/threads/title] update failed");
     return NextResponse.json({ error: "Titles unavailable" }, { status: 500, headers: NO_STORE });
   }
   return NextResponse.json({ updated: true, title }, { headers: NO_STORE });
