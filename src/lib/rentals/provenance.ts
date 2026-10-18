@@ -79,6 +79,8 @@ export function isAvailabilityUnconfirmed(metadata: unknown): boolean {
   // SAN-486/SAN-1235: ONE definition, shared with the search filter. If search treats a stored date
   // as unconfirmed, the card and Details must say so — otherwise a listing could be excluded from
   // confirmed matches while being displayed as if its date were confirmed.
+  // An explicitly confirmed date wins: a date an owner later confirmed must show again.
+  if (meta.available_from_independently_confirmed === true) return false;
   if (meta.test_available_from_simulated === true || meta.test_available_from_simulated === "true") {
     return true;
   }
@@ -86,9 +88,8 @@ export function isAvailabilityUnconfirmed(metadata: unknown): boolean {
   if (status && UNCONFIRMED_AVAILABILITY_STATUSES.has(status)) return true;
   const basis = typeof meta.available_from_basis === "string" ? meta.available_from_basis : null;
   if (basis && UNCONFIRMED_DATE_BASES.has(basis)) return true;
-  // Not independently confirmed AND not a date the source actually stated.
-  if (meta.available_from_independently_confirmed === false && !(basis && STATED_DATE_BASES.has(basis))) {
-    return true;
-  }
+  // A source that actually stated the date keeps it confirmed; anything else marked "not
+  // independently confirmed" is not a confirmed date either.
+  if (meta.available_from_independently_confirmed === false && !basis) return true;
   return false;
 }
