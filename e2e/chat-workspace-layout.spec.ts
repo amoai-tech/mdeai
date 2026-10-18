@@ -295,9 +295,62 @@ test.describe("SAN-1414 /chat is a fixed workspace", { tag: ["@deterministic"] }
         sidewaysOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
+    // SAN-1412: high-value mobile actions are comfortable to tap without affecting desktop density.
+    const newChatHeight = await drawer.getByTestId("nav-new-chat").evaluate((el) => el.getBoundingClientRect().height);
+    const threadHeight = await drawer.getByTestId("nav-thread-item").first().evaluate((el) => el.getBoundingClientRect().height);
+    expect(newChatHeight).toBeGreaterThanOrEqual(44);
+    expect(threadHeight).toBeGreaterThanOrEqual(44);
     expect(state.listScrolls, "20 chats scroll inside the drawer's own list").toBe(true);
     expect(state.newChatTop, "New chat is near the top of the drawer").toBeLessThan(160);
     expect(state.sidewaysOverflow, "no sideways scrolling").toBeLessThanOrEqual(0);
+  });
+});
+
+/**
+ * SAN-1412 · Give new and reopened saved chats real titles and refresh the sidebar.
+ *
+ * Opening a saved chat that still shows the dated fallback asks the server to name it (no title in the
+ * request: the server derives it), and the sidebar shows the new title without a reload or a loading
+ * flash. The server's answers are mocked here; the derivation and the owner check are covered by the
+ * unit and route tests.
+ */
+test.describe("SAN-1412 saved chat titles", { tag: ["@deterministic"] }, () => {
+  test("opening an untitled saved chat names it and refreshes the sidebar without a reload", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const TITLE = "Find me a quiet 2-bedroom in Laureles under COP 4M.";
+    let title: string | null = null;
+    const patches: Array<{ method: string; body: string | null }> = [];
+    await page.route("**/api/threads", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ threads: [{ id: "t-1", title, updatedAt: "2026-10-16T17:32:00.000Z" }] }),
+      }),
+    );
+    await page.route("**/api/threads/t-1", (route) => {
+      patches.push({ method: route.request().method(), body: route.request().postData() });
+      title = TITLE;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ updated: true, title: TITLE }),
+      });
+    });
+    await mockFastPaths(page);
+    await gotoDeterministicChat(page);
+
+    const item = page.getByTestId("nav-thread-item");
+    await expect(item).toHaveCount(1);
+    await expect(item).toContainText("Chat ·");
+
+    await page.evaluate(() => {
+      (window as unknown as { __noReload: string }).__noReload = "same-page";
+    });
+    await item.click();
+
+    await expect(item).toHaveText(TITLE);
+    expect(patches).toEqual([{ method: "PATCH", body: null }]);
+    expect(await page.evaluate(() => (window as unknown as { __noReload?: string }).__noReload)).toBe("same-page");
   });
 });
 

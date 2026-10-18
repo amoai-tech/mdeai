@@ -20,6 +20,8 @@ import {
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { threadLabel } from "@/lib/chat/thread-label";
+import { isMeaningfulThreadTitle } from "@/lib/chat/thread-title";
+import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { useNavThreads } from "@/lib/chat/use-nav-threads";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -147,6 +149,11 @@ export function ChatNavRail({
     stopActiveRun();
     setActiveThreadId(id);
     router.push("/chat");
+    // SAN-1412: a chat that still shows the dated fallback gets a real title from its first message.
+    // Background and fail-soft; opening is never held up by it.
+    if (!isMeaningfulThreadTitle(threads.find((thread) => thread.id === id)?.title)) {
+      void ensureThreadTitle(id);
+    }
   }
 
   return (
@@ -168,7 +175,7 @@ export function ChatNavRail({
           <button
             type="button"
             data-testid="nav-new-chat"
-            className="inline-flex h-8 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            className="inline-flex min-h-11 w-full items-center justify-start gap-2 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8"
             onClick={onNewChat}
           >
             <MessageSquarePlus className="size-4 shrink-0" aria-hidden />
@@ -213,7 +220,7 @@ export function ChatNavRail({
                   data-thread-id={thread.id}
                   onClick={() => onSelectThread(thread.id)}
                   className={cn(
-                    "w-full truncate rounded-md px-3 py-1.5 text-left text-sm leading-snug hover:bg-muted",
+                    "min-h-11 w-full truncate rounded-md px-3 py-2 text-left text-sm leading-snug hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring lg:min-h-8 lg:py-1.5",
                     activeThreadId === thread.id
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground",
