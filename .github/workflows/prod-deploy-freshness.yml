@@ -161,8 +161,35 @@ jobs:
                 NEWER_SHORT=$(printf '%s' "$newer_sha" | cut -c1-9)
                 echo "$(date -u +%H:%M:%S) superseded by $NEWER_SHORT: $newer_out"
                 if [ "$newer_verdict" = "READY" ]; then
-                  echo "production serves the newer main commit $newer_sha, which contains $TARGET_SHA; this run is superseded"
-                  exit 0
+                  # A moved main SHA is not proof of ancestry (force-pushes/rewinds).
+                  # Only suppress the old run when GitHub confirms its commit is
+                  # the merge base of the newer READY commit.
+                  if compare_out=$(curl --silent --show-error --fail-with-body --max-time 15 \
+                    -H "Authorization: Bearer $GITHUB_TOKEN" \
+                    -H "Accept: application/vnd.github+json" \
+                    "https://api.github.com/repos/$GITHUB_REPOSITORY/compare/$TARGET_SHA...$newer_sha"); then
+                    ancestry=$(printf '%s' "$compare_out" | ORIGINAL="$TARGET_SHA" CURRENT="$newer_sha" node -e '
+                      let raw = "";
+                      process.stdin.on("data", (chunk) => { raw += chunk; });
+                      process.stdin.on("end", () => {
+                        try {
+                          const compare = JSON.parse(raw);
+                          if (compare.status === "ahead" &&
+                              compare.merge_base_commit?.sha === process.env.ORIGINAL &&
+                              compare.head_commit?.sha === process.env.CURRENT) {
+                            console.log("ancestor");
+                          }
+                        } catch { /* Malformed GitHub response must fail closed. */ }
+                      });
+                    ')
+                    if [ "$ancestry" = "ancestor" ]; then
+                      echo "production serves the newer main commit $newer_sha, which contains $TARGET_SHA; this run is superseded"
+                      exit 0
+                    fi
+                    echo "::warning::newer deployed main commit is not proven to contain $TARGET_SHA; keeping freshness check active"
+                  else
+                    echo "::warning::GitHub commit comparison failed; cannot safely suppress this run"
+                  fi
                 fi
               fi
             fi

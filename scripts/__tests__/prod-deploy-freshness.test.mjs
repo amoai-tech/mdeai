@@ -29,13 +29,14 @@ const FAKE_CURL = [
   '  *"api.vercel.com"*"sha=TARGETS"*) printf \'{"deployments":[{"target":"production","source":"git","readyState":"%s","meta":{"githubCommitSha":"TARGETS"}}]}\\n200\' "$TARGET_STATE" ;;',
   '  *"api.vercel.com"*"sha=NEWER"*) printf \'{"deployments":[{"target":"production","source":"git","readyState":"%s","meta":{"githubCommitSha":"NEWER"}}]}\\n200\' "$NEWER_STATE" ;;',
   '  *"api.github.com"*"/commits/main"*) printf \'{"sha":"%s"}\' "$MAIN_SHA" ;;',
+  '  *"api.github.com"*"/compare/"*) printf \'{"status":"%s","merge_base_commit":{"sha":"%s"},"head_commit":{"sha":"%s"}}\' "$COMPARE_STATUS" "$COMPARE_MERGE_BASE" "$MAIN_SHA" ;;',
   '  *) printf \'{"deployments":[]}\\n200\' ;;',
   "esac",
   "",
 ].join("\n");
 
 // A zero window keeps the negative cases fast; the gate exits after its first full check.
-function runGate({ targetState, newerState = "READY", mainSha = "NEWER", window = "0" }) {
+function runGate({ targetState, newerState = "READY", mainSha = "NEWER", compareStatus = "ahead", compareMergeBase = "TARGETS", window = "0" }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "freshness-gate-"));
   const curl = path.join(dir, "curl");
   // "curl" lives in a directory this test just created with mkdtempSync; nothing from input
@@ -58,6 +59,8 @@ function runGate({ targetState, newerState = "READY", mainSha = "NEWER", window 
       TARGET_STATE: targetState,
       NEWER_STATE: newerState,
       MAIN_SHA: mainSha,
+      COMPARE_STATUS: compareStatus,
+      COMPARE_MERGE_BASE: compareMergeBase,
     },
   });
   fs.rmSync(dir, { recursive: true, force: true });
@@ -74,6 +77,16 @@ test("passes when a newer main commit that contains it is the one deployed", () 
   const result = runGate({ targetState: "CANCELED", newerState: "READY" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /this run is superseded/);
+});
+
+test("does not accept a deployed commit on a diverged main branch", () => {
+  const result = runGate({ targetState: "CANCELED", compareStatus: "diverged", compareMergeBase: "UNRELATED" });
+  assert.equal(result.status, 1, "a deployed commit missing the original change must not pass freshness");
+});
+
+test("does not accept a deployed older commit after a branch rewind", () => {
+  const result = runGate({ targetState: "CANCELED", compareStatus: "behind", compareMergeBase: "NEWER" });
+  assert.equal(result.status, 1, "rewound main must not be treated as superseding this commit");
 });
 
 test("still fails when the newer commit is only building", () => {
