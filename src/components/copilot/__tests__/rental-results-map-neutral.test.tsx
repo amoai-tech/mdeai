@@ -25,6 +25,7 @@ vi.mock("@/components/chat/rich-card-results-context", () => ({
 vi.mock("@/components/copilot/tool-pins-sync", () => ({ ToolPinsSync: () => null }));
 
 import { RentalResults } from "@/components/copilot/search-tool-result-cards";
+import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 
 const rental = (id: string, coords?: { latitude: number; longitude: number }) => ({
   id,
@@ -43,9 +44,9 @@ let container: HTMLElement;
 function render(result: unknown = {
   source: "supabase",
   results: [rental("mapped", { latitude: 6.24, longitude: -75.59 }), rental("unmapped")],
-}) {
+}, searchMeta?: RentalSearchMeta) {
   act(() => {
-    root.render(<RentalResults result={result} />);
+    root.render(<RentalResults result={result} searchMeta={searchMeta} />);
   });
 }
 beforeEach(() => {
@@ -104,5 +105,50 @@ describe("SAN-472 chat rental card/map parity", () => {
     const card = Array.from(container.querySelectorAll('[data-testid="rental-card"]'))
       .find((el) => el.textContent?.includes("Rental unmapped"));
     expect(card?.getAttribute("data-selected")).toBe("false");
+  });
+});
+
+describe("SAN-1503 · truthful natural-language rental result totals", () => {
+  const result = { source: "supabase", results: [rental("one"), rental("two"), rental("three")], total: 42 };
+  const meta = (queryText?: string): RentalSearchMeta => ({
+    userText: "Find rentals",
+    params: { ...(queryText !== undefined ? { queryText } : {}) },
+  });
+
+  it("shows an exact total for structured results", () => {
+    render(result, meta());
+    expect(container.querySelector('[data-testid="rental-results-count"]')?.textContent)
+      .toContain("Showing 3 of 42 matching apartments");
+  });
+
+  it("does not claim the bounded candidate count is an exact total for natural-language searches", () => {
+    render(result, meta("quiet rentals near cafés"));
+    const count = container.querySelector('[data-testid="rental-results-count"]')?.textContent ?? "";
+    expect(count).toContain("3 suggested apartments");
+    expect(count).not.toContain("42");
+  });
+
+  it("whitespace queryText preserves the exact structured total", () => {
+    render(result, meta("  "));
+    expect(container.querySelector('[data-testid="rental-results-count"]')?.textContent)
+      .toContain("Showing 3 of 42 matching apartments");
+  });
+
+  it("keeps the real catalog link while hiding estimated query counts", () => {
+    render(result, meta("digital nomad apartment"));
+    expect(container.querySelector('[data-testid="rental-browse-all-link"]')?.getAttribute("href"))
+      .toBe("/rentals");
+  });
+
+  it("keeps existing tool result behavior when no search metadata is supplied", () => {
+    render(result);
+    expect(container.querySelector('[data-testid="rental-results-count"]')?.textContent)
+      .toContain("Showing 3 of 42 matching apartments");
+  });
+
+  it("never shows a count or browse link for empty results", () => {
+    render({ source: "supabase", results: [], total: 42 }, meta("quiet"));
+    expect(container.querySelector('[data-testid="rental-results-count"]')).toBeNull();
+    expect(container.querySelector('[data-testid="rental-browse-all-link"]')).toBeNull();
   });
 });

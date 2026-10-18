@@ -268,10 +268,14 @@ export function RentalResults({
   const rankExplanation = filterCustomerVisibleRentalRankExplanation(
     envelope.rankExplanation ?? [],
   );
-  const totalMatches = typeof envelope.total === "number" &&
+  const searchParams = searchMeta?.params;
+  // Intelligent search ranks a bounded candidate pool; only the structured
+  // Supabase count is exact. Never present a candidate count as exhaustive.
+  const isNaturalLanguageSearch = Boolean(searchParams?.queryText?.trim());
+  const totalMatches = !isNaturalLanguageSearch &&
+    typeof envelope.total === "number" &&
     Number.isSafeInteger(envelope.total) && envelope.total >= rows.length
       ? envelope.total : null;
-  const searchParams = searchMeta?.params;
   // Use the same validated tool pins that the map receives; never select a phantom pin.
   const mappedRentalIds = useMemo(
     () => new Set(normalizeToolOutput("rental", result).pins.map((pin) => pin.id)),
@@ -296,7 +300,9 @@ export function RentalResults({
           <span className="text-muted-foreground">
             {totalMatches != null && totalMatches > rows.length
               ? `Showing ${rows.length} of ${totalMatches} matching apartments`
-              : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
+              : isNaturalLanguageSearch
+                ? `${rows.length} suggested apartment${rows.length === 1 ? "" : "s"}`
+                : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
           </span>
           <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
             data-testid="rental-browse-all-link">
