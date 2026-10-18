@@ -133,6 +133,17 @@ if (!configured && process.env.SAN1469_VOTE_E2E === "required") {
 }
 test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
 
+  // A failing run must still leave a safe artifact: the workflow uploads
+  // `test-results/*.png`, while Playwright's automatic failure screenshot is nested under a
+  // per-test directory and is not masked. Capture a top-level screenshot with the receipt id
+  // masked, so a failure stays diagnosable without publishing private data.
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === testInfo.expectedStatus) return;
+    await page
+      .screenshot({ path: "test-results/vote-failure-390.png", mask: [page.getByTestId("vote-receipt-id")] })
+      .catch(() => {});
+  });
+
   test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
@@ -156,6 +167,8 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       userId = identity.userId;
       await page.goto("/restaurants/" + restaurantId + "?contest_id=" + contestId);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      // One actionable button, never two. A duplicate would be a real defect, not noise.
+      await expect(page.getByTestId("vote-cta")).toHaveCount(1);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
       // Wait for hydration BEFORE clicking. A click on server-rendered HTML has no handler
       // attached yet and silently does nothing, which is exactly how this test failed in CI.
@@ -172,12 +185,20 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId + "?contest_id=" + contestId,
         { timeout: 30_000 },
       );
+      // The URL changes when the client router pushes; the route itself has not necessarily
+      // rendered. Reloading /login before it commits leaves the previous restaurant tree
+      // mounted, which is how CI ended up with a second, unhydrated Vote button after the
+      // redirect. Wait for the form to exist before reloading.
+      await expect(page.locator('input[name="email"]')).toBeVisible({ timeout: 30_000 });
       const session = await getTestSession(identity.email);
       await injectSession(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
       // Predicate instead of a constructed RegExp: no dynamic pattern to backtrack on.
       await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId && url.searchParams.get("contest_id") === contestId);
+      // Wait for the redirect transition to settle: exactly one button, hydrated and clickable.
+      await expect(page.getByTestId("vote-cta")).toHaveCount(1);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
+      await expect(page.getByTestId("vote-cta")).toHaveAttribute("data-hydrated", "true");
 
       await page.getByTestId("vote-cta").click();
       await expect(page.getByRole("dialog")).toBeVisible();
