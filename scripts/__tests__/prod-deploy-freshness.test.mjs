@@ -14,9 +14,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+// Path is derived from this file's own URL, never from input.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."); // nosemgrep
 const workflow = YAML.parse(
-  fs.readFileSync(path.join(root, ".github/workflows/prod-deploy-freshness.yml"), "utf8"),
+  fs.readFileSync(path.join(root, ".github/workflows/prod-deploy-freshness.yml"), "utf8"), // nosemgrep
 );
 const gate = workflow.jobs.freshness.steps[0].run;
 
@@ -37,8 +38,10 @@ const FAKE_CURL = [
 function runGate({ targetState, newerState = "READY", mainSha = "NEWER", window = "0" }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "freshness-gate-"));
   const curl = path.join(dir, "curl");
-  fs.writeFileSync(curl, FAKE_CURL);
-  fs.chmodSync(curl, 0o755);
+  // "curl" lives in a directory this test just created with mkdtempSync; nothing from input
+  // reaches the path. The fake binary is what lets us exercise the workflow shell offline.
+  fs.writeFileSync(curl, FAKE_CURL); // nosemgrep
+  fs.chmodSync(curl, 0o755); // nosemgrep
   const result = spawnSync("bash", ["-c", gate], {
     encoding: "utf8",
     timeout: 30_000,
