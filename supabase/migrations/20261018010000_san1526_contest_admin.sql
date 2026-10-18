@@ -1,18 +1,16 @@
 -- SAN-1526 · Super Admin contest lifecycle, with an audit trail
 --
--- The admin dashboard needs to create a contest, add catalog restaurants, and change status.
--- `vote` is private (not in pgrst.db_schemas) so the browser cannot write it; every mutation
--- is a server action that has already checked the session, calling one of these service-role
--- RPCs. Each RPC re-checks the actor (defence in depth) and writes exactly one audit row in
--- the same transaction as the mutation, so a failed write leaves neither.
+-- `vote` is private (not in pgrst.db_schemas), so the browser cannot write it. Every mutation is
+-- a server action that has already checked the session, calling one of these service-role RPCs.
+-- Each RPC re-checks the actor, restricts itself to restaurant contests, and writes the mutation
+-- and its audit row in the same transaction.
 --
--- Idempotency: a repeated call with the same p_request_id returns the first result instead of
--- creating a second contest/entry.
+-- Idempotency is scoped per actor: a request id belongs to the admin who minted it, so two admins
+-- can never receive each other's contest.
+--
+-- Every contest lookup carries `kind = 'restaurant'`, so this surface cannot touch a pageant.
 
 -- ── 1. Audit table ────────────────────────────────────────────────────────────────
--- No existing table records who changed a contest. RLS is enabled with NO policies: that is
--- an explicit deny-all for every role, and service_role bypasses it. The schema itself is
--- also unreachable from the browser.
 create table if not exists vote.contest_audit (
   id uuid primary key default gen_random_uuid(),
   contest_id uuid not null references vote.contests(id) on delete cascade,
@@ -28,10 +26,19 @@ create table if not exists vote.contest_audit (
 create index if not exists vote_contest_audit_contest_idx
   on vote.contest_audit (contest_id, created_at desc);
 
-create unique index if not exists vote_contest_audit_request_idx
-  on vote.contest_audit (request_id) where request_id is not null;
+-- Idempotency is per actor, so the uniqueness must be too.
+drop index if exists vote_contest_audit_request_idx;
+create unique index if not exists vote_contest_audit_actor_request_idx
+  on vote.contest_audit (actor_user_id, request_id) where request_id is not null;
 
 alter table vote.contest_audit enable row level security;
+
+-- Explicit deny-all for every end-user role. service_role bypasses RLS, but the policy records
+-- the intended authorization so the table is not left without an explicit one.
+drop policy if exists contest_audit_service_role on vote.contest_audit;
+create policy contest_audit_service_role on vote.contest_audit
+  for all to service_role using (true) with check (true);
+
 revoke all on vote.contest_audit from public, anon, authenticated;
 
 -- ── 2. Helpers ───────────────────────────────────────────────────────────────────
@@ -110,7 +117,7 @@ begin
     'status', c.status, 'kind', c.kind, 'starts_at', c.starts_at, 'ends_at', c.ends_at,
     'created_at', c.created_at, 'updated_at', c.updated_at
   ) into v_contest
-  from vote.contests c where c.id = p_contest_id;
+  from vote.contests c where c.id = p_contest_id and c.kind = 'restaurant';
 
   if v_contest is null then
     raise exception 'contest not found' using errcode = 'P0002';
@@ -148,7 +155,8 @@ begin
   perform public.assert_contest_admin(p_actor);
 
   if p_request_id is not null then
-    select a.after into v_existing from vote.contest_audit a where a.request_id = p_request_id limit 1;
+    select a.after into v_existing from vote.contest_audit a
+    where a.request_id = p_request_id and a.actor_user_id = p_actor limit 1;
     if v_existing is not null then return v_existing; end if;
   end if;
 
@@ -175,6 +183,7 @@ begin
   return v_after;
 end;
 $$;
+
 create or replace function public.admin_contest_update(
   p_actor uuid, p_contest_id uuid,
   p_title text default null, p_description text default null, p_status text default null,
@@ -192,12 +201,13 @@ begin
   perform public.assert_contest_admin(p_actor);
 
   if p_request_id is not null then
-    select a.after into v_existing from vote.contest_audit a where a.request_id = p_request_id limit 1;
+    select a.after into v_existing from vote.contest_audit a
+    where a.request_id = p_request_id and a.actor_user_id = p_actor limit 1;
     if v_existing is not null then return v_existing; end if;
   end if;
 
   select c.status, c.starts_at, c.ends_at into v_status, v_starts, v_ends
-  from vote.contests c where c.id = p_contest_id;
+  from vote.contests c where c.id = p_contest_id and c.kind = 'restaurant' for update;
   if v_status is null then
     raise exception 'contest not found' using errcode = 'P0002';
   end if;
@@ -241,16 +251,21 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare v_entity uuid; v_name text; v_slug text; v_after jsonb; v_existing jsonb; v_contest uuid;
+declare
+  v_entity uuid; v_name text; v_slug text; v_after jsonb; v_existing jsonb;
+  v_contest uuid; v_restored uuid;
 begin
   perform public.assert_contest_admin(p_actor);
 
   if p_request_id is not null then
-    select a.after into v_existing from vote.contest_audit a where a.request_id = p_request_id limit 1;
+    select a.after into v_existing from vote.contest_audit a
+    where a.request_id = p_request_id and a.actor_user_id = p_actor limit 1;
     if v_existing is not null then return v_existing; end if;
   end if;
 
-  select c.id into v_contest from vote.contests c where c.id = p_contest_id;
+  -- Serialize concurrent links for this contest so two callers cannot both create an entry.
+  select c.id into v_contest from vote.contests c
+  where c.id = p_contest_id and c.kind = 'restaurant' for update;
   if v_contest is null then
     raise exception 'contest not found' using errcode = 'P0002';
   end if;
@@ -264,6 +279,27 @@ begin
   where e.contest_id = p_contest_id and e.restaurant_id = p_restaurant_id;
   if v_entity is not null then
     return jsonb_build_object('entity_id', v_entity, 'restaurant_id', p_restaurant_id, 'already_linked', true);
+  end if;
+
+  -- Re-link the entry that was unlinked earlier, so its ballots stay attached to one entity
+  -- instead of being stranded on an orphan while a fresh entry starts at zero.
+  select (a.after->>'entity_id')::uuid into v_restored
+  from vote.contest_audit a
+  where a.contest_id = p_contest_id
+    and a.action = 'contest.entry.unlink'
+    and a.after->>'restaurant_id' = p_restaurant_id::text
+  order by a.created_at desc
+  limit 1;
+
+  if v_restored is not null then
+    update vote.entities e set restaurant_id = p_restaurant_id
+    where e.id = v_restored and e.contest_id = p_contest_id and e.restaurant_id is null;
+    if found then
+      v_after := jsonb_build_object('entity_id', v_restored, 'restaurant_id', p_restaurant_id,
+                                    'restaurant_name', v_name, 'restored', true);
+      perform public.contest_audit_insert(p_actor, p_contest_id, 'contest.entry.link', null, v_after, p_origin, p_request_id);
+      return v_after;
+    end if;
   end if;
 
   v_slug := lower(regexp_replace(v_name, '[^a-zA-Z0-9]+', '-', 'g'))
@@ -288,13 +324,20 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare v_entity uuid; v_ballots bigint; v_after jsonb; v_existing jsonb;
+declare v_entity uuid; v_ballots bigint; v_after jsonb; v_existing jsonb; v_contest uuid;
 begin
   perform public.assert_contest_admin(p_actor);
 
   if p_request_id is not null then
-    select a.after into v_existing from vote.contest_audit a where a.request_id = p_request_id limit 1;
+    select a.after into v_existing from vote.contest_audit a
+    where a.request_id = p_request_id and a.actor_user_id = p_actor limit 1;
     if v_existing is not null then return v_existing; end if;
+  end if;
+
+  select c.id into v_contest from vote.contests c
+  where c.id = p_contest_id and c.kind = 'restaurant' for update;
+  if v_contest is null then
+    raise exception 'contest not found' using errcode = 'P0002';
   end if;
 
   select e.id into v_entity from vote.entities e

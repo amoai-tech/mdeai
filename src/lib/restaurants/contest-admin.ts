@@ -144,12 +144,14 @@ export async function linkAdminRestaurant(
   contestId: string,
   restaurantId: string,
   origin: ContestWriteOrigin = "manual",
-): Promise<{ entity_id: string; already_linked?: boolean }> {
+  requestId: string | null = null,
+): Promise<{ entity_id: string; already_linked?: boolean; restored?: boolean }> {
   const { data, error } = await service().rpc("admin_contest_link_restaurant", {
     p_actor: actorId,
     p_contest_id: contestId,
     p_restaurant_id: restaurantId,
     p_origin: origin,
+    p_request_id: requestId,
   });
   if (error) throw new Error(error.message);
   return data as unknown as { entity_id: string; already_linked?: boolean };
@@ -160,24 +162,32 @@ export async function unlinkAdminRestaurant(
   contestId: string,
   restaurantId: string,
   origin: ContestWriteOrigin = "manual",
+  requestId: string | null = null,
 ): Promise<void> {
   const { error } = await service().rpc("admin_contest_unlink_restaurant", {
     p_actor: actorId,
     p_contest_id: contestId,
     p_restaurant_id: restaurantId,
     p_origin: origin,
+    p_request_id: requestId,
   });
   if (error) throw new Error(error.message);
 }
 
-/** Active catalog restaurants, for the admin picker. Read-only. */
-export async function listCatalogRestaurants(): Promise<CatalogRestaurant[]> {
-  const { data, error } = await service()
+/**
+ * Active catalog restaurants for the admin picker. Already-linked ids are excluded in SQL so an
+ * unlinked restaurant beyond the row limit is never hidden from the selector.
+ */
+export async function listCatalogRestaurants(excludeIds: string[] = []): Promise<CatalogRestaurant[]> {
+  let query = service()
     .from("restaurants")
     .select("id,name,neighborhood")
-    .eq("is_active", true)
-    .order("name")
-    .limit(500);
+    .eq("is_active", true);
+  if (excludeIds.length > 0) {
+    // Ids come from our own contest entries, never from the browser.
+    query = query.not("id", "in", "(" + excludeIds.join(",") + ")");
+  }
+  const { data, error } = await query.order("name").limit(500);
   if (error) throw new Error(error.message);
   return (data ?? []) as CatalogRestaurant[];
 }

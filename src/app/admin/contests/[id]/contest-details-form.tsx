@@ -54,6 +54,7 @@ export function ContestDetailsForm({ contest }: { contest: AdminContestDetail["c
             className="min-h-11 w-full rounded-md border border-border/60 bg-background px-3"
             type="datetime-local"
             name="starts_at"
+            required
             defaultValue={toLocalInput(contest.starts_at)}
           />
         </label>
@@ -63,6 +64,7 @@ export function ContestDetailsForm({ contest }: { contest: AdminContestDetail["c
             className="min-h-11 w-full rounded-md border border-border/60 bg-background px-3"
             type="datetime-local"
             name="ends_at"
+            required
             defaultValue={toLocalInput(contest.ends_at)}
           />
         </label>

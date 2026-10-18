@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import type { AdminContestEntry, CatalogRestaurant } from "@/lib/restaurants/contest-admin";
 import { linkRestaurantAction, unlinkRestaurantAction } from "../actions";
 
@@ -38,6 +39,7 @@ export function ContestEntries({
                 <form action={unlinkRestaurantAction}>
                   <input type="hidden" name="contest_id" value={contestId} />
                   <input type="hidden" name="restaurant_id" value={entry.restaurant_id} />
+                  <input type="hidden" name="request_id" value={randomUUID()} />
                   <button
                     className="min-h-11 rounded-md border border-border/60 px-4 text-sm"
                     data-testid={"contest-unlink-" + entry.entity_id}
@@ -55,6 +57,7 @@ export function ContestEntries({
       {available.length > 0 ? (
         <form action={linkRestaurantAction} className="mt-4 flex flex-wrap items-end gap-3">
           <input type="hidden" name="contest_id" value={contestId} />
+          <input type="hidden" name="request_id" value={randomUUID()} />
           <label className="text-sm">
             <span className="mb-1 block text-muted-foreground">Add a restaurant</span>
             <select

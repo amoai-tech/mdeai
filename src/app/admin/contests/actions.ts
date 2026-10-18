@@ -54,12 +54,21 @@ export async function updateContestAction(formData: FormData): Promise<void> {
   if (!contestId) throw new Error("Missing contest.");
 
   const status = text(formData, "status");
+  const startsAt = text(formData, "starts_at");
+  const endsAt = text(formData, "ends_at");
+  if (!startsAt || !endsAt) throw new Error("Start and end dates are required.");
+
+  const startsMs = Date.parse(startsAt);
+  const endsMs = Date.parse(endsAt);
+  if (Number.isNaN(startsMs) || Number.isNaN(endsMs)) throw new Error("Enter valid start and end dates.");
+  if (endsMs <= startsMs) throw new Error("The contest must end after it starts.");
+
   await updateAdminContest(actorId, contestId, {
     title: text(formData, "title") || null,
     description: formData.has("description") ? text(formData, "description") : null,
     status: STATUSES.includes(status as ContestStatus) ? (status as ContestStatus) : null,
-    startsAt: text(formData, "starts_at") || null,
-    endsAt: text(formData, "ends_at") || null,
+    startsAt,
+    endsAt,
   });
 
   revalidatePath("/admin/contests/" + contestId);
@@ -72,7 +81,7 @@ export async function linkRestaurantAction(formData: FormData): Promise<void> {
   const restaurantId = text(formData, "restaurant_id");
   if (!contestId || !restaurantId) throw new Error("Choose a restaurant to add.");
 
-  await linkAdminRestaurant(actorId, contestId, restaurantId);
+  await linkAdminRestaurant(actorId, contestId, restaurantId, "manual", text(formData, "request_id") || null);
   revalidatePath("/admin/contests/" + contestId);
 }
 
@@ -82,6 +91,6 @@ export async function unlinkRestaurantAction(formData: FormData): Promise<void> 
   const restaurantId = text(formData, "restaurant_id");
   if (!contestId || !restaurantId) throw new Error("Missing entry.");
 
-  await unlinkAdminRestaurant(actorId, contestId, restaurantId);
+  await unlinkAdminRestaurant(actorId, contestId, restaurantId, "manual", text(formData, "request_id") || null);
   revalidatePath("/admin/contests/" + contestId);
 }

@@ -40,9 +40,10 @@ export default async function AdminContestDetailPage({
   const detail = await getAdminContest(user.id, id);
   if (!detail) notFound();
 
-  const catalog = await listCatalogRestaurants();
-  const linked = new Set(detail.entries.map((entry) => entry.restaurant_id).filter(Boolean));
-  const available = catalog.filter((restaurant) => !linked.has(restaurant.id));
+  const linkedIds = detail.entries
+    .map((entry) => entry.restaurant_id)
+    .filter((id): id is string => id !== null);
+  const available = await listCatalogRestaurants(linkedIds);
 
   return (
     <main data-testid="admin-contest-detail" className="mx-auto min-h-screen max-w-5xl px-4 py-8">

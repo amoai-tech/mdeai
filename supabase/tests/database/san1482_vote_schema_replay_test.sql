@@ -93,7 +93,7 @@ select is(
 );
 select is(
   (select count(*)::int from pg_policies where schemaname = 'vote'),
-  29, 'vote has the expected twenty-nine RLS policies'
+  30, 'vote has the expected thirty RLS policies'
 );
 
 select * from finish();
