@@ -30,6 +30,15 @@ describe("business URL extraction parsing (SAN-1193)", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("rejects a non-http website from the model", () => {
+    expect(
+      businessUrlDraftSchema.safeParse({
+        businessName: "Café Central",
+        website: "javascript:alert(1)",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects privileged or unknown model output", () => {
     expect(
       businessUrlDraftSchema.safeParse({ businessName: "Café", status: "active" }).success,

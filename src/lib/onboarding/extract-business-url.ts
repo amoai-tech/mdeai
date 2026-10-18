@@ -7,7 +7,15 @@ export const businessUrlDraftSchema = z
     businessName: z.string().trim().min(2).max(160).optional(),
     category: z.string().trim().min(2).max(80).optional(),
     neighborhood: z.string().trim().min(2).max(80).optional(),
-    website: z.string().trim().max(300).optional(),
+    website: z
+      .string()
+      .trim()
+      .max(300)
+      .refine(
+        (value) => value === "" || /^https?:\/\/[^\s]+$/i.test(value),
+        "Enter a valid http(s) URL",
+      )
+      .optional(),
     description: z.string().trim().max(1000).optional(),
     sources: z.array(z.string().trim().max(300)).max(5).default([]),
     unknownFields: z.array(z.string().trim().max(40)).max(10).default([]),
