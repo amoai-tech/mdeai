@@ -35,7 +35,7 @@ const SKILLS = path.resolve(".claude/skills");
  * the first place, so an unknown key is reported rather than silently accepted.
  */
 const TOP_LEVEL_KEYS = ["skill_name", "version", "evals"];
-const EVAL_KEYS = ["id", "prompt", "expected_output", "files", "expectations"];
+const EVAL_KEYS = ["id", "prompt", "expected_output", "files", "expectations", "should_trigger"];
 function evalFiles() {
   return fs
     .readdirSync(SKILLS, { withFileTypes: true })
@@ -92,6 +92,37 @@ test("every skill eval file follows the official schema", () => {
     const expected = data.evals.map((_, index) => index + 1);
     if (JSON.stringify(ids) !== JSON.stringify(expected)) {
       problems.push(`${skill}: evals[].id must be 1..n without gaps or duplicates, got ${JSON.stringify(ids)}`);
+    }
+    // SAN-1365: migrate one real pack at a time. The runner grades only
+    // explicitly named deterministic checks; legacy strings are unproven.
+    // should_trigger is an MDE extension to the upstream eval format.
+    if (skill === "errors") {
+      const positives = data.evals.filter((x) => x.should_trigger === true);
+      const negatives = data.evals.filter((x) => x.should_trigger === false);
+      if (positives.length < 1 || negatives.length < 1) {
+        problems.push("errors: first behavioral pack requires both a positive and a negative control");
+      }
+      for (const item of data.evals) {
+        const checks = Array.isArray(item.expectations) ? item.expectations : [];
+        const ids = checks.map((e) => e?.id);
+        if (new Set(ids).size !== checks.length || checks.length < 2) {
+          problems.push("errors: expectation ids must be unique and checks non-empty");
+        }
+        for (const e of checks) {
+          if (!e || e.kind !== "deterministic" ||
+              !["catalog_contains", "skill_called", "skill_not_called", "skill_result_ok", "turn_completed"].includes(e.check) ||
+              typeof e.id !== "string" || !e.id ||
+              (e.check !== "turn_completed" && e.value !== "errors")) {
+            problems.push("errors: every expectation must have a named, gradeable check (rubrics deferred)");
+          }
+        }
+        const names = new Set(checks.map((e) => e.check));
+        if (!names.has("catalog_contains") || !names.has("turn_completed") ||
+            (item.should_trigger && (!names.has("skill_called") || !names.has("skill_result_ok"))) ||
+            (item.should_trigger === false && !names.has("skill_not_called"))) {
+          problems.push("errors: missing essential positive/negative trace checks");
+        }
+      }
     }
     data.evals.forEach((item, index) => {
       const extraKeys = Object.keys(item).filter((key) => !EVAL_KEYS.includes(key));
