@@ -7,13 +7,14 @@ only. A model's final answer is never used as evidence that a skill was loaded.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {"catalog_contains", "skill_called", "skill_not_called", "skill_result_ok", "turn_completed"}
@@ -31,10 +32,10 @@ def load_case(skill: str, eval_id: int) -> dict:
         raise ValueError(f"eval {skill}/{eval_id} not found or duplicated")
     case = matches[0]
     if not isinstance(case.get("should_trigger"), bool):
-        raise ValueError("case must declare should_trigger (MDE extension)")
+        raise TypeError("case must declare should_trigger (MDE extension)")
     expectations = case.get("expectations")
     if not isinstance(expectations, list) or not expectations:
-        raise ValueError("case must have gradeable expectations")
+        raise TypeError("case must have gradeable expectations")
     if len({x.get("id") for x in expectations if isinstance(x, dict)}) != len(expectations):
         raise ValueError("expectation identifiers must be unique")
     for item in expectations:
@@ -52,7 +53,7 @@ def read_trace(path: Path) -> list[dict]:
         raise ValueError(f"trace does not exist: {path}")
     if path.name.endswith(".zstd"):
         try:
-            raw = subprocess.run(["zstd", "-dc", str(path)], capture_output=True, timeout=30, check=True).stdout
+            raw = subprocess.run([shutil.which("zstd") or "/usr/bin/zstd", "-dc", "--", str(path.resolve())], capture_output=True, timeout=30, check=True).stdout
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             raise ValueError("could not decompress session trace with zstd") from exc
         lines = raw.splitlines()
@@ -82,6 +83,19 @@ def text_parts(event: dict) -> str:
         return ""
     return "\n".join(x.get("text", "") for x in data.get("content", [])
                      if isinstance(x, dict) and x.get("type") == "text")
+
+
+def check_evidence(name: str, value: str | None, catalogs: list[str],
+                   calls: dict, results: dict, finished: bool) -> bool:
+    if name == "catalog_contains":
+        return any(f"- \x60{value}\x60:" in cat for cat in catalogs)
+    if name == "skill_called":
+        return value in calls.values()
+    if name == "skill_not_called":
+        return value not in calls.values()
+    if name == "skill_result_ok":
+        return any(skill == value and results.get(call_id) is True for call_id, skill in calls.items())
+    return finished
 
 
 def grade(case: dict, events: list[dict]) -> list[dict]:
@@ -119,21 +133,9 @@ def grade(case: dict, events: list[dict]) -> list[dict]:
     finished = any(e["type"] == "turn/end" and (e.get("data") or {}).get("reason", {}).get("kind") != "error" for e in events)
     rows = []
     for item in case["expectations"]:
-        name = item["check"]
-        value = item.get("value")
-        if name == "catalog_contains":
-            ok = any(f"- \x60{value}\x60:" in cat for cat in catalogs)
-        elif name == "skill_called":
-            ok = value in calls.values()
-        elif name == "skill_not_called":
-            ok = value not in calls.values()
-        elif name == "skill_result_ok":
-            ok = any(skill == value and results.get(call_id) is True for call_id, skill in calls.items())
-        else:
-            ok = finished
-        rows.append({"id": item["id"], "check": name, "pass": ok, "notes": "verified in session events" if ok else "not proven by session events"})
-    # Explicit expectations must prove target selection, not just a completed
-    # answer. For negative controls this means absence of the target skill.
+        ok = check_evidence(item["check"], item.get("value"), catalogs, calls, results, finished)
+        rows.append({"id": item["id"], "check": item["check"], "pass": ok,
+                     "notes": "verified in session events" if ok else "not proven by session events"})
     return rows
 
 
@@ -148,8 +150,11 @@ def find_session(home: Path, session_id: str) -> Path:
 
 def run_model(case: dict, dsh: str, home: Path, timeout: int) -> Path:
     env = {**os.environ, "DSH_HOME": str(home)}
+    executable = shutil.which(dsh)
+    if executable is None or not Path(executable).is_file():
+        raise ValueError("DSH executable was not found; supply an installed DSH CLI path")
     try:
-        run = subprocess.run([dsh, "--profile", "headless", "--json", case["prompt"]],
+        run = subprocess.run([str(Path(executable).resolve()), "--profile", "headless", "--json", case["prompt"]],
                              cwd=ROOT, env=env, capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError(f"headless model run failed to start or timed out: {type(exc).__name__}") from exc
