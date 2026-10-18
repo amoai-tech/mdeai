@@ -263,6 +263,33 @@ describe("MdeCopilotKitProvider — root provider on non-chat pages", () => {
     expect(seen.mapSync.explicit).toBe(true);
   });
 
+  it("does not reconnect an answer just saved on Rentals, but replays it on return", async () => {
+    auth.userId = "sofia";
+    navigation.pathname = "/rentals";
+    const page = () => (
+      <MdeCopilotKitProvider>
+        <NavHandle />
+        <Probe name="mapSync" />
+      </MdeCopilotKitProvider>
+    );
+
+    await render(page());
+    const id = seen.mapSync.threadId!;
+    expect(seen.mapSync.explicit).toBe(false);
+    await act(async () => { nav!.markThreadSaved(id); });
+    expect(seen.mapSync.threadId).toBe(id);
+    // A completed turn must not reconnect into itself while still displayed.
+    expect(seen.mapSync.explicit).toBe(false);
+
+    navigation.pathname = "/chat";
+    await render(page());
+    navigation.pathname = "/cafes";
+    await render(page());
+    // Returning to discovery after unmounting its provider may now replay.
+    expect(seen.mapSync.threadId).toBe(id);
+    expect(seen.mapSync.explicit).toBe(true);
+  });
+
   it("keeps one conversation across Chat, Rentals, Cafés, Nightlife, Restaurants and Events", async () => {
     const ids: string[] = [];
     const routes = ["/chat", "/rentals", "/cafes", "/nightlife", "/restaurants", "/events", "/chat"];
