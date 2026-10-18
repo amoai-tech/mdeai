@@ -9,7 +9,7 @@ const { leads, limiter, auth, serviceAvailable, insertCount } = vi.hoisted(() =>
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser: auth } }),
+  createClient: () => ({ auth: { getUser: auth } }),
 }));
 vi.mock("@/lib/distributed-rate-limit", () => ({
   clientIpFromRequest: () => "127.0.0.1",
@@ -22,12 +22,12 @@ vi.mock("@/lib/supabase/service", () => ({
           from: () => ({
             select: () => ({
               eq: (_col: string, id: string) => ({
-                maybeSingle: async () => ({ data: leads.get(id) ?? null, error: null }),
+                maybeSingle: () => ({ data: leads.get(id) ?? null, error: null }),
               }),
             }),
             insert: (row: { id: string; intent: string; metadata: Record<string, unknown> }) => ({
               select: () => ({
-                single: async () => {
+                single: () => {
                   insertCount.value++;
                   if (row.intent !== "host") throw new Error("Wrong CRM intent");
                   if (leads.has(row.id)) return { data: null, error: { code: "23505" } };
@@ -143,7 +143,7 @@ describe("SAN-882 venue leads", () => {
 
   it("supports authenticated submissions and never logs the email", async () => {
     auth.mockResolvedValue({ data: { user: { id: "c132f270-61ca-4bf6-86a4-5033c21d0804" } } });
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const response = await post(payload);
     expect(response.status).toBe(200);
     expect(leads.size).toBe(1);

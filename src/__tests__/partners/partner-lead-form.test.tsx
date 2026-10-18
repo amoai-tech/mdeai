@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PartnerLeadForm } from "@/components/partners/partner-lead-form";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const hydration = vi.hoisted(() => ({ value: true }));
+vi.mock("@/hooks/use-hydrated", () => ({
+  useHydrated: () => hydration.value,
+}));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -33,31 +37,44 @@ let mounted: { container: HTMLDivElement; root: Root } | null = null;
 
 afterEach(() => {
   if (mounted) {
-    act(() => mounted!.root.unmount());
+    act(() => {
+      mounted?.root.unmount();
+    });
     mounted.container.remove();
     mounted = null;
   }
 });
 
+function mount(): HTMLDivElement {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  let root!: Root;
+  act(() => {
+    root = createRoot(container);
+    root.render(<PartnerLeadForm {...PROPS} />);
+  });
+  mounted = { container, root };
+  return container;
+}
+
 describe("PartnerLeadForm hydration guard", () => {
-  it("server markup keeps submit disabled so a pre-hydration click cannot native-GET guest details", () => {
-    const html = renderToStaticMarkup(<PartnerLeadForm {...PROPS} />);
-    expect(html).toContain('data-testid="venues-landing-lead-submit"');
-    expect(html).toMatch(/data-testid="venues-landing-lead-submit"[^>]*\bdisabled\b/);
+  it("keeps submit disabled before hydration so a click cannot native-GET guest details", () => {
+    hydration.value = false;
+    const container = mount();
+    expect(
+      container
+        .querySelector('[data-testid="venues-landing-lead-submit"]')
+        ?.matches(":disabled"),
+    ).toBe(true);
   });
 
-  it("enables submit once React has hydrated", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    let root!: Root;
-    await act(async () => {
-      root = createRoot(container);
-      root.render(<PartnerLeadForm {...PROPS} />);
-    });
-    mounted = { container, root };
-    const button = container.querySelector(
-      '[data-testid="venues-landing-lead-submit"]',
-    ) as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
+  it("enables submit once hydrated", () => {
+    hydration.value = true;
+    const container = mount();
+    expect(
+      container
+        .querySelector('[data-testid="venues-landing-lead-submit"]')
+        ?.matches(":disabled"),
+    ).toBe(false);
   });
 });
