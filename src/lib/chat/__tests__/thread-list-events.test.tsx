@@ -107,6 +107,32 @@ describe("useNavThreads keeps the list when a quiet refresh fails (SAN-1412)", (
   });
 });
 
+describe("useNavThreads preserves initial load errors", () => {
+  it("keeps the error when a subsequent quiet refresh also fails", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const { useNavThreads } = await import("../use-nav-threads");
+    const { notifyThreadListChanged } = await import("../thread-list-events");
+    let current = { error: false, loading: true, count: 0 };
+    function Probe() {
+      const { error, loading, threads } = useNavThreads();
+      current = { error, loading, count: threads.length };
+      return null;
+    }
+    fetchMock.mockRejectedValue(new Error("offline"));
+    try {
+      await act(async () => { root.render(<Probe />); });
+      expect(current).toEqual({ error: true, loading: false, count: 0 });
+      await act(async () => { notifyThreadListChanged(); });
+      expect(current).toEqual({ error: true, loading: false, count: 0 });
+    } finally {
+      act(() => { root.unmount(); });
+      container.remove();
+    }
+  });
+});
+
 describe("useNavThreads refreshes on a list change (SAN-1412)", () => {
   let root: Root;
   let container: HTMLElement;
