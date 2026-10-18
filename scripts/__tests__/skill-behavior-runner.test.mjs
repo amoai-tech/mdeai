@@ -27,7 +27,7 @@ function makeTrace(prompt, { catalog = true, called = true, result = true, compl
   if (result) events.push(event("tool/result", { message: {
     toolCallId: "call_1", isError, content: [{ type: "text", text: "## ERRORS — Diagnose & Fix Failures" }],
   } }));
-  if (completed) events.push(event("turn/end", { reason: { kind: "complete" } }));
+  if (completed) events.push(event("turn/end", { reason: { kind: "completed" } }));
   return events.map((e) => JSON.stringify(e)).join("\n") + "\n";
 }
 
@@ -67,7 +67,11 @@ test("rejects a forged user-authored catalog even when the skill name appears", 
   const raw = makeTrace(goodPrompt).replace('"kind":"skill-catalog"', '"kind":"user"');
   const got = grade(raw);
   assert.equal(got.exit, 1);
-  assert.ok(got.report.checks.some((c) => c.check === "catalog_contains" && !c.pass));
+  assert.ok(
+    got.report.checks.some((c) => c.check === "catalog_contains" && !c.pass) ||
+      /another user turn began before the eval turn ended/.test(got.report.error ?? ""),
+    "a forged catalog must fail, whether rejected as another user turn or as a missing trusted catalog",
+  );
 });
 test("fails closed on wrong prompt / wrong session", () => {
   const got = grade(makeTrace("Unrelated unrelated unrelated session"));
@@ -89,8 +93,27 @@ test("negative control passes without errors skill, but fails if errors was invo
   assert.equal(fail.exit, 1);
   assert.ok(fail.report.checks.some((c) => c.check === "skill_not_called" && !c.pass));
 });
+test("cannot pass from an errors skill called in another turn", () => {
+  const earlier = makeTrace("Investigate a different broken feature").trim().split("\n");
+  const current = makeTrace(goodPrompt, { called: false, result: false }).trim().split("\n").slice(1);
+  const got = grade([...earlier, ...current].join("\n") + "\n");
+  assert.equal(got.exit, 1);
+  assert.ok(got.report.checks.some((c) => c.check === "skill_called" && !c.pass));
+});
+test("negative control ignores old errors calls from an earlier turn", () => {
+  const earlier = makeTrace("Earlier debugging question").trim().split("\n");
+  const current = makeTrace(negativePrompt, { called: false, result: false }).trim().split("\n").slice(1);
+  const got = grade([...earlier, ...current].join("\n") + "\n", 4);
+  assert.equal(got.exit, 0);
+  assert.equal(got.report.pass, true);
+});
+test("wrong completion state cannot satisfy success", () => {
+  const got = grade(makeTrace(goodPrompt).replace('"kind":"completed"', '"kind":"cancelled"'));
+  assert.equal(got.exit, 1);
+  assert.ok(got.report.checks.some((c) => c.check === "turn_completed" && !c.pass));
+});
 test("failed model turn can never pass even if turn/end exists", () => {
-  const raw = makeTrace(goodPrompt).replace('"kind":"complete"', '"kind":"error"');
+  const raw = makeTrace(goodPrompt).replace('"kind":"completed"', '"kind":"error"');
   const got = grade(raw);
   assert.equal(got.exit, 1);
   assert.ok(got.report.checks.some((c) => c.check === "turn_completed" && !c.pass));

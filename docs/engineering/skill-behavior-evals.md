@@ -37,7 +37,7 @@ python3 scripts/run-skill-behavior-eval.py \
   --output /tmp/mde-errors-skill-eval.json
 ~~~
 
-The trace must contain the eval prompt as user-authored input. A trace for
+The grader isolates the turn containing the eval prompt; skill calls in older\nor later turns cannot satisfy it. The trace must contain the prompt as\nuser-authored input. A trace for
 another question fails, even if it loaded the same skill. The JSON report
 includes pass/fail for each check, trace path, and UTC timestamp. Nonzero
 exit means not proven. Keep private trace files **outside Git**.

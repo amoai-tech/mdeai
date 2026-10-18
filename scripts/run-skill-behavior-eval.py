@@ -98,13 +98,30 @@ def check_evidence(name: str, value: str | None, catalogs: list[str],
     return finished
 
 
-def grade(case: dict, events: list[dict]) -> list[dict]:
-    # A trace must belong to this exact prompt, not an unrelated session that
-    # happened to load the same skill successfully.
-    actual_inputs = [text_parts(e) for e in events if e["type"] == "user/message"
-                     and e.get("data", {}).get("source", {}).get("kind") in ("user", None)]
-    if not any(case["prompt"] in message for message in actual_inputs):
+def eval_turn(case: dict, events: list[dict]) -> list[dict]:
+    """Find exactly one user eval prompt and isolate its own completed turn."""
+    matches = [i for i, event in enumerate(events)
+               if event["type"] == "user/message"
+               and (event.get("data") or {}).get("source", {}).get("kind") == "user"
+               and case["prompt"] in text_parts(event)]
+    if not matches:
         raise ValueError("trace has no matching user-authored eval prompt")
+    if len(matches) != 1:
+        raise ValueError("trace has multiple matching eval prompts; use a fresh single-run session")
+    start = matches[0]
+    # Events in earlier/later turns cannot satisfy the selected eval.
+    for index in range(start + 1, len(events)):
+        event = events[index]
+        if event["type"] == "turn/end":
+            return events[start:index + 1]
+        if event["type"] == "user/message" and (
+                (event.get("data") or {}).get("source", {}).get("kind") == "user"):
+            raise ValueError("another user turn began before the eval turn ended")
+    return events[start:]
+
+
+def grade(case: dict, events: list[dict]) -> list[dict]:
+    events = eval_turn(case, events)
     catalogs = [text_parts(e) for e in events if e["type"] == "user/message"
                 and (e.get("data") or {}).get("source", {}).get("kind") == "skill-catalog"
                 and "<available_skills>" in text_parts(e)]
@@ -130,7 +147,9 @@ def grade(case: dict, events: list[dict]) -> list[dict]:
             if call_id in calls:
                 results[call_id] = (message.get("isError") is False
                                     and bool(message.get("content")))
-    finished = any(e["type"] == "turn/end" and (e.get("data") or {}).get("reason", {}).get("kind") != "error" for e in events)
+    finished = any(e["type"] == "turn/end"
+                   and (e.get("data") or {}).get("reason", {}).get("kind") == "completed"
+                   for e in events)
     rows = []
     for item in case["expectations"]:
         ok = check_evidence(item["check"], item.get("value"), catalogs, calls, results, finished)
