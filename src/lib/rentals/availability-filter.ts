@@ -22,6 +22,7 @@
  */
 
 import { isRealCalendarDate } from "@/lib/rentals/date-only";
+import { UNCONFIRMED_AVAILABILITY_STATUSES, UNCONFIRMED_DATE_BASES } from "@/lib/rentals/provenance";
 
 /** The slice of a Supabase/PostgREST filter builder this helper needs. */
 type FilterChain = {
@@ -39,6 +40,22 @@ export type AvailabilityFilterOptions = {
 };
 
 const DAY_MS = 86_400_000;
+
+const OWNER_CONFIRMED = "metadata->>available_from_independently_confirmed";
+const BASIS = "metadata->>available_from_basis";
+
+/**
+ * PostgREST form of `isAvailabilityUnconfirmed(metadata)`:
+ *   NOT owner-confirmed  AND  (simulated | unconfirmed status | unconfirmed basis | "not confirmed" with no basis).
+ * An owner-confirmed date always wins over a marker. The "not owner-confirmed" guard is written as
+ * `is.null OR neq.true` because SQL `neq` is never true for a missing key.
+ */
+const UNCONFIRMED_DATE_CLAUSE = `and(or(${OWNER_CONFIRMED}.is.null,${OWNER_CONFIRMED}.neq.true),or(${[
+  "metadata->>test_available_from_simulated.eq.true",
+  ...[...UNCONFIRMED_AVAILABILITY_STATUSES].map((v) => `metadata->>availability_status.eq.${v}`),
+  ...[...UNCONFIRMED_DATE_BASES].map((v) => `${BASIS}.eq.${v}`),
+  `and(${OWNER_CONFIRMED}.eq.false,${BASIS}.is.null)`,
+].join(",")}))`;
 
 /**
  * Generic over the caller's builder type: Supabase's own recursive builder types make a constrained
@@ -72,21 +89,16 @@ export function applyAvailabilityFilters<Q>(query: Q, { checkIn, checkOut, today
     // A stored move-in date is only CONFIRMED when its metadata does not flag it as simulated or
     // unverified (15 live development rows carry such a date; all are active and requestable).
     // Flagged rows stay discoverable and are labelled "Availability unconfirmed" instead of being
-    // treated as a proven whole-stay match.
+    // treated as a proven whole-stay match. The clause mirrors `isAvailabilityUnconfirmed`
+    // (provenance.ts) one for one and is built from the same marker sets.
     // ponytail: the launch phase still requires a known date; apply the same flag exclusion there
     // when the launch gates are armed, so an unconfirmed date is never a launch claim either.
-    const unconfirmedDate = [
-      "metadata->>test_available_from_simulated.eq.true",
-      "metadata->>availability_status.eq.unconfirmed",
-      "metadata->>availability_status.eq.source_claim_unverified",
-      "metadata->>available_from_basis.eq.source_for_rent_dates_unconfirmed",
-    ].join(",");
     if (developmentMode) {
       // An unknown or unconfirmed move-in date stays discoverable and is labelled "Availability
       // unconfirmed" — but it is not a free pass: a KNOWN end date or stay-length conflict still
       // excludes it, and a confirmed date still has to start on or before the requested day.
       q = q.or(
-        `and(or(available_from.is.null,available_from.lte.${stayStart},${unconfirmedDate}),${coverage.join(",")})`,
+        `and(or(available_from.is.null,available_from.lte.${stayStart},${UNCONFIRMED_DATE_CLAUSE}),${coverage.join(",")})`,
       );
       return q as unknown as Q;
     }

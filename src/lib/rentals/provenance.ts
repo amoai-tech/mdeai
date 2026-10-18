@@ -63,13 +63,16 @@ export function externalSourceProvider(metadata: unknown): string | null {
  * A date the source did state (`source_explicit_date`, `source_rented_until`) is still shown.
  * Rows without these metadata keys (every ordinary listing) are unaffected.
  */
-const UNCONFIRMED_DATE_BASES = new Set([
+export const UNCONFIRMED_DATE_BASES: ReadonlySet<string> = new Set([
   "source_for_rent_dates_unconfirmed",
   "source_rented_until_past_recheck",
   "source_available_now",
 ]);
-/** Mirror of the markers the search filter in availability-filter.ts excludes from confirmed matches. */
-const UNCONFIRMED_AVAILABILITY_STATUSES = new Set(["unconfirmed", "source_claim_unverified"]);
+/**
+ * The search filter in availability-filter.ts is BUILT from these two sets (and the rules in
+ * `isAvailabilityUnconfirmed` below), so the card label and the search result cannot disagree.
+ */
+export const UNCONFIRMED_AVAILABILITY_STATUSES: ReadonlySet<string> = new Set(["unconfirmed", "source_claim_unverified"]);
 
 export function isAvailabilityUnconfirmed(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false;
