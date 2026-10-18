@@ -5,7 +5,7 @@ SELECT count(*) AS imported,
        count(*) FILTER (WHERE public.rental_listing_is_public(
          a.status,a.moderation_status,a.listing_workflow_status,a.landlord_id,a.metadata
        )) AS discoverable,
-       count(*) FILTER (WHERE a.rental_can_request_viewing) AS viewing_eligible,
+       count(*) FILTER (WHERE public.rental_can_request_viewing(a)) AS viewing_eligible,
        count(*) FILTER (WHERE a.verified IS FALSE) AS honestly_unverified,
        count(*) FILTER (WHERE a.latitude IS NOT NULL AND a.longitude IS NOT NULL) AS pins,
        sum(cardinality(a.images)) AS photo_urls
