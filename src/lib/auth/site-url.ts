@@ -15,9 +15,52 @@ export async function getSiteOrigin(): Promise<string> {
   return "http://localhost:3001";
 }
 
-export function safeNextPath(next: string | null | undefined, fallback = "/") {
-  if (next && next.startsWith("/") && !next.startsWith("//")) {
-    return next;
+/**
+ * A placeholder origin that can never be a real destination. Candidate paths are resolved
+ * against it so the URL parser — not a hand-written blocklist — decides whether the value
+ * stays on this site.
+ */
+const RESOLUTION_BASE = "https://mde.invalid";
+
+/**
+ * Sanitise the `next` return path used after sign-in.
+ *
+ * This value arrives from the query string or a form field, so it is attacker-controlled.
+ * Only a path that resolves to the same origin is allowed; anything else falls back.
+ *
+ * The naive `startsWith("/") && !startsWith("//")` check is not enough: for special-scheme
+ * URLs, browsers treat `\` exactly like `/`, so `/\evil.com` resolves to
+ * `https://evil.com/`. Resolving against a placeholder origin catches that class instead of
+ * enumerating the ways a string can escape the site.
+ */
+export function safeNextPath(
+  next: string | null | undefined,
+  fallback = "/",
+): string {
+  // A repeated query parameter arrives as an array (`?next=a&next=b`); anything that is
+  // not a string is not a path, and must not throw inside an auth route.
+  if (typeof next !== "string" || next.length === 0) return fallback;
+
+  // Browsers strip tabs, newlines and other control characters before parsing, so
+  // "/\t/evil.com" would become "//evil.com". Reject them at the source.
+  for (let index = 0; index < next.length; index += 1) {
+    const code = next.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return fallback;
   }
-  return fallback;
+
+  // Only a site-relative path can be valid. This also rejects "https://…", "//…",
+  // "javascript:…" and Windows-style separators without relying on the resolver alone.
+  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+    return fallback;
+  }
+
+  try {
+    const resolved = new URL(next, RESOLUTION_BASE);
+    if (resolved.origin !== RESOLUTION_BASE) return fallback;
+    if (!resolved.pathname.startsWith("/")) return fallback;
+  } catch {
+    return fallback;
+  }
+
+  return next;
 }
