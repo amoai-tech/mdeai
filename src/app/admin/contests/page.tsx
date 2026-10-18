@@ -2,6 +2,7 @@ import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { listAdminContests } from "@/lib/restaurants/contest-admin";
+import { SignInRequired } from "@/components/auth/sign-in-required";
 import { createContestAction } from "./actions";
 
 export const metadata = {
@@ -38,9 +39,13 @@ export default async function AdminContestsPage() {
       </header>
 
       {!user ? (
-        <p className="text-sm text-muted-foreground" data-testid="admin-sign-in-required">
-          Sign in as an admin to manage contests.
-        </p>
+        <SignInRequired
+          buttonLabel="Sign in to manage contests"
+          description="Sign in to create contests and manage restaurant nominees."
+          returnTo="/admin/contests"
+          testId="admin-sign-in-required"
+          title="Admin sign-in required"
+        />
       ) : !isAdmin ? (
         <p data-testid="admin-not-authorized" className="text-sm text-muted-foreground">
           Admin access required.
