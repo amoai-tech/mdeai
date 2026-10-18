@@ -11,7 +11,15 @@ import {
 export async function submitVenueLead(
   input: VenueLeadInput,
 ): Promise<VenueLeadResult> {
-  const payload = venueLeadInputSchema.parse(input);
+  // Safe-parse so the form shows the first human validation message instead of
+  // Zod's serialized issue list (the default ZodError.message).
+  const parsed = venueLeadInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(
+      parsed.error.issues[0]?.message ?? "Please check the form and try again",
+    );
+  }
+  const payload = parsed.data;
 
   const res = await fetch("/api/partners/venue-leads", {
     method: "POST",

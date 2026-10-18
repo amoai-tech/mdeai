@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type RefObject } from "react";
+import Link from "next/link";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -20,6 +21,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
@@ -264,10 +266,25 @@ export function RentalResults({
     can_schedule_viewing?: boolean;
     schedule_viewing_url?: string | null;
   }>;
+  const unappliedRequests = envelope.unappliedRequests ?? [];
+  // With results there are cards to check; with none, only the admission itself is truthful.
+  const unappliedNote = rows.length
+    ? unappliedRentalNotice(unappliedRequests)
+    : undefined;
+  const emptyUnappliedNote = rows.length
+    ? ""
+    : emptyRentalNotice(unappliedRequests);
   const rankExplanation = filterCustomerVisibleRentalRankExplanation(
     envelope.rankExplanation ?? [],
   );
   const searchParams = searchMeta?.params;
+  // Intelligent search ranks a bounded candidate pool; only the structured
+  // Supabase count is exact. Never present a candidate count as exhaustive.
+  const isNaturalLanguageSearch = Boolean(searchParams?.queryText?.trim());
+  const totalMatches = !isNaturalLanguageSearch &&
+    typeof envelope.total === "number" &&
+    Number.isSafeInteger(envelope.total) && envelope.total >= rows.length
+      ? envelope.total : null;
   // Use the same validated tool pins that the map receives; never select a phantom pin.
   const mappedRentalIds = useMemo(
     () => new Set(normalizeToolOutput("rental", result).pins.map((pin) => pin.id)),
@@ -286,9 +303,32 @@ export function RentalResults({
     <>
       <RichCardResultsRegistrar category="rental" count={rows.length} />
       <ToolPinsSync category="rental" result={result} />
+      {rows.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+          data-testid="rental-results-count">
+          <span className="text-muted-foreground">
+            {totalMatches != null && totalMatches > rows.length
+              ? `Showing ${rows.length} of ${totalMatches} matching apartments`
+              : isNaturalLanguageSearch
+                ? `${rows.length} suggested apartment${rows.length === 1 ? "" : "s"}`
+                : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
+          </span>
+          <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
+            data-testid="rental-browse-all-link">
+            Browse all apartments
+          </Link>
+        </div>
+      ) : null}
       {rows.length > 0 && envelope.budgetNote ? (
         <p className="text-xs text-muted-foreground" data-testid="rental-budget-comparison-note">
           {envelope.budgetNote}
+        </p>
+      ) : null}
+      {rows.length > 0 && unappliedNote ? (
+        // Same sentence the fast path appends, so an agent answer cannot leave a pet or
+        // furnishing request undisclosed.
+        <p className="text-xs text-muted-foreground" data-testid="rental-unapplied-requests-note">
+          {unappliedNote}
         </p>
       ) : null}
       {rows.length > 0 && rankExplanation.length > 0 ? (
@@ -300,7 +340,7 @@ export function RentalResults({
           <ul className="mt-1 list-inside list-disc">
             {rankExplanation.map((entry) => (
               <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor} ({entry.score.toFixed(2)}): {entry.note}
+                {entry.factor}: {entry.note}
               </li>
             ))}
           </ul>
@@ -310,7 +350,10 @@ export function RentalResults({
         <EmptyState
           testId="rentals-empty"
           title="No rentals matched"
-          description={envelope.budgetNote ?? "Try another neighborhood or fewer filters."}
+          description={
+            [envelope.budgetNote, emptyUnappliedNote].filter(Boolean).join(" ") ||
+            "Try another neighborhood or fewer filters."
+          }
           suggestions={[
             { label: "Rentals in Laureles", testId: "rentals-empty-suggest-laureles" },
             { label: "Poblado 2BR", testId: "rentals-empty-suggest-poblado" },

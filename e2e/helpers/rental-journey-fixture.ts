@@ -272,6 +272,13 @@ export async function findResidue(admin: Admin, fixture: Fixture): Promise<strin
       .select("id", { count: "exact", head: true })
       .in("id", [fixture.ownerProfileId, fixture.otherProfileId]),
   );
+  // The base profile row is separate from landlord_profiles and does not cascade from auth.
+  await count("base profiles", () =>
+    admin
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .in("id", [fixture.owner.userId, fixture.other.userId]),
+  );
 
   for (const [who, userId] of [
     ["owner", fixture.owner.userId],
