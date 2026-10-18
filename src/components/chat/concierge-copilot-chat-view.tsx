@@ -113,13 +113,12 @@ function ConciergeChatViewInner(props: CopilotChatViewProps) {
   // finishes loading — a renter's first message was silently lost. Keep it disabled until the
   // client has taken over.
   const hydrated = useHydrated();
-  // The tab's conversation id is minted before the verified session is known,
-  // but a saved conversation is only reattached once it is. Typing into the
-  // provisional thread would lose that message when it is replaced, so keep the
-  // composer locked until the thread is resolved. Outside the chat routes this
-  // context is absent and the composer behaves as before.
+  // A saved conversation is only reattached once the verified owner is known.
+  // While that reattachment is pending the composer stays locked, so a first
+  // message cannot land in the thread it is about to leave. A fresh tab has
+  // nothing to restore and can type as soon as the client has hydrated.
   const threadNav = useOptionalThreadNav();
-  const composerReady = hydrated && (threadNav?.ready ?? true);
+  const composerReady = hydrated && !threadNav?.restoringSavedThread;
   const input = useMemo(
     () => conciergeComposerInput(props.input, onSubmitMessage, composerReady),
     [onSubmitMessage, props.input, composerReady],

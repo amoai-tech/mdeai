@@ -108,13 +108,47 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     expect(nav.activeThreadId).toBeUndefined();
     expect(nav.hasPersistedThread).toBe(false);
     expect(nav.restoredThread).toBe(false);
+    expect(nav.restoringSavedThread, "a stored selection is what auth must be awaited for").toBe(true);
     expect(nav.sessionThreadId).not.toBe(oldId);
     auth.loading = false;
     auth.id = "camila";
     await show();
     expect(nav.activeThreadId).toBeUndefined();
+    expect(nav.restoringSavedThread).toBe(false);
     expect(nav.sessionThreadId).not.toBe(oldId);
     expect(saved().owner).toBe("camila");
+  });
+
+  it("a fresh tab can select a chat before the verified session resolves", async () => {
+    // Nothing is stored, so there is no conversation to reattach: a slow auth
+    // call must not block the rail or the composer.
+    auth.id = "sofia";
+    auth.loading = true;
+    await show();
+    expect(nav.restoringSavedThread).toBe(false);
+    const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await change(() => nav.selectSavedThread(A));
+    expect(nav.activeThreadId, "the selection is shown immediately").toBe(A);
+    auth.loading = false;
+    await show();
+    expect(nav.activeThreadId, "and survives the owner resolution").toBe(A);
+    expect(nav.restoringSavedThread).toBe(false);
+  });
+
+  it("keeps a stored saved chat while the session is still resolving", async () => {
+    auth.id = "sofia";
+    await show();
+    const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await change(() => nav.selectSavedThread(A));
+    auth.loading = true;
+    await show("cold-load");
+    // The empty pre-auth tab must not overwrite the conversation that is still
+    // waiting to be reattached; otherwise a refresh during a slow login loses it.
+    expect(saved().activeThreadId).toBe(A);
+    expect(nav.activeThreadId).toBeUndefined();
+    auth.loading = false;
+    await show();
+    expect(nav.activeThreadId, "the stored chat is restored once the owner is known").toBe(A);
   });
 
   it("marks a stored saved conversation restorable after a refresh", async () => {

@@ -68,6 +68,11 @@ type ThreadNavContextValue = {
   hasPersistedThread: boolean;
   /** This tab loaded an existing saved conversation (refresh / reopen). */
   restoredThread: boolean;
+  /**
+   * A stored saved conversation exists but the verified owner is not known yet.
+   * Only this case needs to wait for auth; a fresh tab must not.
+   */
+  restoringSavedThread: boolean;
   setActiveThreadId: Dispatch<SetStateAction<string | undefined>>;
   selectSavedThread: (id: string) => void;
   markThreadSaved: (id: string) => void;
@@ -99,7 +104,21 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     sessionThreadId: crypto.randomUUID(),
   }));
   const [newChatCount, setNewChatCount] = useState(0);
+  // Reading this is not a decision about ownership: it only decides whether the
+  // UI must wait for the verified session before it can reattach a conversation.
+  // A fresh tab has nothing to restore, so a slow auth call must not disable the
+  // composer or hold back a selection.
+  const [mayRestore] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const value = JSON.parse(raw) as { activeThreadId?: unknown; savedThreadId?: unknown };
+      return typeof value.activeThreadId === "string" || typeof value.savedThreadId === "string";
+    } catch { return false; }
+  });
   const ready = !loading && tab.owner === owner;
+  const restoringSavedThread = !ready && mayRestore;
 
   useEffect(() => {
     if (loading || tab.owner === owner) return;
@@ -136,13 +155,22 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   }, [owner, loading, tab]);
 
   useEffect(() => {
-    if (!ready) return;
+    // Before the owner is resolved, only a selection the person just made may
+    // be written. Writing the empty pre-auth tab would overwrite the stored
+    // conversation that is still waiting to be reattached during a slow login.
+    if (!ready && !tab.activeThreadId) return;
     try {
-      const stored: TabThread = { ...tab };
+      // A selection made while the session is still resolving must survive a
+      // refresh. A pre-auth tab is stored under the owner it is currently
+      // scoped to; an owner change replaces it on resolution.
+      const stored: TabThread = {
+        ...tab,
+        owner: tab.owner === PENDING ? owner : tab.owner,
+      };
       delete stored.restored;
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     } catch { /* no storage */ }
-  }, [tab, ready]);
+  }, [tab, owner, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -160,19 +188,23 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   }, [owner, ready, tab?.activeThreadId]);
 
   const setActiveThreadId = useCallback<Dispatch<SetStateAction<string | undefined>>>((value) => {
-    if (!ready) return;
+    // Only a pending restoration must block a selection. A fresh tab can record
+    // one immediately; the pending->owner resolution keeps it.
+    if (!ready && restoringSavedThread) return;
+    const applies = (old: TabThread | null) =>
+      Boolean(old && (old.owner === owner || old.owner === PENDING));
     if (typeof value === "function") {
       // Derived updates (and popstate) never add a history step of their own.
-      setTab((old) => old?.owner === owner
-        ? { ...old, activeThreadId: value(old.activeThreadId) } : old);
+      setTab((old) => (applies(old)
+        ? { ...old, activeThreadId: value(old.activeThreadId) } : old));
       return;
     }
     // A direct selection becomes one Back/Forward step. Doing it here keeps the
     // rail on the same public contract it had before SAN-1413 (setActiveThreadId
     // + stopActiveRun), so both behaviours compose.
     recordSelection(owner, value ?? null, true);
-    setTab((old) => old?.owner === owner ? { ...old, activeThreadId: value } : old);
-  }, [owner, ready]);
+    setTab((old) => (applies(old) ? { ...old, activeThreadId: value } : old));
+  }, [owner, ready, restoringSavedThread]);
 
   const selectSavedThread = useCallback((id: string) => {
     if (!UUID.test(id)) return;
@@ -197,11 +229,15 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ThreadNavContextValue>(() => ({
     ready: Boolean(ready),
     sessionThreadId: tab.sessionThreadId,
-    activeThreadId: ready ? tab.activeThreadId : undefined,
+    // A selection made on this page before auth resolved is this tab's own and
+    // safe to show. Anything from a previous owner stays hidden until resolved.
+    activeThreadId: ready || (!restoringSavedThread && tab.owner === PENDING)
+      ? tab.activeThreadId : undefined,
     hasPersistedThread: Boolean(ready && (tab.activeThreadId || tab.savedThreadId === tab.sessionThreadId)),
     restoredThread: Boolean(ready && tab.restored && tab.savedThreadId === tab.sessionThreadId),
+    restoringSavedThread,
     setActiveThreadId, selectSavedThread, markThreadSaved, clearActiveThread, newChatCount,
-  }), [ready, tab, setActiveThreadId, selectSavedThread, markThreadSaved, clearActiveThread, newChatCount]);
+  }), [ready, tab, restoringSavedThread, setActiveThreadId, selectSavedThread, markThreadSaved, clearActiveThread, newChatCount]);
 
   // Never replace the app shell while auth loads: the server-rendered chat and
   // its disabled composer must stay on screen (SAN-1413 / SAN-407).
