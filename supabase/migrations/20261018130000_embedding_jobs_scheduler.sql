@@ -15,13 +15,19 @@
 --   * It skips the HTTP call when no job is claimable (same rule as claim_embedding_jobs: pending and due,
 --     or processing with an expired lease). An idle queue costs one cheap SELECT per minute, not a function
 --     invocation.
---   * It allows 30 s for the response. The worker embeds up to 5 documents per call; pg_net's 5 s default
---     would record a timeout while the worker was still finishing.
+--   * It allows 120 s for the response: the worker may process for 90 s before its last 20 s
+--     Gemini request finishes. A 30 s HTTP timeout could report a failure while indexing continued.
 --
 -- ONE-TIME SETUP (not in Git, because it is a secret)
 -- Vault must contain `embedding_cron_secret`, equal to the Edge Function secret EMBEDDING_CRON_SECRET, and
 -- `project_url` (already present). Until `embedding_cron_secret` exists the job raises P1523 on each tick
 -- when there is work, so a missing secret fails loudly in cron.job_run_details instead of silently.
+--
+-- SECURITY / PG_NET PLATFORM CONSTRAINT
+-- pg_net temporarily stores x-cron-secret in net.http_request_queue. Keep the net schema OUT of
+-- Data API exposed schemas, and do not issue untrusted database LOGIN roles. Hosted Supabase
+-- owns the extension's PUBLIC grants; trying to revoke them from postgres is ineffective or breaks
+-- pg_net. Do not log request headers. Vault encrypts the secret at rest, not within pg_net's queue.
 --
 -- HOW TO READ THE RESULT
 -- pg_cron reports `succeeded` once net.http_post has QUEUED the request. The worker's real answer
@@ -83,7 +89,7 @@ select cron.schedule(
           'x-cron-secret', v_cron_secret
         ),
         body                 := '{"limit":5}'::jsonb,
-        timeout_milliseconds := 30000
+        timeout_milliseconds := 120000
       );
     end
     $guard$;

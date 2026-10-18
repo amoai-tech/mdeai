@@ -21,7 +21,7 @@
 
 begin;
 
-select plan(12);
+select plan(13);
 
 -- ═══ A · The job ═══════════════════════════════════════════════════════════════
 select is(
@@ -108,6 +108,11 @@ select ok(
           and headers ->> 'x-cron-secret' = 'test-only-secret-value'
      from net.http_request_queue order by id desc limit 1),
   'SAN-1523: the request targets the worker and carries the x-cron-secret header');
+
+select ok(
+  (select timeout_milliseconds >= 120000 and timeout_milliseconds <= 150000
+     from net.http_request_queue order by id desc limit 1),
+  'SAN-1523: pg_net waits long enough for a worker batch without exceeding the Edge Function response window');
 
 -- C5 · a crashed worker (processing, lease expired) is picked up again
 update _n set n = (select count(*) from net.http_request_queue) where label = 'start';
