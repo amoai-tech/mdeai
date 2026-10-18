@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { scoreRentalQuery, buildRentalSearchParams } from "@/lib/rental-query-parser";
+import {
+  budgetNotApplied,
+  buildRentalSearchParams,
+  scoreRentalQuery,
+} from "@/lib/rental-query-parser";
 
 describe("SAN-1502 postmerge — real COP monthly budget", () => {
   it.each([
@@ -16,6 +20,38 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(params?.budgetCurrency).toBe("COP");
     expect(params?.maxPricePerNight).toBeUndefined();
     expect(params?.stayType).toBe("monthly");
+  });
+
+  it("never turns a COP amount written in millions into a $2/night cap", () => {
+    const text = "2BR in Laureles under 2 million pesos";
+    const params = buildRentalSearchParams(text, {});
+    // "2 million pesos" is a monthly COP budget, not two US dollars a night. Guessing a USD
+    // nightly cap both hides real listings and lets the answer claim a budget was applied.
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+  });
+
+  it("still reads an explicit dollar amount with a magnitude", () => {
+    expect(buildRentalSearchParams("1BR in Laureles under $2k/night", {})?.maxPricePerNight).toBe(2000);
+  });
+
+  it("does not tell a renter their monthly budget was ignored when the search applied it", () => {
+    const text = "Furnished 2BR in Laureles under COP 3.5 million per month";
+    const params = buildRentalSearchParams(text, {});
+    expect(params?.maxPriceMonthly).toBe(3_500_000);
+    expect(budgetNotApplied(text, params!)).toBe(false);
+  });
+
+  it("treats a nightly budget as applied", () => {
+    const text = "1BR in Laureles under $80/night";
+    const params = buildRentalSearchParams(text, {});
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(budgetNotApplied(text, params!)).toBe(false);
+  });
+
+  it("still reports a stated budget the parser could not apply", () => {
+    expect(budgetNotApplied("2BR in Laureles under $80/night", {})).toBe(true);
+    expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
   });
 
   it("retains budget across neighborhood refinements", () => {
