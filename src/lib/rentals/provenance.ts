@@ -68,13 +68,27 @@ const UNCONFIRMED_DATE_BASES = new Set([
   "source_rented_until_past_recheck",
   "source_available_now",
 ]);
+/** A basis the source actually stated; these stay confirmed even when not independently verified. */
+const STATED_DATE_BASES = new Set(["source_explicit_date", "source_rented_until"]);
+/** Mirror of the markers the search filter in availability-filter.ts excludes from confirmed matches. */
+const UNCONFIRMED_AVAILABILITY_STATUSES = new Set(["unconfirmed", "source_claim_unverified"]);
 
 export function isAvailabilityUnconfirmed(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false;
   const meta = metadata as Record<string, unknown>;
-  return (
-    meta.available_from_independently_confirmed === false &&
-    typeof meta.available_from_basis === "string" &&
-    UNCONFIRMED_DATE_BASES.has(meta.available_from_basis)
-  );
+  // SAN-486/SAN-1235: ONE definition, shared with the search filter. If search treats a stored date
+  // as unconfirmed, the card and Details must say so — otherwise a listing could be excluded from
+  // confirmed matches while being displayed as if its date were confirmed.
+  if (meta.test_available_from_simulated === true || meta.test_available_from_simulated === "true") {
+    return true;
+  }
+  const status = typeof meta.availability_status === "string" ? meta.availability_status : null;
+  if (status && UNCONFIRMED_AVAILABILITY_STATUSES.has(status)) return true;
+  const basis = typeof meta.available_from_basis === "string" ? meta.available_from_basis : null;
+  if (basis && UNCONFIRMED_DATE_BASES.has(basis)) return true;
+  // Not independently confirmed AND not a date the source actually stated.
+  if (meta.available_from_independently_confirmed === false && !(basis && STATED_DATE_BASES.has(basis))) {
+    return true;
+  }
+  return false;
 }
