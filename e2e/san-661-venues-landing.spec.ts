@@ -81,12 +81,12 @@ test.describe("SAN-661 · For Venues landing", () => {
     ).toBeVisible();
   });
 
-  test("pricing CTA links to /contact", async ({ page }) => {
+  test("pricing CTA takes visitors to the working inline lead form", async ({ page }) => {
     await page.goto(BASE, { waitUntil: "domcontentloaded" });
     const pricingCta = page.getByTestId("venues-landing-pricing-cta");
     await expect(pricingCta).toBeVisible();
     const href = await pricingCta.getAttribute("href");
-    expect(href).toBe("/contact");
+    expect(href).toBe("#demo");
   });
 
   test("how-it-works section has 5 steps", async ({ page }) => {

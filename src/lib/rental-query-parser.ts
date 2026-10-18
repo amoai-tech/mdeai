@@ -281,14 +281,19 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
     ? { amount: ceiling, currency } : null;
 }
 
+const BUDGET_MAGNITUDE = "(m|k|millions?|millones?|mill[oó]n|mil)";
+
 function parseBudget(text: string): {
   maxPricePerNight?: number;
   budgetType?: "nightly" | "monthly" | "total_trip";
 } {
   const underMatch = text.match(
-    /(?:under|below|max|up to)\s*\$?\s*([\d,.]+)\s*(?:\/\s*night|per night|night)?/i,
+    new RegExp(
+      `(?:under|below|max|up to)\\s*\\$?\\s*([\\d,.]+)\\s*${BUDGET_MAGNITUDE}?\\s*(?:\\/\\s*night|per night|night)?`,
+      "i",
+    ),
   );
-  const plainMatch = text.match(/\$\s*([\d,.]+)/);
+  const plainMatch = text.match(new RegExp(`\\$\\s*([\\d,.]+)\\s*${BUDGET_MAGNITUDE}?`, "i"));
   const amountStr = underMatch?.[1] ?? plainMatch?.[1];
   if (!amountStr) {
     // "cheap" / "affordable" is a preference, not a number. It used to become a hard
@@ -296,8 +301,18 @@ function parseBudget(text: string): {
     return {};
   }
 
-  const amount = Number(amountStr.replace(/,/g, ""));
+  const magnitudeToken = (underMatch?.[2] ?? plainMatch?.[2] ?? "").toLowerCase();
+  let amount = Number(amountStr.replace(/,/g, ""));
   if (!Number.isFinite(amount) || amount <= 0) return {};
+
+  if (magnitudeToken) {
+    // "2 million pesos" is a COP amount, never "$2 a night": the digits alone are not a price,
+    // and converting COP to a USD nightly cap is a guess (SAN-1502). Leave the budget unapplied
+    // so the answer says so instead of filtering on a number the renter never gave.
+    if (!/\$\s*[\d.,]/.test(text)) return {};
+    amount *=
+      /^(m|millions?|millones?|mill[oó]n)$/.test(magnitudeToken) ? 1_000_000 : 1_000;
+  }
 
   if (MONTHLY_RE.test(text) && amount >= 400) {
     return { maxPricePerNight: Math.round(amount / 30), budgetType: "monthly" };
@@ -439,6 +454,21 @@ const EXPLICIT_BUDGET_PATTERNS: readonly RegExp[] = [
 export function statesBudget(text: string): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
   return EXPLICIT_BUDGET_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * True when the renter named a budget the search did not apply.
+ *
+ * A parsed cap counts as applied, including `maxPriceMonthly`: the search enforces it through
+ * `rentalMonthlyBudgetPredicate`, so the answer must not tell that renter the monthly budget
+ * was ignored.
+ */
+export function budgetNotApplied(
+  userText: string,
+  params: Pick<RentalSearchApiParams, "maxPricePerNight" | "maxPriceMonthly">,
+): boolean {
+  const applied = params.maxPricePerNight != null || params.maxPriceMonthly != null;
+  return !applied && statesBudget(userText);
 }
 
 const FAST_PATH_LIMIT = 8;

@@ -14,6 +14,7 @@ export {
 export function rentalsToToolEnvelope(
   cards: Rental[],
   meta?: {
+    total?: number;
     hybridUsed?: boolean;
     rankExplanation?: Array<{ factor: string; score: number; note: string }>;
     budgetNote?: string;
@@ -45,7 +46,11 @@ export function rentalsToToolEnvelope(
       latitude: r.latitude,
       longitude: r.longitude,
     })),
-    total: cards.length,
+    // Preserve the backend match count. A short chat result is not the entire
+    // catalog, and explicit "show 3" requests must not turn 42 into "3 total".
+    total: typeof meta?.total === "number" && Number.isSafeInteger(meta.total) && meta.total >= cards.length
+      ? meta.total
+      : cards.length,
     source: "supabase" as const,
     hybridUsed: meta?.hybridUsed,
     rankExplanation: meta?.rankExplanation,

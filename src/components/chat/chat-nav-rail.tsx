@@ -91,7 +91,7 @@ function NavItemRow({ item, active }: { item: NavItem; active: boolean }) {
 function NavSectionLabel({ children }: { children: string }) {
   return (
     <li className="mt-2 border-t pt-2">
-      <span className="block px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+      <span className="block px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {children}
       </span>
     </li>

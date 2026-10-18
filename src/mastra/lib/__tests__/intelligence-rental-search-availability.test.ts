@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => {
     neighborhoodRow: null as { id: string; name: string } | null,
     profileRow: null as Record<string, unknown> | null,
     rpcError: null as { message: string; code: string } | null,
+    rpcSignal: null as AbortSignal | null,
+    rpcHang: false,
     filterCalls: [] as unknown[][],
     apartmentCalls: 0,
     hybridReloadEmpty: false,
@@ -106,13 +108,30 @@ const mocks = vi.hoisted(() => {
   };
 
   const client = {
-    rpc: vi.fn(async (name: string) =>
-      name === "rental_development_active"
-        ? { data: false, error: null }
-        : mocks.state.rpcError
-          ? { data: null, error: mocks.state.rpcError }
-          : { data: hybridRows, error: null },
-    ),
+    rpc: vi.fn((name: string) => {
+      if (name === "rental_development_active") return Promise.resolve({ data: false, error: null });
+      // Match the real PostgREST RPC builder: the call is thenable and supports abortSignal().
+      const chain = {
+        abortSignal: vi.fn((signal: AbortSignal) => {
+          state.rpcSignal = signal;
+          return chain;
+        }),
+        then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
+          if (state.rpcHang) {
+            return new Promise((done) => {
+              state.rpcSignal?.addEventListener("abort", () =>
+                done({ data: null, error: { message: "timeout", code: "" } }), { once: true });
+            }).then(resolve, reject);
+          }
+          return Promise.resolve(
+            state.rpcError
+              ? { data: null, error: state.rpcError }
+              : { data: hybridRows, error: null },
+          ).then(resolve, reject);
+        },
+      };
+      return chain;
+    }),
     from: vi.fn((table: string) => {
       if (table === "apartments") {
         state.apartmentCalls += 1;
@@ -151,10 +170,66 @@ describe("searchRentalsIntelligent — SAN-1356 availability + monthly truth", (
     mocks.state.neighborhoodRow = null;
     mocks.state.profileRow = null;
     mocks.state.rpcError = null;
+    mocks.state.rpcSignal = null;
+    mocks.state.rpcHang = false;
     mocks.state.filterCalls.length = 0;
     mocks.state.apartmentCalls = 0;
     mocks.state.hybridReloadEmpty = false;
+    mocks.client.rpc.mockClear();
   });
+
+  it("uses existing hybrid ranking during development without an active/owner eligibility gate", async () => {
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+    const result = await searchRentalsIntelligent(
+      { queryText: "quiet Laureles apartment", limit: 5 },
+      { developmentPhase: true },
+    );
+    expect(mocks.client.rpc).toHaveBeenCalledWith("hybrid_search_listings", expect.any(Object));
+    expect(result.hybridUsed).toBe(true);
+    expect(result.embedStatus).toBe("ok");
+    expect(mocks.state.filterCalls).not.toContainEqual(["eq", "status", "active"]);
+    expect(mocks.state.filterCalls).not.toContainEqual(["not", "landlord_id", "is", null]);
+  });
+
+  it("limits hybrid RPC wait time and uses keyword fallback if PostgREST stalls", async () => {
+    mocks.state.rpcHang = true;
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => timeout(20));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+      const result = await searchRentalsIntelligent(
+        { queryText: "quiet Laureles apartment", limit: 5 },
+        { developmentPhase: true },
+      );
+      expect(mocks.state.rpcSignal).toBeInstanceOf(AbortSignal);
+      expect(result.hybridUsed).toBe(false);
+      expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+      expect(result.rankExplanation).toEqual(expect.arrayContaining([
+        expect.objectContaining({ factor: "hybrid_rpc_error" }),
+      ]));
+    } finally {
+      spy.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps keyword results when the development hybrid RPC fails", async () => {
+    mocks.state.rpcError = { message: "semantic RPC unavailable", code: "503" };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+    const result = await searchRentalsIntelligent(
+      { queryText: "quiet Laureles apartment", limit: 5 },
+      { developmentPhase: true },
+    );
+    expect(result.hybridUsed).toBe(false);
+    expect(result.results.map((row) => row.id)).toEqual(["active-1"]);
+    expect(result.rankExplanation).toEqual(expect.arrayContaining([
+      expect.objectContaining({ factor: "hybrid_rpc_error" }),
+    ]));
+    warn.mockRestore();
+  });
+
   it("drops expired hybrid rows and preserves stored monthly price", async () => {
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
 

@@ -38,6 +38,7 @@ export const rentalAgent = new Agent({
 
 # Tool
 - search-rentals: search the rental catalog by neighborhood, minBedrooms, maxPricePerNight.
+- Always put the renter's own words in queryText, including requests this search cannot filter (pets, furnished, parking, pool, gym). The cards disclose those requests from that text; never say or imply one was applied, and never drop it silently.
 
 # Working memory rules
 You have working memory with: lastQuery, lastResults, selectedListingId.
