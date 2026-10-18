@@ -1,5 +1,7 @@
 const EMBED_MODEL = "gemini-embedding-001";
 const EMBED_DIM = 768;
+/** A stalled Gemini call must not hang rental search; expiry is reported as network_error so the keyword fallback runs. */
+const EMBED_TIMEOUT_MS = 5000;
 
 export type EmbedFailureReason =
   | "missing_key"
@@ -34,6 +36,7 @@ export async function embedQueryTextDetailed(text: string): Promise<EmbedQueryRe
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        signal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
         body: JSON.stringify({
           model: `models/${EMBED_MODEL}`,
           content: { parts: [{ text: text.trim() }] },

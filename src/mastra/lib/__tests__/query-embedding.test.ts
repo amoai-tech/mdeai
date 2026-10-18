@@ -104,6 +104,23 @@ describe("embedQueryText", () => {
   });
 });
 
+describe("embedQueryTextDetailed deadline", () => {
+  it("gives up on a stalled Gemini call and reports network_error so keyword search can run", async () => {
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+    // Shrink the real 5 s deadline so the test proves the actual abort path, not a mock rejection.
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(AbortSignal.timeout(20));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+      ),
+    );
+    expect(await embedQueryTextDetailed("quiet balcony")).toEqual({ ok: false, reason: "network_error" });
+  });
+});
+
 describe("vectorLiteral", () => {
   it("formats array as pgvector literal", () => {
     expect(vectorLiteral([0.1, 0.2, 0.3])).toBe("[0.1,0.2,0.3]");
