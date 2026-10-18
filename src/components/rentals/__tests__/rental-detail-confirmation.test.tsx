@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 
 vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
@@ -100,6 +101,27 @@ async function requestViewing() {
   });
   await act(() => Promise.resolve());
 }
+
+describe("rental detail page — first-interaction hydration safety", () => {
+  it("renders request controls disabled in server HTML until event handlers are attached", () => {
+    const html = renderToString(<RentalDetailView detail={detail} />);
+    for (const testId of ["rental-detail-request-cta", "rental-detail-request-cta-mobile", "rental-detail-ask-cta"]) {
+      const match = html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`));
+      expect(match?.[0], `${testId} should be present in server HTML`).toBeDefined();
+      expect(match?.[0]).toContain("disabled");
+    }
+  });
+
+  it("enables the viewing button when hydrated, without any business approval", async () => {
+    await act(async () => {
+      root.render(<RentalDetailView detail={detail} />);
+    });
+    const cta = document.querySelector('[data-testid="rental-detail-request-cta-mobile"]') as HTMLButtonElement;
+    expect(cta.disabled).toBe(false);
+    await act(async () => { cta.click(); });
+    expect(document.querySelector('[data-testid="schedule-viewing-modal"]')).toBeTruthy();
+  });
+});
 
 describe("rental detail page — viewing confirmation", () => {
   it("shows 'Viewing request received' after a saved request, and closes the form", async () => {
