@@ -24,7 +24,12 @@ Verified against live Supabase project zkwcbyxiwklihegjhuql on 2026-10-17:
 - upload-local-rental-photos.mjs: archived uploader, read-only dry run by default.
   From repository root, with 464 local photos in photos/rentals, use:
       node docs/07-operations/rentals/san-1503/upload-local-rental-photos.mjs
+  Run npm ci (including devDependencies) before the dry run; sharp converts the 31 AVIF photos.
   The media directory may be set by MDE_RENTAL_MEDIA_DIR.
+  A checkout without the intentionally untracked photo binaries must be pointed
+  to the operator's existing folder with MDE_RENTAL_MEDIA_DIR.
+  Paths from the manifest are checked against the media directory after
+  resolving symlinks; files outside that directory are rejected.
   NEVER run --apply against this already-synced batch: it modifies Storage
   and gallery records and may temporarily hide apartments.
 - photo_manifest.csv: checksum and ordering inventory, no binary images.

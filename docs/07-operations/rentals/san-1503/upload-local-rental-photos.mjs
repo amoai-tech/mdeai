@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
+import { readPhotoWithinMediaDirectory } from './media-path.mjs';
 
 const root = process.cwd();
 const mediaDir = path.resolve(process.env.MDE_RENTAL_MEDIA_DIR ?? path.join(root, 'photos', 'rentals'));
@@ -146,9 +147,7 @@ async function main() {
   for (const row of manifest) {
     const slug = slugByName[row.property_name];
     if (!slug) fail(`Unknown manifest property: ${row.property_name}`);
-    const file = path.resolve(mediaDir, row.local_file);
-    if (!file.startsWith(mediaDir + path.sep)) fail(`Manifest path escapes photo directory: ${row.local_file}`);
-    const body = await fs.readFile(file);
+    const { file, body } = await readPhotoWithinMediaDirectory(mediaDir, row.local_file);
     const hash = createHash('sha256').update(body).digest('hex');
     if (hash !== row.sha256 || body.length !== Number(row.bytes)) fail(`Photo checksum or size mismatch: ${row.local_file}`);
     const n = Number(row.photo_number);
@@ -177,7 +176,7 @@ async function main() {
     try {
       sharp = (await import('sharp')).default;
     } catch {
-      fail('AVIF conversion needs the "sharp" package. Install it in the MDE project, then retry. Nothing was uploaded.');
+      fail('AVIF conversion requires the sharp devDependency. Run npm ci with devDependencies and retry. Nothing was uploaded.');
     }
     const sample = all.find((x) => x.ext === '.avif');
     const test = await sharp(sample.body).webp({ quality: 86 }).toBuffer();
