@@ -21,12 +21,14 @@ export function useNavThreads() {
     const request = ++latestRequestRef.current;
     const isLatest = () => request === latestRequestRef.current;
     if (!options?.quiet) setLoading(true);
-    setError(false);
     try {
       const r = await fetch("/api/threads");
       if (!r.ok) throw new Error(`/api/threads ${r.status}`);
       const d = (await r.json()) as { threads: NavThread[] };
-      if (isLatest()) setThreads(d.threads ?? []);
+      if (isLatest()) {
+        setThreads(d.threads ?? []);
+        setError(false);
+      }
     } catch {
       // A failed quiet refresh keeps the list the user already sees instead of replacing it with an error.
       if (!options?.quiet && isLatest()) setError(true);
