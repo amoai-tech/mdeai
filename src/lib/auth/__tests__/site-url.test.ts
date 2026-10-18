@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { safeNextPath } from "../site-url";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getSiteOrigin, normalizeSiteOrigin, safeNextPath } from "../site-url";
 
 /** The origin a browser resolves a post-sign-in redirect against. */
 const ORIGIN = "https://www.mdeai.co";
@@ -74,5 +74,44 @@ describe("safeNextPath", () => {
     const result = safeNextPath(value);
     expect(result).toBe(value);
     expect(new URL(result, ORIGIN).origin).toBe(ORIGIN);
+  });
+});
+
+
+describe("authentication callback origin", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("repairs the real Vercel misconfiguration: a bare production hostname", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "mdeai.co");
+    expect(await getSiteOrigin()).toBe("https://mdeai.co");
+    expect(new URL("/auth/callback?next=%2Fadmin%2Fcontests", await getSiteOrigin()).href)
+      .toBe("https://mdeai.co/auth/callback?next=%2Fadmin%2Fcontests");
+  });
+
+  it("returns users to the same preview deployment, never the production domain", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "mdeai-510gxud5m-amoco.vercel.app");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "mdeai.co");
+    expect(await getSiteOrigin()).toBe("https://mdeai-510gxud5m-amoco.vercel.app");
+  });
+
+  it("rejects preview hostnames outside Vercel and missing preview configuration", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "evil.example");
+    await expect(getSiteOrigin()).rejects.toThrow("Invalid Vercel preview authentication origin");
+    vi.stubEnv("VERCEL_URL", "");
+    vi.stubEnv("VERCEL_BRANCH_URL", "");
+    await expect(getSiteOrigin()).rejects.toThrow("Missing VERCEL_URL");
+  });
+
+  it("keeps localhost HTTP while requiring HTTPS for non-local domains", () => {
+    expect(normalizeSiteOrigin("http://localhost:3001/")).toBe("http://localhost:3001");
+    expect(normalizeSiteOrigin("https://mdeai.co/")).toBe("https://mdeai.co");
+    expect(() => normalizeSiteOrigin("http://mdeai.co")).toThrow();
+    expect(() => normalizeSiteOrigin("https://mdeai.co/path")).toThrow();
+    expect(() => normalizeSiteOrigin("https://person:secret@mdeai.co")).toThrow();
+    expect(() => normalizeSiteOrigin("https://mdeai.co?next=evil")).toThrow();
+    expect(() => normalizeSiteOrigin("")).toThrow();
   });
 });

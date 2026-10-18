@@ -1,17 +1,53 @@
 import { headers } from "next/headers";
 
-/** Origin for magic-link redirects (localhost:3001 in dev). */
-export async function getSiteOrigin(): Promise<string> {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
+/**
+ * Normalize the server-configured OAuth callback origin. A bare hostname is accepted because
+ * historical Vercel configuration contains "mdeai.co" rather than "https://mdeai.co".
+ * Never accept a URL with credentials, a path, or insecure non-local HTTP.
+ */
+export function normalizeSiteOrigin(value: string): string {
+  const raw = value.trim();
+  const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (
+    !["https:", "http:"].includes(url.protocol) ||
+    (url.protocol === "http:" && !local) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("Invalid authentication site origin configuration");
   }
+  return url.origin;
+}
+
+/**
+ * OAuth and magic-link callbacks must return to the deployment where sign-in began.
+ * Use Vercel's trusted deployment hostname on previews, never a production site URL.
+ * In production, use the configured canonical domain; locally, use the dev origin.
+ */
+export async function getSiteOrigin(): Promise<string> {
+  if (process.env.VERCEL_ENV === "preview") {
+    const deploymentHost = process.env.VERCEL_URL ?? process.env.VERCEL_BRANCH_URL;
+    if (!deploymentHost) {
+      throw new Error("Missing VERCEL_URL for preview authentication callback");
+    }
+    const origin = normalizeSiteOrigin(deploymentHost);
+    if (!new URL(origin).hostname.endsWith(".vercel.app")) {
+      throw new Error("Invalid Vercel preview authentication origin");
+    }
+    return origin;
+  }
+
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return normalizeSiteOrigin(configured);
+
   const headersList = await headers();
   const host = headersList.get("x-forwarded-host") ?? headersList.get("host");
   const proto = headersList.get("x-forwarded-proto") ?? "http";
-  if (host) {
-    return `${proto}://${host}`;
-  }
+  if (host) return normalizeSiteOrigin(`${proto}://${host}`);
   return "http://localhost:3001";
 }
 
