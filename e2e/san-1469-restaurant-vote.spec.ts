@@ -40,7 +40,7 @@ async function proveSecondBrowserRecovery(
   try {
     await injectSession(secondContext, session);
     const secondPage = await secondContext.newPage();
-    await secondPage.goto("/restaurants/" + ids.restaurantId);
+    await secondPage.goto("/restaurants/" + ids.restaurantId + "?contest_id=" + ids.contestId);
     const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
       localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
       { contest: ids.contestId, entity: ids.entityId, user: ids.userId },
@@ -87,7 +87,7 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
 
       const identity = await createThrowawayIdentity("san1469-voter");
       userId = identity.userId;
-      await page.goto("/restaurants/" + restaurantId);
+      await page.goto("/restaurants/" + restaurantId + "?contest_id=" + contestId);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.getByTestId("vote-cta")).toBeVisible();
       // Wait for hydration BEFORE clicking. A click on server-rendered HTML has no handler
@@ -102,14 +102,14 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       // that route after the click. The trace shows it completing AFTER the default
       // 5-second URL assertion. Still require the exact safe return URL.
       await expect(page).toHaveURL(
-        (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId,
+        (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId + "?contest_id=" + contestId,
         { timeout: 30_000 },
       );
       const session = await getTestSession(identity.email);
       await injectSession(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
       // Predicate instead of a constructed RegExp: no dynamic pattern to backtrack on.
-      await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId);
+      await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId && url.searchParams.get("contest_id") === contestId);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
 
       await page.getByTestId("vote-cta").click();

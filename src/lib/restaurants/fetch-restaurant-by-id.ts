@@ -52,16 +52,22 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
  *
  * Server-only: public.vote_restaurant_target is granted to service_role alone, so this
  * never runs in the browser and vote.* stays private. Returns null when the restaurant is
- * not linked to a votable contest yet — the panel then shows its honest not-open state.
+ * not linked to a votable contest or its contest is ambiguous without an explicit ID.
  */
 export async function fetchRestaurantVoteTarget(
   restaurantId: string,
+  contestId: string | null = null,
 ): Promise<{ contestId: string; entityId: string } | null> {
-  if (!UUID_RE.test(restaurantId)) return null;
+  // An invalid or forged contest selection must never fall back to another
+  // contest's ballot. The existing service-role-only RPC validates the pair.
+  if (!UUID_RE.test(restaurantId) || (contestId !== null && !UUID_RE.test(contestId))) return null;
   const supabase = createServiceRoleClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase.rpc("vote_restaurant_target", { p_restaurant_id: restaurantId });
+  const args = contestId
+    ? { p_restaurant_id: restaurantId, p_contest_id: contestId }
+    : { p_restaurant_id: restaurantId };
+  const { data, error } = await supabase.rpc("vote_restaurant_target", args);
   if (error) {
     // Never silently hide a broken lookup: operators need the signal, the page still renders.
     console.error("[restaurant] vote_restaurant_target failed:", error.message);

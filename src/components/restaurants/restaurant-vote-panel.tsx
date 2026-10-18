@@ -65,7 +65,10 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
   const goToLogin = useCallback(() => {
-    router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants"));
+    // Keep the chosen contest across authentication; pathname alone drops
+    // ?contest_id and would produce the same ambiguous lookup after sign-in.
+    const safeReturn = (pathname ?? "/restaurants") + window.location.search;
+    router.push("/login?next=" + encodeURIComponent(safeReturn));
   }, [pathname, router]);
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
@@ -244,8 +247,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   if (!voteTarget) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-not-open">
-        <p className="font-medium">Voting is not available for this restaurant yet.</p>
-        <p className="mt-1">The restaurant needs to be connected to its contest entry before voting can be displayed.</p>
+        <p className="font-medium">A voting target is not available from this link.</p>
+        <p className="mt-1">Open this restaurant from a specific contest to vote. It may be linked to multiple contests, or not yet linked.</p>
       </div>
     );
   }
