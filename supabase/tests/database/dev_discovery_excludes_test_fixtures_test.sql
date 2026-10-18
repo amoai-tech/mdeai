@@ -49,8 +49,8 @@ select is((select count(*)::int from public.apartments where id = '00000000-0000
   'development: an ordinary signed-in user reads an ordinary development listing (no moderation, owner, rights or verification needed)');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a002'), 1,
   'development: and an imported external candidate');
-select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a007'), 1,
-  'development: inactive ordinary inventory is not blocked from signed-in search');
+select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a007'), 0,
+  'development: unrelated user cannot see another broker inactive draft');
 select is((select count(*)::int from public.apartments where id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but not an explicit test fixture');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a003'), 0,
@@ -78,8 +78,8 @@ reset role;
 -- ── anonymous visitors: ordinary development listings are public through the canonical rule -----------------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006', '00000000-0000-4000-8000-00000053a007')), 4,
-  'development: an anonymous visitor reads active, inactive and test_mode development listings');
+select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006', '00000000-0000-4000-8000-00000053a007')), 3,
+  'development: anonymous visitor reads active development records, not inactive drafts');
 select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004', '00000000-0000-4000-8000-00000053a005') or id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but never a test fixture, a kind-marked fixture, a private or an internal record');
 reset role;

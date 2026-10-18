@@ -7,7 +7,7 @@ select is(public.rental_development_active(), true, 'Phase A is explicit in serv
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
           true, 'Phase A exposes active draft-status inventory without moderation review');
 select is(public.rental_listing_is_public('inactive','pending','draft',null,'{}'::jsonb),
-          true, 'Phase A also exposes inactive development inventory without business status gate');
+          false, 'Phase A keeps inactive internal drafts out of public search while management remains unrestricted');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"inventory_kind":"external_candidate"}'::jsonb),true,

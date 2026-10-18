@@ -1,12 +1,14 @@
 -- SAN-1502 · MDE Rentals — Enable Full Development Journeys and Defer Real-World Approval Gates
--- Development discovery must never depend on status/approval/publishing/owner flags.
+-- Development discovery must not depend on moderation, publishing or ownership approvals.
+-- Active status is the deliberate public-visibility toggle: inactive broker drafts stay private.
 -- The duplicated authenticated policy exposed explicit test fixtures (permissive RLS policies
 -- combine with OR). Keep ONE canonical phase-aware discovery predicate; keep private and
 -- test-fixture data isolated from unrelated outsiders, while admin/creator/test-actor policies
 -- retain their independent authenticated paths.
 --
 -- This changes two existing canonical functions, not the booking system or a new search layer.
--- In development, status is a management label, not permission to search or inspect.
+-- In development, an active listing is public regardless of business approvals.
+-- Inactive records remain manageable by the owner, admin, or authorized tester, never outsiders.
 -- At launch, the existing active/approved/published/owner rules remain unchanged.
 -- Forward-only and replay-safe; this migration has NOT been applied to the remote ledger.
 
@@ -19,7 +21,8 @@ set search_path = ''
 as $function$
   select coalesce(lower(p_metadata->>'visibility'),'') not in ('private','internal')
     and case when public.rental_development_active() then
-      coalesce(lower(p_metadata->>'is_test_fixture'),'false') <> 'true'
+      p_status='active'
+      and coalesce(lower(p_metadata->>'is_test_fixture'),'false') <> 'true'
       and coalesce(lower(p_metadata->>'inventory_kind'),'') <> 'test_fixture'
     else
       p_status='active' and p_moderation_status='approved'
@@ -48,4 +51,4 @@ $function$;
 drop policy if exists apartments_authenticated_development_access on public.apartments;
 
 comment on policy anyone_can_view_active_apartments on public.apartments is
-  'SAN-1502: canonical apartment discovery via rental_listing_is_public(); development exposes non-private, non-fixture listings regardless of status or business approval. Public launch retains the strict rules. Explicit test fixtures stay with authenticated admin/creator/test-actor policies.';
+  'SAN-1502: canonical apartment discovery via rental_listing_is_public(); development exposes active non-private, non-fixture listings regardless of business approval, while inactive drafts stay private to owner/admin. Launch retains strict rules. Explicit test fixtures stay with authenticated admin/creator/test-actor policies.';

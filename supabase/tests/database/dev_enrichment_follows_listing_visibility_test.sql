@@ -1,6 +1,6 @@
 -- SAN-1502 · Search fingerprints follow the listing's own visibility.
--- Development: ordinary active or inactive listings are searchable by meaning even without
--- approval, publication or ownership; private and explicit fixtures stay isolated.
+-- Development: active ordinary listings are searchable by meaning even without
+-- approval, publication or ownership; inactive drafts, private and fixture rows stay isolated.
 -- Launch: the strict rule returns.
 -- Run with: supabase test db
 begin;
@@ -40,28 +40,28 @@ select is(public.rental_development_active(), true, 'precondition: the database 
 -- Development, signed out.
 set local role anon;
 select is((select count(*)::int from public.listing_embeddings
-            where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D1: anon reads active and inactive ordinary development fingerprints');
+            where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 1,
+  'D1: anon reads only the active ordinary development fingerprint');
 select is((select count(*)::int from public.listing_embeddings
-            where listing_id='f1507000-0000-4000-8000-00000000a003'), 1,
-  'D2: an inactive ordinary development listing is also searchable by meaning');
+            where listing_id='f1507000-0000-4000-8000-00000000a003'), 0,
+  'D2: an inactive broker draft is not exposed to anonymous semantic search');
 select is((select count(*)::int from public.listing_embeddings
             where listing_id in ('f1507000-0000-4000-8000-00000000a002','f1507000-0000-4000-8000-00000000a004')), 0,
   'D2b: explicit private and fixture data remain isolated');
 select is((select count(*)::int from public.rental_signals
-            where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D3: anon reads score rows for active and inactive development listings only');
+            where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 1,
+  'D3: anon reads score rows only for publicly active development listings');
 reset role;
 
 -- Development, signed in as an ordinary user.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1507000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select is((select count(*)::int from public.listing_embeddings
-            where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D4: an ordinary signed-in user sees both development fingerprints');
+            where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 1,
+  'D4: ordinary signed-in user cannot see inactive draft fingerprints');
 select is((select count(*)::int from public.rental_signals
-            where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D5: an ordinary signed-in user sees both development score rows');
+            where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 1,
+  'D5: ordinary signed-in user cannot read inactive draft signals');
 reset role;
 
 -- The helper agrees with the policies for each case.
@@ -69,8 +69,8 @@ select is(public.rental_enrichment_is_readable('f1507000-0000-4000-8000-00000000
   'D6: ordinary development listing is readable');
 select is(public.rental_enrichment_is_readable('f1507000-0000-4000-8000-00000000a002'), false,
   'D7: a private listing is never readable by the public');
-select is(public.rental_enrichment_is_readable('f1507000-0000-4000-8000-00000000a003'), true,
-  'D8: inactive ordinary development listings remain readable');
+select is(public.rental_enrichment_is_readable('f1507000-0000-4000-8000-00000000a003'), false,
+  'D8: inactive draft fingerprint is not publicly readable');
 select is(public.rental_enrichment_is_readable('f1507000-0000-4000-8000-00000000a004'), false,
   'D9: a test fixture is not readable by the public');
 
