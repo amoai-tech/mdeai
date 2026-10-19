@@ -60,7 +60,7 @@ Regenerate via `scripts/seed-*-anchors.mjs` → write directly to a new migratio
 
 **39 ACTIVE deployments vs 4 directories in this repo** → 4 `MATCHED`, **35 `UNKNOWN-PRESERVE`**.
 
-⚠️ **The 35 unmatched functions are load-bearing.** `pg_cron` job 2 calls `/functions/v1/lead-reminder-tick` every 5 minutes using a `vault` secret, and that function has no source here. **Do not delete a live function because it looks unmatched.**
+⚠️ **The 35 unmatched functions are load-bearing.** `pg_cron` job 2 used to call `/functions/v1/lead-reminder-tick` every 5 minutes using a `vault` secret; that schedule is retired (migration `20261019120000_san1313_retire_broken_lead_reminder_cron.sql`, SAN-1313) because the function always failed, but the function itself is still deployed and has no source here. **Do not delete a live function because it looks unmatched.**
 
 Recover source with `supabase functions download <slug>` **before** any rewrite or retirement. Full reconciliation matrix: [`../docs/02-architecture/edge-functions.md`](../docs/02-architecture/edge-functions.md).
 
