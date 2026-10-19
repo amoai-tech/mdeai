@@ -261,12 +261,12 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("map-sheet-content")).toBeHidden();
 
-    const send = page
-      .locator(
-        '[data-testid="copilot-chat-ready"], [data-testid="copilot-chat-request-in-progress"]',
-      )
-      .first();
-    await expect(send).toBeVisible();
+    // The old chat-ready/request-in-progress markers are not rendered by the v2
+    // composer. Check the actual renter-visible control after dismissing the map.
+    const composer = page.getByTestId("copilot-chat-region").getByTestId("copilot-chat-textarea");
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+    await expect(composer).toBeEditable();
+    await expect(page.getByTestId("copilot-send-button")).toBeVisible();
     await page.screenshot({ path: path.join(outDir, "j17-mobile-map.png") });
   });
 
