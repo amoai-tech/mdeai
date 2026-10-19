@@ -2,10 +2,12 @@
 --
 -- WHAT THIS LOCKS IN
 --   1. A fresh replay ends with EXACTLY the four approved named jobs — as a set, not a count.
+--      (SAN-1523 added `mdeai_embedding_jobs_tick`; the broken `mdeai_lead_reminder_tick` was
+--      retired by 20261019120000, so the list is four again.)
 --   2. Each job carries its approved schedule, and all four are active.
---   3. The retired `chat-archive-abandoned` job is absent and cannot come back.
---   4. The Edge-backed job resolves its target from Vault and contains no literal Supabase URL,
---      so a replayed dev/recovery database can never call production.
+--   3. The retired `chat-archive-abandoned` and `mdeai_lead_reminder_tick` jobs are absent and
+--      cannot come back.
+--   4. (The Vault/no-literal-URL rule for the embedding job lives in embedding_jobs_scheduler_test.sql.)
 --   5. No dead `agent_jobs` function returns.
 --   6. Every direct-SQL command's dependencies still exist, so a structural pass cannot hide a
 --      command that would fail the moment pg_cron ran it.
@@ -16,21 +18,21 @@
 -- and a missing job both fail. Assertions 3 and 13 cover the specific regressions this task
 -- exists to prevent.
 --
--- WHY DEPENDENCY RESOLUTION IS ASSERTED HERE (assertions 14–17)
+-- WHY DEPENDENCY RESOLUTION IS ASSERTED HERE (assertions 12–15)
 -- pg_cron stores a schedule as text. A schedule can therefore assert perfectly in `cron.job` and
 -- still fail on every run because a relation, function or column it names was dropped. That is
 -- precisely how `chat-archive-abandoned` failed 14 days in a row after `public.conversations`
 -- was removed. Asserting the command targets exist closes that gap; it does not execute them.
 --
 -- RED → GREEN
---   RED   before 20260928130000: replay has ZERO schedules, so assertions 1–9 fail.
+--   RED   before 20260928130000: replay has ZERO schedules, so the count, set, schedule and active assertions fail.
 --   GREEN after it.
 --
 -- Run with: supabase test db
 
 begin;
 
-select plan(17);
+select plan(15);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · The exact approved manifest
@@ -38,15 +40,14 @@ select plan(17);
 
 select is(
   (select count(*)::int from cron.job),
-  5,
-  'B2: exactly five cron jobs exist after a fresh replay (four from SAN-1313 + the SAN-1523 embedding tick)');
+  4,
+  'B2: exactly four cron jobs exist after a fresh replay');
 
 select is(
   (select array_agg(jobname order by jobname) from cron.job),
   array['chat-lead-followup-check',
         'mdeai_analytics_daily_snapshot',
         'mdeai_embedding_jobs_tick',
-        'mdeai_lead_reminder_tick',
         'wait_list_expire_holds'],
   'B2: the job set is EXACTLY the approved names (extra or missing both fail)');
 
@@ -54,14 +55,15 @@ select ok(
   not exists (select 1 from cron.job where jobname = 'chat-archive-abandoned'),
   'B2: the retired chat-archive-abandoned job is absent');
 
+-- Its Edge Function claims rows through landlord_inbox.reminder_sent_at, which does not exist,
+-- so every call was an HTTP 500 that pg_cron still logged as "succeeded".
+select ok(
+  not exists (select 1 from cron.job where jobname = 'mdeai_lead_reminder_tick'),
+  'B2: the retired mdeai_lead_reminder_tick job is absent (it always failed with HTTP 500)');
+
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- B · Exact schedules — a wrong cadence is a silent production behaviour change
 -- ═══════════════════════════════════════════════════════════════════════════════
-
-select is(
-  (select schedule from cron.job where jobname = 'mdeai_lead_reminder_tick'),
-  '*/5 * * * *',
-  'B2: mdeai_lead_reminder_tick runs every 5 minutes');
 
 select is(
   (select schedule from cron.job where jobname = 'mdeai_analytics_daily_snapshot'),
@@ -84,14 +86,14 @@ select is(
 
 select is(
   (select count(*)::int from cron.job where active),
-  5,
-  'B2: all five approved jobs are active');
+  4,
+  'B2: all four approved jobs are active');
 
 select is(
   (select count(*)::int from cron.job
     where database = 'postgres' and username = 'postgres'),
-  5,
-  'B2: all five jobs run as postgres on the postgres database');
+  4,
+  'B2: all four jobs run as postgres on the postgres database');
 
 -- pg_cron timezone is GLOBAL, not per job. Pinned because changing it would shift every
 -- business-hour schedule at once.
@@ -99,25 +101,6 @@ select is(
   current_setting('cron.timezone', true),
   'GMT',
   'B2: cron.timezone remains GMT (global, not per-job)');
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- D · Environment safety — the Edge job must not hardcode a host
--- ═══════════════════════════════════════════════════════════════════════════════
-
-select ok(
-  not exists (
-    select 1 from cron.job
-    where jobname = 'mdeai_lead_reminder_tick'
-      and command ~* 'https?://[a-z0-9-]+\.supabase\.(co|in)'),
-  'B2: the Edge cron command contains NO literal Supabase URL (resolved from Vault instead)');
-
-select ok(
-  (select command from cron.job where jobname = 'mdeai_lead_reminder_tick')
-    like '%project_url%'
-  and
-  (select command from cron.job where jobname = 'mdeai_lead_reminder_tick')
-    like '%lead_reminder_cron_secret%',
-  'B2: the Edge cron command resolves project_url and lead_reminder_cron_secret from Vault');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- E · No dead baggage returns
