@@ -15,8 +15,8 @@
 -- WHY SET EQUALITY AND NOT A COUNT
 -- `count(*) = 4` passes when one approved job is missing and a stray fifth job has appeared.
 -- Assertion 2 compares the sorted jobname array against the approved manifest, so an extra job
--- and a missing job both fail. Assertions 3 and 13 cover the specific regressions this task
--- exists to prevent.
+-- and a missing job both fail. Assertions 3–4 explicitly guard retired jobs; assertions
+-- 12–15 verify retained direct-SQL job dependencies.
 --
 -- WHY DEPENDENCY RESOLUTION IS ASSERTED HERE (assertions 12–15)
 -- pg_cron stores a schedule as text. A schedule can therefore assert perfectly in `cron.job` and

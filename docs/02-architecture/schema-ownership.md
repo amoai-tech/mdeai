@@ -218,7 +218,7 @@ All app-owned `SECURITY DEFINER` functions already pin `search_path`: **0 lack i
 
 ### 6.2 Scheduled jobs (pg_cron, 6 active)
 
-> **Update 2026-10-19:** job 2 below is retired. Retired by migration `20261019120000_san1313_retire_broken_lead_reminder_cron.sql` (SAN-1313): the function always returned HTTP 500 because `landlord_inbox.reminder_sent_at` does not exist. This table is a dated snapshot; the current approved list is asserted in `supabase/tests/database/san1313b_pg_cron_schedule_replay_test.sql`.
+> **Retirement pending deployment (2026-10-19):** job 2 is removed when migration `20261019120000_san1313_retire_broken_lead_reminder_cron.sql` (SAN-1313) is applied. Until then the production scheduler may still run: the function always returned HTTP 500 because `landlord_inbox.reminder_sent_at` does not exist. This table is a dated snapshot; the current approved list is asserted in `supabase/tests/database/san1313b_pg_cron_schedule_replay_test.sql`.
 
 | Job | Schedule | Action |
 |---|---|---|

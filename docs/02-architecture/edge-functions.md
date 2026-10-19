@@ -62,7 +62,7 @@ Distribution of the live `entrypoint_path` values:
 
 `pg_cron` **job 2** calls `https://<ref>.supabase.co/functions/v1/lead-reminder-tick` **every 5 minutes**, authenticating with `X-Cron-Secret` read from `vault.decrypted_secrets`. `lead-reminder-tick` has **no repo source**.
 
-> **Update 2026-10-19:** the job 2 schedule is retired. Retired by migration `20261019120000_san1313_retire_broken_lead_reminder_cron.sql` (SAN-1313): the function always returned HTTP 500 because `landlord_inbox.reminder_sent_at` does not exist. The Edge Function and its Vault secret remain deployed.
+> **Retirement pending deployment (2026-10-19):** migration `20261019120000_san1313_retire_broken_lead_reminder_cron.sql` (SAN-1313) unschedules job 2 when applied. Until then it remains active in production: the function always returned HTTP 500 because `landlord_inbox.reminder_sent_at` does not exist. The Edge Function and its Vault secret remain deployed.
 
 **Therefore: deleting "unmatched" live functions stops production silently.** Every one of the 35 is `UNKNOWN-PRESERVE` until its caller set is proven.
 
@@ -70,7 +70,7 @@ Distribution of the live `entrypoint_path` values:
 
 | Caller | Target | Evidence |
 |---|---|---|
-| `cron.job` id 2 (`*/5 * * * *`) — **retired 2026-10-19** | `lead-reminder-tick` | `net.http_post` + vault secret |
+| `cron.job` id 2 (`*/5 * * * *`) — **retirement migration pending deployment** | `lead-reminder-tick` | `net.http_post` + vault secret |
 | (others) | none found via `pg_proc` scan for `functions/v1` / `net.http_post` outside job 2 | — |
 
 ### 2.3 `verify_jwt` spread across the 35
