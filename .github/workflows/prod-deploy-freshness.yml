@@ -34,7 +34,7 @@ jobs:
   freshness:
     name: prod serves merge SHA
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Require a READY production deployment for the exact commit
@@ -198,5 +198,45 @@ jobs:
               echo "::error::no native Git production deployment for $TARGET_SHA became READY within $WINDOW_SECONDS s ($out). Neither this commit nor a newer main commit is deployed — check the Vercel Git integration."
               exit 1
             fi
+            sleep 30
+          done
+
+
+      - name: Require the public domain to serve the same commit
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          PUBLIC_URL_FROM_VARS: ${{ vars.PRODUCTION_BASE_URL }}
+          DOMAIN_WINDOW_SECONDS: "600"
+        run: |
+          set -euo pipefail
+
+          # A READY deployment is NOT the same as the domain serving it. On 2026-10-18 the
+          # deployment for the merge was READY while www.mdeai.co served a build from
+          # 2026-09-19, because a leftover alias pinned the domain to an old deployment. The
+          # step above proves a deployment exists; this step proves a VISITOR gets it.
+          PUBLIC_URL="${PUBLIC_URL_FROM_VARS:-https://www.mdeai.co}"
+          for name in TARGET_SHA DOMAIN_WINDOW_SECONDS; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::${name} is not set."
+              exit 1
+            fi
+          done
+
+          probe="${PUBLIC_URL%/}/api/version"
+          deadline=$(( $(date +%s) + DOMAIN_WINDOW_SECONDS ))
+          while :; do
+            body=$(curl --silent --show-error --max-time 15 "$probe" || true)
+            served=$(printf "%s" "$body" | jq -r ".sha // empty" 2>/dev/null || true)
+
+            if [ "$served" = "$TARGET_SHA" ]; then
+              echo "$(date -u +%H:%M:%S) ${PUBLIC_URL} serves ${TARGET_SHA:0:9}"
+              exit 0
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::${PUBLIC_URL} did not serve ${TARGET_SHA:0:9} within ${DOMAIN_WINDOW_SECONDS}s (domain reported [${served:-none}]). A READY deployment exists but the public domain points elsewhere - check the Vercel custom-domain alias/promotion state before assuming the code is broken."
+              exit 1
+            fi
+            echo "$(date -u +%H:%M:%S) waiting: domain reports [${served:-none}]"
             sleep 30
           done
