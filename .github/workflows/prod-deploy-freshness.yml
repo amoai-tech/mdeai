@@ -34,7 +34,7 @@ jobs:
   freshness:
     name: prod serves merge SHA
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Require a READY production deployment for the exact commit
@@ -202,41 +202,116 @@ jobs:
           done
 
 
-      - name: Require the public domain to serve the same commit
+      - name: Require every production host to serve the target commit
         env:
           TARGET_SHA: ${{ github.sha }}
           PUBLIC_URL_FROM_VARS: ${{ vars.PRODUCTION_BASE_URL }}
-          DOMAIN_WINDOW_SECONDS: "600"
+          DOMAIN_WINDOW_SECONDS: "1200"
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          # A READY deployment is NOT the same as the domain serving it. On 2026-10-18 the
-          # deployment for the merge was READY while www.mdeai.co served a build from
-          # 2026-09-19, because a leftover alias pinned the domain to an old deployment. The
-          # step above proves a deployment exists; this step proves a VISITOR gets it.
-          PUBLIC_URL="${PUBLIC_URL_FROM_VARS:-https://www.mdeai.co}"
-          for name in TARGET_SHA DOMAIN_WINDOW_SECONDS; do
+          # The step above proves a READY deployment exists. This one proves a VISITOR
+          # receives it. Six conditions, each a real failure mode:
+          #   1. HTTP 200 - an error body must never be parsed as a result
+          #   2. environment must be production - a preview build must not satisfy it
+          #   3. SHA must equal the target, or a newer main commit that CONTAINS it
+          #   4. EVERY production host is checked, not just the configured one
+          #   5. redirects are followed - the apex 308s to www
+          #   6. the window covers certification and promotion, not just the build
+          #
+          # Historical cause: on 2026-10-18 a READY merge deployment existed while
+          # www.mdeai.co served a build from 2026-09-19, because a leftover alias pinned
+          # the domain to an old deployment.
+
+          for name in TARGET_SHA DOMAIN_WINDOW_SECONDS GITHUB_TOKEN; do
             if [ -z "${!name:-}" ]; then
               echo "::error::${name} is not set."
               exit 1
             fi
           done
 
-          probe="${PUBLIC_URL%/}/api/version"
-          deadline=$(( $(date +%s) + DOMAIN_WINDOW_SECONDS ))
-          while :; do
-            body=$(curl --silent --show-error --max-time 15 "$probe" || true)
-            served=$(printf "%s" "$body" | jq -r ".sha // empty" 2>/dev/null || true)
+          PRIMARY="${PUBLIC_URL_FROM_VARS:-https://www.mdeai.co}"
+          PRIMARY_HOST=$(printf "%s" "${PRIMARY#*://}" | cut -d/ -f1)
+          # Only derive an apex when the configured host is itself a www. host. A custom
+          # https://staging.example.com has no implied sibling, and inventing one would make
+          # the check fail on a host nobody claims exists.
+          HOSTS="$PRIMARY"
+          case "$PRIMARY_HOST" in
+            www.*)
+              HOSTS="$HOSTS https://${PRIMARY_HOST#www.}"
+              ;;
+          esac
+          echo "checking production hosts: $HOSTS"
 
-            if [ "$served" = "$TARGET_SHA" ]; then
-              echo "$(date -u +%H:%M:%S) ${PUBLIC_URL} serves ${TARGET_SHA:0:9}"
+          # A newer main commit may be deployed instead of this run commit. Accept it only when
+          # GitHub proves it contains TARGET_SHA: a moved main is not proof of ancestry, and a
+          # force-push must fail closed.
+          contains_target() {
+            local served="$1"
+            [ -n "$served" ] || return 1
+            local resp status base
+            if ! resp=$(curl --silent --show-error --fail-with-body --max-time 20 -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/compare/${TARGET_SHA}...${served}"); then
+              return 1
+            fi
+            status=$(printf "%s" "$resp" | jq -r ".status // empty" 2>/dev/null || true)
+            base=$(printf "%s" "$resp" | jq -r ".merge_base_commit.sha // empty" 2>/dev/null || true)
+            [ "$status" = "ahead" ] && [ "$base" = "$TARGET_SHA" ]
+          }
+
+          deadline=$(( $(date +%s) + DOMAIN_WINDOW_SECONDS ))
+          last_problem="not checked"
+          while :; do
+            all_ok=1
+            served_detail=""
+            last_problem=""
+
+            for host in $HOSTS; do
+              probe="${host%/}/api/version"
+              body_file=$(mktemp)
+              status=$(curl --silent --show-error --location --max-time 20 --output "$body_file" --write-out "%{http_code}" "$probe" || echo "000")
+
+              if [ "$status" != "200" ]; then
+                all_ok=0
+                last_problem="${last_problem} ${host}->HTTP${status}"
+                rm -f "$body_file"
+                continue
+              fi
+
+              sha=$(jq -r ".sha // empty" "$body_file" 2>/dev/null || true)
+              env_name=$(jq -r ".environment // empty" "$body_file" 2>/dev/null || true)
+              rm -f "$body_file"
+
+              if [ "$env_name" != "production" ]; then
+                all_ok=0
+                last_problem="${last_problem} ${host}->environment:${env_name:-missing}"
+                continue
+              fi
+
+              if [ "$sha" = "$TARGET_SHA" ]; then
+                served_detail="${served_detail} ${host}=${sha:0:9}"
+                continue
+              fi
+
+              if contains_target "$sha"; then
+                echo "$(date -u +%H:%M:%S) ${host} serves newer commit ${sha:0:9}, which contains ${TARGET_SHA:0:9}; superseded"
+                served_detail="${served_detail} ${host}=${sha:0:9}"
+                continue
+              fi
+
+              all_ok=0
+              last_problem="${last_problem} ${host}->sha:${sha:0:9}"
+            done
+
+            if [ "$all_ok" = "1" ]; then
+              echo "$(date -u +%H:%M:%S) every production host serves a commit containing ${TARGET_SHA:0:9}:${served_detail}"
               exit 0
             fi
 
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::${PUBLIC_URL} did not serve ${TARGET_SHA:0:9} within ${DOMAIN_WINDOW_SECONDS}s (domain reported [${served:-none}]). A READY deployment exists but the public domain points elsewhere - check the Vercel custom-domain alias/promotion state before assuming the code is broken."
+              echo "::error::within ${DOMAIN_WINDOW_SECONDS}s the public domain did not serve ${TARGET_SHA:0:9} from a production deployment.${last_problem}. A READY deployment exists but a host is pointing elsewhere, serving a preview build, or erroring - check the Vercel custom-domain alias and promotion state before assuming the code is broken."
               exit 1
             fi
-            echo "$(date -u +%H:%M:%S) waiting: domain reports [${served:-none}]"
+            echo "$(date -u +%H:%M:%S) waiting:${last_problem}"
             sleep 30
           done
