@@ -49,6 +49,13 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
+  // Authentication pages do not use agents. Mounting the concierge provider there triggers
+  // anonymous /api/copilotkit/info requests (401) and misleading "agent not found" warnings.
+  // Keep authorization intact: only signed-in routes can access the protected runtime.
+  if (pathname === "/login" || pathname === "/signup" || pathname.startsWith("/auth/")) {
+    return <>{children}</>;
+  }
+
   // These routes bring their own v2 provider in a layout, so the root
   // conciergeAgent provider must NOT also wrap them:
   //  - /chat            → the public concierge layout

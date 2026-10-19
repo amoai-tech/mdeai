@@ -310,6 +310,21 @@ describe("MdeCopilotKitProvider — root provider on non-chat pages", () => {
     expect(seen.journey.explicit).toBe(false); // No saved turn yet.
   });
 
+  it("does not start the concierge runtime on login or signup pages", async () => {
+    for (const path of ["/login", "/signup"]) {
+      navigation.pathname = path;
+      const fetchMock = vi.mocked(globalThis.fetch);
+      fetchMock.mockClear();
+      await render(
+        <MdeCopilotKitProvider key={path}>
+          <Probe name="authRoute" />
+        </MdeCopilotKitProvider>,
+      );
+      expect(seen.authRoute.threadId).toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  });
+
   it("leaves /chat to ChatProvider: no root thread configuration there", async () => {
     navigation.pathname = "/chat";
     await render(

@@ -38,16 +38,17 @@ select plan(17);
 
 select is(
   (select count(*)::int from cron.job),
-  4,
-  'B2: exactly four cron jobs exist after a fresh replay');
+  5,
+  'B2: exactly five cron jobs exist after a fresh replay (four from SAN-1313 + the SAN-1523 embedding tick)');
 
 select is(
   (select array_agg(jobname order by jobname) from cron.job),
   array['chat-lead-followup-check',
         'mdeai_analytics_daily_snapshot',
+        'mdeai_embedding_jobs_tick',
         'mdeai_lead_reminder_tick',
         'wait_list_expire_holds'],
-  'B2: the job set is EXACTLY the four approved names (extra or missing both fail)');
+  'B2: the job set is EXACTLY the approved names (extra or missing both fail)');
 
 select ok(
   not exists (select 1 from cron.job where jobname = 'chat-archive-abandoned'),
@@ -83,14 +84,14 @@ select is(
 
 select is(
   (select count(*)::int from cron.job where active),
-  4,
-  'B2: all four approved jobs are active');
+  5,
+  'B2: all five approved jobs are active');
 
 select is(
   (select count(*)::int from cron.job
     where database = 'postgres' and username = 'postgres'),
-  4,
-  'B2: all four jobs run as postgres on the postgres database');
+  5,
+  'B2: all five jobs run as postgres on the postgres database');
 
 -- pg_cron timezone is GLOBAL, not per job. Pinned because changing it would shift every
 -- business-hour schedule at once.

@@ -14,7 +14,8 @@ jobs:
   deterministic-chromium:
     name: deterministic chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -30,27 +31,23 @@ jobs:
       - name: Install Chromium
         run: npx playwright install chromium --with-deps
 
-      - name: Run deterministic critical journeys
+      # The npm script includes long-chat virtualization with the same deterministic
+      # adapter. One Playwright invocation = one Next dev-server start for both suites.
+      # Keep the real mobile composer separate: it MUST NOT use deterministic chat.
+      - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
           NEXT_TELEMETRY_DISABLED: 1
           E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
           NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
         run: npm run test:e2e:deterministic
-
-      # SAN-1357: the long-chat virtualization proof is a *permanent* regression, so it must
-      # run on every PR. `test:e2e:deterministic` only runs deterministic-critical.spec.ts,
-      # so without this step the 500-message proof would exist but silently stop protecting
-      # main. The npm script owns its own safe dummy environment and web-server command, so
-      # nothing is duplicated here.
-      - name: Prove long-chat virtualization
-        run: npm run test:e2e:chat-virtualization
 
       # SAN-522: the mobile composer regression must run against the REAL v2
       # composer, so it is its own step *without* NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT
@@ -79,3 +76,48 @@ jobs:
             tmp/playwright-report/**
           if-no-files-found: ignore
           retention-days: 7
+
+  # Run the existing real auth-route browser suite on every PR, in parallel with the
+  # long deterministic suite. No E2E_BYPASS_AUTH and NO privileged Supabase secrets:
+  # these tests assert anonymous guard and sanitized post-login return behavior.
+  auth-guard-chromium:
+    name: auth redirect + guard chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Prove safe login redirects and auth guards
+        env:
+          NODE_ENV: development
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: npm run test:e2e:auth
+
+      # This job has no production credentials, but limit retained diagnostics.
+      - name: Upload auth failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-guard-playwright-${{ github.run_id }}
+          path: test-results/**
+          if-no-files-found: ignore
+          retention-days: 3
