@@ -7924,6 +7924,14 @@ export type Database = {
         Args: { p_restaurant_id: string }
         Returns: Json
       }
+      contest_public_list: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      contest_public_get: {
+        Args: { p_ref: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
