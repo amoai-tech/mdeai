@@ -89,18 +89,37 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await page.screenshot({ path: path.join(outDir, "j08-restaurant-detail.png") });
   });
 
-  test("J09 — event buy CTA (checkout or login redirect)", async ({ page }) => {
+  test("J09 — events answer is a real card or the explicit empty state", async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await gotoHome(page);
     await sendConciergeMessage(page, "salsa events this weekend in Medellín");
     await waitForCopilotIdle(page, 150_000);
-    const eventCard = page.locator('[data-testid="event-card"]').first();
-    await eventCard.waitFor({ state: "visible", timeout: 120_000 });
-    const buy = eventCard.getByRole("link", { name: /buy|tickets/i }).first();
-    if (await buy.isVisible().catch(() => false)) {
-      await buy.click();
-      await page.waitForURL(/\/(login|events\/)/, { timeout: 30_000 });
+
+    // Two truthful terminals, and only two. The events tool renders a card when
+    // the live marketplace has matching inventory and `events-empty` when it
+    // does not. Demanding a card made this journey fail on a correct answer
+    // whenever the market was empty, which is most of the time pre-launch.
+    const card = page.locator('[data-testid="event-card"]').first();
+    const empty = page.getByTestId("events-empty").first();
+    await expect(card.or(empty)).toBeVisible({ timeout: 120_000 });
+
+    if (await card.isVisible().catch(() => false)) {
+      // Real inventory: prove the buy path is reachable. Checkout itself is
+      // exercised by the ticketing specs; here we only need the next hop.
+      const buy = card.getByRole("link", { name: /buy|tickets/i }).first();
+      if (await buy.isVisible().catch(() => false)) {
+        await buy.click();
+        await page.waitForURL(/\/(login|events\/)/, { timeout: 30_000 });
+      }
+    } else {
+      // No inventory: the empty state must be explicit and still actionable,
+      // not a dead end that leaves the renter with nothing to do.
+      await expect(empty).toContainText(/no events/i);
+      await expect(page.getByTestId("events-empty-suggest-weekend")).toBeVisible();
     }
+
     await page.screenshot({ path: path.join(outDir, "j09-event-cta.png") });
   });
 
