@@ -32,6 +32,11 @@ vi.mock("@copilotkit/react-core/v2", () => ({ useCopilotKit: () => ({ copilotkit
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent }),
 }));
+vi.mock("@/lib/chat/thread-nav-context", () => ({ useOptionalThreadNav: () => null }));
+
+vi.mock("@/lib/chat/ensure-thread-title", () => ({
+  ensureThreadTitle: (id: string) => ensureMock(id),
+}));
 
 vi.mock("@/lib/chat/ensure-thread-title", () => ({
   ensureThreadTitle: (id: string) => ensureMock(id),

@@ -5,11 +5,13 @@ import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /** Shared concierge chat controller for v2 routes. */
 function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
+  const markThreadSaved = useOptionalThreadNav()?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
 
@@ -55,13 +57,13 @@ function useLiveConciergeChat() {
         content,
       });
       await copilotkit.runAgent({ agent });
-      // SAN-1412: the turn is saved, so give the chat a real title and refresh the sidebar. Every
-      // agent send (the composer, chips, the café panel) comes through here. Not awaited and
-      // fail-soft: a title problem must never delay or break a chat turn.
+      // Only completed turns are recorded as saved, never a freshly minted UUID.
+      markThreadSaved?.(agent.threadId);
+      // Title the persisted conversation without delaying the user or navigation.
       if (agent.threadId) void ensureThreadTitle(agent.threadId);
       return true;
     },
-    [agent, copilotkit],
+    [agent, copilotkit, markThreadSaved],
   );
 
   return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };

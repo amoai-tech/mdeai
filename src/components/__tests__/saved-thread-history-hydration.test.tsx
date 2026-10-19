@@ -3,6 +3,12 @@ import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// The navigation owner waits for a verified auth identity. Test the anonymous path
+// without making Supabase network calls during provider lifecycle unit tests.
+vi.mock("@/hooks/use-session", () => ({
+  useSession: () => ({ user: null, loading: false }),
+}));
+
 import { ChatProvider, useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 
@@ -88,6 +94,8 @@ const select = async (id: string | undefined, opts: { connect?: boolean } = {}) 
 };
 
 beforeEach(async () => {
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
   agent = new FakeAgent();
   fakeAgent.current = agent;
   requests = {};

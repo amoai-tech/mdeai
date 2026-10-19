@@ -243,6 +243,29 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
     throw new Error("E2E Supabase env missing (url/anon)");
   }
   const admin = await getSupabaseAdmin();
+
+  // Supabase admin.generateLink(type: "magiclink") creates missing users.
+  // The shared QA identity must already exist: a smoke run must never silently
+  // provision a new account in the real project if the QA account was deleted.
+  // Throwaway identities are created explicitly elsewhere before this helper.
+  if (email.toLowerCase() === QA_HOST_EMAIL.toLowerCase()) {
+    let page = 1;
+    let found = false;
+    while (true) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 1000,
+      });
+      if (error) throw new Error(`QA account lookup failed: ${error.message}`);
+      found = data.users.some((user) => user.email?.toLowerCase() === QA_HOST_EMAIL);
+      if (found || !data.nextPage) break;
+      page = data.nextPage;
+    }
+    if (!found) {
+      throw new Error(`Existing QA account ${QA_HOST_EMAIL} not found; refusing magic-link auto-creation`);
+    }
+  }
+
   const { createClient } = await import("@supabase/supabase-js");
   const client = createClient(url, anon);
 
