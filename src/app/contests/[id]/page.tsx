@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty/empty-state";
 import { ContestNomineeCard } from "@/components/restaurants/contest-nominee-card";
 import {
-  canVoteIn,
   contestState,
   contestWindowLabel,
   getPublicContest,
@@ -13,10 +12,10 @@ import {
 export const dynamic = "force-dynamic";
 
 const STATE_LABEL: Record<ContestState, string> = {
-  open: "Voting open",
-  upcoming: "Starting soon",
-  closed: "Voting closed",
-  draft: "Draft — not open yet",
+  open: "Within contest window",
+  upcoming: "Upcoming",
+  closed: "Contest window ended",
+  draft: "Draft",
   archived: "Archived",
 };
 
@@ -46,10 +45,9 @@ export default async function ContestDetailPage({
   const { contest, nominees } = result;
   const state = contestState(contest);
   const window = contestWindowLabel(contest);
-  const voting = canVoteIn(state);
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-8" data-testid="contest-page">
+    <main className="mx-auto min-h-screen max-w-4xl px-4 py-8" data-testid="contest-page" data-contest-id={contest.id}>
       <nav className="mb-4 text-sm">
         <Link className="text-muted-foreground underline" href="/contests">All contests</Link>
       </nav>
@@ -75,13 +73,9 @@ export default async function ContestDetailPage({
             The organizer has not published rules for this contest yet.
           </p>
         )}
-        {!voting ? (
-          <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="contest-not-open">
-            {state === "draft" || state === "upcoming"
-              ? "Voting has not opened yet. You can still browse the restaurants competing."
-              : "Voting is closed for this contest. You can still browse the restaurants that competed."}
-          </p>
-        ) : null}
+        <p className="mt-3 text-sm text-muted-foreground" data-testid="contest-vote-guidance">
+          Open a participating restaurant to check its current voting options.
+        </p>
       </section>
 
       <section aria-labelledby="contest-nominees">

@@ -16,10 +16,10 @@ export const metadata = {
 };
 
 const STATE_LABEL: Record<ContestState, string> = {
-  open: "Voting open",
-  upcoming: "Starting soon",
-  closed: "Voting closed",
-  draft: "Draft — not open yet",
+  open: "Within contest window",
+  upcoming: "Upcoming",
+  closed: "Contest window ended",
+  draft: "Draft",
   archived: "Archived",
 };
 

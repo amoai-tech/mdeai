@@ -10,6 +10,11 @@ import { expect, test } from "@playwright/test";
  * renders, so the suite keeps working as contests come and go.
  */
 test.describe("public contest discovery", { tag: ["@contests"] }, () => {
+  test("restaurant directory links to contest discovery", async ({ page }) => {
+    await page.goto("/restaurants");
+    await expect(page.getByRole("link", { name: "Explore restaurant contests" })).toHaveAttribute("href", "/contests");
+  });
+
   test("lists real contests and opens one", async ({ page }) => {
     const problems: string[] = [];
     page.on("pageerror", (error) => problems.push(String(error).slice(0, 120)));
@@ -26,6 +31,7 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     const cardCount = await cards.count();
     if (cardCount === 0) {
       await expect(page.getByTestId("contests-empty")).toBeVisible();
+      expect(problems, "empty state must also be error-free").toEqual([]);
       return;
     }
 
@@ -40,9 +46,10 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
 
     // A cold dev server hydrates lazily; a <Link> clicked before hydration does nothing.
     await page.waitForLoadState("networkidle");
+    const expectedTitle = (await cards.first().locator("h2").innerText()).trim();
     await cards.first().locator("a").first().click();
     await expect(page).toHaveURL(/\/contests\/.+/, { timeout: 20_000 });
-    await expect(page.getByTestId("contest-title")).toBeVisible();
+    await expect(page.getByTestId("contest-title")).toHaveText(expectedTitle);
     await expect(page.getByTestId("contest-error")).toHaveCount(0);
 
     // Nominees, when present, must carry the contest identity into the restaurant page.
@@ -50,7 +57,9 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     if ((await nomineeLinks.count()) > 0) {
       const href = await nomineeLinks.first().getAttribute("href");
       expect(href).toContain("/restaurants/");
-      expect(href).toContain("contest_id=");
+      const contestId = await page.getByTestId("contest-page").getAttribute("data-contest-id");
+      expect(contestId).toMatch(/^[0-9a-f-]{36}$/i);
+      expect(new URL(href!, "http://localhost").searchParams.get("contest_id")).toBe(contestId);
     } else {
       await expect(page.getByTestId("contest-nominees-empty")).toBeVisible();
     }
