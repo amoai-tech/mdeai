@@ -53,13 +53,22 @@ const LIBRARY_ITEMS: NavItem[] = [
   { slug: "profile", label: "Profile", href: null, Icon: User },
 ];
 
-function NavItemRow({ item, active }: { item: NavItem; active: boolean }) {
+function NavItemRow({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
   const { Icon, slug, label, href } = item;
   if (href) {
     return (
       <li>
         <Link
           href={href}
+          onClick={() => onNavigate?.()}
           data-testid={`nav-${slug}-link`}
           aria-current={active ? "page" : undefined}
           className={cn(
@@ -104,19 +113,25 @@ function NavSectionLabel({ children }: { children: string }) {
  * The Explore and Library link groups. Shared by the chat rail and the session-free rail on the
  * discovery pages, so both list the same destinations. `activeSlug` marks the current page.
  */
-export function ExploreLibraryNav({ activeSlug }: { activeSlug?: string }) {
+export function ExploreLibraryNav({
+  activeSlug,
+  onNavigate,
+}: {
+  activeSlug?: string;
+  onNavigate?: () => void;
+}) {
   return (
     <ul className="flex shrink-0 flex-col gap-1 text-sm">
       {/* Explore — live verticals (link) + not-yet-live placeholders (sitemap.md) */}
       <NavSectionLabel>Explore</NavSectionLabel>
       {EXPLORE_ITEMS.map((item) => (
-        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} onNavigate={onNavigate} />
       ))}
 
       {/* Library — personal pages */}
       <NavSectionLabel>Library</NavSectionLabel>
       {LIBRARY_ITEMS.map((item) => (
-        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} />
+        <NavItemRow key={item.slug} item={item} active={item.slug === activeSlug} onNavigate={onNavigate} />
       ))}
     </ul>
   );
@@ -125,8 +140,10 @@ export function ExploreLibraryNav({ activeSlug }: { activeSlug?: string }) {
 /** SCREEN-002 — chat nav rail with thread list + new chat + nav links. */
 export function ChatNavRail({
   testId = "nav-rail",
+  onNavigate,
 }: {
   testId?: string;
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
   const { startNewChat, stopActiveRun } = useConciergeSession();
@@ -137,20 +154,37 @@ export function ChatNavRail({
   // Both stay on /chat, where the concierge lives (D-13). These used to push
   // "/" from before the concierge moved, which dropped Sofia on the marketing
   // home and never reopened the chat she picked (SAN-1378).
+  //
+  // The rail only exists on /chat, so a navigation is only needed when a test or
+  // future mount renders it elsewhere. Re-pushing the current URL is not just
+  // redundant: the App Router rewrites that history entry's state, which erased
+  // the saved-chat selection and made one Back press appear to do nothing.
+  function goToChat() {
+    // Read the live path at click time: this handler only runs in the browser,
+    // and it avoids depending on a router hook that unit tests do not provide.
+    if (typeof window !== "undefined" && window.location.pathname !== "/chat") {
+      router.push("/chat");
+    }
+  }
+
   function onNewChat() {
-    clearActiveThread();
     startNewChat();
-    router.push("/chat");
+    clearActiveThread();
+    onNavigate?.();
+    goToChat();
   }
 
   function onSelectThread(id: string) {
-    // New Chat stops a streaming reply inside startNewChat(); opening a saved
-    // chat must too, or the old answer streams into the chat being opened.
+    // Clear old map cards and detach an in-flight run before reopening, then
+    // record the selected conversation. setActiveThreadId adds the Back/Forward
+    // step; re-pushing /chat would wipe that entry (SAN-1413).
+    startNewChat();
     stopActiveRun();
     setActiveThreadId(id);
-    router.push("/chat");
-    // SAN-1412: a chat that still shows the dated fallback gets a real title from its first message.
-    // Background and fail-soft; opening is never held up by it.
+    onNavigate?.();
+    goToChat();
+    // Repair placeholder and missing titles without overwriting a meaningful one.
+    // This stays best-effort and must not push another /chat history entry.
     if (!isMeaningfulThreadTitle(threads.find((thread) => thread.id === id)?.title)) {
       void ensureThreadTitle(id);
     }
@@ -225,6 +259,7 @@ export function ChatNavRail({
                       ? "bg-muted font-medium text-foreground"
                       : "text-muted-foreground",
                   )}
+                  aria-current={activeThreadId === thread.id ? "true" : undefined}
                   title={label}
                 >
                   {label}
@@ -245,7 +280,7 @@ export function ChatNavRail({
         </ul>
       </div>
 
-      <ExploreLibraryNav />
+      <ExploreLibraryNav onNavigate={onNavigate} />
 
       <p className="mt-auto shrink-0 text-xs text-muted-foreground">
         Ask for rentals, events, cafés, or map pins in Laureles and Poblado.

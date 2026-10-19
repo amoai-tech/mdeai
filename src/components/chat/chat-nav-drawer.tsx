@@ -46,7 +46,7 @@ export function ChatNavDrawer({ rail }: { rail?: ReactNode } = {}) {
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>Concierge navigation menu</SheetDescription>
           </SheetHeader>
-          {rail ?? <ChatNavRail testId="nav-rail-drawer" />}
+          {rail ?? <ChatNavRail testId="nav-rail-drawer" onNavigate={() => setOpen(false)} />}
         </SheetContent>
       </Sheet>
     </>

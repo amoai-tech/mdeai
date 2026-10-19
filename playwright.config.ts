@@ -14,6 +14,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
+  "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
@@ -47,6 +48,8 @@ export default defineConfig({
         "**/chat-virtualization.spec.ts",
         // SAN-966: needs the deterministic chat, so it runs under `local-chromium`.
         "**/chat-result-order.spec.ts",
+        // SAN-1413: same reason.
+        "**/chat-thread-history.spec.ts",
         // SAN-1414: same reason.
         "**/chat-workspace-layout.spec.ts",
         // SAN-524: touch/mobile map journey runs hermetically with the deterministic chat + Maps seam.
@@ -67,6 +70,7 @@ export default defineConfig({
         "**/auth-guard.spec.ts",
         "**/chat-virtualization.spec.ts",
         "**/chat-result-order.spec.ts",
+        "**/chat-thread-history.spec.ts",
         "**/chat-workspace-layout.spec.ts",
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         "**/maps-layout-mobile.spec.ts",
