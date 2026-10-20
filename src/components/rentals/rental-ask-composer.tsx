@@ -172,6 +172,19 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
   const lastQuery = useRef<ConciergeWorkingMemory>({});
   // The agent's tool result owns the cards for this turn; the page search is only a fallback.
   const toolResultSeen = useRef(false);
+  // True once this page has shown an answer. A follow-up that produces no rental tool result
+  // ("which of these has a balcony?") must keep that answer, not rerun the question as a search.
+  const hasAnswer = useRef(false);
+  /** A follow-up that names a real filter may refine the search; one that only asks about the
+   *  current rows ("which of these has a balcony?") must not be re-run as a broad catalogue query. */
+  const carriesFilter = (text: string) => {
+    const params = buildRentalSearchParams(text, lastQuery.current);
+    if (!params) return false;
+    return Boolean(
+      params.neighborhood || params.minBedrooms != null || params.maxPriceMonthly != null ||
+      params.maxPricePerNight != null || params.checkIn || params.checkOut,
+    );
+  };
   const appliedSignature = useRef("");
   const turnId = useRef(0);
   const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
@@ -182,6 +195,7 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       if (!onResults || cancelled.current || appliedSignature.current === signature) return;
       appliedSignature.current = signature;
       toolResultSeen.current = true;
+      hasAnswer.current = true;
       onResults(payload);
       setState((prev) => ({
         ...prev,
@@ -252,7 +266,13 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       // The cards normally come from the agent's own rental tool result. Only when the turn
       // produced none (an off-topic answer, a tool failure) does the page run a structured search,
       // so the renter is not left staring at a stale list.
-      if (onResults && !toolResultSeen.current && turn === turnId.current && !cancelled.current) {
+      if (
+        onResults &&
+        !toolResultSeen.current &&
+        turn === turnId.current &&
+        !cancelled.current &&
+        (!hasAnswer.current || carriesFilter(text))
+      ) {
         try {
           const found = await searchRentalsForQuestion(text, lastQuery.current);
           if (!cancelled.current && turn === turnId.current) {
@@ -260,6 +280,7 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
               setError(found);
             } else {
               lastQuery.current = found.nextMemory;
+              hasAnswer.current = true;
               onResults(found.payload);
               // The fallback rows also become the agent's referent for "which of these…".
               setState((prev) => ({

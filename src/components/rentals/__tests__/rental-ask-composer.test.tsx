@@ -383,6 +383,43 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(onResults).not.toHaveBeenCalled();
   });
 
+  it("keeps the current answer when a follow-up produces no rental tool result", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    // First question: the agent's tool result becomes the answer.
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2 bedroom in Laureles" },
+        { id: "a1", role: "assistant", toolCalls: [{ id: "call-1", function: { name: "searchRentalsTool" } }] },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [{ id: "rnt_1" }] }) },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    expect(onResults).toHaveBeenCalledTimes(1);
+
+    // Follow-up: a conversational answer with no tool call. The list must not be replaced by a
+    // fresh search of the question itself (live, this turned 8 apartments into 32).
+    await act(async () => {
+      agent.messages = [
+        ...agent.messages,
+        { id: "u2", role: "user", content: "which of these has a balcony?" },
+        { id: "a2", role: "assistant", content: "The listing details do not specify a balcony." },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+
+    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("shows a failed rental search but still asks the concierge", async () => {
     const onResults = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
