@@ -12,6 +12,12 @@ import {
   fetchComparison,
 } from "./check-skill-upstream-drift.mjs";
 
+const EXPECTED_REPOSITORIES = Object.freeze({
+  OpenMuse: "CopilotKit/openmuse",
+  OpenDots: "CopilotKit/OpenDots",
+  OpenBot: "CopilotKit/openbot",
+});
+const CLASS_VALUES = new Set(Object.values(CLASSES));
 const STRATEGIES = new Set(["MODEL", "ADAPT", "REFERENCE ONLY"]);
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
@@ -24,12 +30,15 @@ export function parseReferenceUpstreams(config) {
   }
   const seen = new Set();
   for (const entry of config.sources) {
-    if (!["OpenMuse", "OpenDots", "OpenBot"].includes(entry.name) ||
+    if (!Object.hasOwn(EXPECTED_REPOSITORIES, entry.name) ||
         !REPO.test(entry.repository) || !SHA.test(entry.reviewedCommit) ||
         !STRATEGIES.has(entry.strategy) || !ISSUE.test(entry.linear) ||
         !Array.isArray(entry.destinations) || !entry.destinations.length ||
         entry.destinations.some((dest) => typeof dest !== "string" || !dest.startsWith("src/") && !dest.startsWith("docs/"))) {
       throw new Error("Invalid upstream reference entry: " + String(entry.name));
+    }
+    if (EXPECTED_REPOSITORIES[entry.name] !== entry.repository) {
+      throw new Error("Unexpected repository for " + entry.name + ": " + entry.repository);
     }
     if (seen.has(entry.name)) throw new Error("Duplicate upstream reference: " + entry.name);
     seen.add(entry.name);
@@ -44,14 +53,34 @@ export function loadReferenceUpstreams() {
   return parseReferenceUpstreams(config);
 }
 
+export function upstreamSourceUrl(entry) {
+  return "https://github.com/" + entry.repository + "/compare/" + entry.reviewedCommit + "...HEAD";
+}
+
+function safeErrorReason(error) {
+  const code = error?.cause?.code ?? error?.code;
+  if (typeof code === "string" && /^[A-Z0-9_]+$/.test(code)) return code;
+  if (typeof error?.name === "string" && /^[A-Za-z0-9_.-]+$/.test(error.name)) return error.name;
+  return "UNKNOWN";
+}
+
 export async function inspectReferences(entries, compare = fetchComparison) {
   const results = [];
   for (const entry of entries) {
+    const sourceUrl = upstreamSourceUrl(entry);
     try {
       const upstream = await compare(entry.repository, entry.reviewedCommit);
-      results.push({ ...entry, ...upstream });
+      const classification = CLASS_VALUES.has(upstream?.classification)
+        ? upstream.classification
+        : CLASSES.DRIFT;
+      results.push({ ...entry, ...upstream, classification, sourceUrl });
     } catch (error) {
-      results.push({ ...entry, classification: classifyError(error) });
+      results.push({
+        ...entry,
+        classification: classifyError(error),
+        reason: safeErrorReason(error),
+        sourceUrl,
+      });
     }
   }
   return results;
@@ -61,36 +90,70 @@ export function formatSummary(results) {
   return [
     "## AI reference upstreams (SAN-1551)",
     "",
-    "Changes require review by the existing Linear owner. No automatic upgrades or PR gates.",
+    "Each row needs a manual decision: adapt, defer, or ignore. No automatic upgrades or PR gates.",
     "",
     "| Project | Reference | Status | Owner | Review |",
     "| --- | --- | --- | --- | --- |",
-    ...results.map((entry) =>
-      "| " + entry.name +
-      " | `" + entry.reviewedCommit.slice(0, 9) + "`" +
-      " | " + entry.classification +
-      (entry.aheadBy ? " (" + entry.aheadBy + " ahead)" : "") +
-      " | " + entry.linear +
-      " | [Compare](https://github.com/" + entry.repository + "/compare/" +
-      entry.reviewedCommit + "...HEAD) |"),
+    ...results.map((entry) => {
+      const status = entry.classification + (entry.reason ? " (" + entry.reason + ")" : "");
+      const release = entry.reviewedRelease
+        ? "[release](https://github.com/" + entry.repository + "/releases/tag/" + encodeURIComponent(entry.reviewedRelease) + ")"
+        : null;
+      const review = [release, "[compare](" + (entry.sourceUrl ?? upstreamSourceUrl(entry)) + ")"].filter(Boolean).join(" · ");
+      return "| " + entry.name +
+        " | `" + entry.reviewedCommit.slice(0, 9) + "`" +
+        " | " + status +
+        (entry.aheadBy ? " (" + entry.aheadBy + " ahead)" : "") +
+        " | " + entry.linear +
+        " | " + review + " |";
+    }),
     "",
   ].join("\n");
 }
 
+export function formatJson(results) {
+  return JSON.stringify(resultJson(results), null, 2);
+}
+
+function resultJson(results) {
+  return results.map(({ name, repository, reviewedCommit, reviewedRelease, strategy, linear, classification, aheadBy, reason, sourceUrl }) => ({
+    name,
+    repository,
+    reviewedCommit,
+    reviewedRelease: reviewedRelease ?? null,
+    strategy,
+    linear,
+    classification,
+    aheadBy: aheadBy ?? null,
+    reason: reason ?? null,
+    sourceUrl,
+  }));
+}
+
+export function formatWarning(entry) {
+  return "::warning::" + entry.name + " " + entry.classification +
+    (entry.reason ? " (" + entry.reason + ")" : "") +
+    " against " + entry.reviewedCommit.slice(0, 9) + "; review " + entry.linear +
+    " at " + entry.sourceUrl;
+}
+
 async function main() {
-  const entries = loadReferenceUpstreams();
-  const result = await inspectReferences(entries);
-  const summary = formatSummary(result);
-  if (process.argv.includes("--json")) {
-    console.log(JSON.stringify(result.map(({ name, repository, reviewedCommit, reviewedRelease, strategy, linear, classification, aheadBy }) =>
-      ({ name, repository, reviewedCommit, reviewedRelease: reviewedRelease ?? null,
-        strategy, linear, classification, aheadBy: aheadBy ?? null })), null, 2));
-  } else console.log(summary);
-  for (const entry of result) {
-    if (entry.classification !== CLASSES.OK) {
-      console.log("::warning::" + entry.name + " " + entry.classification +
-        " against " + entry.reviewedCommit.slice(0, 9) + "; review " + entry.linear);
+  try {
+    const entries = loadReferenceUpstreams();
+    const result = await inspectReferences(entries);
+    const jsonOut = process.argv.includes("--json");
+    if (jsonOut) console.log(formatJson(result));
+    else console.log(formatSummary(result));
+    for (const entry of result) {
+      if (entry.classification !== CLASSES.OK) {
+        // Keep stdout valid JSON; annotations belong on stderr in JSON mode.
+        if (jsonOut) console.error(formatWarning(entry));
+        else console.log(formatWarning(entry));
+      }
     }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
   }
   // Reference drift is deliberately NOT a required release or business gate.
   // Malformed manifests and runtime exceptions still fail normally.
