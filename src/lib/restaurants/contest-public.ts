@@ -34,9 +34,12 @@ export type PublicNominee = {
 };
 
 /**
- * A tally field must be a non-negative safe integer. Anything else — absent, null, negative,
- * fractional, a string — is a broken read, not a zero. Treating it as zero would silently publish a
- * leaderboard nobody can trust.
+ * A tally field must be a non-negative safe integer.
+ *
+ * The SQL guards the normal path: it coalesces a count to 0, so a well-formed response always
+ * carries a number, and zero means zero. This check exists for the other path — the RPC payload is
+ * untrusted JSON crossing a process boundary, and a malformed value (null, negative, fractional, a
+ * string) must fail the read rather than be published as a plausible-looking zero.
  */
 function asCount(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -130,6 +133,8 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
 
       const accepted = asCount(row.audience_accepted);
       const development = asCount(row.development_test_total);
+      // Reachable only from a malformed payload, never from the coalesced SQL: if the transport
+      // hands back something that is not a count, say the read failed instead of inventing a 0.
       if (accepted === null || development === null) {
         console.error("[contests] malformed tally on nominee " + entityId);
         return { status: "error" };
