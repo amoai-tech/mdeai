@@ -164,6 +164,30 @@ export function evaluatePreflight(state) {
     }
   }
 
+  // A migration version is the timestamp prefix, not the full filename. Supabase's remote
+  // ledger records one row per version, so two differently named files sharing a prefix
+  // can silently leave one migration's intended data changes unapplied (SAN-1556).
+  if (Array.isArray(state.pushableMigrations)) {
+    const versionFiles = new Map();
+    for (const file of state.pushableMigrations) {
+      const version = file.match(/^([0-9]+)_/)?.[1];
+      if (!version) continue;
+      const files = versionFiles.get(version) ?? [];
+      files.push(file);
+      versionFiles.set(version, files);
+    }
+    const collisions = [...versionFiles.entries()].filter(([, files]) => files.length > 1);
+    if (collisions.length) {
+      add(
+        "fail",
+        `${collisions.length} duplicate Supabase migration version(s) — only one can be recorded in the remote ledger`,
+        collisions.flatMap(([version, files]) => files.map((file) => `${version}: ${file}`)),
+      );
+    } else {
+      add("pass", "migration timestamp versions are unique");
+    }
+  }
+
   // Untracked files elsewhere cannot reach production, but they mean a noisy tree.
   if (state.untrackedOther.length > 0) {
     add(
