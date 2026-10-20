@@ -48,6 +48,47 @@ def load_case(skill: str, eval_id: int) -> dict:
     return case
 
 
+def load_trigger_case(skill: str, trigger_id: int) -> dict:
+    """Reuse the exact same trace grader for routing probes (no second runner).
+
+    Positive cases must call the target skill. Negative cases must not call it
+    and must select the fixture's expected existing owner. A session's final
+    answer alone cannot substitute for a trusted skill tool call.
+    """
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill):
+        raise ValueError("invalid skill name")
+    path = ROOT / ".claude" / "skills" / skill / "evals" / "trigger-evals.json"
+    pack = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(pack, list):
+        raise TypeError("trigger pack must be an array")
+    if any(not isinstance(item, dict) for item in pack):
+        raise TypeError("trigger pack entries must be objects")
+    matches = [case for case in pack if case.get("id") == f"{skill}-{trigger_id}"]
+    if len(matches) != 1:
+        raise ValueError("trigger id missing or duplicated")
+    case = matches[0]
+    positive = case.get("should_trigger")
+    owner = case.get("expected_owner")
+    if not isinstance(positive, bool) or not isinstance(owner, str) or not re.fullmatch(
+        r"[a-z0-9]+(?:-[a-z0-9]+)*", owner
+    ) or (owner == skill) != positive:
+        raise ValueError("trigger case has invalid or contradictory routing owner")
+    prompt = case.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("trigger case has no prompt")
+    checks = [
+        {"id": "catalog", "check": "catalog_contains", "value": skill},
+        {"id": "correct-owner", "check": "skill_called", "value": owner},
+        {"id": "owner-read", "check": "skill_result_ok", "value": owner},
+        {"id": "finished", "check": "turn_completed"},
+    ]
+    if not positive:
+        checks.insert(1, {"id": "not-"+skill, "check": "skill_not_called", "value": skill})
+    for check in checks:
+        check["kind"] = "deterministic"
+    return {"prompt": prompt, "should_trigger": positive, "expectations": checks}
+
+
 def trace_bytes(path: Path, limit: int) -> bytes:
     """Read one bounded local trace, including stdin and Python 3.14+ zstd."""
     if str(path) == "-":
@@ -212,7 +253,9 @@ def run_model(case: dict, dsh: str, home: Path, timeout: int) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skill", required=True, help="canonical MDE skill name")
-    parser.add_argument("--eval-id", required=True, type=int, help="1-based eval id")
+    cases = parser.add_mutually_exclusive_group(required=True)
+    cases.add_argument("--eval-id", type=int, help="1-based behavioral eval id")
+    cases.add_argument("--trigger-id", type=int, help="1-based trigger probe id")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--trace", type=Path, help="persisted DSH v4 .zstd or JSONL trace, or '-' for stdin")
     mode.add_argument("--run", action="store_true", help="actually run this eval via DSH headless; requires credentials")
@@ -221,10 +264,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--output", type=Path, help="write machine-readable result to this file")
     args = parser.parse_args()
-    report = {"skill": args.skill, "eval_id": args.eval_id, "timestamp": datetime.now(timezone.utc).isoformat(),
+    report = {"skill": args.skill, "eval_id": args.eval_id,
+              "trigger_id": args.trigger_id, "case_type": "trigger" if args.trigger_id is not None else "behavior",
+              "timestamp": datetime.now(timezone.utc).isoformat(),
               "status": "failed", "checks": [], "trace_path": None, "error": None}
     try:
-        case = load_case(args.skill, args.eval_id)
+        case = (load_trigger_case(args.skill, args.trigger_id)
+                if args.trigger_id is not None else load_case(args.skill, args.eval_id))
         trace = run_model(case, args.dsh, args.dsh_home, args.timeout) if args.run else args.trace
         report["trace_path"] = "-" if str(trace) == "-" else str(trace.resolve())
         events = read_trace(trace)

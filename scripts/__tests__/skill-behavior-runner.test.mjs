@@ -110,3 +110,63 @@ test("failed model turn can never pass even if turn/end exists", () => {
   assert.equal(got.exit, 1);
   assert.ok(got.report.checks.some((c) => c.check === "turn_completed" && !c.pass));
 });
+
+
+// SAN-1557: reuse the same DSH grader for all 18 real trigger definitions.
+// These synthetic traces prove grading integrity, NOT actual agent accuracy.
+function makeOwnerTrace(prompt, expectedOwner, badOwner = null, omitCatalog = false) {
+  const advertised = ["openmuse", "opendots", "openbot", "supabase",
+    "frontend-design", "copilotkit", "real-estate", "mastra"];
+  const catalog = "<available_skills>\n" +
+    advertised.map((s) => "- \x60" + s + "\x60: MDE domain skill.").join("\n") +
+    "\n</available_skills>";
+  const events = [event("session"), event("user/message", {
+    role: "user", source: { kind: "user" },
+    content: [{ type: "text", text: prompt }],
+  })];
+  if (!omitCatalog) events.push(event("user/message", {
+    role: "user", source: { kind: "skill-catalog" },
+    content: [{ type: "text", text: catalog }],
+  }));
+  const selected = badOwner || expectedOwner;
+  events.push(event("tool/call", {
+    name: "skill", callId: "call_1", arguments: JSON.stringify({ name: selected }),
+  }));
+  events.push(event("tool/result", {
+    message: { toolCallId: "call_1", isError: false,
+      content: [{ type: "text", text: "# " + selected }] },
+  }));
+  events.push(event("turn/end", { reason: { kind: "completed" } }));
+  return events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+}
+
+function gradeTriggerTrace(input, skill, id) {
+  const proc = spawnSync("python3", [script, "--skill", skill,
+    "--trigger-id", String(id), "--trace", "-"], {
+    cwd: root, input, encoding: "utf8", timeout: 10000,
+  });
+  return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
+}
+
+test("all 18 SAN-1557 routing probes have executable pass/fail checks", () => {
+  let count = 0;
+  for (const skill of ["openmuse", "opendots", "openbot"]) {
+    const prompts = JSON.parse(readFileSync(".claude/skills/" + skill +
+      "/evals/trigger-evals.json", "utf8"));
+    for (let i = 0; i < prompts.length; i++) {
+      const c = prompts[i];
+      const good = gradeTriggerTrace(makeOwnerTrace(c.prompt, c.expected_owner), skill, i + 1);
+      assert.equal(good.exit, 0, skill + "/" + c.id + " " + JSON.stringify(good.report));
+      assert.equal(good.report.case_type, "trigger");
+      assert.ok(good.report.checks.every((v) => v.pass));
+      const wrong = gradeTriggerTrace(makeOwnerTrace(c.prompt, c.expected_owner, skill === c.expected_owner
+        ? "mastra" : skill), skill, i + 1);
+      assert.equal(wrong.exit, 1, skill + "/" + c.id + " falsely passed wrong owner");
+      assert.ok(wrong.report.checks.some((v) => !v.pass));
+      const forged = gradeTriggerTrace(makeOwnerTrace(c.prompt, c.expected_owner, null, true), skill, i + 1);
+      assert.equal(forged.exit, 1, skill + "/" + c.id + " falsely passed absent catalog");
+      count++;
+    }
+  }
+  assert.equal(count, 18);
+});
