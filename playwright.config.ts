@@ -4,7 +4,12 @@ const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
-const baseURL = prodBaseURL || localBaseURL;
+// Remote targets belong only to the opt-in prod-smoke project. A developer's
+// inherited PROD_SMOKE_BASE_URL must never redirect ordinary browser tests.
+const baseURL = localBaseURL;
+// Keep live-data tests out of ordinary local/agent discovery. Both flags must
+// be intentional; explicit trusted production scripts already supply them.
+const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSERVER === "1";
 
 const VITEST_TESTS = "**/*.test.ts";
 
@@ -54,6 +59,8 @@ export default defineConfig({
         "**/chat-workspace-layout.spec.ts",
         // SAN-524: touch/mobile map journey runs hermetically with the deterministic chat + Maps seam.
         "**/maps-layout-mobile.spec.ts",
+        // SAN-1075: the viewing modal needs the deterministic chat + an emulated keyboard.
+        "**/viewing-modal-keyboard.spec.ts",
         // SAN-1075: the phone header runs with the deterministic chat so it can measure real boxes.
         "**/mobile-header.spec.ts",
         // SAN-522: mobile composer runs under local-chromium; keep it out of the general project.
@@ -76,6 +83,7 @@ export default defineConfig({
         "**/chat-workspace-layout.spec.ts",
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         "**/maps-layout-mobile.spec.ts",
+        "**/viewing-modal-keyboard.spec.ts",
         "**/mobile-header.spec.ts",
         "**/browse-map-close-touch.spec.ts",
       ],
@@ -145,7 +153,7 @@ export default defineConfig({
         trace: "retain-on-failure",
       },
     },
-    {
+    ...(runProductionProjects ? [{
       name: "prod-smoke",
       testMatch: PROD_SPECS,
       testIgnore: VITEST_TESTS,
@@ -155,16 +163,18 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: prodBaseURL || "https://www.mdeai.co",
-        trace: "off",
+        trace: "off" as const,
       },
-    },
+    }] : []),
   ],
   webServer: process.env.PW_SKIP_WEBSERVER
     ? undefined
     : {
         command: webServerCommand,
         url: localBaseURL,
-        reuseExistingServer: !process.env.CI,
+        // A reused server may belong to a different worktree and produce false greens.
+        // Explicit opt-in is available when the caller knows the server owner.
+        reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
         timeout: 120_000,
       },
 });

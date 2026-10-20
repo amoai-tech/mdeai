@@ -27,7 +27,7 @@
     "id": "openbot-5",
     "prompt": "Optimize the MDE restaurant landing page spacing and mobile typography only.",
     "should_trigger": false,
-    "expected_owner": "frontend-design"
+    "expected_owner": "uiux"
   },
   {
     "id": "openbot-6",

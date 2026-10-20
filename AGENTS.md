@@ -37,6 +37,7 @@ npm run lint              # ESLint, --max-warnings 0
 npm run typecheck         # tsc --noEmit
 npm test                  # Vitest, run once
 npm run test:e2e          # Playwright
+npm run test:e2e:qa-signin  # Opt-in real signed-in Supabase QA browser smoke (/saved)
 npx supabase test db      # database (pgTAP) tests
 npm run check:env:ci      # env contract, strict
 npm run check:skills      # skill library + agent exposure mirror
@@ -45,6 +46,7 @@ npm run graphify:query -- "<question>"
 ```
 
 `npm run floor` is the canonical repository gate; see `package.json` for the current command chain.
+For auth changes, also run the signed-in QA smoke with credentials in ignored local environment files (never committed); keep anonymous tests unauthenticated. See [e2e/README.md](e2e/README.md#san-1549--one-command-signed-in-qa-smoke) for prerequisites, safe credential handling, and production-smoke commands.
 
 Traps worth knowing before you debug them:
 

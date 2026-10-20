@@ -9,7 +9,7 @@ import {
 } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
-import { Calendar, Heart } from "lucide-react";
+import { Calendar } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -66,7 +66,6 @@ export function RentalCard({
   searchParams,
   onSelect,
   onSchedule,
-  onSave,
   onOpenDetails,
   canScheduleViewing,
 }: RentalCardProps) {
@@ -243,6 +242,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="outline"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-details-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -258,7 +258,7 @@ export function RentalCard({
             target="_blank"
             rel="nofollow noopener noreferrer"
             data-testid="rental-original-listing-cta"
-            className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+            className="inline-flex h-8 min-h-11 items-center rounded-md border px-3 text-sm lg:min-h-0"
           >
             View original listing
           </a>
@@ -268,6 +268,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="default"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-schedule-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -278,21 +279,6 @@ export function RentalCard({
             Schedule viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="rental-save-cta"
-          disabled
-          title="Save for later (coming soon)"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSave?.();
-          }}
-        >
-          <Heart className="size-3.5" aria-hidden />
-          Save
-        </Button>
       </div>
     </VenueCardShell>
   );
