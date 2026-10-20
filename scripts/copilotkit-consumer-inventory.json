@@ -278,6 +278,11 @@
       "file": "src/lib/hooks/__tests__/use-concierge-chat-thread-id.test.tsx",
       "classification": "test-only",
       "note": "SAN-1421 regression test for the tab thread pinning in useConciergeChat.appendMessage. Mocks the v2 hooks to prove a fresh authenticated tab adopts sessionThreadId before the first run, and that an explicit or persisted thread is never overridden."
+    },
+    {
+      "file": "src/components/rentals/rental-ask-tool-results.ts",
+      "classification": "keep",
+      "note": "SAN-1421 parsing/selection module extracted from the Ask MDE composer. Imports only the v2 AbstractAgent type to read the agent's rental tool result from the thread; it mounts no provider and starts no run."
     }
   ]
 }
