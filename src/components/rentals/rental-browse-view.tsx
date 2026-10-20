@@ -8,6 +8,7 @@ import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
+import { RentalInlineAsk, type RentalInlineAskPayload } from "@/components/rentals/rental-inline-ask";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
@@ -64,6 +65,12 @@ function RentalBrowseViewInner({
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
+  // SAN-1421 — an inline answer replaces the visible list and its pins until the renter clears
+  // it or navigates to a different filter set (the wrapper remounts on that change).
+  const [ask, setAsk] = useState<RentalInlineAskPayload | null>(null);
+  const shownResults = ask?.results ?? results;
+  const shownTotal = ask?.total ?? total;
+  const askActive = ask != null;
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -78,11 +85,11 @@ function RentalBrowseViewInner({
 
   const pins = useMemo(
     () =>
-      results.flatMap((r) => {
+      shownResults.flatMap((r) => {
         const pin = rentalToMapPin(r);
         return pin ? [pin] : [];
       }),
-    [results],
+    [shownResults],
   );
 
   useBrowseMapSync(pins, "rental");
@@ -95,8 +102,8 @@ function RentalBrowseViewInner({
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsRental = useMemo(
-    () => (detailsId ? (results.find((r) => r.id === detailsId) ?? null) : null),
-    [detailsId, results],
+    () => (detailsId ? (shownResults.find((r) => r.id === detailsId) ?? null) : null),
+    [detailsId, shownResults],
   );
   const closeDetails = useCallback(() => setDetailsId(null), []);
   const scheduleFor = (r: Rental) => () =>
@@ -104,13 +111,15 @@ function RentalBrowseViewInner({
 
   // Public browse includes source-linked external ads alongside verified inventory.
   // Do not claim every result is verified or available for MDE viewing requests.
-  const subtitle = previewMode
-    ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
-    : error
-      ? "Long-stay apartments in Medellín"
-      : dateError
-        ? "Long-stay rentals in Medellín"
-        : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
+  const subtitle = askActive
+    ? `Ask MDE — ${formatCountSubtitle(shownTotal, shownResults.length)}`
+    : previewMode
+      ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
+      : error
+        ? "Long-stay apartments in Medellín"
+        : dateError
+          ? "Long-stay rentals in Medellín"
+          : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
     <>
@@ -148,6 +157,20 @@ function RentalBrowseViewInner({
         }
       >
         <section className="mt-4" aria-label="Rental listings">
+          {/* SAN-1421 — ask MDE here instead of sending the renter to /chat. */}
+          <RentalInlineAsk
+            activeQuery={ask?.query ?? null}
+            onClear={() => setAsk(null)}
+            onResults={(payload) => setAsk(payload)}
+          />
+          {ask?.budgetNotice ? (
+            <p
+              data-testid="rental-inline-ask-budget-note"
+              className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-900 dark:text-amber-200"
+            >
+              {ask.budgetNotice}
+            </p>
+          ) : null}
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
@@ -176,26 +199,28 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {!error && !dateError && results.length === 0 ? (
+          {!error && !dateError && shownResults.length === 0 ? (
             <EmptyState
               testId="rentals-empty"
-              title="No rentals currently match these filters"
+              title={askActive ? "No rentals match your question" : "No rentals currently match these filters"}
               description={
-                stayLabel
-                  ? "None are open for the whole stay you chose. Try other dates, another neighborhood or bedroom count, or ask MDE in chat."
-                  : "Try another neighborhood or bedroom count, or ask MDE in chat."
+                askActive
+                  ? "Try another neighborhood, bedroom count or monthly budget, or clear the answer to see every apartment again."
+                  : stayLabel
+                    ? "None are open for the whole stay you chose. Try other dates, another neighborhood or bedroom count, or ask MDE in chat."
+                    : "Try another neighborhood or bedroom count, or ask MDE in chat."
               }
               icon={<Building2 className="size-8" aria-hidden />}
             />
           ) : null}
 
-          {!error && !dateError && results.length > 0 ? (
+          {!error && !dateError && shownResults.length > 0 ? (
             <div
               className={RENTAL_RESULTS_GRID}
-              aria-label={`${results.length} rentals`}
+              aria-label={`${shownResults.length} rentals`}
               data-testid="rentals-grid"
             >
-              {results.map((r) => {
+              {shownResults.map((r) => {
                 const pinId = `rental-${r.id}`;
                 return (
                   <RentalBrowseCard
@@ -234,10 +259,14 @@ function RentalBrowseViewInner({
 
 /** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
+  // A new filter navigation is a new page: remount so an old inline answer cannot outlive it.
+  const filterKey = [props.neighborhood, props.beds, props.from, props.through, props.previewMode]
+    .map((part) => part ?? "")
+    .join("|");
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
-        <RentalBrowseViewInner {...props} />
+        <RentalBrowseViewInner key={filterKey} {...props} />
       </BrowseMapContextShell>
       <ScheduleViewingModal />
     </RentalUiProvider>
