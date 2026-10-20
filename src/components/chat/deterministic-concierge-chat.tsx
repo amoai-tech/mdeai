@@ -66,6 +66,8 @@ export function DeterministicConciergeChat() {
           <textarea
             data-testid="copilot-chat-textarea"
             aria-label="Type a message"
+            enterKeyHint="send"
+            inputMode="text"
             placeholder="Type a message..."
             disabled={!hydrated}
             value={value}
@@ -84,7 +86,7 @@ export function DeterministicConciergeChat() {
             aria-label="Send"
             disabled={!hydrated || !value.trim() || sending}
             onClick={() => void submit()}
-            className="rounded-full bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+            className="min-h-11 min-w-11 rounded-full bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {sending ? "Sending…" : "Send"}
           </button>
