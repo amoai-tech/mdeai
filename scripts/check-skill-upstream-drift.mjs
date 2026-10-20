@@ -118,7 +118,7 @@ export function loadPins(root) {
   return pins;
 }
 
-async function fetchComparison(slug, reviewed) {
+export async function fetchComparison(slug, reviewed) {
   const hasToken = Boolean(process.env.GITHUB_TOKEN);
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "mdeai-skill-drift" };
   if (hasToken) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;

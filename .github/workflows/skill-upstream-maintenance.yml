@@ -55,3 +55,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/check-skill-upstream-drift.mjs
+
+      # SAN-1551: use the same scheduled read-only maintenance workflow for
+      # upstream APPLICATION references. A new upstream release is not an
+      # application dependency bump, business approval gate, or PR CI blocker.
+      - name: Review OpenMuse OpenDots OpenBot reference drift
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-ai-reference-upstreams.mjs
