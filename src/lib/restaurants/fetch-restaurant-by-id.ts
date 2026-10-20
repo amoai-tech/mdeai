@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
+import { restaurantSearchDisplayName, rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
 
 const SELECT_FIELDS =
   "id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary";
@@ -58,7 +58,16 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
 
   if (error) return { status: "error" };
   if (!data) return { status: "not_found" };
-  return { status: "found", restaurant: rowToRestaurant(data as unknown as RestaurantRow) };
+  const restaurant = rowToRestaurant(data as unknown as RestaurantRow);
+  return {
+    status: "found",
+    // Cards and Details must share the same location-qualified label. Supabase retains
+    // each venue's canonical name, ID, and Google place ID.
+    restaurant: {
+      ...restaurant,
+      name: restaurantSearchDisplayName(restaurant.name, restaurant.id),
+    },
+  };
 }
 
 /**
