@@ -79,4 +79,20 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         # A write journey must not retry: a retry duplicates fixtures, spends the hourly
         # anonymous-viewing budget, and can strand rows when the first attempt half-succeeded.
-        run: npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --retries=0
+        run: >-
+          npx playwright test e2e/rental-conversion-journey.spec.ts
+          --project=prod-smoke --retries=0
+          --trace=retain-on-failure --screenshot=only-on-failure
+
+      # A failed production journey is the one run someone has to debug later. Keep the trace,
+      # the screenshots and the HTML report instead of losing them with the runner.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-renter-journey-failure
+          path: |
+            test-results/
+            tmp/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
