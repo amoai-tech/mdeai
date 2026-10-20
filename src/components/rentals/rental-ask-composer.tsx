@@ -303,7 +303,7 @@ function ComposerInput(props: {
   );
 }
 
-function ComposerError(props: { error: string; canRetry: boolean; onRetry: () => void }) {
+function ComposerError(props: { error: string; canRetry: boolean; retryable: boolean; onRetry: () => void }) {
   return (
     <div
       id="rental-ask-error"
@@ -312,15 +312,17 @@ function ComposerError(props: { error: string; canRetry: boolean; onRetry: () =>
       className="mt-2 flex items-center justify-between gap-3 text-sm text-destructive"
     >
       <span>{props.error}</span>
-      <button
-        type="button"
-        data-testid="rental-ask-retry"
-        onClick={props.onRetry}
-        disabled={!props.canRetry}
-        className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
-      >
-        Try again
-      </button>
+      {props.retryable ? (
+        <button
+          type="button"
+          data-testid="rental-ask-retry"
+          onClick={props.onRetry}
+          disabled={!props.canRetry}
+          className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+        >
+          Try again
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -334,6 +336,8 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
 
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Retry only when the user turn is known not to have been appended.
+  const [retryable, setRetryable] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [sending, setSending] = useState(false);
   // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
@@ -361,26 +365,37 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
     cancelled.current = false;
     setSending(true);
     setError(null);
+    setRetryable(false);
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
     const errorVersionBefore = getConciergeErrorVersion();
+    let agentSendAttempted = false;
     try {
       if (onResults) {
-        // Deterministic, immediately visible: the catalogue and its pins become the answer.
-        const found = await searchRentalsForQuestion(text);
-        if (typeof found === "string") {
-          setError(found);
-        } else {
-          onResults(found);
+        // Search is supplementary: a network failure must not suppress the saved concierge turn.
+        try {
+          const found = await searchRentalsForQuestion(text);
+          if (cancelled.current) return;
+          if (typeof found === "string") {
+            setError(found);
+          } else {
+            onResults(found);
+          }
+        } catch {
+          if (cancelled.current) return;
+          setError(SEARCH_UNAVAILABLE);
         }
       }
+      if (cancelled.current) return;
+      agentSendAttempted = true;
       const started = await appendMessage(text);
       // A stopped run must not bring the text back.
       if (cancelled.current) return;
       if (!started) {
         // Nothing was sent: give the words back, unless the user has already typed something else.
         setError(ERROR_COPY);
+        setRetryable(true);
         setDraft((current) => (current === "" ? raw : current));
         return;
       }
@@ -392,8 +407,15 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
       setShowTranscript(true);
     } catch {
       if (!cancelled.current) {
-        setError(ERROR_COPY);
-        setDraft((current) => (current === "" ? raw : current));
+        // runAgent may reject after addMessage already persisted the user turn.
+        // Treat an attempted send as potentially started; never offer an unsafe resend.
+        if (agentSendAttempted) {
+          setError(ERROR_COPY_RUN);
+        } else {
+          setError(ERROR_COPY);
+          setRetryable(true);
+          setDraft((current) => (current === "" ? raw : current));
+        }
       }
     } finally {
       sendInFlight.current = false;
@@ -462,7 +484,7 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
         </p>
       ) : null}
       {error ? (
-        <ComposerError error={error} canRetry={canSend} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
+        <ComposerError error={error} canRetry={canSend} retryable={retryable} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
       ) : null}
     </div>
   );

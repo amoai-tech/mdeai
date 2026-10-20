@@ -160,7 +160,11 @@ describe("RentalAskComposer (SAN-1421)", () => {
     // The turn is already in the thread; restoring it here would resend the same question.
     expect(alert.textContent).toContain("in the conversation");
     expect(draftValue()).toBe("");
-    expect((screen.getByTestId("rental-ask-retry") as HTMLButtonElement).disabled).toBe(true);
+    // Once a user turn is already saved, Retry is not a valid action — even if
+    // someone begins typing a new question in the composer.
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
+    type("Different question");
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
   });
 
   it("frees the box while the answer streams, so the next question cannot join the sent one", async () => {
@@ -261,6 +265,50 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(onResults).not.toHaveBeenCalled();
     expect(chat.appendMessage).toHaveBeenCalledWith("studio in Envigado");
     vi.unstubAllGlobals();
+  });
+
+  it("continues the concierge turn if the supplementary rental fetch loses network", async () => {
+    const onResults = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedrooms in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("temporarily unavailable");
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledWith("2 bedrooms in Laureles"));
+    expect(onResults).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("stops before sending the agent turn when cancelled during rental search", async () => {
+    const pending = deferred<Response>();
+    const onResults = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(pending.promise));
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedrooms in Envigado");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    fireEvent.click(screen.getByTestId("rental-ask-stop"));
+    await act(async () => {
+      pending.resolve(new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
+      await pending.promise;
+    });
+    expect(onResults).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not propose duplicate Retry when the agent send rejects after dispatch", async () => {
+    chat.appendMessage.mockRejectedValueOnce(new Error("stream failed"));
+    render(<RentalAskComposer />);
+    type("furnished studio");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("in the conversation");
+    expect(draftValue()).toBe("");
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
   });
 
   it("offers Stop while an answer is running", () => {

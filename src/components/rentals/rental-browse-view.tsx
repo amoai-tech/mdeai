@@ -264,7 +264,10 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
-        <RentalBrowseViewInner {...props} />
+        <RentalBrowseViewInner
+          key={JSON.stringify([props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+          {...props}
+        />
       </BrowseMapContextShell>
       <ScheduleViewingModal />
     </RentalUiProvider>
