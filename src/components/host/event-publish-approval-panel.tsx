@@ -21,7 +21,7 @@ import {
   eventPublishReceipt,
 } from "@/lib/events/review-proposal";
 import type { ReviewReceipt } from "@/platform/contracts/review-proposal";
-import type { EventDraftState } from "@/lib/types";
+import { EventDraftStateSchema, type EventDraftState } from "@/lib/types";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 
 type EventPublishApprovalPanelProps = {
@@ -43,6 +43,7 @@ export function EventPublishApprovalPanel({
   onPublished,
 }: EventPublishApprovalPanelProps) {
   const [proposalId] = useState(() => draft.approvalRequestId ?? crypto.randomUUID());
+  const [approvalRequestId, setApprovalRequestId] = useState(draft.approvalRequestId);
   const [decided, setDecided] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,20 +61,22 @@ export function EventPublishApprovalPanel({
     setLastDecision(decision);
 
     try {
-      const proposal = await buildEventReviewProposal(draft, proposalId);
+      const normalizedDraft = EventDraftStateSchema.parse(draft);
+      const proposal = await buildEventReviewProposal(normalizedDraft, proposalId);
       const res = await fetch("/api/approval-commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           decision,
-          draft,
+          draft: proposal.draft,
           proposalId: proposal.proposalId,
           baseVersion: proposal.baseVersion,
           draftHash: proposal.draftHash,
-          approvalRequestId: draft.approvalRequestId,
+          approvalRequestId,
         }),
       });
       const json = (await res.json()) as ApprovalCommitResponse;
+      if (json.approvalRequestId) setApprovalRequestId(json.approvalRequestId);
 
       const outcome = resolveApprovalCommit(decision, res.ok, json);
       if (outcome.kind === "error") {

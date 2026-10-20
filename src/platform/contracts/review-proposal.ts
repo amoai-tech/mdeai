@@ -7,14 +7,29 @@ export function canonicalJson(value: unknown): string {
   const record = value as Record<string, unknown>;
   return `{${Object.entries(record)
     .filter(([, entryValue]) => entryValue !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalJson(entryValue)}`)
     .join(",")}}`;
 }
 
-/** SHA-256 of the exact canonical draft; works in the browser, Node and Deno. */
+const DRAFT_IDENTITY_FIELDS = new Set([
+  "approvalRequestId",
+  "publishedEventId",
+  "publishedSlug",
+  "status",
+]);
+
+/** Remove generated identity fields so retries compare event content, not server state. */
+export function normalizeReviewDraft(draft: unknown): unknown {
+  if (!draft || typeof draft !== "object" || Array.isArray(draft)) return draft;
+  return Object.fromEntries(
+    Object.entries(draft as Record<string, unknown>).filter(([key]) => !DRAFT_IDENTITY_FIELDS.has(key)),
+  );
+}
+
+/** SHA-256 of the normalized canonical draft; works in the browser, Node and Deno. */
 export async function computeDraftHash(draft: unknown): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalJson(draft));
+  const bytes = new TextEncoder().encode(canonicalJson(normalizeReviewDraft(draft)));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -59,7 +74,7 @@ export async function createReviewProposal(input: {
     proposalId: input.proposalId,
     target: input.target,
     baseVersion: input.baseVersion,
-    draft: input.draft,
+    draft: normalizeReviewDraft(input.draft),
     draftHash: await computeDraftHash(input.draft),
     createdAt: input.createdAt ?? new Date().toISOString(),
   });

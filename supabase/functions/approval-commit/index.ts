@@ -5,6 +5,7 @@ import { buildEventInsert } from "./build-event-insert.ts";
 import {
   RECEIPT_PREFIX,
   canonicalJson,
+  normalizeReviewDraft,
   parseReceipt,
   sha256,
   type Receipt,
@@ -90,10 +91,23 @@ Deno.serve(async (req: Request) => {
   }
 
   let approvalId: string | null = body.approvalRequestId ?? null;
+
+  if (!approvalId && body.proposalId) {
+    const { data: byProposal, error: proposalLookupErr } = await service
+      .from("approval_requests")
+      .select("id")
+      .eq("proposal_id", body.proposalId)
+      .maybeSingle();
+    if (proposalLookupErr) {
+      return jr(errorBody("LOOKUP_FAILED", proposalLookupErr.message), 500, req);
+    }
+    if (byProposal) approvalId = byProposal.id;
+  }
+
   if (approvalId) {
     const { data: existing, error: existingErr } = await service
       .from("approval_requests")
-      .select("id, requested_by, action_type, status, payload, notes")
+      .select("id, requested_by, action_type, status, payload, notes, proposal_id")
       .eq("id", approvalId)
       .maybeSingle();
     if (existingErr) {
@@ -104,9 +118,16 @@ Deno.serve(async (req: Request) => {
     }
     const receipt = parseReceipt(existing.notes);
     if (receipt) {
+      if (decision !== "approved") {
+        return jr(
+          errorBody("DECISION_CONFLICT", "This approval was already published."),
+          409,
+          req,
+        );
+      }
       return jr({ success: true, approvalRequestId: approvalId, decision, ...receipt }, 200, req);
     }
-    if (canonicalJson(existing.payload) !== canonicalJson(draft)) {
+    if (canonicalJson(normalizeReviewDraft(existing.payload)) !== canonicalJson(normalizeReviewDraft(draft))) {
       return jr(
         errorBody("DRAFT_CHANGED", "This draft changed after review. Start a new review."),
         409,
@@ -118,7 +139,7 @@ Deno.serve(async (req: Request) => {
       p_agent: "hostEventAgent",
       p_action_type: "publish_event",
       p_subject: draft.title ?? "Untitled event",
-      p_payload: draft,
+      p_payload: normalizeReviewDraft(draft),
       p_risk_level: "medium",
       p_requested_by: userId,
     });
@@ -130,6 +151,36 @@ Deno.serve(async (req: Request) => {
       );
     }
     approvalId = createdId;
+    if (body.proposalId) {
+      const { error: proposalWriteErr } = await service
+        .from("approval_requests")
+        .update({ proposal_id: body.proposalId })
+        .eq("id", approvalId);
+      if (proposalWriteErr?.code === "23505") {
+        const { data: winner, error: winnerErr } = await service
+          .from("approval_requests")
+          .select("id, notes")
+          .eq("proposal_id", body.proposalId)
+          .maybeSingle();
+        if (winnerErr || !winner) {
+          return jr(errorBody("LOOKUP_FAILED", winnerErr?.message ?? "proposal lookup failed"), 500, req);
+        }
+        approvalId = winner.id;
+        const winnerReceipt = parseReceipt(winner.notes);
+        if (winnerReceipt) {
+          if (decision !== "approved") {
+            return jr(
+              errorBody("DECISION_CONFLICT", "This approval was already published."),
+              409,
+              req,
+            );
+          }
+          return jr({ success: true, approvalRequestId: approvalId, decision, ...winnerReceipt }, 200, req);
+        }
+      } else if (proposalWriteErr) {
+        return jr(errorBody("RPC_FAILED", proposalWriteErr.message), 500, req);
+      }
+    }
   }
 
   if (!approvalId) {

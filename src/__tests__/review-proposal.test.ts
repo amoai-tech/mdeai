@@ -19,6 +19,13 @@ describe("review proposal contract", () => {
     expect(first).toMatch(/^[a-f0-9]{64}$/);
     expect(await computeDraftHash(reordered)).toBe(first);
     expect(await computeDraftHash({ ...draft, capacity: 81 })).not.toBe(first);
+    expect(await computeDraftHash({
+      ...draft,
+      approvalRequestId: "11111111-1111-4111-8111-111111111111",
+      publishedEventId: "event-1",
+      publishedSlug: "salsa-night",
+      status: "published",
+    })).toBe(first);
   });
 
   it("builds a valid proposal with one stable identity", async () => {
