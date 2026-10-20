@@ -90,7 +90,9 @@ describe("BrowseMapSheet placement above a pinned composer", () => {
     await act(async () => root.render(<BrowseMapSheet raised />));
 
     const fab = document.querySelector('[data-testid="browse-map-fab"]') as HTMLElement;
-    expect(fab.className).toContain("bottom-28");
+    // Bottom offset comes from the composer's measured height, so an open transcript or an error row
+    // cannot end up underneath the button; a fixed offset only cleared the collapsed box.
+    expect(fab.getAttribute("style")).toContain("--mde-ask-composer-height");
     expect(fab.className).not.toContain("bottom-6");
   });
 });

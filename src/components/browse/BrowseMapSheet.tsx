@@ -14,9 +14,10 @@ export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
       <Button
         variant="default"
         size="sm"
-        // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar
-        // instead of on top of its Send button.
-        className={raised ? "fixed bottom-28 right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
+        // measured, so an expanded transcript or an error row cannot end up underneath the button.
+        className={raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised ? { bottom: "calc(1rem + var(--mde-ask-composer-height, 6rem))" } : undefined}
         onClick={() => setOpen(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"
