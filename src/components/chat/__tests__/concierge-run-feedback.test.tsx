@@ -52,7 +52,6 @@ describe("ConciergeRunFeedback", () => {
     const stop = view.querySelector('[data-testid="concierge-stop"]');
     expect(stop).toBeTruthy();
     expect(stop?.getAttribute("aria-label")).toBe("Stop");
-    expect(stop?.getAttribute("aria-label")).toBe("Stop");
     act(() => stop?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(mocks.stop).toHaveBeenCalledTimes(1);
   });
