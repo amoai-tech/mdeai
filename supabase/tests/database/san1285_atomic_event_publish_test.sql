@@ -117,7 +117,7 @@ select is((select organizer_id from public.events where id=current_setting('san1
 select is((select count(*)::int from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000011'),
   1,'13: one durable confirmation request');
 select is((select count(*)::int from public.approval_decisions where request_id=
-  (select id from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000011')),
+  (select ar.id from public.approval_requests ar where ar.proposal_id='a1285000-0000-4000-8000-000000000011')),
   1,'14: one audit decision');
 select ok((select notes like 'MDE_RECEIPT:%' from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000011'),
   '15: durable receipt stored on the idempotency anchor');
@@ -236,7 +236,7 @@ select is((select count(*)::int from public.events where slug='san1285-rollback'
 select is((select count(*)::int from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000013'),
   0,'18: no orphan confirmation/receipt after failure');
 select is((select count(*)::int from public.approval_decisions where request_id in
-  (select id from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000013')),
+  (select ar.id from public.approval_requests ar where ar.proposal_id='a1285000-0000-4000-8000-000000000013')),
   0,'19: no orphan decision after failed tier insertion');
 
 select * from finish();
