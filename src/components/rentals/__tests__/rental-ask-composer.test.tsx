@@ -225,6 +225,44 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.appendMessage).not.toHaveBeenCalled();
   });
 
+  it("updates the page's cards from the same structured search the chat fast path uses", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/rentals/search");
+    expect(JSON.parse(String(init.body)).neighborhood).toBe("Laureles");
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "2 bedroom in Laureles", total: 1 }),
+    );
+    // The conversation still runs, so the same question and answer persist on /chat.
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledWith("2 bedroom in Laureles"));
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a failed rental search but still asks the concierge", async () => {
+    const onResults = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type("studio in Envigado");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("temporarily unavailable");
+    expect(onResults).not.toHaveBeenCalled();
+    expect(chat.appendMessage).toHaveBeenCalledWith("studio in Envigado");
+    vi.unstubAllGlobals();
+  });
+
   it("offers Stop while an answer is running", () => {
     chat.isLoading = true;
     render(<RentalAskComposer />);

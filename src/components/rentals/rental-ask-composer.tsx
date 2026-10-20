@@ -21,6 +21,12 @@ import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import { useSession } from "@/hooks/use-session";
 import { getConciergeErrorVersion } from "@/lib/concierge-error-store";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import {
+  budgetNotApplied,
+  buildRentalSearchParams,
+  canFastPathRentalSearch,
+} from "@/lib/rental-query-parser";
+import type { Rental } from "@/mastra/tools/search-rentals";
 
 /**
  * SAN-1421 — "Ask MDE" inside the results column.
@@ -40,6 +46,46 @@ const ERROR_COPY_RUN =
 const PLACEHOLDER = "Ask about these apartments";
 /** Published for the phone Map button, so it clears the composer at any height. */
 const HEIGHT_VAR = "--mde-ask-composer-height";
+const SEARCH_UNAVAILABLE = "Rental search is temporarily unavailable. Please try again.";
+const SEARCH_FAILED = "Could not search rentals right now. Please try again.";
+
+/** What the browse column needs to replace its cards and pins with the answer. */
+export type RentalAskResults = {
+  results: Rental[];
+  total: number;
+  query: string;
+  /** The question named a budget the search could not apply; say so instead of implying it did. */
+  budgetNotice?: string;
+};
+
+/**
+ * The same structured request the chat fast path posts, against the same endpoint.
+ * No second search engine: the classification and parameters come from the shared parser.
+ */
+async function searchRentalsForQuestion(query: string): Promise<RentalAskResults | string> {
+  const memory = {};
+  const params = canFastPathRentalSearch(query, memory)
+    ? buildRentalSearchParams(query, memory)
+    : null;
+  const response = await fetch("/api/rentals/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // The shared endpoint caps a page at 20; asking for more is a 400, not more rows.
+    body: JSON.stringify({ ...(params ?? { queryText: query }), limit: 20 }),
+  });
+  if (response.status === 503) return SEARCH_UNAVAILABLE;
+  if (!response.ok) return SEARCH_FAILED;
+  const data = (await response.json()) as { results?: Rental[]; total?: number };
+  if (!Array.isArray(data.results)) return SEARCH_FAILED;
+  return {
+    results: data.results,
+    total: data.total ?? data.results.length,
+    query,
+    budgetNotice: budgetNotApplied(query, params ?? {})
+      ? "I could not apply a monthly budget from that question yet, so check the price on each card."
+      : undefined,
+  };
+}
 
 type PlainTurn = { id: string; role: "user" | "assistant"; text: string };
 type AgentMessage = { id?: string; role?: string; content?: unknown };
@@ -279,7 +325,7 @@ function ComposerError(props: { error: string; canRetry: boolean; onRetry: () =>
   );
 }
 
-function LiveComposer() {
+function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) => void }) {
   const { agent, isReady } = useConciergeCoAgent();
   const { appendMessage, isLoading, stopActiveRun } = useConciergeChat();
   const { user, loading: sessionLoading } = useSession();
@@ -320,6 +366,15 @@ function LiveComposer() {
     setDraft("");
     const errorVersionBefore = getConciergeErrorVersion();
     try {
+      if (onResults) {
+        // Deterministic, immediately visible: the catalogue and its pins become the answer.
+        const found = await searchRentalsForQuestion(text);
+        if (typeof found === "string") {
+          setError(found);
+        } else {
+          onResults(found);
+        }
+      }
       const started = await appendMessage(text);
       // A stopped run must not bring the text back.
       if (cancelled.current) return;
@@ -344,7 +399,7 @@ function LiveComposer() {
       sendInFlight.current = false;
       setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut, isReady]);
+  }, [appendMessage, busy, draft, signedOut, isReady, onResults]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
@@ -413,10 +468,10 @@ function LiveComposer() {
   );
 }
 
-export function RentalAskComposer() {
+export function RentalAskComposer({ onResults }: { onResults?: (results: RentalAskResults) => void } = {}) {
   // Read the context without throwing: previews, isolated tests and deterministic E2E render this
   // page with no chat stack, and must get an inert box instead of an error.
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) return <InertComposer />;
-  return <LiveComposer />;
+  return <LiveComposer onResults={onResults} />;
 }
