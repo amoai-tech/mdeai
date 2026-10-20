@@ -151,12 +151,12 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
           </div>
         </div>
 
-        <div className="order-1 min-h-[13rem] w-full md:order-2 md:min-h-0 md:w-[42%]">
+        <div className="order-1 aspect-[16/10] w-full md:order-2 md:aspect-auto md:w-[42%]">
           {hasCover && cover ? (
             <Image
               alt=""
               aria-hidden
-              className="h-40 w-full object-cover md:h-full"
+              className="h-full w-full object-cover"
               height={640}
               src={cover}
               width={800}
@@ -165,7 +165,7 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
             // Typography-first panel: no empty image slot, no invented photography.
             <div
               aria-hidden
-              className="flex h-full min-h-[13rem] items-end bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-6 md:min-h-0"
+              className="flex h-full w-full items-end bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-6"
             >
               <span className="font-serif text-6xl leading-none text-primary/30">
                 {(contest.title.match(/[a-z0-9]/i)?.[0] ?? "C").toUpperCase()}
