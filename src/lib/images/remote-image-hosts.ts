@@ -19,6 +19,10 @@ const STATIC_HOSTS: RemoteImageRule[] = [
   { protocol: "https", hostname: "images.unsplash.com" },
   // Apartment seed images (SAN-718 live data).
   { protocol: "https", hostname: "picsum.photos" },
+  // Wikimedia Commons: openly licensed photos of real places (tourist_destinations). Restricted to the
+  // Commons file tree; every record that points here must carry its author and licence (see
+  // fetchLiveDestinations), so a card never shows a Commons picture without credit.
+  { protocol: "https", hostname: "upload.wikimedia.org", pathPrefix: "/wikipedia/commons/" },
 ];
 
 const SUPABASE_STORAGE_PREFIX = "/storage/v1/object/public/";
