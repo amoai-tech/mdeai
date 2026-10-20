@@ -264,7 +264,9 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       } else if (code === "NONCE_REPLAYED" || code === "NONCE_INVALID") {
         setMessage("The vote confirmation expired or was used. Try again for a fresh one.");
       } else {
-        setMessage("Could not confirm your vote. Retry to recover the same receipt if it was saved.");
+        // An unconfirmed cast result must never lead back to a vote-enabled UI.
+        setState("unknown");
+        return;
       }
       setState("error");
     } catch (err) {
@@ -272,8 +274,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       // timeout, and CI has no other way to name the cause.
       console.error("[vote] cast request threw:", err instanceof Error ? err.message : err);
       // A request may have committed even if the network response never arrived.
-      setMessage("Connection interrupted. Retry to recover your original vote — do not assume it failed.");
-      setState("error");
+      // Recheck the server; never re-offer a fresh Vote CTA on an unknown outcome.
+      setState("unknown");
     } finally {
       inFlight.current = false;
     }
