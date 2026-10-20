@@ -336,7 +336,8 @@ test.describe("SAN-1412 saved chat titles", { tag: ["@deterministic"] }, () => {
         body: JSON.stringify({ updated: true, title: TITLE }),
       });
     });
-    await mockFastPaths(page);
+    // This test supplies a custom thread-list route above; keep it authoritative.
+    await mockFastPaths(page, { mockThreads: false });
     await gotoDeterministicChat(page);
 
     const item = page.getByTestId("nav-thread-item");
