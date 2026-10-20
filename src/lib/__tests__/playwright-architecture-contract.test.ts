@@ -277,7 +277,7 @@ describe("SAN-1341 Playwright architecture", () => {
 
   it("never silently reuses an existing worktree server", () => {
     const configText = fs.readFileSync("playwright.config.ts", "utf8");
-    expect(configText).toContain('reuseExistingServer: process.env.PW_REUSE_WEBSERVER === "1"');
+    expect(configText).toContain('reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1"');
     if (!process.env.PW_REUSE_WEBSERVER && config.webServer && !Array.isArray(config.webServer)) {
       expect(config.webServer.reuseExistingServer).toBe(false);
     }

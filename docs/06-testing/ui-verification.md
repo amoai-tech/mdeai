@@ -153,7 +153,8 @@ npm run test:mastra | test:lib | test:hooks | test:api   # scoped vitest
 # Playwright e2e (committed proof)
 npm run test:e2e                     # local Chromium only; fresh :3002, never production
 npm run test:e2e:deterministic        # isolated mocked chat/map journeys
-# For a known, intentionally reused dev server only: PW_REUSE_WEBSERVER=1 npm run test:e2e
+# For a known dev server only (not CI): PW_REUSE_WEBSERVER=1 npm run test:e2e
+# PROD_SMOKE_BASE_URL never retargets local Chromium; remote smoke requires --project=prod-smoke.
 # Remote/prod specs require BOTH PW_SKIP_WEBSERVER=1 and PROD_SMOKE_BASE_URL=<explicit URL>.
 npm run test:e2e:desktop             # e2e/maps-layout-desktop.spec.ts
 npm run test:e2e:mobile              # e2e/maps-layout-mobile.spec.ts
