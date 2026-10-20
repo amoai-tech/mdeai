@@ -23,7 +23,7 @@ const agent = vi.hoisted(() => ({
   messages: [] as Array<{ id: string; role: string; content: string }>,
   listeners: [] as Array<() => void>,
 }));
-const coagent = vi.hoisted(() => ({ present: true }));
+const coagent = vi.hoisted(() => ({ present: true, isReady: true }));
 const nav = vi.hoisted(() => ({ pathname: "/rentals", search: "" }));
 const errorVersion = vi.hoisted(() => ({ value: 0 }));
 
@@ -50,8 +50,8 @@ vi.mock("@/components/chat/concierge-coagent-context", () => {
     },
   };
   return {
-    useConciergeCoAgent: () => ({ agent: liveAgent }),
-    useOptionalConciergeCoAgent: () => (coagent.present ? { agent: liveAgent } : null),
+    useConciergeCoAgent: () => ({ agent: liveAgent, isReady: coagent.isReady }),
+    useOptionalConciergeCoAgent: () => (coagent.present ? { agent: liveAgent, isReady: coagent.isReady } : null),
   };
 });
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
@@ -84,6 +84,7 @@ beforeEach(() => {
   session.user = { id: "user-1" };
   session.loading = false;
   coagent.present = true;
+  coagent.isReady = true;
   nav.pathname = "/rentals";
   nav.search = "";
   agent.messages = [];
@@ -157,6 +158,42 @@ describe("RentalAskComposer (SAN-1421)", () => {
 
     expect(await screen.findByTestId("rental-ask-error")).not.toBeNull();
     expect(draftValue()).toBe("2BR in Envigado");
+  });
+
+  it("allows only one agent run on rapid repeated Enter presses", async () => {
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer />);
+    type("2BR in Laureles");
+    const field = screen.getByLabelText("Ask MDE about rentals");
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(chat.appendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("rental-ask-stop")).not.toBeNull();
+    await act(async () => { pending.resolve(true); await pending.promise; });
+    expect(draftValue()).toBe("");
+  });
+
+  it("keeps a submitted draft when a run is stopped but still resolves", async () => {
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer />);
+    type("two bedrooms near metro");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    fireEvent.click(screen.getByTestId("rental-ask-stop"));
+    expect(chat.stopActiveRun).toHaveBeenCalledTimes(1);
+    await act(async () => { pending.resolve(true); await pending.promise; });
+    expect(draftValue()).toBe("two bedrooms near metro");
+  });
+
+  it("blocks sending until the shared agent connection is ready", () => {
+    coagent.isReady = false;
+    render(<RentalAskComposer />);
+    type("furnished flats");
+    expect((screen.getByTestId("rental-ask-send") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain("Connecting to MDE");
+    fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
+    expect(chat.appendMessage).not.toHaveBeenCalled();
   });
 
   it("offers Stop while an answer is running", () => {

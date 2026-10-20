@@ -82,7 +82,7 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         {askComposer ? (
           <div
             data-testid="workspace-ask-composer"
-            className="sticky bottom-0 z-20 mt-auto border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+            className="sticky bottom-0 z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90"
           >
             {askComposer}
           </div>

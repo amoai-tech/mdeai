@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
@@ -263,7 +264,7 @@ function ComposerError(props: { error: string; canRetry: boolean; onRetry: () =>
 }
 
 function LiveComposer() {
-  const { agent } = useConciergeCoAgent();
+  const { agent, isReady } = useConciergeCoAgent();
   const { appendMessage, isLoading, stopActiveRun } = useConciergeChat();
   const { user, loading: sessionLoading } = useSession();
   const pathname = usePathname();
@@ -272,14 +273,18 @@ function LiveComposer() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [sending, setSending] = useState(false);
+  // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
+  const sendInFlight = useRef(false);
+  const cancelled = useRef(false);
 
   const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
   usePublishHeight(shellElement);
 
   const turns = useTurns(agent);
   const signedOut = !sessionLoading && !user;
-  const busy = isLoading;
-  const canSend = draft.trim().length > 0 && !busy && !signedOut;
+  const busy = isLoading || sending;
+  const canSend = draft.trim().length > 0 && !busy && !signedOut && isReady;
 
   const query = searchParams?.toString() ?? "";
   const returnTo = query ? `${pathname}?${query}` : pathname;
@@ -289,11 +294,16 @@ function LiveComposer() {
     // Keep the exact text as typed: the box is only cleared if it still holds what was sent.
     const raw = draft;
     const text = raw.trim();
-    if (!text || busy || signedOut) return;
+    if (!text || busy || signedOut || !isReady || sendInFlight.current) return;
+    sendInFlight.current = true;
+    cancelled.current = false;
+    setSending(true);
     setError(null);
     const errorVersionBefore = getConciergeErrorVersion();
     try {
       const started = await appendMessage(text);
+      // A stopped run must not erase an unsent draft even if its promise resolves successfully.
+      if (cancelled.current) return;
       if (!started || getConciergeErrorVersion() !== errorVersionBefore) {
         setError(ERROR_COPY);
         return;
@@ -302,9 +312,17 @@ function LiveComposer() {
       setDraft((current) => (current === raw ? "" : current));
       setShowTranscript(true);
     } catch {
-      setError(ERROR_COPY);
+      if (!cancelled.current) setError(ERROR_COPY);
+    } finally {
+      sendInFlight.current = false;
+      setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut]);
+  }, [appendMessage, busy, draft, signedOut, isReady]);
+
+  const onStop = useCallback(() => {
+    if (sendInFlight.current) cancelled.current = true;
+    stopActiveRun();
+  }, [stopActiveRun]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -327,12 +345,20 @@ function LiveComposer() {
       />
 
       {signedOut ? (
-        <p className="text-sm text-muted-foreground" data-testid="rental-ask-signed-out">
-          <Link href={signInHref} className="font-medium text-primary hover:underline">
+        // A visitor should see a deliberate entry point, not a footnote: the row keeps the
+        // composer's height and its 44px target, and says exactly what signing in unlocks.
+        <div
+          data-testid="rental-ask-signed-out"
+          className="flex items-center justify-between gap-3"
+        >
+          <p className="text-sm text-muted-foreground">Ask MDE about these apartments.</p>
+          <Link
+            href={signInHref}
+            className="inline-flex h-11 shrink-0 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
             Sign in
-          </Link>{" "}
-          to ask MDE about these apartments.
-        </p>
+          </Link>
+        </div>
       ) : (
         <ComposerInput
           draft={draft}
@@ -342,12 +368,17 @@ function LiveComposer() {
           onDraft={setDraft}
           onKeyDown={onKeyDown}
           onSend={() => void send()}
-          onStop={stopActiveRun}
+          onStop={onStop}
         />
       )}
 
+      {!signedOut && !isReady ? (
+        <p role="status" className="mt-2 text-xs text-muted-foreground">
+          Connecting to MDE — you can send when the connection is ready.
+        </p>
+      ) : null}
       {error ? (
-        <ComposerError error={error} canRetry={!busy && draft.trim().length > 0} onRetry={() => void send()} />
+        <ComposerError error={error} canRetry={canSend} onRetry={() => void send()} />
       ) : null}
     </div>
   );
