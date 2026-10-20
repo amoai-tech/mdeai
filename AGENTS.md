@@ -246,6 +246,29 @@ Owned by `tasks`. The required body sections and the PR readiness sequence live 
 
 A PR body that only restates the diff has added nothing.
 
+### Right-sized PRs and tasks
+
+Keep PRs and Linear tasks as small as practical, but large
+enough to deliver one complete, verifiable outcome.
+
+- One PR = one clear problem, solution, and testable result.
+- Include all code, migrations, tests, and configuration
+  necessary to complete that outcome.
+- Do not add unrelated features, refactors, or task cleanup.
+- Split only when changes have independent outcomes,
+  ownership, risks, dependencies, or release requirements.
+- Do not create separate PRs or Linear tasks for every file,
+  test, minor fix, or implementation step.
+- Prefer extending an existing relevant task over creating
+  duplicates.
+- If a PR becomes difficult to review or verify, reduce its
+  scope without breaking a complete working journey.
+- Never sacrifice security, correctness, or necessary tests
+  just to make a PR smaller.
+
+Optimize for the fewest PRs and tasks that deliver complete,
+reviewable, independently verifiable results.
+
 ## CI and merge approval
 
 `floor` and `mastra-schema-init` are required status checks on `main`. `floor` runs on every PR regardless of base branch, because a stacked PR still needs the same general repository proof; `mastra-schema-init` independently gates the Mastra storage/schema contract.
