@@ -103,6 +103,80 @@ function ContestCard({ contest }: { contest: PublicContestSummary }) {
   );
 }
 
+/**
+ * Exactly one public contest: a grid leaves an empty column and reads unfinished. This gives the
+ * single real contest a deliberate featured treatment instead of entering the two-column loop.
+ * Zero, one and many each get their own layout, all from the same canonical read.
+ */
+function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
+  const state = contestState(contest);
+  const window = contestWindowLabel(contest);
+  const href = "/contests/" + contest.slug;
+  const cover = contest.coverUrl;
+  const hasCover = Boolean(cover && isRenderableRemoteImage(cover));
+
+  return (
+    <article
+      className="group overflow-hidden rounded-3xl border border-border/60 transition-colors hover:border-primary/40 focus-within:border-primary/40"
+      data-testid={"contest-card-" + contest.slug}
+      data-featured="true"
+    >
+      <Link className="grid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:grid-cols-[1.1fr_1fr]" href={href}>
+        <div className="order-2 flex flex-col justify-between gap-6 p-6 sm:p-10 md:order-1">
+          <div className="space-y-4">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+              data-testid="contest-state"
+            >
+              <span aria-hidden className={"size-1.5 rounded-full " + STATE_DOT[state]} />
+              {STATE_LABEL[state]}
+            </span>
+            <h2 className="text-balance font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              {contest.title}
+            </h2>
+            {window ? <p className="text-sm text-muted-foreground">{window}</p> : null}
+            {contest.description ? (
+              <p className="max-w-prose text-pretty text-base leading-relaxed text-foreground">
+                {contest.description}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground">
+              View contest
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {contest.nominees} restaurant{contest.nominees === 1 ? "" : "s"} on the ballot
+            </span>
+          </div>
+        </div>
+
+        <div className="order-1 min-h-40 md:order-2">
+          {hasCover && cover ? (
+            <Image
+              alt=""
+              aria-hidden
+              className="h-40 w-full object-cover md:h-full"
+              height={640}
+              src={cover}
+              width={800}
+            />
+          ) : (
+            // Typography-first panel: no empty image slot, no invented photography.
+            <div
+              aria-hidden
+              className="flex h-full min-h-40 items-end bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-6"
+            >
+              <span className="font-serif text-6xl leading-none text-primary/30">
+                {(contest.title.match(/[a-z0-9]/i)?.[0] ?? "C").toUpperCase()}
+              </span>
+            </div>
+          )}
+        </div>
+      </Link>
+    </article>
+  );
+}
 export default async function ContestsPage() {
   const result = await listPublicContests();
 
@@ -128,6 +202,8 @@ export default async function ContestsPage() {
           testId="contests-empty"
           title="No restaurant contests yet"
         />
+      ) : result.contests.length === 1 ? (
+        <FeaturedContest contest={result.contests[0]} />
       ) : (
         <ul className="grid grid-cols-1 gap-5 md:grid-cols-2" data-testid="contests-list">
           {result.contests.map((contest) => (
