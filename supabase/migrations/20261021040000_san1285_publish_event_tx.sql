@@ -200,7 +200,10 @@ begin
     exception when others then
       v_receipt := null;
     end;
-    if v_receipt is not null and v_receipt ? 'eventId' then
+    -- Only a well-formed event id may be cast; a malformed legacy receipt must
+    -- not block the recovery path with a cast error.
+    if v_receipt is not null
+       and (v_receipt ->> 'eventId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       select * into v_existing_event
       from public.events
       where id = (v_receipt ->> 'eventId')::uuid

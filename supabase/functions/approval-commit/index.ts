@@ -64,11 +64,21 @@ function failureResponse(
   const status = httpStatusFor(error.code);
 
   if (error.code === "23505") {
+    // The only expected unique violation is the public event slug. Anything else
+    // is reported truthfully instead of claiming a slug conflict.
+    const constraint = error.message?.match(/constraint "([^"]+)"/)?.[1] ?? "";
+    if (constraint.includes("events_slug")) {
+      return jr(
+        errorBody(
+          "SLUG_CONFLICT",
+          "That event link is already in use. Try publishing again.",
+        ),
+        409,
+        req,
+      );
+    }
     return jr(
-      errorBody(
-        "SLUG_CONFLICT",
-        "That event link is already in use. Try publishing again.",
-      ),
+      errorBody("CONFLICT", "This publish conflicted with another write. Retry shortly."),
       409,
       req,
     );

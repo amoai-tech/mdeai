@@ -12,7 +12,7 @@
 -- Fixtures are created inside this transaction and rolled back at the end.
 
 begin;
-select plan(31);
+select plan(32);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values
@@ -236,6 +236,55 @@ select is(
   1,
   'retry does not duplicate ticket tiers'
 );
+
+-- A malformed legacy receipt must not block the retry or publish a second event:
+-- the function skips the bad receipt and recovers the event linked by approval.
+update public.approval_requests
+set notes = 'MDE_RECEIPT:{"eventId":"not-a-uuid","slug":"broken"}'
+where proposal_id = 'a1285000-0000-4000-8000-000000000010';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"a1285000-0000-4000-8000-000000000001","role":"authenticated"}',
+  true
+);
+
+select is(
+  (public.publish_event_tx(
+    'a1285000-0000-4000-8000-000000000010',
+    $draft${
+      "title": "SAN-1285 Atomic Event",
+      "neighborhood": "Laureles",
+      "dateIso": "2099-05-01T20:00:00-05:00",
+      "venue": "Son Havana",
+      "priceMinCop": 50000,
+      "capacity": 80,
+      "description": "Atomic publish fixture",
+      "ticketTiers": []
+    }$draft$::jsonb,
+    $event${
+      "source": "host_wizard",
+      "name": "SAN-1285 Atomic Event",
+      "description": "Atomic publish fixture",
+      "address": "Son Havana",
+      "city": "Medellín",
+      "country": "CO",
+      "event_start_time": "2099-05-02T01:00:00Z",
+      "ticket_price_min": 50000,
+      "currency": "cop",
+      "slug": "san1285-atomic-event",
+      "status": "published",
+      "organizer_id": "a1285000-0000-4000-8000-000000000001",
+      "created_by": "a1285000-0000-4000-8000-000000000001",
+      "details": {"neighborhood": "Laureles", "capacity": 80, "ticket_tiers": []}
+    }$event$::jsonb
+  ) ->> 'eventId')::uuid,
+  (select (receipt ->> 'eventId')::uuid from san1285_result),
+  'a malformed legacy receipt recovers the linked event instead of duplicating'
+);
+
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- A changed draft after review must be refused with zero writes.
