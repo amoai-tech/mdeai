@@ -1,6 +1,6 @@
 -- SAN-1497 · vote_tally separates real audience votes from development-test ballots
 begin;
-select plan(6);
+select plan(12);
 
 insert into auth.users (id, email) values
   ('f1497000-0000-0000-0000-000000000001','tally-a@example.com'),
@@ -49,6 +49,30 @@ select is(
 
 select is((public.vote_tally('e1497000-0000-0000-0000-000000000009') ->> 'audience_accepted')::int,
   0, 'an entity with no votes reports zero, not null');
+
+-- The tally exposes confidential audit semantics; only server-side reads may call it.
+select is(has_function_privilege('anon', 'public.vote_tally(uuid)', 'EXECUTE'),
+  false, 'anonymous callers cannot execute the tally');
+select is(has_function_privilege('authenticated', 'public.vote_tally(uuid)', 'EXECUTE'),
+  false, 'authenticated callers cannot execute the tally directly');
+select is(has_function_privilege('service_role', 'public.vote_tally(uuid)', 'EXECUTE'),
+  true, 'the server role can read the canonical tally');
+
+-- A clean paid ballot must not inflate the free audience tally.
+insert into vote.votes (contest_id, entity_id, source, ip_hash, idempotency_key,
+  restaurant_ballot, fraud_status, development_test)
+values ('c1497000-0000-0000-0000-000000000001',
+  'e1497000-0000-0000-0000-000000000001', 'paid', 'iph', 'tk-paid',
+  false, 'clean', false);
+select is((public.vote_tally('e1497000-0000-0000-0000-000000000001') ->> 'audience_accepted')::int,
+  1, 'a clean paid ballot does not increase accepted free votes');
+
+-- Suspicious audience ballots remain pending until they are reviewed.
+update vote.votes set fraud_status = 'suspicious' where idempotency_key = 'tk-2';
+select is((public.vote_tally('e1497000-0000-0000-0000-000000000001') ->> 'audience_pending')::int,
+  1, 'a suspicious, non-test audience ballot remains pending');
+select is((public.vote_tally('e1497000-0000-0000-0000-000000000001') ->> 'audience_total')::int,
+  2, 'review state changes do not add paid, blocked, or test ballots to free audience total');
 
 select * from finish();
 rollback;
