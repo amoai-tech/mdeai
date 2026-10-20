@@ -20,8 +20,41 @@ type Body = {
   decision?: string;
   draft?: DraftPayload;
   approvalRequestId?: string;
+  proposalId?: string;
+  baseVersion?: string;
+  draftHash?: string;
   reason?: string;
 };
+
+type Receipt = { eventId: string; slug: string; proposalId?: string | null };
+const RECEIPT_PREFIX = "MDE_RECEIPT:";
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+    .join(",")}}`;
+}
+
+async function sha256(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function parseReceipt(notes: string | null): Receipt | null {
+  if (!notes?.startsWith(RECEIPT_PREFIX)) return null;
+  try {
+    const value = JSON.parse(notes.slice(RECEIPT_PREFIX.length)) as Receipt;
+    return typeof value?.eventId === "string" && typeof value?.slug === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 const VALID_DECISIONS = new Set(["approved", "edit", "rejected"]);
 
@@ -68,33 +101,89 @@ Deno.serve(async (req: Request) => {
 
   const service = getServiceClient();
 
-  const { data: approvalId, error: reqErr } = await service.rpc("request_approval", {
-    p_agent: "hostEventAgent",
-    p_action_type: "publish_event",
-    p_subject: draft.title ?? "Untitled event",
-    p_payload: draft,
-    p_risk_level: "medium",
-    p_requested_by: userId,
-  });
+  if (body.draftHash) {
+    const actual = await sha256(draft);
+    if (actual !== body.draftHash) {
+      return jr(
+        errorBody("DRAFT_CHANGED", "This draft changed after review. Start a new review."),
+        409,
+        req,
+      );
+    }
+  }
 
-  if (reqErr || !approvalId) {
-    return jr(
-      errorBody("RPC_FAILED", reqErr?.message ?? "request_approval failed"),
-      500,
-      req,
-    );
+  let approvalId: string | null = body.approvalRequestId ?? null;
+  if (approvalId) {
+    const { data: existing, error: existingErr } = await service
+      .from("approval_requests")
+      .select("id, requested_by, action_type, status, payload, notes")
+      .eq("id", approvalId)
+      .maybeSingle();
+    if (existingErr) {
+      return jr(errorBody("LOOKUP_FAILED", existingErr.message), 500, req);
+    }
+    if (!existing || existing.requested_by !== userId || existing.action_type !== "publish_event") {
+      return jr(errorBody("APPROVAL_NOT_FOUND", "Approval request not found"), 404, req);
+    }
+    const receipt = parseReceipt(existing.notes);
+    if (receipt) {
+      return jr({ success: true, approvalRequestId: approvalId, decision, ...receipt }, 200, req);
+    }
+    if (canonicalJson(existing.payload) !== canonicalJson(draft)) {
+      return jr(
+        errorBody("DRAFT_CHANGED", "This draft changed after review. Start a new review."),
+        409,
+        req,
+      );
+    }
+  } else {
+    const { data: createdId, error: reqErr } = await service.rpc("request_approval", {
+      p_agent: "hostEventAgent",
+      p_action_type: "publish_event",
+      p_subject: draft.title ?? "Untitled event",
+      p_payload: draft,
+      p_risk_level: "medium",
+      p_requested_by: userId,
+    });
+    if (reqErr || !createdId) {
+      return jr(
+        errorBody("RPC_FAILED", reqErr?.message ?? "request_approval failed"),
+        500,
+        req,
+      );
+    }
+    approvalId = createdId;
+  }
+
+  if (!approvalId) {
+    return jr(errorBody("RPC_FAILED", "approval request missing"), 500, req);
   }
 
   const rpcDecision = mapRpcDecision(decision);
-  const { error: decideErr } = await service.from("approval_decisions").insert({
-    request_id: approvalId,
-    decision: rpcDecision,
-    decided_by: userId,
-    reason: body.reason ?? null,
-  });
-
-  if (decideErr) {
-    return jr(errorBody("RPC_FAILED", decideErr.message), 500, req);
+  const { data: priorDecision, error: decisionLookupErr } = await service
+    .from("approval_decisions")
+    .select("decision")
+    .eq("request_id", approvalId)
+    .maybeSingle();
+  if (decisionLookupErr) {
+    return jr(errorBody("LOOKUP_FAILED", decisionLookupErr.message), 500, req);
+  }
+  if (!priorDecision) {
+    const { error: decideErr } = await service.from("approval_decisions").insert({
+      request_id: approvalId,
+      decision: rpcDecision,
+      decided_by: userId,
+      reason: body.reason ?? null,
+    });
+    if (decideErr) {
+      return jr(errorBody("RPC_FAILED", decideErr.message), 500, req);
+    }
+  } else if (priorDecision.decision !== rpcDecision) {
+    return jr(
+      errorBody("DECISION_CONFLICT", "This approval was already decided differently."),
+      409,
+      req,
+    );
   }
 
   if (decision !== "approved") {
@@ -178,13 +267,25 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  const receipt: Receipt = {
+    eventId: eventRow.id,
+    slug: eventRow.slug,
+    proposalId: body.proposalId ?? null,
+  };
+  const { error: receiptErr } = await service
+    .from("approval_requests")
+    .update({ notes: RECEIPT_PREFIX + JSON.stringify(receipt) })
+    .eq("id", approvalId);
+  if (receiptErr) {
+    console.error("[approval-commit] receipt persist failed", receiptErr.message);
+  }
+
   return jr(
     {
       success: true,
       approvalRequestId: approvalId,
       decision,
-      eventId: eventRow.id,
-      slug: eventRow.slug,
+      ...receipt,
     },
     200,
     req,
