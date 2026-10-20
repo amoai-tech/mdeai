@@ -32,6 +32,8 @@ vi.mock("@/components/maps/ChatMap", async () => {
   };
 });
 vi.mock("@/components/modals/schedule-viewing-modal", () => ({ ScheduleViewingModal: () => null }));
+// The workspace header shows the sign-in status; it needs a Supabase client, which these tests do not use.
+vi.mock("@/components/auth/auth-status", () => ({ AuthStatus: () => null }));
 
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
 import { RentalDetailsPanel } from "@/components/rentals/rental-details-panel";
@@ -244,7 +246,7 @@ describe("/rentals Details panel — desktop", () => {
     await mount();
     const mapBefore = byId("chat-map-stub");
     const cardsBefore = container.querySelectorAll('[data-testid^="rental-card-"][data-result-kind="rental"]').length;
-    const filters = byId("rentals-browse")?.querySelectorAll("a[aria-pressed]").length;
+    const filters = byId("rentals-browse")?.querySelectorAll("a[aria-current]").length;
     await click(detailsButton(MAPPED_SLUG));
     expect(byId("browse-map-panel")?.querySelector("[inert]")).not.toBeNull(); // map is inert under the panel
     expect(byId("browse-map-panel")?.className).toMatch(/\bz-20\b/); // above the sticky filter header
@@ -255,7 +257,7 @@ describe("/rentals Details panel — desktop", () => {
     expect(byId("browse-map-panel")?.className).not.toMatch(/\bz-20\b/); // restaurants/map-only layout unchanged
     expect(container.querySelectorAll('[data-testid^="rental-card-"][data-result-kind="rental"]').length).toBe(cardsBefore);
     expect(cardsBefore).toBe(9);
-    expect(byId("rentals-browse")?.querySelectorAll("a[aria-pressed]").length).toBe(filters);
+    expect(byId("rentals-browse")?.querySelectorAll("a[aria-current]").length).toBe(filters);
   });
 
   it("Escape closes the panel and returns focus to the Details button that opened it", async () => {

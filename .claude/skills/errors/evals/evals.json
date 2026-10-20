@@ -1,18 +1,38 @@
 {
   "skill_name": "errors",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "evals": [
     {
       "id": 1,
-      "prompt": "Build started failing after a dependency update, but I do not know which package caused it. Investigate root cause only; do not edit files.",
+      "prompt": "We have a reproducible MDE defect: rental search shows no apartments although rows exist in Supabase. Give only the FIRST TWO steps you would take to diagnose it and which project guide applies; do not actually troubleshoot, execute commands, or change anything. Use the project skills that the coding assistant should follow.",
       "expected_output": "Confirms actual error and affected runtime before suggesting a small scoped fix; makes no code changes.",
       "files": [],
       "expectations": [
-        "Identify the correct scope and user-visible outcome without inventing evidence",
-        "Preserve the owning workflow's authorization, security and no-false-success rules",
-        "State precise verification and any unknowns rather than claiming unrun tests",
-        "Confirms actual error and affected runtime before suggesting a small scoped fix; makes no code changes."
-      ]
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     },
     {
       "id": 2,
@@ -20,11 +40,31 @@
       "expected_output": "Traces UI to backend to Supabase authorization, identifies evidence needed, does not bypass authorization.",
       "files": [],
       "expectations": [
-        "Identify the correct scope and user-visible outcome without inventing evidence",
-        "Preserve the owning workflow's authorization, security and no-false-success rules",
-        "State precise verification and any unknowns rather than claiming unrun tests",
-        "Traces UI to backend to Supabase authorization, identifies evidence needed, does not bypass authorization."
-      ]
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     },
     {
       "id": 3,
@@ -32,10 +72,56 @@
       "expected_output": "Checks exact branch and error, isolates regression before proposing changes.",
       "files": [],
       "expectations": [
-        "Identify the correct scope and user-visible outcome without inventing evidence",
-        "Preserve the owning workflow's authorization, security and no-false-success rules",
-        "State precise verification and any unknowns rather than claiming unrun tests",
-        "Checks exact branch and error, isolates regression before proposing changes."
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 4,
+      "prompt": "Explain the difference between server-side rendering and client-side rendering in Next.js. Nothing is failing; this is a simple conceptual comparison.",
+      "expected_output": "Answers the conceptual question without invoking the MDE errors skill.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "does-not-load-errors",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "errors"
+        },
+        {
+          "id": "completes-explanation",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
       ]
     }
   ]

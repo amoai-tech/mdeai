@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Menu } from "lucide-react";
 import { ChatNavRail } from "@/components/chat/chat-nav-rail";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-/** MAP-007B — collapsible nav for tablet/mobile (desktop uses fixed left rail). */
-export function ChatNavDrawer() {
+/**
+ * MAP-007B — collapsible nav for tablet/mobile (desktop uses fixed left rail).
+ * `rail` lets a page without a chat session (the discovery pages) supply its own session-free rail.
+ */
+export function ChatNavDrawer({ rail }: { rail?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -43,7 +46,7 @@ export function ChatNavDrawer() {
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>Concierge navigation menu</SheetDescription>
           </SheetHeader>
-          <ChatNavRail testId="nav-rail-drawer" />
+          {rail ?? <ChatNavRail testId="nav-rail-drawer" onNavigate={() => setOpen(false)} />}
         </SheetContent>
       </Sheet>
     </>

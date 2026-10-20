@@ -4,6 +4,7 @@ import { test, expect } from "@playwright/test";
 import {
   gotoHome,
   sendConciergeMessage,
+  submitConciergeMessageExpectingNoTurn,
   waitForCopilotIdle,
   waitForRentalCards,
   waitForRestaurantCards,
@@ -13,6 +14,12 @@ import {
   RESTAURANT_FAST_PATH_QUERY,
   NIGHTLIFE_GROUNDING_QUERY,
 } from "./helpers/maps-layout";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  hasE2eEnv,
+  signInAsOnOrigin,
+} from "./helpers/auth";
 import { expectProtectedRouteLoginRedirect } from "./helpers/screen-evidence";
 
 const isProd = Boolean(process.env.PROD_SMOKE_BASE_URL?.trim());
@@ -135,17 +142,63 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await page.screenshot({ path: path.join(outDir, "j13-schedule-viewing.png") });
   });
 
-  test("J14 — rental follow-up context", async ({ page }) => {
+  test("J14 — guest rental follow-up offers sign-in, never a silent drop", async ({ page }) => {
     test.setTimeout(300_000);
     await gotoHome(page);
+    // The public fast path works for guests: this really returns rental cards.
     await sendConciergeMessage(page, RENTAL_QUERY);
     await waitForRentalCards(page);
     await waitForCopilotIdle(page, 120_000);
-    await sendConciergeMessage(page, "when can I view?");
-    await waitForCopilotIdle(page, 120_000);
-    expect(await page.locator('[data-testid="rental-card"]').count()).toBeGreaterThan(0);
+
+    // The follow-up needs the AI runtime, which refuses guests on purpose (SAN-1507).
+    // Submit once without expecting an app request, then require the sign-in offer.
+    await submitConciergeMessageExpectingNoTurn(page, "when can I view?");
+    await expect(page.getByTestId("concierge-sign-in-prompt")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("concierge-sign-in-link")).toHaveAttribute(
+      "href",
+      "/login?next=%2Fchat",
+    );
+    // The refusal must not look like a silent failure or invent an assistant answer.
     await expect(page.getByText(/what can i help you with/i)).toHaveCount(0);
-    await page.screenshot({ path: path.join(outDir, "j14-rental-followup.png") });
+    expect(await page.locator('[data-testid="rental-card"]').count()).toBeGreaterThan(0);
+    await page.screenshot({ path: path.join(outDir, "j14-guest-signin-offer.png") });
+  });
+
+  test("J14 — signed-in rental follow-up keeps the previous rental context", async ({ page }) => {
+    test.setTimeout(300_000);
+    test.skip(!hasE2eEnv(), "Needs Supabase e2e credentials for a real signed-in turn");
+
+    const identity = await createThrowawayIdentity("journey-j14");
+    try {
+      await signInAsOnOrigin(page, process.env.PROD_SMOKE_BASE_URL!, identity.email);
+      await gotoHome(page);
+      await sendConciergeMessage(page, RENTAL_QUERY);
+      await waitForRentalCards(page);
+      await waitForCopilotIdle(page, 180_000);
+
+      // Signed in, the follow-up must reach the AI runtime — not the public fast path.
+      // Arm the wait first: an accepted submit issues its request immediately.
+      const runtimeTurn = page.waitForRequest(
+        (request) => {
+          try {
+            const url = new URL(request.url());
+            return request.method() !== "GET" && url.pathname === "/api/copilotkit";
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 60_000 },
+      );
+      await sendConciergeMessage(page, "when can I view?");
+      await runtimeTurn;
+      await waitForCopilotIdle(page, 180_000);
+      // The rental results that answered the first question are still the working set.
+      expect(await page.locator('[data-testid="rental-card"]').count()).toBeGreaterThan(0);
+      await expect(page.getByTestId("concierge-sign-in-prompt")).toHaveCount(0);
+      await page.screenshot({ path: path.join(outDir, "j14-signed-in-followup.png") });
+    } finally {
+      await deleteThrowawayIdentity(identity);
+    }
   });
 
   test("J15 — back-to-back pin clear", async ({ page }) => {
@@ -208,12 +261,19 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("map-sheet-content")).toBeHidden();
 
-    const send = page
-      .locator(
-        '[data-testid="copilot-chat-ready"], [data-testid="copilot-chat-request-in-progress"]',
-      )
-      .first();
-    await expect(send).toBeVisible();
+    // The old chat-ready/request-in-progress markers are not rendered by the v2
+    // composer. Check the actual renter-visible control after dismissing the map:
+    // it must accept a draft and enable Send without issuing a paid agent turn.
+    const composer = page.getByTestId("copilot-chat-region").getByTestId("copilot-chat-textarea");
+    await expect(composer).toBeVisible({ timeout: 15_000 });
+    await expect(composer).toBeEditable();
+    const draft = "Can I still ask about this area?";
+    await composer.click();
+    await composer.fill(draft);
+    await expect(composer).toHaveValue(draft);
+    await expect(page.getByTestId("copilot-send-button")).toBeEnabled();
+    await composer.fill("");
+    await expect(page.getByTestId("copilot-send-button")).toBeVisible();
     await page.screenshot({ path: path.join(outDir, "j17-mobile-map.png") });
   });
 

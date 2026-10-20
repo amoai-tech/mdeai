@@ -1,0 +1,3 @@
+# verify_jwt=false: called by pg_cron/pg_net (no user JWT) and by an operator. The function authenticates
+# every request itself with the X-Cron-Secret header (constant-time compare); see index.ts.
+verify_jwt = false

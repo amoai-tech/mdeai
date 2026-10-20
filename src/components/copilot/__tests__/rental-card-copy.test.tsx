@@ -14,7 +14,7 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
     expect(src).not.toMatch(/Photo soon/i);
   });
 
-  it("rendered Save CTA uses user-facing tooltip, not internal ticket copy", () => {
+  it("does not render a dead Save CTA or internal ticket copy", () => {
     const html = renderToStaticMarkup(
       <RentalCard
         id="rental-1"
@@ -26,7 +26,8 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
         onSelect={() => undefined}
       />,
     );
-    expect(html).toContain('title="Save for later (coming soon)"');
+    expect(html).not.toContain('data-testid="rental-save-cta"');
+    expect(html).not.toMatch(/Save for later/i);
     expect(html).not.toMatch(/SCREEN-/);
     expect(html).not.toMatch(/Photo soon/i);
   });

@@ -2,6 +2,23 @@
 
 Portable repository guidance for coding agents working from the current Git checkout root.
 
+## MANDATORY — prelaunch development comes before launch certification
+
+**Product-owner decision:** MDE AI is in **Phase A — prelaunch development**. The product owner and lead developer set development priorities; do not replace their decisions with agent-preferred requirements. **Make the real application functional now; certify public launch later.** This directive governs all product workflows and overrides older business-gating guidance in skills, tasks, PRDs, and examples. It does **not** override technical security or data-integrity requirements.
+
+1. **Unblock development immediately.** Do not require apartment eligibility, moderation, freshness, verification, owner or broker paperwork, partner approval, publishing approval, photo-rights paperwork, or booking/viewing permissions as prerequisites to building, showing, searching, mapping, managing, publishing, or testing records. Development listings need not be launch-ready to appear in search, Details, Maps, or AI results or to accept development viewing requests.
+2. **Full authorized Super Admin control.** Provide authenticated, server-authorized, audited actions to create, import, edit, activate, publish, unpublish, restore, approve, reject, revoke and manage users, roles, landlord/broker assignments, listings, photos/media, events, leads, showings, bookings, tickets, and AI workflows. Approval management features can be tested without making their status a prerequisite to normal development workflows. Never grant admin powers through client-editable roles or expose service keys.
+3. **Use the actual application and database.** Build and exercise the existing Next.js UI, API/server actions, Supabase schema, RLS/RPCs, Mastra/CopilotKit agents, and real persisted transactions. Do not introduce duplicate search engines, approval subsystems, booking services, parallel sandboxes, fake transaction paths, or test-only workflows unless explicitly requested. Use safe payment testing when applicable.
+4. **Remove restrictions at their source.** Trace blockers to the canonical SQL function, RLS policy, RPC, server route, agent tool, UI condition, or configuration and fix the responsible implementation. Do not hide it with a second filter, duplicate service, or frontend-only workaround. Keep one canonical, server-controlled development-versus-launch policy; a live URL or `NODE_ENV=production` does not authorize public-launch gates.
+5. **Keep facts truthful.** Label development/test records accurately. Never invent ownership, verification, listing availability, prices, locations, booking authority, payments, photo rights, or completed actions. Use lawfully usable media and preserve source attribution; unknown facts remain unknown.
+6. **Preserve technical safeguards, not business prerequisites.** Keep authentication, protection from unauthorized third-party access, server-side admin authorization, secrets, per-user/private-data isolation, RLS where appropriate, valid data constraints, atomic writes, idempotency, audit trails, retry safety, and real payment integrity. These are not grounds for reimposing deferred business paperwork/eligibility rules.
+7. **Implement rather than debate.** Explain a material risk once, briefly, then execute the product owner's requested functionality. Avoid repeated objections, unnecessary Linear issues, speculative compliance tasks, or an audit in place of a fix.
+8. **Finish with proof.** Inspect → change → focused tests → full applicable checks → commit/push → verify the affected UI/API/DB journey. For rentals, prove search → cards/map → Details → viewing → exactly one persisted lead + showing → correct broker visibility. For events, prove creation/publishing → safe checkout → webhook → ticket/QR/wallet. For AI, prove grounded response → authorized action → persisted result. Report exactly what passed and what remains blocked; never claim success without evidence.
+
+**Phase B — public launch, only when explicitly initiated by the product owner:** activate and verify the real-world ownership/agency authority, advertising/photo/viewing rights, inventory accuracy/freshness, publication eligibility, business approvals, payments, and release certification. Clean up or isolate development-only records before treating them as verified public supply. Do not impose these Phase B requirements during Phase A.
+
+**Default decision:** When a business restriction prevents building or exercising a core feature, make that feature functional now while retaining technical security and truthful data. **Success in development means working user journeys — not more gates, paperwork, or documentation.**
+
 ## Repository truth
 
 - Remote: `https://github.com/amoai-tech/mdeai.git`.
@@ -20,6 +37,7 @@ npm run lint              # ESLint, --max-warnings 0
 npm run typecheck         # tsc --noEmit
 npm test                  # Vitest, run once
 npm run test:e2e          # Playwright
+npm run test:e2e:qa-signin  # Opt-in real signed-in Supabase QA browser smoke (/saved)
 npx supabase test db      # database (pgTAP) tests
 npm run check:env:ci      # env contract, strict
 npm run check:skills      # skill library + agent exposure mirror
@@ -28,6 +46,7 @@ npm run graphify:query -- "<question>"
 ```
 
 `npm run floor` is the canonical repository gate; see `package.json` for the current command chain.
+For auth changes, also run the signed-in QA smoke with credentials in ignored local environment files (never committed); keep anonymous tests unauthenticated. See [e2e/README.md](e2e/README.md#san-1549--one-command-signed-in-qa-smoke) for prerequisites, safe credential handling, and production-smoke commands.
 
 Traps worth knowing before you debug them:
 
@@ -204,7 +223,7 @@ Before broad repository searching on substantial code tasks:
 - Mix bare CopilotKit v1 imports with `/v2` imports.
 - Reset, clean, or discard unrelated working-tree changes.
 - Mark work Done without current evidence from the relevant tests/runtime.
-- Weaken a gate, or fabricate data, to make a check pass.
+- Weaken a technical/security/CI verification gate, or fabricate data, to make a check pass. Business eligibility/approval gates that obstruct Phase A workflows are defects to fix at their canonical source.
 
 ## Enforced automatically
 
@@ -264,7 +283,7 @@ Structural eval definitions are specifications only until they are executed. A s
 
 Representative product surfaces include `/`, `/chat`, `/events`, `/rentals`, `/restaurants`, `/cafes`, `/nightlife`, `/trips`, `/host/*`, `/admin/event-bookings`, and `/api/copilotkit/[[...path]]`.
 
-This bootstrap file does not define product behavior. Current source code, current tests, current Linear tasks, and the owning skills are authoritative.
+This file sets repository-wide development-phase policy. Current source code, tests, Linear tasks, and owning skills govern feature details only insofar as they do not contradict the Phase A directive above.
 
 ## Response style
 

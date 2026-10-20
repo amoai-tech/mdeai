@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
 
+// Match the voting E2E runner: CI uses Playwright Chromium, while local Ubuntu
+// installations can opt into the system Chrome binary without changing CI.
+test.use({ launchOptions: process.env.MDE_E2E_CHROME_PATH
+  ? { executablePath: process.env.MDE_E2E_CHROME_PATH } : {} });
+
 // AUTH-005 — deterministic auth-guard journeys.
 //
 // Completing a magic link (needs an inbox) or Google OAuth (needs Google consent)
@@ -41,6 +46,25 @@ test.describe("AUTH-005 auth guards", { tag: ["@auth", "@smoke"] }, () => {
       page.getByRole("button", { name: "Continue with Google" }),
     ).toBeVisible();
     await expect(page.locator("#email")).toBeVisible();
+  });
+
+  test("login form rejects unsafe return links but keeps contest context", async ({ page }) => {
+    // Exercise the real Next.js login route, not just the safeNextPath unit helper.
+    // Both passwordless entry points must receive the sanitized same-site target.
+    for (const unsafe of ["/\\external.example", "//external.example", "https://external.example"]) {
+      await page.goto("/login?next=" + encodeURIComponent(unsafe));
+      const returns = page.locator('form input[name="next"]');
+      await expect(returns).toHaveCount(2);
+      await expect(returns.nth(0)).toHaveValue("/");
+      await expect(returns.nth(1)).toHaveValue("/");
+    }
+
+    const valid = "/restaurants/restaurant-id?contest_id=contest-id";
+    await page.goto("/login?next=" + encodeURIComponent(valid));
+    const returns = page.locator('form input[name="next"]');
+    await expect(returns).toHaveCount(2);
+    await expect(returns.nth(0)).toHaveValue(valid);
+    await expect(returns.nth(1)).toHaveValue(valid);
   });
 
   test("signup page renders passwordless options", async ({ page }) => {

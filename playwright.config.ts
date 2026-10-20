@@ -4,7 +4,12 @@ const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
-const baseURL = prodBaseURL || localBaseURL;
+// Remote targets belong only to the opt-in prod-smoke project. A developer's
+// inherited PROD_SMOKE_BASE_URL must never redirect ordinary browser tests.
+const baseURL = localBaseURL;
+// Keep live-data tests out of ordinary local/agent discovery. Both flags must
+// be intentional; explicit trusted production scripts already supply them.
+const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSERVER === "1";
 
 const VITEST_TESTS = "**/*.test.ts";
 
@@ -14,6 +19,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
+  "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
@@ -47,10 +53,14 @@ export default defineConfig({
         "**/chat-virtualization.spec.ts",
         // SAN-966: needs the deterministic chat, so it runs under `local-chromium`.
         "**/chat-result-order.spec.ts",
+        // SAN-1413: same reason.
+        "**/chat-thread-history.spec.ts",
         // SAN-1414: same reason.
         "**/chat-workspace-layout.spec.ts",
         // SAN-524: touch/mobile map journey runs hermetically with the deterministic chat + Maps seam.
         "**/maps-layout-mobile.spec.ts",
+        // SAN-1075: the viewing modal needs the deterministic chat + an emulated keyboard.
+        "**/viewing-modal-keyboard.spec.ts",
         // SAN-522: mobile composer runs under local-chromium; keep it out of the general project.
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         // SAN-524: the browse map sheet Close target; runs in the PR gate under `local-chromium`.
@@ -67,9 +77,11 @@ export default defineConfig({
         "**/auth-guard.spec.ts",
         "**/chat-virtualization.spec.ts",
         "**/chat-result-order.spec.ts",
+        "**/chat-thread-history.spec.ts",
         "**/chat-workspace-layout.spec.ts",
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         "**/maps-layout-mobile.spec.ts",
+        "**/viewing-modal-keyboard.spec.ts",
         "**/browse-map-close-touch.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
@@ -138,7 +150,7 @@ export default defineConfig({
         trace: "retain-on-failure",
       },
     },
-    {
+    ...(runProductionProjects ? [{
       name: "prod-smoke",
       testMatch: PROD_SPECS,
       testIgnore: VITEST_TESTS,
@@ -148,16 +160,18 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: prodBaseURL || "https://www.mdeai.co",
-        trace: "off",
+        trace: "off" as const,
       },
-    },
+    }] : []),
   ],
   webServer: process.env.PW_SKIP_WEBSERVER
     ? undefined
     : {
         command: webServerCommand,
         url: localBaseURL,
-        reuseExistingServer: !process.env.CI,
+        // A reused server may belong to a different worktree and produce false greens.
+        // Explicit opt-in is available when the caller knows the server owner.
+        reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
         timeout: 120_000,
       },
 });

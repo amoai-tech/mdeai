@@ -8,6 +8,12 @@
 # Driven by the GitHub push itself, so it still runs when Vercel deploys nothing.
 # Not a required status check: it runs after the merge and exists to make a missing or
 # stuck deployment fail visibly.
+#
+# Back-to-back merges: Vercel promotes the newest commit and marks the previous
+# production deployment `inactive`, so the older commit can never have its own READY
+# deployment even though its code ships inside the newer one. This job accepts that only
+# when the *current* main commit has its own READY native Git production deployment, so a
+# genuinely stuck pipeline still fails.
 name: Prod deploy freshness
 
 on:
@@ -28,7 +34,7 @@ jobs:
   freshness:
     name: prod serves merge SHA
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Require a READY production deployment for the exact commit
@@ -36,111 +42,276 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           # Fail on configuration, not on a confusing API response or an
           # `unbound variable` abort from `set -u`.
-          for name in VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_ORG_ID TARGET_SHA WINDOW_SECONDS; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::${name} is not set. VERCEL_ORG_ID is a repository variable; VERCEL_TOKEN and VERCEL_PROJECT_ID are repository secrets; TARGET_SHA comes from github.sha."
-              exit 1
+          missing=0
+          for name in VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_ORG_ID GITHUB_TOKEN TARGET_SHA WINDOW_SECONDS; do
+            if [ -z "$(printenv "$name" || true)" ]; then
+              echo "::error::$name is not set. VERCEL_ORG_ID is a repository variable; VERCEL_TOKEN and VERCEL_PROJECT_ID are repository secrets; TARGET_SHA is github.sha."
+              missing=1
             fi
           done
-          echo "requiring production to serve ${TARGET_SHA} within ${WINDOW_SECONDS}s"
+          [ "$missing" -eq 0 ] || exit 1
 
-          deadline=$(( $(date +%s) + WINDOW_SECONDS ))
-          while :; do
-            # Vercel v7 supports an exact SHA filter. Querying the commit directly is
-            # simpler and safer than scanning/paginating deployment history.
+          SHORT=$(printf '%s' "$TARGET_SHA" | cut -c1-9)
+          echo "requiring production to serve $TARGET_SHA within $WINDOW_SECONDS s"
+
+          # One verdict per SHA. Prints "<verdict> <details>":
+          # READY | PENDING | FAILED | absent | api_error.
+          # Returns 0 when parsed, 1 on a fatal HTTP answer, 2 when it should be retried.
+          verdict_for_sha() {
+            sha="$1"
             if ! resp=$(curl --silent --show-error --write-out '\n%{http_code}' \
-              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-              "https://api.vercel.com/v7/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&sha=${TARGET_SHA}"); then
-              echo "$(date -u +%H:%M:%S) vercel api request failed; retrying"
-              if [ "$(date +%s)" -ge "$deadline" ]; then
-                echo "::error::the Vercel API request kept failing for the whole ${WINDOW_SECONDS}s window"
-                exit 1
-              fi
-              sleep 30
-              continue
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v7/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&sha=$sha"); then
+              echo "transient curl failure"
+              return 2
             fi
             status=$(printf '%s' "$resp" | tail -n1)
             body=$(printf '%s' "$resp" | sed '$d')
-
             case "$status" in
-              200) ;;
+              200)
+                # Two things this deliberately gets right:
+                #
+                # 1. A SHA can have several production deployments — one per retry. A single
+                #    failed attempt must not mask a successful one, so match the whole set and
+                #    prefer READY.
+                # 2. Native automatic Git deploys must have BOTH source=git and the exact
+                #    githubCommitSha. CLI/redeploy/import attempts can carry Git metadata too, so
+                #    metadata alone is not enough to prove the production pipeline worked.
+                printf '%s' "$body" | SHA="$sha" node -e '
+                  const fs = require("fs");
+                  let data;
+                  try {
+                    data = JSON.parse(fs.readFileSync(0, "utf8"));
+                  } catch {
+                    console.log("api_error gitDeployments=unparsable cliFallback=?");
+                    process.exit(0);
+                  }
+                  const sha = process.env.SHA;
+                  const prod = (data.deployments || []).filter((d) => d.target === "production");
+                  const git = prod.filter((d) => d.source === "git" && (d.meta || {}).githubCommitSha === sha);
+                  const fallback = prod.filter((d) => d.source !== "git" && ((d.meta || {}).githubCommitSha === sha || (d.meta || {}).gitCommitSha === sha));
+                  const states = git.map((d) => d.readyState);
+                  const inFlight = ["BUILDING", "QUEUED", "INITIALIZING"];
+                  let verdict = "absent";
+                  if (states.includes("READY")) verdict = "READY";
+                  else if (states.some((s) => inFlight.includes(s))) verdict = "PENDING";
+                  else if (states.length) verdict = "FAILED";
+                  console.log(verdict + " gitDeployments=" + (states.length ? states.join("/") : "none") + " cliFallback=" + fallback.length);
+                '
+                return 0
+                ;;
               401|403)
-                echo "::error::the Vercel API rejected the token for project ${VERCEL_PROJECT_ID} / team ${VERCEL_ORG_ID} (HTTP ${status}): $(printf '%s' "$body" | head -c 300)"
-                exit 1
+                echo "auth HTTP $status: $(printf '%s' "$body" | head -c 200)"
+                return 1
                 ;;
               429|5??)
-                echo "$(date -u +%H:%M:%S) vercel api returned transient HTTP ${status}; retrying"
-                if [ "$(date +%s)" -ge "$deadline" ]; then
-                  echo "::error::the Vercel API stayed unavailable (last HTTP ${status}) for the whole ${WINDOW_SECONDS}s window"
-                  exit 1
-                fi
-                sleep 30
-                continue
+                echo "transient HTTP $status"
+                return 2
                 ;;
               *)
-                echo "::error::the Vercel API returned non-retryable HTTP ${status}: $(printf '%s' "$body" | head -c 300)"
-                exit 1
+                echo "fatal HTTP $status: $(printf '%s' "$body" | head -c 200)"
+                return 1
                 ;;
             esac
+          }
 
-            # Two things this deliberately gets right:
-            #
-            # 1. A SHA can have several production deployments — one per retry. A single
-            #    failed attempt must not mask a successful one, so match the whole set and
-            #    prefer READY. (SHA d2c21c9c4 really does have one READY deployment
-            #    alongside four that errored.)
-            # 2. Native automatic Git deploys must have BOTH source=git and the exact
-            #    githubCommitSha. CLI/redeploy/import attempts can carry Git metadata too, so
-            #    metadata alone is not enough to prove the production pipeline worked.
-            line=$(printf '%s' "$body" | TARGET_SHA="$TARGET_SHA" node -e '
-              const fs = require("fs");
-              let data;
-              try {
-                data = JSON.parse(fs.readFileSync(0, "utf8"));
-              } catch {
-                console.log("api_error gitDeployments=unparsable cliFallback=?");
-                process.exit(0);
-              }
-              const sha = process.env.TARGET_SHA;
-              const prod = (data.deployments || []).filter((d) => d.target === "production");
-              const git = prod.filter((d) => d.source === "git" && (d.meta || {}).githubCommitSha === sha);
-              const fallback = prod.filter((d) => d.source !== "git" && ((d.meta || {}).githubCommitSha === sha || (d.meta || {}).gitCommitSha === sha));
-              const states = git.map((d) => d.readyState);
-              const inFlight = ["BUILDING", "QUEUED", "INITIALIZING"];
-              let verdict = "absent";
-              if (states.includes("READY")) verdict = "READY";
-              else if (states.some((s) => inFlight.includes(s))) verdict = "PENDING";
-              else if (states.length) verdict = "FAILED";
-              console.log(`${verdict} gitDeployments=${states.length ? states.join("/") : "none"} cliFallback=${fallback.length}`);
-            ')
-            verdict=${line%% *}
+          deadline=$(( $(date +%s) + WINDOW_SECONDS ))
+          while :; do
+            out="not checked"
+            verdict="transient"
+            newer_sha=""
 
-            echo "$(date -u +%H:%M:%S) sha=${TARGET_SHA:0:9} ${line}"
-
-            case "$verdict" in
-              READY)
-                echo "production is serving ${TARGET_SHA} from a native Git deployment"
+            if out=$(verdict_for_sha "$TARGET_SHA"); then
+              verdict=$(printf '%s' "$out" | cut -d' ' -f1)
+              echo "$(date -u +%H:%M:%S) sha=$SHORT $out"
+              if [ "$verdict" = "READY" ]; then
+                echo "production is serving $TARGET_SHA from a native Git deployment"
                 exit 0
-                ;;
-              FAILED)
-                echo "::error::every native Git production deployment for ${TARGET_SHA} failed (${line}). Production is serving older code."
+              fi
+              if [ "$verdict" = "api_error" ]; then
+                echo "::error::Vercel returned HTTP 200 with an invalid deployment payload ($out)"
                 exit 1
-                ;;
-              api_error)
-                echo "::error::Vercel returned HTTP 200 with an invalid deployment payload (${line})"
+              fi
+            else
+              rc=$?
+              if [ "$rc" -eq 1 ]; then
+                echo "::error::the Vercel API rejected the request; cannot verify production"
                 exit 1
-                ;;
-            esac
+              fi
+              echo "$(date -u +%H:%M:%S) vercel query failed; retrying"
+            fi
+
+            # Accept a superseded commit only when the newer main commit is itself deployed.
+            if main_out=$(curl --silent --show-error \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/main"); then
+              newer_sha=$(printf '%s' "$main_out" | node -e 'let s="";process.stdin.on("data",(d)=>{s+=d;}).on("end",()=>{try{console.log(JSON.parse(s).sha||"");}catch{console.log("");}});')
+            fi
+            if [ -n "$newer_sha" ] && [ "$newer_sha" != "$TARGET_SHA" ]; then
+              if newer_out=$(verdict_for_sha "$newer_sha"); then
+                newer_verdict=$(printf '%s' "$newer_out" | cut -d' ' -f1)
+                NEWER_SHORT=$(printf '%s' "$newer_sha" | cut -c1-9)
+                echo "$(date -u +%H:%M:%S) superseded by $NEWER_SHORT: $newer_out"
+                if [ "$newer_verdict" = "READY" ]; then
+                  # A moved main SHA is not proof of ancestry (force-pushes/rewinds).
+                  # Only suppress the old run when GitHub confirms its commit is
+                  # the merge base of the newer READY commit.
+                  if compare_out=$(curl --silent --show-error --fail-with-body --max-time 15 \
+                    -H "Authorization: Bearer $GITHUB_TOKEN" \
+                    -H "Accept: application/vnd.github+json" \
+                    "https://api.github.com/repos/$GITHUB_REPOSITORY/compare/$TARGET_SHA...$newer_sha"); then
+                    ancestry=$(printf '%s' "$compare_out" | ORIGINAL="$TARGET_SHA" CURRENT="$newer_sha" node -e '
+                      let raw = "";
+                      process.stdin.on("data", (chunk) => { raw += chunk; });
+                      process.stdin.on("end", () => {
+                        try {
+                          const compare = JSON.parse(raw);
+                          if (compare.status === "ahead" &&
+                              compare.merge_base_commit?.sha === process.env.ORIGINAL &&
+                              compare.head_commit?.sha === process.env.CURRENT) {
+                            console.log("ancestor");
+                          }
+                        } catch { /* Malformed GitHub response must fail closed. */ }
+                      });
+                    ')
+                    if [ "$ancestry" = "ancestor" ]; then
+                      echo "production serves the newer main commit $newer_sha, which contains $TARGET_SHA; this run is superseded"
+                      exit 0
+                    fi
+                    echo "::warning::newer deployed main commit is not proven to contain $TARGET_SHA; keeping freshness check active"
+                  else
+                    echo "::warning::GitHub commit comparison failed; cannot safely suppress this run"
+                  fi
+                fi
+              fi
+            fi
 
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::no native Git production deployment for ${TARGET_SHA} became READY within ${WINDOW_SECONDS}s (${line}). The commit is on main but www.mdeai.co is not serving it — check the Vercel Git integration."
+              echo "::error::no native Git production deployment for $TARGET_SHA became READY within $WINDOW_SECONDS s ($out). Neither this commit nor a newer main commit is deployed — check the Vercel Git integration."
               exit 1
             fi
+            sleep 30
+          done
+
+
+      - name: Require every production host to serve the target commit
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          PUBLIC_URL_FROM_VARS: ${{ vars.PRODUCTION_BASE_URL }}
+          DOMAIN_WINDOW_SECONDS: "1200"
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # The step above proves a READY deployment exists. This one proves a VISITOR
+          # receives it. Six conditions, each a real failure mode:
+          #   1. HTTP 200 - an error body must never be parsed as a result
+          #   2. environment must be production - a preview build must not satisfy it
+          #   3. SHA must equal the target, or a newer main commit that CONTAINS it
+          #   4. EVERY production host is checked, not just the configured one
+          #   5. redirects are followed - the apex 308s to www
+          #   6. the window covers certification and promotion, not just the build
+          #
+          # Historical cause: on 2026-10-18 a READY merge deployment existed while
+          # www.mdeai.co served a build from 2026-09-19, because a leftover alias pinned
+          # the domain to an old deployment.
+
+          for name in TARGET_SHA DOMAIN_WINDOW_SECONDS GITHUB_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::${name} is not set."
+              exit 1
+            fi
+          done
+
+          PRIMARY="${PUBLIC_URL_FROM_VARS:-https://www.mdeai.co}"
+          PRIMARY_HOST=$(printf "%s" "${PRIMARY#*://}" | cut -d/ -f1)
+          # Only derive an apex when the configured host is itself a www. host. A custom
+          # https://staging.example.com has no implied sibling, and inventing one would make
+          # the check fail on a host nobody claims exists.
+          HOSTS="$PRIMARY"
+          case "$PRIMARY_HOST" in
+            www.*)
+              HOSTS="$HOSTS https://${PRIMARY_HOST#www.}"
+              ;;
+          esac
+          echo "checking production hosts: $HOSTS"
+
+          # A newer main commit may be deployed instead of this run commit. Accept it only when
+          # GitHub proves it contains TARGET_SHA: a moved main is not proof of ancestry, and a
+          # force-push must fail closed.
+          contains_target() {
+            local served="$1"
+            [ -n "$served" ] || return 1
+            local resp status base
+            if ! resp=$(curl --silent --show-error --fail-with-body --max-time 20 -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/compare/${TARGET_SHA}...${served}"); then
+              return 1
+            fi
+            status=$(printf "%s" "$resp" | jq -r ".status // empty" 2>/dev/null || true)
+            base=$(printf "%s" "$resp" | jq -r ".merge_base_commit.sha // empty" 2>/dev/null || true)
+            [ "$status" = "ahead" ] && [ "$base" = "$TARGET_SHA" ]
+          }
+
+          deadline=$(( $(date +%s) + DOMAIN_WINDOW_SECONDS ))
+          last_problem="not checked"
+          while :; do
+            all_ok=1
+            served_detail=""
+            last_problem=""
+
+            for host in $HOSTS; do
+              probe="${host%/}/api/version"
+              body_file=$(mktemp)
+              status=$(curl --silent --show-error --location --max-time 20 --output "$body_file" --write-out "%{http_code}" "$probe" || echo "000")
+
+              if [ "$status" != "200" ]; then
+                all_ok=0
+                last_problem="${last_problem} ${host}->HTTP${status}"
+                rm -f "$body_file"
+                continue
+              fi
+
+              sha=$(jq -r ".sha // empty" "$body_file" 2>/dev/null || true)
+              env_name=$(jq -r ".environment // empty" "$body_file" 2>/dev/null || true)
+              rm -f "$body_file"
+
+              if [ "$env_name" != "production" ]; then
+                all_ok=0
+                last_problem="${last_problem} ${host}->environment:${env_name:-missing}"
+                continue
+              fi
+
+              if [ "$sha" = "$TARGET_SHA" ]; then
+                served_detail="${served_detail} ${host}=${sha:0:9}"
+                continue
+              fi
+
+              if contains_target "$sha"; then
+                echo "$(date -u +%H:%M:%S) ${host} serves newer commit ${sha:0:9}, which contains ${TARGET_SHA:0:9}; superseded"
+                served_detail="${served_detail} ${host}=${sha:0:9}"
+                continue
+              fi
+
+              all_ok=0
+              last_problem="${last_problem} ${host}->sha:${sha:0:9}"
+            done
+
+            if [ "$all_ok" = "1" ]; then
+              echo "$(date -u +%H:%M:%S) every production host serves a commit containing ${TARGET_SHA:0:9}:${served_detail}"
+              exit 0
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::within ${DOMAIN_WINDOW_SECONDS}s the public domain did not serve ${TARGET_SHA:0:9} from a production deployment.${last_problem}. A READY deployment exists but a host is pointing elsewhere, serving a preview build, or erroring - check the Vercel custom-domain alias and promotion state before assuming the code is broken."
+              exit 1
+            fi
+            echo "$(date -u +%H:%M:%S) waiting:${last_problem}"
             sleep 30
           done

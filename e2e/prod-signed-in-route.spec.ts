@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { hasE2eEnv, signInAsOnOrigin, QA_HOST_EMAIL } from "./helpers/auth";
 
+// Authenticated pages and private threads must not generate failure screenshots/traces.
+// Playwright may still attach automatic error-context; keep test reports private.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 /**
  * SAN-1314 — live signed-in route proof against a deployed environment.
  *

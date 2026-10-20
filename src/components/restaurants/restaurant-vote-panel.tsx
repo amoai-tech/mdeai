@@ -73,10 +73,14 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const hydrated = useSyncExternalStore(subscribeNever, hydratedOnClient, hydratedOnServer);
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
+  const contestId = voteTarget?.contestId;
+  const entityId = voteTarget?.entityId;
   const goToLogin = useCallback(() => {
-    const next = (pathname ?? "/restaurants") + (typeof window === "undefined" ? "" : window.location.search);
-    router.push("/login?next=" + encodeURIComponent(next));
-  }, [pathname, router]);
+    // Preserve only the verified contest identity, not untrusted query parameters.
+    const safeReturn = (pathname ?? "/restaurants") +
+      (contestId ? "?contest_id=" + encodeURIComponent(contestId) : "");
+    router.push("/login?next=" + encodeURIComponent(safeReturn));
+  }, [pathname, router, contestId]);
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
     setMessage(null);
@@ -91,9 +95,6 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     // No session, or we could not tell: ask the visitor to sign in. Never open blind.
     goToLogin();
   }, [goToLogin]);
-  const contestId = voteTarget?.contestId;
-  const entityId = voteTarget?.entityId;
-
   // Store only the idempotency key, not a vote receipt or auth credential.
   // On reload the server re-reads the committed ballot. This lookup has no nonce
   // and cannot create a new ballot; vote-cast checks the existing key first.
@@ -281,8 +282,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   if (!voteTarget) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-not-open">
-        <p className="font-medium">Voting is not available for this restaurant yet.</p>
-        <p className="mt-1">The restaurant needs to be connected to its contest entry before voting can be displayed.</p>
+        <p className="font-medium">A voting target is not available from this link.</p>
+        <p className="mt-1">Open this restaurant from a specific contest to vote. It may be linked to multiple contests, or not yet linked.</p>
       </div>
     );
   }
