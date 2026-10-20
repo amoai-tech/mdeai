@@ -265,6 +265,10 @@ enough to deliver one complete, verifiable outcome.
   scope without breaking a complete working journey.
 - Never sacrifice security, correctness, or necessary tests
   just to make a PR smaller.
+- If the complete change is too large to review safely, stop and
+  escalate to the repository maintainer to approve a larger PR
+  or a dependency-safe split. Adjust scope or schedule, never
+  weaken security, correctness, or required tests.
 
 Optimize for the fewest PRs and tasks that deliver complete,
 reviewable, independently verifiable results.
