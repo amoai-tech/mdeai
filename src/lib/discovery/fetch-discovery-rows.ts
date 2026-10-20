@@ -330,6 +330,8 @@ const FEATURED_DESTINATIONS = [
   "Metrocable",
 ] as const;
 
+const GUIDE_AREAS = new Set(["laureles", "el poblado", "envigado", "el centro"]);
+
 function nameKey(name: string): string {
   return name
     .normalize("NFD")
@@ -383,8 +385,6 @@ export async function fetchLiveDestinations(
     .from("tourist_destinations")
     .select("id, name, category, description, primary_image_url, details")
     .eq("is_active", true)
-    // Neighbourhoods have their own section.
-    .neq("category", "Neighborhood")
     .order("name", { ascending: true })
     .limit(60);
 
@@ -398,6 +398,9 @@ export async function fetchLiveDestinations(
   const seen = new Set<string>();
   const unique = rows.filter(({ row }) => {
     const key = nameKey(row.name);
+    // The four areas in the neighbourhood guide have their own section. (Not "every Neighborhood row":
+    // Comuna 13 is filed under that category but is a place people go to see.)
+    if (GUIDE_AREAS.has(key)) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

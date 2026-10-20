@@ -100,13 +100,14 @@ describe("homepage destinations (SAN-1556)", () => {
     id: name, name, category: "Culture", description: `About ${name}`, primary_image_url: null, ...over,
   });
 
-  it("shows each place once, featured places first, and no neighbourhood rows", async () => {
-    const { client, calls } = fakeClient([
-      dest("Catedral Metropolitana"), dest("Parque Arví"), dest("Parque Arví"), dest("Comuna 13"),
+  it("shows each place once and featured places first, leaving the neighbourhood-guide areas to their own section", async () => {
+    const { client } = fakeClient([
+      dest("Catedral Metropolitana"), dest("Parque Arví"), dest("Parque Arví"), dest("Comuna 13", { category: "Neighborhood" }),
+      dest("Laureles", { category: "Neighborhood" }), dest("El Poblado", { category: "Neighborhood" }),
     ]);
     const cards = await fetchLiveDestinations(client);
+    // Comuna 13 is filed under "Neighborhood" but is a place to visit, so it stays (and leads).
     expect(cards.map((c) => c.name)).toEqual(["Comuna 13", "Parque Arví", "Catedral Metropolitana"]);
-    expect(calls).toContain("neq(category,Neighborhood)");
   });
 
   it("shows a photo only when we host it; stock or dead links give an honest text card", async () => {
