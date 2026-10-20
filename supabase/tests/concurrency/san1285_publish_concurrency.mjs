@@ -111,6 +111,11 @@ try {
     [aEventId],
   );
   check(tiers.rows[0].n === 1, "exactly one ticket tier exists after a concurrent retry");
+  const cents = await seed.query(
+    "select price_cents from public.event_tickets where event_id=$1",
+    [aEventId],
+  );
+  check(cents.rows[0]?.price_cents === 3000000, "30000 COP is 3000000 Stripe minor units");
 } finally {
   try {
     await seed.query(
