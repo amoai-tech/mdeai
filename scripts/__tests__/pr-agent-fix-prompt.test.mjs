@@ -353,6 +353,29 @@ describe("SAN-1552 fix-prompt formatter — evidence honesty", () => {
     assert.match(rendered.body, /labelled this claim NEEDS VERIFICATION; its quoted code is present/);
   });
 
+  it("does not promote a quote found only on a neighboring unchanged line", () => {
+    const quoted = "const injected = `${tenantId}`";
+    const result = stateReview({
+      findings: [stateFinding({
+        id: "q-neighbor",
+        path: "src/tenant.ts",
+        lineStart: 10,
+        verification: "NEEDS VERIFICATION",
+        problem: `Review quotes \`${quoted}\` as the defect.`,
+      })],
+    });
+    const patch = [
+      "@@ -8,4 +8,4 @@",
+      ` ${quoted}`,
+      " context line nine",
+      "+changed line ten",
+      " context line eleven",
+    ].join("\n");
+    const rendered = render(result, [{ filename: "src/tenant.ts", status: "modified", patch }]);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 1);
+  });
+
   it("keeps a NEEDS VERIFICATION claim out of Confirmed when its quoted code is absent", () => {
     const result = stateReview({
       findings: [

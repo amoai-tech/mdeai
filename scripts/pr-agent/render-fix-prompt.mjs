@@ -278,8 +278,9 @@ function buildPromptBody({ headSha, baseSha, prUrl, parsed, coverageConfirmed, c
   if (confirmed.length > 0) {
     parts.push("### Confirmed fixes", "");
     parts.push(
-      "Confirmed means the file, the changed line and the code the review quotes all exist in this " +
-        "head's real diff. It is not independent proof the defect is real — read the code before editing.",
+      "Confirmed means the finding points to an added line in this head's real diff. " +
+        "For findings labelled NEEDS VERIFICATION, quoted code also matches the reported added lines. " +
+        "This does not prove the defect is real — inspect the behavior before editing.",
       "",
     );
     confirmed.forEach((item, index) => parts.push(renderItem(item, index + 1), ""));
@@ -391,7 +392,7 @@ function classifyFindings({ parsed, changedFiles, headSha }) {
     // prose-vs-code classifier. A finding that quotes only plain identifiers stays Investigate.
     const quoted = quotedCodeFragments(finding);
     const quotedEvidence =
-      quoted.length > 0 && quoted.every((fragment) => item.location.context.includes(fragment));
+      quoted.length > 0 && quoted.every((fragment) => item.location.addedContext?.includes(fragment));
     if (
       item.location.grounded &&
       (item.verification !== "NEEDS VERIFICATION" || quotedEvidence) &&
@@ -401,7 +402,7 @@ function classifyFindings({ parsed, changedFiles, headSha }) {
     ) {
       if (item.verification === "NEEDS VERIFICATION") {
         item.reviewNote =
-          "The review labelled this claim NEEDS VERIFICATION; its quoted code is present in this head's diff, so the location and excerpt are independently grounded. Confirm the behaviour before editing.";
+          "The review labelled this claim NEEDS VERIFICATION; its quoted code is present on its reported added lines, so the location and excerpt are independently grounded. Confirm the behaviour before editing.";
       }
       confirmed.push(item);
       continue;
