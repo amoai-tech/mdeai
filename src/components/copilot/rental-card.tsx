@@ -243,6 +243,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="outline"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-details-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -258,7 +259,7 @@ export function RentalCard({
             target="_blank"
             rel="nofollow noopener noreferrer"
             data-testid="rental-original-listing-cta"
-            className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+            className="inline-flex h-8 min-h-11 items-center rounded-md border px-3 text-sm lg:min-h-0"
           >
             View original listing
           </a>
@@ -268,6 +269,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="default"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-schedule-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -282,6 +284,7 @@ export function RentalCard({
           type="button"
           size="sm"
           variant="outline"
+          className="min-h-11 lg:min-h-0"
           data-testid="rental-save-cta"
           disabled
           title="Save for later (coming soon)"
