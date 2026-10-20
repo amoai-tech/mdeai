@@ -225,7 +225,7 @@ async function HomeDiscoveryRowsInner() {
   const rows: RowData[] = ROW_HEADERS.map((header, i) => {
     const result = results[i];
     if (result.status === "rejected") {
-      console.error(`[home-discovery-rows] ${header.id} failed`, result.reason);
+      console.error("[home-discovery-rows] %s failed", header.id, result.reason);
       return { ...header, cards: [] };
     }
     return { ...header, cards: result.value };

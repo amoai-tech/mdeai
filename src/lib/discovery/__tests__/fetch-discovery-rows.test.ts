@@ -44,14 +44,27 @@ describe("homepage events (SAN-1556): only real, upcoming, honestly described", 
     expect(calls.some((c) => c.startsWith("gte(event_start_time,"))).toBe(true);
   });
 
-  it("drops QA events, invents no rating, and shows the real date instead of 'Tonight'", async () => {
-    const { client } = fakeClient([event({ id: "qa", name: "QA SAN-896 approve 1781570666926" }), event({})]);
+  it("excludes QA/test events in the query itself, so they cannot crowd real events out of the first rows", async () => {
+    const { client, calls } = fakeClient([]);
+    await fetchLiveEvents(client);
+    expect(calls).toContain("not(name,imatch,^\\s*(qa|test)\\y)");
+    expect(calls).toContain("limit(4)");
+  });
+
+  it("invents no rating and shows the real date instead of 'Tonight'", async () => {
+    const { client } = fakeClient([event({})]);
     const cards = await fetchLiveEvents(client);
     expect(cards.map((c) => c.name)).toEqual(["Parade"]);
     expect(cards[0].rating).toBeNull();
     expect(cards[0].meta).toMatch(/Dec 6/);
     expect(cards[0].meta).not.toMatch(/tonight|this week|next week/i);
     expect(cards[0].href).toBe("/events/parade");
+  });
+
+  it("spells the city correctly when an event has no address or city (the shared helper returns 'Medellin')", async () => {
+    const { client } = fakeClient([event({ address: null, city: null })]);
+    const [card] = await fetchLiveEvents(client);
+    expect(card.why).toBe("Medellín");
   });
 
   it("keeps an unknown price unknown (not 'Free') and prints pesos as pesos, whatever the case stored", async () => {

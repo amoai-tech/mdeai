@@ -235,8 +235,13 @@ type EventRow = {
   primary_image_url: string | null;
 };
 
-/** QA / test events created through the real host flow must not be recommended to visitors. */
-const TEST_EVENT_NAME = /^\s*(qa|test)\b/i;
+/**
+ * QA / test events created through the real host flow must not be recommended to visitors.
+ * Applied in the query itself, so they can never crowd real events out of the first rows.
+ * Postgres regex: `\y` is a word boundary (`\b` means backspace there), so "Qatar Night Market"
+ * and "Testimonial Gala" are kept while "QA SAN-896 …" and "Test event" are dropped.
+ */
+const TEST_EVENT_NAME_PATTERN = "^\\s*(qa|test)\\y";
 
 function eventPriceLabel(min: number | null, currency: string | null): string | null {
   // An unknown price stays unknown. (The shared browse mapper turns null into 0 = "Free".)
@@ -255,34 +260,34 @@ export async function fetchLiveEvents(
     )
     .eq("is_active", true)
     .in("status", ["published", "live"])
+    .not("name", "imatch", TEST_EVENT_NAME_PATTERN)
     .gte("event_start_time", new Date().toISOString())
     .order("event_start_time", { ascending: true })
-    .limit(8);
+    .limit(4);
 
   if (error || !data?.length) return [];
 
-  return (data as EventRow[])
-    .filter((row) => !TEST_EVENT_NAME.test(row.name))
-    .slice(0, 4)
-    .map((row) => {
-      const neighborhood = extractNeighborhood(row.address, row.city);
-      const where = neighborhood && neighborhood !== "Medellín" ? neighborhood : (row.address ?? "Medellín");
-      const typeKey = (row.event_type ?? "other").toLowerCase();
-      return {
-        id: row.id,
-        name: row.name,
-        kind: EVENT_CATEGORY_LABEL[typeKey] ?? "Event",
-        // Events carry no user ratings; nothing is shown rather than a made-up number.
-        rating: null,
-        meta: [formatEventStart(row.event_start_time), eventPriceLabel(row.ticket_price_min, row.currency)]
-          .filter(Boolean)
-          .join(" · "),
-        why: where,
-        image: row.primary_image_url ?? "",
-        query: `${row.name} Medellín events tickets`,
-        href: `/events/${encodeURIComponent(row.slug?.trim() || row.id)}`,
-      };
-    });
+  return (data as EventRow[]).map((row) => {
+    // extractNeighborhood falls back to an unaccented "Medellin"; a bare city name is not a
+    // neighbourhood, so compare accent-insensitively and show the properly spelled city.
+    const neighborhood = extractNeighborhood(row.address, row.city);
+    const where = nameKey(neighborhood) === "medellin" ? (row.address ?? "Medellín") : neighborhood;
+    const typeKey = (row.event_type ?? "other").toLowerCase();
+    return {
+      id: row.id,
+      name: row.name,
+      kind: EVENT_CATEGORY_LABEL[typeKey] ?? "Event",
+      // Events carry no user ratings; nothing is shown rather than a made-up number.
+      rating: null,
+      meta: [formatEventStart(row.event_start_time), eventPriceLabel(row.ticket_price_min, row.currency)]
+        .filter(Boolean)
+        .join(" · "),
+      why: where,
+      image: row.primary_image_url ?? "",
+      query: `${row.name} Medellín events tickets`,
+      href: `/events/${encodeURIComponent(row.slug?.trim() || row.id)}`,
+    };
+  });
 }
 
 // ─── Row 5 — Things to see (tourist destinations) ────────────────────────────
