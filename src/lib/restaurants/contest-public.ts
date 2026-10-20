@@ -25,7 +25,25 @@ export type PublicNominee = {
   neighborhood: string | null;
   imageUrl: string | null;
   category: string | null;
+  /** Clean, non-test audience ballots. The only input to a public place. */
+  audienceAccepted: number;
+  /** Development-test ballots. Reported separately, never added to accepted. */
+  developmentTestTotal: number;
+  /** Competition place; null when nobody has an accepted vote. */
+  rank: number | null;
 };
+
+/**
+ * A tally field must be a non-negative safe integer.
+ *
+ * The SQL guards the normal path: it coalesces a count to 0, so a well-formed response always
+ * carries a number, and zero means zero. This check exists for the other path — the RPC payload is
+ * untrusted JSON crossing a process boundary, and a malformed value (null, negative, fractional, a
+ * string) must fail the read rather than be published as a plausible-looking zero.
+ */
+function asCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
 
 export type ListResult =
   | { status: "ok"; contests: PublicContestSummary[] }
@@ -112,6 +130,25 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
       const restaurantId = asString(row.restaurant_id);
       const name = asString(row.restaurant_name);
       if (!entityId || !restaurantId || !name) continue;
+
+      const accepted = asCount(row.audience_accepted);
+      const development = asCount(row.development_test_total);
+      // Reachable only from a malformed payload, never from the coalesced SQL: if the transport
+      // hands back something that is not a count, say the read failed instead of inventing a 0.
+      if (accepted === null || development === null) {
+        console.error("[contests] malformed tally on nominee " + entityId);
+        return { status: "error" };
+      }
+      const rankRaw = row.rank;
+      const rankIsValid =
+        typeof rankRaw === "number" && Number.isSafeInteger(rankRaw) && rankRaw > 0;
+      // A nominee with accepted votes must carry a place. Missing it means the read is broken —
+      // silently showing "unranked" would hide a real defect behind a plausible empty rank.
+      if (accepted > 0 && !rankIsValid) {
+        console.error("[contests] accepted votes without a rank on nominee " + entityId);
+        return { status: "error" };
+      }
+      const rank = rankIsValid ? (rankRaw as number) : null;
       nominees.push({
         entityId,
         restaurantId,
@@ -119,6 +156,9 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
         neighborhood: asString(row.neighborhood),
         imageUrl: asString(row.image_url),
         category: asString(row.category),
+        audienceAccepted: accepted,
+        developmentTestTotal: development,
+        rank,
       });
     }
   }
