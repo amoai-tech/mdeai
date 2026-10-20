@@ -265,9 +265,36 @@ Deno.serve(async (req: Request) => {
 
   const { data: eventRow, error: eventErr } = await service
     .from("events")
-    .insert(buildEventInsert(draft, userId, slug, hostDisplay))
+    .insert({
+      ...buildEventInsert(draft, userId, slug, hostDisplay),
+      approval_request_id: approvalId,
+    })
     .select("id, slug")
     .single();
+
+  if (eventErr?.code === "23505") {
+    const { data: existing } = await service
+      .from("events")
+      .select("id, slug")
+      .eq("approval_request_id", approvalId)
+      .maybeSingle();
+    if (existing) {
+      const receipt: Receipt = {
+        eventId: existing.id,
+        slug: existing.slug,
+        proposalId: body.proposalId ?? null,
+      };
+      await service
+        .from("approval_requests")
+        .update({ notes: RECEIPT_PREFIX + JSON.stringify(receipt) })
+        .eq("id", approvalId);
+      return jr(
+        { success: true, approvalRequestId: approvalId, decision, ...receipt },
+        200,
+        req,
+      );
+    }
+  }
 
   if (eventErr || !eventRow) {
     return jr(
