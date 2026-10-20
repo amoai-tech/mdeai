@@ -1,5 +1,9 @@
 -- SAN-1556 · Replace four dead tourist-destination photos with real, openly licensed ones.
 --
+-- Version note: this migration originally shared the 20261021040000 prefix with the
+-- already-applied SAN-1470 migration. It was renumbered to 20261021050000 before first
+-- application so both can run in order. The data update below is unchanged.
+--
 -- Why: the stored links for Comuna 13, Plaza Botero, Parque Arví and Museo de Antioquia pointed at
 -- Wikimedia Commons paths that do not load (the folder hash does not match the file name, and for three
 -- of the four the file name does not exist on Commons at all). The homepage therefore showed text-only
