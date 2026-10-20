@@ -7,8 +7,13 @@ import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error
 
 const mocks = vi.hoisted(() => ({
   loading: true,
+  thread: "thread-a",
   stop: vi.fn(),
   retry: vi.fn(),
+}));
+
+vi.mock("@/lib/chat/thread-nav-context", () => ({
+  useOptionalThreadNav: () => ({ activeThreadId: mocks.thread, sessionThreadId: "thread-a" }),
 }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
@@ -58,7 +63,7 @@ describe("ConciergeRunFeedback", () => {
 
   it("shows Retry after an error and calls the existing-turn retry", () => {
     mocks.loading = false;
-    reportConciergeError();
+    reportConciergeError("thread-a");
     const view = mount();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeTruthy();
     act(() => {
@@ -74,6 +79,15 @@ describe("ConciergeRunFeedback", () => {
     const view = mount();
     expect(view.querySelector('[data-testid="concierge-stop"]')).toBeTruthy();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+  });
+
+  it("hides and clears a failure from another conversation", () => {
+    mocks.loading = false;
+    mocks.thread = "thread-b";
+    reportConciergeError("thread-a");
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+    expect(view.textContent).toBe("");
   });
 
   it("renders nothing when idle", () => {

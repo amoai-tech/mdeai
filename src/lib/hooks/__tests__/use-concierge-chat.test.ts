@@ -128,6 +128,16 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
     expect(ensureMock).not.toHaveBeenCalled();
   });
 
+  it("does not retry a failure owned by another conversation", async () => {
+    agent.isRunning = false;
+    agent.threadId = "thread-1";
+    reportConciergeError("thread-2");
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
+    clearConciergeError();
+  });
+
   it("does not retry while a reply is running", async () => {
     agent.isRunning = true;
     const chat = useConciergeChat();
