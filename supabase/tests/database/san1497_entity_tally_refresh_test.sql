@@ -1,6 +1,6 @@
 -- SAN-1497 · vote.entity_tally follows reviews and deletions, not just inserts
 begin;
-select plan(7);
+select plan(10);
 
 insert into auth.users (id, email) values
   ('f1498000-0000-0000-0000-000000000001','refresh-a@example.com'),
@@ -24,10 +24,19 @@ update vote.votes set fraud_status = 'blocked' where id = 'd1498000-0000-0000-00
 select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000001'),
   0::bigint, 'flagging a ballot blocked refreshes the projection');
 
+-- audience_votes alone is not the whole projection: the scored total must move with it.
+select is((select round(weighted_total::numeric, 3)::text from vote.entity_tally
+            where entity_id = 'e1498000-0000-0000-0000-000000000001'),
+  '0.000', 'blocking a ballot also recomputes weighted_total');
+
 update vote.votes set fraud_status = 'clean' where id = 'd1498000-0000-0000-0000-000000000001';
 
 select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000001'),
   1::bigint, 'reviewing a ballot clean refreshes the projection');
+
+select is((select round(weighted_total::numeric, 3)::text from vote.entity_tally
+            where entity_id = 'e1498000-0000-0000-0000-000000000001'),
+  '0.500', 'restoring a ballot also recomputes weighted_total');
 
 insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values
   ('e1498000-0000-0000-0000-000000000002','c1498000-0000-0000-0000-000000000001','refresh-e2','[TEST] Refresh E2','a1498000-0000-0000-0000-000000000002');
@@ -41,6 +50,13 @@ select is((select audience_votes from vote.entity_tally where entity_id = 'e1498
 
 select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000002'),
   1::bigint, 'moving a ballot increments the entity it joined');
+
+-- The ranking is stored per entity across the contest, so moving the only ballot must swap both.
+select is(
+  (select (select rank from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000001')::text
+       || '/' ||
+          (select rank from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000002')::text),
+  '2/1', 'moving a ballot re-ranks both entities');
 
 delete from vote.votes where id = 'd1498000-0000-0000-0000-000000000001';
 
