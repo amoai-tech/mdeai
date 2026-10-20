@@ -157,6 +157,7 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
               alt=""
               aria-hidden
               className="h-full w-full object-cover"
+              sizes="(max-width: 768px) 100vw, 42vw"
               height={640}
               src={cover}
               width={800}
@@ -167,7 +168,7 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
               aria-hidden
               className="flex h-full w-full items-end bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-6"
             >
-              <span className="font-serif text-6xl leading-none text-primary/30">
+              <span className="font-serif text-5xl leading-none text-primary/25">
                 {(contest.title.match(/[a-z0-9]/i)?.[0] ?? "C").toUpperCase()}
               </span>
             </div>

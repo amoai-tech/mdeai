@@ -67,6 +67,39 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     expect(problems, "no console errors or 5xx while browsing").toEqual([]);
   });
 
+
+  // Layout is asserted, not inferred from markup: a class name does not prove a rendered height,
+  // and a stacking bug once shipped while every string assertion passed.
+  test("the featured contest keeps a 16:10 panel on phones and sits beside its text on desktop", async ({
+    page,
+  }) => {
+    await page.goto("/contests");
+    const featured = page.locator('[data-featured="true"]');
+    if ((await featured.count()) === 0) {
+      test.skip(true, "no single-contest featured layout in this data set");
+      return;
+    }
+
+    const link = featured.locator("a").first();
+    const parts = link.locator(":scope > div");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phone = await parts.nth(1).boundingBox();
+    expect(phone, "the visual panel must render on a phone").not.toBeNull();
+    // A collapsed panel is the bug this guards: it rendered 64px before the explicit frame.
+    expect(phone!.height, "the phone panel must not collapse").toBeGreaterThan(150);
+    expect(phone!.width / phone!.height).toBeGreaterThan(1.4);
+    expect(phone!.width / phone!.height).toBeLessThan(1.8);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const textBox = await parts.nth(0).boundingBox();
+    const visualBox = await parts.nth(1).boundingBox();
+    expect(textBox && visualBox).toBeTruthy();
+    const topGap = Math.abs(textBox!.y - visualBox!.y);
+    expect(topGap, "desktop must place the visual beside the text, not under it").toBeLessThan(8);
+    expect(visualBox!.x).toBeGreaterThan(textBox!.x);
+  });
+
   test("an unknown contest is a 404, not an empty page", async ({ page }) => {
     const response = await page.goto("/contests/san-1524-does-not-exist");
     expect(response?.status()).toBe(404);

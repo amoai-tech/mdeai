@@ -59,13 +59,13 @@ export function ContestNomineeCard({
         </div>
         <div className="flex items-start justify-between gap-3 p-4">
           <div className="min-w-0">
-            <p className="truncate font-medium leading-snug">{nominee.name}</p>
+            <p className="line-clamp-2 font-medium leading-snug">{nominee.name}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {nominee.neighborhood ?? "Medellín"}
             </p>
           </div>
           <span className="mt-0.5 shrink-0 text-sm font-medium text-primary group-hover:underline" aria-hidden>
-            Vote →
+            View restaurant →
           </span>
         </div>
       </Link>
