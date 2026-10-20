@@ -3,6 +3,9 @@ name: Playwright deterministic
 on:
   pull_request:
     branches: [main]
+    # `labeled` lets a reviewer add `run-e2e` after the PR opened and start the
+    # suite without an empty push; `unlabeled` lets the next push re-evaluate it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read

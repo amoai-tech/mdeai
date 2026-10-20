@@ -24,7 +24,6 @@ const BROWSER_FACING = [
   /^src\/(?:app|components|hooks|lib|platform)\//,
   /^src\/proxy\.ts$/,
   /^public\//,
-  /^e2e\//,
   /^next\.config\./,
   /^playwright\.config\./,
   /^postcss\.config\./,
@@ -33,15 +32,19 @@ const BROWSER_FACING = [
 ];
 
 /**
- * A test-only edit does not change what a browser sees. `e2e/**` is intentionally not
- * excluded there: changing a journey must run that journey.
+ * A test-only edit does not change what a browser sees. This never applies to `e2e/`:
+ * changing a journey, a fixture, or an e2e helper must run that journey.
  */
 const TEST_ONLY = /(?:__tests__\/|\.test\.[cm]?[jt]sx?$)/;
+const E2E_PATH = /^e2e\//;
 
+/** True when a changed path can alter what a browser sees or how a journey runs. */
 export function isBrowserFacing(file) {
+  if (E2E_PATH.test(file)) return true;
   return BROWSER_FACING.some((pattern) => pattern.test(file)) && !TEST_ONLY.test(file);
 }
 
+/** Decide whether this PR needs the deterministic browser suite. */
 export function decideBrowserSuite({ changedFiles = [], labels = [] } = {}) {
   const files = changedFiles.map((file) => file.trim()).filter(Boolean);
 

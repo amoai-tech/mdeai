@@ -26,6 +26,8 @@ test("browser-facing paths run the suite", () => {
     "src/proxy.ts",
     "public/logo.svg",
     "e2e/deterministic-critical.spec.ts",
+    "e2e/__tests__/shared-fixture.ts",
+    "e2e/helpers/rental-fixture-marker.test.ts",
     "next.config.ts",
     "playwright.config.ts",
     "postcss.config.mjs",
@@ -46,6 +48,15 @@ test("test-only edits and unrelated files do not run the suite", () => {
     ".github/workflows/floor.yml",
   ]) {
     assert.equal(isBrowserFacing(file), false, file);
+  }
+});
+
+test("e2e fixtures and helpers still run the suite even when test-named", () => {
+  for (const file of [
+    "e2e/__tests__/shared-fixture.ts",
+    "e2e/helpers/rental-fixture-marker.test.ts",
+  ]) {
+    assert.equal(decideBrowserSuite({ changedFiles: [file] }).run, true, file);
   }
 });
 
