@@ -108,9 +108,16 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
       ) : null}
 
       <div>
-        <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
-          {price ?? <span className="text-muted-foreground">Price not provided</span>}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
+            {price ?? <span className="text-muted-foreground">Price not provided</span>}
+          </p>
+          {price && rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-xs" data-testid="rental-details-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
         {rental.availability ? (
           <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-details-availability">
             {rental.availability}
