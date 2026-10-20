@@ -93,7 +93,9 @@ export function useGroundedSearchFastPath() {
       } catch (err) {
         console.error("[grounded-fast-path]", err);
         setToolResult(null);
-        return false;
+        // This is a failed café search, not an unhandled intent: report it
+        // to the send pipeline so Try again replays the same search.
+        throw err;
       } finally {
         busyRef.current = false;
       }
