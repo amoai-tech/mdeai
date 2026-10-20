@@ -7,7 +7,7 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
-import { ConciergeRunFeedback } from "@/components/chat/concierge-run-feedback";
+import { ConciergeErrorFeedback } from "@/components/chat/concierge-run-feedback";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
@@ -53,8 +53,6 @@ export function ChatCenterPanel() {
         <ChatQueryBar />
         {deterministic ? null : <ChatFilterCopilotInstructions />}
         <WorkflowProgressStrip />
-        {/* Mounted outside the transcript so a failed first search still offers Retry. */}
-        <ConciergeRunFeedback />
         <div
           id="copilot-chat-region"
           data-testid="copilot-chat-region"
@@ -62,6 +60,8 @@ export function ChatCenterPanel() {
           aria-relevant="additions"
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-4"
         >
+          {/* First child of the polite live region: an empty-thread failure is still announced. */}
+          <ConciergeErrorFeedback />
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>
