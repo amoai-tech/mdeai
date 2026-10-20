@@ -79,16 +79,22 @@
           "value": "openmuse"
         },
         {
-          "id": "called-openmuse",
+          "id": "not-called-openmuse",
           "kind": "deterministic",
-          "check": "skill_called",
+          "check": "skill_not_called",
           "value": "openmuse"
         },
         {
-          "id": "read-openmuse",
+          "id": "called-copilotkit",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "copilotkit"
+        },
+        {
+          "id": "read-copilotkit",
           "kind": "deterministic",
           "check": "skill_result_ok",
-          "value": "openmuse"
+          "value": "copilotkit"
         },
         {
           "id": "completed",
@@ -96,7 +102,7 @@
           "check": "turn_completed"
         }
       ],
-      "should_trigger": true
+      "should_trigger": false
     }
   ]
 }

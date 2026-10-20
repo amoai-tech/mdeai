@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mapCuisineFromTypes, priceLevelToTier, estimateAvgPriceFromLevel, restaurantSchema, searchRestaurants } from '../search-restaurants.js';
+import { mapCuisineFromTypes, priceLevelToTier, estimateAvgPriceFromLevel, restaurantSchema, searchRestaurants, restaurantSearchDisplayName } from '../search-restaurants.js';
 
 vi.mock('../../lib/intelligence-restaurant-search', () => ({
   searchRestaurantsIntelligent: vi.fn().mockResolvedValue({ results: [], hybridUsed: false }),
@@ -57,6 +57,30 @@ describe('searchRestaurants — intelligent search fallback', () => {
     const result = await searchRestaurants({ queryText: 'rooftop dinner Provenza', limit: 5 });
     expect(result.source).toBe('fallback');
     expect(result.results.length).toBeGreaterThan(0);
+  });
+});
+
+describe('El Cielo labels in the intelligent chat search path', () => {
+  it('preserves both real result IDs and distinguishes their on-screen names', async () => {
+    const { searchRestaurantsIntelligent } = await import('../../lib/intelligence-restaurant-search');
+    const base = {
+      cuisine: 'international', neighborhood: 'El Poblado', priceTier: '$$$',
+      avgPricePerPerson: 30, currency: 'USD', rating: 4.5, vibe: [], imageUrl: '',
+      sourceUrl: 'https://mdeai.co/restaurants/example',
+    };
+    vi.mocked(searchRestaurantsIntelligent).mockResolvedValueOnce({
+      results: [
+        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'El Cielo' },
+        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'El Cielo' },
+      ],
+      source: 'supabase', hybridUsed: false,
+    } as never);
+
+    const result = await searchRestaurants({ queryText: 'restaurants in El Poblado', limit: 5 });
+    expect(result.results.map(({ id, name }) => [id, name])).toEqual([
+      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'El Cielo · Elcielo Hotel'],
+      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'El Cielo · Carrera 40'],
+    ]);
   });
 });
 
@@ -129,5 +153,21 @@ describe('restaurantSchema — MASTRA-048 enrichment fields', () => {
     const result = restaurantSchema.parse(baseRestaurant);
     expect(result.mapsUrl).toBeUndefined();
     expect(result.aiSummary).toBeUndefined();
+  });
+});
+
+
+describe('restaurant search display names — real El Cielo locations', () => {
+  it('distinguishes both venues without changing their stored names or IDs', () => {
+    expect(restaurantSearchDisplayName('El Cielo', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('El Cielo · Elcielo Hotel');
+    expect(restaurantSearchDisplayName('El Cielo', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
+      .toBe('El Cielo · Carrera 40');
+  });
+
+  it('does not rename any other restaurants or unknown El Cielo records', () => {
+    expect(restaurantSearchDisplayName('El Cielo', 'some-other-id')).toBe('El Cielo');
+    expect(restaurantSearchDisplayName('El Cielo Café', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('El Cielo Café');
   });
 });

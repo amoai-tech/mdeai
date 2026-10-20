@@ -6,6 +6,7 @@ import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
 import { createClient } from "@/lib/supabase/client";
+import { useKeyboardInset } from "@/lib/hooks/use-chat-keyboard-height";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import { contactReducer, INITIAL_CONTACT } from "./contact-fields";
 
@@ -36,6 +37,9 @@ const loadPrefillForCurrentUser = async (): Promise<SchedulePrefill | null> => {
 /** SCREEN-008 — schedule viewing modal → POST /api/leads/schedule-viewing (G2). */
 export const ScheduleViewingModal = () => {
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } = useRentalUi();
+  // SAN-1075 — iOS overlays the keyboard instead of shrinking the layout viewport.
+  // Reserve its height so Cancel/Submit stay reachable while the renter types.
+  const keyboardInset = useKeyboardInset();
   const panelRef = useRef<HTMLDivElement>(null);
   useModalA11y(Boolean(scheduleTarget), closeScheduleViewing, panelRef);
   // SAN-1203 — `setSubmitting` is async, so a fast double-click could fire two
@@ -104,6 +108,7 @@ export const ScheduleViewingModal = () => {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      style={keyboardInset ? { paddingBottom: keyboardInset + 16 } : undefined}
       role="presentation"
       data-testid="schedule-viewing-modal"
       onClick={(e) => {
@@ -115,7 +120,8 @@ export const ScheduleViewingModal = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="schedule-viewing-title"
-        className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg"
+        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-4 shadow-lg"
+        style={{ maxHeight: `calc(100dvh - 2rem - ${keyboardInset}px)` }}
       >
         <h2 id="schedule-viewing-title" className="text-lg font-semibold">
           Schedule a viewing
@@ -127,7 +133,7 @@ export const ScheduleViewingModal = () => {
           <label className="block text-sm">
             <span className="font-medium">Your name</span>
             <input
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
               name="name"
               autoComplete="name"
               required
@@ -140,7 +146,7 @@ export const ScheduleViewingModal = () => {
             <span className="font-medium">Email</span>
             <input
               type="email"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
               name="email"
               autoComplete="email"
               required
@@ -153,7 +159,7 @@ export const ScheduleViewingModal = () => {
             <span className="font-medium">Phone (optional)</span>
             <input
               type="tel"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
               name="phone"
               autoComplete="tel"
               value={contact.phone.value}
@@ -165,7 +171,7 @@ export const ScheduleViewingModal = () => {
             <span className="font-medium">Preferred time (Medellín time)</span>
             <input
               type="datetime-local"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
               name="preferredAt"
               required
               value={preferredAt}
@@ -186,12 +192,18 @@ export const ScheduleViewingModal = () => {
             <Button
               type="button"
               variant="outline"
+              className="min-h-11 lg:min-h-0"
               onClick={closeScheduleViewing}
               disabled={submitting}
             >
               Cancel
             </Button>
-            <Button type="submit" data-testid="schedule-viewing-submit" disabled={submitting}>
+            <Button
+              type="submit"
+              className="min-h-11 lg:min-h-0"
+              data-testid="schedule-viewing-submit"
+              disabled={submitting}
+            >
               {submitting ? "Submitting…" : "Submit"}
             </Button>
           </div>

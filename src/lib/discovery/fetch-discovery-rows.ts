@@ -23,6 +23,12 @@ export interface PlaceCardData {
   image: string;
   query: string;
   href?: string;
+  /** Events only: the real start (ISO), so the card can show the date first. */
+  startsAt?: string;
+  /** Descriptive alt text for the photo (defaults to the name). */
+  imageAlt?: string;
+  /** Who took the photo and under what licence. Set for every openly licensed (non-owned) photo. */
+  imageCredit?: { text: string; href: string; licenseHref?: string };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,6 +292,7 @@ export async function fetchLiveEvents(
       image: row.primary_image_url ?? "",
       query: `${row.name} Medellín events tickets`,
       href: `/events/${encodeURIComponent(row.slug?.trim() || row.id)}`,
+      startsAt: row.event_start_time,
     };
   });
 }
@@ -298,6 +305,18 @@ type DestinationRow = {
   category: string | null;
   description: string | null;
   primary_image_url: string | null;
+  details: { image_credit?: ImageCredit } | null;
+};
+
+/** Stored in `tourist_destinations.details.image_credit` next to a Wikimedia Commons photo. */
+type ImageCredit = {
+  image_url?: string;
+  source?: string;
+  author?: string;
+  license?: string;
+  license_url?: string;
+  source_url?: string;
+  alt?: string;
 };
 
 /** Editorial order for the first cards. Names missing from the table are simply skipped. */
@@ -312,6 +331,8 @@ const FEATURED_DESTINATIONS = [
   "Metrocable",
 ] as const;
 
+const GUIDE_AREAS = new Set(["laureles", "el poblado", "envigado", "el centro"]);
+
 function nameKey(name: string): string {
   return name
     .normalize("NFD")
@@ -322,9 +343,9 @@ function nameKey(name: string): string {
 }
 
 /**
- * Only photos we host ourselves are shown. The destination table's other photo links are
- * stock images or Wikimedia paths that do not resolve, and a card must never show a
- * picture of something that is not that place. A card without a photo is honest.
+ * Photos we host ourselves (Supabase storage) are always allowed. Other photo links in the destination
+ * table are stock images or Wikimedia paths that do not resolve, and a card must never show a picture of
+ * something that is not that place; see `destinationPhoto` for the credited Commons exception.
  */
 function ownedImage(url: string | null): string {
   const host = supabaseStorageHost();
@@ -336,24 +357,64 @@ function ownedImage(url: string | null): string {
   }
 }
 
+const COMMONS_PREFIX = "https://upload.wikimedia.org/wikipedia/commons/";
+
+/**
+ * A photo is shown when it is ours (Supabase storage), or a Wikimedia Commons image whose record carries
+ * its author, licence and source page. Anything else (stock links, dead Commons paths, a Commons URL with
+ * no credit) gives the honest text card.
+ */
+function destinationPhoto(row: DestinationRow): Pick<PlaceCardData, "image" | "imageAlt" | "imageCredit"> {
+  const own = ownedImage(row.primary_image_url);
+  if (own) return { image: own };
+  const url = row.primary_image_url;
+  const credit = row.details?.image_credit;
+  // Bind attribution to the exact image, not just the destination record. A later photo edit
+  // must never inherit the previous photographer's credit.
+  if (
+    url?.startsWith(COMMONS_PREFIX) &&
+    credit?.image_url === url &&
+    credit.author?.trim() &&
+    credit.license?.trim() &&
+    credit.source_url?.startsWith("https://commons.wikimedia.org/wiki/File:") &&
+    credit.license_url?.startsWith("https://creativecommons.org/licenses/")
+  ) {
+    return {
+      image: url,
+      imageAlt: credit.alt?.trim() || undefined,
+      imageCredit: {
+        text: `Photo: ${credit.author} · ${credit.license}`,
+        href: credit.source_url,
+        licenseHref: credit.license_url,
+      },
+    };
+  }
+  return { image: "" };
+}
+
 export async function fetchLiveDestinations(
   supabase: SupabaseClient,
 ): Promise<PlaceCardData[]> {
   const { data, error } = await supabase
     .from("tourist_destinations")
-    .select("id, name, category, description, primary_image_url")
+    .select("id, name, category, description, primary_image_url, details")
     .eq("is_active", true)
-    // Neighbourhoods have their own section.
-    .neq("category", "Neighborhood")
     .order("name", { ascending: true })
     .limit(60);
 
   if (error || !data?.length) return [];
 
-  // The table holds some places twice (e.g. Parque Arví); show each place once.
+  // The table holds some places twice (e.g. Parque Arví); show each place once, keeping the row that has a
+  // usable photo. (Array.sort is stable, so the name order is otherwise kept.)
+  const rows = (data as DestinationRow[])
+    .map((row) => ({ row, photo: destinationPhoto(row) }))
+    .sort((a, b) => Number(Boolean(b.photo.image)) - Number(Boolean(a.photo.image)));
   const seen = new Set<string>();
-  const unique = (data as DestinationRow[]).filter((row) => {
+  const unique = rows.filter(({ row }) => {
     const key = nameKey(row.name);
+    // The four areas in the neighbourhood guide have their own section. (Not "every Neighborhood row":
+    // Comuna 13 is filed under that category but is a place people go to see.)
+    if (GUIDE_AREAS.has(key)) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -363,16 +424,16 @@ export async function fetchLiveDestinations(
     const i = FEATURED_DESTINATIONS.indexOf(name as (typeof FEATURED_DESTINATIONS)[number]);
     return i === -1 ? FEATURED_DESTINATIONS.length : i;
   };
-  unique.sort((a, b) => rank(a.name) - rank(b.name));
+  unique.sort((a, b) => rank(a.row.name) - rank(b.row.name));
 
-  return unique.slice(0, 8).map((row) => ({
+  return unique.slice(0, 4).map(({ row, photo }) => ({
     id: row.id,
     name: row.name,
     kind: row.category ?? "Place",
     rating: null,
     meta: "",
     why: row.description?.trim() ?? "",
-    image: ownedImage(row.primary_image_url),
+    ...photo,
     query: `Tell me about ${row.name} in Medellín`,
   }));
 }

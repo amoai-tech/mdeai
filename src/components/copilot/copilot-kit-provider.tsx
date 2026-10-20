@@ -25,7 +25,7 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
-      onError={reportConciergeError}
+      onError={() => reportConciergeError(activeThreadId ?? sessionThreadId)}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"

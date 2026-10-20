@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 
 /**
  * SAN-1378: switching conversation while a reply is still streaming must stop
@@ -11,6 +12,7 @@ const ensureMock = vi.fn();
 const agent = {
   isRunning: false,
   threadId: "",
+  messages: [{ id: "user-1", role: "user", content: "Find rentals" }],
   addMessage: vi.fn(),
   setMessages: vi.fn(() => calls.push("setMessages")),
   setState: vi.fn(() => calls.push("setState")),
@@ -45,10 +47,12 @@ vi.mock("@/lib/chat/ensure-thread-title", () => ({
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 
 beforeEach(() => {
+  clearConciergeError();
   calls.length = 0;
   vi.clearAllMocks();
   agent.isRunning = false;
   agent.threadId = "";
+  agent.messages = [{ id: "user-1", role: "user", content: "Find rentals" }];
   ensureMock.mockReset();
   ensureMock.mockResolvedValue(true);
 });
@@ -72,6 +76,73 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
     agent.isRunning = true;
     chat.stopActiveRun();
     expect(copilotkit.stopAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the existing turn without adding a duplicate user message", async () => {
+    agent.isRunning = false;
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockResolvedValue(undefined);
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(true);
+    expect(agent.addMessage).not.toHaveBeenCalled();
+    expect(copilotkit.runAgent).toHaveBeenCalledWith({ agent });
+    expect(ensureMock).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("rejects retry when there is no user message to replay", async () => {
+    agent.messages = [];
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("permits only one retry while the first run has not started streaming", async () => {
+    agent.threadId = "thread-1";
+    let complete!: () => void;
+    copilotkit.runAgent.mockReturnValue(new Promise<void>((resolve) => { complete = resolve; }));
+    const chat = useConciergeChat();
+    const first = chat.retryLastTurn();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).toHaveBeenCalledTimes(1);
+    complete();
+    await expect(first).resolves.toBe(true);
+    await expect(chat.retryLastTurn()).resolves.toBe(true);
+    expect(copilotkit.runAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not title a different thread after a mid-retry switch", async () => {
+    agent.threadId = "thread-1";
+    let complete!: () => void;
+    copilotkit.runAgent.mockReturnValue(new Promise<void>((resolve) => { complete = resolve; }));
+    const first = useConciergeChat().retryLastTurn();
+    agent.threadId = "thread-2";
+    complete();
+    await expect(first).resolves.toBe(true);
+    expect(ensureMock).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a resolved stream was successful when onError fired", async () => {
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockImplementation(async () => { reportConciergeError(); });
+    await expect(useConciergeChat().retryLastTurn()).resolves.toBe(false);
+    expect(ensureMock).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a failure owned by another conversation", async () => {
+    agent.isRunning = false;
+    agent.threadId = "thread-1";
+    reportConciergeError("thread-2");
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
+    clearConciergeError();
+  });
+
+  it("does not retry while a reply is running", async () => {
+    agent.isRunning = true;
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
   });
 
   it("falls back to abortRun if stopAgent throws", () => {
