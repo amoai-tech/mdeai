@@ -50,6 +50,9 @@ export function DeterministicConciergeChat() {
       data-testid="concierge-chat-view-mounted"
       data-hydrated={hydrated ? "true" : "false"}
       className="flex min-h-0 flex-1 flex-col justify-end"
+      // The deterministic composer does not use CopilotKit's built-in keyboard lift.
+      // Match the real visible-viewport contract when the keyboard overlays /chat.
+      style={{ paddingBottom: "var(--mde-keyboard-height, 0px)" }}
     >
       {/* The same tail the real transcript renders, above the composer. */}
       <div ref={scrollerRef} className="mx-auto min-h-0 w-full max-w-3xl overflow-y-auto">
