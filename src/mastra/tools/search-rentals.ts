@@ -11,7 +11,6 @@ import {
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -566,6 +565,8 @@ export async function searchRentals(
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
+      // Load after tool initialization; intelligence search reuses our row-mapping helpers.
+      const { searchRentalsIntelligent } = await import('../lib/intelligence-rental-search');
       const intel = await searchRentalsIntelligent(query, { ...options, developmentPhase: developmentMode });
       const latencyMs = Date.now() - started;
       await writeSearchLog({

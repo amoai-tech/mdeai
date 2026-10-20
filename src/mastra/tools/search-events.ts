@@ -11,7 +11,6 @@ import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchEventsIntelligent, resolveEventCategoryForQuery } from '../lib/intelligence-event-search';
 import { writeSearchLog } from '../lib/search-logs';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -240,6 +239,8 @@ export async function searchEvents(
   query: EventQuery,
 ): Promise<EventSearchResult> {
   const limit = query.limit ?? 5;
+  // Defer the intelligence module until our event helper exports are initialized.
+  const { searchEventsIntelligent, resolveEventCategoryForQuery } = await import('../lib/intelligence-event-search');
   const category = resolveEventCategoryForQuery(query.category, query.queryText);
   const normalizedQuery = category === query.category ? query : { ...query, category };
 
