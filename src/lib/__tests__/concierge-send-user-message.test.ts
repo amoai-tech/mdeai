@@ -74,7 +74,7 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     const failure = getConciergeErrorSnapshot();
     expect(failure.threadId).toBe("thread-a");
     expect(failure.retry).toBeTypeOf("function");
-    await failure.retry?.();
+    await Promise.all([failure.retry?.(), failure.retry?.()]);
     expect(handlers.handleEventMessage).toHaveBeenCalledTimes(2);
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
@@ -89,7 +89,8 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     const failure = getConciergeErrorSnapshot();
     expect(failure.threadId).toBe("thread-a");
-    expect(failure.retry).toBe(handlers.retryLastTurn);
+    await failure.retry?.();
+    expect(handlers.retryLastTurn).toHaveBeenCalledTimes(1);
   });
 
   it("salsa events still uses event handler before agent", async () => {

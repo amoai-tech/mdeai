@@ -23,8 +23,15 @@ export type ConciergeErrorInput = {
 };
 
 const IDLE: ConciergeErrorSnapshot = { version: 0, threadId: null };
-let _error: ConciergeErrorSnapshot = IDLE;
+const GLOBAL_KEY = "__global__";
+const _errors = new Map<string, ConciergeErrorSnapshot>();
+let _last: ConciergeErrorSnapshot = IDLE;
+let _version = 0;
 const _listeners = new Set<() => void>();
+
+function keyFor(threadId?: string | null) {
+  return threadId ?? GLOBAL_KEY;
+}
 
 function notify() {
   _listeners.forEach((l) => l());
@@ -37,23 +44,33 @@ export function reportConciergeError(
     typeof input === "string" || input === null ? input : input?.threadId;
   const retry =
     typeof input === "object" && input !== null ? input.retry : undefined;
-  _error = { version: _error.version + 1, threadId: threadId ?? null, retry };
+  _version += 1;
+  const snapshot: ConciergeErrorSnapshot = {
+    version: _version,
+    threadId: threadId ?? null,
+    retry,
+  };
+  // Keep a separate slot per conversation. A late failure from Chat A must
+  // not overwrite Chat B's newer notice.
+  _errors.set(keyFor(threadId), snapshot);
+  _last = snapshot;
   notify();
 }
 
 /** Clear the current failure. Pass a thread id to avoid clearing another chat's error. */
 export function clearConciergeError(threadId?: string | null) {
-  if (
-    threadId !== undefined &&
-    _error.threadId !== null &&
-    _error.threadId !== threadId
-  ) {
+  if (threadId === undefined) {
+    const hadError = _errors.size > 0;
+    _errors.clear();
+    _last = IDLE;
+    _version = 0;
+    if (hadError) notify();
     return;
   }
-  if (_error.version !== 0) {
-    _error = IDLE;
-    notify();
-  }
+  const key = keyFor(threadId);
+  if (!_errors.delete(key)) return;
+  if (_last.threadId === (threadId ?? null)) _last = IDLE;
+  notify();
 }
 
 export function subscribeConciergeError(listener: () => void) {
@@ -62,11 +79,20 @@ export function subscribeConciergeError(listener: () => void) {
 }
 
 export function getConciergeErrorSnapshot(): ConciergeErrorSnapshot {
-  return _error;
+  return _last;
+}
+
+/** The notice that belongs to one conversation, never another chat's late error. */
+export function getConciergeErrorForThread(
+  threadId?: string | null,
+): ConciergeErrorSnapshot {
+  // A no-thread report is the legacy/provider fallback for callers that have
+  // not supplied an id yet; it must remain visible to the active chat.
+  return _errors.get(keyFor(threadId)) ?? _errors.get(GLOBAL_KEY) ?? IDLE;
 }
 
 export function getConciergeErrorVersion() {
-  return _error.version;
+  return _version;
 }
 
 export function getConciergeErrorVersionServer() {
@@ -74,5 +100,9 @@ export function getConciergeErrorVersionServer() {
 }
 
 export function getConciergeErrorSnapshotServer(): ConciergeErrorSnapshot {
+  return IDLE;
+}
+
+export function getConciergeErrorForThreadServer(): ConciergeErrorSnapshot {
   return IDLE;
 }

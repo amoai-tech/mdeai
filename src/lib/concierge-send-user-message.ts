@@ -86,10 +86,18 @@ export async function sendConciergeUserMessage(
     // A fast-path failure must retry that search, not the previous agent turn.
     // An agent failure already has its user message in the transcript, so it
     // retries the existing turn instead of appending a duplicate.
-    const retry =
-      agentAttempted && handlers.retryLastTurn
-        ? handlers.retryLastTurn
-        : () => sendConciergeUserMessage(trimmed, handlers);
+    let retryInFlight = false;
+    const retry = async () => {
+      if (retryInFlight) return false;
+      retryInFlight = true;
+      try {
+        return agentAttempted && handlers.retryLastTurn
+          ? await handlers.retryLastTurn()
+          : await sendConciergeUserMessage(trimmed, handlers);
+      } finally {
+        retryInFlight = false;
+      }
+    };
     reportConciergeError({ threadId, retry });
     return false;
   }

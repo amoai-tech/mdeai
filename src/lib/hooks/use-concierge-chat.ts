@@ -7,6 +7,7 @@ import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import {
   clearConciergeError,
+  getConciergeErrorForThread,
   getConciergeErrorSnapshot,
   reportConciergeError,
 } from "@/lib/concierge-error-store";
@@ -62,15 +63,18 @@ function useLiveConciergeChat() {
     if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
         !agent.messages.some((message) => message.role === "user")) return false;
     const retryThreadId = agent.threadId;
-    const priorError = getConciergeErrorSnapshot();
+    const priorError = getConciergeErrorForThread(retryThreadId);
+    const latestError = getConciergeErrorSnapshot();
     // A notice from another conversation must never replay this agent's turn.
     if (priorError.threadId && priorError.threadId !== retryThreadId) return false;
+    if (priorError.version === 0 && latestError.threadId &&
+        latestError.threadId !== retryThreadId) return false;
     retriesInFlight.add(agent);
     clearConciergeError(retryThreadId);
     try {
       await copilotkit.runAgent({ agent });
       // CopilotKit can surface a stream error via onError without rejecting.
-      const error = getConciergeErrorSnapshot();
+      const error = getConciergeErrorForThread(retryThreadId);
       if (error.version > 0) return false;
       // A thread change during retry must not save/title a different chat.
       if (agent.threadId === retryThreadId) {

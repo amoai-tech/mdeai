@@ -105,6 +105,15 @@ describe("ConciergeRunFeedback", () => {
     expect(mocks.retry).not.toHaveBeenCalled();
   });
 
+  it("shows the current chat's newer notice after an old chat reports late", () => {
+    mocks.loading = false;
+    mocks.thread = "thread-b";
+    reportConciergeError("thread-b");
+    reportConciergeError("thread-a");
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeTruthy();
+  });
+
   it("renders nothing when idle", () => {
     mocks.loading = false;
     const view = mount();
