@@ -454,6 +454,14 @@ describe("RentalBrowseCard — price label", () => {
     expect(cop).not.toContain('data-testid="rental-card-currency"');
   });
 
+  it("labels the primary nightly price for a USD-only listing, and leaves COP nightly alone", () => {
+    const usd = renderCard({ price_daily: 78, price_monthly: null, currency: "USD" });
+    const cop = renderCard({ price_daily: 80_000, price_monthly: null, currency: "COP" });
+    expect(usd).toContain("$78/night");
+    expect(usd).toContain('data-testid="rental-card-nightly-currency"');
+    expect(cop).toContain("COP 80,000/night");
+    expect(cop).not.toContain('data-testid="rental-card-nightly-currency"');
+  });
 
   it("shows the monthly rent and no derived nightly price for a COP monthly listing", () => {
     const html = renderCard({ price_daily: null, price_monthly: 14_500_000, currency: "COP" });
