@@ -61,7 +61,9 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const pathname = usePathname();
   const inFlight = useRef(false);
   const retryAfter = useRef(0);
-  const [state, setState] = useState<PanelState>("idle");
+  // A remounted panel must not offer a second actionable Vote while the server
+  // checks whether this account already has a ballot (e.g. after login).
+  const [state, setState] = useState<PanelState>("checking");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [alreadyVotedName, setAlreadyVotedName] = useState<string | null>(null);
@@ -344,7 +346,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         className="min-h-11 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground disabled:opacity-60"
         data-testid="vote-cta"
         data-hydrated={hydrated ? "true" : "false"}
-        disabled={state === "casting" || state === "checking" || state === "closed"}
+        disabled={!hydrated || state === "casting" || state === "checking" || state === "closed"}
         onClick={() => { if (inFlight.current) return; void startVote(); }}
         type="button"
       >
