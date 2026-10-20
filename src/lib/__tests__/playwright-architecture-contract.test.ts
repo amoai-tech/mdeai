@@ -129,8 +129,12 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("--retries=0");
     expect(workflow).toContain('PW_SKIP_WEBSERVER: "1"');
     expect(workflow).not.toMatch(/--trace=on\b/);
-    // The evidence upload must survive a timeout or a cancelled job.
-    expect(workflow).toMatch(/Upload failure artifacts[\s\S]{0,200}if: always\(\)/);
+    // The evidence upload must survive a timeout or a cancelled job, and must never publish raw
+    // browser state: this repository is public, so traces are encrypted or not uploaded at all.
+    expect(workflow).toMatch(/Upload encrypted failure artifacts[\s\S]{0,220}if: always\(\)/);
+    expect(workflow).toContain("PROD_JOURNEY_ARTIFACT_KEY");
+    expect(workflow).toContain("openssl enc -aes-256-cbc");
+    expect(workflow).not.toMatch(/\n\s+test-results\/\n/);
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [
