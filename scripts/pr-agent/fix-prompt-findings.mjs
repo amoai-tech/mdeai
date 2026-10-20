@@ -135,6 +135,11 @@ export function locateFinding(finding, changedFiles) {
     startLine: low,
     endLine: high,
     context: lines.join("\n").slice(0, MAX_CONTEXT_CHARS),
+    addedContext: [...added.entries()]
+      .filter(([line]) => line >= low && line <= high)
+      .map(([, text]) => text)
+      .join("\n")
+      .slice(0, MAX_CONTEXT_CHARS),
   };
 }
 

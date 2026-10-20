@@ -16,6 +16,7 @@ import { labelMap, parsePatchLines } from "../pr-agent/fix-prompt-findings.mjs";
 import { FIX_PROMPT_MARKER, publishedHeadOf } from "../pr-agent/fix-prompt-comment.mjs";
 import { redactSecrets, renderFixPrompt, renderOutdatedFixPrompt } from "../pr-agent/render-fix-prompt.mjs";
 import { reviewEnvelope, stampReviewEnvelope } from "../pr-agent/review-policy.mjs";
+import { quotedCodeFragments } from "../pr-agent/evals/score-review.mjs";
 import {
   BASE,
   HEAD,
@@ -312,7 +313,110 @@ describe("SAN-1552 fix-prompt formatter — evidence honesty", () => {
     const rendered = render(result, [changedFile("src/app.ts", 10)]);
     assert.equal(rendered.confirmed, 0);
     assert.equal(rendered.investigate, 2);
-    assert.match(rendered.body, /NEEDS VERIFICATION; a model label is not independent proof/);
+    assert.match(rendered.body, /NEEDS VERIFICATION and its quoted code is not present/);
+  });
+
+  it("keeps advisory quoted-code findings in Investigate with an accurate reason", () => {
+    const quoted = "const tenant = `${tenantId}`";
+    const result = stateReview({
+      findings: [stateFinding({
+        id: "advisory-quote",
+        path: "src/tenant.ts",
+        lineStart: 10,
+        status: "advisory",
+        verification: "NEEDS VERIFICATION",
+        problem: `Review quotes \`${quoted}\` as a possible concern.`,
+      })],
+    });
+    const files = [{ filename: "src/tenant.ts", status: "modified", patch: [
+      "@@ -9,2 +9,2 @@",
+      " context line nine",
+      `+${quoted}`,
+      " context line eleven",
+    ].join("\n") }];
+    const rendered = render(result, files);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 1);
+    assert.match(rendered.body, /labels this finding advisory/);
+    assert.doesNotMatch(rendered.body, /quoted code is not present/);
+  });
+
+  it("promotes a NEEDS VERIFICATION finding whose quoted code is in the diff", () => {
+    // The same shape the live SAN-1552 probe produced: a HIGH SQL injection the review itself
+    // labelled NEEDS VERIFICATION, while quoting the exact added line.
+    const quoted = "select id, total from orders where tenant_id = '${tenantId}'";
+    // The existing code-fragment heuristic recognizes the dollar sign in the interpolation.
+    assert.deepEqual(quotedCodeFragments({ body: `The query \`${quoted}\` is built by string interpolation.` }), [quoted]);
+    const result = stateReview({
+      findings: [
+        stateFinding({
+          id: "q1",
+          path: "src/tenant.ts",
+          lineStart: 10,
+          verification: "NEEDS VERIFICATION",
+          problem: `The query \`${quoted}\` is built by string interpolation.`,
+        }),
+      ],
+    });
+    const files = [
+      {
+        filename: "src/tenant.ts",
+        status: "modified",
+        patch: [
+          "@@ -8,3 +8,4 @@",
+          " export function f(request) {",
+          "   const url = request.url;",
+          "+  return `" + quoted + "`;",
+          " }",
+        ].join("\n"),
+      },
+    ];
+    const rendered = render(result, files);
+    assert.equal(rendered.confirmed, 1);
+    assert.equal(rendered.investigate, 0);
+    assert.match(rendered.body, /### Confirmed fixes/);
+    assert.match(rendered.body, /labelled this claim NEEDS VERIFICATION; its quoted code is present/);
+  });
+
+  it("does not promote a quote found only on a neighboring unchanged line", () => {
+    const quoted = "const injected = `${tenantId}`";
+    const result = stateReview({
+      findings: [stateFinding({
+        id: "q-neighbor",
+        path: "src/tenant.ts",
+        lineStart: 10,
+        verification: "NEEDS VERIFICATION",
+        problem: `Review quotes \`${quoted}\` as the defect.`,
+      })],
+    });
+    const patch = [
+      "@@ -8,4 +8,4 @@",
+      ` ${quoted}`,
+      " context line nine",
+      "+changed line ten",
+      " context line eleven",
+    ].join("\n");
+    const rendered = render(result, [{ filename: "src/tenant.ts", status: "modified", patch }]);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 1);
+  });
+
+  it("keeps a NEEDS VERIFICATION claim out of Confirmed when its quoted code is absent", () => {
+    const result = stateReview({
+      findings: [
+        stateFinding({
+          id: "q2",
+          path: "src/tenant.ts",
+          lineStart: 10,
+          verification: "NEEDS VERIFICATION",
+          problem: "The handler may skip the auth check entirely.",
+        }),
+      ],
+    });
+    const rendered = render(result, [changedFile("src/tenant.ts", 10)]);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 1);
+    assert.match(rendered.body, /quoted code is not present on the reported added lines/);
   });
 
   it("demotes a finding the recorded state last saw at another head", () => {

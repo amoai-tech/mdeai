@@ -21,7 +21,7 @@
 import { FIX_PROMPT_MARKER, MAX_COMMENT_CHARS } from "./fix-prompt-comment.mjs";
 import { MAX_TITLE_CHARS, field, findingTitle, labelMap, locateFinding } from "./fix-prompt-findings.mjs";
 import { parseReviewEnvelope } from "./review-policy.mjs";
-import { parseFindings } from "./evals/score-review.mjs";
+import { parseFindings, quotedCodeFragments } from "./evals/score-review.mjs";
 
 const SEVERITY_RANK = new Map([
   ["BLOCKER", 0],
@@ -137,7 +137,8 @@ function renderItem(item, position) {
   if (item.failureScenario) lines.push(`Failure scenario: ${item.failureScenario}`);
   if (item.fix) lines.push(`Proposed fix: ${item.fix}`);
   lines.push("</issue_to_address>");
-  if (item.investigateReason) lines.push(renderElement("review_note", item.investigateReason));
+  const note = item.reviewNote || item.investigateReason;
+  if (note) lines.push(renderElement("review_note", note));
   lines.push("<verify>");
   lines.push(item.verify);
   lines.push("</verify>");
@@ -195,6 +196,7 @@ function toItem(finding, changedFiles) {
     verification,
     location,
     investigateReason: "",
+    reviewNote: "",
     problem: sanitizeModelText(field(map, "problem", "technical", "summary")),
     impact: sanitizeModelText(field(map, "impact", "plain english", "real-world example", "user impact")),
     failureScenario: sanitizeModelText(field(map, "failure scenario", "failure mode", "reproduction")),
@@ -276,8 +278,9 @@ function buildPromptBody({ headSha, baseSha, prUrl, parsed, coverageConfirmed, c
   if (confirmed.length > 0) {
     parts.push("### Confirmed fixes", "");
     parts.push(
-      "Confirmed means the file and the changed line exist in this head's real diff. It is not " +
-        "independent proof the defect is real — read the code before editing.",
+      "Confirmed means the finding points to an added line in this head's real diff. " +
+        "For findings labelled NEEDS VERIFICATION, quoted code also matches the reported added lines. " +
+        "This does not prove the defect is real — inspect the behavior before editing.",
       "",
     );
     confirmed.forEach((item, index) => parts.push(renderItem(item, index + 1), ""));
@@ -286,8 +289,8 @@ function buildPromptBody({ headSha, baseSha, prUrl, parsed, coverageConfirmed, c
   if (investigate.length > 0) {
     parts.push("### Investigate / needs verification", "");
     parts.push(
-      "These were reported but could not be grounded in this head's diff. Verify before changing code; " +
-        "drop the item if the code already handles it.",
+      "These were reported but are not confirmed for this head. Each item states why; verify before " +
+        "changing code, and drop the item if the code already handles it.",
       "",
     );
     investigate.forEach((item, index) => parts.push(renderItem(item, confirmed.length + index + 1), ""));
@@ -382,22 +385,37 @@ function classifyFindings({ parsed, changedFiles, headSha }) {
     const seenAt = typeof finding.lastSeenHeadSha === "string" ? finding.lastSeenHeadSha : "";
     const carriedFromOtherHead = seenAt.length > 0 && seenAt.toLowerCase() !== headSha.toLowerCase();
     const unlabelled = !item.severity && item.status !== "changes_required";
+    // Independent evidence: every code fragment the review quotes must appear in the diff excerpt we
+    // copied. This is what a model label can never establish on its own, and it is why a cautious
+    // NEEDS VERIFICATION label does not have to demote a finding whose exact code is in the diff.
+    // ponytail: reuse the scoring harness's "code-like fragment" heuristic rather than adding a
+    // prose-vs-code classifier. A finding that quotes only plain identifiers stays Investigate.
+    const quoted = quotedCodeFragments(finding);
+    const quotedEvidence =
+      quoted.length > 0 && quoted.every((fragment) => item.location.addedContext?.includes(fragment));
     if (
       item.location.grounded &&
-      item.verification !== "NEEDS VERIFICATION" &&
+      (item.verification !== "NEEDS VERIFICATION" || quotedEvidence) &&
       item.status !== "advisory" &&
       item.severity !== null &&
       !carriedFromOtherHead
     ) {
+      if (item.verification === "NEEDS VERIFICATION") {
+        item.reviewNote =
+          "The review labelled this claim NEEDS VERIFICATION; its quoted code is present on its reported added lines, so the location and excerpt are independently grounded. Confirm the behaviour before editing.";
+      }
       confirmed.push(item);
       continue;
     }
 
     if (carriedFromOtherHead) {
       item.investigateReason = `Recorded state last saw this finding at ${seenAt.slice(0, 9)}, not at the current head.`;
-    } else if (item.location.grounded && item.verification === "NEEDS VERIFICATION") {
+    } else if (item.location.grounded && item.status === "advisory") {
       item.investigateReason =
-        "The review itself marks this claim NEEDS VERIFICATION; a model label is not independent proof.";
+        "The review labels this finding advisory, so it remains unconfirmed even when its quoted code matches the added lines.";
+    } else if (item.location.grounded && item.verification === "NEEDS VERIFICATION" && !quotedEvidence) {
+      item.investigateReason =
+        "The review marks this claim NEEDS VERIFICATION and its quoted code is not present on the reported added lines, so it remains unconfirmed.";
     } else if (unlabelled) {
       item.investigateReason =
         "The review did not label this finding with a severity or a changes-required status, so it cannot be confirmed.";
