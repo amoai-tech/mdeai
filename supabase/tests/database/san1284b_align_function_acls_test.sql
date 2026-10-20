@@ -146,11 +146,11 @@ reset role;
 -- Scope guards — this batch must not create or touch anything else
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- SAN-1305 owns these; they are production-only today and must NOT be recreated here.
+-- SAN-1305 restored these in its own recovery migration (20261017020000); this batch still does not create them.
 select is((select count(*)::int from pg_proc
             where pronamespace = 'public'::regnamespace
               and proname in ('hybrid_search_listings','hybrid_search_events','hybrid_search_restaurants')),
-          0, 'S: hybrid_search_* NOT created (SAN-1305 owns them)');
+          3, 'S: hybrid_search_* are created by the SAN-1305 recovery migration, not by this batch');
 
 -- The 6 production-only functions are classified separately and must NOT be recreated here.
 select is((select count(*)::int from pg_proc

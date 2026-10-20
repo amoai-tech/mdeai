@@ -179,6 +179,21 @@
     "anon": true,
     "authenticated": true
   },
+  "hybrid_search_events(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "hybrid_search_listings(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "hybrid_search_restaurants(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
   "insert_trip_item_for_user(p_trip_id uuid, p_item_type text, p_source_id uuid, p_title text, p_start_at timestamp with time zone, p_end_at timestamp with time zone)": {
     "public": false,
     "anon": true,
