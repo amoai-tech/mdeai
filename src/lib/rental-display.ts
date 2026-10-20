@@ -35,6 +35,12 @@ const BENEFIT_MAP: Array<{ re: RegExp; label: string }> = [
   { re: /\bsafe|security\b/i, label: "Secure building" },
 ];
 
+/** One whole-unit amount in its own currency: USD keeps the `$`, every other currency gets its code. */
+export function formatListingMoney(amount: number, currency: string = "USD"): string {
+  const unit = (currency || "USD").toUpperCase();
+  return `${unit === "USD" ? "$" : `${unit} `}${amount.toLocaleString("en-US")}`;
+}
+
 /**
  * Format a listing's prices in **the listing's own currency**.
  *
@@ -58,9 +64,7 @@ export function formatRentalPrices(
   if (!hasNightly && !hasMonthly) {
     return { nightlyLabel: null, monthlyLabel: null };
   }
-  const unit = (currency || "USD").toUpperCase();
-  const money = (amount: number) =>
-    `${unit === "USD" ? "$" : `${unit} `}${amount.toLocaleString("en-US")}`;
+  const money = (amount: number) => formatListingMoney(amount, currency);
   return {
     nightlyLabel: hasNightly ? `${money(nightly)}/night` : null,
     monthlyLabel: hasMonthly

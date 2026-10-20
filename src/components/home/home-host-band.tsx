@@ -6,10 +6,8 @@ const marqueeItems = [
   "Set your capacity",
   "AI-assisted setup",
   "Reach locals & expats",
-  "Free to list",
   "Manage RSVPs",
   "Build your audience",
-  "Go live in minutes",
 ];
 
 function InlineMarquee() {

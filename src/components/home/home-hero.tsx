@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, PlayIcon } from "lucide-react";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { HomeMapPreview } from "@/components/home/home-map-teaser";
 
 const chips = [
   "Rentals in Laureles",
@@ -38,10 +39,10 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.85_0.18_175/0.3),transparent)]" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-7xl">
-        <div className="grid items-end gap-8 lg:grid-cols-[1fr_420px]">
+        <div className="grid items-end gap-4 lg:grid-cols-[1fr_minmax(0,460px)] lg:gap-8">
 
           {/* Left — text + search */}
-          <div className="pb-12 md:pb-16">
+          <div className="pb-4 md:pb-6 lg:pb-16">
             {/* Badge */}
             <div className="mb-5">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs font-semibold text-primary-foreground/80">
@@ -122,35 +123,9 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
             </div>
           </div>
 
-          {/* Right — hero imagery */}
-          <div className="hidden lg:flex lg:flex-col lg:items-center lg:justify-end lg:self-end">
-            <div className="relative w-full">
-              {/* Phone mockup with map screenshot */}
-              <div className="mx-auto w-[280px] overflow-hidden rounded-t-[2rem] border-4 border-primary-foreground/10 bg-background shadow-2xl">
-                <div className="h-6 bg-foreground/5 flex items-center justify-center gap-1 px-4">
-                  <div className="h-1.5 w-1.5 rounded-full bg-foreground/20" />
-                  <div className="h-1 w-16 rounded-full bg-foreground/20" />
-                </div>
-                {/* Map placeholder */}
-                <div className="relative h-[280px] bg-[oklch(0.92_0.03_175)] px-4 py-3">
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1599687267812-35c05ff70ee9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=560')] bg-cover bg-center opacity-80" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/60" />
-                  <div className="absolute bottom-4 left-4 right-4 rounded-xl bg-background/95 p-3 shadow-lg backdrop-blur-sm">
-                    <p className="text-xs font-semibold text-foreground">Parque Lleras · El Poblado</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">14 venues · open now</p>
-                  </div>
-                </div>
-                {/* Chat preview */}
-                <div className="bg-background px-4 py-3">
-                  <div className="flex gap-2">
-                    <div className="size-6 shrink-0 rounded-full bg-accent flex items-center justify-center text-[10px] font-bold text-accent-foreground">✦</div>
-                    <div className="rounded-2xl rounded-tl-none bg-muted px-3 py-2 text-[11px] text-foreground leading-relaxed">
-                      Here are the top rooftop bars near Parque Lleras open tonight…
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Right — a real map of Medellín: neighbourhood prompts, not listing pins */}
+          <div className="pb-12 md:pb-16 lg:self-end">
+            <HomeMapPreview />
           </div>
 
         </div>

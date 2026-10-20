@@ -42,7 +42,7 @@ export function HomeHowItWorks() {
             How it works
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ask → Map → Book. No guessing, no scam listings.
+            Ask, see it on the map, then open the details.
           </p>
         </div>
 

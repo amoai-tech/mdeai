@@ -35,19 +35,19 @@ const features: Feature[] = [
     id: "events",
     Icon: TicketIcon,
     title: "Events & tickets",
-    desc: "See what's on and buy tickets in a tap — no third app, no dead ends.",
+    desc: "See what's on in Medellín and open the event page for details and tickets.",
   },
   {
     id: "rentals",
     Icon: HomeIcon,
-    title: "Verified rentals",
-    desc: "Furnished stays with real photos and total-price honesty. Book a viewing in seconds.",
+    title: "Rentals with real prices",
+    desc: "Furnished stays shown with their photos and monthly price in the listing's own currency. Request a viewing from the listing.",
   },
   {
     id: "guides",
     Icon: LeafIcon,
     title: "Local guides",
-    desc: "Neighbourhood intelligence — walkability, vibe, and the paisa spots tourists miss.",
+    desc: "Ask about any neighbourhood — its character, what to see and where locals go.",
   },
 ];
 
