@@ -134,6 +134,14 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-staged
 
+      # SAN-1281 · a candidate whose schema production does not have must not be promoted.
+      # Read-only: it compares the committed migrations with the production ledger and fails
+      # closed. Applying migrations stays the reviewed operator step (npm run push:migration).
+      - name: Require every committed migration to be applied to production
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node .trusted/scripts/verify-production-migrations.mjs
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
