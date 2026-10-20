@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
 const spec = readFileSync("e2e/san-1092-broker-onboarding.spec.ts", "utf8");
