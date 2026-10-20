@@ -243,6 +243,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
     fireEvent.click(screen.getByTestId("rental-ask-send"));
 
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    // The same envelope reaches the agent, so its answer and the cards share one result set.
+    const statePatch = coagent.setState.mock.calls
+      .map(([patch]) => (typeof patch === "function" ? patch({}) : patch))
+      .find((next) => Array.isArray(next.lastRentalResults));
+    expect(statePatch?.lastRentalResults).toHaveLength(1);
+    expect(statePatch?.lastRentalResults?.[0]?.id).toBe("rnt_1");
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/rentals/search");
     expect(JSON.parse(String(init.body)).neighborhood).toBe("Laureles");

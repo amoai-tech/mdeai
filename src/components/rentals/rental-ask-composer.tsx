@@ -433,6 +433,21 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
           } else {
             lastQuery.current = found.nextMemory;
             onResults(found.payload);
+            // Give the agent the rows the renter can see, so "which of these…" follow-ups have a
+            // referent. This does NOT constrain the model's own count: verified live, it still
+            // answers "Found 5" against 8 shown, because it runs its own tool call. Cards and
+            // counts become provably equal only when the cards render that tool result (SAN-1421
+            // follow-up), not when state is shared.
+            setState((prev) => ({
+              ...prev,
+              ...found.nextMemory,
+              lastRentalResults: found.payload.results.map((r) => ({
+                id: r.id,
+                title: r.title,
+                neighborhood: r.neighborhood,
+                nightly_price: r.nightly_price,
+              })),
+            }));
           }
         } catch {
           if (cancelled.current) return;
