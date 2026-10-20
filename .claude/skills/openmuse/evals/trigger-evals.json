@@ -1,0 +1,38 @@
+[
+  {
+    "id": "openmuse-1",
+    "prompt": "Please make the AI chat Stop button preserve my unsent apartment-search draft on mobile.",
+    "should_trigger": true,
+    "expected_owner": "openmuse"
+  },
+  {
+    "id": "openmuse-2",
+    "prompt": "Use OpenMuse's approach to improve source-linked rental cards and sync valid apartment pins to the chat map.",
+    "should_trigger": true,
+    "expected_owner": "openmuse"
+  },
+  {
+    "id": "openmuse-3",
+    "prompt": "Audit our CopilotKit conversation queue, loading cards, scroll position and 390px chat composer like OpenMuse.",
+    "should_trigger": true,
+    "expected_owner": "openmuse"
+  },
+  {
+    "id": "openmuse-4",
+    "prompt": "Add a PostGIS spatial index to the apartments table for nearest-neighbor lookup.",
+    "should_trigger": false,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "openmuse-5",
+    "prompt": "The Supabase RPC for creating rental viewing leads is failing its tenant RLS check.",
+    "should_trigger": false,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "openmuse-6",
+    "prompt": "Redesign the event ticket checkout screen without changing the AI chat experience.",
+    "should_trigger": false,
+    "expected_owner": "frontend-design"
+  }
+]

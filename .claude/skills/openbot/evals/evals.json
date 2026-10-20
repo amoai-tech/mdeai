@@ -1,0 +1,39 @@
+{
+  "skill_name": "openbot",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A broker requests that AI open an external real-estate portal and submit a form with no API. Explain whether OpenBot is justified and the proof sequence.",
+      "expected_output": "Check native MDE API/MCP first, then isolated official OpenBot release proof under SAN-1324 and optional adapter under SAN-1325.",
+      "files": [],
+      "expectations": [
+        "Does not install OpenBot or duplicate rental search engine",
+        "Verifies official release/AG-UI Mastra wire boundary",
+        "Plans technical permissions, audit, retries and kill switch"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "An external website labels a dangerous Submit button Continue, and the agent tries to click an untrusted element reference. Review OpenBot safety behavior.",
+      "expected_output": "Model trusted server-resolved target policy and audit-before-action; do not trust model-supplied display text.",
+      "files": [],
+      "expectations": [
+        "Uses upstream server/src/computer/gateway.ts and policy.ts as models",
+        "Server authorization and deny rules cannot be client bypassed",
+        "No business paperwork or prelaunch eligibility gate"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The user wants an ordinary rental search card with a map. Should OpenBot be installed?",
+      "expected_output": "Route to native rental/concierge domain rather than OpenBot and explain why this use case needs no browser coworker.",
+      "files": [],
+      "expectations": [
+        "Rejects unnecessary OpenBot setup",
+        "Reuses existing CopilotKit, Mastra, Supabase, maps",
+        "Names what would justify optional isolated deployment"
+      ]
+    }
+  ]
+}

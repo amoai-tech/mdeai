@@ -23,6 +23,13 @@ import eventsTriggers from "../../.claude/skills/events/evals/trigger-evals.json
 import supabaseTriggers from "../../.claude/skills/supabase/evals/trigger-evals.json" with { type: "json" };
 import mastraTriggers from "../../.claude/skills/mastra/evals/trigger-evals.json" with { type: "json" };
 
+import openmuseBehavior from "../../.claude/skills/openmuse/evals/evals.json" with { type: "json" };
+import openmuseTriggers from "../../.claude/skills/openmuse/evals/trigger-evals.json" with { type: "json" };
+import opendotsBehavior from "../../.claude/skills/opendots/evals/evals.json" with { type: "json" };
+import opendotsTriggers from "../../.claude/skills/opendots/evals/trigger-evals.json" with { type: "json" };
+import openbotBehavior from "../../.claude/skills/openbot/evals/evals.json" with { type: "json" };
+import openbotTriggers from "../../.claude/skills/openbot/evals/trigger-evals.json" with { type: "json" };
+
 const SKILLS = path.resolve(".claude/skills");
 
 /**
@@ -208,4 +215,25 @@ test("critical routing workflows and production domains have positive and near-m
   for (const [skill, triggers] of Object.entries(fixtures)) {
     assertTriggerCases(skill, triggers);
   }
+});
+
+
+// SAN-1557: metadata checks only. Real agent model/tool behavior must be
+// independently executed and compared to a no-skill baseline.
+test("OpenMuse, OpenDots, and OpenBot have disjoint positive and near-miss evals", () => {
+  const fixtures = {
+    openmuse: [openmuseBehavior, openmuseTriggers],
+    opendots: [opendotsBehavior, opendotsTriggers],
+    openbot: [openbotBehavior, openbotTriggers],
+  };
+  for (const [name, [behavior, triggers]] of Object.entries(fixtures)) {
+    assert.equal(behavior.skill_name, name);
+    assert.ok(behavior.evals.length >= 3);
+    assertTriggerCases(name, triggers);
+    for (const item of behavior.evals) {
+      assert.ok(item.expectations.length >= 3, name + ": no gradeable expectations");
+    }
+  }
+  const all = Object.values(fixtures).flatMap(([, cases]) => cases);
+  assert.equal(new Set(all.map((item) => item.prompt)).size, all.length);
 });
