@@ -42,9 +42,38 @@ export function missingVersions(local, applied) {
   return local.filter((version) => !have.has(String(version)));
 }
 
+/**
+ * The base URL is configuration, not user input — but a release step holding a service-role key must
+ * never issue a request to an arbitrary host. A mistyped or tampered value would send the key (and
+ * the request) to an internal address such as 169.254.169.254 or localhost.
+ *
+ * Accept only https to a Supabase project host, or to one explicitly named for self-hosted setups.
+ */
+export function trustedSupabaseOrigin(raw, selfHosted = process.env.MDEAI_TRUSTED_SUPABASE_HOST) {
+  let url;
+  try {
+    url = new URL(String(raw));
+  } catch {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not a valid URL");
+  }
+  if (url.protocol !== "https:") {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL must use https");
+  }
+  const isSupabaseHost = /\.supabase\.(co|in)$/i.test(url.hostname);
+  const isDeclaredHost = Boolean(selfHosted) && url.hostname === selfHosted;
+  if (!isSupabaseHost && !isDeclaredHost) {
+    throw new Error(
+      "refusing to send the service key to " +
+        url.hostname +
+        " — expected a *.supabase.co host or MDEAI_TRUSTED_SUPABASE_HOST",
+    );
+  }
+  return url.origin;
+}
+
 /** Read the applied versions through PostgREST, with no client library. */
 async function fetchAppliedVersions(url, key) {
-  const response = await fetch(url.replace(/\/$/, "") + "/rest/v1/rpc/applied_migration_versions", {
+  const response = await fetch(trustedSupabaseOrigin(url) + "/rest/v1/rpc/applied_migration_versions", {
     method: "POST",
     headers: {
       apikey: key,
