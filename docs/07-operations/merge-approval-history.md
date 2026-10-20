@@ -6,6 +6,14 @@ accumulate incident history.
 
 Current rule: `main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that exact case an administrator merge is allowed only when the exact PR head has `floor` and `mastra-schema-init` green, the canonical MDE review (`review / verify-review-result`) is green on that head with no verified blocking finding, every review thread is resolved, and the PR body records the exception and exact head SHA. Each use is recorded below and in the PR. The exception ends when a second collaborator with write access exists.
 
+## 2026-10-20 — PR #472 · El Cielo Details labels (sole-collaborator exception)
+
+The owner requested completion of [PR #472](https://github.com/amoai-tech/mdeai/pull/472), which reuses the existing display-label helper from #465 in restaurant Details lookup; no database changes or booking/vote permission changes. Current GitHub collaborator query showed exactly one repository collaborator, `amoai-tech`, who also authored the PR. The normal approving-review rule is structurally unsatisfiable because GitHub disallows self-approval.
+
+The documented administrator exception is permitted **only on the exact final head** after `floor`, `mastra-schema-init`, and canonical `review / verify-review-result` all pass and unresolved review threads are zero. Record the final head SHA, evidence, and merge result in the PR discussion before and after merging. This entry does not grant a general bypass or weaken any check. The actual post-merge production outcome must be verified separately (the custom domain was still on the earlier #462 build when reviewed).
+
+**Review question:** Do both real El Cielo venue IDs preserve their canonical Supabase names, ratings and map/vote references while browse and Details use identical location-qualified labels? Local focused Vitest 28/28, ESLint and typecheck passed prior to this documentation addition; exact-final-head CI is the merge criterion.
+
 ## 2026-10-20 — sole-collaborator policy (current rule)
 
 **This is a deliberate rule change, not another one-off bypass.** It supersedes the “not a precedent” language in the entries below for the sole-collaborator case only.
