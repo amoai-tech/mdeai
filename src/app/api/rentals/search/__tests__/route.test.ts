@@ -72,6 +72,15 @@ describe("POST /api/rentals/search", () => {
     );
   });
 
+  it("rejects a malformed currency at the HTTP boundary without searching", async () => {
+    const res = await POST(post({
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP) or price_monthly.lte.999999999",
+    }));
+    expect(res.status).toBe(400);
+    expect(searchRentals).not.toHaveBeenCalled();
+  });
+
   it("returns 503 rental_search_unavailable when the database cannot be read", async () => {
     searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
     const res = await POST(post({ limit: 8 }));

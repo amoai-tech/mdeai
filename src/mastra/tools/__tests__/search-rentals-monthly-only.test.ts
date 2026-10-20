@@ -12,6 +12,7 @@
  * onboarding actually stores them.
  */
 import { describe, expect, it, vi } from "vitest";
+import type { ZodType } from "zod";
 
 /** USD-scale nightly budget used throughout, matching `maxPricePerNight`'s documented unit. */
 const mockApartmentRows = [
@@ -322,6 +323,98 @@ describe("rentalPricePredicate — budget is only applied within its own currenc
     expect(clause).toContain(
       "and(currency.eq.USD,price_daily.is.null,price_monthly.not.is.null,price_monthly.lte.2414)",
     );
+  });
+});
+
+describe("monthly budget PostgREST filter input safety", () => {
+  it.each([
+    "COP) or price_monthly.lte.999999999",
+    "COP,price_monthly.lte.999999999",
+    "COP.eq.USD",
+    "COP%29",
+    'COP"\\\\',
+    "COP XYZ",
+    "",
+  ])("rejects malformed budgetCurrency %j before composing a filter", async (currency) => {
+    const { rentalMonthlyBudgetPredicate, monthlyBudgetFromQuery, searchRentalsTool } =
+      await import("../search-rentals");
+    const currencyRule = /three-letter/;
+    expect(() => rentalMonthlyBudgetPredicate(3_500_000, currency)).toThrow(currencyRule);
+    expect(() => monthlyBudgetFromQuery({ maxPriceMonthly: 3_500_000, budgetCurrency: currency })).toThrow(currencyRule);
+    // Mastra exposes its Zod input through a standard-schema type at compile time.
+    const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
+    expect(inputSchema.safeParse({
+      maxPriceMonthly: 3_500_000, budgetCurrency: currency,
+    }).success).toBe(false);
+  });
+
+  it("normalizes an ordinary three-letter tool currency to uppercase", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
+    const parsed = inputSchema.safeParse({ maxPriceMonthly: 3_000_000, budgetCurrency: "cop" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.budgetCurrency : undefined).toBe("COP");
+  });
+
+  it("allows ordinary three-letter currencies and preserves the original COP comparison", async () => {
+    const { rentalMonthlyBudgetPredicate } = await import("../search-rentals");
+    expect(rentalMonthlyBudgetPredicate(3_500_000, "cop")).toBe(
+      "and(currency.neq.COP,price_daily.not.is.null)," +
+      "and(currency.neq.COP,price_monthly.not.is.null)," +
+      "and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3500000)",
+    );
+    expect(rentalMonthlyBudgetPredicate(1200, "USD")).toContain(
+      "and(currency.eq.USD,price_monthly.not.is.null,price_monthly.lte.1200)",
+    );
+  });
+
+  it("rejects a malicious currency before attempting intelligent or structured search", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    await expect(searchRentals({
+      queryText: "two-bedroom rental",
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP) or price_monthly.lte.999999999",
+    })).rejects.toThrow(/three-letter/);
+    // Same rejection on the structured path, before any client or filter exists.
+    await expect(searchRentals({
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP) or price_monthly.lte.999999999",
+    })).rejects.toThrow(/three-letter/);
+  });
+
+  it("rejects nonfinite or nonpositive monthly caps in the direct predicate", async () => {
+    const { rentalMonthlyBudgetPredicate } = await import("../search-rentals");
+    for (const amount of [Infinity, Number.NaN, -10, 0]) {
+      expect(() => rentalMonthlyBudgetPredicate(amount, "COP")).toThrow(/finite positive/);
+    }
+  });
+});
+
+describe("searchRentals — a monthly budget confirms only same-currency matches", () => {
+  it("keeps a COP monthly listing under a lowercase cop cap", async () => {
+    const { MONTHLY_BUDGET_NOTE } = await import("../search-rentals");
+    const result = await search({ maxPriceMonthly: 2_500_000, budgetCurrency: "cop" });
+    expect(result.results.map((r) => r.id)).toContain("apt-cop-monthly");
+    expect(result.budgetNote).toBe(MONTHLY_BUDGET_NOTE);
+  });
+
+  it("excludes a COP monthly listing above the cap and keeps other currencies as alternatives", async () => {
+    const ids = (await search({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" })).results.map(
+      (r) => r.id,
+    );
+    expect(ids).not.toContain("apt-cop-monthly");
+    // A USD listing is retained as an uncompared alternative, never silently deleted.
+    expect(ids).toContain("apt-usd-nightly");
+  });
+
+  it("applies a USD monthly cap only to USD monthly prices", async () => {
+    const ids = (
+      await search({ maxPriceMonthly: 2_414, budgetCurrency: "usd" })
+    ).results.map((r) => r.id);
+    expect(ids).toContain("apt-usd-boundary-in"); // 2414 <= 2414
+    expect(ids).not.toContain("apt-usd-boundary-out"); // 2415 > 2414
+    expect(ids).not.toContain("apt-usd-both"); // 9000 > 2414
+    expect(ids).toContain("apt-cop-monthly"); // other currency: shown, not compared
   });
 });
 
