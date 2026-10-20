@@ -4,7 +4,7 @@
 -- recomputes the entity whose ballot changed. When that entity becomes the new maximum, every other
 -- contender's denominator changed while their stored weighted_total did not.
 begin;
-select plan(3);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('f1499000-0000-0000-0000-000000000001','wide-a@example.com'),
@@ -36,6 +36,45 @@ select is((select round(weighted_total::numeric, 3)::text from vote.entity_tally
 
 select is((select round(weighted_total::numeric, 3)::text from vote.entity_tally where entity_id = 'e1499000-0000-0000-0000-000000000001'),
   '0.500', 'the leading contender keeps a full score at the new maximum');
+
+-- Normalization must change stored rank as well as the display score.
+select is((select rank from vote.entity_tally where entity_id = 'e1499000-0000-0000-0000-000000000002'),
+  2, 'the losing contender drops to rank two when the maximum increases');
+
+-- Removing the maximum restores the unchanged contender's previous normalized score.
+delete from vote.votes where idempotency_key = 'wd-3';
+select is((select round(weighted_total::numeric, 3)::text from vote.entity_tally
+  where entity_id = 'e1499000-0000-0000-0000-000000000002'),
+  '0.500', 'deleting the maximum also re-normalizes the remaining contender');
+
+-- Moving an existing ballot between contests must recompute both contest projections.
+insert into public.restaurants (id, name, is_active) values
+  ('a1499000-0000-0000-0000-000000000003','[TEST] Wide C', true);
+insert into vote.contests (id, slug, kind, title, org_id, starts_at, ends_at, status) values
+  ('c1499000-0000-0000-0000-000000000002','wide-test-second','restaurant','[TEST] Wide Second',
+   'f1499000-0000-0000-0000-000000000001', now()-interval '1 day', now()+interval '1 day','live');
+insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values
+  ('e1499000-0000-0000-0000-000000000003','c1499000-0000-0000-0000-000000000002',
+   'wide-c','[TEST] Wide C','a1499000-0000-0000-0000-000000000003');
+update vote.votes set contest_id = 'c1499000-0000-0000-0000-000000000002',
+  entity_id = 'e1499000-0000-0000-0000-000000000003' where idempotency_key = 'wd-2';
+select is((select audience_votes from vote.entity_tally
+  where entity_id = 'e1499000-0000-0000-0000-000000000002'),
+  0::bigint, 'moving a ballot into another contest clears the source contender');
+select is((select audience_votes from vote.entity_tally
+  where entity_id = 'e1499000-0000-0000-0000-000000000003'),
+  1::bigint, 'moving a ballot into another contest updates the destination contender');
+select is((select rank from vote.entity_tally
+  where entity_id = 'e1499000-0000-0000-0000-000000000002'),
+  2, 'the source contest re-ranks after the cross-contest transfer');
+
+-- A server-only helper must not become callable by visitors through grants inheritance.
+select is(has_function_privilege('anon','vote.recompute_contest_tally(uuid)','EXECUTE'),
+  false, 'anonymous visitors cannot run contest-wide recomputation');
+select is(has_function_privilege('authenticated','vote.recompute_contest_tally(uuid)','EXECUTE'),
+  false, 'signed-in visitors cannot run contest-wide recomputation');
+select is(has_function_privilege('service_role','vote.recompute_contest_tally(uuid)','EXECUTE'),
+  false, 'contest-wide recomputation is internal to the privileged vote trigger');
 
 select * from finish();
 rollback;

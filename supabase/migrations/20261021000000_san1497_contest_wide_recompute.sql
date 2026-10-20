@@ -8,13 +8,14 @@
 --
 -- Fix at the canonical source: recompute every entity in the affected contest.
 --
--- ponytail: ceiling — a full contest recompute per ballot change is O(nominees) work per vote and is
--- right for Phase A volumes (tens of ballots). Upgrade path when voting volume grows: recompute only
--- when the contest maximum or the ordering actually changed, keeping the single-entity fast path
--- otherwise.
+-- ponytail: ceiling — a full contest recompute loops all nominees and each entity helper
+-- re-ranks the whole contest, so its rank-update work is O(nominees^2) per ballot plus
+-- per-entity vote scans. Acceptable for Phase A (10 restaurant nominees in live data).
+-- Upgrade path: batch score/rank refresh at the canonical owner when volume warrants it.
 
--- Invoker rights: this only loops and delegates to recompute_entity_tally(), which carries the
--- definer privilege. Execution is granted to service_role alone, so a browser can never reach it.
+-- Invoker rights: this coordinator runs only from the privileged trigger, and delegates to
+-- recompute_entity_tally(). No direct grants: service_role cannot call it independently
+-- because vote schema access and the delegate function are deliberately restricted.
 create or replace function vote.recompute_contest_tally(p_contest_id uuid)
 returns void
 language plpgsql
@@ -34,8 +35,7 @@ begin
 end;
 $$;
 
-revoke all on function vote.recompute_contest_tally(uuid) from public, anon, authenticated;
-grant execute on function vote.recompute_contest_tally(uuid) to service_role;
+revoke all on function vote.recompute_contest_tally(uuid) from public, anon, authenticated, service_role;
 
 create or replace function vote.trigger_recompute_on_vote()
 returns trigger
