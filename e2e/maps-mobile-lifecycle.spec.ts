@@ -104,11 +104,21 @@ async function searchCafes(page: Page) {
   await expect(
     page.locator('[data-testid="grounded-card"][data-result-kind="cafe"]').first(),
   ).toBeVisible({ timeout: 120_000 });
+  // Cards render before the map context has the grounded coordinates. Wait for
+  // a non-zero trigger count; the live café result set and marker clustering are
+  // data-dependent, so the test must not hardcode 3.
+  const trigger = page.getByTestId("map-sheet-trigger");
+  await expect(trigger).toHaveAttribute("aria-label", /Open map with \d+ pins?/, {
+    timeout: 120_000,
+  });
+  return Number(
+    (await trigger.getAttribute("aria-label"))?.match(/with (\d+) pins?/)?.[1] ?? 0,
+  );
 }
 
 test.describe("real Google Maps mobile lifecycle", () => {
-  test("first mount is clean in 10 fresh browser contexts", async ({ browser }) => {
-    test.setTimeout(420_000);
+  test("10 fresh contexts mount the real map with grounded pins", async ({ browser }) => {
+    test.setTimeout(600_000);
 
     for (let run = 1; run <= 10; run += 1) {
       const context = await browser.newContext({
@@ -122,16 +132,16 @@ test.describe("real Google Maps mobile lifecycle", () => {
 
       try {
         await gotoChat(page);
+        const grounded = await searchCafes(page);
+        expect(grounded, `cold run ${run}: trigger pin count`).toBeGreaterThan(0);
         const sheet = await openSheet(page);
-        // With no grounded pins the sheet intentionally renders its empty state
-        // instead of mounting Google Maps. Either state must be error-free.
-        if ((await sheet.locator(".gm-style").count()) > 0) {
-          await expectRealMap(sheet);
-        } else {
-          await expect(
-            sheet.getByText("Search in chat to see available map locations."),
-          ).toBeVisible({ timeout: 10_000 });
-        }
+        await expect
+          .poll(() => sheet.getByTestId("map-pin").count(), {
+            timeout: 20_000,
+            message: `cold run ${run}: expected visible café pins`,
+          })
+          .toBeGreaterThan(0);
+        await expectRealMap(sheet);
         await closeMap(page);
         await assertNoPageErrors(page, errors, `cold run ${run}`);
       } finally {
@@ -140,33 +150,7 @@ test.describe("real Google Maps mobile lifecycle", () => {
     }
   });
 
-  test("first mount with 3 grounded pins is clean", async ({ browser }) => {
-    test.setTimeout(240_000);
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
-    });
-    const page = await context.newPage();
-    const errors = captureErrors(page);
-    await installRejectionCapture(page);
-
-    try {
-      await gotoChat(page);
-      await searchCafes(page);
-      const sheet = await openSheet(page);
-      await expect
-        .poll(() => sheet.getByTestId("map-pin").count(), { timeout: 20_000 })
-        .toBe(3);
-      await expectRealMap(sheet);
-      await closeMap(page);
-      await assertNoPageErrors(page, errors, "cold 3-pin first mount");
-    } finally {
-      await context.close();
-    }
-  });
-
-  test("same context survives 10 open/close cycles with no pins", async ({ page }) => {
+  test("10 empty-state open/close cycles with no pins", async ({ page }) => {
     test.setTimeout(240_000);
     const errors = captureErrors(page);
     await installRejectionCapture(page);
@@ -175,25 +159,24 @@ test.describe("real Google Maps mobile lifecycle", () => {
     for (let cycle = 1; cycle <= 10; cycle += 1) {
       const sheet = await openSheet(page);
       await expect(sheet.getByTestId("map-pin")).toHaveCount(0);
-      if ((await sheet.locator(".gm-style").count()) > 0) {
-        await expectRealMap(sheet);
-      } else {
-        await expect(
-          sheet.getByText("Search in chat to see available map locations."),
-        ).toBeVisible({ timeout: 10_000 });
-      }
+      // The product intentionally renders the empty state instead of mounting a
+      // map when there are no grounded pins.
+      await expect(
+        sheet.getByText("Search in chat to see available map locations."),
+      ).toBeVisible({ timeout: 10_000 });
       await closeMap(page);
       await assertNoPageErrors(page, errors, `no-pin cycle ${cycle}`);
     }
   });
 
-  test("10 open/close cycles keep the same 3 grounded café pins", async ({ page }) => {
+  test("10 open/close cycles keep the same grounded café pins", async ({ page }) => {
     test.setTimeout(420_000);
     const errors = captureErrors(page);
     await installRejectionCapture(page);
 
     await gotoChat(page);
-    await searchCafes(page);
+    const grounded = await searchCafes(page);
+    expect(grounded, "trigger pin count").toBeGreaterThan(0);
 
     let expectedPins: string[] = [];
     for (let cycle = 1; cycle <= 10; cycle += 1) {
@@ -201,9 +184,9 @@ test.describe("real Google Maps mobile lifecycle", () => {
       await expect
         .poll(() => sheet.getByTestId("map-pin").count(), {
           timeout: 20_000,
-          message: `cycle ${cycle}: expected 3 café pins`,
+          message: `cycle ${cycle}: expected visible café pins`,
         })
-        .toBe(3);
+        .toBeGreaterThan(0);
       const pinIds = await sheet
         .getByTestId("map-pin")
         .evaluateAll((elements) =>
