@@ -129,7 +129,7 @@ describe("homepage destinations (SAN-1556)", () => {
 
 describe("homepage destination photos (SAN-1556): real, openly licensed, credited", () => {
   const COMMONS = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13%2C_Medell%C3%ADn_02.jpg/960px-Comuna_13%2C_Medell%C3%ADn_02.jpg";
-  const credit = { author: "Bernard Gagnon", license: "CC BY-SA 4.0", source_url: "https://commons.wikimedia.org/wiki/File:Comuna_13,_Medell%C3%ADn_02.jpg", alt: "Brick houses on the hillsides of Comuna 13" };
+  const credit = { author: "Bernard Gagnon", license: "CC BY-SA 4.0", license_url: "https://creativecommons.org/licenses/by-sa/4.0/", source_url: "https://commons.wikimedia.org/wiki/File:Comuna_13,_Medell%C3%ADn_02.jpg", image_url: COMMONS, alt: "Brick houses on the hillsides of Comuna 13" };
   const dest = (name: string, over: Record<string, unknown> = {}) => ({
     id: name, name, category: "Culture", description: `About ${name}`, primary_image_url: null, details: {}, ...over,
   });
@@ -139,16 +139,27 @@ describe("homepage destination photos (SAN-1556): real, openly licensed, credite
     const [card] = await fetchLiveDestinations(client);
     expect(card.image).toBe(COMMONS);
     expect(card.imageAlt).toBe("Brick houses on the hillsides of Comuna 13");
-    expect(card.imageCredit).toEqual({ text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url });
+    expect(card.imageCredit).toEqual({ text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url, licenseHref: credit.license_url });
   });
 
   it("never shows a Commons photo that has no recorded author, licence and source", async () => {
     const { client } = fakeClient([
       dest("No credit", { primary_image_url: COMMONS }),
       dest("Half credit", { primary_image_url: COMMONS, details: { image_credit: { author: "Someone" } } }),
+      dest("No bound image", { primary_image_url: COMMONS, details: { image_credit: { ...credit, image_url: undefined } } }),
+      dest("No license terms", { primary_image_url: COMMONS, details: { image_credit: { ...credit, license_url: undefined } } }),
     ]);
     const cards = await fetchLiveDestinations(client);
-    expect(cards.map((c) => c.image)).toEqual(["", ""]);
+    expect(cards.map((c) => c.image)).toEqual(["", "", "", ""]);
+  });
+
+  it("never attributes a newly changed image to the previous photographer", async () => {
+    const { client } = fakeClient([
+      dest("Stale credit", { primary_image_url: COMMONS, details: { image_credit: { ...credit, image_url: "https://upload.wikimedia.org/wikipedia/commons/thumb/other.jpg" } } }),
+    ]);
+    const [card] = await fetchLiveDestinations(client);
+    expect(card.image).toBe("");
+    expect(card.imageCredit).toBeUndefined();
   });
 
   it("keeps the duplicate row that has a usable photo", async () => {
@@ -164,7 +175,7 @@ describe("homepage destination photos (SAN-1556): real, openly licensed, credite
   it("renders the photo, its credit text and a credits line with a link outside the card links", () => {
     const html = renderToStaticMarkup(
       HomeDiscoverySectionsUI({
-        data: { destinations: [{ id: "d", name: "Comuna 13", kind: "Neighborhood", rating: null, meta: "", why: "", image: COMMONS, query: "q", imageAlt: "Brick houses on the hillsides of Comuna 13", imageCredit: { text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url } }], rentals: [], restaurants: [], cafes: [], events: [] },
+        data: { destinations: [{ id: "d", name: "Comuna 13", kind: "Neighborhood", rating: null, meta: "", why: "", image: COMMONS, query: "q", imageAlt: "Brick houses on the hillsides of Comuna 13", imageCredit: { text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url, licenseHref: credit.license_url } }], rentals: [], restaurants: [], cafes: [], events: [] },
       }),
     );
     expect(html).toContain("<img");
@@ -172,6 +183,8 @@ describe("homepage destination photos (SAN-1556): real, openly licensed, credite
     expect(html).toContain("Photo: Bernard Gagnon · CC BY-SA 4.0");
     expect(html).toContain("Photo credits, via Wikimedia Commons");
     expect(html).toContain(`href="${credit.source_url}"`);
+    expect(html).toContain(`href="${credit.license_url}"`);
+    expect(html).toContain("<details");
   });
 });
 

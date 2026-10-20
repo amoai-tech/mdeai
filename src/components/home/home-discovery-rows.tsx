@@ -81,29 +81,41 @@ function Cards({ cards }: { cards: PlaceCardData[] }) {
   );
 }
 
-/** Where each openly licensed photo came from, with links (cards cannot hold links; they are links). */
+/** Compact, keyboard-accessible attribution below linked photo cards (no nested links). */
 function PhotoCredits({ cards }: { cards: PlaceCardData[] }) {
-  const credited = cards.filter((c) => c.imageCredit);
+  const credited = cards.filter((card) => card.imageCredit);
   if (credited.length === 0) return null;
   return (
-    <p className="text-sm text-muted-foreground">
-      Photo credits, via Wikimedia Commons:{" "}
-      {credited.map((card, i) => (
-        <span key={card.id}>
-          {i > 0 && "; "}
-          {card.name}:{" "}
-          <a
-            href={card.imageCredit!.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {card.imageCredit!.text.replace(/^Photo: /, "")}
-          </a>
-        </span>
-      ))}
-      .
-    </p>
+    <details className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground">
+      <summary className="min-h-11 cursor-pointer list-item rounded-sm py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        Photo credits, via Wikimedia Commons
+      </summary>
+      <ul className="space-y-2 pb-2">
+        {credited.map((card) => (
+          <li key={card.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span>{card.name}:</span>
+            <a
+              href={card.imageCredit!.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {card.imageCredit!.text.replace(/^Photo: /, "")}
+            </a>
+            {card.imageCredit!.licenseHref && (
+              <a
+                href={card.imageCredit!.licenseHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Licence terms
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

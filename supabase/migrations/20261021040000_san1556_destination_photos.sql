@@ -22,6 +22,7 @@ update public.tourist_destinations
 set primary_image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13%2C_Medell%C3%ADn_02.jpg/960px-Comuna_13%2C_Medell%C3%ADn_02.jpg',
     details = coalesce(details, '{}'::jsonb) || jsonb_build_object('image_credit', jsonb_build_object(
       'source', 'Wikimedia Commons',
+      'image_url', 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13%2C_Medell%C3%ADn_02.jpg/960px-Comuna_13%2C_Medell%C3%ADn_02.jpg',
       'title', 'File:Comuna 13, Medellín 02.jpg',
       'author', 'Bernard Gagnon',
       'license', 'CC BY-SA 4.0',
@@ -38,6 +39,7 @@ update public.tourist_destinations
 set primary_image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Medell%C3%ADn%2C_Plaza_Botero%2C_2023-07_CN-01.jpg/960px-Medell%C3%ADn%2C_Plaza_Botero%2C_2023-07_CN-01.jpg',
     details = coalesce(details, '{}'::jsonb) || jsonb_build_object('image_credit', jsonb_build_object(
       'source', 'Wikimedia Commons',
+      'image_url', 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Medell%C3%ADn%2C_Plaza_Botero%2C_2023-07_CN-01.jpg/960px-Medell%C3%ADn%2C_Plaza_Botero%2C_2023-07_CN-01.jpg',
       'title', 'File:Medellín, Plaza Botero, 2023-07 CN-01.jpg',
       'author', 'Steffen Schmitz',
       'license', 'CC BY-SA 4.0',
@@ -54,6 +56,7 @@ update public.tourist_destinations
 set primary_image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Bosque_Parque_Arv%C3%AD.JPG/960px-Bosque_Parque_Arv%C3%AD.JPG',
     details = coalesce(details, '{}'::jsonb) || jsonb_build_object('image_credit', jsonb_build_object(
       'source', 'Wikimedia Commons',
+      'image_url', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Bosque_Parque_Arv%C3%AD.JPG/960px-Bosque_Parque_Arv%C3%AD.JPG',
       'title', 'File:Bosque Parque Arví.JPG',
       'author', 'Paco Godoy',
       'license', 'CC BY-SA 3.0',
@@ -70,6 +73,7 @@ update public.tourist_destinations
 set primary_image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Medell%C3%ADn%2C_Museo_de_Antioquia%2C_2023-07_CN-01.jpg/960px-Medell%C3%ADn%2C_Museo_de_Antioquia%2C_2023-07_CN-01.jpg',
     details = coalesce(details, '{}'::jsonb) || jsonb_build_object('image_credit', jsonb_build_object(
       'source', 'Wikimedia Commons',
+      'image_url', 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Medell%C3%ADn%2C_Museo_de_Antioquia%2C_2023-07_CN-01.jpg/960px-Medell%C3%ADn%2C_Museo_de_Antioquia%2C_2023-07_CN-01.jpg',
       'title', 'File:Medellín, Museo de Antioquia, 2023-07 CN-01.jpg',
       'author', 'Steffen Schmitz',
       'license', 'CC BY-SA 4.0',

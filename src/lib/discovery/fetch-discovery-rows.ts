@@ -28,7 +28,7 @@ export interface PlaceCardData {
   /** Descriptive alt text for the photo (defaults to the name). */
   imageAlt?: string;
   /** Who took the photo and under what licence. Set for every openly licensed (non-owned) photo. */
-  imageCredit?: { text: string; href: string };
+  imageCredit?: { text: string; href: string; licenseHref?: string };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -310,6 +310,7 @@ type DestinationRow = {
 
 /** Stored in `tourist_destinations.details.image_credit` next to a Wikimedia Commons photo. */
 type ImageCredit = {
+  image_url?: string;
   source?: string;
   author?: string;
   license?: string;
@@ -368,11 +369,24 @@ function destinationPhoto(row: DestinationRow): Pick<PlaceCardData, "image" | "i
   if (own) return { image: own };
   const url = row.primary_image_url;
   const credit = row.details?.image_credit;
-  if (url?.startsWith(COMMONS_PREFIX) && credit?.author && credit.license && credit.source_url) {
+  // Bind attribution to the exact image, not just the destination record. A later photo edit
+  // must never inherit the previous photographer's credit.
+  if (
+    url?.startsWith(COMMONS_PREFIX) &&
+    credit?.image_url === url &&
+    credit.author?.trim() &&
+    credit.license?.trim() &&
+    credit.source_url?.startsWith("https://commons.wikimedia.org/wiki/File:") &&
+    credit.license_url?.startsWith("https://creativecommons.org/licenses/")
+  ) {
     return {
       image: url,
       imageAlt: credit.alt?.trim() || undefined,
-      imageCredit: { text: `Photo: ${credit.author} · ${credit.license}`, href: credit.source_url },
+      imageCredit: {
+        text: `Photo: ${credit.author} · ${credit.license}`,
+        href: credit.source_url,
+        licenseHref: credit.license_url,
+      },
     };
   }
   return { image: "" };
