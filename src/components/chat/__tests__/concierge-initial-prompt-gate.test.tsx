@@ -109,7 +109,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
 
     const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
     unmount();
@@ -163,7 +163,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: true, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: true, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
 
     const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
     unmount();
@@ -178,7 +178,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
 
     const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
     unmount();
@@ -196,6 +196,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
     mockUseConciergeChat.mockReturnValue({
       isLoading: false,
       reset: vi.fn(), stopActiveRun: vi.fn(),
+      retryLastTurn: vi.fn(async () => false),
       appendMessage: vi.fn(async () => true),
       isRuntimeUnavailable: () => false,
     });
@@ -240,7 +241,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
     mockSendConciergeUserMessage.mockResolvedValue(false);
 
     const rendered = renderWithAct(React.createElement(ConciergeInitialPrompt));
@@ -262,7 +263,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
     mockSendConciergeUserMessage.mockRejectedValue(new Error("Network error"));
 
     const rendered = renderWithAct(React.createElement(ConciergeInitialPrompt));
@@ -285,7 +286,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
 
     const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
 
@@ -309,7 +310,7 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       setState: vi.fn(),
       agent: undefined,
     });
-    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
+    mockUseConciergeChat.mockReturnValue({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false });
 
     const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
 
