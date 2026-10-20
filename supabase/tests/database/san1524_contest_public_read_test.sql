@@ -1,6 +1,6 @@
 -- SAN-1524 · public contest read: restaurant-only scope, allowlisted shape, service-role only
 begin;
-select plan(9);
+select plan(14);
 
 insert into auth.users (id, email) values
   ('f1524000-0000-4000-8000-0000000000aa','san1524-public@example.com');
@@ -57,6 +57,18 @@ select is(
 select is(
   has_function_privilege('authenticated','public.contest_public_get(text)','EXECUTE'),
   false, 'the browser cannot call the public read directly');
+
+-- Prove both read RPCs remain server-only even if grants change later.
+select is(has_function_privilege('anon','public.contest_public_get(text)','EXECUTE'), false,
+  'anon cannot execute the contest detail RPC');
+select is(has_function_privilege('service_role','public.contest_public_get(text)','EXECUTE'), true,
+  'service_role can execute the contest detail RPC');
+select is(has_function_privilege('anon','public.contest_public_list()','EXECUTE'), false,
+  'anon cannot execute the contest list RPC');
+select is(has_function_privilege('authenticated','public.contest_public_list()','EXECUTE'), false,
+  'authenticated cannot execute the contest list RPC');
+select is(has_function_privilege('service_role','public.contest_public_list()','EXECUTE'), true,
+  'service_role can execute the contest list RPC');
 
 select * from finish();
 rollback;
