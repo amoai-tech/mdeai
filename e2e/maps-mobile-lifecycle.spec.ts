@@ -54,30 +54,20 @@ async function gotoChat(page: Page) {
   await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible({
     timeout: 30_000,
   });
-  // The trigger paints before React hydrates; `openSheet` retries the click.
-  await expect(page.getByTestId("map-sheet-trigger")).toBeVisible({
-    timeout: 10_000,
+  // PR #474 keeps this control disabled until hydration. Wait for readiness
+  // instead of hiding dropped first taps behind repeated clicks.
+  const trigger = page.getByTestId("map-sheet-trigger");
+  await expect(trigger).toBeVisible({ timeout: 10_000 });
+  await expect(trigger).toHaveAttribute("data-hydrated", "true", {
+    timeout: 15_000,
   });
+  await expect(trigger).toBeEnabled({ timeout: 15_000 });
 }
 
 async function openSheet(page: Page) {
   const trigger = page.getByTestId("map-sheet-trigger");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await trigger.click();
-    try {
-      await expect(page.getByTestId("map-sheet-content")).toBeVisible({
-        timeout: 4_000,
-      });
-      break;
-    } catch (error) {
-      if (attempt === 2) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`map sheet did not open after 3 attempts: ${detail}`, {
-          cause: error,
-        });
-      }
-    }
-  }
+  await expect(trigger).toBeEnabled({ timeout: 15_000 });
+  await trigger.click();
   const sheet = page.getByTestId("map-sheet-content");
   await expect(sheet).toBeVisible({ timeout: 10_000 });
   return sheet;
