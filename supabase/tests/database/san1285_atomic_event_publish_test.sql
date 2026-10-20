@@ -135,7 +135,7 @@ select is(
   true,'11c: a 30,000,000 COP tier publishes without integer overflow');
 reset role;
 select is(
-  (select max(price_cents)::bigint from public.event_tickets t
+  (select max(t.price_cents)::bigint from public.event_tickets t
      join public.events e on e.id=t.event_id
     where e.slug='san1285-high-price'),
   3000000000::bigint,'11d: 30,000,000 COP stored as 3,000,000,000 minor units');
