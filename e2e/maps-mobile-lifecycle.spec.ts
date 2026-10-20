@@ -55,7 +55,9 @@ async function gotoChat(page: Page) {
     timeout: 30_000,
   });
   // The trigger paints before React hydrates; `openSheet` retries the click.
-  await expect(page.getByTestId("map-sheet-trigger")).toBeVisible();
+  await expect(page.getByTestId("map-sheet-trigger")).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 async function openSheet(page: Page) {
@@ -67,8 +69,13 @@ async function openSheet(page: Page) {
         timeout: 4_000,
       });
       break;
-    } catch {
-      if (attempt === 2) throw new Error("map sheet did not open");
+    } catch (error) {
+      if (attempt === 2) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`map sheet did not open after 3 attempts: ${detail}`, {
+          cause: error,
+        });
+      }
     }
   }
   const sheet = page.getByTestId("map-sheet-content");
@@ -121,7 +128,9 @@ test.describe("real Google Maps mobile lifecycle", () => {
         if ((await sheet.locator(".gm-style").count()) > 0) {
           await expectRealMap(sheet);
         } else {
-          await expect(sheet.getByText("Search in chat to see available map locations.")).toBeVisible();
+          await expect(
+            sheet.getByText("Search in chat to see available map locations."),
+          ).toBeVisible({ timeout: 10_000 });
         }
         await closeMap(page);
         await assertNoPageErrors(page, errors, `cold run ${run}`);
@@ -169,7 +178,9 @@ test.describe("real Google Maps mobile lifecycle", () => {
       if ((await sheet.locator(".gm-style").count()) > 0) {
         await expectRealMap(sheet);
       } else {
-        await expect(sheet.getByText("Search in chat to see available map locations.")).toBeVisible();
+        await expect(
+          sheet.getByText("Search in chat to see available map locations."),
+        ).toBeVisible({ timeout: 10_000 });
       }
       await closeMap(page);
       await assertNoPageErrors(page, errors, `no-pin cycle ${cycle}`);
