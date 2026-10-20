@@ -54,6 +54,8 @@ export default defineConfig({
         "**/chat-workspace-layout.spec.ts",
         // SAN-524: touch/mobile map journey runs hermetically with the deterministic chat + Maps seam.
         "**/maps-layout-mobile.spec.ts",
+        // SAN-1075: the viewing modal needs the deterministic chat + an emulated keyboard.
+        "**/viewing-modal-keyboard.spec.ts",
         // SAN-522: mobile composer runs under local-chromium; keep it out of the general project.
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         // SAN-524: the browse map sheet Close target; runs in the PR gate under `local-chromium`.
@@ -74,6 +76,7 @@ export default defineConfig({
         "**/chat-workspace-layout.spec.ts",
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
         "**/maps-layout-mobile.spec.ts",
+        "**/viewing-modal-keyboard.spec.ts",
         "**/browse-map-close-touch.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
