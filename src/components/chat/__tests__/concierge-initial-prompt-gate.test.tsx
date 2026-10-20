@@ -137,6 +137,16 @@ describe("ConciergeInitialPrompt — SAN-1356 send gate behavior", () => {
       expect(mockSendConciergeUserMessage).not.toHaveBeenCalled();
     });
 
+    it("never sends during a pending session check, even if the runtime reports ready", () => {
+      mockUseConciergeCoAgent.mockReturnValue({
+        isReady: true, state: {}, setState: vi.fn(), agent: undefined,
+      });
+      mockUseSession.mockReturnValue({ user: null, loading: true });
+      const { unmount } = renderWithAct(React.createElement(ConciergeInitialPrompt));
+      unmount();
+      expect(mockSendConciergeUserMessage).not.toHaveBeenCalled();
+    });
+
     it("still waits for the runtime when the visitor is signed in", () => {
       notReady();
       mockUseSession.mockReturnValue({ user: { id: "u1" } as never, loading: false });

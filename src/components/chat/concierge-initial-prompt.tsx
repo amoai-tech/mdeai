@@ -36,7 +36,7 @@ export function ConciergeInitialPrompt() {
       router.replace("/chat", { scroll: false });
       return;
     }
-    if (!trimmedQ || sentRef.current || !(isReady || isConfirmedGuest) || isLoading) return;
+    if (!trimmedQ || sentRef.current || sessionLoading || !(isReady || isConfirmedGuest) || isLoading) return;
 
     // Claim the send before starting to prevent concurrent sends
     sentRef.current = true;
@@ -61,7 +61,7 @@ export function ConciergeInitialPrompt() {
         // Release claim on rejection so a retry can occur
         sentRef.current = false;
       });
-  }, [searchParams, isReady, isConfirmedGuest, isLoading, router, handlers]);
+  }, [searchParams, isReady, isConfirmedGuest, sessionLoading, isLoading, router, handlers]);
 
   return null;
 }
