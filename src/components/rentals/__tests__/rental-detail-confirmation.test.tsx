@@ -85,8 +85,9 @@ async function requestViewing() {
     /request viewing/i.test(b.textContent ?? ""),
   );
   expect(open).toBeTruthy();
+  if (!open) throw new Error("Request viewing button is missing");
   await act(async () => {
-    open!.click();
+    open.click();
   });
   const modal = document.querySelector('[data-testid="schedule-viewing-modal"]');
   expect(modal).toBeTruthy();
@@ -141,10 +142,11 @@ describe("rental detail page — viewing confirmation", () => {
     expect(document.querySelector('[data-testid="schedule-viewing-modal"]')).toBeNull();
     const banner = document.querySelector('[data-testid="lead-confirmation-card"]');
     expect(banner).toBeTruthy();
-    expect(banner!.textContent).toContain("Viewing request received");
-    expect(banner!.textContent).toContain("awaiting host confirmation");
-    expect(banner!.textContent).toContain("Envigado Modern Tower");
-    expect(banner!.getAttribute("data-showing-id")).toBe("66666666-7777-8888-9999-000000000000");
+    if (!(banner instanceof HTMLElement)) throw new Error("Lead confirmation banner is missing");
+    expect(banner.textContent).toContain("Viewing request received");
+    expect(banner.textContent).toContain("awaiting host confirmation");
+    expect(banner.textContent).toContain("Envigado Modern Tower");
+    expect(banner.getAttribute("data-showing-id")).toBe("66666666-7777-8888-9999-000000000000");
   });
 
   const saved = {
