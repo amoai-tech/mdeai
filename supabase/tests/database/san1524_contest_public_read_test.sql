@@ -1,6 +1,6 @@
 -- SAN-1524 · public contest read: restaurant-only scope, allowlisted shape, service-role only
 begin;
-select plan(14);
+select plan(16);
 
 insert into auth.users (id, email) values
   ('f1524000-0000-4000-8000-0000000000aa','san1524-public@example.com');
@@ -69,6 +69,25 @@ select is(has_function_privilege('authenticated','public.contest_public_list()',
   'authenticated cannot execute the contest list RPC');
 select is(has_function_privilege('service_role','public.contest_public_list()','EXECUTE'), true,
   'service_role can execute the contest list RPC');
+
+-- A category that belongs to ANOTHER contest must never label this contest's nominee.
+insert into vote.categories (contest_id, slug, title, position) values
+  ((select id from vote.contests where slug = 'san1524-pageant-pub'),'foreign-cat','Foreign Category',1);
+update vote.entities
+   set category_id = (select id from vote.categories where slug = 'foreign-cat')
+ where contest_id = (select id from vote.contests where slug = 'san1524-public')
+   and slug = 'alpha';
+
+select is(
+  (select count(*)::int
+     from jsonb_array_elements(public.contest_public_get('san1524-public') -> 'nominees') n
+    where n ->> 'category' = 'Foreign Category'),
+  0, 'a category from another contest never labels a nominee');
+
+-- A visitor who types an uppercase slug must still land on the contest.
+select is(
+  public.contest_public_get(upper('san1524-public')) -> 'contest' ->> 'slug',
+  'san1524-public', 'the slug lookup ignores letter case');
 
 select * from finish();
 rollback;

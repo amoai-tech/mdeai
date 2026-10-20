@@ -1,5 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty/empty-state";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
 import {
   contestState,
   contestWindowLabel,
@@ -23,40 +25,80 @@ const STATE_LABEL: Record<ContestState, string> = {
   archived: "Archived",
 };
 
-const STATE_STYLE: Record<ContestState, string> = {
-  open: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  upcoming: "border-sky-200 bg-sky-50 text-sky-900",
-  closed: "border-border/60 bg-muted text-muted-foreground",
-  draft: "border-amber-200 bg-amber-50 text-amber-900",
-  archived: "border-border/60 bg-muted text-muted-foreground",
+const STATE_DOT: Record<ContestState, string> = {
+  open: "bg-emerald-500",
+  upcoming: "bg-sky-500",
+  closed: "bg-muted-foreground/50",
+  draft: "bg-amber-500",
+  archived: "bg-muted-foreground/50",
 };
+
+function ContestCover({ contest }: { contest: PublicContestSummary }) {
+  const cover = contest.coverUrl;
+  if (cover && isRenderableRemoteImage(cover)) {
+    return (
+      <Image
+        alt=""
+        aria-hidden
+        className="h-40 w-full object-cover sm:h-48"
+        height={384}
+        src={cover}
+        width={768}
+      />
+    );
+  }
+  // No cover yet: an intentional typographic panel, not a broken image.
+  return (
+    <div
+      aria-hidden
+      className="flex h-24 w-full items-center bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-5 sm:h-28"
+    >
+      <span className="font-serif text-2xl text-primary/70">
+        {(contest.title.match(/[a-z0-9]/i)?.[0] ?? "C").toUpperCase()}
+      </span>
+    </div>
+  );
+}
 
 function ContestCard({ contest }: { contest: PublicContestSummary }) {
   const state = contestState(contest);
   const window = contestWindowLabel(contest);
+  const href = "/contests/" + contest.slug;
 
   return (
-    <li className="rounded-xl border border-border/60 p-5" data-testid={"contest-card-" + contest.slug}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">
-          <Link className="underline" href={"/contests/" + contest.slug}>
+    <li
+      className="group overflow-hidden rounded-2xl border border-border/60 transition-colors hover:border-primary/40 focus-within:border-primary/40 hover:shadow-sm"
+      data-testid={"contest-card-" + contest.slug}
+    >
+      <Link className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" href={href}>
+      <ContestCover contest={contest} />
+      <div className="space-y-3 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-balance text-xl font-semibold tracking-tight">
             {contest.title}
-          </Link>
-        </h2>
-        <span
-          className={"rounded-full border px-3 py-1 text-xs font-medium " + STATE_STYLE[state]}
-          data-testid="contest-state"
-        >
-          {STATE_LABEL[state]}
-        </span>
+          </h2>
+          <span
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            data-testid="contest-state"
+          >
+            <span aria-hidden className={"size-1.5 rounded-full " + STATE_DOT[state]} />
+            {STATE_LABEL[state]}
+          </span>
+        </div>
+        {window ? <p className="text-xs text-muted-foreground">{window}</p> : null}
+        {contest.description ? (
+          <p className="line-clamp-3 text-sm leading-relaxed text-foreground">{contest.description}</p>
+        ) : null}
+        <p className="flex items-center justify-between border-t border-border/40 pt-3 text-sm">
+          <span className="text-muted-foreground">
+            {contest.nominees} restaurant{contest.nominees === 1 ? "" : "s"} on the ballot
+          </span>
+          <span className="font-medium text-primary group-hover:underline" aria-hidden>
+            View contest →
+          </span>
+        </p>
       </div>
-      {window ? <p className="mt-1 text-xs text-muted-foreground">{window}</p> : null}
-      {contest.description ? (
-        <p className="mt-3 text-sm text-foreground">{contest.description}</p>
-      ) : null}
-      <p className="mt-3 text-sm text-muted-foreground">
-        {contest.nominees} restaurant{contest.nominees === 1 ? "" : "s"} on the ballot
-      </p>
+      </Link>
     </li>
   );
 }
@@ -65,11 +107,14 @@ export default async function ContestsPage() {
   const result = await listPublicContests();
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 py-8" data-testid="contests-page">
-      <header className="mb-6">
-        <h1 className="font-serif text-3xl font-semibold">Restaurant contests</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Medellín restaurant contests, the restaurants competing in each, and where to vote.
+    <main className="mx-auto min-h-screen max-w-5xl px-4 py-10 sm:px-6" data-testid="contests-page">
+      <header className="mb-8 max-w-2xl">
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">Medellín</p>
+        <h1 className="mt-2 text-balance font-serif text-4xl font-semibold tracking-tight sm:text-5xl">
+          Restaurant contests
+        </h1>
+        <p className="mt-3 text-pretty text-base leading-relaxed text-muted-foreground">
+          The restaurants competing in each contest, and where to cast your vote.
         </p>
       </header>
 
@@ -84,14 +129,14 @@ export default async function ContestsPage() {
           title="No restaurant contests yet"
         />
       ) : (
-        <ul className="space-y-4" data-testid="contests-list">
+        <ul className="grid grid-cols-1 gap-5 md:grid-cols-2" data-testid="contests-list">
           {result.contests.map((contest) => (
             <ContestCard contest={contest} key={contest.id} />
           ))}
         </ul>
       )}
 
-      <p className="mt-8 text-xs text-muted-foreground">
+      <p className="mt-10 text-xs text-muted-foreground">
         <Link className="underline" href="/restaurants">Browse all restaurants</Link>
       </p>
     </main>

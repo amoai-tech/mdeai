@@ -1,7 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { EmptyState } from "@/components/empty/empty-state";
 import { ContestNomineeCard } from "@/components/restaurants/contest-nominee-card";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
 import {
   contestState,
   contestWindowLabel,
@@ -11,6 +14,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// generateMetadata and the page body both need this read; React de-duplicates it per request.
+const loadContest = cache(getPublicContest);
+
 const STATE_LABEL: Record<ContestState, string> = {
   open: "Within contest window",
   upcoming: "Upcoming",
@@ -18,6 +24,37 @@ const STATE_LABEL: Record<ContestState, string> = {
   draft: "Draft",
   archived: "Archived",
 };
+
+const STATE_DOT: Record<ContestState, string> = {
+  open: "bg-emerald-500",
+  upcoming: "bg-sky-500",
+  closed: "bg-muted-foreground/50",
+  draft: "bg-amber-500",
+  archived: "bg-muted-foreground/50",
+};
+
+function describe(description: string | null): string {
+  if (!description) return "See the Medellín restaurants competing in this contest and where to vote.";
+  const text = description.replace(/\s+/g, " ").trim();
+  return text.length > 155 ? text.slice(0, 152).trimEnd() + "…" : text;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const result = await loadContest(id);
+  if (result.status !== "found") {
+    return { title: "Contest not found · mdeai", robots: { index: false } };
+  }
+  const { contest } = result;
+  const title = contest.title + " · Restaurant contest";
+  const description = describe(contest.description);
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" as const },
+    twitter: { card: "summary_large_image" as const, title, description },
+  };
+}
 
 export default async function ContestDetailPage({
   params,
@@ -28,7 +65,7 @@ export default async function ContestDetailPage({
 
   if (id.trim().length === 0) notFound();
 
-  const result = await getPublicContest(id);
+  const result = await loadContest(id);
   if (result.status === "not_found") notFound();
   if (result.status === "error") {
     return (
@@ -45,29 +82,48 @@ export default async function ContestDetailPage({
   const { contest, nominees } = result;
   const state = contestState(contest);
   const window = contestWindowLabel(contest);
+  const cover = contest.coverUrl;
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-8" data-testid="contest-page" data-contest-id={contest.id}>
+    <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6" data-testid="contest-page" data-contest-id={contest.id}>
       <nav className="mb-4 text-sm">
         <Link className="text-muted-foreground underline" href="/contests">All contests</Link>
       </nav>
 
-      <header className="mb-6">
-        <h1 className="font-serif text-3xl font-semibold" data-testid="contest-title">
+      {cover && isRenderableRemoteImage(cover) ? (
+        <Image
+          alt=""
+          aria-hidden
+          className="mb-6 h-48 w-full rounded-2xl object-cover sm:h-64"
+          height={512}
+          src={cover}
+          width={1024}
+        />
+      ) : null}
+
+      <header className="mb-8">
+        <h1
+          className="text-balance font-serif text-4xl font-semibold tracking-tight sm:text-5xl"
+          data-testid="contest-title"
+        >
           {contest.title}
         </h1>
-        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium" data-testid="contest-state">
+        <p className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            data-testid="contest-state"
+          >
+            <span aria-hidden className={"size-1.5 rounded-full " + STATE_DOT[state]} />
             {STATE_LABEL[state]}
           </span>
           {window ? <span>{window}</span> : null}
         </p>
       </header>
 
-      <section aria-labelledby="contest-about" className="mb-8">
-        <h2 className="mb-2 text-lg font-semibold" id="contest-about">About this contest</h2>
+      <section aria-labelledby="contest-about" className="mb-10">
+        <h2 className="mb-2 text-lg font-semibold tracking-tight" id="contest-about">About this contest</h2>
         {contest.description ? (
-          <p className="text-sm text-foreground" data-testid="contest-description">{contest.description}</p>
+          <p className="text-pretty text-base leading-relaxed text-foreground" data-testid="contest-description">{contest.description}</p>
         ) : (
           <p className="text-sm text-muted-foreground" data-testid="contest-no-rules">
             The organizer has not published rules for this contest yet.
@@ -79,7 +135,7 @@ export default async function ContestDetailPage({
       </section>
 
       <section aria-labelledby="contest-nominees">
-        <h2 className="mb-3 text-lg font-semibold" id="contest-nominees">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-nominees">
           Restaurants on the ballot
         </h2>
         {nominees.length === 0 ? (
