@@ -5,8 +5,12 @@ import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
-import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
+import { clearConciergeError, getConciergeErrorVersion, reportConciergeError } from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+
+// runAgent awaits detachActiveRun before isRunning becomes true. Two quick
+// Retry clicks can otherwise start the same turn twice, even across hook users.
+const retriesInFlight = new WeakSet<object>();
 
 /** Shared concierge chat controller for v2 routes. */
 function useLiveConciergeChat() {
@@ -50,17 +54,28 @@ function useLiveConciergeChat() {
   }, [agent, stopActiveRun]);
 
   const retryLastTurn = useCallback(async () => {
-    if (!agent || agent.isRunning) return false;
+    // Never start an empty/previous turn or a concurrent replay.
+    if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
+        !agent.messages.some((message) => message.role === "user")) return false;
+    retriesInFlight.add(agent);
+    const retryThreadId = agent.threadId;
     clearConciergeError();
     try {
       await copilotkit.runAgent({ agent });
-      markThreadSaved?.(agent.threadId);
-      if (agent.threadId) void ensureThreadTitle(agent.threadId);
+      // CopilotKit can surface a stream error via onError without rejecting.
+      if (getConciergeErrorVersion() > 0) return false;
+      // A thread change during retry must not save/title a different chat.
+      if (agent.threadId === retryThreadId) {
+        markThreadSaved?.(retryThreadId);
+        if (retryThreadId) void ensureThreadTitle(retryThreadId);
+      }
       return true;
     } catch (error) {
       console.error("[concierge-retry]", error);
-      reportConciergeError();
+      if (agent.threadId === retryThreadId) reportConciergeError();
       return false;
+    } finally {
+      retriesInFlight.delete(agent);
     }
   }, [agent, copilotkit, markThreadSaved]);
 

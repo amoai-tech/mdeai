@@ -51,6 +51,7 @@ describe("ConciergeRunFeedback", () => {
     const view = mount();
     const stop = view.querySelector('[data-testid="concierge-stop"]');
     expect(stop).toBeTruthy();
+    expect(stop?.getAttribute("aria-label")).toBe("Stop");
     act(() => stop?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(mocks.stop).toHaveBeenCalledTimes(1);
   });
@@ -66,6 +67,13 @@ describe("ConciergeRunFeedback", () => {
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(mocks.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer Retry during an active run even if an error event arrives", () => {
+    reportConciergeError();
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-stop"]')).toBeTruthy();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
   });
 
   it("renders nothing when idle", () => {

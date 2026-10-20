@@ -26,13 +26,14 @@ export function ConciergeRunFeedback() {
         <button
           type="button"
           data-testid="concierge-stop"
+          aria-label="Stop"
           onClick={stopActiveRun}
           className="self-start rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           Stop
         </button>
       ) : null}
-      {errorVersion > 0 ? (
+      {errorVersion > 0 && !isLoading ? (
         <ConciergeErrorNotice onRetry={() => void retryLastTurn()} />
       ) : null}
     </div>
