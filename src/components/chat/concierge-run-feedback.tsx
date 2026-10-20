@@ -29,9 +29,15 @@ export function ConciergeRunFeedback() {
   );
 
   // A failure from an old chat must not offer Retry in the new chat.
+  // Re-read the store first: a newer error from the current thread may have
+  // replaced the stale one between render and this effect.
   useEffect(() => {
-    if (stale) clearConciergeError();
-  }, [stale]);
+    if (!stale) return;
+    const current = getConciergeErrorSnapshot();
+    if (current.threadId && current.threadId !== currentThreadId) {
+      clearConciergeError(current.threadId);
+    }
+  }, [stale, currentThreadId]);
 
   if (!isLoading && (error.version === 0 || stale)) return null;
 
