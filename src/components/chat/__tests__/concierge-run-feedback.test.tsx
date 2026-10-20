@@ -39,6 +39,7 @@ function mount() {
 beforeEach(() => {
   clearConciergeError();
   mocks.loading = true;
+  mocks.thread = "thread-a";
   mocks.stop.mockReset();
   mocks.retry.mockReset();
 });
@@ -88,6 +89,20 @@ describe("ConciergeRunFeedback", () => {
     const view = mount();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
     expect(view.textContent).toBe("");
+  });
+
+  it("uses the failed operation's retry instead of the generic agent retry", () => {
+    mocks.loading = false;
+    const retryOperation = vi.fn();
+    reportConciergeError({ threadId: "thread-a", retry: retryOperation });
+    const view = mount();
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((button) => button.textContent === "Try again ↻")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(retryOperation).toHaveBeenCalledTimes(1);
+    expect(mocks.retry).not.toHaveBeenCalled();
   });
 
   it("renders nothing when idle", () => {

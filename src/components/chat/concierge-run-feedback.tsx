@@ -56,7 +56,7 @@ export function ConciergeRunFeedback() {
       ) : null}
       {error.version > 0 && !isLoading && !stale ? (
         <ConciergeErrorNotice
-          onRetry={() => void retryLastTurn()}
+          onRetry={() => void (error.retry ?? retryLastTurn)()}
         />
       ) : null}
     </div>

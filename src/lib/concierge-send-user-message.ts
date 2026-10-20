@@ -13,6 +13,10 @@ import {
 } from "@/lib/concierge-pending-store";
 
 export type ConciergeSendHandlers = {
+  /** Current conversation; used to keep a failure and its Retry in the right chat. */
+  threadId?: string;
+  /** Retry the existing agent turn instead of sending the text again. */
+  retryLastTurn?: () => Promise<boolean>;
   handleRentalMessage: (text: string) => Promise<boolean>;
   /** Wired when SAN-494 · EVT-035 — Restaurant card Event Venue CTA venue fast-path lands; optional until then. */
   handleEventVenueBookingMessage?: (text: string) => Promise<boolean>;
@@ -57,7 +61,9 @@ export async function sendConciergeUserMessage(
   const trimmed = text.trim();
   if (!trimmed) return false;
 
-  clearConciergeError();
+  const threadId = handlers.threadId;
+  clearConciergeError(threadId);
+  let agentAttempted = false;
 
   try {
     const classification = await resolveRouterClassification(trimmed, {
@@ -70,11 +76,21 @@ export async function sendConciergeUserMessage(
     }
 
     setConciergePendingSend(true);
-    return handlers.onAgentSend(trimmed);
+    agentAttempted = true;
+    // Await so an agent rejection is caught here and gets the correct
+    // thread/retry identity instead of escaping as an unhandled rejection.
+    return await handlers.onAgentSend(trimmed);
   } catch (err) {
     console.error("[concierge-send]", err);
     clearConciergePendingSend();
-    reportConciergeError();
+    // A fast-path failure must retry that search, not the previous agent turn.
+    // An agent failure already has its user message in the transcript, so it
+    // retries the existing turn instead of appending a duplicate.
+    const retry =
+      agentAttempted && handlers.retryLastTurn
+        ? handlers.retryLastTurn
+        : () => sendConciergeUserMessage(trimmed, handlers);
+    reportConciergeError({ threadId, retry });
     return false;
   }
 }

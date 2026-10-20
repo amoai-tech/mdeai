@@ -5,6 +5,7 @@ import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
 import { getConciergeErrorVersion, reportConciergeError } from "@/lib/concierge-error-store";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
@@ -22,7 +23,9 @@ export const AGENT_UNAVAILABLE_MESSAGE =
 
 /** Fast-path + agent handlers for sendConciergeUserMessage (CopilotChat + ?q=). */
 export function useConciergeSendHandlers(): ConciergeSendHandlers {
-  const { appendMessage, isRuntimeUnavailable } = useConciergeChat();
+  const { appendMessage, isRuntimeUnavailable, retryLastTurn } = useConciergeChat();
+  const nav = useOptionalThreadNav();
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
   const { user, loading: sessionLoading } = useSession();
@@ -81,13 +84,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         }
       } catch (error) {
         console.error("[concierge-agent-send]", error);
-        reportConciergeError();
+        reportConciergeError({ threadId, retry: retryLastTurn });
         showNotice(AGENT_UNAVAILABLE_MESSAGE);
       }
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
+    [appendMessage, isRuntimeUnavailable, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
   );
 
   useEffect(() => {
@@ -111,6 +114,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       onAgentSend,
       lastIntent: state?.lastIntent,
       inRentalSearch,
+      threadId,
+      retryLastTurn,
     }),
     [
       handleRentalMessage,
@@ -121,6 +126,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       onAgentSend,
       state?.lastIntent,
       inRentalSearch,
+      retryLastTurn,
+      threadId,
     ],
   );
 }

@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { clearConciergeError, getConciergeErrorSnapshot } from "@/lib/concierge-error-store";
 import { sendConciergeUserMessage } from "../concierge-send-user-message";
 
 function makeHandlers() {
   return {
+    threadId: undefined as string | undefined,
+    retryLastTurn: undefined as (() => Promise<boolean>) | undefined,
     handleRentalMessage: vi.fn(async () => false),
     handleEventVenueBookingMessage: vi.fn(async () => false),
     handleEventMessage: vi.fn(async () => false),
@@ -11,6 +14,11 @@ function makeHandlers() {
     onAgentSend: vi.fn(async () => true),
   };
 }
+
+beforeEach(() => {
+  clearConciergeError();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
 
 describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMessage pipeline", () => {
   it("plan my weekend reaches agent without event fast-path", async () => {
@@ -52,6 +60,36 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     expect(handlers.handleEventVenueBookingMessage).toHaveBeenCalledOnce();
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("retries the failed fast-path search, not the previous agent turn", async () => {
+    const handlers = makeHandlers();
+    handlers.threadId = "thread-a";
+    handlers.handleEventMessage
+      .mockRejectedValueOnce(new Error("event search failed"))
+      .mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage("salsa events this weekend", handlers);
+
+    const failure = getConciergeErrorSnapshot();
+    expect(failure.threadId).toBe("thread-a");
+    expect(failure.retry).toBeTypeOf("function");
+    await failure.retry?.();
+    expect(handlers.handleEventMessage).toHaveBeenCalledTimes(2);
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("uses the agent-turn retry for a failed agent send", async () => {
+    const handlers = makeHandlers();
+    handlers.threadId = "thread-a";
+    handlers.retryLastTurn = vi.fn(async () => true);
+    handlers.onAgentSend.mockRejectedValueOnce(new Error("agent failed"));
+
+    await sendConciergeUserMessage("plan my weekend", handlers);
+
+    const failure = getConciergeErrorSnapshot();
+    expect(failure.threadId).toBe("thread-a");
+    expect(failure.retry).toBe(handlers.retryLastTurn);
   });
 
   it("salsa events still uses event handler before agent", async () => {

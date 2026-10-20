@@ -13,6 +13,13 @@
 export type ConciergeErrorSnapshot = {
   version: number;
   threadId: string | null;
+  /** The failed operation to replay. Absent for legacy/provider-only errors. */
+  retry?: () => void | Promise<unknown>;
+};
+
+export type ConciergeErrorInput = {
+  threadId?: string | null;
+  retry?: () => void | Promise<unknown>;
 };
 
 const IDLE: ConciergeErrorSnapshot = { version: 0, threadId: null };
@@ -23,8 +30,14 @@ function notify() {
   _listeners.forEach((l) => l());
 }
 
-export function reportConciergeError(threadId?: string | null) {
-  _error = { version: _error.version + 1, threadId: threadId ?? null };
+export function reportConciergeError(
+  input?: string | null | ConciergeErrorInput,
+) {
+  const threadId =
+    typeof input === "string" || input === null ? input : input?.threadId;
+  const retry =
+    typeof input === "object" && input !== null ? input.retry : undefined;
+  _error = { version: _error.version + 1, threadId: threadId ?? null, retry };
   notify();
 }
 
