@@ -316,6 +316,31 @@ describe("SAN-1552 fix-prompt formatter — evidence honesty", () => {
     assert.match(rendered.body, /NEEDS VERIFICATION and its quoted code is not present/);
   });
 
+  it("keeps advisory quoted-code findings in Investigate with an accurate reason", () => {
+    const quoted = "const tenant = `${tenantId}`";
+    const result = stateReview({
+      findings: [stateFinding({
+        id: "advisory-quote",
+        path: "src/tenant.ts",
+        lineStart: 10,
+        status: "advisory",
+        verification: "NEEDS VERIFICATION",
+        problem: `Review quotes \`${quoted}\` as a possible concern.`,
+      })],
+    });
+    const files = [{ filename: "src/tenant.ts", status: "modified", patch: [
+      "@@ -9,2 +9,2 @@",
+      " context line nine",
+      `+${quoted}`,
+      " context line eleven",
+    ].join("\n") }];
+    const rendered = render(result, files);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 1);
+    assert.match(rendered.body, /labels this finding advisory/);
+    assert.doesNotMatch(rendered.body, /quoted code is not present/);
+  });
+
   it("promotes a NEEDS VERIFICATION finding whose quoted code is in the diff", () => {
     // The same shape the live SAN-1552 probe produced: a HIGH SQL injection the review itself
     // labelled NEEDS VERIFICATION, while quoting the exact added line.
@@ -391,7 +416,7 @@ describe("SAN-1552 fix-prompt formatter — evidence honesty", () => {
     const rendered = render(result, [changedFile("src/tenant.ts", 10)]);
     assert.equal(rendered.confirmed, 0);
     assert.equal(rendered.investigate, 1);
-    assert.match(rendered.body, /quoted code is not present in this head's diff/);
+    assert.match(rendered.body, /quoted code is not present on the reported added lines/);
   });
 
   it("demotes a finding the recorded state last saw at another head", () => {

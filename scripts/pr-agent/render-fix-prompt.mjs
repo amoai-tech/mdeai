@@ -410,9 +410,12 @@ function classifyFindings({ parsed, changedFiles, headSha }) {
 
     if (carriedFromOtherHead) {
       item.investigateReason = `Recorded state last saw this finding at ${seenAt.slice(0, 9)}, not at the current head.`;
-    } else if (item.location.grounded && item.verification === "NEEDS VERIFICATION") {
+    } else if (item.location.grounded && item.status === "advisory") {
       item.investigateReason =
-        "The review marks this claim NEEDS VERIFICATION and its quoted code is not present in this head's diff, so it remains unconfirmed.";
+        "The review labels this finding advisory, so it remains unconfirmed even when its quoted code matches the added lines.";
+    } else if (item.location.grounded && item.verification === "NEEDS VERIFICATION" && !quotedEvidence) {
+      item.investigateReason =
+        "The review marks this claim NEEDS VERIFICATION and its quoted code is not present on the reported added lines, so it remains unconfirmed.";
     } else if (unlabelled) {
       item.investigateReason =
         "The review did not label this finding with a severity or a changes-required status, so it cannot be confirmed.";
