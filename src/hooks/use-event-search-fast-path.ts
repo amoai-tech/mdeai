@@ -102,6 +102,7 @@ export function useEventSearchFastPath() {
       userText: string,
       params: EventSearchApiParams,
       memory: ConciergeWorkingMemory,
+      propagateFailure = false,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
@@ -135,6 +136,9 @@ export function useEventSearchFastPath() {
       } catch (err) {
         console.error("[event-fast-path]", err);
         setToolResult(null);
+        // Chat sends must reach the operation-aware Retry handler. Filter-chip
+        // searches retain their existing non-throwing failure behavior.
+        if (propagateFailure) throw err;
         return false;
       } finally {
         busyRef.current = false;
@@ -179,7 +183,7 @@ export function useEventSearchFastPath() {
       if (!params) return false;
 
       clearLocalMessages();
-      return runSearch(trimmed, params, memory);
+      return runSearch(trimmed, params, memory, true);
     },
     [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, state],
   );
