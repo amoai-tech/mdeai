@@ -177,6 +177,16 @@ Deno.serve(async (req: Request) => {
           }
           return jr({ success: true, approvalRequestId: approvalId, decision, ...winnerReceipt }, 200, req);
         }
+        // The winning request has claimed this proposal but has not written its
+        // receipt yet. Do not publish a second event from the losing request.
+        return jr(
+          errorBody(
+            "PUBLISH_IN_PROGRESS",
+            "This proposal is already being published. Retry shortly.",
+          ),
+          409,
+          req,
+        );
       } else if (proposalWriteErr) {
         return jr(errorBody("RPC_FAILED", proposalWriteErr.message), 500, req);
       }
