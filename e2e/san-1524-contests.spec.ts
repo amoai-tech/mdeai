@@ -75,8 +75,17 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
   }) => {
     await page.goto("/contests");
     const featured = page.locator('[data-featured="true"]');
-    if ((await featured.count()) === 0) {
-      test.skip(true, "no single-contest featured layout in this data set");
+    const cards = page.locator('[data-testid^="contest-card-"]');
+    const cardCount = await cards.count();
+
+    // Never skip: a skipped assertion is coverage that cannot fail. Every branch asserts the
+    // layout its data actually requires, so a regression in any of them is caught.
+    expect(cardCount, "the public contest list must render at least one contest here").toBeGreaterThan(0);
+
+    if (cardCount > 1) {
+      // More than one contest: the grid is correct, and the featured treatment must NOT appear.
+      await expect(page.getByTestId("contests-list")).toBeVisible();
+      await expect(featured).toHaveCount(0);
       return;
     }
 
