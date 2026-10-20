@@ -79,4 +79,45 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         # A write journey must not retry: a retry duplicates fixtures, spends the hourly
         # anonymous-viewing budget, and can strand rows when the first attempt half-succeeded.
-        run: npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --retries=0
+        run: >-
+          npx playwright test e2e/rental-conversion-journey.spec.ts
+          --project=prod-smoke --retries=0
+          --trace=retain-on-failure --screenshot=only-on-failure
+
+      # A failed production journey is the one run someone has to debug later, but a Playwright
+      # trace can contain cookies, browser storage and request bodies from the session. This
+      # repository is public, so nothing raw is uploaded: the bundle is encrypted with a
+      # repository secret, and with no key configured the step refuses to upload and says so.
+      # always(), not failure(): a timeout cancels the job, where failure() is false.
+      # Limitation: a hard-killed runner cannot run any step, so nothing is preserved then.
+      - name: Encrypt failure artifacts
+        if: always()
+        env:
+          ARTIFACT_KEY: ${{ secrets.PROD_JOURNEY_ARTIFACT_KEY }}
+        run: |
+          set -euo pipefail
+          set --
+          [ -d test-results ] && set -- "$@" test-results
+          [ -d tmp/playwright-report ] && set -- "$@" tmp/playwright-report
+          if [ "$#" -eq 0 ]; then
+            echo "no failure artifacts to encrypt"
+            exit 0
+          fi
+          if [ -z "$ARTIFACT_KEY" ]; then
+            echo "::warning::PROD_JOURNEY_ARTIFACT_KEY is not configured; a trace can contain browser storage, so nothing is uploaded to this public repository"
+            exit 0
+          fi
+          tar -czf journey-artifacts.tgz "$@"
+          printf '%s' "$ARTIFACT_KEY" | openssl enc -aes-256-cbc -pbkdf2 -salt -pass stdin \
+            -in journey-artifacts.tgz -out journey-artifacts.tgz.enc
+          rm -f journey-artifacts.tgz
+          echo "encrypted artifacts ready"
+
+      - name: Upload encrypted failure artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-renter-journey-failure-encrypted
+          path: journey-artifacts.tgz.enc
+          if-no-files-found: ignore
+          retention-days: 7
