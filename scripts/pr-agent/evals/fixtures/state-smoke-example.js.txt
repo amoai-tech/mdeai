@@ -1,0 +1,5 @@
+// PR-Agent state smoke test: inert fixture, never imported or executed.
+// A reviewer should identify the deliberately unsafe query construction.
+export function exampleQuery(tenantId) {
+  return `select id from orders where tenant_id = '${tenantId}'`;
+}
