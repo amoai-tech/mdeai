@@ -82,7 +82,7 @@ jobs:
         run: >-
           npx playwright test e2e/rental-conversion-journey.spec.ts
           --project=prod-smoke --retries=0
-          --trace=retain-on-failure --screenshot=only-on-failure
+          --trace=retain-on-failure
 
       # A failed production journey is the one run someone has to debug later, but a Playwright
       # trace can contain cookies, browser storage and request bodies from the session. This

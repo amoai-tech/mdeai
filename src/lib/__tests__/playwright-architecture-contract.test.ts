@@ -125,7 +125,9 @@ describe("SAN-1341 Playwright architecture", () => {
       "utf8",
     );
     expect(workflow).toContain("--trace=retain-on-failure");
-    expect(workflow).toContain("--screenshot=only-on-failure");
+    // Playwright has no --screenshot CLI flag; screenshots are config-owned and a trace already
+    // contains them. Passing it made the workflow die before any test ran.
+    expect(workflow).not.toContain("--screenshot");
     expect(workflow).toContain("--retries=0");
     expect(workflow).toContain('PW_SKIP_WEBSERVER: "1"');
     expect(workflow).not.toMatch(/--trace=on\b/);
