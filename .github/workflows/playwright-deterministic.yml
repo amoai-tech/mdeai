@@ -40,6 +40,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: 1
           E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: DEMO_MAP_ID # Expected on mocked dev maps; avoid repeated warnings.
           NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
