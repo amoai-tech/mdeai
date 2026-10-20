@@ -38,7 +38,7 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
-  useConciergeChat: vi.fn(() => ({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false })),
+  useConciergeChat: vi.fn(() => ({ isLoading: false, reset: vi.fn(), stopActiveRun: vi.fn(), retryLastTurn: vi.fn(async () => false), appendMessage: vi.fn(async () => true), isRuntimeUnavailable: () => false })),
 }));
 
 vi.mock("@/lib/concierge-send-user-message", () => ({
