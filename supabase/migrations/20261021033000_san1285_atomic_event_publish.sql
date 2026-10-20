@@ -226,7 +226,7 @@ begin
   )
   -- Host input is whole COP; event_tickets.price_cents and Stripe unit_amount
   -- use minor units. Convert exactly ONCE here, not in checkout or the UI.
-  select v_event_id, t.value->>'name', (t.value->>'priceCop')::integer * 100,
+  select v_event_id, t.value->>'name', (t.value->>'priceCop')::bigint * 100,
          (t.value->>'quantity')::integer, 'cop', true, (t.ordinality - 1)::integer
   from jsonb_array_elements(v_tiers) with ordinality as t(value, ordinality);
 

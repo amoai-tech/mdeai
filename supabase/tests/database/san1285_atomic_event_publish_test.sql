@@ -1,7 +1,7 @@
 -- SAN-1285: actual SQL auth, transaction and retry behavior; runs in ROLLBACK.
 begin;
 set search_path = public, extensions;
-select plan(43);
+select plan(45);
 
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
 values
@@ -122,6 +122,23 @@ select is((select min(price_cents) from public.event_tickets where event_id=curr
   4000000::bigint,'11a: 40000 whole COP becomes 4000000 minor units for Stripe');
 select is((select ticket_price_min from public.events where id=current_setting('san1285.event_id')::uuid),
   40000::numeric,'11b: event summary remains in whole COP');
+
+-- A tier above the old int32 minor-unit ceiling must publish without overflow.
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a1285000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select is(
+  (public.publish_event_tx(
+    'a1285000-0000-4000-8000-000000000030',
+    '{"title":"SAN1285 High Price","dateIso":"2030-10-23T19:00:00Z","ticketTiers":[{"name":"VIP","priceCop":30000000,"quantity":2}]}'::jsonb,
+    'san1285-high-price'
+  )->>'eventId') is not null,
+  true,'11c: a 30,000,000 COP tier publishes without integer overflow');
+reset role;
+select is(
+  (select max(price_cents)::bigint from public.event_tickets t
+     join public.events e on e.id=t.event_id
+    where e.slug='san1285-high-price'),
+  3000000000::bigint,'11d: 30,000,000 COP stored as 3,000,000,000 minor units');
 select is((select organizer_id from public.events where id=current_setting('san1285.event_id')::uuid),
   'a1285000-0000-4000-8000-000000000001'::uuid,'12: only authenticated host is organizer');
 select is((select count(*)::int from public.approval_requests where proposal_id='a1285000-0000-4000-8000-000000000011'),
