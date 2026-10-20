@@ -124,32 +124,121 @@ async function searchRentalsForQuestion(
 }
 
 type PlainTurn = { id: string; role: "user" | "assistant"; text: string };
-type AgentMessage = { id?: string; role?: string; content?: unknown };
+type AgentMessage = {
+  id?: string;
+  role?: string;
+  content?: unknown;
+  toolName?: string;
+  toolCallId?: string;
+  toolCalls?: unknown;
+};
+
+const RENTAL_TOOL = /search[-_]?rentals/i;
+
+/** Message text across the shapes the thread stores (plain string, or parts with text). */
+function messageText(message: AgentMessage | undefined): string {
+  const content = message?.content;
+  if (typeof content === "string") {
+    try {
+      const parsed = JSON.parse(content) as { content?: string; parts?: Array<{ type?: string; text?: string }> };
+      const text = parsed.parts?.find((part) => part.type === "text")?.text ?? parsed.content;
+      if (typeof text === "string") return text;
+    } catch {
+      return content;
+    }
+    return "";
+  }
+  if (content && typeof content === "object") {
+    const parsed = content as { content?: string; parts?: Array<{ type?: string; text?: string }> };
+    return parsed.parts?.find((part) => part.type === "text")?.text ?? parsed.content ?? "";
+  }
+  return "";
+}
+
+type ToolCallLike = { id?: string; function?: { name?: string } };
+
+/** True when a parsed tool result looks like rental rows, for results whose call name is lost. */
+function looksLikeRentalRows(results: unknown[]): boolean {
+  const first = results[0] as { nightly_price?: unknown; price_monthly?: unknown; bedrooms?: unknown } | undefined;
+  return Boolean(first && ("nightly_price" in first || "price_monthly" in first || "bedrooms" in first));
+}
+
+/**
+ * The agent's own rental search result: the single source of truth for the cards.
+ *
+ * The client keeps the result on a `role: "tool"` message (toolCallId + JSON content) and the
+ * tool's name on the preceding assistant message's `toolCalls`. The result carries no total, so
+ * the honest count is the rows it returned — the same rows the answer was written from.
+ */
+function latestRentalToolResult(
+  messages: readonly AgentMessage[],
+): { signature: string; payload: RentalAskResults } | null {
+  const callNames = new Map<string, string>();
+  for (const message of messages) {
+    if (message.role !== "assistant" || !Array.isArray(message.toolCalls)) continue;
+    for (const call of message.toolCalls as ToolCallLike[]) {
+      if (call?.id && call.function?.name) callNames.set(call.id, call.function.name);
+    }
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "tool") continue;
+    let data: unknown = message.content;
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        continue;
+      }
+    }
+    const envelope = data as { results?: unknown; budgetNote?: string } | null;
+    if (!envelope || !Array.isArray(envelope.results) || envelope.results.length === 0) continue;
+    const toolName = callNames.get(message.toolCallId ?? "") ?? "";
+    if (toolName ? !RENTAL_TOOL.test(toolName) : !looksLikeRentalRows(envelope.results)) continue;
+    const question = [...messages.slice(0, index)]
+      .reverse()
+      .find((candidate) => candidate.role === "user");
+    const resultRows = envelope.results as (Rental & { id?: string })[];
+    return {
+      signature: `${message.toolCallId ?? index}:${resultRows.length}:${resultRows[0]?.id ?? ""}`,
+      payload: {
+        results: resultRows,
+        total: resultRows.length,
+        query: messageText(question),
+        budgetNotice: envelope.budgetNote,
+      },
+    };
+  }
+  return null;
+}
+
+const payloadRows = (payload: RentalAskResults) =>
+  payload.results.map((r) => ({
+    id: r.id,
+    title: r.title,
+    neighborhood: r.neighborhood,
+    nightly_price: r.nightly_price,
+  }));
 
 /** Keep only turns that have text, so tool/state-only messages do not leave blank rows. */
 function plainTurns(messages: readonly AgentMessage[]): PlainTurn[] {
   const turns: PlainTurn[] = [];
   messages.forEach((message, index) => {
     if (message.role !== "user" && message.role !== "assistant") return;
-    if (typeof message.content !== "string") return;
-    const text = message.content.trim();
+    const text = messageText(message).trim();
     if (!text) return;
     turns.push({ id: message.id ?? `${message.role}-${index}`, role: message.role, text });
   });
   return turns.slice(-TRANSCRIPT_LIMIT);
 }
 
-/**
- * Copied messages, subscribed, so streaming and in-place mutations reach the transcript.
- * Reading `agent.messages` during render alone would miss both.
- */
+/** Copied messages, subscribed, so streaming and in-place mutations reach the transcript. */
 function useTurns(agent: AbstractAgent | undefined): PlainTurn[] {
   const [snapshot, setSnapshot] = useState<{ agent: AbstractAgent | undefined; messages: readonly AgentMessage[] }>(
     () => ({ agent, messages: agent ? [...(agent.messages as unknown as AgentMessage[])] : [] }),
   );
 
-  // A different agent (a restored thread) seeds from its own messages. Adjusting state while
-  // rendering is the supported React pattern for derived-from-props state.
   if (snapshot.agent !== agent) {
     setSnapshot({
       agent,
@@ -166,6 +255,25 @@ function useTurns(agent: AbstractAgent | undefined): PlainTurn[] {
   }, [agent]);
 
   return useMemo(() => plainTurns(snapshot.messages), [snapshot.messages]);
+}
+
+/** Applies each new rental tool result once, as the agent streams it in. */
+function useRentalToolResults(
+  agent: AbstractAgent | undefined,
+  onResult: (payload: RentalAskResults, signature: string) => void,
+): void {
+  useEffect(() => {
+    if (!agent) return;
+    let seen = "";
+    const read = () => {
+      const found = latestRentalToolResult(agent.messages as unknown as AgentMessage[]);
+      if (!found || found.signature === seen) return;
+      seen = found.signature;
+      onResult(found.payload, found.signature);
+    };
+    const subscription = agent.subscribe({ onMessagesChanged: read });
+    return () => subscription.unsubscribe();
+  }, [agent, onResult]);
 }
 
 /** Publish the composer's rendered height so the phone FAB can sit above it, transcript included. */
@@ -382,8 +490,27 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
 
   // Refinements build on the previous rental question; a remount (filter change) starts fresh.
   const lastQuery = useRef<ConciergeWorkingMemory>({});
+  // The agent's tool result owns the cards for this turn; the page search is only a fallback.
+  const toolResultSeen = useRef(false);
+  const appliedSignature = useRef("");
+  const turnId = useRef(0);
   const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
   usePublishHeight(shellElement);
+
+  const applyToolResult = useCallback(
+    (payload: RentalAskResults, signature: string) => {
+      if (!onResults || cancelled.current || appliedSignature.current === signature) return;
+      appliedSignature.current = signature;
+      toolResultSeen.current = true;
+      onResults(payload);
+      setState((prev) => ({
+        ...prev,
+        lastRentalResults: payloadRows(payload),
+      }));
+    },
+    [onResults, setState],
+  );
+  useRentalToolResults(agent, applyToolResult);
 
   const turns = useTurns(agent);
   const signedOut = !sessionLoading && !user;
@@ -420,40 +547,11 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
         ...(context?.through ? { checkOut: context.through } : {}),
       },
     }));
+    const turn = ++turnId.current;
+    toolResultSeen.current = false;
     const errorVersionBefore = getConciergeErrorVersion();
     let agentSendAttempted = false;
     try {
-      if (onResults) {
-        // Search is supplementary: a network failure must not suppress the saved concierge turn.
-        try {
-          const found = await searchRentalsForQuestion(text, lastQuery.current);
-          if (cancelled.current) return;
-          if (typeof found === "string") {
-            setError(found);
-          } else {
-            lastQuery.current = found.nextMemory;
-            onResults(found.payload);
-            // Give the agent the rows the renter can see, so "which of these…" follow-ups have a
-            // referent. This does NOT constrain the model's own count: verified live, it still
-            // answers "Found 5" against 8 shown, because it runs its own tool call. Cards and
-            // counts become provably equal only when the cards render that tool result (SAN-1421
-            // follow-up), not when state is shared.
-            setState((prev) => ({
-              ...prev,
-              ...found.nextMemory,
-              lastRentalResults: found.payload.results.map((r) => ({
-                id: r.id,
-                title: r.title,
-                neighborhood: r.neighborhood,
-                nightly_price: r.nightly_price,
-              })),
-            }));
-          }
-        } catch {
-          if (cancelled.current) return;
-          setError(SEARCH_UNAVAILABLE);
-        }
-      }
       if (cancelled.current) return;
       agentSendAttempted = true;
       const started = await appendMessage(text);
@@ -470,6 +568,30 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);
         return;
+      }
+      // The cards normally come from the agent's own rental tool result. Only when the turn
+      // produced none (an off-topic answer, a tool failure) does the page run a structured search,
+      // so the renter is not left staring at a stale list.
+      if (onResults && !toolResultSeen.current && turn === turnId.current && !cancelled.current) {
+        try {
+          const found = await searchRentalsForQuestion(text, lastQuery.current);
+          if (!cancelled.current && turn === turnId.current) {
+            if (typeof found === "string") {
+              setError(found);
+            } else {
+              lastQuery.current = found.nextMemory;
+              onResults(found.payload);
+              // The fallback rows also become the agent's referent for "which of these…".
+              setState((prev) => ({
+                ...prev,
+                ...found.nextMemory,
+                lastRentalResults: payloadRows(found.payload),
+              }));
+            }
+          }
+        } catch {
+          if (!cancelled.current) setError(SEARCH_UNAVAILABLE);
+        }
       }
       setShowTranscript(true);
     } catch {

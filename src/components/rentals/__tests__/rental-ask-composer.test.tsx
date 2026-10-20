@@ -20,7 +20,14 @@ const session = vi.hoisted(() => ({
   loading: false,
 }));
 const agent = vi.hoisted(() => ({
-  messages: [] as Array<{ id: string; role: string; content: string }>,
+  messages: [] as Array<{
+    id: string;
+    role: string;
+    content?: string;
+    toolName?: string;
+    toolCallId?: string;
+    toolCalls?: unknown;
+  }>,
   listeners: [] as Array<() => void>,
 }));
 const coagent = vi.hoisted(() => ({ present: true, isReady: true, setState: vi.fn() }));
@@ -310,6 +317,72 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("takes the cards from the agent's own rental tool result, with no second search", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2 bedroom in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({
+            results: [{ id: "rnt_1" }, { id: "rnt_2" }],
+            budgetNote: "No monthly budget applied",
+          }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "2 bedroom in Laureles",
+        total: 2,
+        budgetNotice: "No monthly budget applied",
+        results: [expect.objectContaining({ id: "rnt_1" }), expect.objectContaining({ id: "rnt_2" })],
+      }),
+    );
+    // The page must not run a second, independent search when the agent already produced the rows.
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("ignores a tool result that arrives after the renter stopped the answer", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    fireEvent.click(screen.getByTestId("rental-ask-stop"));
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2 bedroom in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [{ id: "rnt_1" }] }) },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).not.toHaveBeenCalled();
+  });
+
   it("shows a failed rental search but still asks the concierge", async () => {
     const onResults = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
@@ -340,20 +413,22 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("stops before sending the agent turn when cancelled during rental search", async () => {
-    const pending = deferred<Response>();
+  it("does not run the fallback search after the renter stopped the answer", async () => {
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
     const onResults = vi.fn();
-    vi.stubGlobal("fetch", vi.fn().mockReturnValue(pending.promise));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     render(<RentalAskComposer onResults={onResults} />);
     type("2 bedrooms in Envigado");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
     fireEvent.click(screen.getByTestId("rental-ask-stop"));
     await act(async () => {
-      pending.resolve(new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
+      pending.resolve(true);
       await pending.promise;
     });
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(onResults).not.toHaveBeenCalled();
-    expect(chat.appendMessage).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
