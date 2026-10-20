@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Map, AdvancedMarker } from "@vis.gl/react-google-maps";
+import { Map, AdvancedMarker, AdvancedMarkerAnchorPoint } from "@vis.gl/react-google-maps";
+import { HostErrorBoundary } from "@/components/host/host-error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
 import { MapsUnavailable } from "@/components/maps/map-referer-help";
-import { MEDELLIN_CENTER, getGoogleMapsMapId, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
+import { getGoogleMapsMapId, isE2EMapsMockEnabled } from "@/platform/maps/map-config";
 
 const TEASER_PINS = [
   { id: "laureles",  lat: 6.2516, lng: -75.5918, label: "Rentals in Laureles",           query: "Rentals in Laureles" },
@@ -15,12 +16,21 @@ const TEASER_PINS = [
   { id: "provenza",  lat: 6.2075, lng: -75.5699, label: "Cafés near Provenza",           query: "Cafés near Provenza Medellín" },
 ] as const;
 
+/** The view that holds every pin with room around it, so no pin sits on the map's edge. */
+const PIN_BOUNDS = {
+  north: Math.max(...TEASER_PINS.map((p) => p.lat)),
+  south: Math.min(...TEASER_PINS.map((p) => p.lat)),
+  east: Math.max(...TEASER_PINS.map((p) => p.lng)),
+  west: Math.min(...TEASER_PINS.map((p) => p.lng)),
+};
+const PIN_BOUNDS_PADDING = { top: 56, bottom: 56, left: 56, right: 56 };
+
+/** A 44px tap target around a small visible dot. */
 function TeaserPin({ label }: { label: string }) {
   return (
-    <div
-      aria-label={label}
-      className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-primary shadow-md ring-2 ring-background transition-transform duration-150 hover:scale-125 motion-reduce:hover:scale-100"
-    />
+    <div aria-label={label} className="group flex size-11 cursor-pointer items-center justify-center">
+      <span className="size-4 rounded-full bg-primary shadow-md ring-2 ring-background transition-transform duration-150 group-hover:scale-125 motion-reduce:group-hover:scale-100" />
+    </div>
   );
 }
 
@@ -51,37 +61,52 @@ function MapTeaser() {
   return (
     <div
       className={`relative h-[260px] w-full overflow-hidden rounded-2xl sm:h-[320px] md:h-[380px] ${
-        available ? "border border-border" : ""
+        // The fallback notice is see-through, so on the green hero it needs a solid surface to stay readable.
+        available ? "border border-border" : "bg-background"
       }`}
     >
-      {available ? (
-        <>
-          <Map
-            mapId={mapId}
-            defaultCenter={MEDELLIN_CENTER}
-            defaultZoom={12}
-            gestureHandling="none"
-            disableDefaultUI
-            className="h-full w-full"
-            aria-label="Map of Medellín showing neighbourhoods to ask about"
-          >
-            {TEASER_PINS.map(({ id, lat, lng, label, query }) => (
-              <AdvancedMarker
-                key={id}
-                position={{ lat, lng }}
-                onClick={() => router.push(`/chat?q=${encodeURIComponent(query)}`)}
-              >
-                <TeaserPin label={label} />
-              </AdvancedMarker>
-            ))}
-          </Map>
-          <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-sm">
-            ▣ Google Maps
+      {/* The boundary sits ABOVE the available/unavailable swap on purpose. When Google rejects the
+          key after load the page swaps the <Map> for the notice, and the pins throw while they are
+          torn down. A boundary inside the swapped branch is removed with it and catches nothing; one
+          that survives the swap contains the throw, so a broken map only degrades the map slot and
+          never replaces the whole homepage with the route error page. */}
+      <HostErrorBoundary
+        label="home-map"
+        fallback={
+          <div className="h-full bg-background">
+            <MapsUnavailable reason="auth-failed" />
           </div>
-        </>
-      ) : (
-        <MapsUnavailable reason={mapsStatus} />
-      )}
+        }
+      >
+        {available ? (
+          <>
+            <Map
+              mapId={mapId}
+              defaultBounds={{ ...PIN_BOUNDS, padding: PIN_BOUNDS_PADDING }}
+              gestureHandling="none"
+              disableDefaultUI
+              className="h-full w-full"
+              aria-label="Map of Medellín showing neighbourhoods to ask about"
+            >
+              {TEASER_PINS.map(({ id, lat, lng, label, query }) => (
+                <AdvancedMarker
+                  key={id}
+                  position={{ lat, lng }}
+                  anchorPoint={AdvancedMarkerAnchorPoint.CENTER}
+                  onClick={() => router.push(`/chat?q=${encodeURIComponent(query)}`)}
+                >
+                  <TeaserPin label={label} />
+                </AdvancedMarker>
+              ))}
+            </Map>
+            <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-border bg-background/80 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+              ▣ Google Maps
+            </div>
+          </>
+        ) : (
+          <MapsUnavailable reason={mapsStatus} />
+        )}
+      </HostErrorBoundary>
     </div>
   );
 }
