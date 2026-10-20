@@ -85,6 +85,16 @@ async function askForRentals(page: Page) {
 test.describe("SAN-966 results stay above the message box", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await mockFastPaths(page);
+    // No live thread-list dependency in fast-path-only cases. Keep this local:
+    // other suites use authoritative per-test thread lists and title mocks.
+    await page.route("**/api/threads", (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ threads: [] }),
+      });
+    });
   });
 
   test("deterministic chat does not connect the live CopilotKit transport", async ({ page }) => {

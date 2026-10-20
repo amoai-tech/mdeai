@@ -101,15 +101,6 @@ export const groundedSource = {
 };
 
 export async function mockFastPaths(page: Page) {
-  // The nav rail reads saved threads on mount. Do not let deterministic fast-path
-  // tests fetch the real (unavailable in CI) Supabase-backed /api/threads route.
-  await page.route("**/api/threads", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ threads: [] }),
-    }),
-  );
   await page.route("**/api/restaurants/search", async (route) => {
     await route.fulfill({
       status: 200,
