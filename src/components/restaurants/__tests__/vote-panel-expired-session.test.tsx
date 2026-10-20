@@ -56,3 +56,31 @@ describe("expired saved-vote session", () => {
     expect(container.querySelector('[data-testid="vote-cta"]')).toBeNull();
   });
 });
+
+
+describe("unknown saved-vote status with an existing local key", () => {
+  it.each(["server-500", "network-failure"] as const)(
+    "never calls vote-cast on %s; offers a safe retry",
+    async (failure) => {
+      window.localStorage.setItem(
+        `mde:restaurant-vote:${target.contestId}:${target.entityId}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+        "44444444-4444-4444-8444-444444444444",
+      );
+      const mockedFetch = vi.fn();
+      if (failure === "server-500") {
+        mockedFetch.mockResolvedValue({ ok: false, status: 500 });
+      } else {
+        mockedFetch.mockRejectedValue(new Error("offline"));
+      }
+      vi.stubGlobal("fetch", mockedFetch);
+      act(() => root.render(<RestaurantVotePanel restaurantName="Carmen" voteTarget={target} />));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+      expect(container.querySelector('[data-testid="vote-check-failed"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="vote-retry-check"]')).not.toBeNull();
+      expect(container.querySelector('[data-testid="vote-cta"]')).toBeNull();
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+      expect(mockedFetch.mock.calls[0][0]).toContain("/api/restaurants/my-vote?");
+      expect(mockedFetch.mock.calls.some(([url]) => String(url).includes("/vote-cast"))).toBe(false);
+    },
+  );
+});

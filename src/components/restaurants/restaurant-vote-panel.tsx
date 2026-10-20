@@ -140,9 +140,10 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
           setState("already-voted");
           return;
         }
-        // A failed read is NOT proof that no ballot exists. Only give up when there is no local
-        // key either; otherwise fall through and try the original-key recovery.
-        if (outcome.kind === "unknown" && !hasLocalKey) { setState("unknown"); return; }
+        // Unknown means we cannot prove whether a ballot exists. Even a saved idempotency
+        // key does NOT justify calling the write-capable vote-cast endpoint automatically.
+        // Retry only this read until the server confirms a ballot (or explicit absence).
+        if (outcome.kind === "unknown") { setState("unknown"); return; }
         if (outcome.kind === "none" && !hasLocalKey) { setState("idle"); return; }
         const key = localKey as string;
         const response = await fetch(functionsUrl + "/vote-cast", {
