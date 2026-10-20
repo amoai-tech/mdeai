@@ -60,7 +60,10 @@ ignored `.env.local` or CI secret store. Never print, commit or upload these
 secrets, Supabase session cookies, Playwright traces, storage-state JSON or
 authenticated screenshots. On a clean worktree, provide the env locally
 without committing it. Missing credentials must make this explicit smoke fail,
-not skip to green.
+not skip to green. Playwright 1.61 may create `error-context.md` with page content
+on a failed assertion even when trace/screenshot/video are off; treat local
+`test-results/` and HTML reports as sensitive and never publish them from
+authenticated runs. There is no supported `error-context: "off"` test option.
 
 **Negative path:** `npm run test:e2e:auth` runs the existing signed-out
 guard suite independently; do not globally authenticate its contexts.
