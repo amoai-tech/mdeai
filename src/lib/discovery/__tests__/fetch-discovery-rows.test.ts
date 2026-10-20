@@ -126,6 +126,54 @@ describe("homepage destinations (SAN-1556)", () => {
   });
 });
 
+describe("homepage destination photos (SAN-1556): real, openly licensed, credited", () => {
+  const COMMONS = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13%2C_Medell%C3%ADn_02.jpg/960px-Comuna_13%2C_Medell%C3%ADn_02.jpg";
+  const credit = { author: "Bernard Gagnon", license: "CC BY-SA 4.0", source_url: "https://commons.wikimedia.org/wiki/File:Comuna_13,_Medell%C3%ADn_02.jpg", alt: "Brick houses on the hillsides of Comuna 13" };
+  const dest = (name: string, over: Record<string, unknown> = {}) => ({
+    id: name, name, category: "Culture", description: `About ${name}`, primary_image_url: null, details: {}, ...over,
+  });
+
+  it("shows a Commons photo with its credit and descriptive alt text", async () => {
+    const { client } = fakeClient([dest("Comuna 13", { primary_image_url: COMMONS, details: { image_credit: credit } })]);
+    const [card] = await fetchLiveDestinations(client);
+    expect(card.image).toBe(COMMONS);
+    expect(card.imageAlt).toBe("Brick houses on the hillsides of Comuna 13");
+    expect(card.imageCredit).toEqual({ text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url });
+  });
+
+  it("never shows a Commons photo that has no recorded author, licence and source", async () => {
+    const { client } = fakeClient([
+      dest("No credit", { primary_image_url: COMMONS }),
+      dest("Half credit", { primary_image_url: COMMONS, details: { image_credit: { author: "Someone" } } }),
+    ]);
+    const cards = await fetchLiveDestinations(client);
+    expect(cards.map((c) => c.image)).toEqual(["", ""]);
+  });
+
+  it("keeps the duplicate row that has a usable photo", async () => {
+    const { client } = fakeClient([
+      dest("Parque Arví", { id: "stock", primary_image_url: "https://images.unsplash.com/photo-1.jpg" }),
+      dest("Parque Arví", { id: "credited", primary_image_url: COMMONS, details: { image_credit: credit } }),
+    ]);
+    const cards = await fetchLiveDestinations(client);
+    expect(cards.map((c) => c.id)).toEqual(["credited"]);
+    expect(cards[0].image).toBe(COMMONS);
+  });
+
+  it("renders the photo, its credit text and a credits line with a link outside the card links", () => {
+    const html = renderToStaticMarkup(
+      HomeDiscoverySectionsUI({
+        data: { destinations: [{ id: "d", name: "Comuna 13", kind: "Neighborhood", rating: null, meta: "", why: "", image: COMMONS, query: "q", imageAlt: "Brick houses on the hillsides of Comuna 13", imageCredit: { text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url } }], rentals: [], restaurants: [], cafes: [], events: [] },
+      }),
+    );
+    expect(html).toContain("<img");
+    expect(html).toContain('alt="Brick houses on the hillsides of Comuna 13"');
+    expect(html).toContain("Photo: Bernard Gagnon · CC BY-SA 4.0");
+    expect(html).toContain("Photo credits, via Wikimedia Commons");
+    expect(html).toContain(`href="${credit.source_url}"`);
+  });
+});
+
 describe("HomeDiscoverySectionsUI (SAN-1556): no stand-in data", () => {
   const none: DiscoveryData = { destinations: [], rentals: [], restaurants: [], cafes: [], events: [] };
   const card = { id: "1", name: "Pageant", kind: "Event", rating: null, meta: "", why: "", image: "", query: "q" };

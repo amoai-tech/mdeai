@@ -81,6 +81,32 @@ function Cards({ cards }: { cards: PlaceCardData[] }) {
   );
 }
 
+/** Where each openly licensed photo came from, with links (cards cannot hold links; they are links). */
+function PhotoCredits({ cards }: { cards: PlaceCardData[] }) {
+  const credited = cards.filter((c) => c.imageCredit);
+  if (credited.length === 0) return null;
+  return (
+    <p className="text-sm text-muted-foreground">
+      Photo credits, via Wikimedia Commons:{" "}
+      {credited.map((card, i) => (
+        <span key={card.id}>
+          {i > 0 && "; "}
+          {card.name}:{" "}
+          <a
+            href={card.imageCredit!.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {card.imageCredit!.text.replace(/^Photo: /, "")}
+          </a>
+        </span>
+      ))}
+      .
+    </p>
+  );
+}
+
 // ─── Pure render component ────────────────────────────────────────────────────
 
 export function HomeDiscoverySectionsUI({ data }: { data: DiscoveryData }) {
@@ -119,6 +145,7 @@ export function HomeDiscoverySectionsUI({ data }: { data: DiscoveryData }) {
           }}
         >
           <Cards cards={destinations} />
+          <PhotoCredits cards={destinations} />
         </Section>
       )}
 
