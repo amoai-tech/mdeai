@@ -56,8 +56,10 @@ export async function updateSession(request: NextRequest) {
     return authRelay;
   }
 
+  // A misconfigured production deployment must never activate the test-only bypass.
   const e2eAuthBypass =
     process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production" &&
     process.env.E2E_BYPASS_AUTH === "1";
 
   if (e2eAuthBypass) {

@@ -11,6 +11,10 @@ import {
 import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
+// Authenticated pages and private threads must not generate failure screenshots/traces.
+// Playwright may still attach automatic error-context; keep test reports private.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 /**
  * SAN-547 · D17 — live User A / User B isolation proof against a deployed environment.
  *
