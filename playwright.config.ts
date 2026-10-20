@@ -4,7 +4,12 @@ const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
-const baseURL = prodBaseURL || localBaseURL;
+// Remote targets belong only to the opt-in prod-smoke project. A developer's
+// inherited PROD_SMOKE_BASE_URL must never redirect ordinary browser tests.
+const baseURL = localBaseURL;
+// Keep live-data tests out of ordinary local/agent discovery. Both flags must
+// be intentional; explicit trusted production scripts already supply them.
+const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSERVER === "1";
 
 const VITEST_TESTS = "**/*.test.ts";
 
@@ -142,7 +147,7 @@ export default defineConfig({
         trace: "retain-on-failure",
       },
     },
-    {
+    ...(runProductionProjects ? [{
       name: "prod-smoke",
       testMatch: PROD_SPECS,
       testIgnore: VITEST_TESTS,
@@ -152,16 +157,18 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: prodBaseURL || "https://www.mdeai.co",
-        trace: "off",
+        trace: "off" as const,
       },
-    },
+    }] : []),
   ],
   webServer: process.env.PW_SKIP_WEBSERVER
     ? undefined
     : {
         command: webServerCommand,
         url: localBaseURL,
-        reuseExistingServer: !process.env.CI,
+        // A reused server may belong to a different worktree and produce false greens.
+        // Explicit opt-in is available when the caller knows the server owner.
+        reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
         timeout: 120_000,
       },
 });
