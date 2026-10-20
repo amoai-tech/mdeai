@@ -19,6 +19,7 @@
  */
 import { chromium } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const BASE = (process.env.SMOKE_BASE_URL || "https://www.mdeai.co").replace(/\/$/, "");
 const REPO = process.env.GITHUB_REPOSITORY || "amoai-tech/mdeai";
@@ -43,11 +44,12 @@ async function ghApi(path) {
   }
 }
 
-const CHUNK_PATTERN = new RegExp("/_next/static/chunks/[^\"']+\\.js", "g");
-
 /** Sorted chunk list plus a short hash, so a served build is identifiable across runs. */
-function chunkFingerprint(html) {
-  const chunks = Array.from(new Set(html.match(CHUNK_PATTERN) || [])).sort();
+export function chunkFingerprint(source) {
+  // Built per call: there is no shared `lastIndex` to reason about. It also stays a string,
+  // because a regex literal containing quotes desyncs Codacy's JS parser.
+  const pattern = new RegExp("/_next/static/chunks/[^\"']+\\.js", "g");
+  const chunks = Array.from(new Set(source.match(pattern) || [])).sort();
   return {
     chunks,
     fingerprint: createHash("sha256").update(chunks.join("\n")).digest("hex").slice(0, 16),
@@ -56,8 +58,8 @@ function chunkFingerprint(html) {
 
 async function servedFingerprint() {
   const res = await fetch(BASE + "/chat", { headers: { "Cache-Control": "no-cache" } });
-  const html = await res.text();
-  const { chunks, fingerprint } = chunkFingerprint(html);
+  const pageSource = await res.text();
+  const { chunks, fingerprint } = chunkFingerprint(pageSource);
   return {
     ok: res.ok,
     status: res.status,
@@ -235,7 +237,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("production behaviour smoke crashed:", err);
-  process.exit(1);
-});
+const isEntrypoint =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error("production behaviour smoke crashed:", err);
+    process.exit(1);
+  });
+}
