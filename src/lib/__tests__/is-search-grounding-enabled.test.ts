@@ -6,10 +6,10 @@ describe("isSearchGroundingEnabled", () => {
     vi.unstubAllEnvs();
   });
 
-  it("is false on Vercel production even when ENABLE_SEARCH_GROUNDING=1", () => {
+  it("can opt in Vercel production explicitly when ENABLE_SEARCH_GROUNDING=1", () => {
     vi.stubEnv("VERCEL_ENV", "production");
     vi.stubEnv("ENABLE_SEARCH_GROUNDING", "1");
-    expect(isSearchGroundingEnabled()).toBe(false);
+    expect(isSearchGroundingEnabled()).toBe(true);
   });
 
   it("follows ENABLE_SEARCH_GROUNDING on preview", () => {
