@@ -92,7 +92,9 @@ create table public.__acl_probe (id int primary key, v int, updated_at timestamp
 create trigger __acl_probe_trg before update on public.__acl_probe
   for each row execute function public.update_updated_at();
 insert into public.__acl_probe(id, v) values (1, 1);
-grant update on public.__acl_probe to authenticated;
+-- SAN-1562 removes broad default table grants. This probe needs explicit READ
+-- as well as UPDATE so the test exercises trigger EXECUTE, not table ACLs.
+grant select, update on public.__acl_probe to authenticated;
 
 set local role authenticated;
 update public.__acl_probe set v = 2 where id = 1;
@@ -136,7 +138,7 @@ select is(has_function_privilege('authenticated', to_regprocedure('public.acting
 select is(has_function_privilege('authenticated', to_regprocedure('public.bump_staff_link_version(uuid)'), 'EXECUTE'),
           true, 'S: bump_staff_link_version keeps authenticated');
 select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])'), 'EXECUTE'),
-          true, 'S: ticket_payment_refund_v2 keeps authenticated (SB-002 contract)');
+          false, 'S: ticket_payment_refund_v2 denies direct buyer calls (SAN-1562)');
 
 select * from finish();
 rollback;
