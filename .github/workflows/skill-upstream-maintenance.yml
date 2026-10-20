@@ -63,4 +63,6 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/check-ai-reference-upstreams.mjs
+        run: |
+          set -o pipefail
+          node scripts/check-ai-reference-upstreams.mjs | tee -a "${GITHUB_STEP_SUMMARY:?}"

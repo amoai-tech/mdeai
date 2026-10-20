@@ -5,7 +5,6 @@
  * instruction to install/update dependencies or block application releases.
  */
 import fs from "node:fs";
-import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   CLASSES,
@@ -13,15 +12,13 @@ import {
   fetchComparison,
 } from "./check-skill-upstream-drift.mjs";
 
-const MANIFEST = "docs/03-platform/copilotkit-mastra/reference-upstreams.json";
 const STRATEGIES = new Set(["MODEL", "ADAPT", "REFERENCE ONLY"]);
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
 const ISSUE = /^SAN-[1-9][0-9]*$/;
 
-export function loadReferenceUpstreams(root) {
-  const file = path.join(root, MANIFEST);
-  const config = JSON.parse(fs.readFileSync(file, "utf8"));
+/** Validate the pinned inventory without touching the filesystem. */
+export function parseReferenceUpstreams(config) {
   if (config.schemaVersion !== 1 || !Array.isArray(config.sources) || config.sources.length !== 3) {
     throw new Error("Expected exactly three tracked AI reference projects");
   }
@@ -39,6 +36,12 @@ export function loadReferenceUpstreams(root) {
   }
   if (seen.size !== 3) throw new Error("Missing an AI upstream project");
   return config.sources;
+}
+
+/** Read the committed manifest from the repository root. */
+export function loadReferenceUpstreams() {
+  const config = JSON.parse(fs.readFileSync("docs/03-platform/copilotkit-mastra/reference-upstreams.json", "utf8"));
+  return parseReferenceUpstreams(config);
 }
 
 export async function inspectReferences(entries, compare = fetchComparison) {
@@ -75,16 +78,10 @@ export function formatSummary(results) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const rootAt = args.indexOf("--root");
-  if (rootAt !== -1 && !args[rootAt + 1]) throw new Error("--root needs a directory");
-  const root = path.resolve(rootAt === -1 ? "." : args[rootAt + 1]);
-  const entries = loadReferenceUpstreams(root);
+  const entries = loadReferenceUpstreams();
   const result = await inspectReferences(entries);
   const summary = formatSummary(result);
-  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-  if (summaryFile) fs.appendFileSync(summaryFile, summary + "\n");
-  if (args.includes("--json")) {
+  if (process.argv.includes("--json")) {
     console.log(JSON.stringify(result.map(({ name, repository, reviewedCommit, reviewedRelease, strategy, linear, classification, aheadBy }) =>
       ({ name, repository, reviewedCommit, reviewedRelease: reviewedRelease ?? null,
         strategy, linear, classification, aheadBy: aheadBy ?? null })), null, 2));

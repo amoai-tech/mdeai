@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { after, test } from "node:test";
-import { loadReferenceUpstreams, inspectReferences, formatSummary } from "../check-ai-reference-upstreams.mjs";
+import { test } from "node:test";
+import {
+  loadReferenceUpstreams,
+  parseReferenceUpstreams,
+  inspectReferences,
+  formatSummary,
+} from "../check-ai-reference-upstreams.mjs";
 import { CLASSES } from "../check-skill-upstream-drift.mjs";
 
-const root = path.resolve(".");
-const entries = loadReferenceUpstreams(root);
+const entries = loadReferenceUpstreams();
 
 test("inventory is exactly the three upstream projects and pins full commits", () => {
   assert.deepEqual(entries.map((entry) => entry.name).sort(), ["OpenBot", "OpenDots", "OpenMuse"]);
@@ -32,16 +34,15 @@ test("network errors are reported as unavailable, not falsely reported as drift 
   assert.ok(result.every((item) => item.classification === CLASSES.UPSTREAM_UNAVAILABLE));
 });
 
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), "mde-ai-upstream-"));
-after(() => fs.rmSync(temp, { recursive: true, force: true }));
 test("invalid or missing references cannot silently disappear from the report", () => {
-  const target = path.join(temp, "docs/03-platform/copilotkit-mastra");
-  fs.mkdirSync(target, { recursive: true });
-  const manifest = path.join(target, "reference-upstreams.json");
-  fs.writeFileSync(manifest, JSON.stringify({ schemaVersion: 1, sources: entries.slice(0, 2) }));
-  assert.throws(() => loadReferenceUpstreams(temp), /exactly three/);
-  fs.writeFileSync(manifest, JSON.stringify({ schemaVersion: 1, sources: entries.map((e) => ({ ...e, reviewedCommit: "bad" })) }));
-  assert.throws(() => loadReferenceUpstreams(temp), /Invalid upstream/);
+  assert.throws(
+    () => parseReferenceUpstreams({ schemaVersion: 1, sources: entries.slice(0, 2) }),
+    /exactly three/,
+  );
+  assert.throws(
+    () => parseReferenceUpstreams({ schemaVersion: 1, sources: entries.map((entry) => ({ ...entry, reviewedCommit: "bad" })) }),
+    /Invalid upstream/,
+  );
 });
 
 test("workflow reuses scheduled skill maintenance and cannot run on PRs or write to repo", () => {
