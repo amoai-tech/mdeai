@@ -104,6 +104,37 @@ describe("preflight-migration-release", () => {
     });
   });
 
+  describe("duplicate Supabase migration versions (SAN-1556 regression)", () => {
+    it("fails when differently named tracked migrations share one timestamp", () => {
+      const migrations = [
+        "20261021040000_san1470_contest_accepted_leaderboard.sql",
+        "20261021040000_san1556_destination_photos.sql",
+      ];
+      const result = evaluatePreflight(cleanState({
+        pushableMigrations: migrations,
+        trackedMigrations: migrations,
+      }));
+      assert.equal(result.failures, 1, messages(result));
+      assert.match(messages(result), /duplicate Supabase migration version/);
+      const details = result.checks.find((c) => c.message.includes("duplicate Supabase")).details;
+      assert.equal(details.length, 2);
+      assert.ok(details.every((d) => d.startsWith("20261021040000: ")));
+    });
+
+    it("accepts distinct migration timestamps, even with the same base name", () => {
+      const migrations = [
+        "20261021040000_contest.sql",
+        "20261021041000_contest.sql",
+      ];
+      const result = evaluatePreflight(cleanState({
+        pushableMigrations: migrations,
+        trackedMigrations: migrations,
+      }));
+      assert.equal(result.failures, 0, messages(result));
+      assert.match(messages(result), /migration timestamp versions are unique/);
+    });
+  });
+
   describe("migrations the CLI would apply but Git does not track", () => {
     const PUSHED = "20260928150000_probe.sql";
 
