@@ -272,6 +272,17 @@ function clampBacktickRuns(text) {
   return String(text ?? "").replace(/`{64,}/g, "`".repeat(63));
 }
 
+/**
+ * An excerpt is copied verbatim from the PR, so it may contain this prompt's own closing tags. Escape
+ * them so untrusted source text can never terminate the excerpt and become task authority.
+ */
+function neutralizeExcerpt(text) {
+  return String(text ?? "").replace(
+    /<\/(code_context|issue_to_address|review_note|verify|location)>/gi,
+    "<\\/$1>",
+  );
+}
+
 function renderItem(item, position) {
   const { location } = item;
   const range =
@@ -289,7 +300,7 @@ function renderItem(item, position) {
   );
   if (location.context) {
     lines.push("<code_context>");
-    lines.push(location.context);
+    lines.push(neutralizeExcerpt(location.context));
     lines.push("</code_context>");
   }
   lines.push("<issue_to_address>");
@@ -298,7 +309,9 @@ function renderItem(item, position) {
   if (item.failureScenario) lines.push(`Failure scenario: ${item.failureScenario}`);
   if (item.fix) lines.push(`Proposed fix: ${item.fix}`);
   lines.push("</issue_to_address>");
-  if (item.investigateReason) lines.push(`<review_note>${item.investigateReason}</review_note>`);
+  if (item.investigateReason) {
+    lines.push(`<review_note>${escapeAttribute(item.investigateReason)}</review_note>`);
+  }
   lines.push("<verify>");
   lines.push(item.verify);
   lines.push("</verify>");
@@ -366,9 +379,11 @@ function toItem(finding, changedFiles) {
 
 function isActionable(finding) {
   if (!finding || finding.state === "RESOLVED") return false;
-  const body = String(finding.body ?? "").trim();
-  if (body.length === 0) return false;
-  return Boolean(finding.severity) || finding.status === "changes_required";
+  if (String(finding.body ?? "").trim().length === 0) return false;
+  if (finding.severity || finding.status === "changes_required") return true;
+  // A located finding with no labels is still a real reported problem, so it renders as
+  // Investigate instead of disappearing. PR-Agent v0.45 state bodies often carry no labels.
+  return Boolean(finding.path) && Number.isInteger(finding.lineStart);
 }
 
 function severityRank(finding) {
@@ -493,102 +508,39 @@ function statusComment({ headSha, status, code, reason }) {
   ].join("\n");
 }
 
-/**
- * Render the fix prompt for one verified review.
- *
- * @param {object} input
- * @param {object} input.result Exact `verifyReviewResult(...)` output (`ok`, `code`, `comment`, `type`).
- * @param {string} [input.reviewBody] Serialized review body, for tests/transport when `comment` is absent.
- * @param {string} input.baseSha
- * @param {string} input.headSha
- * @param {string} input.prUrl
- * @param {Array<{filename: string, status: string, patch?: string, previous_filename?: string}>} input.changedFiles
- * @returns {{status: "prompt"|"no_verified_fixes"|"review_incomplete", code: string, reason: string, body: string, confirmed: number, investigate: number, omitted: number}}
- */
-export function renderFixPrompt({ result, reviewBody, baseSha, headSha, prUrl, changedFiles }) {
-  const incomplete = (code, reason) => ({
-    status: "review_incomplete",
+/** A terminal "no prompt" result: zero findings, one truthful status, one diagnostic code. */
+function noPromptResult({ headSha, status, code, reason }) {
+  const label = status === "review_incomplete" ? "review incomplete" : "no verified fixes";
+  return {
+    status,
     code,
     reason,
     body: commentShell({
       headSha,
-      summary: `review incomplete · ${String(headSha ?? "").slice(0, 9)}`,
-      markdown: statusComment({ headSha, status: "review_incomplete", code, reason }),
+      summary: `${label} · ${String(headSha ?? "").slice(0, 9)}`,
+      markdown: statusComment({ headSha, status, code, reason }),
       fenced: false,
     }),
     confirmed: 0,
     investigate: 0,
     omitted: 0,
     duplicates: 0,
-  });
+  };
+}
 
-  if (!SHA_RE.test(baseSha ?? "")) return incomplete("INVALID_INPUT", "baseSha is not a 40-character git SHA");
-  if (!SHA_RE.test(headSha ?? "")) return incomplete("INVALID_INPUT", "headSha is not a 40-character git SHA");
-  if (!/^https?:\/\//i.test(String(prUrl ?? ""))) return incomplete("INVALID_INPUT", "prUrl must be an http(s) URL");
-  if (!result || result.ok !== true) {
-    return incomplete(
-      result?.code ?? "REVIEW_NOT_VERIFIED",
-      result?.reason ?? "the exact-head verifier did not accept a review result",
-    );
-  }
-
-  const body = result.comment?.body ?? reviewBody;
-  if (typeof body !== "string" || body.length === 0) {
-    return incomplete("MISSING_REVIEW_BODY", "the verified result carries no review body");
-  }
-
-  const envelope = parseReviewEnvelope(body);
-  if (!envelope.valid) return incomplete(envelope.code, envelope.reason);
-  if (envelope.baseSha !== baseSha.toLowerCase()) {
-    return incomplete("WRONG_BASE", `review envelope base ${envelope.baseSha} does not match ${baseSha.toLowerCase()}`);
-  }
-  if (envelope.headSha !== headSha.toLowerCase()) {
-    return incomplete("STALE_HEAD", `review envelope head ${envelope.headSha} does not match ${headSha.toLowerCase()}`);
-  }
-
-  const parsed = parseFindings(envelope.body);
-  if (parsed.stateValid === false) {
-    return incomplete("INVALID_REVIEW_STATE", parsed.stateError ?? "persistent finding state failed validation");
-  }
-  if (parsed.source !== "state") {
-    return {
-      status: "no_verified_fixes",
-      code: "NO_COVERAGE_STATE",
-      reason:
-        "the review published no persistent finding state, so there is no authoritative finding set for this head",
-      body: commentShell({
-        headSha,
-        summary: `no verified fixes · ${headSha.slice(0, 9)}`,
-        markdown: statusComment({
-          headSha,
-          status: "no_verified_fixes",
-          code: "NO_COVERAGE_STATE",
-          reason: "the review published no persistent finding state; an absent list is not a clean bill of health",
-        }),
-        fenced: false,
-      }),
-      confirmed: 0,
-      investigate: 0,
-      omitted: 0,
-      duplicates: 0,
-    };
-  }
-  if (parsed.runHeadSha && parsed.runHeadSha.toLowerCase() !== headSha.toLowerCase()) {
-    return incomplete("STALE_HEAD", `coverage state records head ${parsed.runHeadSha}, not ${headSha.toLowerCase()}`);
-  }
-  if (parsed.runComplete !== true) {
-    return incomplete("INCOMPLETE_REVIEW", `coverage state reports complete=${String(parsed.runComplete)}`);
-  }
-  if (Array.isArray(parsed.excludedFiles) && parsed.excludedFiles.length > 0) {
-    return incomplete("PARTIAL_COVERAGE", `coverage state excludes ${parsed.excludedFiles.length} file(s)`);
-  }
-
-  const coverageConfirmed = Boolean(result.coverageConfirmed);
-
+/**
+ * Split the authoritative state findings into confirmed and investigate items.
+ *
+ * Confirmed requires all four of: a location grounded in this head's diff, no NEEDS VERIFICATION
+ * label, a non-advisory status, and a finding the recorded state actually saw at this head. A model
+ * label alone never promotes anything. Everything else keeps its reason and moves to Investigate.
+ */
+function classifyFindings({ parsed, changedFiles, headSha }) {
   const seen = new Set();
-  let droppedDuplicates = 0;
   const confirmed = [];
   const investigate = [];
+  let droppedDuplicates = 0;
+
   for (const finding of parsed.findings) {
     if (!isActionable(finding)) continue;
     const item = toItem(finding, changedFiles);
@@ -598,74 +550,53 @@ export function renderFixPrompt({ result, reviewBody, baseSha, headSha, prUrl, c
       continue;
     }
     seen.add(key);
-    const carriedFromOtherHead =
-      typeof finding.lastSeenHeadSha === "string" &&
-      finding.lastSeenHeadSha.length > 0 &&
-      finding.lastSeenHeadSha.toLowerCase() !== headSha.toLowerCase();
+
+    const seenAt = typeof finding.lastSeenHeadSha === "string" ? finding.lastSeenHeadSha : "";
+    const carriedFromOtherHead = seenAt.length > 0 && seenAt.toLowerCase() !== headSha.toLowerCase();
+    const unlabelled = !item.severity && item.status !== "changes_required";
     if (
       item.location.grounded &&
       item.verification !== "NEEDS VERIFICATION" &&
       item.status !== "advisory" &&
+      item.severity !== null &&
       !carriedFromOtherHead
     ) {
       confirmed.push(item);
       continue;
     }
-    item.investigateReason = carriedFromOtherHead
-      ? `Recorded state last saw this finding at ${String(finding.lastSeenHeadSha).slice(0, 9)}, not at the current head.`
-      : investigateReason(item.location);
-    if (item.verification === "NEEDS VERIFICATION" && item.location.grounded) {
+
+    if (carriedFromOtherHead) {
+      item.investigateReason = `Recorded state last saw this finding at ${seenAt.slice(0, 9)}, not at the current head.`;
+    } else if (item.location.grounded && item.verification === "NEEDS VERIFICATION") {
       item.investigateReason =
         "The review itself marks this claim NEEDS VERIFICATION; a model label is not independent proof.";
+    } else if (unlabelled) {
+      item.investigateReason =
+        "The review did not label this finding with a severity or a changes-required status, so it cannot be confirmed.";
+    } else {
+      item.investigateReason = investigateReason(item.location);
     }
     investigate.push(item);
   }
 
   confirmed.sort(compareItems);
   investigate.sort(compareItems);
+  return { confirmed, investigate, droppedDuplicates };
+}
 
-  if (confirmed.length === 0 && investigate.length === 0) {
-    return {
-      status: "no_verified_fixes",
-      code: "NO_ACTIONABLE_FINDINGS",
-      reason: "complete coverage state records no actionable finding for this head",
-      body: commentShell({
-        headSha,
-        summary: `no verified fixes · ${headSha.slice(0, 9)}`,
-        markdown: statusComment({
-          headSha,
-          status: "no_verified_fixes",
-          code: "NO_ACTIONABLE_FINDINGS",
-          reason: "complete coverage state records no actionable finding for this head",
-        }),
-        fenced: false,
-      }),
-      confirmed: 0,
-      investigate: 0,
-      omitted: 0,
-      duplicates: droppedDuplicates,
-    };
-  }
-
-  const base = {
-    baseSha: baseSha.toLowerCase(),
-    headSha: headSha.toLowerCase(),
-    prUrl,
-    parsed,
-    coverageConfirmed,
-  };
+/** Build the prompt, trim only the lowest-priority investigate items, and say what was trimmed. */
+function capPrompt({ base, confirmed, investigate }) {
   let keptInvestigate = investigate.length;
   let omitted = 0;
+  const build = () =>
+    buildPromptBody({ ...base, confirmed, investigate: investigate.slice(0, keptInvestigate) });
 
-  // Cap the comment without silently dropping items: trim the lowest-priority investigate items
-  // first, and say exactly how many were omitted and why.
-  const build = () => buildPromptBody({ ...base, confirmed, investigate: investigate.slice(0, keptInvestigate) });
+  // `FIX_PROMPT_MARKER.length + ... + 2_000` reserves room for the comment shell and the notice.
   while (FIX_PROMPT_MARKER.length + build().length + 2_000 >= MAX_COMMENT_CHARS && keptInvestigate > 0) {
     keptInvestigate -= 1;
     omitted += 1;
   }
 
-  const rendered = investigate.slice(0, keptInvestigate);
   let prompt = build();
   if (omitted > 0) {
     prompt = prompt.replace(
@@ -676,17 +607,153 @@ export function renderFixPrompt({ result, reviewBody, baseSha, headSha, prUrl, c
     );
   }
   if (prompt.length > MAX_PROMPT_CHARS) {
-    // Only reachable when a single confirmed item is itself oversized. Truncate visibly, never
-    // silently: the notice names what happened.
+    // Only reachable when one confirmed item is itself oversized. Truncate visibly, never silently.
     prompt = `${prompt.slice(0, MAX_PROMPT_CHARS).trimEnd()}\n\n> Prompt truncated at ${MAX_PROMPT_CHARS} characters; open the PR-Agent review for the remaining detail.`;
   }
+  return { prompt, rendered: investigate.slice(0, keptInvestigate), omitted };
+}
 
-  const summary = `${confirmed.length} confirmed, ${rendered.length} to investigate · ${headSha.slice(0, 9)}`;
+/**
+ * Validate the review the exact-head verifier accepted. Returns either the parsed ReviewEnvelope or
+ * a `{ code, reason }` failure — never a partially trusted body.
+ */
+function trustedReviewBody({ result, reviewBody, baseSha, headSha }) {
+  if (!SHA_RE.test(baseSha ?? "")) {
+    return { code: "INVALID_INPUT", reason: "baseSha is not a 40-character git SHA" };
+  }
+  if (!SHA_RE.test(headSha ?? "")) {
+    return { code: "INVALID_INPUT", reason: "headSha is not a 40-character git SHA" };
+  }
+  if (!result || result.ok !== true) {
+    return {
+      code: result?.code ?? "REVIEW_NOT_VERIFIED",
+      reason: result?.reason ?? "the exact-head verifier did not accept a review result",
+    };
+  }
+  const body = result.comment?.body ?? reviewBody;
+  if (typeof body !== "string" || body.length === 0) {
+    return { code: "MISSING_REVIEW_BODY", reason: "the verified result carries no review body" };
+  }
+  const envelope = parseReviewEnvelope(body);
+  if (!envelope.valid) return { code: envelope.code, reason: envelope.reason };
+  if (envelope.baseSha !== baseSha.toLowerCase()) {
+    return {
+      code: "WRONG_BASE",
+      reason: `review envelope base ${envelope.baseSha} does not match ${baseSha.toLowerCase()}`,
+    };
+  }
+  if (envelope.headSha !== headSha.toLowerCase()) {
+    return {
+      code: "STALE_HEAD",
+      reason: `review envelope head ${envelope.headSha} does not match ${headSha.toLowerCase()}`,
+    };
+  }
+  return { envelope };
+}
+
+/**
+ * Render the fix prompt for one verified review.
+ *
+ * @param {object} input
+ * @param {object} input.result Exact `verifyReviewResult(...)` output (`ok`, `code`, `comment`, `type`).
+ * @param {string} [input.reviewBody] Serialized review body, for tests/transport when `comment` is absent.
+ * @param {string} input.baseSha
+ * @param {string} input.headSha
+ * @param {string} input.prUrl
+ * @param {Array<{filename: string, status: string, patch?: string, previous_filename?: string}>} input.changedFiles
+ * @returns {{status: "prompt"|"no_verified_fixes"|"review_incomplete", code: string, reason: string, body: string, confirmed: number, investigate: number, omitted: number, duplicates: number}}
+ */
+export function renderFixPrompt({ result, reviewBody, baseSha, headSha, prUrl, changedFiles }) {
+  if (!/^https?:\/\//i.test(String(prUrl ?? ""))) {
+    return noPromptResult({
+      headSha,
+      status: "review_incomplete",
+      code: "INVALID_INPUT",
+      reason: "prUrl must be an http(s) URL",
+    });
+  }
+
+  const trusted = trustedReviewBody({ result, reviewBody, baseSha, headSha });
+  if (!trusted.envelope) {
+    return noPromptResult({ headSha, status: "review_incomplete", code: trusted.code, reason: trusted.reason });
+  }
+
+  const parsed = parseFindings(trusted.envelope.body);
+  if (parsed.stateValid === false) {
+    return noPromptResult({
+      headSha,
+      status: "review_incomplete",
+      code: "INVALID_REVIEW_STATE",
+      reason: parsed.stateError ?? "persistent finding state failed validation",
+    });
+  }
+  if (parsed.source !== "state") {
+    return noPromptResult({
+      headSha,
+      status: "no_verified_fixes",
+      code: "NO_COVERAGE_STATE",
+      reason: "the review published no persistent finding state; an absent list is not a clean bill of health",
+    });
+  }
+  if (parsed.runHeadSha && parsed.runHeadSha.toLowerCase() !== headSha.toLowerCase()) {
+    return noPromptResult({
+      headSha,
+      status: "review_incomplete",
+      code: "STALE_HEAD",
+      reason: `coverage state records head ${parsed.runHeadSha}, not ${headSha.toLowerCase()}`,
+    });
+  }
+  if (parsed.runComplete !== true) {
+    return noPromptResult({
+      headSha,
+      status: "review_incomplete",
+      code: "INCOMPLETE_REVIEW",
+      reason: `coverage state reports complete=${String(parsed.runComplete)}`,
+    });
+  }
+  if (Array.isArray(parsed.excludedFiles) && parsed.excludedFiles.length > 0) {
+    return noPromptResult({
+      headSha,
+      status: "review_incomplete",
+      code: "PARTIAL_COVERAGE",
+      reason: `coverage state excludes ${parsed.excludedFiles.length} file(s)`,
+    });
+  }
+
+  const { confirmed, investigate, droppedDuplicates } = classifyFindings({ parsed, changedFiles, headSha });
+  if (confirmed.length === 0 && investigate.length === 0) {
+    return {
+      ...noPromptResult({
+        headSha,
+        status: "no_verified_fixes",
+        code: "NO_ACTIONABLE_FINDINGS",
+        reason: "complete coverage state records no actionable finding for this head",
+      }),
+      duplicates: droppedDuplicates,
+    };
+  }
+
+  const { prompt, rendered, omitted } = capPrompt({
+    base: {
+      baseSha: baseSha.toLowerCase(),
+      headSha: headSha.toLowerCase(),
+      prUrl,
+      parsed,
+      coverageConfirmed: Boolean(result.coverageConfirmed),
+    },
+    confirmed,
+    investigate,
+  });
+
   return {
     status: "prompt",
     code: "OK",
     reason: `rendered ${confirmed.length} confirmed and ${rendered.length} investigate finding(s)`,
-    body: commentShell({ headSha, summary, markdown: prompt }),
+    body: commentShell({
+      headSha,
+      summary: `${confirmed.length} confirmed, ${rendered.length} to investigate · ${headSha.slice(0, 9)}`,
+      markdown: prompt,
+    }),
     confirmed: confirmed.length,
     investigate: rendered.length,
     omitted,
