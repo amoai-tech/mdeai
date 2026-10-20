@@ -263,8 +263,8 @@ enough to deliver one complete, verifiable outcome.
   duplicates.
 - If a PR becomes difficult to review or verify, reduce its
   scope without breaking a complete working journey.
-- Never sacrifice security, correctness, or necessary tests
-  just to make a PR smaller.
+- Preserve security controls, correctness guarantees, and
+  necessary tests regardless of PR size.
 - Escalation trigger: a proposed split omits implementation,
   migrations, configuration, or tests needed for either PR to
   pass its required checks independently. Before opening,
