@@ -3,7 +3,6 @@
 import { memo } from "react";
 
 import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
-import { ConciergeRunFeedback } from "@/components/chat/concierge-run-feedback";
 import { ConciergeSignInPrompt } from "@/components/chat/concierge-sign-in-prompt";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { EventFastPathPanel } from "@/components/chat/event-fast-path-panel";
@@ -61,7 +60,6 @@ export const ConciergeTranscriptTail = memo(function ConciergeTranscriptTail({
       <GroundedFastPathPanel />
       <RestaurantFastPathPanel />
       <EventResultsPanel />
-      <ConciergeRunFeedback />
     </div>
   );
 });

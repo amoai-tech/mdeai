@@ -7,6 +7,7 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
+import { ConciergeRunFeedback } from "@/components/chat/concierge-run-feedback";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
@@ -52,6 +53,8 @@ export function ChatCenterPanel() {
         <ChatQueryBar />
         {deterministic ? null : <ChatFilterCopilotInstructions />}
         <WorkflowProgressStrip />
+        {/* Mounted outside the transcript so a failed first search still offers Retry. */}
+        <ConciergeRunFeedback />
         <div
           id="copilot-chat-region"
           data-testid="copilot-chat-region"
