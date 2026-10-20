@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+
+// The contest pages are part of the critical public surface: /contests is the entry point to
+// voting. Importing the spec (rather than tagging it for a suite nobody runs) puts its state and
+// geometry assertions in the required deterministic check, which is where a regression must fail.
+import "./san-1524-contests.spec";
 import {
   gotoMarketingHome,
   submitHomeHeroQuery,
