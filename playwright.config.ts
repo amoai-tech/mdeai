@@ -86,6 +86,7 @@ export default defineConfig({
         "**/viewing-modal-keyboard.spec.ts",
         "**/mobile-header.spec.ts",
         "**/browse-map-close-touch.spec.ts",
+        "**/san-1524-contests.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,
