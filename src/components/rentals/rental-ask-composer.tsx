@@ -34,6 +34,9 @@ import {
   budgetNotApplied,
   buildRentalSearchParams,
   canFastPathRentalSearch,
+  isWholeCityReply,
+  scoreRentalQuery,
+  statesBudget,
 } from "@/lib/rental-query-parser";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { ConciergeWorkingMemory } from "@/lib/types";
@@ -178,12 +181,11 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
   /** A follow-up that names a real filter may refine the search; one that only asks about the
    *  current rows ("which of these has a balcony?") must not be re-run as a broad catalogue query. */
   const carriesFilter = (text: string) => {
-    const params = buildRentalSearchParams(text, lastQuery.current);
-    if (!params) return false;
-    return Boolean(
-      params.neighborhood || params.minBedrooms != null || params.maxPriceMonthly != null ||
-      params.maxPricePerNight != null || params.checkIn || params.checkOut,
-    );
+    // Inspect this turn alone: buildRentalSearchParams merges saved filters, which would make
+    // a conversational question look like a new search after an earlier fallback.
+    const signals = scoreRentalQuery(text);
+    return signals.hasBudget || statesBudget(text) || signals.hasBedrooms ||
+      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text);
   };
   const appliedSignature = useRef("");
   const turnId = useRef(0);

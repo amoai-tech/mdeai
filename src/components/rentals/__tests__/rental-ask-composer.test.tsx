@@ -420,6 +420,32 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the current rows after a fallback search when the next turn only asks about amenities", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    // First agent reply has no tool result: structured fallback legitimately fills the page,
+    // and remembers Laureles/2 bedrooms for the next turn.
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A question about THESE rows adds no new filter. The old parameters must not turn it
+    // into a second catalogue search simply because the parser inherits previous filters.
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 15)); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onResults).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
   it("shows a failed rental search but still asks the concierge", async () => {
     const onResults = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
