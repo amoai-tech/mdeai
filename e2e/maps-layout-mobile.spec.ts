@@ -358,7 +358,7 @@ test.describe("SAN-1505 rental photos on narrow chat cards", () => {
 test.describe("SAN-1075 rental card actions at phone size", () => {
   test.use({ isMobile: true, hasTouch: true });
 
-  test("Details and Schedule viewing are at least 44px and no dead Save is shown at 390px", async ({ page }) => {
+  test("Details, Schedule viewing and View original listing are at least 44px; no dead Save at 390px", async ({ page }) => {
     await page.setViewportSize(PHONE_390);
     await mockFastPaths(page);
     await page.route("**/api/rentals/search", (route) =>
@@ -366,7 +366,15 @@ test.describe("SAN-1075 rental card actions at phone size", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          results: [{ ...rental, can_schedule_viewing: true, schedule_viewing_url: "/rentals/e2e-touch/schedule" }],
+          results: [{
+            ...rental,
+            can_schedule_viewing: true,
+            schedule_viewing_url: "/rentals/e2e-touch/schedule",
+            // The source link only renders for an allowlisted external listing.
+            tags: ["external-source"],
+            source_url: "https://www.fincaraiz.com.co/apartment/193916988",
+            source_provider: "fincaraiz",
+          }],
           total: 1,
           source: "mock",
         }),
@@ -382,6 +390,7 @@ test.describe("SAN-1075 rental card actions at phone size", () => {
     for (const [label, testId] of [
       ["Details", "rental-details-cta"],
       ["Schedule viewing", "rental-schedule-cta"],
+      ["View original listing", "rental-original-listing-cta"],
     ] as const) {
       const action = card.getByTestId(testId);
       await expect(action, `${label} is on the card`).toBeVisible();
