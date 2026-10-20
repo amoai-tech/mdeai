@@ -6,7 +6,7 @@ import {
   fetchLiveEvents,
   fetchLiveRestaurants,
 } from "@/lib/discovery/fetch-discovery-rows";
-import { HomeDiscoveryRowsUI } from "@/components/home/home-discovery-rows";
+import { HomeDiscoverySectionsUI, type DiscoveryData } from "@/components/home/home-discovery-rows";
 
 /** Records every chained filter and resolves with the given rows, whatever the method. */
 function fakeClient(rows: Array<Record<string, unknown>>) {
@@ -126,35 +126,56 @@ describe("homepage destinations (SAN-1556)", () => {
   });
 });
 
-describe("HomeDiscoveryRowsUI (SAN-1556): no stand-in data", () => {
+describe("HomeDiscoverySectionsUI (SAN-1556): no stand-in data", () => {
+  const none: DiscoveryData = { destinations: [], rentals: [], restaurants: [], cafes: [], events: [] };
   const card = { id: "1", name: "Pageant", kind: "Event", rating: null, meta: "", why: "", image: "", query: "q" };
+  const render = (data: Partial<DiscoveryData>) =>
+    renderToStaticMarkup(HomeDiscoverySectionsUI({ data: { ...none, ...data } }));
 
-  it("renders a row with fewer than four real cards and hides rows with none", () => {
-    const html = renderToStaticMarkup(
-      HomeDiscoveryRowsUI({
-        rows: [
-          { id: "events", label: "Upcoming events", href: "/events", ctaLabel: "View all events", cards: [card] },
-          { id: "cafes", label: "Cafés", href: "/cafes", ctaLabel: "Explore cafés", cards: [] },
-        ],
-      }),
-    );
+  it("renders only the sections that have real records (fewer than four is fine)", () => {
+    const html = render({ events: [{ ...card, startsAt: "2099-12-06T14:00:00Z", meta: "Sun, Dec 6, 9:00 AM · Free" }] });
     expect(html).toContain("Upcoming events");
     expect(html).toContain("Pageant");
-    expect(html).not.toContain("Cafés");
+    expect(html).not.toContain("Rentals in Medellín");
+    expect(html).not.toContain("Eat and drink");
+    expect(html).not.toContain("Things to see");
+  });
+
+  it("leads an event with its real date, in Medellín time", () => {
+    const html = render({ events: [{ ...card, startsAt: "2099-12-06T03:00:00Z" }] });
+    // 03:00 UTC is still Dec 5 in Medellín (UTC-5).
+    expect(html).toMatch(/Dec<\/span><span[^>]*>5</);
   });
 
   it("shows an honest empty state, with no invented cards, when nothing is available", () => {
-    const html = renderToStaticMarkup(HomeDiscoveryRowsUI({ rows: [{ id: "events", label: "Upcoming events", href: "/events", ctaLabel: "x", cards: [] }] }));
+    const html = render({});
     expect(html).toContain("Recommendations are unavailable right now");
     expect(html).toContain('href="/chat"');
     expect(html).not.toMatch(/unsplash|Carmen|Pergamino|Feria/i);
   });
 
+  it("puts restaurants and cafés in one tabbed section, only offering tabs that have records", () => {
+    const both = render({
+      restaurants: [{ ...card, id: "r", name: "Casa" }],
+      cafes: [{ ...card, id: "c", name: "Tinto" }],
+    });
+    expect(both).toContain("Eat and drink");
+    expect(both).toContain("Restaurants");
+    expect(both).toContain("Cafés");
+    const onlyCafes = render({ cafes: [{ ...card, id: "c", name: "Tinto" }] });
+    expect(onlyCafes).toContain("Tinto");
+    expect(onlyCafes).not.toMatch(/role="tab"/);
+  });
+
   it("shows a star rating only when one exists", () => {
     const rated = { ...card, id: "2", name: "Rated", rating: 4.9 };
-    const html = renderToStaticMarkup(
-      HomeDiscoveryRowsUI({ rows: [{ id: "r", label: "Restaurants", href: "/restaurants", ctaLabel: "x", cards: [card, rated] }] }),
-    );
+    const html = render({ rentals: [card, rated] });
     expect(html.match(/★/g)).toHaveLength(1);
+  });
+
+  it("uses an honest text card, not a stock picture, when a record has no photo", () => {
+    const html = render({ destinations: [{ ...card, id: "d", name: "Plaza Botero", kind: "Culture" }] });
+    expect(html).toContain("Plaza Botero");
+    expect(html).not.toContain("<img");
   });
 });
