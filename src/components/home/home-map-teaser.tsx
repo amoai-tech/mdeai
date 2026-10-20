@@ -63,7 +63,7 @@ function MapTeaser() {
             gestureHandling="none"
             disableDefaultUI
             className="h-full w-full"
-            aria-label="Map of Medellín showing popular areas"
+            aria-label="Map of Medellín showing neighbourhoods to ask about"
           >
             {TEASER_PINS.map(({ id, lat, lng, label, query }) => (
               <AdvancedMarker
@@ -86,27 +86,16 @@ function MapTeaser() {
   );
 }
 
-export function HomeMapTeaser() {
+/** Neighbourhood prompts on a real map of Medellín. The pins are areas to ask about, not listings. */
+export function HomeMapPreview() {
   return (
-    <section
-      aria-label="Live map of Medellín"
-      className="bg-muted/40 py-10 md:py-12"
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-4 flex items-end justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-foreground md:text-lg">
-              See it on the map
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Tap a pin to ask the concierge about that area.
-            </p>
-          </div>
-        </div>
-        <MapsShell>
-          <MapTeaser />
-        </MapsShell>
-      </div>
-    </section>
+    <div data-testid="home-map-preview">
+      <MapsShell>
+        <MapTeaser />
+      </MapsShell>
+      <p className="mt-2 text-sm text-primary-foreground/75">
+        Tap an area to ask the concierge about it.
+      </p>
+    </div>
   );
 }
