@@ -7,7 +7,7 @@
 --
 -- Run with: supabase test db
 begin;
-select plan(56);
+select plan(63);
 
 -- ── deterministic actors ─────────────────────────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email) values
@@ -83,7 +83,12 @@ values
   ('f1507000-0000-4000-8000-000000000108', 'SAN1502 kind-marked fixture',
    'san1502-viewing-kind-fixture', 'Laureles', 'Medellín', 'Fixture marked only by inventory_kind',
    'active', 'approved', 'published', 'f1507000-0000-4000-8000-000000000011',
-   '{"inventory_kind":"test_fixture"}'::jsonb, current_date - 1, current_date + 60);
+   '{"inventory_kind":"test_fixture"}'::jsonb, current_date - 1, current_date + 60),
+
+  ('f1507000-0000-4000-8000-000000000109', 'SAN1502 rename-before-fixture',
+   'san1502-viewing-rename-original', 'Laureles', 'Medellín', 'Normal rental renamed into a fixture',
+   'inactive', 'pending', 'draft', 'f1507000-0000-4000-8000-000000000011',
+   '{}'::jsonb, current_date - 1, current_date + 60);
 
 select set_config('san1502.scheduled_at', (now() + interval '3 days')::text, true);
 
@@ -254,6 +259,23 @@ select is(
                            'f1507000-0000-4000-8000-000000000103')),
   0, 'denied fixture requests wrote no lead');
 
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(
+      'f1507000-0000-4000-8000-000000000102',
+      null::uuid,
+      'san1502-viewing-active-fixture-guest', 'form',
+      'san1502-viewing-guest@example.com', 'Guest Renter',
+      null, null, current_setting('san1502.scheduled_at')::timestamptz,
+      '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'development rental viewing requires an authorized renter',
+  'a guest request cannot book an active fixture');
+
+select is(
+  (select count(*)::int from public.leads
+    where apartment_id = 'f1507000-0000-4000-8000-000000000102'
+      and user_id is null),
+  0, 'the guest fixture denial wrote no lead');
+
 select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000102',
@@ -299,6 +321,40 @@ select is(
     where apartment_id = 'f1507000-0000-4000-8000-000000000103'
       and user_id = 'f1507000-0000-4000-8000-000000000001'),
   1, 'the administrator fixture request persisted one lead');
+
+-- A normal booking that is renamed into a fixture after the fact must not be
+-- replayable through its saved lead, even when the old slug no longer exists.
+select lives_ok(
+  $q$select public.p1_schedule_tour_atomic(
+      'san1502-viewing-rename-original',
+      'f1507000-0000-4000-8000-000000000008',
+      'san1502-viewing-rename-1', 'form',
+      'san1502-viewing-unrelated@example.com', 'Rename Renter',
+      null, null, current_setting('san1502.scheduled_at')::timestamptz,
+      '{}'::jsonb, '{}'::jsonb)$q$,
+  'a normal pending apartment can be booked before it becomes a fixture');
+
+update public.apartments
+   set metadata = '{"is_test_fixture":"true","inventory_kind":"test_fixture"}'::jsonb,
+       slug = 'san1502-viewing-renamed-fixture'
+ where id = 'f1507000-0000-4000-8000-000000000109';
+
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(
+      'san1502-viewing-rename-original',
+      'f1507000-0000-4000-8000-000000000008',
+      'san1502-viewing-rename-1', 'form',
+      'san1502-viewing-unrelated@example.com', 'Rename Renter',
+      null, null, current_setting('san1502.scheduled_at')::timestamptz,
+      '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'development rental viewing requires an authorized renter',
+  'a renamed fixture cannot be replayed through its saved lead');
+
+select is(
+  (select count(*)::int from public.leads
+    where apartment_id = 'f1507000-0000-4000-8000-000000000109'
+      and user_id = 'f1507000-0000-4000-8000-000000000008'),
+  1, 'the renamed-fixture replay denial left the original lead intact');
 
 -- ── private/internal and source-only inventory stays protected ───────────────
 select throws_ok(
@@ -362,6 +418,32 @@ select is(
    where l.apartment_id = 'f1507000-0000-4000-8000-000000000101'
      and l.user_id = 'f1507000-0000-4000-8000-000000000004'),
   1, 'the slug request persisted one showing');
+
+-- ── a private listing cannot be replayed through a committed request ────────
+update public.apartments
+   set metadata = coalesce(metadata, '{}'::jsonb) || '{"visibility":"private"}'::jsonb
+ where id = 'f1507000-0000-4000-8000-000000000101';
+
+select throws_ok(
+  $q$select public.p1_schedule_tour_atomic(
+      'f1507000-0000-4000-8000-000000000101',
+      'f1507000-0000-4000-8000-000000000003',
+      'san1502-viewing-pending-1', 'form',
+      'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
+      null, null, current_setting('san1502.scheduled_at')::timestamptz,
+      '{}'::jsonb, '{}'::jsonb)$q$,
+  '42501', 'private rental is not requestable',
+  'a committed viewing cannot be replayed after the listing becomes private');
+
+select is(
+  (select count(*)::int from public.leads
+    where apartment_id = 'f1507000-0000-4000-8000-000000000101'
+      and user_id = 'f1507000-0000-4000-8000-000000000003'),
+  1, 'the private replay denial left the original lead intact');
+
+update public.apartments
+   set metadata = metadata - 'visibility'
+ where id = 'f1507000-0000-4000-8000-000000000101';
 
 -- ── broker isolation on the persisted records ────────────────────────────────
 select set_config('san1502.lead_id',

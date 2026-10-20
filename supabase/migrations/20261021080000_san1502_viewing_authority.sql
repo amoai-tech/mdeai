@@ -179,6 +179,24 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  -- Privacy is a boundary, not a volatile new-request validation. A viewing that
+  -- committed before the listing was marked private/internal must not be
+  -- replayed through the early idempotent return. New requests are still denied
+  -- by the visibility predicate in the lookup below; this guard covers replay.
+  IF v_lead.id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.apartments a
+     WHERE (
+       a.id::text = lower(v_listing_id)
+       OR a.slug = v_listing_id
+       OR a.id = v_lead.apartment_id
+       OR a.id::text = lower(v_lead.metadata #>> '{schedule_viewing_identity,apartment_id}')
+     )
+       AND coalesce(lower(a.metadata->>'visibility'), '') IN ('private', 'internal')
+  ) THEN
+    RAISE EXCEPTION 'private rental is not requestable'
+      USING ERRCODE = '42501';
+  END IF;
+
   IF v_lead.id IS NOT NULL THEN
     -- Replay against the immutable request snapshot, never mutable CRM columns.
     -- This keeps one idempotency key bound to one logical viewing even when the
