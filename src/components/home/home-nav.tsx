@@ -27,7 +27,7 @@ export function HomeNav() {
         {/* Logo */}
         <Link
           href="/"
-          className="shrink-0 text-lg font-extrabold tracking-[-0.04em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex min-h-[44px] shrink-0 items-center text-lg font-extrabold tracking-[-0.04em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           mde·ai
         </Link>
@@ -41,7 +41,7 @@ export function HomeNav() {
             <Link
               key={label}
               href={href}
-              className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none"
+              className="inline-flex min-h-[44px] items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none"
             >
               {label}
             </Link>
@@ -68,7 +68,7 @@ export function HomeNav() {
         {/* Mobile — Sheet handles animation + focus trap + Escape + aria-modal */}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
-            className="ml-auto flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:hidden"
+            className="ml-auto flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:hidden"
             aria-label="Open menu"
           >
             <MenuIcon className="size-5" aria-hidden="true" />

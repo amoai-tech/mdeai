@@ -1,11 +1,9 @@
-import { Suspense } from "react";
-import Image from "next/image";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
-import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
+import { EventListRow, PlaceCard } from "@/components/home/home-place-card";
+import { HomeEatDrinkTabs } from "@/components/home/home-eat-drink-tabs";
 import {
   fetchLiveRentals,
   fetchLiveRestaurants,
@@ -15,135 +13,90 @@ import {
   type PlaceCardData,
 } from "@/lib/discovery/fetch-discovery-rows";
 
-// ─── Rows ─────────────────────────────────────────────────────────────────────
-// Every card comes from a real record. A row with no real records is not rendered —
-// there is no stand-in data (SAN-1556).
+// Every card comes from a real record. A section with no real records is not rendered —
+// there is no stand-in data (SAN-1556). Each section has its own weight on purpose: rentals are
+// the photo-led main event, eat & drink share tabs, events lead with their date.
 
-export interface RowData {
-  id: string;
-  label: string;
-  href: string;
-  ctaLabel: string;
-  cards: PlaceCardData[];
+export interface DiscoveryData {
+  destinations: PlaceCardData[];
+  rentals: PlaceCardData[];
+  restaurants: PlaceCardData[];
+  cafes: PlaceCardData[];
+  events: PlaceCardData[];
 }
 
-type RowHeader = Omit<RowData, "cards">;
+const CARD_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4";
+const SECTION_LINK =
+  "inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
 
-const ROW_HEADERS: RowHeader[] = [
-  { id: "rentals", label: "Rentals in Medellín", href: "/rentals", ctaLabel: "Browse all rentals" },
-  { id: "restaurants", label: "Top-rated restaurants", href: "/restaurants", ctaLabel: "See all restaurants" },
-  { id: "cafes", label: "Cafés", href: "/cafes", ctaLabel: "Explore cafés" },
-  { id: "events", label: "Upcoming events", href: "/events", ctaLabel: "View all events" },
-  {
-    id: "destinations",
-    label: "Things to see in Medellín",
-    href: `/chat?q=${encodeURIComponent("What are the best things to see in Medellín?")}`,
-    ctaLabel: "Ask the concierge",
-  },
-];
-
-// ─── PlaceCard ────────────────────────────────────────────────────────────────
-
-function PlaceCard({
-  name,
-  kind,
-  rating,
-  meta,
-  why,
-  image,
-  query,
-  href,
-}: Omit<PlaceCardData, "id">) {
-  // A photo is rendered only for a host next/image is configured for; otherwise the
-  // card is an honest text card rather than a broken or crashing image.
-  const hasPhoto = isRenderableRemoteImage(image);
+function Section({
+  id,
+  title,
+  intro,
+  link,
+  tone = "plain",
+  children,
+}: {
+  id: string;
+  title: string;
+  intro?: string;
+  link?: { href: string; label: string; testId: string };
+  tone?: "plain" | "tinted";
+  children: ReactNode;
+}) {
   return (
-    <Link
-      href={href ?? `/chat?q=${encodeURIComponent(query)}`}
-      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    <section
+      id={id}
+      aria-labelledby={`${id}-heading`}
+      className={`${tone === "tinted" ? "bg-muted/40" : "bg-background"} py-12 md:py-16`}
     >
-      <Card className="h-full overflow-hidden transition-all duration-200 group-hover:border-primary/30 group-hover:shadow-md motion-reduce:transition-none">
-        {hasPhoto ? (
-          <div className="relative h-36 overflow-hidden bg-muted">
-            <Image
-              src={image}
-              alt={name}
-              fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
-              sizes="(max-width: 640px) 50vw, 25vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-            <Badge
-              variant="secondary"
-              className="absolute left-2 top-2 bg-background/85 text-xs font-semibold backdrop-blur-sm"
-            >
-              {kind}
-            </Badge>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+          <div className="max-w-2xl">
+            <h2 id={`${id}-heading`} className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              {title}
+            </h2>
+            {intro && <p className="mt-1.5 text-base text-muted-foreground">{intro}</p>}
           </div>
-        ) : (
-          <div className="px-3 pt-3">
-            <Badge variant="secondary" className="text-xs font-semibold">
-              {kind}
-            </Badge>
-          </div>
-        )}
-
-        <CardContent className="flex flex-col gap-1.5 p-3">
-          <p className="line-clamp-1 text-sm font-semibold text-foreground">{name}</p>
-          {(rating != null || meta) && (
-            <div className="flex items-center gap-2">
-              {rating != null && (
-                <span className="text-xs font-bold text-accent">★ {rating}</span>
-              )}
-              {meta && <span className="text-xs text-muted-foreground">{meta}</span>}
-            </div>
+          {link && (
+            <Link href={link.href} data-testid={link.testId} className={SECTION_LINK}>
+              {link.label}
+              <ArrowRightIcon className="size-4" aria-hidden="true" />
+            </Link>
           )}
-          {why && (
-            <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{why}</p>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
+        </div>
+        {children}
+      </div>
+    </section>
   );
 }
 
-// ─── PlaceCard Skeleton ───────────────────────────────────────────────────────
-
-function PlaceCardSkeleton() {
+function Cards({ cards }: { cards: PlaceCardData[] }) {
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="h-36 bg-muted animate-pulse" />
-      <div className="p-3 flex flex-col gap-2">
-        <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
-        <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
-        <div className="space-y-1">
-          <div className="h-3 w-full bg-muted rounded animate-pulse" />
-          <div className="h-3 w-4/5 bg-muted rounded animate-pulse" />
-        </div>
-      </div>
+    <div className={CARD_GRID}>
+      {cards.map(({ id, ...card }) => (
+        <PlaceCard key={id} {...card} />
+      ))}
     </div>
   );
 }
 
 // ─── Pure render component ────────────────────────────────────────────────────
 
-export function HomeDiscoveryRowsUI({ rows }: { rows: RowData[] }) {
-  const visible = rows.filter((row) => row.cards.length > 0);
+export function HomeDiscoverySectionsUI({ data }: { data: DiscoveryData }) {
+  const { destinations, rentals, restaurants, cafes, events } = data;
+  const hasEatDrink = restaurants.length > 0 || cafes.length > 0;
 
-  if (visible.length === 0) {
+  if (!destinations.length && !rentals.length && !hasEatDrink && !events.length) {
     return (
-      <section aria-label="Discover Medellín" className="bg-background py-10 md:py-14">
+      <section aria-label="Discover Medellín" className="bg-background py-12 md:py-16">
         <div className="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 sm:px-6 lg:px-8">
-          <h2 className="text-base font-semibold text-foreground md:text-lg">
-            Recommendations are unavailable right now
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Ask the concierge and it will search for you.
-          </p>
+          <h2 className="text-2xl font-semibold text-foreground">Recommendations are unavailable right now</h2>
+          <p className="text-base text-muted-foreground">Ask the concierge and it will search for you.</p>
           <Link
             href="/chat"
             data-testid="discovery-empty-cta"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 text-base font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             Ask the concierge
           </Link>
@@ -153,31 +106,61 @@ export function HomeDiscoveryRowsUI({ rows }: { rows: RowData[] }) {
   }
 
   return (
-    <section aria-label="Discover Medellín" className="bg-background py-10 md:py-14">
-      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8">
-        {visible.map(({ id, label, href, ctaLabel, cards }) => (
-          <div key={id} className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground md:text-lg">{label}</h2>
-              <Link
-                href={href}
-                data-testid={`discovery-cta-${id}`}
-                className="flex items-center gap-1 text-xs font-medium text-primary transition-colors duration-200 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 motion-reduce:transition-none"
-              >
-                {ctaLabel}
-                <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
+    <>
+      {destinations.length > 0 && (
+        <Section
+          id="things-to-see"
+          title="Things to see in Medellín"
+          intro="Places from our city guide. Ask the concierge about any of them."
+          link={{
+            href: `/chat?q=${encodeURIComponent("What are the best things to see in Medellín?")}`,
+            label: "Ask the concierge",
+            testId: "discovery-cta-destinations",
+          }}
+        >
+          <Cards cards={destinations} />
+        </Section>
+      )}
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {cards.map((card) => (
-                <PlaceCard key={card.id} {...card} />
-              ))}
-            </div>
+      {rentals.length > 0 && (
+        <Section
+          id="rentals"
+          title="Rentals in Medellín"
+          intro="Photos and monthly prices, shown in each listing's own currency."
+          link={{ href: "/rentals", label: "Browse all rentals", testId: "discovery-cta-rentals" }}
+          tone="tinted"
+        >
+          <Cards cards={rentals} />
+        </Section>
+      )}
+
+      {hasEatDrink && (
+        <Section
+          id="eat-and-drink"
+          title="Eat and drink"
+          intro="Restaurants and cafés from our listings. Looking for a night out? See nightlife."
+          link={{ href: "/nightlife", label: "Nightlife", testId: "discovery-cta-nightlife" }}
+        >
+          <HomeEatDrinkTabs restaurants={restaurants} cafes={cafes} />
+        </Section>
+      )}
+
+      {events.length > 0 && (
+        <Section
+          id="events"
+          title="Upcoming events"
+          intro="Real events with their real dates."
+          link={{ href: "/events", label: "View all events", testId: "discovery-cta-events" }}
+          tone="tinted"
+        >
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {events.map(({ id, ...event }) => (
+              <EventListRow key={id} {...event} />
+            ))}
           </div>
-        ))}
-      </div>
-    </section>
+        </Section>
+      )}
+    </>
   );
 }
 
@@ -185,35 +168,33 @@ export function HomeDiscoveryRowsUI({ rows }: { rows: RowData[] }) {
 
 export function HomeDiscoveryRowsSkeleton() {
   return (
-    <section
-      aria-label="Discover Medellín"
-      aria-busy="true"
-      className="bg-background py-10 md:py-14"
-    >
-      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8">
-        {Array.from({ length: 4 }).map((_, rowIdx) => (
-          <div key={rowIdx} className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="h-5 w-36 bg-muted rounded animate-pulse" />
-              <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+    <section aria-label="Discover Medellín" aria-busy="true" className="bg-background py-12 md:py-16">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
+        <div className={CARD_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-xl border bg-card">
+              <div className="aspect-[4/3] animate-pulse bg-muted" />
+              <div className="flex flex-col gap-2 p-4">
+                <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, cardIdx) => (
-                <PlaceCardSkeleton key={cardIdx} />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-// ─── Async inner — fetches live data; failed or empty rows are simply left out ─
+// ─── Async inner — fetches live data; failed or empty sections are simply left out ─
+
+const EMPTY: PlaceCardData[] = [];
 
 async function HomeDiscoveryRowsInner() {
   const supabase = await createClient();
 
+  const names = ["rentals", "restaurants", "cafes", "events", "destinations"] as const;
   const results = await Promise.allSettled([
     fetchLiveRentals(supabase),
     fetchLiveRestaurants(supabase),
@@ -222,16 +203,15 @@ async function HomeDiscoveryRowsInner() {
     fetchLiveDestinations(supabase),
   ]);
 
-  const rows: RowData[] = ROW_HEADERS.map((header, i) => {
-    const result = results[i];
+  const [rentals, restaurants, cafes, events, destinations] = results.map((result, i) => {
     if (result.status === "rejected") {
-      console.error("[home-discovery-rows] %s failed", header.id, result.reason);
-      return { ...header, cards: [] };
+      console.error("[home-discovery] %s failed", names[i], result.reason);
+      return EMPTY;
     }
-    return { ...header, cards: result.value };
+    return result.value;
   });
 
-  return <HomeDiscoveryRowsUI rows={rows} />;
+  return <HomeDiscoverySectionsUI data={{ rentals, restaurants, cafes, events, destinations }} />;
 }
 
 // ─── Public export — self-contained with Suspense skeleton ───────────────────

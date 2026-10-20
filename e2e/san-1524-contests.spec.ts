@@ -10,20 +10,26 @@ import { expect, test } from "@playwright/test";
  * renders, so the suite keeps working as contests come and go.
  */
 /**
- * The contest pages read `vote` through a service-role-only function. A CI environment without
- * that credential renders the honest error state — which is an environment gap, not a product
- * defect. Naming it explicitly beats a confusing "expected 0, received 1" on an error banner, and
- * beats letting three tests fail for the same missing key.
+ * The contest pages read `vote` through a service-role-only function.
+ *
+ * The skip keys off the CREDENTIAL, never off the error banner. Deciding from `contests-error`
+ * conflated "this environment has no key" with "the database read just failed" — and a real
+ * outage, a broken RPC or a regression would then be quietly skipped instead of failing. Here a
+ * present credential means every contest-read failure must fail the test.
  */
-async function skipWithoutContestCredential(page: import("@playwright/test").Page) {
-  const unavailable = await page
-    .getByTestId("contests-error")
-    .isVisible()
-    .catch(() => false);
-  if (unavailable) {
-    test.skip(true, "contest reads need a service-role Supabase credential; this environment has none");
+const hasContestCredential = Boolean(
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY,
+);
+
+function skipWithoutContestCredential() {
+  if (!hasContestCredential) {
+    test.skip(
+      true,
+      "contest reads need a service-role Supabase credential; this environment has none",
+    );
+    return true;
   }
-  return unavailable;
+  return false;
 }
 
 test.describe("public contest discovery", { tag: ["@contests"] }, () => {
@@ -42,7 +48,7 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     await page.goto("/contests");
     await expect(page.getByTestId("contests-page")).toBeVisible();
 
-    if (await skipWithoutContestCredential(page)) return;
+    if (skipWithoutContestCredential()) return;
 
     // Either real contests or the honest empty state — never a blank page or an error.
     await expect(page.getByTestId("contests-error")).toHaveCount(0);
@@ -97,7 +103,7 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     const cards = page.locator('[data-testid^="contest-card-"]');
     const cardCount = await cards.count();
 
-    if (await skipWithoutContestCredential(page)) return;
+    if (skipWithoutContestCredential()) return;
 
     expect(cardCount, "the public contest list must render at least one contest here").toBeGreaterThan(0);
 
@@ -131,7 +137,7 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
   test("an unknown contest is a 404, not an empty page", async ({ page }) => {
     const response = await page.goto("/contests/san-1524-does-not-exist");
     // Without credentials the read fails, the page renders its error state and answers 200.
-    if (await skipWithoutContestCredential(page)) return;
+    if (skipWithoutContestCredential()) return;
     expect(response?.status()).toBe(404);
   });
 });

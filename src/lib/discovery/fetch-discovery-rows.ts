@@ -23,6 +23,8 @@ export interface PlaceCardData {
   image: string;
   query: string;
   href?: string;
+  /** Events only: the real start (ISO), so the card can show the date first. */
+  startsAt?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,6 +288,7 @@ export async function fetchLiveEvents(
       image: row.primary_image_url ?? "",
       query: `${row.name} Medellín events tickets`,
       href: `/events/${encodeURIComponent(row.slug?.trim() || row.id)}`,
+      startsAt: row.event_start_time,
     };
   });
 }
@@ -365,7 +368,7 @@ export async function fetchLiveDestinations(
   };
   unique.sort((a, b) => rank(a.name) - rank(b.name));
 
-  return unique.slice(0, 8).map((row) => ({
+  return unique.slice(0, 4).map((row) => ({
     id: row.id,
     name: row.name,
     kind: row.category ?? "Place",
