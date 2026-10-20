@@ -35,6 +35,8 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 const TRANSCRIPT_LIMIT = 6;
 const ERROR_COPY = "MDE could not answer that. Your question is still here — try again.";
+const ERROR_COPY_RUN =
+  "MDE could not answer that. Your question is in the conversation — open the full chat to continue.";
 const PLACEHOLDER = "Ask about these apartments";
 /** Published for the phone Map button, so it clears the composer at any height. */
 const HEIGHT_VAR = "--mde-ask-composer-height";
@@ -67,13 +69,16 @@ function useTurns(agent: AbstractAgent | undefined): PlainTurn[] {
   // A different agent (a restored thread) seeds from its own messages. Adjusting state while
   // rendering is the supported React pattern for derived-from-props state.
   if (snapshot.agent !== agent) {
-    setSnapshot({ agent, messages: agent ? [...(agent.messages as unknown as AgentMessage[])] : [] });
+    setSnapshot({
+      agent,
+      messages: agent ? [...(agent.messages as unknown as AgentMessage[])].slice(-12) : [],
+    });
   }
 
   useEffect(() => {
     if (!agent) return;
     const copy = () =>
-      setSnapshot({ agent, messages: [...(agent.messages as unknown as AgentMessage[])] });
+      setSnapshot({ agent, messages: [...(agent.messages as unknown as AgentMessage[])].slice(-12) });
     const subscription = agent.subscribe({ onMessagesChanged: copy });
     return () => subscription.unsubscribe();
   }, [agent]);
@@ -134,10 +139,20 @@ function InertComposer() {
   );
 }
 
-function Transcript({ turns }: { turns: PlainTurn[] }) {
+function Transcript({ turns, busy }: { turns: PlainTurn[]; busy: boolean }) {
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [turns]);
   return (
     <ol
+      ref={listRef}
+      id="rental-ask-transcript"
       data-testid="rental-ask-transcript"
+      role="log"
+      aria-live="polite"
+      aria-busy={busy}
       className="mb-3 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3"
     >
       {turns.map((turn) => (
@@ -169,13 +184,14 @@ function ComposerHeader(props: {
             data-testid="rental-ask-toggle-transcript"
             aria-expanded={props.showTranscript}
             onClick={props.onToggle}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            aria-controls="rental-ask-transcript"
+            className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             <MessageSquare className="h-3.5 w-3.5" aria-hidden />
             {props.showTranscript ? "Hide conversation" : "Show conversation"}
           </button>
         ) : null}
-        <Link href="/chat" className="text-xs font-medium text-primary hover:underline">
+        <Link href="/chat" className="inline-flex min-h-11 items-center text-xs font-medium text-primary hover:underline">
           Open full chat
         </Link>
       </div>
@@ -234,7 +250,7 @@ function ComposerInput(props: {
         onKeyDown={props.onKeyDown}
         placeholder={PLACEHOLDER}
         aria-describedby={props.error ? "rental-ask-error" : undefined}
-        className="min-h-11 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-h-11 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-base placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
       />
       <SendButton busy={props.busy} canSend={props.canSend} onSend={props.onSend} onStop={props.onStop} />
     </div>
@@ -255,7 +271,7 @@ function ComposerError(props: { error: string; canRetry: boolean; onRetry: () =>
         data-testid="rental-ask-retry"
         onClick={props.onRetry}
         disabled={!props.canRetry}
-        className="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+        className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
       >
         Try again
       </button>
@@ -291,7 +307,7 @@ function LiveComposer() {
   const signInHref = `/login?next=${encodeURIComponent(returnTo)}`;
 
   const send = useCallback(async () => {
-    // Keep the exact text as typed: the box is only cleared if it still holds what was sent.
+    // The exact text as typed, so a restore only happens when nothing new has been written.
     const raw = draft;
     const text = raw.trim();
     if (!text || busy || signedOut || !isReady || sendInFlight.current) return;
@@ -299,20 +315,31 @@ function LiveComposer() {
     cancelled.current = false;
     setSending(true);
     setError(null);
+    // Clear on dispatch: the sent question is already on its way, and the box must be free for
+    // the next question while this one streams (appending to it would send both together).
+    setDraft("");
     const errorVersionBefore = getConciergeErrorVersion();
     try {
       const started = await appendMessage(text);
-      // A stopped run must not erase an unsent draft even if its promise resolves successfully.
+      // A stopped run must not bring the text back.
       if (cancelled.current) return;
-      if (!started || getConciergeErrorVersion() !== errorVersionBefore) {
+      if (!started) {
+        // Nothing was sent: give the words back, unless the user has already typed something else.
         setError(ERROR_COPY);
+        setDraft((current) => (current === "" ? raw : current));
         return;
       }
-      // Clear only what was sent: anything typed while the answer was running is kept.
-      setDraft((current) => (current === raw ? "" : current));
+      if (getConciergeErrorVersion() !== errorVersionBefore) {
+        // The turn is already in the thread; a Retry here would add the same question twice.
+        setError(ERROR_COPY_RUN);
+        return;
+      }
       setShowTranscript(true);
     } catch {
-      if (!cancelled.current) setError(ERROR_COPY);
+      if (!cancelled.current) {
+        setError(ERROR_COPY);
+        setDraft((current) => (current === "" ? raw : current));
+      }
     } finally {
       sendInFlight.current = false;
       setSending(false);
@@ -328,6 +355,8 @@ function LiveComposer() {
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       // Enter sends; Shift+Enter keeps the newline, the same keys the main composer uses.
       if (event.key === "Enter" && !event.shiftKey) {
+        // Do not send a half-composed IME candidate.
+        if (event.nativeEvent.isComposing) return;
         event.preventDefault();
         void send();
       }
@@ -337,7 +366,7 @@ function LiveComposer() {
 
   return (
     <div ref={setShellElement} data-testid="rental-ask-composer" className={SHELL_CLASS}>
-      {showTranscript && turns.length > 0 ? <Transcript turns={turns} /> : null}
+      {showTranscript && turns.length > 0 ? <Transcript turns={turns} busy={busy} /> : null}
       <ComposerHeader
         turnCount={turns.length}
         showTranscript={showTranscript}
@@ -378,7 +407,7 @@ function LiveComposer() {
         </p>
       ) : null}
       {error ? (
-        <ComposerError error={error} canRetry={canSend} onRetry={() => void send()} />
+        <ComposerError error={error} canRetry={canSend} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
       ) : null}
     </div>
   );

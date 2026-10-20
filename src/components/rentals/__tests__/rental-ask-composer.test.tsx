@@ -147,7 +147,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(draftValue()).toBe("cheaper 2BR, only in Laureles");
   });
 
-  it("reports an answer that failed after it started, using CopilotKit's error signal", async () => {
+  it("reports an answer that failed after it started, without offering a duplicate send", async () => {
     chat.appendMessage.mockImplementationOnce(async () => {
       errorVersion.value = 1;
       return true;
@@ -156,8 +156,35 @@ describe("RentalAskComposer (SAN-1421)", () => {
     type("2BR in Envigado");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
 
-    expect(await screen.findByTestId("rental-ask-error")).not.toBeNull();
-    expect(draftValue()).toBe("2BR in Envigado");
+    const alert = await screen.findByTestId("rental-ask-error");
+    // The turn is already in the thread; restoring it here would resend the same question.
+    expect(alert.textContent).toContain("in the conversation");
+    expect(draftValue()).toBe("");
+    expect((screen.getByTestId("rental-ask-retry") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("frees the box while the answer streams, so the next question cannot join the sent one", async () => {
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer />);
+
+    type("cheaper 2BR");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(draftValue()).toBe("");
+
+    type("only in Laureles");
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
+    expect(draftValue()).toBe("only in Laureles");
+  });
+
+  it("does not send while an IME candidate is still being composed", () => {
+    render(<RentalAskComposer />);
+    type("さくら");
+    fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter", isComposing: true });
+    expect(chat.appendMessage).not.toHaveBeenCalled();
   });
 
   it("allows only one agent run on rapid repeated Enter presses", async () => {
@@ -174,7 +201,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(draftValue()).toBe("");
   });
 
-  it("keeps a submitted draft when a run is stopped but still resolves", async () => {
+  it("does not bring the text back when a run is stopped and later resolves", async () => {
     const pending = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(pending.promise);
     render(<RentalAskComposer />);
@@ -183,7 +210,9 @@ describe("RentalAskComposer (SAN-1421)", () => {
     fireEvent.click(screen.getByTestId("rental-ask-stop"));
     expect(chat.stopActiveRun).toHaveBeenCalledTimes(1);
     await act(async () => { pending.resolve(true); await pending.promise; });
-    expect(draftValue()).toBe("two bedrooms near metro");
+    // The stopped turn is already in the conversation; restoring it would resend it twice.
+    expect(draftValue()).toBe("");
+    expect(screen.queryByTestId("rental-ask-error")).toBeNull();
   });
 
   it("blocks sending until the shared agent connection is ready", () => {
