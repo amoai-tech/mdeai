@@ -17,14 +17,19 @@ security definer
 set search_path to 'vote', 'public'
 as $$
 begin
-  if tg_op in ('UPDATE', 'DELETE') then
+  -- Each affected entity is recomputed exactly once per firing: an UPDATE that keeps the same
+  -- entity must not recompute it twice.
+  if tg_op = 'INSERT' then
+    perform vote.recompute_entity_tally(new.entity_id);
+  elsif tg_op = 'DELETE' then
     perform vote.recompute_entity_tally(old.entity_id);
+  else
+    perform vote.recompute_entity_tally(old.entity_id);
+    if new.entity_id is distinct from old.entity_id then
+      perform vote.recompute_entity_tally(new.entity_id);
+    end if;
   end if;
-  if tg_op in ('INSERT', 'UPDATE') and (tg_op = 'INSERT' or new.entity_id is distinct from old.entity_id) then
-    perform vote.recompute_entity_tally(new.entity_id);
-  elsif tg_op = 'UPDATE' then
-    perform vote.recompute_entity_tally(new.entity_id);
-  end if;
+
   return coalesce(new, old);
 end;
 $$;

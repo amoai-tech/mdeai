@@ -1,12 +1,13 @@
 -- SAN-1497 · vote.entity_tally follows reviews and deletions, not just inserts
 begin;
-select plan(5);
+select plan(7);
 
 insert into auth.users (id, email) values
   ('f1498000-0000-0000-0000-000000000001','refresh-a@example.com'),
   ('f1498000-0000-0000-0000-000000000002','refresh-b@example.com');
 insert into public.restaurants (id, name, is_active) values
-  ('a1498000-0000-0000-0000-000000000001','[TEST] Refresh Restaurant', true);
+  ('a1498000-0000-0000-0000-000000000001','[TEST] Refresh Restaurant', true),
+  ('a1498000-0000-0000-0000-000000000002','[TEST] Refresh Restaurant Two', true);
 insert into vote.contests (id, slug, kind, title, org_id, starts_at, ends_at, status) values
   ('c1498000-0000-0000-0000-000000000001','refresh-test','restaurant','[TEST] Refresh','f1498000-0000-0000-0000-000000000001', now() - interval '1 day', now() + interval '1 day','live');
 insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values
@@ -28,9 +29,22 @@ update vote.votes set fraud_status = 'clean' where id = 'd1498000-0000-0000-0000
 select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000001'),
   1::bigint, 'reviewing a ballot clean refreshes the projection');
 
-delete from vote.votes where id = 'd1498000-0000-0000-0000-000000000001';
+insert into vote.entities (id, contest_id, slug, display_name, restaurant_id) values
+  ('e1498000-0000-0000-0000-000000000002','c1498000-0000-0000-0000-000000000001','refresh-e2','[TEST] Refresh E2','a1498000-0000-0000-0000-000000000002');
+
+-- Moving a ballot to another entity must update BOTH projections, exactly once each.
+update vote.votes set entity_id = 'e1498000-0000-0000-0000-000000000002'
+ where id = 'd1498000-0000-0000-0000-000000000001';
 
 select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000001'),
+  0::bigint, 'moving a ballot decrements the entity it left');
+
+select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000002'),
+  1::bigint, 'moving a ballot increments the entity it joined');
+
+delete from vote.votes where id = 'd1498000-0000-0000-0000-000000000001';
+
+select is((select audience_votes from vote.entity_tally where entity_id = 'e1498000-0000-0000-0000-000000000002'),
   0::bigint, 'deleting a ballot refreshes the projection');
 
 select is((select position('DELETE' in pg_get_triggerdef((select oid from pg_trigger where tgname = 'tr_recompute_tally_on_vote'))) > 0),
