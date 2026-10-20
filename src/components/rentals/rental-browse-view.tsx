@@ -154,7 +154,12 @@ function RentalBrowseViewInner({
             }
           />
         }
-        askComposer={<RentalAskComposer onResults={setAsk} />}
+        askComposer={
+          <RentalAskComposer
+            onResults={setAsk}
+            context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
+          />
+        }
       >
         <section className="mt-4" aria-label="Rental listings">
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}

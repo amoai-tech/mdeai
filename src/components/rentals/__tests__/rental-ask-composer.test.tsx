@@ -23,7 +23,7 @@ const agent = vi.hoisted(() => ({
   messages: [] as Array<{ id: string; role: string; content: string }>,
   listeners: [] as Array<() => void>,
 }));
-const coagent = vi.hoisted(() => ({ present: true, isReady: true }));
+const coagent = vi.hoisted(() => ({ present: true, isReady: true, setState: vi.fn() }));
 const nav = vi.hoisted(() => ({ pathname: "/rentals", search: "" }));
 const errorVersion = vi.hoisted(() => ({ value: 0 }));
 
@@ -50,8 +50,9 @@ vi.mock("@/components/chat/concierge-coagent-context", () => {
     },
   };
   return {
-    useConciergeCoAgent: () => ({ agent: liveAgent, isReady: coagent.isReady }),
-    useOptionalConciergeCoAgent: () => (coagent.present ? { agent: liveAgent, isReady: coagent.isReady } : null),
+    useConciergeCoAgent: () => ({ agent: liveAgent, isReady: coagent.isReady, setState: coagent.setState }),
+    useOptionalConciergeCoAgent: () =>
+      coagent.present ? { agent: liveAgent, isReady: coagent.isReady, setState: coagent.setState } : null,
   };
 });
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
@@ -85,6 +86,7 @@ beforeEach(() => {
   session.loading = false;
   coagent.present = true;
   coagent.isReady = true;
+  coagent.setState.mockReset();
   nav.pathname = "/rentals";
   nav.search = "";
   agent.messages = [];
@@ -280,6 +282,25 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(JSON.parse(String(firstInit.body)).neighborhood).toBe("Laureles");
     // "only under 3M" carries no neighborhood of its own: it refines the Laureles search.
     expect(JSON.parse(String(secondInit.body)).neighborhood).toBe("Laureles");
+    vi.unstubAllGlobals();
+  });
+
+  it("tells the agent which filters and apartment the renter is looking at", async () => {
+    render(
+      <RentalAskComposer
+        context={{ neighborhood: "Laureles", beds: "2", selectedListingId: "rnt_9" }}
+      />,
+    );
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(coagent.setState).toHaveBeenCalled());
+    const patch = coagent.setState.mock.calls[0][0];
+    const next = typeof patch === "function" ? patch({}) : patch;
+    expect(next.lastRentalQuery).toMatchObject({ neighborhood: "Laureles", minBedrooms: 2 });
+    expect(next.selectedListingId).toBe("rnt_9");
+    // The question still goes to the same thread.
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledWith("which of these has a balcony?"));
     vi.unstubAllGlobals();
   });
 

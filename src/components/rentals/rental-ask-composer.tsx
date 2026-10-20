@@ -50,6 +50,16 @@ const HEIGHT_VAR = "--mde-ask-composer-height";
 const SEARCH_UNAVAILABLE = "Rental search is temporarily unavailable. Please try again.";
 const SEARCH_FAILED = "Could not search rentals right now. Please try again.";
 
+/** What this page already knows, so the agent answers about the same apartments. */
+export type RentalAskContext = {
+  neighborhood?: string | null;
+  beds?: string | null;
+  from?: string | null;
+  through?: string | null;
+  /** The apartment whose Details panel is open, if any. */
+  selectedListingId?: string | null;
+};
+
 /** What the browse column needs to replace its cards and pins with the answer. */
 export type RentalAskResults = {
   results: Rental[];
@@ -353,8 +363,8 @@ function ComposerError(props: { error: string; canRetry: boolean; retryable: boo
   );
 }
 
-function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) => void }) {
-  const { agent, isReady } = useConciergeCoAgent();
+function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskResults) => void; context?: RentalAskContext }) {
+  const { agent, isReady, setState } = useConciergeCoAgent();
   const { appendMessage, isLoading, stopActiveRun } = useConciergeChat();
   const { user, loading: sessionLoading } = useSession();
   const pathname = usePathname();
@@ -397,6 +407,19 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
+    // Give the agent the page the renter is on: filters first, then the open apartment.
+    // Written before the send so the answer describes these apartments, not a blank page.
+    setState((prev) => ({
+      ...prev,
+      ...(context?.selectedListingId ? { selectedListingId: context.selectedListingId } : {}),
+      lastRentalQuery: {
+        ...prev.lastRentalQuery,
+        ...(context?.neighborhood ? { neighborhood: context.neighborhood } : {}),
+        ...(context?.beds ? { minBedrooms: Number(context.beds) } : {}),
+        ...(context?.from ? { checkIn: context.from } : {}),
+        ...(context?.through ? { checkOut: context.through } : {}),
+      },
+    }));
     const errorVersionBefore = getConciergeErrorVersion();
     let agentSendAttempted = false;
     try {
@@ -450,7 +473,7 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
       sendInFlight.current = false;
       setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut, isReady, onResults]);
+  }, [appendMessage, busy, draft, signedOut, isReady, onResults, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
@@ -519,10 +542,13 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
   );
 }
 
-export function RentalAskComposer({ onResults }: { onResults?: (results: RentalAskResults) => void } = {}) {
+export function RentalAskComposer({
+  onResults,
+  context,
+}: { onResults?: (results: RentalAskResults) => void; context?: RentalAskContext } = {}) {
   // Read the context without throwing: previews, isolated tests and deterministic E2E render this
   // page with no chat stack, and must get an inert box instead of an error.
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) return <InertComposer />;
-  return <LiveComposer onResults={onResults} />;
+  return <LiveComposer onResults={onResults} context={context} />;
 }
