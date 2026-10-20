@@ -23,8 +23,8 @@ test.describe("SAN-1554 — first failed event search", () => {
 
     await page.goto("/chat", { waitUntil: "domcontentloaded" });
     const input = page.locator("textarea").last();
-    await input.waitFor({ state: "visible", timeout: 30_000 });
-    await page.waitForTimeout(2_000);
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    await expect(input).toBeEnabled({ timeout: 30_000 });
 
     // The real CopilotKit welcome screen owns the empty thread: no result tail exists.
     await expect(page.getByTestId("concierge-transcript-tail")).toHaveCount(0);
