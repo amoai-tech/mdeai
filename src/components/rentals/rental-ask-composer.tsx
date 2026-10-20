@@ -27,6 +27,7 @@ import {
   canFastPathRentalSearch,
 } from "@/lib/rental-query-parser";
 import type { Rental } from "@/mastra/tools/search-rentals";
+import type { ConciergeWorkingMemory } from "@/lib/types";
 
 /**
  * SAN-1421 — "Ask MDE" inside the results column.
@@ -62,11 +63,18 @@ export type RentalAskResults = {
  * The same structured request the chat fast path posts, against the same endpoint.
  * No second search engine: the classification and parameters come from the shared parser.
  */
-async function searchRentalsForQuestion(query: string): Promise<RentalAskResults | string> {
-  const memory = {};
-  const params = canFastPathRentalSearch(query, memory)
+async function searchRentalsForQuestion(
+  query: string,
+  memory: ConciergeWorkingMemory,
+): Promise<{ payload: RentalAskResults; nextMemory: ConciergeWorkingMemory } | string> {
+  // A follow-up can be only a constraint ("under 3M"), which the fast-path gate rejects because it
+  // does not look like a new rental search. Once a rental question exists, merge into it.
+  let params = canFastPathRentalSearch(query, memory)
     ? buildRentalSearchParams(query, memory)
     : null;
+  if (!params && memory.lastRentalQuery) {
+    params = buildRentalSearchParams(query, memory);
+  }
   const response = await fetch("/api/rentals/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,12 +86,29 @@ async function searchRentalsForQuestion(query: string): Promise<RentalAskResults
   const data = (await response.json()) as { results?: Rental[]; total?: number };
   if (!Array.isArray(data.results)) return SEARCH_FAILED;
   return {
-    results: data.results,
-    total: data.total ?? data.results.length,
-    query,
-    budgetNotice: budgetNotApplied(query, params ?? {})
-      ? "I could not apply a monthly budget from that question yet, so check the price on each card."
-      : undefined,
+    payload: {
+      results: data.results,
+      total: data.total ?? data.results.length,
+      query,
+      budgetNotice: budgetNotApplied(query, params ?? {})
+        ? "I could not apply a monthly budget from that question yet, so check the price on each card."
+        : undefined,
+    },
+    // A follow-up ("only in Laureles", "under 3M") refines what the renter already asked for.
+    nextMemory: params
+      ? {
+          lastRentalQuery: {
+            neighborhood: params.neighborhood,
+            minBedrooms: params.minBedrooms,
+            maxPricePerNight: params.maxPricePerNight,
+            maxPriceMonthly: params.maxPriceMonthly,
+            budgetCurrency: params.budgetCurrency,
+            budgetType: params.stayType,
+            checkIn: params.checkIn,
+            checkOut: params.checkOut,
+          },
+        }
+      : memory,
   };
 }
 
@@ -344,6 +369,8 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
   const sendInFlight = useRef(false);
   const cancelled = useRef(false);
 
+  // Refinements build on the previous rental question; a remount (filter change) starts fresh.
+  const lastQuery = useRef<ConciergeWorkingMemory>({});
   const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
   usePublishHeight(shellElement);
 
@@ -375,12 +402,13 @@ function LiveComposer({ onResults }: { onResults?: (results: RentalAskResults) =
       if (onResults) {
         // Search is supplementary: a network failure must not suppress the saved concierge turn.
         try {
-          const found = await searchRentalsForQuestion(text);
+          const found = await searchRentalsForQuestion(text, lastQuery.current);
           if (cancelled.current) return;
           if (typeof found === "string") {
             setError(found);
           } else {
-            onResults(found);
+            lastQuery.current = found.nextMemory;
+            onResults(found.payload);
           }
         } catch {
           if (cancelled.current) return;

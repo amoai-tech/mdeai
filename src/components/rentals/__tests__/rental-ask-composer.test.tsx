@@ -252,6 +252,37 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("lets a follow-up refine the previous rental question instead of starting over", async () => {
+    // A Response body can only be read once, so each request gets its own.
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    // Let the first send leave the in-flight lock before asking the follow-up.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    type("only under COP 3 million");
+    expect(draftValue()).toBe("only under COP 3 million");
+    expect((screen.getByTestId("rental-ask-send") as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(2));
+
+    const [, firstInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(firstInit.body)).neighborhood).toBe("Laureles");
+    // "only under 3M" carries no neighborhood of its own: it refines the Laureles search.
+    expect(JSON.parse(String(secondInit.body)).neighborhood).toBe("Laureles");
+    vi.unstubAllGlobals();
+  });
+
   it("shows a failed rental search but still asks the concierge", async () => {
     const onResults = vi.fn();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
