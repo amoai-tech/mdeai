@@ -29,6 +29,13 @@ vi.mock("@copilotkit/react-core/v2", () => {
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent: undefined }),
 }));
+vi.mock("@/lib/hooks/use-concierge-chat", () => ({
+  useConciergeChat: () => ({
+    isLoading: false,
+    stopActiveRun: vi.fn(),
+    retryLastTurn: vi.fn(),
+  }),
+}));
 vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({
   useConciergeSendHandlers: () => ({}),
 }));

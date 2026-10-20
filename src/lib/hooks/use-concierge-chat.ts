@@ -5,6 +5,7 @@ import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /** Shared concierge chat controller for v2 routes. */
@@ -48,6 +49,21 @@ function useLiveConciergeChat() {
     agent?.setState({});
   }, [agent, stopActiveRun]);
 
+  const retryLastTurn = useCallback(async () => {
+    if (!agent || agent.isRunning) return false;
+    clearConciergeError();
+    try {
+      await copilotkit.runAgent({ agent });
+      markThreadSaved?.(agent.threadId);
+      if (agent.threadId) void ensureThreadTitle(agent.threadId);
+      return true;
+    } catch (error) {
+      console.error("[concierge-retry]", error);
+      reportConciergeError();
+      return false;
+    }
+  }, [agent, copilotkit, markThreadSaved]);
+
   const appendMessage = useCallback(
     async (content: string) => {
       if (!agent) return false;
@@ -66,7 +82,7 @@ function useLiveConciergeChat() {
     [agent, copilotkit, markThreadSaved],
   );
 
-  return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };
+  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };
 }
 
 // The deterministic E2E surface answers fast paths locally; it must not mount
@@ -76,6 +92,7 @@ const deterministicChat = {
   isLoading: false,
   reset: () => {},
   stopActiveRun: () => {},
+  retryLastTurn: async () => false,
   appendMessage: async (content: string) => {
     void content;
     return false;

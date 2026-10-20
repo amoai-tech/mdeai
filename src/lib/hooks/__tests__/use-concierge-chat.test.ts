@@ -74,6 +74,24 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
     expect(copilotkit.stopAgent).toHaveBeenCalledTimes(1);
   });
 
+  it("retries the existing turn without adding a duplicate user message", async () => {
+    agent.isRunning = false;
+    agent.threadId = "thread-1";
+    copilotkit.runAgent.mockResolvedValue(undefined);
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(true);
+    expect(agent.addMessage).not.toHaveBeenCalled();
+    expect(copilotkit.runAgent).toHaveBeenCalledWith({ agent });
+    expect(ensureMock).toHaveBeenCalledWith("thread-1");
+  });
+
+  it("does not retry while a reply is running", async () => {
+    agent.isRunning = true;
+    const chat = useConciergeChat();
+    await expect(chat.retryLastTurn()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
+  });
+
   it("falls back to abortRun if stopAgent throws", () => {
     agent.isRunning = true;
     copilotkit.stopAgent.mockImplementationOnce(() => {
