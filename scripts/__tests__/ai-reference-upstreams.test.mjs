@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import {
   loadReferenceUpstreams,
@@ -37,6 +38,8 @@ test("network errors are reported as unavailable with a safe reason and source U
   assert.ok(result.every((item) => item.reason === "ETIMEDOUT"));
   assert.ok(result.every((item) => item.sourceUrl === "https://github.com/" + item.repository + "/compare/" + item.reviewedCommit + "...HEAD"));
   assert.match(formatWarning(result[0]), /ETIMEDOUT/);
+  const http = await inspectReferences(entries, async () => ({ classification: CLASSES.UPSTREAM_UNAVAILABLE, reason: "HTTP_403" }));
+  assert.match(formatSummary(http), /HTTP_403/);
 });
 
 test("unknown or missing classifications fail closed", async () => {
@@ -90,6 +93,30 @@ test("summary includes a release link for a release-pinned reference", () => {
   const summary = formatSummary(entries.map((entry) => ({ ...entry, classification: CLASSES.DRIFT })));
   assert.match(summary, /releases\/tag\/v0\.0\.14/);
   assert.match(summary, /compare\//);
+});
+
+test("CLI keeps JSON on stdout, warnings on stderr, and exits zero for drift", () => {
+  const fixture = Object.fromEntries(entries.map((entry) => [
+    entry.repository,
+    entry.name === "OpenBot"
+      ? { classification: CLASSES.DRIFT, aheadBy: 1 }
+      : { classification: CLASSES.OK },
+  ]));
+  const run = spawnSync(process.execPath, ["scripts/check-ai-reference-upstreams.mjs", "--json"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      MDE_UPSTREAM_FIXTURE: JSON.stringify(fixture),
+    },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const parsed = JSON.parse(run.stdout);
+  assert.equal(parsed.length, 3);
+  assert.equal(parsed.find((entry) => entry.name === "OpenBot").classification, CLASSES.DRIFT);
+  assert.match(run.stderr, /OpenBot DRIFT/);
+  assert.doesNotMatch(run.stdout, /::warning::/);
 });
 
 test("workflow reuses scheduled skill maintenance and cannot run on PRs or write to repo", () => {

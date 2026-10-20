@@ -137,10 +137,27 @@ export function formatWarning(entry) {
     " at " + entry.sourceUrl;
 }
 
+/** Test-only deterministic compare seam; production always uses GitHub. */
+function fixtureCompare(raw) {
+  let responses;
+  try {
+    responses = new Map(Object.entries(JSON.parse(raw)));
+  } catch {
+    throw new Error("MDE_UPSTREAM_FIXTURE is not valid JSON");
+  }
+  return async (repository) => {
+    const value = responses.get(repository);
+    if (!value) throw Object.assign(new Error("fixture entry missing"), { code: "FIXTURE_MISSING" });
+    return value;
+  };
+}
+
 async function main() {
   try {
     const entries = loadReferenceUpstreams();
-    const result = await inspectReferences(entries);
+    const fixture = process.env.NODE_ENV === "test" ? process.env.MDE_UPSTREAM_FIXTURE : null;
+    const compare = fixture ? fixtureCompare(fixture) : fetchComparison;
+    const result = await inspectReferences(entries, compare);
     const jsonOut = process.argv.includes("--json");
     if (jsonOut) console.log(formatJson(result));
     else console.log(formatSummary(result));
