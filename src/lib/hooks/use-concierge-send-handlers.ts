@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
-import { getConciergeErrorVersion, reportConciergeError } from "@/lib/concierge-error-store";
+import { getConciergeErrorForThread, reportConciergeError } from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
@@ -77,7 +77,9 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       }
       try {
         if (!isRuntimeUnavailable() && (await appendMessage(text))) {
-          if (getConciergeErrorVersion() === 0) return true;
+          // Another conversation can report a late error during this run.
+          // Only this conversation's stream failure should trigger its notice.
+          if (getConciergeErrorForThread(threadId).version === 0) return true;
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
           showExchange(text, AGENT_UNAVAILABLE_MESSAGE);

@@ -86,9 +86,10 @@ export function getConciergeErrorSnapshot(): ConciergeErrorSnapshot {
 export function getConciergeErrorForThread(
   threadId?: string | null,
 ): ConciergeErrorSnapshot {
-  // A no-thread report is the legacy/provider fallback for callers that have
-  // not supplied an id yet; it must remain visible to the active chat.
-  return _errors.get(keyFor(threadId)) ?? _errors.get(GLOBAL_KEY) ?? IDLE;
+  // Named conversations must not inherit a legacy unscoped error: doing so
+  // could expose the wrong Retry action after switching chats.
+  // Unscoped callers still read the legacy global slot via keyFor(undefined).
+  return _errors.get(keyFor(threadId)) ?? IDLE;
 }
 
 export function getConciergeErrorVersion() {

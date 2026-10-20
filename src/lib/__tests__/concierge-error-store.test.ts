@@ -41,6 +41,12 @@ describe("concierge error ownership", () => {
     expect(getConciergeErrorForThread("thread-b")).toMatchObject({ threadId: "thread-b" });
   });
 
+  it("never shows a legacy unscoped error in a named conversation", () => {
+    reportConciergeError({ retry: () => {} });
+    expect(getConciergeErrorForThread("thread-b")).toEqual({ version: 0, threadId: null });
+    expect(getConciergeErrorForThread()).toMatchObject({ version: 1, threadId: null });
+  });
+
   it("keeps legacy no-thread reports visible", () => {
     reportConciergeError();
     expect(getConciergeErrorSnapshot()).toMatchObject({ version: 1, threadId: null });
