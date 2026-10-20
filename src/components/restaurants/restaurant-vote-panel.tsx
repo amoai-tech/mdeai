@@ -28,7 +28,8 @@ type PanelState =
   | "idle" | "checking" | "confirming" | "casting"
   | "receipt" | "closed" | "error"
   | "unknown"          // saved-vote check failed — offer retry, never invite a vote
-  | "already-voted";   // this account voted for another restaurant — hide the CTA
+  | "already-voted"   // this account voted for another restaurant — hide the CTA
+  | "sign-in-required"; // saved vote lookup returned 401: re-authenticate before any vote
 type VoteResponse = {
   data?: { vote_id?: string; created_at?: string; status?: string; entity_id?: string; contest_id?: string; nonce?: string };
   error?: { code?: string };
@@ -73,7 +74,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   const { url: supabaseUrl, anonKey } = getSupabaseEnv();
   const functionsUrl = supabaseUrl + "/functions/v1";
   const goToLogin = useCallback(() => {
-    router.push("/login?next=" + encodeURIComponent(pathname ?? "/restaurants"));
+    const next = (pathname ?? "/restaurants") + (typeof window === "undefined" ? "" : window.location.search);
+    router.push("/login?next=" + encodeURIComponent(next));
   }, [pathname, router]);
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
@@ -126,10 +128,10 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         if (!active) return;
 
         if (outcome.kind === "sign-in") {
-          // Session is not usable. If this browser holds a key, send the voter to sign in so
-          // they can recover their ballot; otherwise "idle" is correct and the CTA routes there.
-          if (hasLocalKey) goToLogin();
-          setState("idle");
+          // A 401 means the account must re-authenticate, even without a local key.
+          // Returning to idle would falsely offer a fresh ballot.
+          setState("sign-in-required");
+          goToLogin();
           return;
         }
         if (outcome.kind === "receipt") { setReceipt(outcome.receipt); setState("receipt"); return; }
@@ -154,8 +156,8 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
         if (saved) { setReceipt(saved); setState("receipt"); return; }
         if (response.status === 401) {
           // Expired session: send them to sign in rather than restoring a Vote button.
+          setState("sign-in-required");
           goToLogin();
-          setState("idle");
           return;
         }
         if (!response.ok && response.status >= 500) {
@@ -280,6 +282,17 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-not-open">
         <p className="font-medium">Voting is not available for this restaurant yet.</p>
         <p className="mt-1">The restaurant needs to be connected to its contest entry before voting can be displayed.</p>
+      </div>
+    );
+  }
+
+  if (state === "sign-in-required") {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" data-testid="vote-signin-required" role="alert">
+        <p className="font-medium">Please sign in again to check your saved vote.</p>
+        <p className="mt-1">We cannot offer another vote until your account has been checked.</p>
+        <button className="mt-3 min-h-11 rounded-md border border-amber-300 bg-white px-4 py-2 font-medium"
+          type="button" onClick={goToLogin}>Sign in again</button>
       </div>
     );
   }
