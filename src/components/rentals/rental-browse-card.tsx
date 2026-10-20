@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -235,6 +235,7 @@ export function RentalBrowseCard({
               type="button"
               size="sm"
               variant="secondary"
+              className="min-h-11 lg:min-h-0"
               data-testid={`rental-details-cta-${rental.id}`}
               onClick={(event) => {
                 event.stopPropagation();
@@ -250,7 +251,7 @@ export function RentalBrowseCard({
               size="sm"
               variant="default"
               data-testid="rental-schedule-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-11 lg:min-h-0")}
               onClick={(e) => {
                 e.stopPropagation();
                 onSchedule?.();
@@ -274,23 +275,13 @@ export function RentalBrowseCard({
               target="_blank"
               rel="nofollow noopener noreferrer"
               data-testid={`rental-card-source-${rental.id}`}
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-11 lg:min-h-0")}
               onClick={(event) => event.stopPropagation()}
             >
               <ExternalLink data-icon="inline-start" aria-hidden />
               View original listing
             </a>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            data-testid="rental-save-cta"
-            disabled
-            title="Save for later (coming soon)"
-          >
-            <Heart data-icon="inline-start" aria-hidden />
-            Save
-          </Button>
         </div>
       }
     >
