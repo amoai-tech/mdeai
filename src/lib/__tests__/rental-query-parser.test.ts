@@ -22,13 +22,38 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(params?.stayType).toBe("monthly");
   });
 
-  it("never turns a COP amount written in millions into a $2/night cap", () => {
+  it("reads a COP amount written in millions as a monthly budget, never a $2/night cap", () => {
     const text = "2BR in Laureles under 2 million pesos";
     const params = buildRentalSearchParams(text, {});
-    // "2 million pesos" is a monthly COP budget, not two US dollars a night. Guessing a USD
-    // nightly cap both hides real listings and lets the answer claim a budget was applied.
+    // "2 million pesos" is a monthly COP budget, not two US dollars a night.
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
     expect(params?.maxPricePerNight).toBeUndefined();
-    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+    expect(params?.stayType).toBe("monthly");
+    expect(budgetNotApplied(text, params ?? {})).toBe(false);
+  });
+
+  it("applies the acceptance sentence without needing the word 'month'", () => {
+    const text = "Find a 2-bedroom apartment in Laureles under COP 3 million.";
+    const params = buildRentalSearchParams(text, {});
+    expect(params).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+    });
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(false);
+  });
+
+  it("does not guess a monthly COP budget from an ambiguous small amount or a nightly phrase", () => {
+    expect(
+      buildRentalSearchParams("2BR in Laureles under COP 300,000", {})?.maxPriceMonthly,
+    ).toBeUndefined();
+    expect(
+      buildRentalSearchParams("2BR in Laureles under COP 80/night", {})?.maxPriceMonthly,
+    ).toBeUndefined();
   });
 
   it("still reads an explicit dollar amount with a magnitude", () => {

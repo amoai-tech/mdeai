@@ -136,13 +136,12 @@ export default async function ContestDetailPage({
         </p>
       </section>
 
-      <section aria-labelledby="contest-nominees">
-        <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-nominees">
-          Restaurants on the ballot
+      <section aria-labelledby="contest-standings-heading" className="mb-10">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-standings-heading">
+          Standings
         </h2>
 
-        <div className="mb-5 rounded-2xl border border-border/60 bg-muted/20 p-4 sm:p-5" data-testid="contest-standings">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">Standings</p>
+        <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 sm:p-5" data-testid="contest-standings">
           <p className="mt-2 text-sm text-foreground" data-testid="standings-summary">
             <span className="font-semibold">{acceptedTotal}</span> accepted audience vote
             {acceptedTotal === 1 ? "" : "s"}
@@ -156,6 +155,13 @@ export default async function ContestDetailPage({
               : "Current leaders, not a certified winner. Test votes are shown separately and never counted."}
           </p>
         </div>
+      </section>
+
+      <section aria-labelledby="contest-nominees">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-nominees">
+          Restaurants on the ballot
+        </h2>
+
         {nominees.length === 0 ? (
           <EmptyState
             description="The organizer has not added any restaurants to this contest yet."

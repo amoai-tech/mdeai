@@ -157,6 +157,15 @@ export function ConciergeCoAgentProvider({
   );
 }
 
+/**
+ * SAN-1421 — the non-throwing read, for UI that is also rendered where no concierge provider is
+ * mounted (isolated component tests, local previews, deterministic E2E). Callers must handle `null`
+ * by rendering an inert surface rather than sending.
+ */
+export function useOptionalConciergeCoAgent(): ConciergeCoAgentValue | null {
+  return useContext(ConciergeCoAgentContext);
+}
+
 export function useConciergeCoAgent(): ConciergeCoAgentValue {
   const ctx = useContext(ConciergeCoAgentContext);
   if (!ctx) {
