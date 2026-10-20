@@ -15,7 +15,7 @@ type Result = { data: unknown; error: { message: string } | null };
 
 const builder = (result: Result) => {
   const b: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "order", "limit", "gte", "lte", "ilike", "in"]) b[m] = vi.fn(() => b);
+  for (const m of ["select", "eq", "order", "limit", "gte", "lte", "ilike", "in", "not", "or"]) b[m] = vi.fn(() => b);
   b.then = (ok?: (v: Result) => unknown, bad?: (r: unknown) => unknown) => Promise.resolve(result).then(ok, bad);
   return b;
 };

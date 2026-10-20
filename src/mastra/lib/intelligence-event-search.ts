@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { isQaEventFixture, NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
 import {
@@ -24,6 +25,7 @@ export type EventIntelligenceSlots = {
 type HybridEventRow = {
   id: string;
   name: string;
+  slug?: string | null;
   description: string | null;
   event_type: string | null;
   address: string | null;
@@ -136,7 +138,7 @@ export function filterHybridEventRows( // skipcq: JS-0067
   category?: EventQuery["category"],
   maxPricePerTicket?: number,
 ): HybridEventRow[] {
-  let filtered = rows;
+  let filtered = rows.filter((row) => !isQaEventFixture(row));
   if (category) {
     filtered = filtered.filter((r) => mapCategory(r.event_type) === category);
   }
@@ -212,7 +214,7 @@ async function hydrateHybridEventRows(
   try {
     const { data, error } = await client
       .from("events")
-      .select("id, city, currency, latitude, longitude, maps_url")
+      .select("id, slug, city, currency, latitude, longitude, maps_url")
       .in("id", rows.map((r) => r.id));
     if (error) {
       console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
@@ -224,6 +226,7 @@ async function hydrateHybridEventRows(
       if (!e) return row;
       return {
         ...row,
+        slug: row.slug ?? (e.slug as string | null),
         city: row.city ?? (e.city as string | null),
         currency: row.currency ?? (e.currency as string | null),
         latitude: row.latitude ?? (e.latitude as number | null),
@@ -317,14 +320,23 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
     }
   }
 
+  // A top-ranked page of QA results should not suppress genuine structured matches.
+  if (hybridUsed && hybridRows.every(isQaEventFixture)) {
+    hybridUsed = false;
+    hybridRows = [];
+    rankExplanation.length = 0;
+  }
+
   if (!hybridUsed) {
     let q = client
       .from("events")
       .select(
-        "id, name, event_type, address, city, event_start_time, ticket_price_min, currency, primary_image_url, latitude, longitude, maps_url",
+        "id, slug, name, event_type, address, city, event_start_time, ticket_price_min, currency, primary_image_url, latitude, longitude, maps_url",
       )
       .eq("is_active", true)
       .eq("status", "published")
+      .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+      .or(NON_QA_EVENT_SLUG_FILTER)
       .order("event_start_time", { ascending: true })
       .limit(48);
     if (neighborhood) q = q.ilike("address", `%${neighborhood}%`);
@@ -338,6 +350,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
     hybridRows = (data ?? []).map((r: Record<string, unknown>) => ({
       id: String(r.id),
       name: String(r.name),
+      slug: r.slug as string | null,
       description: null,
       event_type: r.event_type as string | null,
       address: r.address as string | null,
