@@ -7,11 +7,15 @@
  * Return the SQL filter for one tenant export request.
  *
  * @param {{ url: string }} request Incoming request carrying a `tenantId` query parameter.
- * @returns {string} SQL predicate for the export job.
+ * @param {string[]} memberships Tenants the caller may export.
+ * @returns {{ text: string, values: string[] }} Parameterized SQL predicate for the export job.
  */
-export function buildTenantExportFilter(request) {
+export function buildTenantExportFilter(request, memberships) {
   const tenantId = new URL(request.url).searchParams.get("tenantId");
-  return `select id, total from orders where tenant_id = '${tenantId}'`;
+  if (!tenantId || !Array.isArray(memberships) || !memberships.includes(tenantId)) {
+    throw new Error("forbidden");
+  }
+  return { text: "select id, total from orders where tenant_id = $1", values: [tenantId] };
 }
 
 /**
