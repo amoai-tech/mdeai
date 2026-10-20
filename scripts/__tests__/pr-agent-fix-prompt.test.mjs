@@ -1,159 +1,34 @@
 // SAN-1552 · MDE PR-Agent — Generate copy-ready fix prompts for AI coding agents.
 //
-// These tests are the contract for `scripts/pr-agent/render-fix-prompt.mjs`. They prove the
-// formatter fails closed on untrusted or incomplete review state, grounds every location in the
-// real diff, and publishes at most one comment. They never call GitHub, a model, or the network:
-// the review bodies are hand-built from the recorded PR-Agent state schema, and the publisher is
-// exercised against a fake Octokit client.
+// These tests are the contract for `scripts/pr-agent/render-fix-prompt.mjs` and
+// `scripts/pr-agent/fix-prompt-findings.mjs`: the formatter fails closed on untrusted or incomplete
+// review state and grounds every location in the real diff. No GitHub, model, or network call
+// happens here.
 //
-// The six-finding fixture only models the *format* of the Sourcery "Prompt for AI Agents" review on
-// amoai-tech/mdeai#416. It is not a claim that the merged PR still has defects.
+// The fixtures only model the *format* of the Sourcery "Prompt for AI Agents" review on
+// amoai-tech/mdeai#416. They are not a claim that the merged PR still has defects.
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-import {
-  FIX_PROMPT_MARKER,
-  MAX_COMMENT_CHARS,
-  labelMap,
-  parsePatchLines,
-  publishedHeadOf,
-  redactSecrets,
-  renderFixPrompt,
-  renderOutdatedFixPrompt,
-  upsertFixPromptComment,
-} from "../pr-agent/render-fix-prompt.mjs";
+import { MAX_COMMENT_CHARS } from "../pr-agent/fix-prompt-comment.mjs";
+import { labelMap, parsePatchLines } from "../pr-agent/fix-prompt-findings.mjs";
+import { FIX_PROMPT_MARKER, publishedHeadOf } from "../pr-agent/fix-prompt-comment.mjs";
+import { redactSecrets, renderFixPrompt, renderOutdatedFixPrompt } from "../pr-agent/render-fix-prompt.mjs";
 import { reviewEnvelope, stampReviewEnvelope } from "../pr-agent/review-policy.mjs";
-
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const BASE = "c14348231b0fe2d1094a6dfb5fbb09d7911373bc";
-const HEAD = "d6cdf9e3c4547b662ba9101f6077be48aacb243e";
-const OTHER_HEAD = "9af17edce9b8143d824450eb08bfdac5266e9406";
-const PR_URL = "https://github.com/amoai-tech/mdeai/pull/1552";
-
-const recordedFormatFixture = () =>
-  readFileSync(
-    join(REPO_ROOT, "scripts/pr-agent/evals/fixtures/pr-274-readable-format-postmerge-recorded.md"),
-    "utf8",
-  );
-
-/** A synthetic unified diff whose lines startLine..endLine are added on the RIGHT side. */
-function patchWithAdded(startLine, endLine = startLine, { before = 2, after = 2 } = {}) {
-  const from = Math.max(1, startLine - before);
-  const contextBefore = startLine - from;
-  const added = endLine - startLine + 1;
-  const lines = [
-    `@@ -${from},${contextBefore + after} +${from},${contextBefore + added + after} @@`,
-  ];
-  for (let line = from; line < startLine; line += 1) lines.push(` context line ${line}`);
-  for (let line = startLine; line <= endLine; line += 1) lines.push(`+changed line ${line}`);
-  for (let line = endLine + 1; line <= endLine + after; line += 1) lines.push(` context line ${line}`);
-  return lines.join("\n");
-}
-
-function changedFile(filename, startLine, endLine = startLine, extra = {}) {
-  return { filename, status: "modified", patch: patchWithAdded(startLine, endLine), ...extra };
-}
-
-/** One finding body in the eight-field form MDE's review contract requires. */
-function findingBody({
-  severity = "HIGH",
-  status = "changes_required",
-  verification = "VERIFIED",
-  problem = "A concrete defect was observed.",
-  impact = "A real user or CI consequence follows.",
-  fix = "Apply the smallest safe correction.",
-  test = "Add a focused regression and run it.",
-} = {}) {
-  return [
-    `Severity: ${severity}`,
-    `Problem: ${problem}`,
-    `Impact: ${impact}`,
-    `Fix: ${fix}`,
-    `Test: ${test}`,
-    `Verification state: ${verification}`,
-    `Status: ${status}`,
-  ].join("\n");
-}
-
-function stateFinding({
-  id = "f1",
-  path = "src/app.ts",
-  lineStart = 10,
-  lineEnd = lineStart,
-  state = "ACTIVE",
-  lastSeenHeadSha = HEAD,
-  ...body
-} = {}) {
-  return {
-    body: findingBody(body),
-    finding_id: id,
-    first_seen: "2026-10-19T00:00:00.000Z",
-    last_seen: "2026-10-19T00:00:00.000Z",
-    last_seen_head_sha: lastSeenHeadSha,
-    line_start: lineStart,
-    line_end: lineEnd,
-    path,
-    state,
-  };
-}
-
-/** A verified review result whose body is a real ReviewEnvelope plus real persistent state. */
-function stateReview({
-  findings = [],
-  headSha = HEAD,
-  baseSha = BASE,
-  kind = "full",
-  complete = true,
-  excludedFiles = [],
-  type = "canonical",
-  command = "/review",
-  stateBody = null,
-} = {}) {
-  const state =
-    stateBody ??
-    JSON.stringify({
-      findings,
-      last_run: { complete, excluded_files: excludedFiles, head_sha: headSha, kind },
-      schema_version: 1,
-    });
-  const body = [
-    reviewEnvelope({ baseSha, headSha, command, type }),
-    "## MDE PR Review",
-    "<!-- pr-agent:review:full -->",
-    "",
-    "<!-- pr-agent-review-state:v1",
-    state,
-    "-->",
-    "",
-  ].join("\n");
-  return {
-    ok: true,
-    code: "OK",
-    coverageConfirmed: type === "canonical",
-    type,
-    comment: {
-      id: 101,
-      body,
-      user: { login: "github-actions[bot]" },
-      created_at: "2026-10-19T00:00:00Z",
-      updated_at: "2026-10-19T00:00:00Z",
-    },
-  };
-}
-
-const render = (result, changedFiles, overrides = {}) =>
-  renderFixPrompt({
-    result,
-    baseSha: BASE,
-    headSha: HEAD,
-    prUrl: PR_URL,
-    changedFiles,
-    ...overrides,
-  });
+import {
+  BASE,
+  HEAD,
+  OTHER_HEAD,
+  PR_URL,
+  changedFile,
+  patchWithAdded,
+  recordedCanaryFixture,
+  recordedFormatFixture,
+  render,
+  stateFinding,
+  stateReview,
+} from "./helpers/pr-agent-fix-prompt-fixtures.mjs";
 
 describe("SAN-1552 fix-prompt formatter — diff grounding", () => {
   it("maps only new-side lines and never treats a removed line as present", () => {
@@ -211,7 +86,7 @@ describe("SAN-1552 fix-prompt formatter — diff grounding", () => {
   });
 });
 
-describe("SAN-1552 fix-prompt formatter — trust gates", () => {
+describe("SAN-1552 fix-prompt formatter — trust gates: review identity", () => {
   it("fails closed when the exact-head verifier did not accept a review", () => {
     const rendered = render(
       { ok: false, code: "STALE_HEAD", reason: "ReviewEnvelope head does not match current PR head" },
@@ -235,22 +110,6 @@ describe("SAN-1552 fix-prompt formatter — trust gates", () => {
     const result = stateReview({ findings: [stateFinding()], baseSha: OTHER_HEAD });
     const rendered = render(result, [changedFile("src/app.ts", 10)]);
     assert.equal(rendered.code, "WRONG_BASE");
-  });
-
-  it("rejects an explicitly partial review", () => {
-    const result = stateReview({
-      findings: [stateFinding()],
-      excludedFiles: ["src/large.ts"],
-    });
-    const rendered = render(result, [changedFile("src/app.ts", 10)]);
-    assert.equal(rendered.status, "review_incomplete");
-    assert.equal(rendered.code, "PARTIAL_COVERAGE");
-  });
-
-  it("rejects a review whose coverage state is marked incomplete", () => {
-    const result = stateReview({ findings: [], complete: false });
-    const rendered = render(result, []);
-    assert.equal(rendered.code, "INCOMPLETE_REVIEW");
   });
 
   it("rejects a forged or duplicated state marker", () => {
@@ -288,6 +147,24 @@ describe("SAN-1552 fix-prompt formatter — trust gates", () => {
     const rendered = render(result, []);
     assert.equal(rendered.code, "STALE_HEAD");
   });
+});
+
+describe("SAN-1552 fix-prompt formatter — trust gates: coverage honesty", () => {
+  it("rejects an explicitly partial review", () => {
+    const result = stateReview({
+      findings: [stateFinding()],
+      coverage: { excludedFiles: ["src/large.ts"] },
+    });
+    const rendered = render(result, [changedFile("src/app.ts", 10)]);
+    assert.equal(rendered.status, "review_incomplete");
+    assert.equal(rendered.code, "PARTIAL_COVERAGE");
+  });
+
+  it("rejects a review whose coverage state is marked incomplete", () => {
+    const result = stateReview({ findings: [], coverage: { complete: false } });
+    const rendered = render(result, []);
+    assert.equal(rendered.code, "INCOMPLETE_REVIEW");
+  });
 
   it("never claims complete coverage for a state-free clean review", () => {
     const body = [
@@ -316,31 +193,7 @@ describe("SAN-1552 fix-prompt formatter — trust gates", () => {
   });
 });
 
-describe("SAN-1552 fix-prompt formatter — ordering, dedupe and honesty", () => {
-  it("renders the recorded real PR-Agent review without fabricating fields", () => {
-    const result = {
-      ok: true,
-      code: "OK",
-      coverageConfirmed: true,
-      type: "canonical",
-      comment: {
-        id: 7,
-        body: recordedFormatFixture(),
-        user: { login: "github-actions[bot]" },
-        updated_at: "2026-10-12T00:52:04Z",
-      },
-    };
-    const rendered = render(result, [changedFile("scripts/pr-agent/evals/score-review.mjs", 436, 442)]);
-    assert.equal(rendered.status, "prompt");
-    assert.equal(rendered.confirmed, 1);
-    assert.match(rendered.body, /False-Green Format Compliance/);
-    assert.match(rendered.body, /line_range="440"/);
-    assert.match(rendered.body, /scripts\/pr-agent\/evals\/score-review\.mjs/);
-    // The real body's own fix and test are reused, not invented.
-    assert.match(rendered.body, /Restore the ternary guard/);
-    assert.match(rendered.body, /allCompliant` is `null`, not `true`/);
-  });
-
+describe("SAN-1552 fix-prompt formatter — ordering and dedupe", () => {
   it("orders six findings by severity then path and groups confirmed vs investigate", () => {
     const files = [
       changedFile("src/z-low.ts", 10),
@@ -376,17 +229,6 @@ describe("SAN-1552 fix-prompt formatter — ordering, dedupe and honesty", () =>
     assert.match(rendered.body, /<location path="src\/not-changed\.ts" \/>/);
   });
 
-  it("renders the required evidence blocks for each item", () => {
-    const result = stateReview({ findings: [stateFinding({ path: "src/app.ts", lineStart: 10, lineEnd: 12 })] });
-    const rendered = render(result, [changedFile("src/app.ts", 10, 12)]);
-    assert.match(rendered.body, /<location path="src\/app\.ts" line_range="10-12" \/>/);
-    assert.match(rendered.body, /<code_context>\n[\s\S]*changed line 11[\s\S]*<\/code_context>/);
-    assert.match(rendered.body, /<issue_to_address>[\s\S]*Problem:[\s\S]*<\/issue_to_address>/);
-    assert.match(rendered.body, /<verify>[\s\S]*Add a focused regression[\s\S]*<\/verify>/);
-    assert.match(rendered.body, /npm run floor/);
-    assert.match(rendered.body, /npm run lint` and `npm run typecheck/);
-  });
-
   it("renders one finding deterministically and identically on retry", () => {
     const result = stateReview({ findings: [stateFinding()] });
     const files = [changedFile("src/app.ts", 10)];
@@ -407,25 +249,35 @@ describe("SAN-1552 fix-prompt formatter — ordering, dedupe and honesty", () =>
     assert.equal(rendered.confirmed, 1);
     assert.equal(rendered.duplicates, 1);
   });
+});
 
-  it("demotes model-labelled NEEDS VERIFICATION and advisory findings", () => {
-    const result = stateReview({
-      findings: [
-        stateFinding({ id: "n1", path: "src/app.ts", lineStart: 10, verification: "NEEDS VERIFICATION" }),
-        stateFinding({ id: "n2", path: "src/app.ts", lineStart: 10, status: "advisory" }),
-      ],
-    });
-    const rendered = render(result, [changedFile("src/app.ts", 10)]);
-    assert.equal(rendered.confirmed, 0);
-    assert.equal(rendered.investigate, 2);
-    assert.match(rendered.body, /NEEDS VERIFICATION; a model label is not independent proof/);
+describe("SAN-1552 fix-prompt formatter — evidence honesty", () => {
+  it("renders the recorded real PR-Agent review without fabricating fields", () => {
+    const result = {
+      ok: true,
+      code: "OK",
+      coverageConfirmed: true,
+      type: "canonical",
+      comment: {
+        id: 7,
+        body: recordedFormatFixture(),
+        user: { login: "github-actions[bot]" },
+        updated_at: "2026-10-12T00:52:04Z",
+      },
+    };
+    const rendered = render(result, [changedFile("scripts/pr-agent/evals/score-review.mjs", 436, 442)]);
+    assert.equal(rendered.status, "prompt");
+    assert.equal(rendered.confirmed, 1);
+    assert.match(rendered.body, /False-Green Format Compliance/);
+    assert.match(rendered.body, /line_range="440"/);
+    assert.match(rendered.body, /scripts\/pr-agent\/evals\/score-review\.mjs/);
+    // The real body's own fix and test are reused, not invented.
+    assert.match(rendered.body, /Restore the ternary guard/);
+    assert.match(rendered.body, /allCompliant` is `null`, not `true`/);
   });
 
   it("keeps an unlabelled v0.45 state finding as Investigate instead of dropping it", () => {
-    const fixture = readFileSync(
-      join(REPO_ROOT, "scripts/pr-agent/evals/fixtures/pr-163-canary-v045-recorded.md"),
-      "utf8",
-    );
+    const fixture = recordedCanaryFixture();
     const headSha = "283412878f08ed370fb91e8cab58b463962c2059";
     const body = stampReviewEnvelope(fixture, {
       baseSha: BASE,
@@ -450,6 +302,19 @@ describe("SAN-1552 fix-prompt formatter — ordering, dedupe and honesty", () =>
     assert.match(rendered.body, /Test Does Not Validate Actual Script Regex/);
   });
 
+  it("demotes model-labelled NEEDS VERIFICATION and advisory findings", () => {
+    const result = stateReview({
+      findings: [
+        stateFinding({ id: "n1", path: "src/app.ts", lineStart: 10, verification: "NEEDS VERIFICATION" }),
+        stateFinding({ id: "n2", path: "src/app.ts", lineStart: 10, status: "advisory" }),
+      ],
+    });
+    const rendered = render(result, [changedFile("src/app.ts", 10)]);
+    assert.equal(rendered.confirmed, 0);
+    assert.equal(rendered.investigate, 2);
+    assert.match(rendered.body, /NEEDS VERIFICATION; a model label is not independent proof/);
+  });
+
   it("demotes a finding the recorded state last saw at another head", () => {
     const result = stateReview({ findings: [stateFinding({ path: "src/app.ts", lastSeenHeadSha: OTHER_HEAD })] });
     const rendered = render(result, [changedFile("src/app.ts", 10)]);
@@ -458,7 +323,7 @@ describe("SAN-1552 fix-prompt formatter — ordering, dedupe and honesty", () =>
   });
 });
 
-describe("SAN-1552 fix-prompt formatter — injection and size", () => {
+describe("SAN-1552 fix-prompt formatter — injection safety", () => {
   it("neutralises forged markers, HTML and code fences from model text", () => {
     const hostile = [
       "Severity: HIGH",
@@ -518,6 +383,21 @@ describe("SAN-1552 fix-prompt formatter — injection and size", () => {
     assert.match(rendered.body, /\[REDACTED\]/);
   });
 
+  it("reads labelled fields from both the sectioned and the flattened model shapes", () => {
+    const sectioned = labelMap("Severity: HIGH\nProblem: p\nFix: f\nTest: t\nStatus: changes_required");
+    assert.equal(sectioned.get("problem"), "p");
+    assert.equal(sectioned.get("fix"), "f");
+    assert.equal(sectioned.get("test"), "t");
+    const flattened = labelMap(
+      "**Thing** **Severity:** HIGH **Technical:** the real problem **Fix:** the fix **Verify:** the test **Status:** changes_required",
+    );
+    assert.equal(flattened.get("technical"), "the real problem");
+    assert.equal(flattened.get("fix"), "the fix");
+    assert.equal(flattened.get("verify"), "the test");
+  });
+});
+
+describe("SAN-1552 fix-prompt formatter — size and staleness", () => {
   it("caps the comment without silently dropping items", () => {
     const files = [changedFile("src/app.ts", 10)];
     const findings = [];
@@ -552,160 +432,17 @@ describe("SAN-1552 fix-prompt formatter — injection and size", () => {
     assert.equal(publishedHeadOf(stale.body), HEAD);
     assert.ok(stale.body.includes(FIX_PROMPT_MARKER));
   });
-
-  it("reads labelled fields from both the sectioned and the flattened model shapes", () => {
-    const sectioned = labelMap("Severity: HIGH\nProblem: p\nFix: f\nTest: t\nStatus: changes_required");
-    assert.equal(sectioned.get("problem"), "p");
-    assert.equal(sectioned.get("fix"), "f");
-    assert.equal(sectioned.get("test"), "t");
-    const flattened = labelMap(
-      "**Thing** **Severity:** HIGH **Technical:** the real problem **Fix:** the fix **Verify:** the test **Status:** changes_required",
-    );
-    assert.equal(flattened.get("technical"), "the real problem");
-    assert.equal(flattened.get("fix"), "the fix");
-    assert.equal(flattened.get("verify"), "the test");
-  });
 });
 
-/** A minimal Octokit-shaped fake that records every write. */
-function fakeGithub(existing = []) {
-  const calls = { list: 0, created: [], updated: [] };
-  const comments = existing.map((comment) => ({ ...comment }));
-  const github = {
-    paginate: async (fn, params) => {
-      calls.list += 1;
-      return fn(params);
-    },
-    rest: {
-      issues: {
-        listComments: async () => comments,
-        createComment: async ({ body }) => {
-          const created = {
-            id: 900 + calls.created.length,
-            body,
-            user: { login: "github-actions[bot]" },
-            updated_at: new Date(2026, 0, 1, 0, calls.created.length).toISOString(),
-          };
-          calls.created.push(created);
-          comments.push(created);
-          return { data: created };
-        },
-        updateComment: async ({ comment_id, body }) => {
-          calls.updated.push({ comment_id, body });
-          const target = comments.find((comment) => comment.id === comment_id);
-          if (target) {
-            target.body = body;
-            target.updated_at = new Date(2026, 0, 2).toISOString();
-          }
-          return { data: target };
-        },
-      },
-    },
-  };
-  return { github, calls };
-}
-
-describe("SAN-1552 fix-prompt publisher — one owned comment", () => {
-  const bodyFor = (headSha) =>
-    renderFixPrompt({
-      result: stateReview({ findings: [stateFinding({ path: "src/app.ts" })] }),
-      baseSha: BASE,
-      headSha,
-      prUrl: PR_URL,
-      changedFiles: [changedFile("src/app.ts", 10)],
-    }).body;
-
-  it("creates once and then updates the same comment for a later head", async () => {
-    const { github, calls } = fakeGithub();
-    const first = await upsertFixPromptComment({
-      github,
-      owner: "amoai-tech",
-      repo: "mdeai",
-      issueNumber: 1552,
-      body: bodyFor(HEAD),
-    });
-    assert.equal(first.action, "created");
-    assert.equal(calls.created.length, 1);
-
-    const second = await upsertFixPromptComment({
-      github,
-      owner: "amoai-tech",
-      repo: "mdeai",
-      issueNumber: 1552,
-      body: bodyFor(OTHER_HEAD),
-    });
-    assert.equal(second.action, "updated");
-    assert.equal(calls.created.length, 1, "a retry must never create a second comment");
-    assert.equal(calls.updated.length, 1);
-    assert.equal(second.commentId, first.commentId);
-  });
-
-  it("is a no-op when the body is already current", async () => {
-    const { github, calls } = fakeGithub();
-    const body = bodyFor(HEAD);
-    await upsertFixPromptComment({ github, owner: "o", repo: "r", issueNumber: 1, body });
-    const repeat = await upsertFixPromptComment({ github, owner: "o", repo: "r", issueNumber: 1, body });
-    assert.equal(repeat.action, "unchanged");
-    assert.equal(calls.updated.length, 0);
-    assert.equal(calls.created.length, 1);
-  });
-
-  it("ignores another author's comment that merely quotes the marker", async () => {
-    const { github, calls } = fakeGithub([
-      {
-        id: 5,
-        body: `${FIX_PROMPT_MARKER}\n<!-- mde-pr-agent:fix-prompt-head=${HEAD} -->\nnot the bot`,
-        user: { login: "someone-else" },
-        updated_at: "2026-01-01T00:00:00Z",
-      },
-    ]);
-    const outcome = await upsertFixPromptComment({
-      github,
-      owner: "o",
-      repo: "r",
-      issueNumber: 1,
-      body: bodyFor(HEAD),
-    });
-    assert.equal(outcome.action, "created");
-    assert.equal(calls.created.length, 1);
-    assert.equal(calls.updated.length, 0);
-  });
-
-  it("updates the newest owned comment when duplicates already exist", async () => {
-    const { github, calls } = fakeGithub([
-      { id: 1, body: `${FIX_PROMPT_MARKER}\nold`, user: { login: "github-actions[bot]" }, updated_at: "2026-01-01T00:00:00Z" },
-      { id: 2, body: `${FIX_PROMPT_MARKER}\nnewer`, user: { login: "github-actions[bot]" }, updated_at: "2026-01-02T00:00:00Z" },
-    ]);
-    const outcome = await upsertFixPromptComment({
-      github,
-      owner: "o",
-      repo: "r",
-      issueNumber: 1,
-      body: bodyFor(HEAD),
-    });
-    assert.equal(outcome.action, "updated");
-    assert.equal(outcome.duplicates, 1);
-    assert.equal(calls.updated.length, 1);
-    assert.equal(calls.updated[0].comment_id, 2);
-    assert.equal(calls.created.length, 0);
-  });
-
-  it("refuses to publish a body without its identity marker", async () => {
-    const { github } = fakeGithub();
-    await assert.rejects(
-      () => upsertFixPromptComment({ github, owner: "o", repo: "r", issueNumber: 1, body: "plain comment" }),
-      /does not carry the fix-prompt marker/,
-    );
-  });
-
-  it("surfaces a GitHub API failure instead of reporting success", async () => {
-    const github = {
-      paginate: async () => [],
-      rest: { issues: { createComment: async () => { throw new Error("API rate limit exceeded"); } } },
-    };
-    await assert.rejects(
-      () => upsertFixPromptComment({ github, owner: "o", repo: "r", issueNumber: 1, body: bodyFor(HEAD) }),
-      /API rate limit exceeded/,
-    );
+describe("SAN-1552 fix-prompt formatter — item evidence blocks", () => {
+  it("renders the required evidence blocks for each item", () => {
+    const result = stateReview({ findings: [stateFinding({ path: "src/app.ts", lineStart: 10, lineEnd: 12 })] });
+    const rendered = render(result, [changedFile("src/app.ts", 10, 12)]);
+    assert.match(rendered.body, /<location path="src\/app\.ts" line_range="10-12" \/>/);
+    assert.match(rendered.body, /<code_context>\n[\s\S]*changed line 11[\s\S]*<\/code_context>/);
+    assert.match(rendered.body, /<issue_to_address>[\s\S]*Problem:[\s\S]*<\/issue_to_address>/);
+    assert.match(rendered.body, /<verify>[\s\S]*Add a focused regression[\s\S]*<\/verify>/);
+    assert.match(rendered.body, /npm run floor/);
+    assert.match(rendered.body, /npm run lint` and `npm run typecheck/);
   });
 });
