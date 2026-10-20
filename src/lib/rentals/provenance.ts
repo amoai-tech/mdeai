@@ -44,6 +44,37 @@ export function isExternalSourceListing(metadata: unknown): boolean {
   );
 }
 
+/**
+ * SAN-1235 — the preserved external source of an imported record, INDEPENDENT of whether MDE now
+ * manages it. Attribution is not requestability: a development-managed import can be booked through
+ * MDE *and* still show the advertiser it came from. Reads only the preserved `source_*` keys the
+ * import wrote; it never infers a source, and returns nothing when provenance was not recorded.
+ */
+export function externalSourceAttribution(metadata: unknown): {
+  provider: string | null;
+  originalUrl: string | null;
+} {
+  const empty = { provider: null, originalUrl: null };
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return empty;
+  const meta = metadata as Record<string, unknown>;
+  const declared =
+    meta.source_record_type === "third_party_advertisement" ||
+    meta.inventory_kind === "external_candidate" ||
+    meta.inventory_type === "external" ||
+    meta.allowed_action === "view_original_listing";
+  const text = (keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = meta[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  const provider = text(["source_provider", "source_name"]);
+  const originalUrl = text(["source_original_url", "source_url"]);
+  if (!declared && !provider && !originalUrl) return empty;
+  return { provider, originalUrl };
+}
+
 /** The advertiser's display name, when the import preserved one. */
 export function externalSourceProvider(metadata: unknown): string | null {
   if (!isExternalSourceListing(metadata)) return null;

@@ -52,6 +52,15 @@ describe("mixed verified and source-linked rentals", () => {
     expect(mixed.distinctExternal).toBe(1);
   });
 
+  it("keeps two distinct units sharing a real provider search-results page", () => {
+    const url = "https://rentberry.com/co/apartments/s/antioquia-colombia/3-bed?page=8";
+    const results = mixRentalResults([
+      rental("telaviv-1204", url),
+      rental("el-laurel-201", url),
+    ], [], 8).results;
+    expect(results.map((r) => r.id)).toEqual(["telaviv-1204", "el-laurel-201"]);
+  });
+
   it("keeps all external entries when canonical search returns no inventory", () => {
     expect(mixRentalResults([], Array.from({ length: 9 }, (_, i) => external(i)), 8).results).toHaveLength(8);
   });

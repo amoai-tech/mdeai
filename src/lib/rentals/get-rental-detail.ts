@@ -1,12 +1,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
 import {
   isAvailabilityUnconfirmed,
   isSelfAttested,
   isExternalSourceListing,
   externalSourceProvider,
+  externalSourceAttribution,
+  isUnverifiedExternalSource,
 } from "@/lib/rentals/provenance";
 
 /**
@@ -40,7 +43,7 @@ export type RentalDetail = {
   latitude: number | null;
   longitude: number | null;
   status: string | null;
-  /** The advertiser's own listing, when this is an external candidate (never for MDE-owned rows). */
+  /** Validated advertiser URL, independent of MDE development viewing requestability. */
   sourceUrl: string | null;
   /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
   sourceProvider: string | null;
@@ -118,12 +121,12 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     status: str(row.status),
-    sourceUrl: str(row.source_url),
-    sourceProvider: externalSourceProvider(row.metadata),
+    sourceUrl: approvedExternalSourceUrl(str(row.source_url) ?? externalSourceAttribution(row.metadata).originalUrl),
+    sourceProvider: externalSourceAttribution(row.metadata).provider ?? externalSourceProvider(row.metadata),
     isExternalSource: isExternalSourceListing(row.metadata),
     // Computed by Supabase under the server-controlled phase, not mirrored in UI.
     canScheduleViewing: row.rental_can_request_viewing === true,
-    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isExternalSourceListing(row.metadata),
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isUnverifiedExternalSource(row.metadata) || isExternalSourceListing(row.metadata),
   };
 }
 
