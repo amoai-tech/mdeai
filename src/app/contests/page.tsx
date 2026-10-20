@@ -121,8 +121,8 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
       data-testid={"contest-card-" + contest.slug}
       data-featured="true"
     >
-      <Link className="grid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:grid-cols-[1.1fr_1fr]" href={href}>
-        <div className="order-2 flex flex-col justify-between gap-6 p-6 sm:p-10 md:order-1">
+      <Link className="flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:flex-row" href={href}>
+        <div className="order-2 flex w-full flex-col justify-between gap-6 p-6 sm:p-10 md:order-1 md:w-[58%]">
           <div className="space-y-4">
             <span
               className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground"
@@ -151,7 +151,7 @@ function FeaturedContest({ contest }: { contest: PublicContestSummary }) {
           </div>
         </div>
 
-        <div className="order-1 min-h-40 md:order-2">
+        <div className="order-1 min-h-56 w-full md:order-2 md:min-h-0 md:w-[42%]">
           {hasCover && cover ? (
             <Image
               alt=""
