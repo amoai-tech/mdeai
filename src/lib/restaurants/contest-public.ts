@@ -25,7 +25,22 @@ export type PublicNominee = {
   neighborhood: string | null;
   imageUrl: string | null;
   category: string | null;
+  /** Clean, non-test audience ballots. The only input to a public place. */
+  audienceAccepted: number;
+  /** Development-test ballots. Reported separately, never added to accepted. */
+  developmentTestTotal: number;
+  /** Competition place; null when nobody has an accepted vote. */
+  rank: number | null;
 };
+
+/**
+ * A tally field must be a non-negative safe integer. Anything else — absent, null, negative,
+ * fractional, a string — is a broken read, not a zero. Treating it as zero would silently publish a
+ * leaderboard nobody can trust.
+ */
+function asCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
 
 export type ListResult =
   | { status: "ok"; contests: PublicContestSummary[] }
@@ -112,6 +127,16 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
       const restaurantId = asString(row.restaurant_id);
       const name = asString(row.restaurant_name);
       if (!entityId || !restaurantId || !name) continue;
+
+      const accepted = asCount(row.audience_accepted);
+      const development = asCount(row.development_test_total);
+      if (accepted === null || development === null) {
+        console.error("[contests] malformed tally on nominee " + entityId);
+        return { status: "error" };
+      }
+      const rankRaw = row.rank;
+      const rank =
+        typeof rankRaw === "number" && Number.isSafeInteger(rankRaw) && rankRaw > 0 ? rankRaw : null;
       nominees.push({
         entityId,
         restaurantId,
@@ -119,6 +144,9 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
         neighborhood: asString(row.neighborhood),
         imageUrl: asString(row.image_url),
         category: asString(row.category),
+        audienceAccepted: accepted,
+        developmentTestTotal: development,
+        rank,
       });
     }
   }
