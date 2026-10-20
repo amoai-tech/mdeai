@@ -79,16 +79,22 @@
           "value": "openbot"
         },
         {
-          "id": "called-openbot",
+          "id": "not-called-openbot",
           "kind": "deterministic",
-          "check": "skill_called",
+          "check": "skill_not_called",
           "value": "openbot"
         },
         {
-          "id": "read-openbot",
+          "id": "called-real-estate",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "real-estate"
+        },
+        {
+          "id": "read-real-estate",
           "kind": "deterministic",
           "check": "skill_result_ok",
-          "value": "openbot"
+          "value": "real-estate"
         },
         {
           "id": "completed",
@@ -96,7 +102,7 @@
           "check": "turn_completed"
         }
       ],
-      "should_trigger": true
+      "should_trigger": false
     }
   ]
 }
