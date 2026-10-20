@@ -86,8 +86,11 @@ jobs:
 
       # A failed production journey is the one run someone has to debug later. Keep the trace,
       # the screenshots and the HTML report instead of losing them with the runner.
+      # always(), not failure(): a timeout cancels the job, where failure() is false and the
+      # artifacts would be lost exactly when they matter most. Success runs find nothing to
+      # upload (if-no-files-found: ignore).
       - name: Upload failure artifacts
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: prod-renter-journey-failure

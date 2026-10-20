@@ -112,11 +112,25 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(provider).toContain("isDeterministicE2E()");
   });
 
-  it("does not retain browser traces for live production smoke", () => {
+  it("retains a production journey trace only on failure, via its workflow", () => {
     const prod = (config.projects ?? []).find(
       (project) => project.name === "prod-smoke",
     );
+    // Config default: live production runs never retain traces.
     expect(prod?.use?.trace).toBe("off");
+    // The nightly journey opts into failure-only evidence and disables the CI retry that would
+    // repeat a real write journey. Pin that here so the policy cannot drift silently.
+    const workflow = fs.readFileSync(
+      ".github/workflows/prod-renter-journey.yml",
+      "utf8",
+    );
+    expect(workflow).toContain("--trace=retain-on-failure");
+    expect(workflow).toContain("--screenshot=only-on-failure");
+    expect(workflow).toContain("--retries=0");
+    expect(workflow).toContain('PW_SKIP_WEBSERVER: "1"');
+    expect(workflow).not.toMatch(/--trace=on\b/);
+    // The evidence upload must survive a timeout or a cancelled job.
+    expect(workflow).toMatch(/Upload failure artifacts[\s\S]{0,200}if: always\(\)/);
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [
