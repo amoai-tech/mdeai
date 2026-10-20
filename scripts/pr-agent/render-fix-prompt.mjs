@@ -1,8 +1,10 @@
 // SAN-1552 · MDE PR-Agent — Generate copy-ready fix prompts for AI coding agents.
 //
-// What this is: one deterministic Markdown formatter. It turns a review that the existing
-// exact-head verifier already accepted (`verifyReviewResult` in `review-policy.mjs`) into one
-// persistent "Prompt for AI Agents" comment, grounded in the *current* GitHub PR diff.
+// What this is: the deterministic Markdown formatter. It turns a review that the existing
+// exact-head verifier already accepted (`verifyReviewResult` in `review-policy.mjs`) into the body
+// of one persistent "Prompt for AI Agents" comment, grounded in the *current* GitHub PR diff.
+// Diff grounding lives in `fix-prompt-findings.mjs`; comment identity and the single upsert live in
+// `fix-prompt-comment.mjs`.
 //
 // What this is NOT: a second reviewer, an LLM call, an approval gate, or proof that a finding is a
 // real defect. A model-written "VERIFIED" label is never independent proof. This module only
@@ -14,15 +16,13 @@
 //   - resolved, duplicated, stale and ungrounded findings are dropped or demoted, not promoted.
 // Deterministic CI, required checks and human/independent review remain the real certification.
 //
-// No network and no model call happens here. Publishing is a single upsert against the existing
-// GitHub token, so repeated runs produce exactly one owned comment.
+// No network and no model call happens here.
 
 import { FIX_PROMPT_MARKER, MAX_COMMENT_CHARS } from "./fix-prompt-comment.mjs";
 import { MAX_TITLE_CHARS, field, findingTitle, labelMap, locateFinding } from "./fix-prompt-findings.mjs";
 import { parseReviewEnvelope } from "./review-policy.mjs";
 import { parseFindings } from "./evals/score-review.mjs";
 
-/** Stable identity of the comment this module owns. The head is recorded separately below. */
 const SEVERITY_RANK = new Map([
   ["BLOCKER", 0],
   ["HIGH", 1],
