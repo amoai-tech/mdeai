@@ -153,6 +153,19 @@ afterEach(async () => {
 });
 
 describe("/rentals Details panel — desktop", () => {
+  it("clears the old Details selection when rental URL filters change", async () => {
+    await mount();
+    await click(detailsButton(MAPPED_SLUG));
+    expect(byId("rental-details-panel")).not.toBeNull();
+
+    // Next App Router navigation can update props without remounting the component tree.
+    // The old rental selection must not survive a new catalogue/filter context.
+    act(() => {
+      root.render(<RentalBrowseView {...viewProps(NINE)} neighborhood="Laureles" />);
+    });
+    expect(byId("rental-details-panel")).toBeNull();
+  });
+
   it("fixtures are the nine approved ads: seven mapped, two not, four approved photos each", () => {
     expect(NINE).toHaveLength(9);
     expect(NINE.filter((r) => r.latitude != null)).toHaveLength(MAPPED);

@@ -1,0 +1,46 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+import { ConciergeErrorNotice } from "@/components/chat/concierge-error-notice";
+import {
+  getConciergeErrorForThread,
+  getConciergeErrorForThreadServer,
+  subscribeConciergeError,
+} from "@/lib/concierge-error-store";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
+
+/** Visible Stop while a turn runs, and Retry after an agent failure. */
+export function ConciergeRunFeedback() {
+  const { isLoading, retryLastTurn, stopActiveRun } = useConciergeChat();
+  const nav = useOptionalThreadNav();
+  const currentThreadId = nav?.activeThreadId ?? nav?.sessionThreadId;
+  const error = useSyncExternalStore(
+    subscribeConciergeError,
+    () => getConciergeErrorForThread(currentThreadId),
+    getConciergeErrorForThreadServer,
+  );
+
+  if (!isLoading && error.version === 0) return null;
+
+  return (
+    <div data-testid="concierge-run-feedback" className="flex flex-col gap-2">
+      {isLoading ? (
+        <button
+          type="button"
+          data-testid="concierge-stop"
+          aria-label="Stop"
+          onClick={stopActiveRun}
+          className="self-start rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          Stop
+        </button>
+      ) : null}
+      {error.version > 0 && !isLoading ? (
+        <ConciergeErrorNotice
+          onRetry={() => void (error.retry ?? retryLastTurn)()}
+        />
+      ) : null}
+    </div>
+  );
+}

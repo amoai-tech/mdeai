@@ -257,9 +257,13 @@ function isThousandsGroupedInteger(value: string): boolean {
 /** Parse explicit monthly amounts in a *named currency* without guessing USD↔COP FX.
  * Digits with 3-digit groupings are integer prices; decimal "3,5"/"3.5" only
  * scales when the renter wrote million/M. Unstated currencies remain unfiltered.
+ *
+ * A COP amount written in millions (or at least COP 1,000,000) without an explicit
+ * period is a monthly rent: that is how the Colombian catalogue is priced, and
+ * "under COP 3 million" is the normal way a renter says it. USD still requires an
+ * explicit monthly word, and any nightly marker wins over the COP inference.
  */
 function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP" | "USD" } | null {
-  if (!MONTHLY_RE.test(text)) return null;
   const magnitude = "(millones?|mill[oó]n|million|millions|m|mil|k)";
   const number = "(\\d[\\d.,]{0,16})";
   // Named currency before price, a dollar symbol, or currency after price.
@@ -277,8 +281,15 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   const multiple = /^(m|millones?|mill[oó]n|millions?)$/.test(magnitudeToken)
     ? 1_000_000 : /^(mil|k)$/.test(magnitudeToken) ? 1_000 : 1;
   const ceiling = amount * multiple;
-  return Number.isSafeInteger(ceiling) && ceiling > 0
-    ? { amount: ceiling, currency } : null;
+  if (!Number.isSafeInteger(ceiling) || ceiling <= 0) return null;
+
+  const hasMonthlyWord = MONTHLY_RE.test(text);
+  const hasNightlyWord = /\b(?:night|nightly|noche)\b|\/\s*night|per\s+night/i.test(text);
+  const copMonthlyWithoutWord =
+    currency === "COP" && !hasNightlyWord && (multiple === 1_000_000 || ceiling >= 1_000_000);
+  if (!hasMonthlyWord && !copMonthlyWithoutWord) return null;
+
+  return { amount: ceiling, currency };
 }
 
 const BUDGET_MAGNITUDE = "(m|k|millions?|millones?|mill[oó]n|mil)";

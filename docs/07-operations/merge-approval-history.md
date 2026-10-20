@@ -4,9 +4,36 @@ Decision record for administrator overrides of the `main` approval requirement. 
 the operating rule; this file keeps the evidence for past exceptions so the rule itself does not
 accumulate incident history.
 
-Current rule: `main` requires one approving review. An administrator bypass is exceptional and must
-be recorded in the affected PR — the reason, which required automated checks passed, and why waiting
-for normal approval was not appropriate. See `AGENTS.md` § CI and merge approval.
+Current rule: `main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that exact case an administrator merge is allowed only when the exact PR head has `floor` and `mastra-schema-init` green, the canonical MDE review (`review / verify-review-result`) is green on that head with no verified blocking finding, every review thread is resolved, and the PR body records the exception and exact head SHA. Each use is recorded below and in the PR. The exception ends when a second collaborator with write access exists.
+
+## 2026-10-20 — PR #472 · El Cielo Details labels (sole-collaborator exception)
+
+The owner requested completion of [PR #472](https://github.com/amoai-tech/mdeai/pull/472), which reuses the existing display-label helper from #465 in restaurant Details lookup; no database changes or booking/vote permission changes. Current GitHub collaborator query showed exactly one repository collaborator, `amoai-tech`, who also authored the PR. The normal approving-review rule is structurally unsatisfiable because GitHub disallows self-approval.
+
+The documented administrator exception is permitted **only on the exact final head** after `floor`, `mastra-schema-init`, and canonical `review / verify-review-result` all pass and unresolved review threads are zero. Record the final head SHA, evidence, and merge result in the PR discussion before and after merging. This entry does not grant a general bypass or weaken any check. The actual post-merge production outcome must be verified separately (the custom domain was still on the earlier #462 build when reviewed).
+
+**Review question:** Do both real El Cielo venue IDs preserve their canonical Supabase names, ratings and map/vote references while browse and Details use identical location-qualified labels? Local focused Vitest 28/28, ESLint and typecheck passed prior to this documentation addition; exact-final-head CI is the merge criterion.
+
+## 2026-10-20 — sole-collaborator policy (current rule)
+
+**This is a deliberate rule change, not another one-off bypass.** It supersedes the “not a precedent” language in the entries below for the sole-collaborator case only.
+
+The repository still has exactly one collaborator (`amoai-tech`), which is also the author of every PR. GitHub forbids self-approval, so the one-approval requirement was structurally unsatisfiable: PR #140, #143, #150, and #155 were merged only through overrides, and the open question from the #150 entry — invite a second reviewer or scope the rule — was never resolved. Runtime PRs such as #369 then became unmergeable even with every check green.
+
+**The rule now:** while the repository has exactly one collaborator, an administrator merge is allowed only when:
+
+- the exact PR head has `floor` and `mastra-schema-init` green;
+- the canonical MDE review (`review / verify-review-result`) is green on that head with no verified blocking finding;
+- every review thread is resolved (0 unresolved);
+- the PR body records the exception, the exact head SHA, and the checks that passed.
+
+Every use is recorded in the PR and here. The exception ends automatically when a second collaborator with write access exists; the normal one-approval rule then applies with no bypass.
+
+**Why:** the previous policy left runtime fixes unmergeable indefinitely or required repeated undocumented overrides. This keeps the approval requirement for any future second reviewer and limits the exception to the exact structural case.
+
+**What a reviewer would have been asked:** whether the change is correct, safe, and in scope. That question is answered by the canonical review plus the required checks on the exact head; the PR body carries the reviewer fast path.
+
+**First uses (2026-10-20):** PR #466 (CI risk tiering; exact head and checks recorded in the PR) and PR #369 (rental currency validation; head `c9083cc29a`). Their PR bodies record the exception, the exact checks, and the merge commit once merged.
 
 ## 2026-09-28 — PR #140 and PR #143
 

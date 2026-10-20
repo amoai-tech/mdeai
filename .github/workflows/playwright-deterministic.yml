@@ -3,6 +3,9 @@ name: Playwright deterministic
 on:
   pull_request:
     branches: [main]
+    # `labeled` lets a reviewer add `run-e2e` after the PR opened and start the
+    # suite without an empty push; `unlabeled` lets the next push re-evaluate it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -11,8 +14,51 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Risk tiering: the deterministic browser suite is advisory, not a required check.
+  # It protects UI, routing, styling, and the browser harness; a backend-only change
+  # (for example a Zod validation guard) does not need 14 minutes of Chromium.
+  # Add the `run-e2e` label to any PR to force the browser suite.
+  browser_scope:
+    name: detect browser scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_e2e: ${{ steps.scope.outputs.run_e2e }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Decide whether browser journeys apply
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          # Fail safe: if the diff cannot be computed, run the browser suite rather
+          # than silently claiming a browser-facing change was covered.
+          if ! changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"; then
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+            echo "Could not compute the changed paths; running the browser suite."
+            exit 0
+          fi
+
+          CHANGED_FILES="$changed" LABELS="$LABELS" node scripts/ci/browser-scope.mjs
+
   deterministic-chromium:
     name: deterministic chromium
+    needs: browser_scope
+    # Fail safe: if the scope job itself fails, run the browser suite instead of
+    # skipping it. A green run_e2e is the only path that skips Chromium.
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
     # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
     timeout-minutes: 20
