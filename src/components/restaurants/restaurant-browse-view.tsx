@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { UtensilsCrossed } from "lucide-react";
+import { ArrowUpRight, Trophy, UtensilsCrossed } from "lucide-react";
 import { BrowseLayout } from "@/components/browse/BrowseLayout";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
@@ -77,6 +77,20 @@ function RestaurantBrowseViewInner({
         }
         mapSlot={<BrowseMapPanel />}
       >
+        <aside className="mt-5 flex flex-col gap-4 rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6" data-testid="restaurant-contests-entry">
+          <div className="flex items-start gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-background/80" aria-hidden="true">
+              <Trophy className="size-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-serif text-xl font-semibold tracking-tight">Medellín restaurant contests</h2>
+              <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">Explore the restaurants taking part and discover their voting options.</p>
+            </div>
+          </div>
+          <Link className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
+            Explore restaurant contests <ArrowUpRight className="size-4" aria-hidden="true" />
+          </Link>
+        </aside>
         <section className="mt-6" aria-label="Restaurant listings">
           {error ? (
             <div
