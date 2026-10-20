@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -282,17 +282,6 @@ export function RentalBrowseCard({
               View original listing
             </a>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-11 lg:min-h-0"
-            data-testid="rental-save-cta"
-            disabled
-            title="Save for later (coming soon)"
-          >
-            <Heart data-icon="inline-start" aria-hidden />
-            Save
-          </Button>
         </div>
       }
     >

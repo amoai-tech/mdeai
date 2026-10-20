@@ -34,13 +34,16 @@ const apartment = {
 } as unknown as ApartmentRow;
 
 function actionsIn(html: string, selector: string) {
-  const root = document.createElement("div");
-  root.innerHTML = html;
-  return [...root.querySelectorAll<HTMLElement>(selector)];
+  // Parse the static server markup without assigning to innerHTML. The card
+  // output is React-generated, but Codacy correctly treats string-to-HTML
+  // assignment as a security sink; DOMParser keeps the same assertions without
+  // the sink.
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return [...doc.querySelectorAll<HTMLElement>(selector)];
 }
 
 describe("rental card actions are phone tap size (SAN-1075)", () => {
-  it("browse card: Details, Schedule viewing, original listing and Save", () => {
+  it("browse card: Details, Schedule viewing and original listing", () => {
     const external = {
       ...rowToRental(apartment),
       tags: ["external-source"],
@@ -52,16 +55,16 @@ describe("rental card actions are phone tap size (SAN-1075)", () => {
     );
     const actions = actionsIn(
       html,
-      '[data-testid^="rental-details-cta"], [data-testid="rental-schedule-cta"], [data-testid="rental-save-cta"], a[data-testid^="rental-card-source-"]',
+      '[data-testid^="rental-details-cta"], [data-testid="rental-schedule-cta"], a[data-testid^="rental-card-source-"]',
     );
-    expect(actions.length).toBe(4);
+    expect(actions.length).toBe(3);
     for (const el of actions) {
       expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain("min-h-11");
       expect(el.className).toContain("lg:min-h-0");
     }
   });
 
-  it("chat card: Details, Schedule viewing, original listing and Save", () => {
+  it("chat card: Details, Schedule viewing and original listing", () => {
     const html = renderToStaticMarkup(
       <RentalCard
         id="rental-1"
@@ -80,9 +83,9 @@ describe("rental card actions are phone tap size (SAN-1075)", () => {
     );
     const actions = actionsIn(
       html,
-      '[data-testid="rental-details-cta"], [data-testid="rental-schedule-cta"], [data-testid="rental-save-cta"], [data-testid="rental-original-listing-cta"]',
+      '[data-testid="rental-details-cta"], [data-testid="rental-schedule-cta"], [data-testid="rental-original-listing-cta"]',
     );
-    expect(actions.length).toBe(4);
+    expect(actions.length).toBe(3);
     for (const el of actions) {
       expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain("min-h-11");
       expect(el.className).toContain("lg:min-h-0");

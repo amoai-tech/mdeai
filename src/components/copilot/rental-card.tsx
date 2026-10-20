@@ -9,7 +9,7 @@ import {
 } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
-import { Calendar, Heart } from "lucide-react";
+import { Calendar } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -66,7 +66,6 @@ export function RentalCard({
   searchParams,
   onSelect,
   onSchedule,
-  onSave,
   onOpenDetails,
   canScheduleViewing,
 }: RentalCardProps) {
@@ -280,22 +279,6 @@ export function RentalCard({
             Schedule viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="min-h-11 lg:min-h-0"
-          data-testid="rental-save-cta"
-          disabled
-          title="Save for later (coming soon)"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSave?.();
-          }}
-        >
-          <Heart className="size-3.5" aria-hidden />
-          Save
-        </Button>
       </div>
     </VenueCardShell>
   );
