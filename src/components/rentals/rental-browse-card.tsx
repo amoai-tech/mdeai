@@ -352,7 +352,14 @@ export function RentalBrowseCard({
       </div>
 
       {monthlyLabel ? (
-        <p className="mt-1.5 text-xs text-muted-foreground">{monthlyLabel}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
       ) : !nightlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
       ) : null}
