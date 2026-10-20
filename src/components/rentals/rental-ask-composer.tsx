@@ -78,8 +78,9 @@ async function searchRentalsForQuestion(
   const response = await fetch("/api/rentals/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // The shared endpoint caps a page at 20; asking for more is a 400, not more rows.
-    body: JSON.stringify({ ...(params ?? { queryText: query }), limit: 20 }),
+    // Match the rental tool's own default (8), so the cards and the agent's answer are drawn
+    // from the same rows instead of two different page sizes of the same search.
+    body: JSON.stringify({ ...(params ?? { queryText: query }), limit: 8 }),
   });
   if (response.status === 503) return SEARCH_UNAVAILABLE;
   if (!response.ok) return SEARCH_FAILED;

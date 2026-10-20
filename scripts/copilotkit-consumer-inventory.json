@@ -273,6 +273,11 @@
       "file": "src/components/rentals/rental-ask-composer.tsx",
       "classification": "keep",
       "note": "SAN-1421 in-column Ask MDE box. Imports only the v2 AbstractAgent type, to describe the concierge agent it reads from the shared context; it mounts no provider and sends through the existing useConciergeChat path."
+    },
+    {
+      "file": "src/lib/hooks/__tests__/use-concierge-chat-thread-id.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1421 regression test for the tab thread pinning in useConciergeChat.appendMessage. Mocks the v2 hooks to prove a fresh authenticated tab adopts sessionThreadId before the first run, and that an explicit or persisted thread is never overridden."
     }
   ]
 }
