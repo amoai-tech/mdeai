@@ -54,6 +54,9 @@ async function main() {
   if (reason === "search_disabled") {
     fail("sidecar returned search_disabled — set ENABLE_SEARCH_GROUNDING=1 on Cloud Run");
   }
+  if (source !== "google-search-grounding" || reason != null || body.metadata?.searchDisabled === true) {
+    fail(`no verified Google Search provenance (source=${source ?? "none"}, reason=${reason ?? "none"})`);
+  }
 
   const withUrl = citations.filter(
     (c) => c && typeof c.url === "string" && c.url.startsWith("http"),
