@@ -43,13 +43,21 @@ async function ghApi(path) {
   }
 }
 
+const CHUNK_PATTERN = new RegExp("/_next/static/chunks/[^\"']+\\.js", "g");
+
+/** Sorted chunk list plus a short hash, so a served build is identifiable across runs. */
+function chunkFingerprint(html) {
+  const chunks = Array.from(new Set(html.match(CHUNK_PATTERN) || [])).sort();
+  return {
+    chunks,
+    fingerprint: createHash("sha256").update(chunks.join("\n")).digest("hex").slice(0, 16),
+  };
+}
+
 async function servedFingerprint() {
   const res = await fetch(BASE + "/chat", { headers: { "Cache-Control": "no-cache" } });
   const html = await res.text();
-  const chunks = Array.from(
-    new Set(html.match(/\/_next\/static\/chunks\/[^"']+\.js/g) || []),
-  ).sort();
-  const fingerprint = createHash("sha256").update(chunks.join("\n")).digest("hex").slice(0, 16);
+  const { chunks, fingerprint } = chunkFingerprint(html);
   return {
     ok: res.ok,
     status: res.status,
@@ -87,7 +95,9 @@ async function safeViewingError() {
 
 const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i;
 const EMPTY = /No rentals match|No rentals are available/i;
-const DISCLOSED = /can't filter by monthly budget|budget was not applied/i;
+// Built from a string: the apostrophe in a regex literal desyncs Codacy's JS parser and makes
+// it attribute the rest of the file to the previous function.
+const DISCLOSED = new RegExp("can't filter by monthly budget|budget was not applied", "i");
 
 async function runRentalQuery(browser, contextOptions) {
   const context = await browser.newContext(contextOptions);
