@@ -99,7 +99,7 @@ select throws_ok(
   '22023','INVALID_TICKET_TIERS','8d: tier price cannot silently round');
 select throws_ok(
   $q$ select public.publish_event_tx(
-    'a1285000-0000-4000-8000-000000000018',
+    'a1285000-0000-4000-8000-000000000088',
     '{"title":"Price exceeds minor-unit storage","dateIso":"2030-10-20T19:00:00Z","ticketTiers":[{"name":"General","priceCop":21474837,"quantity":1}]}'::jsonb,
     'san1285-price-overflow') $q$,
   '22023','INVALID_TICKET_TIERS','8e: price above integer minor-unit limit is rejected');
