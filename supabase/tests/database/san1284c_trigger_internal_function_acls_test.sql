@@ -137,8 +137,8 @@ select is(has_function_privilege('authenticated', to_regprocedure('public.acting
           true, 'S: acting_landlord_ids keeps authenticated (RLS depends on it)');
 select is(has_function_privilege('authenticated', to_regprocedure('public.bump_staff_link_version(uuid)'), 'EXECUTE'),
           true, 'S: bump_staff_link_version keeps authenticated');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])'), 'EXECUTE'),
-          false, 'S: ticket_payment_refund_v2 denies direct buyer calls (SAN-1562)');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund_v2(uuid,bigint,text,text,uuid,text,uuid[])'), 'EXECUTE'),
+          false, 'S: ticket_payment_refund_v2 is service_role only (SAN-1562 boundary)');
 
 select * from finish();
 rollback;

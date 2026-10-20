@@ -66,7 +66,7 @@ select is(
 -- Spot-check exact signatures, not just names.
 select ok(to_regprocedure('public.outbox_enqueue(text,text,text,jsonb,uuid)') is not null,
           'outbox_enqueue has its production signature');
-select ok(to_regprocedure('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])') is not null,
+select ok(to_regprocedure('public.ticket_payment_refund_v2(uuid,bigint,text,text,uuid,text,uuid[])') is not null,
           'ticket_payment_refund_v2 has its production signature');
 
 -- ── quarantined on purpose — these MUST stay absent ───────────────────────────
