@@ -171,6 +171,18 @@ test.describe(
     test("hydrates, then mounts a bounded window of rows instead of all 500", async ({ page }) => {
       await expect(page.getByTestId("copilot-message-list")).toBeVisible({ timeout: 20_000 });
 
+      // Hydration flips the probe, but mounting the virtual window is a separate, later step.
+      // Measuring in that gap reads the pre-virtualization DOM and reports zero rows, which is
+      // what made this test fail on one run and pass on another: the assertion is right, the
+      // moment of measurement was not. Wait for the branch to produce rows before asserting.
+      await expect
+        .poll(async () => (await readLayout(page)).mountedRows, {
+          message: "the virtualized window must mount rows after hydration",
+          timeout: 30_000,
+          intervals: [250],
+        })
+        .toBeGreaterThan(0);
+
       const layout = await readLayout(page);
       const scroller = await findScroller(page);
       const scrollerMetrics = await scroller.evaluate((node: HTMLElement | null) =>
