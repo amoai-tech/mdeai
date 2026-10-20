@@ -36,14 +36,16 @@ as $$
       r.neighborhood,
       r.primary_image_url as image_url,
       cat.title as category,
-      coalesce((public.vote_tally(e.id) ->> 'audience_accepted')::int, 0) as accepted,
-      coalesce((public.vote_tally(e.id) ->> 'development_test_total')::int, 0) as development
+      coalesce((tally.counts ->> 'audience_accepted')::int, 0) as accepted,
+      coalesce((tally.counts ->> 'development_test_total')::int, 0) as development
     from vote.entities e
     join target t on t.id = e.contest_id
     join public.restaurants r on r.id = e.restaurant_id
     left join vote.categories cat
       on cat.id = e.category_id
      and cat.contest_id = e.contest_id
+    -- One tally read per nominee, not one per field.
+    cross join lateral (select public.vote_tally(e.id) as counts) tally
     where e.restaurant_id is not null
   ),
   ranked as (

@@ -135,8 +135,15 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
         return { status: "error" };
       }
       const rankRaw = row.rank;
-      const rank =
-        typeof rankRaw === "number" && Number.isSafeInteger(rankRaw) && rankRaw > 0 ? rankRaw : null;
+      const rankIsValid =
+        typeof rankRaw === "number" && Number.isSafeInteger(rankRaw) && rankRaw > 0;
+      // A nominee with accepted votes must carry a place. Missing it means the read is broken —
+      // silently showing "unranked" would hide a real defect behind a plausible empty rank.
+      if (accepted > 0 && !rankIsValid) {
+        console.error("[contests] accepted votes without a rank on nominee " + entityId);
+        return { status: "error" };
+      }
+      const rank = rankIsValid ? (rankRaw as number) : null;
       nominees.push({
         entityId,
         restaurantId,
