@@ -6,7 +6,11 @@
  * Three merged migrations never reached production (20261018102300, 20261020120000 +
  * 20261020130000, 20261021000000). The Next.js deploy is automatic, the database step is a
  * deliberate operator command (npm run push:migration), and nothing checked that it happened.
- * A release could therefore promote code that expected a schema production did not have.
+ *
+ * WHY IT HAS NO IMPORTS
+ * This runs from `.trusted/`, a separate checkout of main that has no node_modules. A package
+ * import (for example @supabase/supabase-js) cannot resolve there, so the gate would fail on every
+ * run and block every release. Node 18+ has fetch, so the whole check is stdlib-only.
  *
  * WHAT IT DOES NOT DO
  * It never applies, repairs, resets or drops anything. It reads the ledger and refuses to let a
@@ -38,6 +42,27 @@ export function missingVersions(local, applied) {
   return local.filter((version) => !have.has(String(version)));
 }
 
+/** Read the applied versions through PostgREST, with no client library. */
+async function fetchAppliedVersions(url, key) {
+  const response = await fetch(url.replace(/\/$/, "") + "/rest/v1/rpc/applied_migration_versions", {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: "Bearer " + key,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    throw new Error("HTTP " + response.status + " from the ledger RPC: " + detail);
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
@@ -55,16 +80,13 @@ async function main() {
     process.exit(2);
   }
 
-  const { createClient } = await import("@supabase/supabase-js");
-  const supabase = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data, error } = await supabase.rpc("applied_migration_versions");
-
-  if (error) {
+  let applied;
+  try {
+    applied = await fetchAppliedVersions(url, key);
+  } catch (error) {
     console.error(
-      "verify-migrations: could not read the production migration ledger: " + error.message,
+      "verify-migrations: could not read the production migration ledger: " +
+        (error && error.message ? error.message : String(error)),
     );
     console.error(
       "verify-migrations: if public.applied_migration_versions() is missing, apply " +
@@ -74,7 +96,6 @@ async function main() {
     process.exit(2);
   }
 
-  const applied = Array.isArray(data) ? data : [];
   const missing = missingVersions(local, applied);
 
   if (missing.length === 0) {
