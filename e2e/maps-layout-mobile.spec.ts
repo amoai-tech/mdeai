@@ -352,3 +352,90 @@ test.describe("SAN-1505 rental photos on narrow chat cards", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+// SAN-1075 — the viewing request is the end of the phone rental journey. iOS
+// overlays the keyboard instead of shrinking the layout viewport, so a fixed
+// modal keeps its Submit button behind the keys unless it reserves that inset.
+test.describe("SAN-1075 viewing modal above the on-screen keyboard", () => {
+  test.use({ viewport: PHONE_390, isMobile: true, hasTouch: true });
+
+  test("keeps Submit reachable and every input at 16px while the keyboard overlays the page", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      // Model iOS: the layout viewport keeps its height and the keyboard covers
+      // the bottom of the visual viewport.
+      const listeners = new Set<EventListener>();
+      let keyboardInset = 0;
+      const fake = {
+        get width() {
+          return window.innerWidth;
+        },
+        get height() {
+          return window.innerHeight - keyboardInset;
+        },
+        offsetTop: 0,
+        offsetLeft: 0,
+        pageTop: 0,
+        pageLeft: 0,
+        scale: 1,
+        addEventListener: (_type: string, listener: EventListener) => {
+          listeners.add(listener);
+        },
+        removeEventListener: (_type: string, listener: EventListener) => {
+          listeners.delete(listener);
+        },
+        dispatchEvent: () => true,
+      };
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        get: () => fake,
+      });
+      (
+        window as unknown as { __setMdeKeyboardInset: (height: number) => void }
+      ).__setMdeKeyboardInset = (height) => {
+        keyboardInset = height;
+        for (const listener of listeners) listener(new Event("resize"));
+      };
+    });
+
+    await seedRentalPin(page);
+    await page.getByTestId("rental-schedule-cta").first().tap();
+
+    const modal = page.getByTestId("schedule-viewing-modal");
+    await expect(modal).toBeVisible();
+    const submit = page.getByTestId("schedule-viewing-submit");
+    await expect(submit).toBeVisible();
+
+    // iOS Safari auto-zooms any input below 16px, which makes the dialog
+    // unusable before the renter can even read it.
+    const fontSizes = await modal.locator("input").evaluateAll((inputs) =>
+      inputs.map((input) => Number.parseFloat(getComputedStyle(input).fontSize)),
+    );
+    expect(fontSizes.length).toBe(4);
+    expect(Math.min(...fontSizes)).toBeGreaterThanOrEqual(16);
+
+    // A requested 320px keyboard is a real iPhone keyboard, not a 150px
+    // browser-chrome change, so it must lift the dialog.
+    await page.evaluate(() => {
+      (
+        window as unknown as { __setMdeKeyboardInset: (height: number) => void }
+      ).__setMdeKeyboardInset(320);
+    });
+
+    const visualBottom = await page.evaluate(
+      () => window.visualViewport?.height ?? window.innerHeight,
+    );
+    await expect
+      .poll(
+        async () => {
+          const box = await submit.boundingBox();
+          return box ? Math.round(box.y + box.height) : Number.POSITIVE_INFINITY;
+        },
+        { timeout: 5_000, message: "Submit above the overlaying keyboard" },
+      )
+      .toBeLessThanOrEqual(Math.round(visualBottom) + 1);
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
