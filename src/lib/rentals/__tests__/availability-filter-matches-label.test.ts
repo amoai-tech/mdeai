@@ -159,6 +159,13 @@ describe("the development search filter admits a late move-in exactly when the l
     expect(admitted(base(metadata, { minimum_stay_days: 90 }))).toBe(false);
   });
 
+  it("an unknown move-in date is still excluded when the end date or stay length conflicts", () => {
+    // The fallback is about an unknown START, not a free pass over a known end or minimum stay.
+    expect(admitted(base({}, { available_from: null, available_to: "2026-11-10" }))).toBe(false);
+    expect(admitted(base({}, { available_from: null, maximum_stay_days: 7 }))).toBe(false);
+    expect(admitted(base({}, { available_from: null, minimum_stay_days: 90 }))).toBe(false);
+  });
+
   it("an unknown move-in date and an on-time confirmed date stay discoverable", () => {
     expect(admitted(base({}, { available_from: null }))).toBe(true);
     expect(admitted(base({}, { available_from: "2026-10-01" }))).toBe(true);
