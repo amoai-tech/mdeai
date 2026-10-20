@@ -1,6 +1,6 @@
 -- SAN-1524 · public contest read: restaurant-only scope, allowlisted shape, service-role only
 begin;
-select plan(16);
+select plan(18);
 
 insert into auth.users (id, email) values
   ('f1524000-0000-4000-8000-0000000000aa','san1524-public@example.com');
@@ -88,6 +88,21 @@ select is(
 select is(
   public.contest_public_get(upper('san1524-public')) -> 'contest' ->> 'slug',
   'san1524-public', 'the slug lookup ignores letter case');
+
+-- A slug may legally equal another contest's UUID. An exact id match must win.
+insert into vote.contests (slug, kind, title, org_id, status, starts_at, ends_at) values
+  ('a1524000-0000-4000-8000-0000000000a1','restaurant','[TEST] San1524 Shadow',
+   'f1524000-0000-4000-8000-0000000000aa','draft',
+   now() - interval '1 day', now() + interval '10 days');
+
+select is(
+  public.contest_public_get('a1524000-0000-4000-8000-0000000000a1') -> 'contest' ->> 'title',
+  '[TEST] San1524 Shadow', 'an exact id match resolves the contest that owns that id');
+
+select is(
+  public.contest_public_get((select id::text from vote.contests where slug = 'san1524-public'))
+    -> 'contest' ->> 'slug',
+  'san1524-public', 'a real uuid still resolves by id');
 
 select * from finish();
 rollback;
