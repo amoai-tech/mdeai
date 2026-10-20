@@ -16,7 +16,7 @@ describe("ConciergeErrorNotice (UX-002)", () => {
       React.createElement(ConciergeErrorNotice, { onRetry: vi.fn() }),
     );
     expect(html).toContain("Something went wrong");
-    expect(html).toContain("The concierge timed out");
+    expect(html).toContain("The assistant could not finish this reply.");
     expect(html).not.toContain("EAUTHTIMEOUT");
     expect(html).not.toContain("INCOMPLETE_STREAM");
     expect(html).not.toContain("RUN_ERROR");
