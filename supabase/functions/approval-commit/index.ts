@@ -265,9 +265,47 @@ Deno.serve(async (req: Request) => {
 
   const { data: eventRow, error: eventErr } = await service
     .from("events")
-    .insert(buildEventInsert(draft, userId, slug, hostDisplay))
+    .insert({
+      ...buildEventInsert(draft, userId, slug, hostDisplay),
+      approval_request_id: approvalId,
+    })
     .select("id, slug")
     .single();
+
+  if (eventErr?.code === "23505") {
+    const { data: existing } = await service
+      .from("events")
+      .select("id, slug")
+      .eq("approval_request_id", approvalId)
+      .maybeSingle();
+    if (existing) {
+      const receipt: Receipt = {
+        eventId: existing.id,
+        slug: existing.slug,
+        proposalId: body.proposalId ?? null,
+      };
+      const { error: receiptErr } = await service
+        .from("approval_requests")
+        .update({ notes: RECEIPT_PREFIX + JSON.stringify(receipt) })
+        .eq("id", approvalId);
+      if (receiptErr) {
+        console.error("[approval-commit] conflict receipt persist failed", receiptErr.message);
+        return jr(
+          errorBody(
+            "RECEIPT_WRITE_FAILED",
+            "The event exists, but its receipt could not be saved. Retry shortly.",
+          ),
+          500,
+          req,
+        );
+      }
+      return jr(
+        { success: true, approvalRequestId: approvalId, decision, ...receipt },
+        200,
+        req,
+      );
+    }
+  }
 
   if (eventErr || !eventRow) {
     return jr(
@@ -316,6 +354,14 @@ Deno.serve(async (req: Request) => {
     .eq("id", approvalId);
   if (receiptErr) {
     console.error("[approval-commit] receipt persist failed", receiptErr.message);
+    return jr(
+      errorBody(
+        "RECEIPT_WRITE_FAILED",
+        "The event was saved, but its receipt could not be persisted. Retry shortly.",
+      ),
+      500,
+      req,
+    );
   }
 
   return jr(
