@@ -107,6 +107,7 @@
     "preflight:migration": "node scripts/preflight-migration-release.mjs",
     "migration:dry-run": "npx supabase db push --dry-run --db-url \"$SUPABASE_DB_URL\"",
     "push:migration": "npm run preflight:migration && npm run migration:dry-run && node scripts/confirm-migration-push.mjs && npx supabase db push --db-url \"$SUPABASE_DB_URL\"",
+    "verify:migrations": "node scripts/verify-production-migrations.mjs",
     "check:release-gates": "node --test scripts/__tests__/*.test.mjs",
     "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs",
     "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts e2e/chat-result-order.spec.ts e2e/chat-workspace-layout.spec.ts e2e/chat-thread-history.spec.ts e2e/maps-layout-mobile.spec.ts e2e/browse-map-close-touch.spec.ts e2e/chat-virtualization.spec.ts --project=local-chromium --workers=1",
