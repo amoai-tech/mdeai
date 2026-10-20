@@ -1,8 +1,8 @@
 import { getCorsHeaders, errorBody, jsonResponse } from "../_shared/http.ts";
 import { getUserClient, getUserId } from "../_shared/supabase-clients.ts";
-import { slugifyEventTitle } from "./slugify.ts";
+import { publishSlug } from "./publish-slug.ts";
 import { sha256 } from "./review-receipt.ts";
-import { publishFailureResponse } from "./publish-errors.ts";
+import { classifyPublishError } from "./publish-errors.ts";
 
 const jr = jsonResponse;
 
@@ -83,11 +83,12 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await getUserClient(authHeader).rpc("publish_event_tx", {
     p_proposal_id: body.proposalId,
     p_draft: draft,
-    p_slug: slugifyEventTitle(draft.title),
+    p_slug: publishSlug(draft.title, body.proposalId),
   });
 
   if (error) {
-    return publishFailureResponse(error, req);
+    const classified = classifyPublishError(error);
+    return jr(errorBody(classified.code, classified.message), classified.status, req);
   }
 
   const receipt = data as {

@@ -1,7 +1,7 @@
 -- SAN-1285: actual SQL auth, transaction and retry behavior; runs in ROLLBACK.
 begin;
 set search_path = public, extensions;
-select plan(40);
+select plan(43);
 
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
 values
@@ -173,6 +173,89 @@ reset role;
 select ok((select notes like 'MDE_RECEIPT:%' from public.approval_requests
   where proposal_id='a1285000-0000-4000-8000-000000000011'),
   '15e: recovery repairs the durable receipt');
+
+-- A receipt pointing at a different proposal's event must not be returned.
+with other_request as (
+  insert into public.approval_requests
+    (agent, action_type, subject, payload, risk_level, requested_by, proposal_id)
+  values (
+    'hostEventAgent','publish_event','Other Event','{}'::jsonb,'medium',
+    'a1285000-0000-4000-8000-000000000001','a1285000-0000-4000-8000-000000000019'
+  ) returning id
+)
+insert into public.events
+  (source, name, slug, status, organizer_id, created_by, event_start_time, approval_request_id)
+select 'host_wizard','Other Event','san1285-other','published',
+       'a1285000-0000-4000-8000-000000000001'::uuid,
+       'a1285000-0000-4000-8000-000000000001'::uuid,
+       '2030-10-20T19:00:00Z'::timestamptz, id
+from other_request;
+select set_config('san1285.other_event',
+  (select id::text from public.events where slug='san1285-other'), true);
+update public.approval_requests
+set notes = 'MDE_RECEIPT:' || jsonb_build_object(
+  'eventId', current_setting('san1285.other_event'),
+  'slug', 'san1285-other',
+  'proposalId', 'a1285000-0000-4000-8000-000000000011'
+)::text
+where proposal_id='a1285000-0000-4000-8000-000000000011';
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a1285000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select is(
+  (public.publish_event_tx(
+    'a1285000-0000-4000-8000-000000000011',
+    $d$ {"title":"SAN1285 Concert","dateIso":"2030-10-20T19:00:00Z","venue":"Test Venue","ticketTiers":[{"name":"General","priceCop":40000,"quantity":30},{"name":"VIP","priceCop":80000,"quantity":10}]} $d$::jsonb,
+    'san1285-concert-tampered'
+  )->>'eventId'),
+  current_setting('san1285.event_id'),
+  '15f: a receipt for another proposal cannot return that event');
+reset role;
+
+-- A pre-#454 legacy event (no approval link) is still returned when the stored
+-- receipt matches its slug.
+insert into public.events
+  (source, name, slug, status, organizer_id, created_by, event_start_time)
+values (
+  'host_wizard','Legacy Event','san1285-legacy','published',
+  'a1285000-0000-4000-8000-000000000001'::uuid,
+  'a1285000-0000-4000-8000-000000000001'::uuid,
+  '2030-10-22T19:00:00Z'::timestamptz
+);
+insert into public.approval_requests
+  (agent, action_type, subject, payload, risk_level, requested_by, proposal_id, notes)
+select
+  'hostEventAgent','publish_event','Legacy Event',
+  '{"title":"Legacy Event","dateIso":"2030-10-22T19:00:00Z"}'::jsonb,
+  'medium','a1285000-0000-4000-8000-000000000001',
+  'a1285000-0000-4000-8000-000000000022',
+  'MDE_RECEIPT:' || jsonb_build_object(
+    'eventId', (select id::text from public.events where slug='san1285-legacy'),
+    'slug','san1285-legacy',
+    'proposalId','a1285000-0000-4000-8000-000000000022'
+  )::text;
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a1285000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select is(
+  (public.publish_event_tx(
+    'a1285000-0000-4000-8000-000000000022',
+    '{"title":"Legacy Event","dateIso":"2030-10-22T19:00:00Z"}'::jsonb,
+    'san1285-legacy'
+  )->>'eventId'),
+  (select id::text from public.events where slug='san1285-legacy'),
+  '15g: a legacy event is recovered only through its matching receipt');
+reset role;
+
+-- Invalid dates are user-input errors, not generic server failures.
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a1285000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select throws_ok(
+  $q$ select public.publish_event_tx(
+    'a1285000-0000-4000-8000-000000000023',
+    '{"title":"Bad Date","dateIso":"not-a-date"}'::jsonb,
+    'bad-date'
+  ) $q$,
+  '22007',null,'15h: an invalid event date is a classified input error');
+reset role;
 
 -- A pre-existing non-approve decision is a conflict with zero writes.
 with created as (

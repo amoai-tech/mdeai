@@ -92,7 +92,14 @@ begin
         select id, slug into v_event_id, v_slug
         from public.events
         where id = (v_receipt->>'eventId')::uuid
-          and organizer_id = v_actor;
+          and organizer_id = v_actor
+          -- Bind the receipt to THIS approval. A legacy event without the link
+          -- is accepted only when the stored receipt also matches its slug, so a
+          -- tampered/stale receipt cannot return another proposal's event.
+          and (
+            approval_request_id = v_request_id
+            or (approval_request_id is null and slug = v_receipt->>'slug')
+          );
         if found then
           return jsonb_build_object(
             'eventId', v_event_id, 'slug', v_slug,
