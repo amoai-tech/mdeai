@@ -17,16 +17,8 @@ function cardHref({ href, query }: Pick<PlaceCardData, "href" | "query">): strin
  * One real record. With a photo it is photo-led; without one it is an honest text card
  * (a tinted header, never a stand-in picture of something that is not that place).
  */
-export function PlaceCard({
-  name,
-  kind,
-  rating,
-  meta,
-  why,
-  image,
-  query,
-  href,
-}: Omit<PlaceCardData, "id">) {
+export function PlaceCard(props: Omit<PlaceCardData, "id">) {
+  const { name, kind, rating, meta, why, image, query, href } = props;
   const hasPhoto = isRenderableRemoteImage(image);
   return (
     <Link href={cardHref({ href, query })} className={`group block rounded-xl ${FOCUS}`}>
