@@ -43,6 +43,7 @@ afterEach(() => {
   container?.remove();
   container = undefined;
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 function click(element: Element | null) {
@@ -96,4 +97,45 @@ describe("EventPublishApprovalPanel", () => {
     expect(second.proposalId).toBe(first.proposalId);
     expect(second.approvalRequestId).toBe("approval-1");
   });
+
+  it("recovers the same proposal after remount following a lost response", async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error("Network disconnected"))
+      .mockResolvedValueOnce(success);
+    vi.stubGlobal("fetch", fetchMock);
+    const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    click(first.querySelector('[data-testid="host-event-approve"]'));
+    await vi.waitFor(() => expect(first.textContent).toContain("Network disconnected"));
+    const firstBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+
+    act(() => root?.unmount());
+    first.remove();
+    root = undefined;
+    container = undefined;
+    const second = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    click(second.querySelector('[data-testid="host-event-approve"]'));
+    await vi.waitFor(() => expect(second.textContent).toContain("Event published and saved."));
+    const secondBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(secondBody.proposalId).toBe(firstBody.proposalId);
+    expect(sessionStorage.getItem("mde:pending-event-publish")).toBeNull();
+  });
+
+  it.each(["edit", "rejected"] as const)(
+    "does not fabricate a saved receipt for a local %s decision",
+    async (decision) => {
+      const respond = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, decision, eventId: null, slug: null }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const view = mount(
+        <EventPublishApprovalPanel draft={draft} status="executing" respond={respond} />,
+      );
+      click(view.querySelector(`[data-testid="host-event-${decision === "edit" ? "edit" : "reject"}"]`));
+      await vi.waitFor(() => expect(respond).toHaveBeenCalledWith(decision));
+      expect(view.querySelector('[data-testid="host-event-approval-receipt"]')).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 });

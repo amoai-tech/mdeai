@@ -269,6 +269,11 @@
     "anon": false,
     "authenticated": true
   },
+  "publish_event_tx(p_proposal_id text, p_draft jsonb, p_slug text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "publish_listing(p_apartment_id uuid)": {
     "public": false,
     "anon": false,

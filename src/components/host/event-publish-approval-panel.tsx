@@ -24,6 +24,25 @@ import type { ReviewReceipt } from "@/platform/contracts/review-proposal";
 import { EventDraftStateSchema, type EventDraftState } from "@/lib/types";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 
+const PENDING_EVENT_PROPOSAL = "mde:pending-event-publish";
+
+/** Keep the same idempotency key if a browser reload follows a lost response. */
+function recoverProposalId(draftHash: string, candidateId: string): string {
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(PENDING_EVENT_PROPOSAL) ?? "null") as
+      | { draftHash?: string; proposalId?: string }
+      | null;
+    if (previous?.draftHash === draftHash && previous.proposalId &&
+        /^[a-f0-9-]{36}$/i.test(previous.proposalId)) {
+      return previous.proposalId;
+    }
+    sessionStorage.setItem(PENDING_EVENT_PROPOSAL, JSON.stringify({ draftHash, proposalId: candidateId }));
+  } catch {
+    // Storage is optional; database idempotency remains the authority.
+  }
+  return candidateId;
+}
+
 type EventPublishApprovalPanelProps = {
   draft: EventDraftState;
   status: "inProgress" | "executing" | "complete";
@@ -56,13 +75,25 @@ export function EventPublishApprovalPanel({
 
   async function commit(decision: ApprovalDecision) {
     if (decided || submitting) return;
+    // Edit/Cancel only change the local draft. No database approval or
+    // network round-trip is required during prelaunch development.
+    if (decision !== "approved") {
+      try { sessionStorage.removeItem(PENDING_EVENT_PROPOSAL); } catch { /* storage is optional */ }
+      setDecided(true);
+      respond(decision);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setLastDecision(decision);
 
     try {
       const normalizedDraft = EventDraftStateSchema.parse(draft);
-      const proposal = await buildEventReviewProposal(normalizedDraft, proposalId);
+      const freshProposal = await buildEventReviewProposal(normalizedDraft, proposalId);
+      const stableId = recoverProposalId(freshProposal.draftHash, proposalId);
+      const proposal = stableId === proposalId
+        ? freshProposal
+        : await buildEventReviewProposal(normalizedDraft, stableId);
       const res = await fetch("/api/approval-commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,23 +119,16 @@ export function EventPublishApprovalPanel({
       }
 
       if (outcome.kind === "published") {
+        try { sessionStorage.removeItem(PENDING_EVENT_PROPOSAL); } catch { /* storage is optional */ }
         setReceipt(eventPublishReceipt(proposal.proposalId, outcome));
         onPublished?.({
           eventId: outcome.eventId,
           slug: outcome.slug,
           approvalRequestId: outcome.approvalRequestId,
         });
-      } else {
-        setReceipt({
-          proposalId: proposal.proposalId,
-          status: "saved",
-          message:
-            decision === "edit"
-              ? "Changes requested. Your draft is editable."
-              : "Review cancelled. Nothing was written.",
-          savedAt: new Date().toISOString(),
-        });
       }
+      // Edit and Cancel change the local wizard state only. Do not invent
+      // a persisted "saved" receipt when no database write occurred.
       setDecided(true);
       respond(decision);
     } catch (err) {
