@@ -252,7 +252,14 @@ A PR body that only restates the diff has added nothing.
 
 Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 
-`main` requires one approving review. Administrator bypasses are exceptional: if one is used, record the reason in the affected PR, which required checks passed, and why waiting for normal approval was not appropriate. Production, runtime, database, and deploy changes satisfy normal approval. Prior bypasses and their reasoning are recorded in `docs/07-operations/merge-approval-history.md`.
+`main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that specific case an administrator merge is allowed only when all of the following are true:
+
+- the exact PR head has `floor` and `mastra-schema-init` green;
+- the canonical MDE review (`review / verify-review-result`) is green on that head, with no verified blocking finding;
+- every review thread is resolved (0 unresolved);
+- the PR body records the exception, the exact head SHA, and the checks that passed.
+
+Record each use in `docs/07-operations/merge-approval-history.md` and in the PR. The exception ends when a second collaborator with write access exists; the normal one-approval rule then applies with no bypass.
 
 ## Completion contract
 

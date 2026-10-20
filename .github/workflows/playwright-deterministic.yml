@@ -56,7 +56,9 @@ jobs:
   deterministic-chromium:
     name: deterministic chromium
     needs: browser_scope
-    if: needs.browser_scope.outputs.run_e2e == 'true'
+    # Fail safe: if the scope job itself fails, run the browser suite instead of
+    # skipping it. A green run_e2e is the only path that skips Chromium.
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
     # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
     timeout-minutes: 20
