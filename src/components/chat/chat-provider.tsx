@@ -203,7 +203,7 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={reportConciergeError}
+      onError={() => reportConciergeError(threadId)}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"

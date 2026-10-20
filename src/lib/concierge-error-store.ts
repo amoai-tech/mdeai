@@ -5,23 +5,40 @@
  * cross-env way to detect stream failures. This tiny store bridges that callback to UI
  * subscribers via useSyncExternalStore, avoiding setState-in-effect and ref-read-in-render
  * rules.
+ *
+ * A failure belongs to the conversation that produced it. Without that identity, an old
+ * error can show Retry in a different chat and replay the wrong turn.
  */
 
-let _errorVersion = 0;
+export type ConciergeErrorSnapshot = {
+  version: number;
+  threadId: string | null;
+};
+
+const IDLE: ConciergeErrorSnapshot = { version: 0, threadId: null };
+let _error: ConciergeErrorSnapshot = IDLE;
 const _listeners = new Set<() => void>();
 
 function notify() {
   _listeners.forEach((l) => l());
 }
 
-export function reportConciergeError() {
-  _errorVersion++;
+export function reportConciergeError(threadId?: string | null) {
+  _error = { version: _error.version + 1, threadId: threadId ?? null };
   notify();
 }
 
-export function clearConciergeError() {
-  if (_errorVersion !== 0) {
-    _errorVersion = 0;
+/** Clear the current failure. Pass a thread id to avoid clearing another chat's error. */
+export function clearConciergeError(threadId?: string | null) {
+  if (
+    threadId !== undefined &&
+    _error.threadId !== null &&
+    _error.threadId !== threadId
+  ) {
+    return;
+  }
+  if (_error.version !== 0) {
+    _error = IDLE;
     notify();
   }
 }
@@ -31,10 +48,18 @@ export function subscribeConciergeError(listener: () => void) {
   return () => _listeners.delete(listener);
 }
 
+export function getConciergeErrorSnapshot(): ConciergeErrorSnapshot {
+  return _error;
+}
+
 export function getConciergeErrorVersion() {
-  return _errorVersion;
+  return _error.version;
 }
 
 export function getConciergeErrorVersionServer() {
   return 0;
+}
+
+export function getConciergeErrorSnapshotServer(): ConciergeErrorSnapshot {
+  return IDLE;
 }

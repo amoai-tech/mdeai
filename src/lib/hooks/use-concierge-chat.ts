@@ -5,7 +5,16 @@ import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import {
+  clearConciergeError,
+  getConciergeErrorSnapshot,
+  reportConciergeError,
+} from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+
+// runAgent awaits detachActiveRun before isRunning becomes true. Two quick
+// Retry clicks can otherwise start the same turn twice, even across hook users.
+const retriesInFlight = new WeakSet<object>();
 
 /** Shared concierge chat controller for v2 routes. */
 function useLiveConciergeChat() {
@@ -48,6 +57,36 @@ function useLiveConciergeChat() {
     agent?.setState({});
   }, [agent, stopActiveRun]);
 
+  const retryLastTurn = useCallback(async () => {
+    // Never start an empty/previous turn or a concurrent replay.
+    if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
+        !agent.messages.some((message) => message.role === "user")) return false;
+    const retryThreadId = agent.threadId;
+    const priorError = getConciergeErrorSnapshot();
+    // A notice from another conversation must never replay this agent's turn.
+    if (priorError.threadId && priorError.threadId !== retryThreadId) return false;
+    retriesInFlight.add(agent);
+    clearConciergeError(retryThreadId);
+    try {
+      await copilotkit.runAgent({ agent });
+      // CopilotKit can surface a stream error via onError without rejecting.
+      const error = getConciergeErrorSnapshot();
+      if (error.version > 0) return false;
+      // A thread change during retry must not save/title a different chat.
+      if (agent.threadId === retryThreadId) {
+        markThreadSaved?.(retryThreadId);
+        if (retryThreadId) void ensureThreadTitle(retryThreadId);
+      }
+      return true;
+    } catch (error) {
+      console.error("[concierge-retry]", error);
+      if (agent.threadId === retryThreadId) reportConciergeError(retryThreadId);
+      return false;
+    } finally {
+      retriesInFlight.delete(agent);
+    }
+  }, [agent, copilotkit, markThreadSaved]);
+
   const appendMessage = useCallback(
     async (content: string) => {
       if (!agent) return false;
@@ -66,7 +105,7 @@ function useLiveConciergeChat() {
     [agent, copilotkit, markThreadSaved],
   );
 
-  return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };
+  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };
 }
 
 // The deterministic E2E surface answers fast paths locally; it must not mount
@@ -76,6 +115,7 @@ const deterministicChat = {
   isLoading: false,
   reset: () => {},
   stopActiveRun: () => {},
+  retryLastTurn: async () => false,
   appendMessage: async (content: string) => {
     void content;
     return false;
