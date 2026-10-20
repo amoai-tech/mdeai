@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SignInRequired } from "@/components/auth/sign-in-required";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminContest, listCatalogRestaurants } from "@/lib/restaurants/contest-admin";
 import { ContestDetailsForm } from "./contest-details-form";
@@ -26,12 +27,29 @@ export default async function AdminContestDetailPage({
     isAdmin = data === true;
   }
 
-  if (!user || !isAdmin) {
+  if (!user) {
+    return (
+      <main className="mx-auto min-h-screen max-w-3xl px-4 py-8">
+        <h1 className="font-serif text-2xl font-semibold">Contest</h1>
+        <div className="mt-3">
+          <SignInRequired
+            buttonLabel="Sign in to manage this contest"
+            description="Sign in to edit this contest and manage its nominees."
+            returnTo={"/admin/contests/" + id}
+            testId="admin-sign-in-required"
+            title="Admin sign-in required"
+          />
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <main className="mx-auto min-h-screen max-w-3xl px-4 py-8">
         <h1 className="font-serif text-2xl font-semibold">Contest</h1>
         <p data-testid="admin-not-authorized" className="mt-2 text-sm text-muted-foreground">
-          {user ? "Admin access required." : "Sign in as an admin to manage contests."}
+          Admin access required.
         </p>
       </main>
     );

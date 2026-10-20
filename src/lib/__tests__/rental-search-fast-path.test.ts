@@ -11,6 +11,7 @@ import {
   statesBudget,
 } from "@/lib/rental-query-parser";
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
 describe("rental-search-fast-path", () => {
@@ -27,6 +28,29 @@ describe("rental-search-fast-path", () => {
       currency: "COP", bedrooms_unknown: true, price_monthly: 2_100_000,
       can_schedule_viewing: false, schedule_viewing_url: null,
     });
+  });
+
+  // SAN-1504 — the chat's Details panel needs the whole search result. The envelope used to drop
+  // the photo list, photo count and source provider, so a fast-path card could not show them.
+  it("SAN-1504: forwards the complete rental so Details can show photos and the source", () => {
+    const listing = {
+      id: "r1", title: "Apartment", neighborhood: "Laureles", nightly_price: 0, price_monthly: 2_400_000,
+      currency: "COP", bedrooms: 2, wifi: false, amenities: ["workspace"], image: "https://x.test/a.webp",
+      images: ["https://x.test/a.webp", "https://x.test/b.webp"], photo_count: 5,
+      source_url: "https://www.fincaraiz.com.co/apartamento/1", source_provider: "Fincaraíz",
+      can_schedule_viewing: false, schedule_viewing_url: null, host_name: "Advertiser",
+      availability: "Availability unconfirmed", tags: ["external-source"], latitude: 6.24, longitude: -75.58,
+    } as Rental;
+    const row = rentalsToToolEnvelope([listing]).results[0];
+    expect(toDetailRental(row)).toMatchObject({
+      image: "https://x.test/a.webp",
+      images: ["https://x.test/a.webp", "https://x.test/b.webp"],
+      photo_count: 5,
+      source_provider: "Fincaraíz",
+      latitude: 6.24,
+    });
+    // The card still reads its photo from the keys it always used.
+    expect(row).toMatchObject({ photo_url: "https://x.test/a.webp", image_url: "https://x.test/a.webp" });
   });
 
   // SAN-407 — answer first, refine second. A generic rental request searches immediately;

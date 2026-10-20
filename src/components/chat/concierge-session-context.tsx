@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -99,6 +100,13 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
     closeEventProposalShell,
     clearLeadConfirmation,
   ]);
+
+  // Browser Back/Forward can switch saved threads without clicking a sidebar
+  // button. Reset the old in-flight run/cards before CopilotKit binds the new ID.
+  useEffect(() => {
+    window.addEventListener("mde:chat-history-selection", startNewChat);
+    return () => window.removeEventListener("mde:chat-history-selection", startNewChat);
+  }, [startNewChat]);
 
   const value = useMemo(
     () => ({ sessionKey, startNewChat, stopActiveRun }),

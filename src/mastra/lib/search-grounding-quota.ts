@@ -6,65 +6,44 @@ const DEFAULT_DAILY_CAP = 50;
 
 export type SearchGroundingQuotaResult =
   | { allowed: true }
-  | { allowed: false; reason: "quota" | "disabled" };
+  | { allowed: false; reason: "quota" | "disabled" | "quota_unavailable" };
 
-/** GS-003 — Search grounding bucket separate from Maps MCP (`search_grounding_quota_log`). */
+/**
+ * Reserve one Google Search invocation atomically, BEFORE the external call.
+ * No database/service key, missing RPC, or DB error => do not spend unmetered calls.
+ * The database function increments at most once per concurrent request.
+ */
 export async function incrementAndCheckSearchGroundingQuota(): Promise<SearchGroundingQuotaResult> {
   if (!isSearchGroundingEnabled()) {
     return { allowed: false, reason: "disabled" };
   }
 
-  const limitRaw = process.env.SEARCH_GROUNDING_DAILY_CAP;
-  if (limitRaw === "0") {
-    return { allowed: false, reason: "disabled" };
-  }
-  const dailyCap = limitRaw ? Number.parseInt(limitRaw, 10) : DEFAULT_DAILY_CAP;
-  if (!Number.isFinite(dailyCap) || dailyCap <= 0) {
+  const raw = process.env.SEARCH_GROUNDING_DAILY_CAP;
+  const dailyCap = raw === undefined ? DEFAULT_DAILY_CAP : Number(raw);
+  if (!Number.isSafeInteger(dailyCap) || dailyCap <= 0) {
     return { allowed: false, reason: "disabled" };
   }
 
   const env = getSupabaseServiceEnv();
   if (!env) {
-    return { allowed: true };
+    console.warn("[search-grounding-quota] Supabase service config unavailable");
+    return { allowed: false, reason: "quota_unavailable" };
   }
 
   const supabase = createClient(env.url, env.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: existing, error: readErr } = await supabase
-    .from("search_grounding_quota_log")
-    .select("count")
-    .eq("date", today)
-    .maybeSingle();
-
-  if (readErr) {
-    console.warn(
-      "[search-grounding-quota] read failed, allowing call:",
-      readErr.message,
-    );
-    return { allowed: true };
+  try {
+    const { data, error } = await supabase.rpc("reserve_search_grounding_quota", {
+      p_daily_cap: dailyCap,
+    });
+    if (error || typeof data !== "boolean") {
+      console.warn("[search-grounding-quota] atomic reserve unavailable", error?.message);
+      return { allowed: false, reason: "quota_unavailable" };
+    }
+    return data ? { allowed: true } : { allowed: false, reason: "quota" };
+  } catch {
+    return { allowed: false, reason: "quota_unavailable" };
   }
-
-  const current = existing?.count ?? 0;
-  if (current >= dailyCap) {
-    return { allowed: false, reason: "quota" };
-  }
-
-  const next = current + 1;
-  const { error: writeErr } = await supabase
-    .from("search_grounding_quota_log")
-    .upsert({ date: today, count: next }, { onConflict: "date" });
-
-  if (writeErr) {
-    console.warn(
-      "[search-grounding-quota] increment failed, allowing call:",
-      writeErr.message,
-    );
-    return { allowed: true };
-  }
-
-  return { allowed: true };
 }

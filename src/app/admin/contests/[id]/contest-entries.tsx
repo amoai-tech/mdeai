@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { randomUUID } from "node:crypto";
 import type { AdminContestEntry, CatalogRestaurant } from "@/lib/restaurants/contest-admin";
-import { linkRestaurantAction, unlinkRestaurantAction } from "../actions";
+import { RestaurantPicker } from "./restaurant-picker";
+import { RemoveNomineeButton } from "./remove-nominee-button";
 
-/** SAN-1526 · nominees: link, unlink (ballots preserved), and the catalog picker. */
+/**
+ * SAN-1543 · nominees: the catalog picker, the current ballot, and a guarded removal.
+ *
+ * The picker is a client component because a native multi-select cannot be used on a phone.
+ * The nominee list stays server-rendered so ballot counts are always read from the database.
+ */
 export function ContestEntries({
   contestId,
   entries,
@@ -24,9 +29,9 @@ export function ContestEntries({
         <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
           {entries.map((entry) => (
             <li
-              key={entry.entity_id}
               className="flex flex-wrap items-center justify-between gap-3 p-4"
               data-testid={"contest-entry-" + entry.entity_id}
+              key={entry.entity_id}
             >
               <div>
                 <p className="font-medium">{entry.display_name}</p>
@@ -36,18 +41,11 @@ export function ContestEntries({
                 </p>
               </div>
               {entry.restaurant_id ? (
-                <form action={unlinkRestaurantAction}>
-                  <input type="hidden" name="contest_id" value={contestId} />
-                  <input type="hidden" name="restaurant_id" value={entry.restaurant_id} />
-                  <input type="hidden" name="request_id" value={randomUUID()} />
-                  <button
-                    className="min-h-11 rounded-md border border-border/60 px-4 text-sm"
-                    data-testid={"contest-unlink-" + entry.entity_id}
-                    type="submit"
-                  >
-                    Remove
-                  </button>
-                </form>
+                <RemoveNomineeButton
+                  contestId={contestId}
+                  name={entry.display_name}
+                  restaurantId={entry.restaurant_id}
+                />
               ) : null}
             </li>
           ))}
@@ -55,38 +53,18 @@ export function ContestEntries({
       )}
 
       {available.length > 0 ? (
-        <form action={linkRestaurantAction} className="mt-4 flex flex-wrap items-end gap-3">
-          <input type="hidden" name="contest_id" value={contestId} />
-          <input type="hidden" name="request_id" value={randomUUID()} />
-          <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Add a restaurant</span>
-            <select
-              className="min-h-11 rounded-md border border-border/60 bg-background px-3"
-              name="restaurant_id"
-              required
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Choose from the catalog
-              </option>
-              {available.map((restaurant) => (
-                <option key={restaurant.id} value={restaurant.id}>
-                  {restaurant.name}
-                  {restaurant.neighborhood ? " · " + restaurant.neighborhood : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="min-h-11 rounded-md bg-primary px-4 font-medium text-primary-foreground"
-            data-testid="contest-link-submit"
-            type="submit"
-          >
-            Add restaurant
-          </button>
-        </form>
+        <RestaurantPicker
+          available={available.map((restaurant) => ({
+            id: restaurant.id,
+            name: restaurant.name,
+            neighborhood: restaurant.neighborhood ?? null,
+          }))}
+          contestId={contestId}
+        />
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">Every active restaurant is already a nominee.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Every active restaurant is already a nominee.
+        </p>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
         Removing a restaurant unlinks it; existing ballots are preserved.{" "}

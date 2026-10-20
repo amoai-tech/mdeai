@@ -19,6 +19,25 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await mockFastPaths(page);
   });
 
+  test("shared fast-path mocks intercept the nav rail thread fetch without Supabase", async ({ page }) => {
+    // A cold Next.js compile can take longer than the default 30s network wait.
+    // Keep this test-specific budget above the 45s hydration timeout.
+    test.setTimeout(90_000);
+    // Prove the fixture itself supplied this response. A 200 from an external
+    // service (or a quiet catch in useNavThreads) must not satisfy this test.
+    const threadResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/threads" &&
+        response.request().method() === "GET",
+      { timeout: 60_000 },
+    );
+    await gotoDeterministicChat(page);
+    const response = await threadResponse;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-mde-e2e-fixture"]).toBe("threads");
+    expect(await response.json()).toEqual({ threads: [] });
+  });
+
   test("Home → Chat sends one restaurant query and renders mocked results", async ({
     page,
   }) => {

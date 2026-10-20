@@ -1,0 +1,102 @@
+{
+  "skill_name": "openmuse",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A renter stops a streaming AI reply and loses an unsent draft. Diagnose the minimal change based on OpenMuse, naming current MDE files and required 390px tests.",
+      "expected_output": "Inspect current chat components and installed CopilotKit v2; model OpenMuse send/stop draft retention; propose focused change and real browser test, no new runtime. Acceptance criteria: Names src/components/chat/concierge-copilot-chat-view.tsx and related chat owner; Checks actual implementation against OpenMuse docs/EXPERIENCE.md before recommending changes; Preserves draft on stop and includes 390px proof; does not install React Native.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "read-openmuse",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openmuse"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "The AI shows five rentals and a map, but two properties have missing coordinates. Use OpenMuse patterns to improve rich results.",
+      "expected_output": "Inspect existing chat card and map wiring; keep unknown coordinates without pins and grounded evidence; model source/error states from the upstream card. Acceptance criteria: Inspects current MDE cards and map instead of adding a search engine; Does not invent pins, prices, availability or images; Tests loading/empty/error/success and links/pin synchronization.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "read-openmuse",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openmuse"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "Make chat show a readable error after a user stops a failing request. Which existing layers and official references matter?",
+      "expected_output": "Distinguish stop vs network failure in existing CopilotKit AG-UI chain and use official v2 docs and focused tests. Acceptance criteria: Verifies current runtime and v2 imports; Uses current upstream examples as models, not copied React Native runtime; Plans focused tests and does not invent a passed result.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "read-openmuse",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openmuse"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    }
+  ]
+}

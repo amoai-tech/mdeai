@@ -190,6 +190,20 @@ async function submitConciergeMessageOnce(page: Page, text: string) {
   await input.press("Enter");
 }
 
+/**
+ * Fill and submit one message WITHOUT waiting for the app to issue a request.
+ *
+ * A signed-out visitor's AI follow-up is refused by design (SAN-1507): the app keeps the
+ * message and shows a sign-in offer instead of calling the runtime. Requiring a request
+ * there would report the product's correct refusal as a harness failure.
+ */
+export async function submitConciergeMessageExpectingNoTurn(
+  page: Page,
+  text: string,
+): Promise<void> {
+  await submitConciergeMessageOnce(page, text);
+}
+
 /** How long an accepted submit has to make the app issue its own API request. */
 export const CONCIERGE_ACCEPT_GRACE_MS = 6_000;
 

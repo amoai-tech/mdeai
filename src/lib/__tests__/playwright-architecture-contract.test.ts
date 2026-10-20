@@ -112,11 +112,31 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(provider).toContain("isDeterministicE2E()");
   });
 
-  it("does not retain browser traces for live production smoke", () => {
+  it("retains a production journey trace only on failure, via its workflow", () => {
     const prod = (config.projects ?? []).find(
       (project) => project.name === "prod-smoke",
     );
+    // Config default: live production runs never retain traces.
     expect(prod?.use?.trace).toBe("off");
+    // The nightly journey opts into failure-only evidence and disables the CI retry that would
+    // repeat a real write journey. Pin that here so the policy cannot drift silently.
+    const workflow = fs.readFileSync(
+      ".github/workflows/prod-renter-journey.yml",
+      "utf8",
+    );
+    expect(workflow).toContain("--trace=retain-on-failure");
+    // Playwright has no --screenshot CLI flag; screenshots are config-owned and a trace already
+    // contains them. Passing it made the workflow die before any test ran.
+    expect(workflow).not.toContain("--screenshot");
+    expect(workflow).toContain("--retries=0");
+    expect(workflow).toContain('PW_SKIP_WEBSERVER: "1"');
+    expect(workflow).not.toMatch(/--trace=on\b/);
+    // The evidence upload must survive a timeout or a cancelled job, and must never publish raw
+    // browser state: this repository is public, so traces are encrypted or not uploaded at all.
+    expect(workflow).toMatch(/Upload encrypted failure artifacts[\s\S]{0,220}if: always\(\)/);
+    expect(workflow).toContain("PROD_JOURNEY_ARTIFACT_KEY");
+    expect(workflow).toContain("openssl enc -aes-256-cbc");
+    expect(workflow).not.toMatch(/\n\s+test-results\/\n/);
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [
@@ -170,6 +190,19 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("NODE_ENV: development");
     expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
     expect(workflow).toContain("SMOKE_BASE_URL: http://localhost:3002");
+  });
+
+  it("includes long-chat virtualization in the same deterministic PR browser run", () => {
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    expect(pkg.scripts["test:e2e:deterministic"]).toContain(
+      "e2e/chat-virtualization.spec.ts",
+    );
+    const workflow = fs.readFileSync(
+      ".github/workflows/playwright-deterministic.yml",
+      "utf8",
+    );
+    expect(workflow).toContain("run: npm run test:e2e:deterministic");
+    expect(workflow).not.toContain("run: npm run test:e2e:chat-virtualization");
   });
 
   it("adds scheduled/manual critical cross-browser certification without slowing PRs", () => {

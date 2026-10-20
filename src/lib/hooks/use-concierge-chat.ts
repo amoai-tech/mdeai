@@ -3,12 +3,15 @@
 import { useCallback } from "react";
 import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /** Shared concierge chat controller for v2 routes. */
 function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
+  const markThreadSaved = useOptionalThreadNav()?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
 
@@ -54,9 +57,13 @@ function useLiveConciergeChat() {
         content,
       });
       await copilotkit.runAgent({ agent });
+      // Only completed turns are recorded as saved, never a freshly minted UUID.
+      markThreadSaved?.(agent.threadId);
+      // Title the persisted conversation without delaying the user or navigation.
+      if (agent.threadId) void ensureThreadTitle(agent.threadId);
       return true;
     },
-    [agent, copilotkit],
+    [agent, copilotkit, markThreadSaved],
   );
 
   return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };

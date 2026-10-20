@@ -1,3 +1,4 @@
+import { SignInRequired } from "@/components/auth/sign-in-required";
 import { createClient } from "@/lib/supabase/server";
 import { RentalTestModePanel } from "@/components/admin/rental-test-mode-panel";
 
@@ -33,7 +34,13 @@ export default async function AdminRentalsPage() {
       </header>
 
       {!user ? (
-        <p className="text-sm text-muted-foreground">Sign in as an admin to use rental test mode.</p>
+        <SignInRequired
+          buttonLabel="Sign in to use rental test mode"
+          description="Sign in to exercise the rental workflow with explicitly test-marked listings."
+          returnTo="/admin/rentals"
+          testId="admin-sign-in-required"
+          title="Admin sign-in required"
+        />
       ) : !isAdmin ? (
         <p data-testid="admin-not-authorized" className="text-sm text-muted-foreground">
           Admin access required.
