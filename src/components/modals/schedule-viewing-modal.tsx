@@ -192,12 +192,18 @@ export const ScheduleViewingModal = () => {
             <Button
               type="button"
               variant="outline"
+              className="min-h-11 lg:min-h-0"
               onClick={closeScheduleViewing}
               disabled={submitting}
             >
               Cancel
             </Button>
-            <Button type="submit" data-testid="schedule-viewing-submit" disabled={submitting}>
+            <Button
+              type="submit"
+              className="min-h-11 lg:min-h-0"
+              data-testid="schedule-viewing-submit"
+              disabled={submitting}
+            >
               {submitting ? "Submitting…" : "Submit"}
             </Button>
           </div>

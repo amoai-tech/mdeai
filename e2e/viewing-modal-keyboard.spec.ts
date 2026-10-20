@@ -103,6 +103,18 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
 
     await expect(page.locator('input[name="name"]')).toBeFocused();
 
+    for (const [label, action] of [
+      ["Submit", page.getByTestId("schedule-viewing-submit")],
+      ["Cancel", page.getByRole("button", { name: "Cancel" })],
+    ] as const) {
+      await expect
+        .poll(async () => Math.round((await action.boundingBox())?.height ?? 0), {
+          timeout: 5_000,
+          message: `${label} is a 44px phone target`,
+        })
+        .toBeGreaterThanOrEqual(44);
+    }
+
     const fontSizes = await page
       .getByTestId("schedule-viewing-modal")
       .locator("input")
