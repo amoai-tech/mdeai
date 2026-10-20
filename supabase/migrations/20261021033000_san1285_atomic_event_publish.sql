@@ -137,7 +137,7 @@ begin
   if p_draft ? 'priceMinCop' and p_draft->'priceMinCop' <> 'null'::jsonb then
     if jsonb_typeof(p_draft->'priceMinCop') <> 'number'
        or (p_draft->>'priceMinCop')::numeric < 0
-       or (p_draft->>'priceMinCop')::numeric > 2147483647
+       or (p_draft->>'priceMinCop')::numeric > 21474836
        or (p_draft->>'priceMinCop')::numeric <> trunc((p_draft->>'priceMinCop')::numeric) then
       raise exception 'INVALID_TICKET_PRICE' using errcode = '22023';
     end if;
@@ -167,7 +167,7 @@ begin
         or jsonb_typeof(t->'priceCop') <> 'number'
         or jsonb_typeof(t->'quantity') <> 'number'
         or (t->>'priceCop')::numeric < 0
-        or (t->>'priceCop')::numeric > 2147483647
+        or (t->>'priceCop')::numeric > 21474836
         or (t->>'priceCop')::numeric <> trunc((t->>'priceCop')::numeric)
         or (t->>'quantity')::numeric <= 0
         or (t->>'quantity')::numeric > 2147483647
@@ -217,7 +217,9 @@ begin
   insert into public.event_tickets (
     event_id, name, price_cents, qty_total, currency, is_active, position
   )
-  select v_event_id, t.value->>'name', (t.value->>'priceCop')::integer,
+  -- Host input is whole COP; event_tickets.price_cents and Stripe unit_amount
+  -- use minor units. Convert exactly ONCE here, not in checkout or the UI.
+  select v_event_id, t.value->>'name', (t.value->>'priceCop')::integer * 100,
          (t.value->>'quantity')::integer, 'cop', true, (t.ordinality - 1)::integer
   from jsonb_array_elements(v_tiers) with ordinality as t(value, ordinality);
 
