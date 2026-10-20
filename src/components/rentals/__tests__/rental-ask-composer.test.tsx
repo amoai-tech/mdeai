@@ -241,7 +241,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("updates the page's cards from the same structured search the chat fast path uses", async () => {
     const onResults = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -256,6 +256,8 @@ describe("RentalAskComposer (SAN-1421)", () => {
       .find((next) => Array.isArray(next.lastRentalResults));
     expect(statePatch?.lastRentalResults).toHaveLength(1);
     expect(statePatch?.lastRentalResults?.[0]?.id).toBe("rnt_1");
+    // Amenities travel verbatim, so the answer can say "balcony" only when the listing does.
+    expect(statePatch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony"]);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/rentals/search");
     expect(JSON.parse(String(init.body)).neighborhood).toBe("Laureles");
@@ -270,7 +272,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("lets a follow-up refine the previous rental question instead of starting over", async () => {
     // A Response body can only be read once, so each request gets its own.
     const fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 })),
+      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 })),
     );
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
@@ -336,7 +338,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
           role: "tool",
           toolCallId: "call-1",
           content: JSON.stringify({
-            results: [{ id: "rnt_1" }, { id: "rnt_2" }],
+            results: [
+              { id: "rnt_1", amenities: ["Balcony", "Wi-Fi"] },
+              { id: "rnt_2", amenities: [] },
+            ],
             budgetNote: "No monthly budget applied",
           }),
         },
@@ -355,6 +360,13 @@ describe("RentalAskComposer (SAN-1421)", () => {
     );
     // The page must not run a second, independent search when the agent already produced the rows.
     expect(fetchMock).not.toHaveBeenCalled();
+    // Amenities reach working memory verbatim: a documented balcony stays, an empty list does not
+    // become "no balcony" (it stays empty, which the answer must read as "not specified").
+    const patch = coagent.setState.mock.calls
+      .map(([value]) => (typeof value === "function" ? value({}) : value))
+      .find((next) => Array.isArray(next.lastRentalResults));
+    expect(patch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony", "Wi-Fi"]);
+    expect(patch?.lastRentalResults?.[1]?.amenities).toEqual([]);
     vi.unstubAllGlobals();
   });
 
@@ -422,7 +434,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
 
   it("keeps the current rows after a fallback search when the next turn only asks about amenities", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
