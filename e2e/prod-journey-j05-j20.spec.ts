@@ -262,10 +262,17 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await expect(page.getByTestId("map-sheet-content")).toBeHidden();
 
     // The old chat-ready/request-in-progress markers are not rendered by the v2
-    // composer. Check the actual renter-visible control after dismissing the map.
+    // composer. Check the actual renter-visible control after dismissing the map:
+    // it must accept a draft and enable Send without issuing a paid agent turn.
     const composer = page.getByTestId("copilot-chat-region").getByTestId("copilot-chat-textarea");
     await expect(composer).toBeVisible({ timeout: 15_000 });
     await expect(composer).toBeEditable();
+    const draft = "Can I still ask about this area?";
+    await composer.click();
+    await composer.fill(draft);
+    await expect(composer).toHaveValue(draft);
+    await expect(page.getByTestId("copilot-send-button")).toBeEnabled();
+    await composer.fill("");
     await expect(page.getByTestId("copilot-send-button")).toBeVisible();
     await page.screenshot({ path: path.join(outDir, "j17-mobile-map.png") });
   });
