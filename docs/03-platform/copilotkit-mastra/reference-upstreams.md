@@ -17,7 +17,7 @@ node scripts/check-ai-reference-upstreams.mjs --json
 node --test scripts/__tests__/ai-reference-upstreams.test.mjs
 ```
 
-A `DRIFT` status means "consider upstream changes", **not** "upgrade now". An `UPSTREAM_UNAVAILABLE` status means no conclusion. Neither fails an application PR or causes an automated merge. Manifest errors still fail to prevent silent loss of tracking. The separate vendored-skill integrity gate retains its original strict policy.
+A `DRIFT` status means "consider upstream changes", **not** "upgrade now". An `UPSTREAM_UNAVAILABLE` status means no conclusion. Neither fails an application PR or causes an automated merge. Manifest errors still fail to prevent silent loss of tracking. Each entry is checked against its expected GitHub owner/repository, and each summary row includes a release or compare link plus the manual decision: adapt, defer or ignore. In `--json` mode stdout stays valid JSON; warnings go to stderr. The separate vendored-skill integrity gate retains its original strict policy.
 
 ## Safe update procedure
 
