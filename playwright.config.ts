@@ -83,6 +83,7 @@ export default defineConfig({
         "**/maps-layout-mobile.spec.ts",
         "**/viewing-modal-keyboard.spec.ts",
         "**/browse-map-close-touch.spec.ts",
+        "**/san-1524-contests.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
       retries: 0,
