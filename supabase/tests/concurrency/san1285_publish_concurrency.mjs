@@ -115,7 +115,7 @@ try {
     "select price_cents from public.event_tickets where event_id=$1",
     [aEventId],
   );
-  check(cents.rows[0]?.price_cents === 3000000, "30000 COP is 3000000 Stripe minor units");
+  check(Number(cents.rows[0]?.price_cents) === 3000000, "30000 COP is 3000000 Stripe minor units");
 } finally {
   try {
     await seed.query(

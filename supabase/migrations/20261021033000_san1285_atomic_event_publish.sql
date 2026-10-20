@@ -144,7 +144,7 @@ begin
   if p_draft ? 'priceMinCop' and p_draft->'priceMinCop' <> 'null'::jsonb then
     if jsonb_typeof(p_draft->'priceMinCop') <> 'number'
        or (p_draft->>'priceMinCop')::numeric < 0
-       or (p_draft->>'priceMinCop')::numeric > 21474836
+       or (p_draft->>'priceMinCop')::numeric > 99999999
        or (p_draft->>'priceMinCop')::numeric <> trunc((p_draft->>'priceMinCop')::numeric) then
       raise exception 'INVALID_TICKET_PRICE' using errcode = '22023';
     end if;
@@ -174,7 +174,7 @@ begin
         or jsonb_typeof(t->'priceCop') <> 'number'
         or jsonb_typeof(t->'quantity') <> 'number'
         or (t->>'priceCop')::numeric < 0
-        or (t->>'priceCop')::numeric > 21474836
+        or (t->>'priceCop')::numeric > 99999999
         or (t->>'priceCop')::numeric <> trunc((t->>'priceCop')::numeric)
         or (t->>'quantity')::numeric <= 0
         or (t->>'quantity')::numeric > 2147483647

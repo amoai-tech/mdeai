@@ -100,9 +100,9 @@ select throws_ok(
 select throws_ok(
   $q$ select public.publish_event_tx(
     'a1285000-0000-4000-8000-000000000088',
-    '{"title":"Price exceeds minor-unit storage","dateIso":"2030-10-20T19:00:00Z","ticketTiers":[{"name":"General","priceCop":21474837,"quantity":1}]}'::jsonb,
+    '{"title":"Price exceeds minor-unit storage","dateIso":"2030-10-20T19:00:00Z","ticketTiers":[{"name":"General","priceCop":100000000,"quantity":1}]}'::jsonb,
     'san1285-price-overflow') $q$,
-  '22023','INVALID_TICKET_TIERS','8e: price above integer minor-unit limit is rejected');
+  '22023','INVALID_TICKET_TIERS','8e: price above the Stripe minor-unit limit is rejected');
 select set_config('request.jwt.claims','{"sub":"a1285000-0000-4000-8000-000000000002","role":"authenticated"}',true);
 select throws_ok(
   $q$ select public.publish_event_tx(
@@ -119,7 +119,7 @@ select is((select count(*)::int from public.event_tickets where event_id=current
 select is((select sum(price_cents)::int from public.event_tickets where event_id=current_setting('san1285.event_id')::uuid),
   12000000,'11: two tier amounts stored in COP minor units');
 select is((select min(price_cents) from public.event_tickets where event_id=current_setting('san1285.event_id')::uuid),
-  4000000,'11a: 40000 whole COP becomes 4000000 minor units for Stripe');
+  4000000::bigint,'11a: 40000 whole COP becomes 4000000 minor units for Stripe');
 select is((select ticket_price_min from public.events where id=current_setting('san1285.event_id')::uuid),
   40000::numeric,'11b: event summary remains in whole COP');
 select is((select organizer_id from public.events where id=current_setting('san1285.event_id')::uuid),
