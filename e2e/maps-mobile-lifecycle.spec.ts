@@ -159,8 +159,9 @@ test.describe("real Google Maps mobile lifecycle", () => {
     for (let cycle = 1; cycle <= 10; cycle += 1) {
       const sheet = await openSheet(page);
       await expect(sheet.getByTestId("map-pin")).toHaveCount(0);
-      // The product intentionally renders the empty state instead of mounting a
-      // map when there are no grounded pins.
+      // The empty state overlays the map; the real map must still mount, or the
+      // historical no-pin lifecycle would go untested.
+      await expectRealMap(sheet);
       await expect(
         sheet.getByText("Search in chat to see available map locations."),
       ).toBeVisible({ timeout: 10_000 });
