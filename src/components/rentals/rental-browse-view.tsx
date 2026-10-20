@@ -10,6 +10,7 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
+import { RentalAskComposer } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
@@ -146,6 +147,7 @@ function RentalBrowseViewInner({
             }
           />
         }
+        askComposer={<RentalAskComposer />}
       >
         <section className="mt-4" aria-label="Rental listings">
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
@@ -220,7 +222,7 @@ function RentalBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet />
+      <BrowseMapSheet raised />
       {detailsRental && !isLgUp ? (
         <RentalDetailsSheet
           rental={detailsRental}

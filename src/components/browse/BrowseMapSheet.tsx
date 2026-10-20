@@ -7,14 +7,16 @@ import { Button } from "@/components/ui/button";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet() {
+export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="lg:hidden">
       <Button
         variant="default"
         size="sm"
-        className="fixed bottom-6 right-4 z-50 gap-2 shadow-lg"
+        // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar
+        // instead of on top of its Send button.
+        className={raised ? "fixed bottom-28 right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
         onClick={() => setOpen(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"

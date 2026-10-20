@@ -80,3 +80,17 @@ describe("BrowseMapSheet close control", () => {
     await act(async () => root.unmount());
   });
 });
+
+/** SAN-1421 — when a page pins an Ask MDE composer at the bottom, the phone Map button clears it. */
+describe("BrowseMapSheet placement above a pinned composer", () => {
+  it("sits above the composer instead of on top of its Send button", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<BrowseMapSheet raised />));
+
+    const fab = document.querySelector('[data-testid="browse-map-fab"]') as HTMLElement;
+    expect(fab.className).toContain("bottom-28");
+    expect(fab.className).not.toContain("bottom-6");
+  });
+});
