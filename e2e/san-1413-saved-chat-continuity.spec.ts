@@ -93,6 +93,31 @@ async function expectOnlyThisChat(page: Page, shown: SeededChat, hidden?: Seeded
   }
 }
 
+/** Navigate real browse links without reselecting or resetting the active chat. */
+async function browseRentalsAndEventsThenReturnToChat(page: Page) {
+  // ── Chat → Rentals → Events → Chat (same tab, actual in-app links) ──────
+  await page.getByTestId("nav-rentals-link").first().click();
+  await page.waitForURL("**/rentals", { timeout: 30_000 });
+  await expect(page.getByTestId("rentals-browse")).toBeVisible();
+  // The SAN-1421 inline composer is not yet present on main; testing that
+  // send/reply handoff requires its owning task to finish the UI separately.
+  // This test proves that navigating the existing discovery workspaces does
+  // not change the selected conversation, without claiming composer parity.
+  await page.getByTestId("nav-events-link").first().click();
+  await page.waitForURL("**/events", { timeout: 30_000 });
+  await expect(page.getByTestId("events-browse")).toBeVisible();
+  await page.getByRole("link", { name: "Ask concierge", exact: true }).click();
+  await page.waitForURL("**/chat", { timeout: 30_000 });
+  // Browser navigation preserves identity even after both route providers
+  // have unmounted and the /chat provider must reconnect and replay A.
+  await page.goBack();
+  await expect(page.getByTestId("events-browse")).toBeVisible();
+  await page.goForward();
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 20_000, message: "Forward returns to Chat" })
+    .toBe("/chat");
+}
+
 test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", () => {
   test.skip(!enabled, "Set PROD_SMOKE_BASE_URL to the deployment under test");
 
@@ -142,27 +167,7 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
     expect(titled.error).toBeNull();
     expect(titled.data?.metadata).toEqual(seededMetadata);
 
-    // ── Chat → Rentals → Events → Chat (same tab, actual in-app links) ──────
-    await page.getByTestId("nav-rentals-link").first().click();
-    await page.waitForURL("**/rentals", { timeout: 30_000 });
-    await expect(page.getByTestId("rentals-browse")).toBeVisible();
-    // The SAN-1421 inline composer is not yet present on main; testing that
-    // send/reply handoff requires its owning task to finish the UI separately.
-    // This test proves that navigating the existing discovery workspaces does
-    // not change the selected conversation, without claiming composer parity.
-    await page.getByTestId("nav-events-link").first().click();
-    await page.waitForURL("**/events", { timeout: 30_000 });
-    await expect(page.getByTestId("events-browse")).toBeVisible();
-    await page.getByRole("link", { name: "Ask concierge", exact: true }).click();
-    await page.waitForURL("**/chat", { timeout: 30_000 });
-    // Browser navigation preserves identity even after both route providers
-    // have unmounted and the /chat provider must reconnect and replay A.
-    await page.goBack();
-    await expect(page.getByTestId("events-browse")).toBeVisible();
-    await page.goForward();
-    await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 20_000, message: "Forward returns to Chat" })
-      .toBe("/chat");
+    await browseRentalsAndEventsThenReturnToChat(page);
     await expect(rail(page), "returning keeps the same conversation").toHaveAttribute(
       "data-active-thread-id", chatA.threadId, { timeout: 20_000 });
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
