@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import errorsBehavior from "../../.claude/skills/errors/evals/evals.json" with { type: "json" };
 import errorsTriggers from "../../.claude/skills/errors/evals/trigger-evals.json" with { type: "json" };
 import prauditBehavior from "../../.claude/skills/praudit/evals/evals.json" with { type: "json" };
@@ -236,4 +237,54 @@ test("OpenMuse, OpenDots, and OpenBot have disjoint positive and near-miss evals
   }
   const all = Object.values(fixtures).flatMap(([, cases]) => cases);
   assert.equal(new Set(all.map((item) => item.prompt)).size, all.length);
+});
+
+
+// Use the ACTUAL DSH runner's loader instead of accepting any array of strings.
+// A parse-only JSON schema check previously passed the three SAN-1557 packs
+// even though the executable runner rejected all nine cases.
+test("SAN-1557 behavioral and routing packs pass the executable runner schema", () => {
+  const program = [
+    "import importlib.util",
+    "s=importlib.util.spec_from_file_location('mde_runner','scripts/run-skill-behavior-eval.py')",
+    "m=importlib.util.module_from_spec(s)",
+    "s.loader.exec_module(m)",
+    "for name in ('openmuse','opendots','openbot'):",
+    "  for n in range(1,4): m.load_case(name,n)",
+    "  for n in range(1,7): m.load_trigger_case(name,n)",
+    "print('RUNNER_CASES_VALID: behavior=9 trigger=18')",
+  ].join("\n");
+  const run = spawnSync("python3", ["-c", program], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  assert.match(run.stdout, /RUNNER_CASES_VALID: behavior=9 trigger=18/);
+});
+
+test("SAN-1557 runner rejects malformed named checks and contradictory trigger owners", () => {
+  const program = [
+    "import importlib.util, pathlib, tempfile, json",
+    "s=importlib.util.spec_from_file_location('mde_runner','scripts/run-skill-behavior-eval.py')",
+    "m=importlib.util.module_from_spec(s)",
+    "s.loader.exec_module(m)",
+    "with tempfile.TemporaryDirectory() as temp:",
+    "  m.ROOT=pathlib.Path(temp)",
+    "  root=m.ROOT/'.claude/skills/openmuse/evals'",
+    "  root.mkdir(parents=True)",
+    "  case={'id':1,'prompt':'explain chat','should_trigger':True,'expectations':[{'id':'bad','kind':'deterministic','check':'made_up','value':'openmuse'}]}",
+    "  (root/'evals.json').write_text(json.dumps({'skill_name':'openmuse','evals':[case]}))",
+    "  try: m.load_case('openmuse',1)",
+    "  except ValueError as e: assert 'expectation' in str(e)",
+    "  else: raise AssertionError('runner accepted a made-up check')",
+    "  (root/'trigger-evals.json').write_text(json.dumps([{'id':'openmuse-1','prompt':'confusing ownership','should_trigger':False,'expected_owner':'openmuse'}]))",
+    "  try: m.load_trigger_case('openmuse',1)",
+    "  except ValueError as e: assert 'routing owner' in str(e)",
+    "  else: raise AssertionError('runner accepted contradictory trigger owner')",
+    "print('MALFORMED_CASES_REJECTED')",
+  ].join("\n");
+  const run = spawnSync("python3", ["-c", program], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  assert.match(run.stdout, /MALFORMED_CASES_REJECTED/);
 });

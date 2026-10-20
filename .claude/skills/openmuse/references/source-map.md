@@ -9,17 +9,17 @@ Confirm its actual merged status and current source before acting.
 - **REFERENCE ONLY:** https://github.com/CopilotKit/openmuse
   → upstream scope, version and license; destination *this map*.
   Verify git SHA and comparison; never install repo as a package.
-- **MODEL:** https://github.com/CopilotKit/openmuse/blob/main/docs/EXPERIENCE.md
+- **MODEL:** https://github.com/CopilotKit/openmuse/blob/1ac68f3909f2478ab6280883f1ab5ea65eb5719d/docs/EXPERIENCE.md
   → composer send/stop, queue, retained draft, scroll, status and mobile.
   Destination: `src/components/chat/concierge-copilot-chat-view.tsx`,
   `src/components/chat/chat-center-panel.tsx`. Verify stop/queue/retry/
   refresh and 390px UI with Playwright before claiming parity.
-- **MODEL / ADAPT behavior only:** https://github.com/CopilotKit/openmuse/blob/main/apps/mobile/src/chat.tsx
+- **MODEL / ADAPT behavior only:** https://github.com/CopilotKit/openmuse/blob/1ac68f3909f2478ab6280883f1ab5ea65eb5719d/apps/mobile/src/chat.tsx
   → read current event handling and thread state; destination same chat files.
   Do **not** copy React Native imports or mount a second thread/provider.
   Verify installed `@copilotkit/react-core/v2` hooks, same-origin runtime and
   actual before/after browser behavior.
-- **MODEL:** https://github.com/CopilotKit/openmuse/blob/main/apps/mobile/src/search-tool-card.tsx
+- **MODEL:** https://github.com/CopilotKit/openmuse/blob/1ac68f3909f2478ab6280883f1ab5ea65eb5719d/apps/mobile/src/search-tool-card.tsx
   → parse real search result, validate source URLs, distinguish loading,
   stopped, error and empty from actual sourced results.
   Destination: `src/components/copilot/search-tool-renders.tsx` and existing

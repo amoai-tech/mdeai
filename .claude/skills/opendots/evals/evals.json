@@ -5,35 +5,98 @@
     {
       "id": 1,
       "prompt": "A partner edits the AI-generated café name, clicks Accept, and reloads. Explain the smallest OpenDots-inspired review flow and files to inspect.",
-      "expected_output": "Map OpenDots review card and decision to existing partner flow, save through authorized MDE endpoint, read back persisted value.",
+      "expected_output": "Map OpenDots review card and decision to existing partner flow, save through authorized MDE endpoint, read back persisted value. Acceptance criteria: References PageReviewCard.tsx and page-review-decision.ts; Checks proposal identity, changed draft and receipt readback; Never claims a save happened before persisted confirmation.",
       "files": [],
       "expectations": [
-        "References PageReviewCard.tsx and page-review-decision.ts",
-        "Checks proposal identity, changed draft and receipt readback",
-        "Never claims a save happened before persisted confirmation"
-      ]
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     },
     {
       "id": 2,
       "prompt": "A retry repeats a profile suggestion after a response timeout; an older edit is already stored. Prevent duplicates and stale overwrites.",
-      "expected_output": "Use existing MDE server action/RPC and idempotency/version checks modeled on OpenDots, not SQLite copied schema.",
+      "expected_output": "Use existing MDE server action/RPC and idempotency/version checks modeled on OpenDots, not SQLite copied schema. Acceptance criteria: Same-draft retry recovers saved receipt; Modified draft yields conflict; canceled suggestion writes nothing; No second editor store, ownership gate or unsafe approval system.",
       "files": [],
       "expectations": [
-        "Same-draft retry recovers saved receipt",
-        "Modified draft yields conflict; canceled suggestion writes nothing",
-        "No second editor store, ownership gate or unsafe approval system"
-      ]
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     },
     {
       "id": 3,
       "prompt": "The owner rejects an AI-suggested event description. Does the product need a publishing approval gate to handle Ignore?",
-      "expected_output": "Explain Ignore/Cancel as review interaction with no writes; existing development publishing/booking remains unblocked.",
+      "expected_output": "Explain Ignore/Cancel as review interaction with no writes; existing development publishing/booking remains unblocked. Acceptance criteria: Distinguishes optional AI user review from business certification; Requires server-side tenant auth on eventual writes; Reports no false data or saved-action success.",
       "files": [],
       "expectations": [
-        "Distinguishes optional AI user review from business certification",
-        "Requires server-side tenant auth on eventual writes",
-        "Reports no false data or saved-action success"
-      ]
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     }
   ]
 }
