@@ -204,6 +204,24 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** Distinct public card/map labels for the two active El Cielo locations.
+ * Keep canonical restaurant names and Google place IDs untouched in Supabase.
+ * IDs and address distinctions were verified against the live rows (2026-10-20).
+ */
+export function restaurantSearchDisplayName(name: string, id: string): string {
+  if (name !== 'El Cielo') return name;
+  if (id === 'fc6031d7-dcf6-44c3-9547-f7172c37ee95') return 'El Cielo · Elcielo Hotel';
+  if (id === 'a1b2c3d4-e5f6-4789-abcd-100000000004') return 'El Cielo · Carrera 40';
+  return name;
+}
+
+function withRestaurantDisplayNames(rows: Restaurant[]): Restaurant[] {
+  return rows.map((row) => ({
+    ...row,
+    name: restaurantSearchDisplayName(row.name, row.id),
+  }));
+}
+
 export function rowToRestaurant(row: RestaurantRow): Restaurant {
   const pl = typeof row.price_level === 'number' ? row.price_level : Number(row.price_level) || 2;
   const rating = num(row.rating) ?? 0;
@@ -331,7 +349,7 @@ export async function searchRestaurants(
         hybridUsed: false,
         groundingUsed: false,
       });
-      return { results: fallback.slice(0, limit), total: fallback.length, source: 'fallback' };
+      return { results: withRestaurantDisplayNames(fallback.slice(0, limit)), total: fallback.length, source: 'fallback' };
     }
 
     // Log final count (after filters) — not pre-filter count.
@@ -346,7 +364,7 @@ export async function searchRestaurants(
       rankExplanation: intel?.rankExplanation,
     });
     return {
-      results: intelFiltered.slice(0, limit),
+      results: withRestaurantDisplayNames(intelFiltered.slice(0, limit)),
       total: intelFiltered.length,
       source: intel?.source ?? 'fallback',
       hybridUsed: intel?.hybridUsed,
@@ -365,7 +383,7 @@ export async function searchRestaurants(
       console.warn('[search-restaurants] Supabase client unavailable — using fallback list');
     }
     const filtered = applyRestaurantFilters(FALLBACK_RESTAURANTS, query);
-    return { results: filtered.slice(0, limit), total: filtered.length, source: 'fallback' as const };
+    return { results: withRestaurantDisplayNames(filtered.slice(0, limit)), total: filtered.length, source: 'fallback' as const };
   };
 
   if (!client) {
@@ -410,7 +428,7 @@ export async function searchRestaurants(
   let mapped = raw.map(rowToRestaurant);
   mapped = applyRestaurantFilters(mapped, query);
   return {
-    results: mapped.slice(0, limit),
+    results: withRestaurantDisplayNames(mapped.slice(0, limit)),
     total: mapped.length,
     source: 'supabase' as const,
   };
