@@ -69,7 +69,7 @@ export default async function ContestDetailPage({
   if (result.status === "not_found") notFound();
   if (result.status === "error") {
     return (
-      <main className="mx-auto min-h-screen max-w-4xl px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto min-h-screen max-w-4xl px-4 py-8">
         <h1 className="font-serif text-2xl font-semibold">Contest</h1>
         <p className="mt-2 text-sm text-foreground" data-testid="contest-error">
           We could not load this contest right now. This is a temporary problem, not a missing contest.
@@ -87,7 +87,7 @@ export default async function ContestDetailPage({
   const cover = contest.coverUrl;
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6" data-testid="contest-page" data-contest-id={contest.id}>
+    <main id="main-content" tabIndex={-1} className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6" data-testid="contest-page" data-contest-id={contest.id}>
       <nav className="mb-4 text-sm">
         <Link className="text-muted-foreground underline" href="/contests">All contests</Link>
       </nav>

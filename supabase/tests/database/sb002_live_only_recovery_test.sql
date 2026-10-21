@@ -125,7 +125,7 @@ select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  1, 'authenticated CAN execute ticket_payment_refund_v2 (as in production)');
+  0, 'authenticated cannot execute ticket_payment_refund_v2 after SAN-1562 security hardening');
 
 -- ── referential integrity restored ────────────────────────────────────────────
 -- 20260503130000_out_of_band_orphan_tables.sql adds this FK only if public.outbox
