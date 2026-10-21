@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { evaluateCopilotKitAuth } from "@/lib/copilotkit-auth";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
@@ -178,6 +178,9 @@ describe("Step 10 · route contract — v2 fetch handler", () => {
 });
 
 describe("Step 9 + 10 · transport agreement", () => {
+  // The runtime-handler test overrides telemetry only for its own case.
+  afterEach(() => vi.unstubAllEnvs());
+
   it("pins one matched single-route pair", () => {
     expect(COPILOTKIT_BASE_PATH).toBe("/api/copilotkit");
     expect(COPILOTKIT_HANDLER_MODE).toBe("single-route");
@@ -240,7 +243,7 @@ describe("Step 9 + 10 · transport agreement", () => {
     // Behavioural proof, not a constant re-read: single-route treats EVERY path as
     // the one envelope endpoint, so a POST to /info is parsed as an envelope and
     // rejected as 400. Multi-route routes /info and answers 405 for a POST.
-    process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+    vi.stubEnv("COPILOTKIT_TELEMETRY_DISABLED", "true");
     const { CopilotRuntime, createCopilotRuntimeHandler } = await import(
       "@copilotkit/runtime/v2"
     );
