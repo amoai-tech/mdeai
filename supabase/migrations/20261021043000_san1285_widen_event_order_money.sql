@@ -8,6 +8,9 @@
 -- This migration widens the money columns and the arithmetic to bigint. It does
 -- not rewrite historical rows: reconciling old whole-COP rows remains SAN-582.
 --
+-- The recreated refund RPC is a trusted-server money mutation only. It is granted
+-- to service_role alone, preserving the SAN-1562 boundary for the new signature.
+--
 -- Affected:
 --   * event_tickets.price_cents
 --   * event_orders.total_cents / subtotal_cents / tax_cents / fee_cents / discount_cents
@@ -241,13 +244,45 @@ begin
 end;
 $function$;
 
--- This surface was never public/anonymous.
+-- SAN-1562 security boundary: refunds are a server-only money mutation. The old
+-- integer signature was revoked in 20261021031500_san1562_restrict_event_commerce_rpcs.sql,
+-- but this migration replaces it with a bigint signature. CREATE FUNCTION grants
+-- EXECUTE to PUBLIC by default, so the new signature must be locked down explicitly:
+-- no buyer, signed-in or anonymous, may call it directly.
 revoke all on function public.ticket_payment_refund_v2(
   uuid, bigint, text, text, uuid, text, uuid[]
-) from public, anon;
+) from public, anon, authenticated, service_role;
 grant execute on function public.ticket_payment_refund_v2(
   uuid, bigint, text, text, uuid, text, uuid[]
-) to authenticated, service_role;
+) to service_role;
+
+-- Defence in depth for the overload class, not just today's signature: if any
+-- legacy/future migration reintroduces another ticket_payment_refund_v2 overload,
+-- it must not restore end-user EXECUTE. The trusted payment server keeps access.
+do $$
+declare
+  v_schema text;
+  v_name   text;
+  v_args   text;
+begin
+  for v_schema, v_name, v_args in
+    select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'ticket_payment_refund_v2'
+  loop
+    execute format(
+      'revoke execute on function %I.%I(%s) from public, anon, authenticated',
+      v_schema, v_name, v_args
+    );
+    execute format(
+      'grant execute on function %I.%I(%s) to service_role',
+      v_schema, v_name, v_args
+    );
+  end loop;
+end
+$$;
 
 comment on function public.compute_ticket_total(uuid, integer, bigint) is
   'SAN-1285: money in integer minor units; bigint arithmetic prevents high-price overflow.';
