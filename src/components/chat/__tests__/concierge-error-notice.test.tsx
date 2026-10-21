@@ -9,6 +9,7 @@ describe("ConciergeErrorNotice (UX-002)", () => {
       React.createElement(ConciergeErrorNotice, { onRetry: vi.fn() }),
     );
     expect(html).toContain('data-testid="concierge-error-notice"');
+    expect(html).toContain('role="alert"');
   });
 
   it("shows generic user-facing copy — no raw error codes", () => {
