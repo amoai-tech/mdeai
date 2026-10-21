@@ -34,6 +34,33 @@ describe("publishSlug", () => {
     expect(slug.length).toBeLessThanOrEqual(80);
   });
 
+  it("does not leave a double hyphen when the 55-character cut lands on a space", () => {
+    // Base slug before the cut ends at "...invitada-y-"; without the post-slice
+    // trim the suffix produces "...invitada-y--<suffix>", which the SQL slug
+    // guard rejects with INVALID_EVENT_DRAFT.
+    const slug = publishSlug(
+      "Una Noche de Salsa en Medellín con Orquesta Invitada y Clase de Baile",
+      PROPOSAL_A,
+    );
+    expect(slug).not.toContain("--");
+    expect(slug.endsWith("-000000000011")).toBe(true);
+    expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+  });
+
+  it("keeps every long-title boundary URL-safe", () => {
+    const titles = [
+      "Una Noche de Salsa en Medellín con Orquesta Invitada y Clase de Baile",
+      "Fiesta de la Música Colombiana con Invitados Especiales y Más",
+      "Salsa Night en Medellín con Orquesta Invitada y Clase de Baile",
+      "Festival de Salsa y Música Colombiana con Invitados Especiales y Más",
+    ];
+    for (const title of titles) {
+      const slug = publishSlug(title, PROPOSAL_A);
+      expect(slug).not.toContain("--");
+      expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    }
+  });
+
   it("falls back to an event slug for a title with no latin characters", () => {
     expect(publishSlug("東京", PROPOSAL_A)).toMatch(/^event-[a-z0-9]+$/);
   });

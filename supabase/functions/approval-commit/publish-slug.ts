@@ -13,7 +13,11 @@ export function publishSlug(title: string, proposalId: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 55);
+    .slice(0, 55)
+    // The 55-character cut can land on a word separator. Trim again after the
+    // cut, otherwise `${base}-${suffix}` produces `--`, which the SQL slug
+    // guard rejects and aborts an otherwise valid publish.
+    .replace(/-+$/g, "");
   // Use the *trailing* 12 alphanumeric characters of the proposal id: UUID
   // fixtures (and real ids) can share a leading prefix but differ at the tail,
   // and 12 hex chars keep the collision space large enough for public slugs.
