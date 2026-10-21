@@ -1,0 +1,1610 @@
+{
+  "generated_at": "2026-10-21T17:00:00+00:00",
+  "repo": "amoai-tech/mdeai",
+  "comparison_base": {
+    "ref": "origin/main",
+    "head": "5d1d76ddf6c26ca8996c4e121a87b584c3a2971b",
+    "commit_date": "2026-10-20T11:09:48-05:00",
+    "note": "Audited with `git show origin/main:<path>` and `gh pr diff`; the local working tree is a reduced canary branch and was NOT used as evidence."
+  },
+  "totals": {
+    "open_prs": 43,
+    "drafts": 6,
+    "by_type": {
+      "Product feature": 22,
+      "Security": 4,
+      "Tests/QA": 8,
+      "Infrastructure": 8,
+      "Documentation": 1
+    },
+    "by_priority": {
+      "P1": 8,
+      "P2": 12,
+      "P3": 10,
+      "P4": 6,
+      "P5": 7
+    },
+    "conflicting": 8,
+    "failing_or_nonpass_checks": 11,
+    "blocked_on_review_only": 20,
+    "nondraft": 37,
+    "green_checks_nondraft": 26
+  },
+  "rubric": {
+    "user_impact": 30,
+    "unlocks_journey": 25,
+    "security_correctness": 20,
+    "reuse_simplicity": 10,
+    "effort_vs_value": 10,
+    "dependency_leverage": 5
+  },
+  "prs": [
+    {
+      "number": 459,
+      "priority": "P1",
+      "title": "Events: Publish once with safe retries and correct ticket amounts",
+      "url": "https://github.com/amoai-tech/mdeai/pull/459",
+      "domain": "Events/Ticketing \u00b7 Payments",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 `review / review` FAILURE",
+      "linear": [
+        "SAN-1285",
+        "SAN-1548",
+        "SAN-582"
+      ],
+      "files": 20,
+      "additions": 1497,
+      "deletions": 494,
+      "journey": "Host publishes an event once; retry/reload returns the same event + tiers; COP 40,000 reaches Stripe as 4,000,000 minor units.",
+      "tests_ci": "floor SUCCESS, supabase-acl SUCCESS, deterministic chromium SUCCESS, Codacy SUCCESS; `review / review` FAILURE (PR-Agent run 39424285473 aborted with 'Version evidence: NEEDS VERIFICATION / Evidence generation failed') \u2192 advisory reviewer infra failure, not a code finding.",
+      "dependencies": "Collides with merged #454 (supabase/functions/approval-commit/index.ts) and merged #475 (scripts/function-acl-baseline.json, san1304a/sb002 ACL tests); #456 shares two of those test files. Migrations 20261021033000/20261021043000 do not collide with main (030000 SAN-1548, 040000 SAN-1470, 050000 SAN-1556, 060000 SAN-1305, 070000 SAN-1502).",
+      "subscores": {
+        "user_impact": 28,
+        "unlocks_journey": 25,
+        "security_correctness": 19,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 5,
+        "dependency_leverage": 4
+      },
+      "value": 87,
+      "action": "Fix (rebase on 5d1d76ddf6, re-run review check) \u2192 merge",
+      "evidence": "Canonical SAN-1285 implementation; #458 is CLOSED so there is no competing publish path left. Touches `.github/workflows/supabase-acl.yml` (changes a required-security workflow \u2014 needs explicit approval per AGENTS.md \u00a7 Ask first)."
+    },
+    {
+      "number": 456,
+      "priority": "P1",
+      "title": "SAN-1562 \u00b7 Stop Fake Ticket Refunds and Check-Ins",
+      "url": "https://github.com/amoai-tech/mdeai/pull/456",
+      "domain": "Events/Ticketing \u00b7 Payments",
+      "type": "Security",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 deterministic chromium FAILURE",
+      "linear": [
+        "SAN-1562",
+        "SAN-1284",
+        "SAN-1357",
+        "SAN-757"
+      ],
+      "files": 4,
+      "additions": 144,
+      "deletions": 3,
+      "journey": "A signed-in user must not be able to fake a refund, consume someone else's QR, or call check-in RPCs directly; anon loses event write grants.",
+      "tests_ci": "supabase-acl SUCCESS, floor SUCCESS, Codacy SUCCESS; `deterministic chromium` FAILURE = shared SAN-1357 `chat-virtualization.spec.ts` first-row flake (run 39410522833 \u2192 `\u2718 30 \u2026 both ends of the conversation are reachable by real scrolling`), not this PR's SQL.",
+      "dependencies": "Migration version **20261021030000 collides with main's 20261021030000_san1548_event_approval_id.sql** \u2192 must renumber to \u226520261021090000 before merge. Duplicates/absorbs #255 (same `ticket_validate_consume` revoke). Shares san1284c + sb002 test files with #459, both already rewritten by merged #475 \u2192 rebase conflicts.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 22,
+        "security_correctness": 20,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 8,
+        "dependency_leverage": 3
+      },
+      "value": 81,
+      "action": "Fix (renumber migration + rebase) \u2192 merge",
+      "evidence": "`gh pr diff 456` shows `revoke execute \u2026 ticket_payment_refund_v2`, `ticket_validate_consume(text)`, `record_check_in`, plus anon INSERT/UPDATE/DELETE removal on `events`/`event_*`. This is a superset of #255's single-function fix."
+    },
+    {
+      "number": 484,
+      "priority": "P1",
+      "title": "Let renters request pending development apartments without exposing test fixtures",
+      "url": "https://github.com/amoai-tech/mdeai/pull/484",
+      "domain": "Rentals/Viewings",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 supabase-acl FAILURE",
+      "linear": [
+        "SAN-1502",
+        "SAN-1286",
+        "SAN-1206",
+        "SAN-1105",
+        "SAN-1349",
+        "SAN-1449"
+      ],
+      "files": 5,
+      "additions": 1252,
+      "deletions": 14,
+      "journey": "Renter opens a pending Phase-A development listing and the Request-viewing path works; active test fixtures and private listings stop being bookable.",
+      "tests_ci": "floor SUCCESS, deterministic chromium SUCCESS, Codacy SUCCESS; `supabase-acl` FAILURE (run 39460687384: pgTAP 3 suites, 2/14 + 6/15 + 7/25 failing). The **identical three-suite signature** appears on #473 (run 39450246434), which contains no SQL at all \u2192 the failure is base-branch/live-schema drift, not proof this migration is wrong. Still not green.",
+      "dependencies": "Builds directly on merged #478 (SAN-1502 phase-A pending rental search, 20261021070000) and is the authority half of the same journey. Migration 20261021080000 is the next free slot after main's 070000. #364 is the sibling SAN-1502 publish-authority fix and must land next to it.",
+      "subscores": {
+        "user_impact": 22,
+        "unlocks_journey": 22,
+        "security_correctness": 18,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 6,
+        "dependency_leverage": 4
+      },
+      "value": 80,
+      "action": "Fix (re-run supabase-acl once base is green) \u2192 merge",
+      "evidence": "`gh pr diff 484` redefines `rental_can_request_viewing` + `p1_schedule_tour_atomic`; per the body the old Phase-B-only fixture exclusion plus the `rental_development_active()` bypass meant an active fixture/private listing could be booked by any authenticated renter \u2014 a live data-exposure hole, not just a UX gap."
+    },
+    {
+      "number": 394,
+      "priority": "P1",
+      "title": "Venue Inquiries: Save Each Lead Once and Keep Contact Details Private",
+      "url": "https://github.com/amoai-tech/mdeai/pull/394",
+      "domain": "Partners/Venue leads",
+      "type": "Security",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-882"
+      ],
+      "files": 7,
+      "additions": 568,
+      "deletions": 45,
+      "journey": "A venue owner retries a dropped inquiry and gets the same saved reference \u2014 not a duplicate lead \u2014 and their email never reaches server logs.",
+      "tests_ci": "floor, deterministic chromium, supabase-acl, Codacy, CodeRabbit, Kilo all SUCCESS; no failed check on this head.",
+      "dependencies": "No file overlap with any open PR. Body notes the advisory Codacy finding was not reviewed; production replay + log-privacy still need post-deploy proof.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 18,
+        "security_correctness": 19,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 6,
+        "dependency_leverage": 3
+      },
+      "value": 74,
+      "action": "Merge",
+      "evidence": "Body cites pre-PR code: insert with no request identity, no durable rate limit, and `console.log(\"[venue-lead] \u2026 email=\" + data.email)`. The diff uses one request id across retries, conflict detection, per-IP limiter, and non-PII logs \u2014 all green on head."
+    },
+    {
+      "number": 453,
+      "priority": "P1",
+      "title": "MDE Events \u2014 Show real ticket prices and only valid Buy actions",
+      "url": "https://github.com/amoai-tech/mdeai/pull/453",
+      "domain": "Events/Discovery",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1560",
+        "SAN-1285",
+        "SAN-178",
+        "SAN-974"
+      ],
+      "files": 4,
+      "additions": 151,
+      "deletions": 16,
+      "journey": "Visitor sees 'From $40,000 COP' from the real cheapest tier instead of 'Free', and no Buy button when no tier is purchasable.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Base of the stack: #461 is based on this branch and must merge after it. Shares `list-published-events.ts` (+ its test) with #461.",
+      "subscores": {
+        "user_impact": 22,
+        "unlocks_journey": 20,
+        "security_correctness": 8,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 8,
+        "dependency_leverage": 4
+      },
+      "value": 70,
+      "action": "Merge (then rebase #461)",
+      "evidence": "Body documents the concrete data defect (Reina de Antioquia: null summary price, USD currency, real 4,000,000-minor-unit COP tier). Query reuses the existing `event_tickets` FK embed with SQL `!inner` so pagination counts real tiers."
+    },
+    {
+      "number": 479,
+      "priority": "P1",
+      "title": "Rentals: Keep the same apartments visible during follow-up questions",
+      "url": "https://github.com/amoai-tech/mdeai/pull/479",
+      "domain": "AI Concierge/Rentals",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1421"
+      ],
+      "files": 5,
+      "additions": 110,
+      "deletions": 5,
+      "journey": "Renter asks 'any with a balcony?' after seeing rentals and the concierge answers from the shown rows (says 'not specified' when absent) instead of re-searching or inventing.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo, GitBook all SUCCESS; no failed check.",
+      "dependencies": "Overlaps merged #445/#449 on the rental ask path and `src/mastra/agents/concierge.ts` with #324. Self-declared gap: needs a live three-turn replay (Laureles \u2192 under 3M \u2192 balcony) on this exact head's preview.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 18,
+        "security_correctness": 8,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 7,
+        "dependency_leverage": 4
+      },
+      "value": 65,
+      "action": "Fix (run the documented preview replay) \u2192 merge",
+      "evidence": "Root cause is data flow, not prompt text: `lastRentalResults` stored only id/title/neighborhood/nightly_price. Diff adds verbatim amenities to working memory and makes both write paths share `payloadRows` so the tool-result and fallback paths cannot drift."
+    },
+    {
+      "number": 476,
+      "priority": "P1",
+      "title": "Chat: Show a Retry button when the first event search fails",
+      "url": "https://github.com/amoai-tech/mdeai/pull/476",
+      "domain": "AI Concierge/Chat",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1554"
+      ],
+      "files": 10,
+      "additions": 165,
+      "deletions": 31,
+      "journey": "Fresh chat + events API 503: the error and Try again appear even with an empty transcript, and Retry re-runs the event search.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo, GitBook SUCCESS; Kilo left a COMMENTED review; no failed check.",
+      "dependencies": "Same SAN-1554 area as merged #457 and #464 (both already changed `concierge-run-feedback.tsx` / `concierge-transcript-tail.tsx` / `concierge-error-store.ts`) \u2192 rebase before merge. Shares `chat-center-panel.tsx` with #406, `concierge-transcript-tail.tsx` with #248.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 18,
+        "security_correctness": 8,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 6,
+        "dependency_leverage": 3
+      },
+      "value": 62,
+      "action": "Merge after rebase",
+      "evidence": "Verified against origin/main: `chat-center-panel.tsx` mounts only `<WorkflowProgressStrip />` (line 54) and `concierge-transcript-tail.tsx` still mounts `<ConciergeRunFeedback />` (line 64) \u2014 so the empty-transcript gap this PR fixes is **still present on main** after #457/#464. Not superseded."
+    },
+    {
+      "number": 483,
+      "priority": "P1",
+      "title": "Chat Tests: Stop False Failures When Scrolling Through 500 Messages",
+      "url": "https://github.com/amoai-tech/mdeai/pull/483",
+      "domain": "Tests/QA \u00b7 CI unblocker",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1357"
+      ],
+      "files": 1,
+      "additions": 15,
+      "deletions": 14,
+      "journey": "No user-facing change: the 500-message virtualization regression stops failing CI for unrelated PRs while still proving both ends are reachable.",
+      "tests_ci": "floor, deterministic chromium, auth-redirect chromium, Codacy, CodeRabbit, Kilo all SUCCESS on this head \u2014 the only open PR that turns that flake green.",
+      "dependencies": "**Highest-leverage PR on the board:** the same `e2e/chat-virtualization.spec.ts` failure is the sole red check on #471, #474, #480 and #456.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 18,
+        "security_correctness": 0,
+        "reuse_simplicity": 9,
+        "effort_vs_value": 10,
+        "dependency_leverage": 5
+      },
+      "value": 48,
+      "action": "Merge first (unblocks #456, #471, #474, #480)",
+      "evidence": "Evidence it is the shared flake: runs 39455299255 (#474), 39434317221 (#471), 39445838084 (#480) and 39410522833 (#456) all fail on the identical test id `SAN-1357 \u00b7 CopilotChatView virtualizes a 500-message conversation \u203a both ends of the conversation are reachable by real scrolling`. One 29-line test-only fix removes four red PRs."
+    },
+    {
+      "number": 364,
+      "priority": "P2",
+      "title": "Rental Publishing: Block Unauthorized Brokers and Keep Original Publish Dates",
+      "url": "https://github.com/amoai-tech/mdeai/pull/364",
+      "domain": "Rentals/Publishing",
+      "type": "Security",
+      "status": "Draft \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1502"
+      ],
+      "files": 2,
+      "additions": 177,
+      "deletions": 0,
+      "journey": "Broker B cannot publish Broker A's listing when the owner field is blank; a repeat publish keeps the original published_at.",
+      "tests_ci": "floor, supabase-acl, deterministic chromium, Codacy, authenticated restaurant vote all SUCCESS; no failed check.",
+      "dependencies": "Same SAN-1502 epic as #484 (viewing authority vs publish authority \u2014 complementary, not duplicate). Migration 20261017020000 is old enough to need rebase past main's 070000/080000.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 16,
+        "security_correctness": 16,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 6,
+        "dependency_leverage": 3
+      },
+      "value": 66,
+      "action": "Fix (undraft + rebase) \u2192 merge after #484",
+      "evidence": "Null-sensitive authorization in an existing SECURITY DEFINER publish function. Draft status is the only thing stopping a 177-line, 2-file security fix that is fully green."
+    },
+    {
+      "number": 404,
+      "priority": "P2",
+      "title": "Autofill a partner profile from their business website",
+      "url": "https://github.com/amoai-tech/mdeai/pull/404",
+      "domain": "Partners/Onboarding",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 CLEAN \u00b7 REVIEW (none submitted)",
+      "linear": [
+        "SAN-1193",
+        "SAN-709"
+      ],
+      "files": 14,
+      "additions": 713,
+      "deletions": 8,
+      "journey": "Partner pastes their website, reviews extracted business facts with sources, and only accepted values are persisted.",
+      "tests_ci": "floor, Codacy, Kilo, CodeRabbit, Vercel SUCCESS. Note: this PR's check list has **no** Playwright/supabase-acl entries (branch scoping), so browser proof is not on the check list.",
+      "dependencies": "Stack: #400 \u2192 #403 \u2192 #404 (base is `feat/san-709-ai-signup`). Must be retargeted to main only after #403 merges. #403 and #404 share `onboarding-ai-suggestion-card.tsx`, `partner-signup-assistant.tsx`, `partner-signup-wizard.tsx`, `ai-suggestion.ts`.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 15,
+        "security_correctness": 14,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 6,
+        "dependency_leverage": 5
+      },
+      "value": 65,
+      "action": "Merge in stack order after #400, #403",
+      "evidence": "SSRF guard is concrete: `business-url.ts` rejects localhost/private/link-local/credentials/non-standard ports before any provider call; route is auth + 10/user/hour fail-closed limiter with 400/429/422/502 taxonomy and no fake success."
+    },
+    {
+      "number": 403,
+      "priority": "P2",
+      "title": "Let partners review AI signup suggestions before applying them",
+      "url": "https://github.com/amoai-tech/mdeai/pull/403",
+      "domain": "Partners/Onboarding",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 CLEAN \u00b7 REVIEW (none submitted)",
+      "linear": [
+        "SAN-709",
+        "SAN-1193",
+        "SAN-705"
+      ],
+      "files": 12,
+      "additions": 597,
+      "deletions": 9,
+      "journey": "Partner sees AI-suggested signup fields as Accept/Edit/Ignore; nothing is written until the existing activation API runs.",
+      "tests_ci": "floor, Codacy, Kilo, CodeRabbit, Vercel SUCCESS.",
+      "dependencies": "Stack base is #400 (`feat/san-705-partner-agent`); #404 stacks on this. Shares `partner-agent.ts` with #400 and the onboarding card/wizard files with #404.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 15,
+        "security_correctness": 14,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 6,
+        "dependency_leverage": 4
+      },
+      "value": 64,
+      "action": "Merge after #400",
+      "evidence": "Review-only design is enforced, not just claimed: one Zod contract rejects unknown/privileged keys, the frontend tool has no DB access, and edited values are re-validated before reaching the form."
+    },
+    {
+      "number": 402,
+      "priority": "P2",
+      "title": "Let partners edit their own business profile",
+      "url": "https://github.com/amoai-tech/mdeai/pull/402",
+      "domain": "Partners/Profile",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-814"
+      ],
+      "files": 6,
+      "additions": 460,
+      "deletions": 0,
+      "journey": "A partner corrects business name/category/neighborhood/website/description instead of needing a database admin.",
+      "tests_ci": "floor, deterministic chromium, Codacy, Kilo, CodeRabbit SUCCESS; Kilo COMMENTED.",
+      "dependencies": "Shares the partner `settings` JSONB with #403/#404 (no file overlap). No migration; relies on existing `partner_members` RLS.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 14,
+        "security_correctness": 12,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 7,
+        "dependency_leverage": 3
+      },
+      "value": 62,
+      "action": "Merge",
+      "evidence": "Server page resolves the partner through `partner_members` RLS with no client-supplied partner id; PATCH is Zod-validated partial merge, 401 unauthenticated / 404 no membership."
+    },
+    {
+      "number": 400,
+      "priority": "P2",
+      "title": "Give every partner one working assistant",
+      "url": "https://github.com/amoai-tech/mdeai/pull/400",
+      "domain": "Partners/Workspace",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-705",
+        "SAN-706"
+      ],
+      "files": 14,
+      "additions": 291,
+      "deletions": 4,
+      "journey": "A caf\u00e9/venue/host partner opens /partners/workspace and asks 'what do I do next?' in their own language.",
+      "tests_ci": "floor, deterministic chromium, Codacy, Kilo, CodeRabbit SUCCESS; Kilo COMMENTED.",
+      "dependencies": "Stack base for #403 and #404. Shares `scripts/copilotkit-consumer-inventory.json` with #403 and `partner-agent.ts` with #403. No migration/new table.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 15,
+        "security_correctness": 10,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 7,
+        "dependency_leverage": 5
+      },
+      "value": 62,
+      "action": "Merge first (stack base)",
+      "evidence": "One `partnerAgent` registered in the single Mastra registry, CopilotKit allowlist and client agent union; partner context is server-derived with the user-scoped client (RLS decides visibility), no client-supplied partner id."
+    },
+    {
+      "number": 461,
+      "priority": "P2",
+      "title": "Events: Hide QA test events from public discovery and AI search",
+      "url": "https://github.com/amoai-tech/mdeai/pull/461",
+      "domain": "Events/Discovery",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 UNSTABLE (no review decision) \u00b7 floor FAILURE",
+      "linear": [
+        "SAN-1561",
+        "SAN-1560",
+        "SAN-896"
+      ],
+      "files": 13,
+      "additions": 146,
+      "deletions": 15,
+      "journey": "Visitors stop seeing 'QA DEMO' cards on /, /events, public detail URLs and AI search, while QA records stay in Supabase for admins.",
+      "tests_ci": "floor FAILURE (run 39415707247): `src/mastra/lib/__tests__/intelligence-event-search-errors.test.ts > throws when structured events query fails (not empty success)` \u2014 AssertionError expecting 'structured event query failed: permis\u2026', got 'client.from(...).select(...).eq(...)'. This is inside this PR's own touched module (`intelligence-event-search.ts`) \u2192 real regression.",
+      "dependencies": "Stacked on #453 (base branch is #453's head) \u2014 must rebase and merge after #453. Shares `list-published-events.ts` + its test with #453, `search-events.ts` with #467.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 15,
+        "security_correctness": 8,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 5,
+        "dependency_leverage": 4
+      },
+      "value": 58,
+      "action": "Fix (own failing unit test + rebase on #453) \u2192 merge",
+      "evidence": "Single shared QA-marker rule across homepage, lists, detail and structured/AI search; no deletion of QA data and no new publishing gate."
+    },
+    {
+      "number": 324,
+      "priority": "P2",
+      "title": "Write real rental prices and links into the WhatsApp reply",
+      "url": "https://github.com/amoai-tech/mdeai/pull/324",
+      "domain": "AI Concierge/WhatsApp",
+      "type": "Product feature",
+      "status": "Open \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED",
+      "linear": [
+        "SAN-1444",
+        "SAN-1442"
+      ],
+      "files": 5,
+      "additions": 402,
+      "deletions": 39,
+      "journey": "WhatsApp renter asks for a furnished 2-bedroom under COP 3.5M/month and receives real titles, the listing's own monthly price, and a validated link instead of prose with no data.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit SUCCESS at head; four review-comment threads from kilo + coderabbit + owner.",
+      "dependencies": "Conflicts vs main. Shares `src/mastra/tools/search-rentals.ts` with #362 and #467, and `src/mastra/agents/concierge.ts` with #479 \u2192 merge #467/#479 first, then rebase this.",
+      "subscores": {
+        "user_impact": 20,
+        "unlocks_journey": 16,
+        "security_correctness": 6,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 5,
+        "dependency_leverage": 2
+      },
+      "value": 55,
+      "action": "Fix (rebase conflicts) \u2192 merge",
+      "evidence": "Channel-correct root cause: the agent is told not to repeat card fields (web renders cards) but WhatsApp has no cards. Formatter is deterministic from the same `searchRentalsTool` output, never converts currencies, and renders unknown price as 'price on request'."
+    },
+    {
+      "number": 482,
+      "priority": "P2",
+      "title": "Database Tests: Allow Development Rentals in Search While Protecting Private Records",
+      "url": "https://github.com/amoai-tech/mdeai/pull/482",
+      "domain": "Rentals/Discovery \u00b7 DB tests",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1291",
+        "SAN-1502",
+        "SAN-468"
+      ],
+      "files": 3,
+      "additions": 35,
+      "deletions": 35,
+      "journey": "No user-facing change: ordinary pending/inactive development rentals become findable while private and test-fixture records stay hidden and cross-broker writes stay denied.",
+      "tests_ci": "supabase-acl, floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Corrects three tests (`dev_discovery_excludes_test_fixtures_test.sql`, `dev_enrichment_follows_listing_visibility_test.sql`, `san468_apartment_public_exposure_rls_test.sql`) that contradict merged #478's Phase-A behavior. No migration.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 14,
+        "security_correctness": 12,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 3
+      },
+      "value": 52,
+      "action": "Merge",
+      "evidence": "Test-only truth correction for the same security invariant #484 implements; without it the red DB tests keep masking the real ACL state."
+    },
+    {
+      "number": 480,
+      "priority": "P2",
+      "title": "Restaurant Voting: Prevent a Second Vote While Checking an Existing Ballot",
+      "url": "https://github.com/amoai-tech/mdeai/pull/480",
+      "domain": "Restaurants/Contests",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 deterministic chromium FAILURE",
+      "linear": [
+        "SAN-1357-adjacent (none parsed)"
+      ],
+      "files": 2,
+      "additions": 33,
+      "deletions": 2,
+      "journey": "A returning signed-in voter cannot see an enabled Vote button before the saved-ballot check finishes (no second ballot).",
+      "tests_ci": "floor, Codacy, CodeRabbit, Kilo, auth-redirect chromium SUCCESS; `deterministic chromium` FAILURE = shared SAN-1357 chat-virtualization flake (run 39445838084 `\u2718 30 e2e/chat-virtualization.spec.ts`) \u2014 unrelated to this diff.",
+      "dependencies": "Fixable purely by merging #483 first and re-running. Touches only `restaurant-vote-panel.tsx` + one test \u2014 no overlap with other open PRs.",
+      "subscores": {
+        "user_impact": 16,
+        "unlocks_journey": 14,
+        "security_correctness": 4,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 8,
+        "dependency_leverage": 2
+      },
+      "value": 51,
+      "action": "Fix (rebase after #483) \u2192 merge",
+      "evidence": "Starts the panel in `checking` instead of `idle` and gates the CTA on hydration + saved-vote read; server-side duplicate protection is unchanged."
+    },
+    {
+      "number": 405,
+      "priority": "P2",
+      "title": "Rentals: Explain Why Apartments Match in Everyday Language",
+      "url": "https://github.com/amoai-tech/mdeai/pull/405",
+      "domain": "AI Concierge/Rentals",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1534"
+      ],
+      "files": 2,
+      "additions": 41,
+      "deletions": 3,
+      "journey": "'Why these rentals' reads 'Limited to Laureles' instead of `hybrid_semantic: hybrid_search_listings RPC`.",
+      "tests_ci": "floor, deterministic chromium, deterministic Maps contracts, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "No file overlap. Copy-only translation of existing ranking reasons; ranking and inventory untouched.",
+      "subscores": {
+        "user_impact": 16,
+        "unlocks_journey": 12,
+        "security_correctness": 2,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 1
+      },
+      "value": 48,
+      "action": "Merge",
+      "evidence": "Presentation-only change in `search-tool-result-cards.tsx` with a matching test; lowest-risk user-visible improvement still open."
+    },
+    {
+      "number": 474,
+      "priority": "P2",
+      "title": "Mobile: Make the Open Map button usable only when it is ready",
+      "url": "https://github.com/amoai-tech/mdeai/pull/474",
+      "domain": "Mobile Maps/Chat",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 deterministic chromium FAILURE",
+      "linear": [
+        "SAN-1564"
+      ],
+      "files": 2,
+      "additions": 42,
+      "deletions": 0,
+      "journey": "On a phone, a fast tap on Open map is either disabled or actually works \u2014 never a painted-but-dead button.",
+      "tests_ci": "floor, deterministic Maps contracts, auth-redirect chromium, Codacy, Kilo, CodeRabbit SUCCESS; `deterministic chromium` FAILURE = shared SAN-1357 flake (run 39455299255).",
+      "dependencies": "Same epic as #473 (test for the historical appendChild crash) \u2014 complementary. Shares `package.json` with #473/#455/#248/#256; no overlap with #471's script.",
+      "subscores": {
+        "user_impact": 14,
+        "unlocks_journey": 12,
+        "security_correctness": 2,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 10,
+        "dependency_leverage": 2
+      },
+      "value": 48,
+      "action": "Fix (rebase after #483) \u2192 merge",
+      "evidence": "Uses `useSyncExternalStore` for a hydration flag so server HTML renders `disabled` and hydration enables it \u2014 no effect/set-state loop, 42 lines."
+    },
+    {
+      "number": 481,
+      "priority": "P2",
+      "title": "Accessibility: Make Skip to Main Content Work on Contest and Login Pages",
+      "url": "https://github.com/amoai-tech/mdeai/pull/481",
+      "domain": "Accessibility/Shell",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [],
+      "files": 5,
+      "additions": 17,
+      "deletions": 6,
+      "journey": "Keyboard-only visitor presses Skip to main content on contests, contest detail, restaurant voting detail or login and focus lands on the real content.",
+      "tests_ci": "floor, deterministic chromium, auth-redirect chromium, Codacy, CodeRabbit, Kilo SUCCESS; new `e2e/san-1524-contests.spec.ts` keyboard check included.",
+      "dependencies": "No Linear id in branch/title/body. No overlap with other open PRs.",
+      "subscores": {
+        "user_impact": 14,
+        "unlocks_journey": 12,
+        "security_correctness": 2,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 10,
+        "dependency_leverage": 1
+      },
+      "value": 46,
+      "action": "Merge",
+      "evidence": "Verified on origin/main: `src/app/contests/page.tsx:185` renders `<main \u2026 data-testid=\"contests-page\">` with **no** `id=\"main-content\"`, and `src/app/login/page.tsx:26` likewise \u2014 the root-layout skip link is genuinely broken on four routes. 17 lines fixes it."
+    },
+    {
+      "number": 376,
+      "priority": "P3",
+      "title": "Rental Partners: Help Brokers Sign Up or Contact MDE",
+      "url": "https://github.com/amoai-tech/mdeai/pull/376",
+      "domain": "Partners/Marketing",
+      "type": "Product feature",
+      "status": "Open \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 no review decision",
+      "linear": [
+        "SAN-691",
+        "SAN-693"
+      ],
+      "files": 7,
+      "additions": 187,
+      "deletions": 49,
+      "journey": "A Medell\u00edn broker reaches a real /partners/rentals landing with 'Sign up as a rental broker' and a contact path instead of a coming-soon stub.",
+      "tests_ci": "floor, Codacy, CodeRabbit, Kilo SUCCESS at head; branch is CONFLICTING against main.",
+      "dependencies": "Its declared dependency **#372 is already MERGED** (2026-10-18), so only the rebase remains. Verified on origin/main: `/partners/rentals` is still `PartnerLandingPlaceholder` with `robots: { index: false }`.",
+      "subscores": {
+        "user_impact": 16,
+        "unlocks_journey": 12,
+        "security_correctness": 6,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 6,
+        "dependency_leverage": 3
+      },
+      "value": 50,
+      "action": "Fix (rebase on main) \u2192 merge",
+      "evidence": "Replaces a noindex placeholder on a partner-acquisition route; no invented listing counts, fees or booking claims."
+    },
+    {
+      "number": 248,
+      "priority": "P3",
+      "title": "Let buyers ask for new condos in chat and see verified project cards",
+      "url": "https://github.com/amoai-tech/mdeai/pull/248",
+      "domain": "AI Concierge/New projects",
+      "type": "Product feature",
+      "status": "Open \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED",
+      "linear": [
+        "SAN-1380"
+      ],
+      "files": 33,
+      "additions": 805,
+      "deletions": 51,
+      "journey": "Buyer asks 'Show me new 2-bedroom projects' in /chat and gets grounded project cards with price/bedrooms/delivery/source, or an honest zero-match answer.",
+      "tests_ci": "floor, deterministic chromium, supabase-acl, deterministic Maps contracts, Codacy, CodeRabbit SUCCESS at head; 15 days stale and CONFLICTING.",
+      "dependencies": "The search/compare engine shipped in merged #241, but `src/lib/new-projects/` does not exist on origin/main \u2192 the chat surface is genuinely missing. Shares `concierge-transcript-tail.tsx` with #476, `database.types.ts` with #244.",
+      "subscores": {
+        "user_impact": 18,
+        "unlocks_journey": 14,
+        "security_correctness": 8,
+        "reuse_simplicity": 5,
+        "effort_vs_value": 3,
+        "dependency_leverage": 2
+      },
+      "value": 50,
+      "action": "Fix (rebase; 33 files/805 lines needs a split)",
+      "evidence": "Biggest stale PR on the board; conflicts are the main risk, not the design (router precedence puts New Projects ahead of the rental classifier)."
+    },
+    {
+      "number": 367,
+      "priority": "P3",
+      "title": "Rental Details: Remove Broken Buttons and Keep Mobile Viewing Accessible",
+      "url": "https://github.com/amoai-tech/mdeai/pull/367",
+      "domain": "Rentals/Details",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-479"
+      ],
+      "files": 3,
+      "additions": 35,
+      "deletions": 23,
+      "journey": "On a phone the misleading Ask-a-question/Save buttons disappear and Request viewing clears the home indicator.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Shares `rental-detail-view.tsx` with deferred draft #362. Real phone inset + persisted viewing receipt still unverified.",
+      "subscores": {
+        "user_impact": 16,
+        "unlocks_journey": 12,
+        "security_correctness": 4,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 8,
+        "dependency_leverage": 2
+      },
+      "value": 49,
+      "action": "Merge",
+      "evidence": "Removes two dead controls and adds safe-area spacing to the existing mobile bar \u2014 reuses the viewing workflow rather than replacing it."
+    },
+    {
+      "number": 373,
+      "priority": "P3",
+      "title": "Stop Fake Clean Reviews From Hiding Security Problems",
+      "url": "https://github.com/amoai-tech/mdeai/pull/373",
+      "domain": "Review tooling/CI integrity",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1332",
+        "SAN-1312"
+      ],
+      "files": 2,
+      "additions": 55,
+      "deletions": 12,
+      "journey": "A code block inside a PR review that says 'no issues' can no longer override a real high-severity finding in PR-Agent scoring.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "No overlap. Regression test reproduces the false-clean case, 66/66 focused tests per body.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 6,
+        "security_correctness": 14,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 8,
+        "dependency_leverage": 2
+      },
+      "value": 46,
+      "action": "Merge",
+      "evidence": "Directly protects the review gate the rest of this board depends on; the merged PR #275 post-mortem is the documented trigger."
+    },
+    {
+      "number": 455,
+      "priority": "P3",
+      "title": "QA: Clean up broker accounts and rental drafts after onboarding tests",
+      "url": "https://github.com/amoai-tech/mdeai/pull/455",
+      "domain": "Tests/QA \u00b7 E2E hygiene",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-677",
+        "SAN-1092"
+      ],
+      "files": 6,
+      "additions": 250,
+      "deletions": 53,
+      "journey": "A developer runs broker onboarding E2E; passing or failing, it deletes only its own listings/profile/identity and fails loudly if cleanup fails.",
+      "tests_ci": "floor, supabase-acl, deterministic chromium, deterministic Maps contracts, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "No overlap. Explicitly not a claim that SAN-677's production journey is done.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 12,
+        "security_correctness": 8,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 7,
+        "dependency_leverage": 3
+      },
+      "value": 45,
+      "action": "Merge",
+      "evidence": "Playwright fixture teardown replaces silent leftover QA auth users/broker profiles/draft listings in the real database."
+    },
+    {
+      "number": 406,
+      "priority": "P3",
+      "title": "Chat: Suggest Monthly COP Rent Instead of Nightly USD",
+      "url": "https://github.com/amoai-tech/mdeai/pull/406",
+      "domain": "AI Concierge/Chat",
+      "type": "Product feature",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1508",
+        "SAN-1059"
+      ],
+      "files": 3,
+      "additions": 39,
+      "deletions": 3,
+      "journey": "New renter's chat welcome example reads '1BR in Laureles under COP 3,000,000/month' instead of '$80/night'.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Partial SAN-1508 on purpose (branch name omits the id so Linear will not auto-close). Shares `chat-center-panel.tsx` with #476.",
+      "subscores": {
+        "user_impact": 14,
+        "unlocks_journey": 10,
+        "security_correctness": 2,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 1
+      },
+      "value": 44,
+      "action": "Merge (do not mark SAN-1508 Done)",
+      "evidence": "Copy + one shared unused recovery constant; the budget chip and its server-side cap remain open."
+    },
+    {
+      "number": 473,
+      "priority": "P3",
+      "title": "Mobile Map Tests: Catch Crashes When Opening and Closing Google Maps",
+      "url": "https://github.com/amoai-tech/mdeai/pull/473",
+      "domain": "Tests/QA \u00b7 Mobile Maps",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 supabase-acl FAILURE",
+      "linear": [
+        "SAN-1564"
+      ],
+      "files": 4,
+      "additions": 201,
+      "deletions": 0,
+      "journey": "No production code change: a real-Google-Maps smoke suite reopens the mobile map repeatedly and fails if pins vanish or an appendChild error returns.",
+      "tests_ci": "floor, deterministic chromium, deterministic Maps contracts, Codacy, Kilo, CodeRabbit, GitBook SUCCESS; `supabase-acl` FAILURE with the same 2/14 + 6/15 + 7/25 signature as #484. This PR contains **no SQL** \u2192 the red ACL suite is base-branch drift, not this diff.",
+      "dependencies": "Adds `npm run test:e2e:maps-lifecycle` and a release-checklist line; shares `package.json`/`playwright.config.ts` with #238/#248/#455.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 12,
+        "security_correctness": 6,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 7,
+        "dependency_leverage": 4
+      },
+      "value": 43,
+      "action": "Fix (ACL suite once base is green) \u2192 merge",
+      "evidence": "30 documented map-mount/open-close scenarios across 3 production smoke tests; guards a crash class that already reached production once."
+    },
+    {
+      "number": 387,
+      "priority": "P3",
+      "title": "CI: Stop Routine Tests From Spending Gemini Credits",
+      "url": "https://github.com/amoai-tech/mdeai/pull/387",
+      "domain": "CI/Test infrastructure",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1536"
+      ],
+      "files": 1,
+      "additions": 18,
+      "deletions": 5,
+      "journey": "A developer editing homepage copy no longer fails CI because the Gemini account has no prepaid balance.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "No overlap. Explicitly not proof that live Gemini works; the live capability suite stays opt-in via `MDE_RUN_LIVE_GEMINI_CAPABILITY_TESTS=1`.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 10,
+        "security_correctness": 4,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 3
+      },
+      "value": 42,
+      "action": "Merge",
+      "evidence": "18 lines in `src/mastra/lib/models.test.ts`; removes a paid-provider dependency from the required gate."
+    },
+    {
+      "number": 467,
+      "priority": "P3",
+      "title": "AI Search: Prevent Mastra startup loops across rentals, events, and restaurants",
+      "url": "https://github.com/amoai-tech/mdeai/pull/467",
+      "domain": "Mastra/Infrastructure",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-583"
+      ],
+      "files": 3,
+      "additions": 7,
+      "deletions": 4,
+      "journey": "No user-facing change: `mastra dev` stops printing circular-dependency warnings for all three search domains.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Shares `search-rentals.ts` with #324 and #362, `search-events.ts` with #461. Verified on origin/main: `src/mastra/tools/search-rentals.ts:14` still statically imports `intelligence-rental-search` \u2192 the cycle is real.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 10,
+        "security_correctness": 2,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 2
+      },
+      "value": 39,
+      "action": "Merge",
+      "evidence": "7 added lines by deferring the intelligence import to call time; no provider/schema/RLS change."
+    },
+    {
+      "number": 420,
+      "priority": "P3",
+      "title": "Events Tests: Accept an Honest 'No Events Found' Result",
+      "url": "https://github.com/amoai-tech/mdeai/pull/420",
+      "domain": "Tests/QA \u00b7 Prod journey",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-546"
+      ],
+      "files": 1,
+      "additions": 26,
+      "deletions": 7,
+      "journey": "A correct empty-event answer stops failing the production J09 journey while the populated branch still asserts a card and Buy path.",
+      "tests_ci": "floor, deterministic chromium, auth-redirect chromium, Codacy, CodeRabbit, Kilo, Sourcery SUCCESS; no failed check.",
+      "dependencies": "Companion to merged #418 (J17). Verified on origin/main: J09 at `e2e/prod-journey-j05-j20.spec.ts:92-98` still waits 120s for `[data-testid=\"event-card\"]` with no empty-state alternative \u2192 still needed.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 14,
+        "security_correctness": 2,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 8,
+        "dependency_leverage": 2
+      },
+      "value": 38,
+      "action": "Merge",
+      "evidence": "One-file test-honesty fix for a journey that fails on a correct app response."
+    },
+    {
+      "number": 244,
+      "priority": "P4",
+      "title": "Let property owners and brokers save onboarding progress and resume later",
+      "url": "https://github.com/amoai-tech/mdeai/pull/244",
+      "domain": "Partners/Onboarding",
+      "type": "Product feature",
+      "status": "Draft \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1391",
+        "SAN-1107"
+      ],
+      "files": 11,
+      "additions": 1540,
+      "deletions": 0,
+      "journey": "Owner/broker leaves mid-onboarding and resumes from a validated draft instead of losing answers.",
+      "tests_ci": "floor, supabase-acl, deterministic chromium, Codacy, CodeRabbit, GitBook SUCCESS; body states exact-head CI + full floor still need verification after its 2026-10-16 rewrite.",
+      "dependencies": "Foundation only \u2014 the wizard is **not** wired to this draft system. Adds `20261006131205_san1391_add_landlord_partner_type.sql` (enum change) and `database.types.ts` (shares with #248). Draft since 2026-10-06.",
+      "subscores": {
+        "user_impact": 14,
+        "unlocks_journey": 10,
+        "security_correctness": 10,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 4,
+        "dependency_leverage": 2
+      },
+      "value": 46,
+      "action": "Defer (draft, unwired, enum migration)",
+      "evidence": "1,540 added lines with no user-visible path yet; the enum migration plus unwired UI is not a Phase-A merge candidate."
+    },
+    {
+      "number": 234,
+      "priority": "P4",
+      "title": "chore: configure Infisical secret management",
+      "url": "https://github.com/amoai-tech/mdeai/pull/234",
+      "domain": "Secrets/Ops",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 Kilo Code Review FAILURE",
+      "linear": [],
+      "files": 2,
+      "additions": 6,
+      "deletions": 0,
+      "journey": "Developers get one pinned Infisical project config and `*.env` files cannot be committed by accident.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Sourcery SUCCESS; `Kilo Code Review` FAILURE (external kilo.ai review, advisory, not required).",
+      "dependencies": "Infisical is already referenced by `.claude/hooks/scan-secrets.mjs`, `guard-sensitive-paths.mjs`, `dist-leak-scan.mjs` and the supabase skill references; no `.infisical.json` ships on main.",
+      "subscores": {
+        "user_impact": 4,
+        "unlocks_journey": 4,
+        "security_correctness": 12,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 9,
+        "dependency_leverage": 1
+      },
+      "value": 38,
+      "action": "Merge (advisory Kilo failure does not gate)",
+      "evidence": "6 added lines; `.gitignore` protection is the real security value."
+    },
+    {
+      "number": 389,
+      "priority": "P4",
+      "title": "AI Chat Tests: Restore Temporary Settings After Every Test",
+      "url": "https://github.com/amoai-tech/mdeai/pull/389",
+      "domain": "Tests/QA",
+      "type": "Tests/QA",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1537"
+      ],
+      "files": 1,
+      "additions": 5,
+      "deletions": 2,
+      "journey": "No user-facing change: one chat test can no longer leak `COPILOTKIT_TELEMETRY_DISABLED` into the next test in the process.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "No overlap. Fixes one confirmed leak, not all intermittent test failures.",
+      "subscores": {
+        "user_impact": 4,
+        "unlocks_journey": 8,
+        "security_correctness": 4,
+        "reuse_simplicity": 8,
+        "effort_vs_value": 10,
+        "dependency_leverage": 2
+      },
+      "value": 36,
+      "action": "Merge",
+      "evidence": "`vi.stubEnv` + describe-scoped `vi.unstubAllEnvs()`; 7 lines."
+    },
+    {
+      "number": 214,
+      "priority": "P4",
+      "title": "ci: restore Codacy coverage reporting",
+      "url": "https://github.com/amoai-tech/mdeai/pull/214",
+      "domain": "CI/Coverage",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [],
+      "files": 3,
+      "additions": 70,
+      "deletions": 12,
+      "journey": "Developers see PR coverage again (JS + TS partial reports finalised per PR) without touching the required floor gate.",
+      "tests_ci": "floor, Codacy Static, Codacy Diff Coverage, 'Report coverage to Codacy', deterministic chromium, CodeRabbit, Kilo SUCCESS \u2014 the only PR on the board with a passing coverage upload run.",
+      "dependencies": "Supersedes #100 (same workflow file, older branch). `.codacy.yml` already exists on origin/main, so only `.github/workflows/codacy-coverage.yml` + `.gitignore` are genuinely new.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 6,
+        "security_correctness": 6,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 8,
+        "dependency_leverage": 1
+      },
+      "value": 34,
+      "action": "Merge (supersedes #100)",
+      "evidence": "Verified: origin/main has `.codacy.yml` but **no** `.github/workflows/codacy-coverage.yml` \u2192 coverage reporting is genuinely off on main."
+    },
+    {
+      "number": 471,
+      "priority": "P4",
+      "title": "Releases: Check the live website version before reporting a deployment",
+      "url": "https://github.com/amoai-tech/mdeai/pull/471",
+      "domain": "Release/Ops tooling",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 deterministic chromium FAILURE",
+      "linear": [],
+      "files": 3,
+      "additions": 213,
+      "deletions": 0,
+      "journey": "A teammate can prove whether 'Feature X is live' matches the commit production actually serves, and can flag a stale claim with exit 1.",
+      "tests_ci": "floor, supabase-acl, deterministic Maps contracts, Codacy, CodeRabbit, Kilo SUCCESS; `deterministic chromium` FAILURE = shared SAN-1357 flake (run 39434317221).",
+      "dependencies": "**Partly duplicates shipped tooling.** origin/main already has `.github/workflows/prod-deploy-freshness.yml` (SAN-1360, post-merge production freshness guard), `src/app/api/version/route.ts` and `scripts/vercel-release-control.mjs` from merged #416. Shares `package.json` with #473/#455/#248/#256.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 6,
+        "security_correctness": 2,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 5,
+        "dependency_leverage": 2
+      },
+      "value": 29,
+      "action": "Defer / combine with existing release tooling",
+      "evidence": "The genuine marginal value is the `--claimed <sha>` stale-claim check, not a second freshness probe. Land it as an extension of the existing release-control script rather than a parallel script + npm entry."
+    },
+    {
+      "number": 313,
+      "priority": "P4",
+      "title": "Record missing reviews for PR #310 and PR #312",
+      "url": "https://github.com/amoai-tech/mdeai/pull/313",
+      "domain": "Operations docs",
+      "type": "Documentation",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [
+        "SAN-1486"
+      ],
+      "files": 1,
+      "additions": 123,
+      "deletions": 6,
+      "journey": "Auditors can see that #310 and #312 merged without an approving review, what GitHub proves, and what follow-up is required.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo, GitBook SUCCESS; no failed check.",
+      "dependencies": "Docs-only, but main has moved: origin/main's `docs/07-operations/merge-approval-history.md` now carries #472/#460 entries that this branch does not, and `git show origin/main:\u2026 | grep 310|312` returns nothing \u2192 the #310/#312 records are still missing. Rebase needed.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 2,
+        "security_correctness": 6,
+        "reuse_simplicity": 7,
+        "effort_vs_value": 7,
+        "dependency_leverage": 1
+      },
+      "value": 29,
+      "action": "Merge after rebase",
+      "evidence": "No invented approvals: the body keeps each merger's reason as unknown and separates 'settings show an exemption was possible' from 'operator intent'."
+    },
+    {
+      "number": 255,
+      "priority": "P5",
+      "title": "Stop anyone with a ticket's QR from marking it used before the door scan",
+      "url": "https://github.com/amoai-tech/mdeai/pull/255",
+      "domain": "Events/Ticketing \u00b7 DB ACL",
+      "type": "Security",
+      "status": "Open \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED) \u00b7 floor FAILURE",
+      "linear": [
+        "SAN-1284",
+        "SAN-1289",
+        "SAN-1350",
+        "SAN-1427"
+      ],
+      "files": 3,
+      "additions": 89,
+      "deletions": 5,
+      "journey": "Only the door-scan service can mark a QR ticket used; a buyer (or someone who glimpsed the QR) can no longer consume it directly.",
+      "tests_ci": "`floor` FAILURE on a **15-day-old head** (run 37488865535); supabase-acl, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS then.",
+      "dependencies": "**Subsumed by #456**, whose migration revokes `ticket_validate_consume(text)` from anon+authenticated and grants only `service_role` (verified in `gh pr diff 456`). Migration 20261008100000 would also need renumbering past main's 20261021070000.",
+      "subscores": {
+        "user_impact": 16,
+        "unlocks_journey": 18,
+        "security_correctness": 18,
+        "reuse_simplicity": 6,
+        "effort_vs_value": 4,
+        "dependency_leverage": 2
+      },
+      "value": 64,
+      "action": "Close (incorporated into #456)",
+      "evidence": "Keeping both would create two overlapping ACL migrations for the same function family; #456 additionally covers `ticket_payment_refund_v2` and `record_check_in` plus anon event-write grants."
+    },
+    {
+      "number": 447,
+      "priority": "P5",
+      "title": "Rentals: Ask MDE on the listings page without losing the map",
+      "url": "https://github.com/amoai-tech/mdeai/pull/447",
+      "domain": "Rentals/Discovery",
+      "type": "Product feature",
+      "status": "Draft \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED",
+      "linear": [
+        "SAN-1421",
+        "SAN-386"
+      ],
+      "files": 3,
+      "additions": 365,
+      "deletions": 20,
+      "journey": "Renter asks 'Show furnished two-bedroom places' on /rentals and cards + pins update in place without leaving the map.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS at head; CONFLICTING/DIRTY.",
+      "dependencies": "**Superseded by merged #445** ('Ask MDE inside the apartment list, without leaving the search', merged 2026-10-20) which shipped the same journey through `rental-ask-composer.tsx` / `rental-browse-view.tsx`. This branch's `rental-inline-ask.tsx` does not exist on origin/main and now conflicts with the shipped implementation.",
+      "subscores": {
+        "user_impact": 8,
+        "unlocks_journey": 6,
+        "security_correctness": 2,
+        "reuse_simplicity": 4,
+        "effort_vs_value": 3,
+        "dependency_leverage": 1
+      },
+      "value": 24,
+      "action": "Close (superseded by merged #445)",
+      "evidence": "Duplicate user journey implemented on a second component; #479 keeps improving the shipped composer path."
+    },
+    {
+      "number": 238,
+      "priority": "P5",
+      "title": "Certify the rental chat restart in production (finds a budget-persistence gap)",
+      "url": "https://github.com/amoai-tech/mdeai/pull/238",
+      "domain": "Tests/QA \u00b7 Prod certification",
+      "type": "Tests/QA",
+      "status": "Draft \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED",
+      "linear": [
+        "SAN-548"
+      ],
+      "files": 2,
+      "additions": 406,
+      "deletions": 0,
+      "journey": "Two-phase opt-in production harness that proves a rental chat survives a real Vercel redeploy (writes to production data by design).",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit SUCCESS at head; CONFLICTING.",
+      "dependencies": "Superseded in coverage terms by merged #396 (live renter viewing journey) and #429 (evidence capture on failure). Shares `playwright.config.ts` with #248/#473.",
+      "subscores": {
+        "user_impact": 4,
+        "unlocks_journey": 6,
+        "security_correctness": 2,
+        "reuse_simplicity": 5,
+        "effort_vs_value": 5,
+        "dependency_leverage": 1
+      },
+      "value": 23,
+      "action": "Close (disposition: draft; coverage now provided by merged #396/#429)",
+      "evidence": "Creates and deletes real production identities (Camila) between phases \u2014 a manual, owner-gated harness that should not sit on the merge queue."
+    },
+    {
+      "number": 362,
+      "priority": "P5",
+      "title": "Rental Listings: Show Original Advertisers and Source-Check Status (Deferred)",
+      "url": "https://github.com/amoai-tech/mdeai/pull/362",
+      "domain": "Rentals/Provenance",
+      "type": "Product feature",
+      "status": "Draft \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED",
+      "linear": [
+        "SAN-1235",
+        "SAN-1503"
+      ],
+      "files": 11,
+      "additions": 213,
+      "deletions": 15,
+      "journey": "Renter could see the original advertiser and 'Not yet checked' freshness on cards and Details (deferred by the owner).",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS at head; CONFLICTING/CONFLICTING-DIRTY.",
+      "dependencies": "Self-labelled **DRAFT \u00b7 DEFERRED \u2014 NOT A CURRENT DEVELOPMENT PRIORITY**. Note `src/lib/rentals/provenance.ts` already exists on origin/main, so part of the surface shipped elsewhere. Shares `rental-detail-view.tsx` with #367, `search-rentals.ts` with #324/#467.",
+      "subscores": {
+        "user_impact": 6,
+        "unlocks_journey": 2,
+        "security_correctness": 2,
+        "reuse_simplicity": 4,
+        "effort_vs_value": 6,
+        "dependency_leverage": 1
+      },
+      "value": 21,
+      "action": "Close (owner-deferred draft) or keep parked off the merge queue",
+      "evidence": "Body explicitly says 'do not merge until the owner reprioritizes it'. Holding a conflicting draft open adds review noise for no Phase-A gain."
+    },
+    {
+      "number": 256,
+      "priority": "P5",
+      "title": "Patch the critical shell-quote advisory so CI can pass",
+      "url": "https://github.com/amoai-tech/mdeai/pull/256",
+      "domain": "Dependency/CI",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED \u00b7 15 days old",
+      "linear": [],
+      "files": 2,
+      "additions": 4,
+      "deletions": 4,
+      "journey": "No user-facing change: pins `shell-quote` to 1.12.0 so the critical advisory stops failing `floor`.",
+      "tests_ci": "All checks SUCCESS **on its 15-day-old head**, but the PR is CONFLICTING.",
+      "dependencies": "**Already satisfied on origin/main**: `git show origin/main:package.json` has `\"shell-quote\": \">=1.11.0\"` and `git show origin/main:package-lock.json` resolves `node_modules/shell-quote` to **1.12.0**. main's floor is green at 5d1d76ddf6.",
+      "subscores": {
+        "user_impact": 2,
+        "unlocks_journey": 2,
+        "security_correctness": 4,
+        "reuse_simplicity": 3,
+        "effort_vs_value": 6,
+        "dependency_leverage": 1
+      },
+      "value": 18,
+      "action": "Close (already satisfied on main)",
+      "evidence": "The advisory it was written for is no longer reachable on main; merging would only narrow an override from `>=1.11.0` to `1.12.0`."
+    },
+    {
+      "number": 100,
+      "priority": "P5",
+      "title": "Add Codacy coverage reporting to CI",
+      "url": "https://github.com/amoai-tech/mdeai/pull/100",
+      "domain": "CI/Coverage",
+      "type": "Infrastructure",
+      "status": "Open \u00b7 CONFLICTING \u00b7 DIRTY \u00b7 REVIEW_REQUIRED \u00b7 31 days old",
+      "linear": [],
+      "files": 2,
+      "additions": 52,
+      "deletions": 0,
+      "journey": "Same outcome as #214: PR-level JS/TS coverage in Codacy without changing the floor gate.",
+      "tests_ci": "floor, Codacy Diff Coverage, coverage, CodeRabbit SUCCESS at head; `Kilo Code Review` FAILURE; CONFLICTING for 31 days.",
+      "dependencies": "**Superseded by #214**, which adds the same `.github/workflows/codacy-coverage.yml` plus the `.codacy.yml` already shipped on main and has a green 'Report coverage to Codacy' run.",
+      "subscores": {
+        "user_impact": 2,
+        "unlocks_journey": 2,
+        "security_correctness": 2,
+        "reuse_simplicity": 3,
+        "effort_vs_value": 5,
+        "dependency_leverage": 1
+      },
+      "value": 15,
+      "action": "Close (superseded by #214)",
+      "evidence": "Older duplicate of the same workflow file; keeping both risks two coverage uploads racing."
+    },
+    {
+      "number": 452,
+      "priority": "P5",
+      "title": "TEST ONLY: PR-Agent must detect reversed access check in isolated probe",
+      "url": "https://github.com/amoai-tech/mdeai/pull/452",
+      "domain": "Review tooling",
+      "type": "Tests/QA",
+      "status": "Draft \u00b7 MERGEABLE \u00b7 BLOCKED (REVIEW_REQUIRED)",
+      "linear": [],
+      "files": 1,
+      "additions": 5,
+      "deletions": 0,
+      "journey": "None for users: an unreferenced TypeScript function with a deliberately reversed confidentiality check used to exercise PR-Agent.",
+      "tests_ci": "floor, deterministic chromium, Codacy, CodeRabbit, Kilo SUCCESS; no failed check.",
+      "dependencies": "Body says **Never merge**. No callsite references the module.",
+      "subscores": {
+        "user_impact": 2,
+        "unlocks_journey": 1,
+        "security_correctness": 0,
+        "reuse_simplicity": 2,
+        "effort_vs_value": 3,
+        "dependency_leverage": 0
+      },
+      "value": 8,
+      "action": "Close (never intended to merge)",
+      "evidence": "A 5-line probe whose whole purpose was served while the PR was open."
+    }
+  ],
+  "collisions": [
+    {
+      "file": "package.json",
+      "prs": [
+        248,
+        256,
+        455,
+        471,
+        473
+      ]
+    },
+    {
+      "file": ".gitignore",
+      "prs": [
+        100,
+        214,
+        234
+      ]
+    },
+    {
+      "file": "playwright.config.ts",
+      "prs": [
+        238,
+        248,
+        473
+      ]
+    },
+    {
+      "file": "src/mastra/tools/search-rentals.ts",
+      "prs": [
+        324,
+        362,
+        467
+      ]
+    },
+    {
+      "file": ".github/workflows/codacy-coverage.yml",
+      "prs": [
+        100,
+        214
+      ]
+    },
+    {
+      "file": "scripts/copilotkit-consumer-inventory.json",
+      "prs": [
+        400,
+        403
+      ]
+    },
+    {
+      "file": "scripts/function-acl-baseline.json",
+      "prs": [
+        255,
+        459
+      ]
+    },
+    {
+      "file": "src/components/chat/chat-center-panel.tsx",
+      "prs": [
+        406,
+        476
+      ]
+    },
+    {
+      "file": "src/components/chat/concierge-transcript-tail.tsx",
+      "prs": [
+        248,
+        476
+      ]
+    },
+    {
+      "file": "src/components/onboarding/onboarding-ai-suggestion-card.tsx",
+      "prs": [
+        403,
+        404
+      ]
+    },
+    {
+      "file": "src/components/partners/partner-signup-assistant.tsx",
+      "prs": [
+        403,
+        404
+      ]
+    },
+    {
+      "file": "src/components/partners/partner-signup-wizard.tsx",
+      "prs": [
+        403,
+        404
+      ]
+    },
+    {
+      "file": "src/components/rentals/rental-detail-view.tsx",
+      "prs": [
+        362,
+        367
+      ]
+    },
+    {
+      "file": "src/lib/events/__tests__/list-published-events.test.ts",
+      "prs": [
+        453,
+        461
+      ]
+    },
+    {
+      "file": "src/lib/events/list-published-events.ts",
+      "prs": [
+        453,
+        461
+      ]
+    },
+    {
+      "file": "src/lib/onboarding/ai-suggestion.ts",
+      "prs": [
+        403,
+        404
+      ]
+    },
+    {
+      "file": "src/lib/supabase/database.types.ts",
+      "prs": [
+        244,
+        248
+      ]
+    },
+    {
+      "file": "src/mastra/agents/concierge.ts",
+      "prs": [
+        324,
+        479
+      ]
+    },
+    {
+      "file": "src/mastra/agents/partner-agent.ts",
+      "prs": [
+        400,
+        403
+      ]
+    },
+    {
+      "file": "src/mastra/tools/search-events.ts",
+      "prs": [
+        461,
+        467
+      ]
+    },
+    {
+      "file": "supabase/tests/database/san1284c_trigger_internal_function_acls_test.sql",
+      "prs": [
+        456,
+        459
+      ]
+    },
+    {
+      "file": "supabase/tests/database/sb002_live_only_recovery_test.sql",
+      "prs": [
+        456,
+        459
+      ]
+    }
+  ],
+  "superseded": [
+    {
+      "pr": 256,
+      "superseded_by": "origin/main 5d1d76ddf6",
+      "proof": "package.json override '>=1.11.0'; package-lock.json resolves shell-quote 1.12.0; floor green on main"
+    },
+    {
+      "pr": 447,
+      "superseded_by": "merged PR #445",
+      "proof": "#445 'Ask MDE inside the apartment list, without leaving the search' merged 2026-10-20T14:45:06Z via rental-ask-composer.tsx / rental-browse-view.tsx; rental-inline-ask.tsx absent from origin/main"
+    },
+    {
+      "pr": 255,
+      "superseded_by": "open PR #456",
+      "proof": "#456 revokes ticket_validate_consume(text) from anon+authenticated and grants service_role only, plus refund/check-in RPCs and anon event-write grants"
+    },
+    {
+      "pr": 100,
+      "superseded_by": "open PR #214",
+      "proof": "both add .github/workflows/codacy-coverage.yml; #214 has a green 'Report coverage to Codacy' run and main already ships .codacy.yml"
+    },
+    {
+      "pr": 238,
+      "superseded_by": "merged PR #396 + #429",
+      "proof": "live renter viewing journey and failure-evidence capture already merged; #238's harness is draft and CONFLICTING"
+    }
+  ],
+  "dependencies": [
+    {
+      "pr": 483,
+      "unblocks": [
+        456,
+        471,
+        474,
+        480
+      ],
+      "reason": "sole red check on those PRs is the SAN-1357 chat-virtualization first-row flake that #483 fixes"
+    },
+    {
+      "pr": 453,
+      "unblocks": [
+        461
+      ],
+      "reason": "#461 base branch is #453's head; rebase required after #453 merges"
+    },
+    {
+      "pr": 400,
+      "unblocks": [
+        403
+      ],
+      "reason": "#403 base is feat/san-705-partner-agent"
+    },
+    {
+      "pr": 403,
+      "unblocks": [
+        404
+      ],
+      "reason": "#404 base is feat/san-709-ai-signup"
+    },
+    {
+      "pr": 456,
+      "requires": [
+        "migration renumber past main's 20261021030000"
+      ],
+      "reason": "version collision with merged SAN-1548 migration"
+    },
+    {
+      "pr": 459,
+      "requires": [
+        "rebase over merged #454 and #475"
+      ],
+      "reason": "approval-commit/index.ts and function-acl-baseline.json / san1304a / sb002 drift"
+    },
+    {
+      "pr": 484,
+      "unblocks": [
+        364
+      ],
+      "reason": "same SAN-1502 epic; #484 is viewing authority, #364 is publish authority"
+    },
+    {
+      "pr": 467,
+      "unblocks": [
+        324
+      ],
+      "reason": "both touch src/mastra/tools/search-rentals.ts"
+    },
+    {
+      "pr": 479,
+      "unblocks": [
+        324
+      ],
+      "reason": "both touch src/mastra/agents/concierge.ts"
+    }
+  ],
+  "merge_order": [
+    483,
+    456,
+    453,
+    394,
+    484,
+    459,
+    479,
+    476,
+    405,
+    481,
+    402,
+    400,
+    403,
+    404,
+    482,
+    367,
+    467,
+    455,
+    420,
+    473,
+    474,
+    480,
+    406,
+    387,
+    373,
+    214,
+    234,
+    313,
+    389,
+    461,
+    364,
+    376,
+    324,
+    248,
+    471,
+    244,
+    362,
+    452,
+    447,
+    255,
+    256,
+    100,
+    238
+  ]
+}
