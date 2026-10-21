@@ -2,6 +2,8 @@
 import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 
 /**
  * SAN-1349 — a broken Google Map must degrade ONLY the map.
@@ -24,6 +26,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mocks = vi.hoisted(() => ({
   apiKey: { value: "test-key" as string | undefined },
   e2eMock: { value: false },
+  scriptLoadError: { value: false },
 }));
 
 vi.mock("@/platform/maps/map-config", () => ({
@@ -35,9 +38,13 @@ vi.mock("@/platform/maps/map-config", () => ({
 }));
 
 vi.mock("@vis.gl/react-google-maps", () => ({
-  APIProvider: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="api-provider">{children}</div>
-  ),
+  APIProvider: ({ children, onError }: { children?: React.ReactNode; onError?: (e: unknown) => void }) => {
+    // The real provider calls onError when the Maps script fails to arrive (ad blocker, network, outage).
+    React.useEffect(() => {
+      if (mocks.scriptLoadError.value) onError?.(new Error("script failed"));
+    }, [onError]);
+    return <div data-testid="api-provider">{children}</div>;
+  },
   Map: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="google-map">{children}</div>
   ),
@@ -70,6 +77,7 @@ function StatusProbe() {
 beforeEach(() => {
   mocks.apiKey.value = "test-key";
   mocks.e2eMock.value = false;
+  mocks.scriptLoadError.value = false;
   delete (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed;
 });
 
@@ -159,3 +167,29 @@ describe("SAN-1349 · the broker map survives the E2E mock", () => {
     expect(html).not.toContain('data-testid="google-map"');
   });
 });
+
+describe("a Maps script that never loads", () => {
+  it("tells the map slot (status load-failed) and keeps the composer mounted", async () => {
+    mocks.scriptLoadError.value = true;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <MapsShell>
+          <StatusProbeInside />
+          {COMPOSER}
+        </MapsShell>,
+      );
+    });
+    expect(container.querySelector("[data-testid='status']")?.textContent).toBe("load-failed");
+    expect(container.querySelector("[data-testid='concierge-composer']")).not.toBeNull();
+    root.unmount();
+    container.remove();
+  });
+});
+
+/** Inside the provider, so it reads the status MapsShell publishes (not the provider-free fallback). */
+function StatusProbeInside() {
+  return <div data-testid="status">{useMapsStatus()}</div>;
+}
