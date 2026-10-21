@@ -475,3 +475,22 @@ describe("rental-query-parser — replacement and preference boundaries", () => 
     expect(params?.stayType).toBe("nightly");
   });
 });
+
+describe("rental-query-parser — whole-city refinements keep saved preferences", () => {
+  it("keeps the monthly budget when the citywide message also names a rental", () => {
+    const params = buildRentalSearchParams("Anywhere in Medellín for a 2BR apartment", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.neighborhood).toBeUndefined();
+    expect(params?.minBedrooms).toBe(2);
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.stayType).toBe("monthly");
+  });
+});

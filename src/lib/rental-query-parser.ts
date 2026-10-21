@@ -559,7 +559,7 @@ export function buildRentalSearchParams(
   // these short replies to the concierge or search semantically for the literal word "anywhere":
   // search the whole city, and keep the size, budget and dates the renter already gave.
   const lastQuery = memory.lastRentalQuery;
-  if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
+  if (cityWide && lastQuery) {
     return {
       minBedrooms: s.minBedrooms ?? lastQuery.minBedrooms,
       // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
