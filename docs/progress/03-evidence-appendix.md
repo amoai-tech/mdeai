@@ -889,7 +889,7 @@ This maps every required part of `01-prompt-Master Product Roadmap, PR Audit & P
 | §12 One canonical plan, 14 sections, clickable URLs, detailed appendix | `docs/progress/02-…md` + this appendix | Complete |
 | §13 Verify counts/titles/PR states/Mermaid/implementation; label unverified; identify doc conflicts | Main §13 + Appendices B/C/E/H; count checks in this audit | Complete to the stated limits; tests were not re-executed |
 | §13 Return Working/Broken/Missing/Highest-value PRs/Readiness/Next 10/Path | Main §1 + §3 + §14 | Complete |
-| §13 Docs-only PR, unrelated worktrees untouched | Branch `docs/master-plan-progress-20261021` from `origin/main`; one docs-only PR, no code/migration/data | See PR link in the delivery message; no merge performed |
+| §13 Docs-only PR, unrelated worktrees untouched | [PR #485](https://github.com/amoai-tech/mdeai/pull/485) from branch `docs/master-plan-progress-20261021`, created from `origin/main`; docs only | Complete; no merge performed |
 | Final success criteria: new agent can see what exists, PR value, Linear owners, AI stack, dashboards, journeys, breakpoints, next order | Main §1–14 + Appendices A–H | Complete |
 
 **Honest limits:** no test suite, signed-in browser flow, Stripe/Gemini/Places/ADK call was executed; all such claims are marked Unverified. The local checkout is a reduced canary, so all product evidence uses `origin/main`. The configured Supabase MCP points at a different project and was not used.

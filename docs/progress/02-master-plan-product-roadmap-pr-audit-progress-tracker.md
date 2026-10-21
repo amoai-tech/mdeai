@@ -576,6 +576,10 @@ Only gaps with **no existing owner** are proposed. Everything else should be cor
 
 ---
 
+### 13.6 Delivery
+
+The canonical plan and appendix are delivered in [PR #485](https://github.com/amoai-tech/mdeai/pull/485) from branch `docs/master-plan-progress-20261021`, created from `origin/main`. It is documentation-only: no code, migration, Linear issue or production data change, and nothing is merged or deployed by this work.
+
 ## 14. Recommended next 10 actions
 
 | # | Action | Owner | Evidence of done |
