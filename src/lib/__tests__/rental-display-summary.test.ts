@@ -51,4 +51,21 @@ describe("fastPathRentalSummary", () => {
     expect(text).toMatch(/not (yet )?(applied|filtered)|isn.t (applied|filtered)/i);
     expect(text).not.toMatch(/wider budget/i);
   });
+
+  it("discloses the monthly budget actually applied on an empty result", () => {
+    const text = fastPathRentalSummary(0, 0, { appliedBudget: "COP 2,000,000 per month" });
+    expect(text).toMatch(/no rentals match that search/i);
+    expect(text).toMatch(/Applied budget: COP 2,000,000 per month\./);
+  });
+
+  it("discloses the applied monthly budget alongside results", () => {
+    const text = fastPathRentalSummary(2, 2, { appliedBudget: "COP 2,000,000 per month" });
+    expect(text.startsWith("Found 2 rentals")).toBe(true);
+    expect(text).toMatch(/Applied budget: COP 2,000,000 per month\./);
+  });
+
+  it("never claims a budget was applied when it was not", () => {
+    const text = fastPathRentalSummary(2, 0, { budgetNotApplied: true });
+    expect(text).not.toMatch(/Applied budget:/);
+  });
 });

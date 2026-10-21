@@ -8,9 +8,9 @@
  *
  * Checks
  *   1. /chat is served with a real next build chunk list (fingerprint = etag + chunk hash).
- *   2. A renter asking "2BR in Laureles under 2 million pesos" gets results AND an honest
- *      "I can't filter by monthly budget yet" line (the #386 fix). A silent $2/night cap
- *      would fail this.
+ *   2. A renter asking "2BR in Laureles under 2 million pesos" gets results or an honest
+ *      empty state, sends `maxPriceMonthly: 2000000` (never a $2/night cap), and is told
+ *      which monthly budget was applied.
  *   3. An invalid viewing request returns HTTP 400 with safe renter copy and no SQL text.
  *   4. GitHub's production deployment for this repo matches main, allowing a grace window
  *      right after a merge.
@@ -99,13 +99,51 @@ const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i
 const EMPTY = /No rentals match|No rentals are available/i;
 // Built from a string: the apostrophe in a regex literal desyncs Codacy's JS parser and makes
 // it attribute the rest of the file to the previous function.
-const DISCLOSED = new RegExp("can't filter by monthly budget|budget was not applied", "i");
+// Monthly budgets are now applied (SAN-1502). The disclosure must therefore say the budget
+// was applied — the old "can't filter by monthly budget" wording is only valid when it was not.
+const DISCLOSED = new RegExp("applied budget|monthly budget|per month", "i");
+
+/**
+ * The #386 regression was a monthly budget silently converted into a nightly cap. The DOM
+ * alone cannot distinguish "applied" from "explained", so this asserts the actual request:
+ * a monthly query must carry maxPriceMonthly and no maxPricePerNight cap.
+ */
+export function classifyMonthlyBudgetRequest(payload, expectedMonthly = 2_000_000) {
+  const monthly = payload ? payload.maxPriceMonthly : undefined;
+  const nightly = payload ? payload.maxPricePerNight : undefined;
+  const ok =
+    typeof monthly === "number" &&
+    Number.isFinite(monthly) &&
+    Math.abs(monthly - expectedMonthly) < 1 &&
+    nightly == null;
+  return {
+    ok,
+    detail: payload
+      ? JSON.stringify({
+          maxPriceMonthly: monthly,
+          maxPricePerNight: nightly,
+          budgetCurrency: payload.budgetCurrency,
+          stayType: payload.stayType,
+        })
+      : "no /api/rentals/search request observed",
+  };
+}
 
 async function runRentalQuery(browser, contextOptions) {
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   const pageErrors = [];
+  let searchRequest = null;
   page.on("pageerror", (err) => pageErrors.push(String(err).slice(0, 200)));
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/rentals/search")) {
+      try {
+        searchRequest = JSON.parse(request.postData() || "{}");
+      } catch {
+        searchRequest = null;
+      }
+    }
+  });
   try {
     await page.goto(BASE + "/chat", { waitUntil: "domcontentloaded", timeout: 60_000 });
     const box = page.locator('[data-testid="copilot-chat-textarea"]');
@@ -121,7 +159,7 @@ async function runRentalQuery(browser, contextOptions) {
     const text = await page.locator("body").innerText();
     const cards = await page.locator('[data-testid="rental-card"]').count();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    return { text, cards, overflow, pageErrors };
+    return { text, cards, overflow, pageErrors, searchRequest };
   } finally {
     await context.close();
   }
@@ -133,8 +171,14 @@ function recordRentalResult(label, query) {
     ANSWERED.test(query.text),
     EMPTY.test(query.text) ? "empty state shown" : "rental cards rendered: " + query.cards,
   );
+  const budgetRequest = classifyMonthlyBudgetRequest(query.searchRequest);
   record(
-    label + ": peso budget is disclosed, never silently capped",
+    label + ": monthly budget is sent as a monthly amount, never a nightly cap",
+    budgetRequest.ok,
+    budgetRequest.detail,
+  );
+  record(
+    label + ": monthly budget context is disclosed",
     DISCLOSED.test(query.text),
     "budget disclosure present: " + DISCLOSED.test(query.text),
   );
