@@ -46,14 +46,16 @@ test("disclosure must name the expected currency and amount", () => {
   assert.equal(disclosureMatches(text, 2_000_000, "USD"), false);
   assert.equal(disclosureMatches(text, 2_100_000, "COP"), false);
   assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month", 2_000_000, "COP"), true);
-  assert.equal(disclosureMatches("I can't filter by monthly budget yet.", 2_000_000, "COP"), true);
-  assert.equal(disclosureMatches("budget was not applied", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("I can't filter by monthly budget yet.", 2_000_000, "COP"), false);
+  assert.equal(disclosureMatches("budget was not applied", 2_000_000, "COP"), false);
   assert.equal(disclosureMatches("monthly budget on cards", 2_000_000, "COP"), false);
 });
 
 test("a nightly wording cannot satisfy the monthly disclosure gate", () => {
   assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per night", 2_000_000, "COP"), false);
   assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month.", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month.\n\nFound 2 rentals", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month.\n 2BR Laureles", 2_000_000, "COP"), true);
 });
 
 test("requires COP and a monthly stay type, not just the right amount", () => {

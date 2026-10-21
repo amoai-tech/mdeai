@@ -419,3 +419,59 @@ describe("rental-query-parser — explicit replacements that cannot be applied",
     expect(params?.budgetCurrency).toBe("COP");
   });
 });
+
+describe("rental-query-parser — replacement and preference boundaries", () => {
+  const monthlyMemory = {
+    lastRentalQuery: {
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPriceMonthly: 2_000_000,
+      budgetCurrency: "COP" as const,
+      budgetType: "monthly" as const,
+    },
+  };
+  const nightlyMemory = {
+    lastRentalQuery: {
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPricePerNight: 80,
+      budgetType: "nightly" as const,
+    },
+  };
+
+  it("does not mistake a bedroom number for an explicit replacement budget", () => {
+    const params = buildRentalSearchParams("budget 2BR apartments in Laureles", monthlyMemory);
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("keeps saved budget for a vague bedroom preference", () => {
+    const params = buildRentalSearchParams("budget 2 bedrooms in Laureles", monthlyMemory);
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("clears an obsolete nightly stay type after an unsupported euro replacement", () => {
+    const query = "anywhere in Medellín under €1500 per month";
+    const params = buildRentalSearchParams(query, nightlyMemory);
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.stayType).toBeUndefined();
+    expect(budgetNotApplied(query, params ?? {})).toBe(true);
+  });
+
+  it("clears an obsolete monthly stay type after an unsupported euro replacement", () => {
+    const query = "my budget is €1500 per month";
+    const params = buildRentalSearchParams(query, monthlyMemory);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(params?.stayType).toBeUndefined();
+  });
+
+  it("still retains stay type when the renter only widens to the entire city", () => {
+    const params = buildRentalSearchParams("anywhere is fine", nightlyMemory);
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.stayType).toBe("nightly");
+  });
+});

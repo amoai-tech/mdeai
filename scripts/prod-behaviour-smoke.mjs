@@ -108,9 +108,8 @@ const EMPTY = /No rentals match|No rentals are available/i;
 // applied. Generic "monthly budget" text on a card is not a disclosure.
 export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
   const lower = String(text).toLowerCase();
-  if (lower.includes("can't filter by monthly budget") || lower.includes("budget was not applied")) {
-    return true;
-  }
+  // This smoke already proves a monthly cap was sent. An unapplied-budget message would
+  // contradict the actual request; do not accept it as a successful disclosure.
   // Parse without a regex: the page text is untrusted, and a backtracking pattern here has no
   // value. Format is exactly "Applied budget: COP 2,000,000 per month."
   const marker = "applied budget:";
@@ -120,19 +119,22 @@ export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
   const currencyEnd = rest.indexOf(" ");
   if (currencyEnd === -1) return false;
   const currency = rest.slice(0, currencyEnd).toUpperCase();
+  // Browser innerText may place the next rental/card on a new line. Treat all common
+  // whitespace as token separators, without regex matching against untrusted page text.
+  const whitespace = (char) => char === " " || char === "\n" || char === "\r" || char === "\t" || char === "\u00a0";
   let i = currencyEnd;
-  while (rest[i] === " ") i += 1;
+  while (i < rest.length && whitespace(rest[i])) i += 1;
   let j = i;
-  while (j < rest.length && rest[j] !== " ") j += 1;
+  while (j < rest.length && !whitespace(rest[j])) j += 1;
   const amount = Number(rest.slice(i, j).replace(/,/g, ""));
   // The period is part of the disclosure: "per night" must never satisfy a monthly check.
-  while (rest[j] === " ") j += 1;
+  while (j < rest.length && whitespace(rest[j])) j += 1;
   let periodEnd = j;
-  while (periodEnd < rest.length && rest[periodEnd] !== " ") periodEnd += 1;
+  while (periodEnd < rest.length && !whitespace(rest[periodEnd])) periodEnd += 1;
   const per = rest.slice(j, periodEnd).toLowerCase();
-  while (rest[periodEnd] === " ") periodEnd += 1;
+  while (periodEnd < rest.length && whitespace(rest[periodEnd])) periodEnd += 1;
   let unitEnd = periodEnd;
-  while (unitEnd < rest.length && rest[unitEnd] !== " ") unitEnd += 1;
+  while (unitEnd < rest.length && !whitespace(rest[unitEnd])) unitEnd += 1;
   let unit = rest.slice(periodEnd, unitEnd).toLowerCase();
   while (unit.endsWith(".") || unit.endsWith(",")) unit = unit.slice(0, -1);
   return (
