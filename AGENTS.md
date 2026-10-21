@@ -272,6 +272,14 @@ enough to deliver one complete, verifiable outcome.
   split and records the decision in the PR description.
   Security, correctness, and necessary tests remain mandatory.
 
+Before opening a PR:
+
+- Verify every changed file supports the stated outcome.
+- Confirm the PR includes the implementation and tests
+  needed to prove one complete working result.
+- Remove unrelated changes. If work must be split,
+  ensure each PR has a clear, independently testable outcome.
+
 Optimize for the fewest PRs and tasks that deliver complete,
 reviewable, independently verifiable results.
 
