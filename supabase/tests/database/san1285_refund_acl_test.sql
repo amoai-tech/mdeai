@@ -6,7 +6,7 @@
 -- invalid-order and full-refund paths as service_role inside a rolled-back
 -- transaction. No production data is touched.
 begin;
-select plan(18);
+select plan(21);
 
 insert into auth.users (id, instance_id, aud, role, email)
 values (
@@ -61,6 +61,29 @@ values (
   'a1285000-0000-4000-8000-0000000000c2',
   'a1285000-0000-4000-8000-0000000000b2',
   'buyer@example.com', 'Refund Buyer', 'san1285-refund-qr-token', 'active'
+);
+
+-- A second paid order exercises the legacy webhook refund RPC
+-- (ticket_payment_refund(uuid)), which ticket-payment-webhook still calls.
+insert into public.event_orders
+  (id, event_id, ticket_id, quantity, buyer_email, buyer_name, total_cents,
+   currency, status, short_id, access_token)
+values (
+  'a1285000-0000-4000-8000-0000000000d3',
+  'a1285000-0000-4000-8000-0000000000b2',
+  'a1285000-0000-4000-8000-0000000000c2',
+  1, 'webhook-buyer@example.com', 'Webhook Buyer', 4000000,
+  'cop', 'paid', 'MDE-SAN1285-WEBHOOK', 'san1285-webhook-access-token'
+);
+
+insert into public.event_attendees
+  (id, order_id, ticket_id, event_id, email, full_name, qr_token, status)
+values (
+  'a1285000-0000-4000-8000-0000000000f2',
+  'a1285000-0000-4000-8000-0000000000d3',
+  'a1285000-0000-4000-8000-0000000000c2',
+  'a1285000-0000-4000-8000-0000000000b2',
+  'webhook-buyer@example.com', 'Webhook Buyer', 'san1285-webhook-qr-token', 'active'
 );
 
 -- ── catalog ACLs ─────────────────────────────────────────────────────────────
@@ -196,6 +219,26 @@ select is(
   (select count(*)::int from public.event_order_refunds
     where order_id = 'a1285000-0000-4000-8000-0000000000d2'),
   1, 'the rejected duplicate did not create a second refund row'
+);
+
+-- The Stripe webhook still calls the legacy ticket_payment_refund(uuid) RPC
+-- with its service client. That authorized refund workflow must keep working.
+set local role service_role;
+select lives_ok(
+  $$select public.ticket_payment_refund('a1285000-0000-4000-8000-0000000000d3'::uuid)$$,
+  'the existing webhook refund RPC still runs for service_role'
+);
+reset role;
+
+select is(
+  (select status from public.event_orders
+    where id = 'a1285000-0000-4000-8000-0000000000d3'),
+  'refunded', 'the webhook-refunded order moved to refunded'
+);
+select is(
+  (select status from public.event_attendees
+    where id = 'a1285000-0000-4000-8000-0000000000f2'),
+  'refunded', 'the webhook-refunded attendee moved to refunded'
 );
 
 select * from finish();
