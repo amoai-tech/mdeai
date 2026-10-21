@@ -530,3 +530,18 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
     expect(orderCalls.map((o) => o.column)).toEqual(["price_daily"]);
   });
 });
+
+describe("search-rentals tool forwards the stay period", () => {
+  it("accepts stayType in the Mastra input schema and passes it to the query", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
+    const parsed = inputSchema.safeParse({
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.stayType : undefined).toBe("monthly");
+    expect(inputSchema.safeParse({ stayType: "weekly" }).success).toBe(false);
+  });
+});
