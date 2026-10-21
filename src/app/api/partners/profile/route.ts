@@ -31,44 +31,40 @@ export async function PATCH(req: Request) {
     return fail(parsed.error.issues[0]?.message ?? "Please check your details", 400);
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("partner_members")
-    .select("partner_id")
-    .eq("profile_id", user.id)
-    .maybeSingle();
-  if (membershipError) {
-    console.error("[/api/partners/profile] membership lookup failed", membershipError.code);
-    return fail("Could not load your partner profile", 500);
-  }
-  if (!membership) return fail("No partner profile for this account", 404);
+  // The RPC derives the partner from auth.uid(), locks the partner row and
+  // merges the submitted fields atomically. It never accepts a trusted partner
+  // id from this body; the optional selection is re-verified inside the RPC.
+  const { data, error } = await supabase.rpc("partner_profile_patch", {
+    p_patch: parsed.data,
+  });
 
-  const { data: current, error: readError } = await supabase
-    .from("partners")
-    .select("id, settings")
-    .eq("id", membership.partner_id)
-    .maybeSingle();
-  if (readError || !current) return fail("Could not load your partner profile", 500);
-
-  const settings = { ...((current.settings ?? {}) as Record<string, unknown>) };
-  for (const [key, value] of Object.entries(parsed.data)) {
-    if (value !== undefined) settings[key] = value;
-  }
-
-  const { data: updated, error: updateError } = await supabase
-    .from("partners")
-    .update({ settings })
-    .eq("id", current.id)
-    .select("id, settings")
-    .maybeSingle();
-
-  if (updateError || !updated) {
-    console.error("[/api/partners/profile] update failed", updateError?.code);
+  if (error) {
+    if (error.code === "42501") {
+      return fail("You do not have access to this partner profile", 403);
+    }
+    if (error.code === "P0002") {
+      return fail("No partner profile for this account", 404);
+    }
+    if (error.code === "P0003") {
+      return fail("You belong to more than one partner. Choose a partner before saving.", 409);
+    }
+    if (error.code === "22023") {
+      return fail("Please check your profile details", 400);
+    }
+    console.error("[/api/partners/profile] update failed", error.code);
     return fail("Could not save your profile", 500);
   }
 
+  const updated = data as { partnerId?: string; settings?: unknown } | null;
+  if (!updated?.partnerId || !updated.settings) {
+    console.error("[/api/partners/profile] update returned no row");
+    return fail("Could not save your profile", 500);
+  }
+
+
   return NextResponse.json({
     success: true,
-    partnerId: updated.id,
+    partnerId: updated.partnerId,
     settings: updated.settings,
   });
 }

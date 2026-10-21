@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { PartnerProfileForm } from "@/components/partners/partner-profile-form";
+import { loadPartnerProfile } from "@/lib/partners/partner-profile-load";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -16,6 +17,33 @@ function readSetting(settings: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function ProfileLoadError({ message }: { message: string }) {
+  return (
+    <MarketingPageShell accent="gold" mainTestId="partner-profile">
+      <section className="border-b border-border px-4 py-12 sm:px-6 sm:py-16">
+        <div className="mx-auto max-w-3xl">
+          <div
+            data-testid="partner-profile-load-error"
+            role="alert"
+            className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6"
+          >
+            <p className="text-base font-semibold text-foreground">
+              Your profile is temporarily unavailable
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+            <Link
+              href="/partners/profile"
+              className="mt-4 inline-flex text-sm font-semibold text-accent underline-offset-4 hover:underline"
+            >
+              Try again
+            </Link>
+          </div>
+        </div>
+      </section>
+    </MarketingPageShell>
+  );
+}
+
 // skipcq: JS-0067 - Next.js App Router page export; not browser global scope
 export default async function PartnerProfilePage() {
   const supabase = await createClient();
@@ -24,19 +52,15 @@ export default async function PartnerProfilePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/partners/profile");
 
-  const { data: membership } = await supabase
-    .from("partner_members")
-    .select("partner_id, role")
-    .eq("profile_id", user.id)
-    .maybeSingle();
+  const profile = await loadPartnerProfile(supabase, user.id);
 
-  const { data: partner } = membership
-    ? await supabase
-        .from("partners")
-        .select("id, type, status, settings")
-        .eq("id", membership.partner_id)
-        .maybeSingle()
-    : { data: null };
+  // A failed query is not the same as "no membership". Never send a partner
+  // back to signup because Supabase had a transient failure.
+  if (profile.status === "error") {
+    return <ProfileLoadError message="We could not load your partner profile. Try again." />;
+  }
+
+  const partner = profile.status === "loaded" ? profile.partner : null;
 
   const settings = (partner?.settings ?? {}) as Record<string, unknown>;
 
