@@ -492,8 +492,12 @@ function mergedBudgetFields(
   q: ConciergeWorkingMemory["lastRentalQuery"],
   s: RentalQuerySignals,
 ): Pick<RentalSearchApiParams, "maxPricePerNight" | "maxPriceMonthly" | "budgetCurrency"> {
-  // A refinement without a new budget keeps the budget the renter last used.
-  if (!s.hasBudget) {
+  // `hasBudget` is also true for vague preferences ("affordable", "budget apartments") that
+  // carry no amount. Those must not erase a ceiling the renter already gave. Only a parsed
+  // amount with a period replaces the stored budget.
+  const statesNewBudget =
+    s.budgetType != null && (s.maxPriceMonthly != null || s.maxPricePerNight != null);
+  if (!statesNewBudget) {
     return {
       maxPricePerNight: q?.maxPricePerNight,
       maxPriceMonthly: q?.maxPriceMonthly,

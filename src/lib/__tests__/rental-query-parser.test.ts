@@ -341,3 +341,33 @@ describe("rental-query-parser — a new budget always replaces the stored one", 
     expect(params?.stayType).toBe("monthly");
   });
 });
+
+describe("rental-query-parser — vague preferences keep the saved ceiling", () => {
+  it("keeps a saved monthly ceiling for 'affordable apartments in Laureles'", () => {
+    const params = buildRentalSearchParams("affordable apartments in Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("keeps a saved nightly ceiling for 'budget apartments in Laureles'", () => {
+    const params = buildRentalSearchParams("budget apartments in Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPricePerNight: 80,
+        budgetType: "nightly",
+      },
+    });
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+  });
+});
