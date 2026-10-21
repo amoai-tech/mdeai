@@ -492,29 +492,32 @@ function mergedBudgetFields(
   q: ConciergeWorkingMemory["lastRentalQuery"],
   s: RentalQuerySignals,
 ): Pick<RentalSearchApiParams, "maxPricePerNight" | "maxPriceMonthly" | "budgetCurrency"> {
-  // A refinement keeps the budget type the renter last used. When they state a new budget of a
-  // different type, the superseded ceiling must not be carried into the same request: the monthly
-  // predicate takes precedence, so keeping both would answer with the wrong (old) ceiling.
-  const budgetType = s.budgetType ?? q?.budgetType;
-  if (budgetType === "monthly" || budgetType === "total_trip") {
+  // A refinement without a new budget keeps the budget the renter last used.
+  if (!s.hasBudget) {
     return {
-      maxPricePerNight: undefined,
-      maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
-      budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
+      maxPricePerNight: q?.maxPricePerNight,
+      maxPriceMonthly: q?.maxPriceMonthly,
+      budgetCurrency: q?.budgetCurrency,
     };
   }
-  if (budgetType === "nightly") {
+  // A new budget replaces the stored one, even when it cannot be applied exactly. Carrying the
+  // superseded ceiling would filter the new search with a number the renter just replaced — e.g.
+  // a “$2000 total for the trip” request must not keep a COP 2,000,000 monthly cap.
+  if (s.budgetType === "monthly" || s.budgetType === "total_trip") {
     return {
-      maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
+      maxPricePerNight: undefined,
+      maxPriceMonthly: s.maxPriceMonthly,
+      budgetCurrency: s.budgetCurrency,
+    };
+  }
+  if (s.budgetType === "nightly") {
+    return {
+      maxPricePerNight: s.maxPricePerNight,
       maxPriceMonthly: undefined,
       budgetCurrency: undefined,
     };
   }
-  return {
-    maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
-    maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
-    budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
-  };
+  return { maxPricePerNight: undefined, maxPriceMonthly: undefined, budgetCurrency: undefined };
 }
 
 export function buildRentalSearchParams(

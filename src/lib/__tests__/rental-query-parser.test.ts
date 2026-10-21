@@ -308,3 +308,36 @@ describe("rental-query-parser — refinements keep the applied budget", () => {
     expect(params?.budgetCurrency).toBeUndefined();
   });
 });
+
+describe("rental-query-parser — a new budget always replaces the stored one", () => {
+  it("clears a stored monthly ceiling when the renter asks for a whole-trip budget", () => {
+    const params = buildRentalSearchParams("2BR in Laureles under $2000 total for the trip", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.stayType).toBe("total_trip");
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(params?.maxPricePerNight).toBeUndefined();
+  });
+
+  it("clears a stored nightly cap when the renter asks for a monthly budget", () => {
+    const params = buildRentalSearchParams("2BR in Laureles under COP 3 million per month", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPricePerNight: 80,
+        budgetType: "nightly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(3_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+});
