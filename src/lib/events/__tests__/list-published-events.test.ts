@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { mapEventRowToBrowseItem } from "../list-published-events";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "../public-event-fixtures";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -149,8 +150,9 @@ describe("GET /api/events/public", () => {
     expect(body.results[0].pricePerTicket).toBeNull();
     expect(body.results[0].canBuyTickets).toBe(false);
     expect(chain.not).toHaveBeenCalledWith(
-      "name", "imatch", "^[[:space:]]*(qa|test)([[:space:]_:-]|$)",
+      "name", "imatch", QA_EVENT_NAME_SQL_PATTERN,
     );
+    expect(chain.or).toHaveBeenCalledWith(NON_QA_EVENT_SLUG_FILTER);
     expect(chain.gte).toHaveBeenCalledWith("event_start_time", expect.any(String));
     expect(select).toHaveBeenCalledWith(
       expect.stringContaining("event_tickets("),

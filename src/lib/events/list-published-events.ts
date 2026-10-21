@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 import {
   dateWindow,
@@ -125,7 +126,8 @@ export async function listPublishedEvents(
     .eq("is_active", true)
     .in("status", ["published", "live"])
     // Public presentation filter only: no gate on dev publishing or admin reads.
-    .not("name", "imatch", "^[[:space:]]*(qa|test)([[:space:]_:-]|$)")
+    .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER)
     .eq("event_tickets.is_active", true)
     .eq("event_tickets.is_hidden", false);
 
