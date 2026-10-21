@@ -107,13 +107,25 @@ const EMPTY = /No rentals match|No rentals are available/i;
 // Requires the applied amount and currency, or an explicit statement that the budget was not
 // applied. Generic "monthly budget" text on a card is not a disclosure.
 export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
-  if (/can't filter by monthly budget|budget was not applied/i.test(text)) return true;
-  const match = text.match(/Applied budget:\s*([A-Z]{3})\s*([0-9,]+)\s*per month/i);
-  if (!match) return false;
-  return (
-    match[1].toUpperCase() === expectedCurrency.toUpperCase() &&
-    Number(match[2].replace(/,/g, "")) === expectedMonthly
-  );
+  const lower = String(text).toLowerCase();
+  if (lower.includes("can't filter by monthly budget") || lower.includes("budget was not applied")) {
+    return true;
+  }
+  // Parse without a regex: the page text is untrusted, and a backtracking pattern here has no
+  // value. Format is exactly "Applied budget: COP 2,000,000 per month."
+  const marker = "applied budget:";
+  const start = lower.indexOf(marker);
+  if (start === -1) return false;
+  const rest = text.slice(start + marker.length).trimStart();
+  const currencyEnd = rest.indexOf(" ");
+  if (currencyEnd === -1) return false;
+  const currency = rest.slice(0, currencyEnd).toUpperCase();
+  let i = currencyEnd;
+  while (rest[i] === " ") i += 1;
+  let j = i;
+  while (j < rest.length && rest[j] !== " ") j += 1;
+  const amount = Number(rest.slice(i, j).replace(/,/g, ""));
+  return currency === expectedCurrency.toUpperCase() && amount === expectedMonthly;
 }
 
 /**
