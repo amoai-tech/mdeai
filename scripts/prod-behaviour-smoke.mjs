@@ -26,6 +26,9 @@ const REPO = process.env.GITHUB_REPOSITORY || "amoai-tech/mdeai";
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const GRACE_MINUTES = Number(process.env.SHA_GRACE_MINUTES || "20");
 const RENTAL_QUERY = process.env.SMOKE_QUERY || "2BR in Laureles under 2 million pesos";
+// Keep in sync with SMOKE_QUERY: the default query asks for 2 million COP per month.
+const EXPECTED_MONTHLY = Number(process.env.SMOKE_MONTHLY_BUDGET || "2000000");
+const EXPECTED_CURRENCY = process.env.SMOKE_MONTHLY_CURRENCY || "COP";
 
 const results = [];
 function record(name, ok, detail) {
@@ -101,29 +104,40 @@ const EMPTY = /No rentals match|No rentals are available/i;
 // it attribute the rest of the file to the previous function.
 // Monthly budgets are now applied (SAN-1502). The disclosure must therefore say the budget
 // was applied — the old "can't filter by monthly budget" wording is only valid when it was not.
-const DISCLOSED = new RegExp("applied budget|monthly budget|per month", "i");
+// Requires the applied amount, or an explicit statement that the budget was not applied.
+// Generic "monthly budget" text on a card is not a disclosure.
+const DISCLOSED = new RegExp(
+  "Applied budget: (?:COP|USD) [0-9,]+ per month|can't filter by monthly budget|budget was not applied",
+  "i",
+);
 
 /**
  * The #386 regression was a monthly budget silently converted into a nightly cap. The DOM
  * alone cannot distinguish "applied" from "explained", so this asserts the actual request:
  * a monthly query must carry maxPriceMonthly and no maxPricePerNight cap.
  */
-export function classifyMonthlyBudgetRequest(payload, expectedMonthly = 2_000_000) {
+export function classifyMonthlyBudgetRequest(
+  payload,
+  expectedMonthly = 2_000_000,
+  expectedCurrency = "COP",
+) {
   const monthly = payload ? payload.maxPriceMonthly : undefined;
   const nightly = payload ? payload.maxPricePerNight : undefined;
+  const currency = payload ? payload.budgetCurrency : undefined;
+  const stayType = payload ? payload.stayType : undefined;
   const ok =
-    typeof monthly === "number" &&
-    Number.isFinite(monthly) &&
-    Math.abs(monthly - expectedMonthly) < 1 &&
-    nightly == null;
+    monthly === expectedMonthly &&
+    nightly == null &&
+    currency === expectedCurrency &&
+    stayType === "monthly";
   return {
     ok,
     detail: payload
       ? JSON.stringify({
           maxPriceMonthly: monthly,
           maxPricePerNight: nightly,
-          budgetCurrency: payload.budgetCurrency,
-          stayType: payload.stayType,
+          budgetCurrency: currency,
+          stayType,
         })
       : "no /api/rentals/search request observed",
   };
@@ -171,7 +185,11 @@ function recordRentalResult(label, query) {
     ANSWERED.test(query.text),
     EMPTY.test(query.text) ? "empty state shown" : "rental cards rendered: " + query.cards,
   );
-  const budgetRequest = classifyMonthlyBudgetRequest(query.searchRequest);
+  const budgetRequest = classifyMonthlyBudgetRequest(
+    query.searchRequest,
+    EXPECTED_MONTHLY,
+    EXPECTED_CURRENCY,
+  );
   record(
     label + ": monthly budget is sent as a monthly amount, never a nightly cap",
     budgetRequest.ok,

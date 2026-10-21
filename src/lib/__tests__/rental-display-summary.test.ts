@@ -68,4 +68,13 @@ describe("fastPathRentalSummary", () => {
     const text = fastPathRentalSummary(2, 0, { budgetNotApplied: true });
     expect(text).not.toMatch(/Applied budget:/);
   });
+
+  it("gives the not-applied state precedence if both flags are passed", () => {
+    const text = fastPathRentalSummary(0, 0, {
+      budgetNotApplied: true,
+      appliedBudget: "COP 2,000,000 per month",
+    });
+    expect(text).toMatch(/budget was not applied/i);
+    expect(text).not.toMatch(/Applied budget:/);
+  });
 });

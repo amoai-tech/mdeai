@@ -34,9 +34,21 @@ test("rejects a payload that sends both a monthly and a nightly ceiling", () => 
   assert.equal(result.ok, false);
 });
 
-test("rejects a string amount or the wrong monthly amount", () => {
+test("rejects a string amount, a near miss, or the wrong monthly amount", () => {
   assert.equal(classifyMonthlyBudgetRequest({ maxPriceMonthly: "2000000" }).ok, false);
   assert.equal(classifyMonthlyBudgetRequest({ maxPriceMonthly: 2_000 }).ok, false);
+  assert.equal(
+    classifyMonthlyBudgetRequest({ maxPriceMonthly: 2_000_000.5, budgetCurrency: "COP", stayType: "monthly" }).ok,
+    false,
+  );
+});
+
+test("requires COP and a monthly stay type, not just the right amount", () => {
+  const base = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP", stayType: "monthly" };
+  assert.equal(classifyMonthlyBudgetRequest(base).ok, true);
+  assert.equal(classifyMonthlyBudgetRequest({ ...base, budgetCurrency: "USD" }).ok, false);
+  assert.equal(classifyMonthlyBudgetRequest({ ...base, stayType: undefined }).ok, false);
+  assert.equal(classifyMonthlyBudgetRequest({ ...base, stayType: "nightly" }).ok, false);
 });
 
 test("fails loudly when no search request was observed", () => {

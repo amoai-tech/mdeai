@@ -181,6 +181,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
           maxPricePerNight: params.maxPricePerNight,
+          maxPriceMonthly: params.maxPriceMonthly,
+          budgetCurrency: params.budgetCurrency,
           // Keep the monthly/trip meaning of the budget so a refinement ("Only Laureles") still
           // searches as a monthly stay instead of silently becoming a nightly one.
           budgetType: params.stayType,
@@ -202,8 +204,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         const pinCount = applySearchResults(cards, query, memory, { total, hybridUsed, rankExplanation, budgetNote });
         // SAN-1502 follow-up: when a monthly budget was applied, say so. A truthful empty
         // state must not leave the renter guessing whether the 2,000,000 ceiling was used.
+        // Never claim a monthly ceiling was applied when the request also carries a nightly cap:
+        // that would describe a superseded value instead of the search actually executed.
         const appliedBudget =
-          params.maxPriceMonthly != null
+          params.maxPriceMonthly != null && params.maxPricePerNight == null
             ? `${params.budgetCurrency ?? "COP"} ${params.maxPriceMonthly.toLocaleString("en-US")} per month`
             : undefined;
         showExchange(

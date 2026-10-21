@@ -488,6 +488,35 @@ function effectiveLimit(s: RentalQuerySignals): number {
   return s.explicitLimit ?? FAST_PATH_LIMIT;
 }
 
+function mergedBudgetFields(
+  q: ConciergeWorkingMemory["lastRentalQuery"],
+  s: RentalQuerySignals,
+): Pick<RentalSearchApiParams, "maxPricePerNight" | "maxPriceMonthly" | "budgetCurrency"> {
+  // A refinement keeps the budget type the renter last used. When they state a new budget of a
+  // different type, the superseded ceiling must not be carried into the same request: the monthly
+  // predicate takes precedence, so keeping both would answer with the wrong (old) ceiling.
+  const budgetType = s.budgetType ?? q?.budgetType;
+  if (budgetType === "monthly" || budgetType === "total_trip") {
+    return {
+      maxPricePerNight: undefined,
+      maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
+      budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
+    };
+  }
+  if (budgetType === "nightly") {
+    return {
+      maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
+      maxPriceMonthly: undefined,
+      budgetCurrency: undefined,
+    };
+  }
+  return {
+    maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
+    maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
+    budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
+  };
+}
+
 export function buildRentalSearchParams(
   text: string,
   memory: ConciergeWorkingMemory,
@@ -526,9 +555,7 @@ export function buildRentalSearchParams(
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
       minBedrooms: s.minBedrooms ?? q.minBedrooms,
-      maxPricePerNight: s.maxPricePerNight ?? q.maxPricePerNight,
-      maxPriceMonthly: s.maxPriceMonthly ?? q.maxPriceMonthly,
-      budgetCurrency: s.budgetCurrency ?? q.budgetCurrency,
+      ...mergedBudgetFields(q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
       stayType: s.budgetType ?? q.budgetType,
@@ -537,7 +564,8 @@ export function buildRentalSearchParams(
     if (
       merged.neighborhood ||
       merged.minBedrooms != null ||
-      merged.maxPricePerNight != null
+      merged.maxPricePerNight != null ||
+      merged.maxPriceMonthly != null
     ) {
       return attachQueryText(merged, text, s);
     }
@@ -551,12 +579,10 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
         minBedrooms: s.minBedrooms ?? q?.minBedrooms,
-        maxPricePerNight: s.maxPricePerNight ?? q?.maxPricePerNight,
-        maxPriceMonthly: s.maxPriceMonthly ?? q?.maxPriceMonthly,
-        budgetCurrency: s.budgetCurrency ?? q?.budgetCurrency,
+        ...mergedBudgetFields(q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
-        stayType: q?.budgetType,
+        stayType: s.budgetType ?? q?.budgetType,
         limit,
       },
       text,

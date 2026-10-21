@@ -219,8 +219,11 @@ export function fastPathRentalSummary(
 ): string {
   if (count === 0) {
     const budgetNote =
-      (options.budgetNotApplied ? " Your budget was not applied to this search." : "") +
-      (options.appliedBudget ? ` Applied budget: ${options.appliedBudget}.` : "") +
+      (options.budgetNotApplied
+        ? " Your budget was not applied to this search."
+        : options.appliedBudget
+          ? ` Applied budget: ${options.appliedBudget}.`
+          : "") +
       (options.unappliedRequests?.length
         ? ` ${emptyRentalNotice(options.unappliedRequests)}`
         : "");

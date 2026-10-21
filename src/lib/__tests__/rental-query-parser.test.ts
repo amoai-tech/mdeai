@@ -275,3 +275,36 @@ describe("rental-query-parser — SAN-1356 explicit result count (top N)", () =>
     expect(params1?.neighborhood).toBe(params2?.neighborhood);
   });
 });
+
+describe("rental-query-parser — refinements keep the applied budget", () => {
+  it("preserves a monthly ceiling when the next message only refines the neighborhood", () => {
+    const params = buildRentalSearchParams("only Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("drops the stored monthly ceiling when the renter asks for a nightly budget", () => {
+    const params = buildRentalSearchParams("actually under $80 per night", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+  });
+});
