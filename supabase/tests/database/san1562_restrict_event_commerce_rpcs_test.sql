@@ -1,14 +1,23 @@
 -- SAN-1562 · Technical access must protect event commerce without business gates.
 -- Uses the real database roles and catalog ACLs. No paid orders are modified.
 begin;
-select plan(20);
+select plan(25);
 
-select is(has_function_privilege('anon', 'public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])', 'EXECUTE'),
-  false, 'anon cannot forge a refund');
-select is(has_function_privilege('authenticated', 'public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])', 'EXECUTE'),
-  false, 'signed-in buyer cannot forge a refund');
-select is(has_function_privilege('service_role', 'public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])', 'EXECUTE'),
-  true, 'trusted payment server retains refund access');
+select is(
+  (select bool_and(not has_function_privilege('anon', p.oid, 'EXECUTE'))
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'),
+  true, 'anon cannot forge a refund via any active signature');
+select is(
+  (select bool_and(not has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'),
+  true, 'signed-in buyer cannot forge a refund via any active signature');
+select is(
+  (select bool_and(has_function_privilege('service_role', p.oid, 'EXECUTE'))
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'),
+  true, 'trusted payment server retains access to every refund signature');
 
 select is(has_function_privilege('anon', 'public.ticket_validate_consume(text)', 'EXECUTE'),
   false, 'anonymous scanner cannot consume a QR directly');
@@ -23,6 +32,23 @@ select is(has_function_privilege('authenticated', 'public.record_check_in(uuid,u
   false, 'buyer cannot impersonate a scanner in audit logs');
 select is(has_function_privilege('service_role', 'public.record_check_in(uuid,uuid,text,uuid,text,inet,text,jsonb)', 'EXECUTE'),
   true, 'trusted scanner server retains audit access');
+
+-- Guard every overload, not just today's integer signature. A later migration
+-- (such as SAN-1285's bigint refund) must not silently restore buyer access.
+select is(
+  (select count(*)::int
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('ticket_payment_refund_v2', 'ticket_validate_consume', 'record_check_in')
+     and has_function_privilege('anon', p.oid, 'EXECUTE')),
+  0, 'anonymous users cannot execute any privileged ticket RPC overload');
+select is(
+  (select count(*)::int
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('ticket_payment_refund_v2', 'ticket_validate_consume', 'record_check_in')
+     and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
+  0, 'signed-in customers cannot execute any privileged ticket RPC overload');
 
 select is(has_table_privilege('anon', 'public.event_orders', 'INSERT'), false,
   'guest cannot insert a fake paid order');
@@ -71,6 +97,17 @@ reset role;
 set local role authenticated;
 select throws_ok($$select public.ticket_payment_refund_v2(null,null,null,null,null,null,null)$$,
   '42501', null, 'signed-in direct refund fails before mutation');
+select throws_ok($$select public.ticket_validate_consume('not-a-real-token')$$,
+  '42501', null, 'signed-in direct QR consume fails before mutation');
+select throws_ok($$select public.record_check_in(null,null,null,null,null,null,null,null)$$,
+  '42501', null, 'signed-in direct check-in audit fails before mutation');
+reset role;
+
+-- A trusted server may reach the real refund implementation, but an unknown
+-- order fails safely before any insert/update; no paid fixture is necessary.
+set local role service_role;
+select throws_ok($$select public.ticket_payment_refund_v2(null,null,null,null,null,null,null)$$,
+  'P0001', 'ORDER_NOT_FOUND', 'trusted server reaches refund logic without mutating an order');
 reset role;
 select * from finish();
 rollback;
