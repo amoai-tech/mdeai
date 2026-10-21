@@ -254,6 +254,11 @@
     "anon": true,
     "authenticated": true
   },
+  "partner_profile_patch(p_patch jsonb, p_partner_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "pause_listing(p_apartment_id uuid)": {
     "public": false,
     "anon": false,
