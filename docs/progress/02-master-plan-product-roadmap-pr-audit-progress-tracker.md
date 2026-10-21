@@ -46,7 +46,7 @@
 
 Work in dependency order, not by PR age: **stop the CI bleed (#483) → land the two security/transaction PRs (#456, #459) → prove the renter commitment (#484/#364) → turn the production smoke green → prove the paid-ticket loop → only then expand dashboards.** The queue is review-bound (20 green PRs waiting on one approval), not code-bound; the fastest meaningful gain is reviewer throughput on a tiny ordered set.
 
-**Readiness: 60/100 · Real blockers: 5 · Test-only PRs: 8 · Actionable feature PRs: 22 · Superseded/already-satisfied: 5 · Close candidates: 7 (the same five overlap).**
+**Readiness: 60/100 · Real blockers: 5 · Test-only PRs: 8 · Actionable feature PRs: 22 · Distinct PRs flagged duplicate/superseded/low-value: 9** (5 superseded, 7 close candidates, 8 low-value — overlapping sets).
 
 ---
 
@@ -607,7 +607,7 @@ The canonical plan and appendix are delivered in [PR #485](https://github.com/am
 - **[Appendix F — Feature matrix with route, code, data and evidence](03-evidence-appendix.md#appendix-f--feature-matrix-with-route-code-data-and-evidence)**
 - **[Appendix G — UX review against the MDE design system](03-evidence-appendix.md#appendix-g--ux-review-against-the-mde-design-system)**
 - **[Appendix H — Prompt compliance checklist](03-evidence-appendix.md#appendix-h--prompt-compliance-checklist)**
-- Raw audit artefacts: [`_work/pr-inventory.md`](_work/pr-inventory.md), [`_work/linear-inventory.md`](_work/linear-inventory.md), [`_work/features-and-pages.md`](_work/features-and-pages.md), [`_work/ai-architecture.md`](_work/ai-architecture.md), [`_work/database-inventory.md`](_work/database-inventory.md), [`_work/release-and-runtime.md`](_work/release-and-runtime.md), plus `data/pr-data.json` and `data/linear-data.json` (machine-readable).
+- Raw audit artefacts: [`_work/pr-inventory.md`](_work/pr-inventory.md), [`_work/linear-inventory.md`](_work/linear-inventory.md), [`_work/features-and-pages.md`](_work/features-and-pages.md), [`_work/ai-architecture.md`](_work/ai-architecture.md), [`_work/database-inventory.md`](_work/database-inventory.md), [`_work/release-and-runtime.md`](_work/release-and-runtime.md), plus `data/pr-data.json`, `data/linear-data.json` and `data/pr-files.json` (machine-readable).
 
 ---
 
