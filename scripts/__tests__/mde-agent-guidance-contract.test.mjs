@@ -14,9 +14,10 @@ test("documented npm commands are defined in the current package", () => {
   const bash = [...guide.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1]).join("\n");
   const commands = [...bash.matchAll(/^\s*npm run ([\w:.-]+)/gm)].map((m) => m[1]);
   assert.ok(commands.length >= 4, "expected runnable examples");
-  for (const command of commands) assert.ok(scripts[command], "undefined npm script: " + command);
+  for (const command of commands) assert.ok(Object.hasOwn(scripts, command), "undefined npm script: " + command);
   assert.ok(scripts.lint && scripts["test:e2e"]);
-  assert.ok(!scripts.e2e && !scripts["e2e:production"]);
+  assert.ok(Object.hasOwn(scripts, "test"), "npm test alias must resolve");
+  assert.match(text("user-journey-testing.md"), /`npm test`/);
 });
 
 test("canonical journeys describe MDE, not another product", () => {
@@ -27,6 +28,10 @@ test("canonical journeys describe MDE, not another product", () => {
   for (const foreign of ["Brand Intelligence", "Production Planner", "Brand → Shoot", "Planner chat continuity"]) {
     assert.ok(!guide.includes(foreign), "foreign canonical workflow: " + foreign);
   }
+  assert.match(guide, /^\| Renter \| Rental search → grounded cards\/map → Details → Request Viewing \| Exactly one saved lead and showing/m);
+  assert.match(guide, /^\| Event organizer \| Create event → ticket tiers → publish \|/m);
+  assert.match(guide, /^\| AI Concierge \| Intent → grounded retrieval → cards\/map → authorized action → refresh \|/m);
+  assert.match(guide, /Keep authentication, user\/tenant isolation/);
   assert.match(guide, /private\/test.fixture exclusion/);
 });
 
@@ -45,7 +50,7 @@ test("relative Markdown links in changed guides resolve", () => {
     const body = text(name);
     for (const match of body.matchAll(/\]\(([^)]+)\)/g)) {
       const target = match[1].split("#")[0];
-      if (!target || /^https?:\/\//.test(target)) continue;
+      if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
       assert.ok(existsSync(resolve(refs, target)), name + ": missing link " + target);
     }
   }

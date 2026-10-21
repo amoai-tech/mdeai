@@ -56,7 +56,7 @@ User / page → CopilotKit / AG-UI → authenticated server context
   → owning server route or atomic RPC → durable store → visible readback
 ```
 
-Only include layers that actually participate. For agent-only queries without a write, do not fabricate a persisted result. For an action involving payment/voting, preserve required **user confirmation and payment consent**. That is different from Phase A **business approvals**. Independent S4 **engineering/security verification** is a development proof gate, not a user-facing landlord approval.
+Only include layers that actually participate. For agent-only queries without a write, do not fabricate a persisted result. For an action involving payment/voting, preserve required **user confirmation and payment consent**. That is different from Phase A **business approvals**. If an existing **product-owned technical HITL confirmation** really applies to an affected consequential AI action, test bypass/rejection and assert no durable write before that specific confirmation; this does **not** authorize landlord, broker, moderation, verification or publishing approval gates during Phase A. Independent S4 **engineering/security verification** is a development proof gate, not a user-facing landlord approval.
 
 For each affected agent flow check:
 
@@ -73,7 +73,7 @@ Load the relevant current [Mastra skill](../../mastra/SKILL.md) and [CopilotKit 
 
 | Journey | Required failure cases when affected |
 | --- | --- |
-| Rentals | Non-matching budget is not shown as matching; nonexistent location gets no invented pin; pending non-fixture allowed in Phase A; private/test fixture and unrelated broker denied; retry creates no duplicate lead/showing |
+| Rentals | Non-matching budget is not shown as matching; nonexistent location gets no invented pin; pending non-fixture **should be requestable under Phase A policy**; verify current RPC/API behavior and record FAIL/UNVERIFIED if not yet landed (viewing-authority PR #484), never silently weaken private/test fixture or unrelated-broker denial; retry creates no duplicate lead/showing |
 | Events | Amount/currency mismatch, duplicate publish, failed webhook, checkout rollback, replay, wrong ticket owner and unauthorized check-in |
 | Votes | Login return to same restaurant, duplicate ballot, forged voter identity, missing persisted receipt |
 | Agent/chat | Empty retrieval, stale result, dropped follow-up constraint, model/tool failure, lost thread, fabricated action success |
