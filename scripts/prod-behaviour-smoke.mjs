@@ -125,7 +125,22 @@ export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
   let j = i;
   while (j < rest.length && rest[j] !== " ") j += 1;
   const amount = Number(rest.slice(i, j).replace(/,/g, ""));
-  return currency === expectedCurrency.toUpperCase() && amount === expectedMonthly;
+  // The period is part of the disclosure: "per night" must never satisfy a monthly check.
+  while (rest[j] === " ") j += 1;
+  let periodEnd = j;
+  while (periodEnd < rest.length && rest[periodEnd] !== " ") periodEnd += 1;
+  const per = rest.slice(j, periodEnd).toLowerCase();
+  while (rest[periodEnd] === " ") periodEnd += 1;
+  let unitEnd = periodEnd;
+  while (unitEnd < rest.length && rest[unitEnd] !== " ") unitEnd += 1;
+  let unit = rest.slice(periodEnd, unitEnd).toLowerCase();
+  while (unit.endsWith(".") || unit.endsWith(",")) unit = unit.slice(0, -1);
+  return (
+    currency === expectedCurrency.toUpperCase() &&
+    amount === expectedMonthly &&
+    per === "per" &&
+    unit === "month"
+  );
 }
 
 /**

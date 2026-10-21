@@ -51,6 +51,11 @@ test("disclosure must name the expected currency and amount", () => {
   assert.equal(disclosureMatches("monthly budget on cards", 2_000_000, "COP"), false);
 });
 
+test("a nightly wording cannot satisfy the monthly disclosure gate", () => {
+  assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per night", 2_000_000, "COP"), false);
+  assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month.", 2_000_000, "COP"), true);
+});
+
 test("requires COP and a monthly stay type, not just the right amount", () => {
   const base = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP", stayType: "monthly" };
   assert.equal(classifyMonthlyBudgetRequest(base).ok, true);
