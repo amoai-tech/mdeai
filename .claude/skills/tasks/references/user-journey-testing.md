@@ -1,171 +1,93 @@
-# User-journey testing standard
+# MDE user-journey testing standard
 
-A user journey is not “does this page work?” It is whether the operator can achieve the real business outcome across every system the journey touches.
+Prove that a real actor can complete the requested MDE outcome across UI, CopilotKit/Mastra (where used), server authorization, Supabase and durable state. A page rendering or a passing mocked tool test is not end-to-end proof.
 
-Prioritize a small number of business-critical journeys over broad low-value coverage.
+**Scope:** Load this reference only for user-facing, cross-system or AI-native changes. Documentation-only, pure helper and static refactor PRs should use the narrow tests in [pre-merge-tests.md](pre-merge-tests.md), not unrelated browser or payment runs.
 
-## Quick lookup — which canonical journey applies?
+## Quick lookup — use the affected MDE journey
 
-Check this before reading the rest of the file. If the task touches:
+| Actor / feature | Journey to verify | Durable or visible success |
+| --- | --- | --- |
+| Renter | Rental search → grounded cards/map → Details → Request Viewing | Exactly one saved lead and showing, correct broker, honest renter confirmation |
+| Broker/landlord | Sign in → own listings/leads → respond/update | Authorized actor sees and updates only the correct records |
+| Event organizer | Create event → ticket tiers → publish | Event and ticket tiers persisted once, prices in correct currency/minor units |
+| Ticket buyer | Discover → Details → Stripe **test-mode** checkout → signed webhook → ticket/QR | Actual paid-test transaction, one order/ticket, valid check-in permissions |
+| Restaurant voter | Discover → sign in → explicit vote confirmation → submit | Persisted vote/receipt, duplicate and outsider rejection |
+| Venue/partner | Register → profile/details → customer inquiry | Correct saved record with owner isolation |
+| Super Admin | Authenticated dashboard → inventory/users/events mutation | Audited authorized transaction and correct readback; outsider denied |
+| AI Concierge | Intent → grounded retrieval → cards/map → authorized action → refresh | Truthful retrieved records, coherent follow-ups and persisted action where applicable |
 
-| Task type / area | Canonical journey (see below) |
-| -- | -- |
-| Brand URL, brand research, Brand DNA/Brand Brain | **Brand Intelligence** |
-| Campaign brief, Planner, shoot plan, shoot approval | **Production Planning** |
-| Planner chat, thread continuity, run/thread restore | **Planner chat continuity** |
-| Upload, Cloudinary, asset metadata, DNA analysis, product linking | **Assets** |
-| None of the above / a new journey | Define a new journey using the fields listed below; do not force-fit an unrelated canonical journey |
+**MDE development phase:** Phase A does **not** require owner/agency verification, property/photo paperwork, moderation, publication, partner approvals, listing freshness or rental eligibility as prerequisites for browsing, viewings or booking. Do not convert review/HITL examples into these business gates. Keep authentication, user/tenant isolation, private/test-fixture exclusion, accurate prices/maps, payment consent, server authorization, atomic writes and idempotency. Public-launch Phase B controls require explicit owner authorization.
 
-For each journey define:
-- actor + starting state
-- business goal
-- observable outcome
-- systems crossed
-- durable writes
-- approval / HITL boundary
-- happy path
-- negative / recovery paths
-- tenant/security boundaries
-- completion evidence
+## Define the smallest journey
 
-## Current MDE testing layers
+Record only what the change touches:
 
-```text
-Vitest → pure logic/components
-Supabase SQL / existing fixtures → RLS/RPC/migrations/tenant contracts
-Playwright → deterministic user journeys
-Mastra/CopilotKit deterministic tests → agent/tool/workflow/runtime contracts
-Explorbot → selected autonomous exploratory-browser pilot
-GitHub Actions → exact-head merge enforcement
-```
+- Actor and initial authenticated/unauthenticated state.
+- Input (query, listing/event ID, budget, action).
+- Observable result and persisted IDs if writing data.
+- Layers crossed, actual authorization boundary and source of truth.
+- Happy path, realistic negative/empty cases, retry/partial failure and recovery.
+- Desktop and 390px mobile when interaction/layout changed.
+- Exact proof command, environment and tested commit SHA.
+- Untested boundary = **UNVERIFIED**, not PASS or fabricated receipt.
 
-Explorbot supplements deterministic coverage; it is not yet a mandatory merge gate. A clean checkout must still be certifiable with repository-owned deterministic tests. Convert verified Explorbot discoveries into permanent regression tests when practical.
+## MDE verification layers
 
-No other AI-evaluation or guardrail platform is adopted by this standard. Choosing one requires a separate explicit research/adoption decision with version, setup, secrets, commands, evidence format, ownership, and local/CI execution defined before it becomes a required gate.
+| Layer | What it proves | Appropriate tool |
+| --- | --- | --- |
+| Logic/UI component | Validation, rendering and local state | Vitest / component test |
+| SQL and authorization | Supabase RPC/RLS, allow/deny, migration replay, transaction integrity | pgTAP and owned fixtures; service-role path tests when relevant |
+| Browser | Real navigation, auth, mobile interaction, network failures, visible receipt | Playwright / Chrome DevTools |
+| AI/tool contract | Correct tool, schema, context/memory and grounded result across turns | Existing CopilotKit/Mastra deterministic tool and run tests |
+| Real integration | Checkout/webhook, broker routing, persisted showing or ticket | Controlled app API + durable database readback; Stripe **test mode** |
+| Release | Exact HEAD checked, migrations applied, serving SHA, postdeploy behavior | Required GitHub CI, deployed runtime/smoke |
 
-## AI-native evaluation requirement
+Use `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`, `npm run test:e2e:deterministic`, `npx supabase test db` and `npm run floor` **only where required by changed risk**. Verify names in current `package.json` / CI; do not assume a fixed Playwright port, provider, or preview URL. See [pre-merge-tests.md](pre-merge-tests.md) for test selection.
 
-For AI-native workflows, verify the relevant behavior using the current MDE test/runtime stack: relevance/completeness, faithfulness/hallucination risk, tool selection/arguments, excessive agency, prompt-injection handling, sensitive-data/system-prompt leakage, HITL bypass attempts, rejection paths, and no durable write before approval. Prefer deterministic assertions and recorded tool/workflow outputs where they can prove the contract.
+**Exploratory automation:** Use the existing selected exploratory-browser pilot when appropriate. It supplements, not replaces, repository-owned deterministic checks. Never claim an uninstalled tool is a required gate.
 
-## Mastra journey decomposition
-
-When a journey crosses Mastra, do not certify only the browser or only the agent. Review the whole path:
+## CopilotKit and Mastra journey
 
 ```text
-Operator
-→ frontend route/state
-→ CopilotKit / AG-UI
-→ authenticated server boundary
-→ server-verified org/resource/thread context
-→ Mastra agent
-→ tool/workflow/provider
-→ human approval when consequential
-→ backend/domain write boundary
-→ durable store
-→ frontend readback after refresh/navigation
+User / page → CopilotKit / AG-UI → authenticated server context
+  → existing Mastra agent and registered tool → grounded Supabase retrieval
+  → result cards / synchronized map → explicit user action when the product requires it
+  → owning server route or atomic RPC → durable store → visible readback
 ```
 
-For each affected Mastra journey record evidence for these layers:
+Only include layers that actually participate. For agent-only queries without a write, do not fabricate a persisted result. For an action involving payment/voting, preserve required **user confirmation and payment consent**. That is different from Phase A **business approvals**. Independent S4 **engineering/security verification** is a development proof gate, not a user-facing landlord approval.
 
-| Layer | Required question |
+For each affected agent flow check:
+
+- **Grounding:** Source rows and search constraints (location, monthly budget, amenities, availability) match displayed cards. No invented prices, coordinates, broker authority or photos.
+- **Tool and identity:** Correct Mastra agent/tool, supported inputs, server-verified user/tenant context; model cannot supply its own authority.
+- **Conversation:** Follow-up questions retain relevant constraints; unknown facts stay unknown; stop, retry, streaming or provider errors have truthful states.
+- **Authorization:** Private/internal/test fixtures stay protected from ordinary users; unauthorized writes denied.
+- **Persistence:** One request/booking/payment/vote yields one correct result; retry has no duplicate side effect; UI reflects database state after refresh.
+- **Safety:** Prompt injection, sensitive-data leakage, and cross-tenant contamination fail safely.
+
+Load the relevant current [Mastra skill](../../mastra/SKILL.md) and [CopilotKit skill](../../copilotkit/SKILL.md) when their code is touched. Do not reference a nonexistent `mastra/references/user-journeys.md` or impose a generic human-approval workflow.
+
+## Risk-specific negative and recovery scenarios
+
+| Journey | Required failure cases when affected |
 | --- | --- |
-| Frontend | Can the operator start, understand, review, recover, and see the final outcome? |
-| CopilotKit/AG-UI | Did the intended thread/agent/event lifecycle occur without custom protocol drift? |
-| Auth/context | Were browser IDs treated as claims and revalidated server-side? |
-| Agent | Was the intended Production Planner/current agent actually active? |
-| Tool/workflow | Did the correct primitive run with validated inputs? |
-| AI behavior | Did natural language choose/avoid the right primitive and avoid invented facts? |
-| HITL | Was the exact artifact explicitly approved before any consequential write? |
-| Backend/domain | Did the owning server/RPC enforce authority and idempotency? |
-| Durable state | Was exactly the intended state persisted once and readable afterward? |
-| Recovery | Did retry/disconnect/provider failure/stale state fail safely? |
-| Tenant | Could Org B read, resume, or influence Org A state? |
+| Rentals | Non-matching budget is not shown as matching; nonexistent location gets no invented pin; pending non-fixture allowed in Phase A; private/test fixture and unrelated broker denied; retry creates no duplicate lead/showing |
+| Events | Amount/currency mismatch, duplicate publish, failed webhook, checkout rollback, replay, wrong ticket owner and unauthorized check-in |
+| Votes | Login return to same restaurant, duplicate ballot, forged voter identity, missing persisted receipt |
+| Agent/chat | Empty retrieval, stale result, dropped follow-up constraint, model/tool failure, lost thread, fabricated action success |
+| Admin/partner | Anonymous or other-tenant write, unauthorized role escalation, failed save with success toast, audit gap |
 
-Use `.claude/skills/mastra/references/user-journeys.md` for the current MDE Mastra journey map, including current executable Planner journeys and future activation gates for Shoot Approval/Save and Brand Intelligence workflows.
+## Completion contract
 
-## Required journey scenarios
+**System correctness** = UI/auth/API/search and relevant integrations work.
+**AI correctness** = tool selection, grounding, state and guardrails work when AI participates.
+**State correctness** = frontend, server action and durable record agree when writing.
 
-Test, when applicable:
-- happy path
-- empty/new state
-- validation failure
-- network/provider failure
-- partial failure
-- retry/recovery
-- duplicate/idempotent action
-- cross-tenant access
-- unauthorized action
-- stale data
-- large-data/pagination
-- mobile/responsive
-- refresh/back navigation
-
-For AI-native journeys also test:
-- relevance and completeness
-- faithfulness / hallucination
-- tool selection + tool arguments
-- unsafe/excessive agency
-- prompt injection
-- PII/system-prompt leakage
-- HITL bypass attempts
-- rejection path
-- no durable write before approval
-- stale prior model/tool result not treated as fresh success
-- operator correction across turns when multi-turn behavior changed
-
-## Canonical MDE journeys
-
-**Brand Intelligence**
-```text
-Brand URL → AI research → draft Brand DNA → operator review → approval → approved Brand Brain persisted
-```
-Negative: crawl failure, weak evidence, hallucination, duplicate brand, cross-tenant access, rejection, AI self-approval attempt, callback replay/mismatch, stale prior draft promotion, credential leakage into durable workflow state.
-
-**Production Planning**
-```text
-Brand → campaign brief → Planner → structured shoot plan → operator edit → approval → Shoot saved
-```
-Prove frontend, CopilotKit/AG-UI, authenticated context, Mastra agent, tools/workflow, backend domain boundary, Supabase authorization, HITL, idempotency and durable readback.
-
-**Planner chat continuity — current executable path**
-```text
-/login → /planner → fresh thread → natural-language request → Production Planner → planning tool/result → visible answer → reload → same run/thread restored
-```
-Negative: ambiguous/missing input, plausible wrong tool, provider failure, stale shared QA thread, cross-org thread access, fake approval statement.
-
-**Assets**
-```text
-Shoot → upload → Cloudinary → asset metadata → DNA analysis → human approval → product linking
-```
-Negative: provider upload succeeds / DB fails, duplicate webhook, wrong org, transformation failure, wrong shoot linkage.
-
-## AI-native certification rule
-
-A green Playwright journey alone does not certify an AI-native workflow.
-Certify both:
-1. system correctness — navigation, auth/tenant, persistence, integrations;
-2. AI correctness — relevance, faithfulness, tool correctness, guardrails, HITL.
-
-For a journey with a durable write, add a third reconciliation check:
-3. **state correctness** — the frontend result, workflow/agent evidence, and durable backend record agree on the same artifact/action.
-
-If a workflow layer does not exist yet, mark it `N/A — owner task not landed`, not PASS. Do not create fake E2E tests to simulate a future workflow.
-
-## Agent prompt
-
-```text
-Identify the smallest set of business-critical user journeys affected by this task, starting from the quick-lookup table if the task fits an existing canonical journey.
-
-For each journey:
-1. Define actor, starting state, business goal, observable success, systems crossed, durable writes, and approval boundaries.
-2. If Mastra participates, decompose the full path: frontend → CopilotKit/AG-UI → authenticated context → agent → tool/workflow/provider → HITL → backend/domain write → durable readback.
-3. Build realistic standard, empty, and large-data scenarios when applicable.
-4. Define happy, negative, recovery, tenant/security, and edge paths.
-5. Use deterministic tests first: Vitest / SQL / Playwright.
-6. For AI-native journeys, evaluate relevance, faithfulness, natural-language tool selection, tool arguments, guardrails, stale-result handling and HITL behavior with the current MDE test/runtime stack; do not introduce a new evaluation platform unless a separately approved task owns that decision.
-7. Reconcile frontend-visible result, agent/workflow evidence, and durable backend state for any consequential write.
-8. Use Explorbot only after deterministic coverage exists, treat it as exploratory developer QA rather than a mandatory merge gate, and convert verified discoveries into permanent regression tests.
-9. Do not certify the journey because one page renders, one Playwright script passes, or one Mastra tool test passes.
-10. Record exact evidence for system correctness, AI correctness, and state correctness when applicable.
-11. Stop and update the task if the journey exposes an incorrect architecture, missing ownership boundary, unsafe write, tenant leak, stale approval/result, or unowned failure path.
-```
+- Prove the affected claim with the cheapest decisive evidence, then broaden for security/side-effect risk.
+- An S4 actor/transaction change needs independent `task-verifier` review; do not self-certify.
+- Never create live production fixtures or execute real paid transactions as proof of a docs change.
+- CI green is not proof that a feature is deployed or that a user journey succeeded.
+- Report **PASS / FAIL / UNVERIFIED / N/A** with command, SHA, environment, and evidence source.
+- Only after applicable layers pass, update Linear status and the PR's exact-head evidence.
