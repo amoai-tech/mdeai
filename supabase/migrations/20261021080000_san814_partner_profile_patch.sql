@@ -1,7 +1,8 @@
 -- SAN-814: merge partner profile fields atomically.
 -- A whole-JSONB read/modify/write in the route can silently lose a concurrent
 -- update. This function locks the partner row, verifies membership from auth.uid(),
--- and merges only the reviewed profile keys.
+-- and merges only reviewed fields after verifying auth.uid() membership.
+-- Keep the privileged RPC narrow: no direct client UPDATE grant on partners.
 
 create or replace function public.partner_profile_patch(
   p_patch jsonb,
@@ -9,8 +10,10 @@ create or replace function public.partner_profile_patch(
 )
 returns jsonb
 language plpgsql
+-- authenticated callers do not have direct partners UPDATE privileges.
+-- Run with narrow definer authority and re-check membership explicitly below.
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -29,10 +32,29 @@ begin
 
   if exists (
     select 1
-    from jsonb_object_keys(p_patch) as key
+    from pg_catalog.jsonb_object_keys(p_patch) as key
     where key <> all(v_allowed)
   ) then
     raise exception 'partner_profile_patch: unsupported profile field' using errcode = '22023';
+  end if;
+
+  -- PostgREST clients can call this RPC directly, bypassing the Next.js Zod
+  -- schema. Enforce the same allowlisted value types and lengths here.
+  if exists (
+    select 1
+    from pg_catalog.jsonb_each(p_patch) as item(field_name, field_value)
+    where pg_catalog.jsonb_typeof(item.field_value) <> 'string'
+       or case item.field_name
+         when 'businessName' then pg_catalog.length(pg_catalog.btrim(item.field_value #>> '{}')) not between 2 and 160
+         when 'category' then pg_catalog.length(pg_catalog.btrim(item.field_value #>> '{}')) not between 2 and 80
+         when 'neighborhood' then pg_catalog.length(pg_catalog.btrim(item.field_value #>> '{}')) not between 2 and 80
+         when 'description' then pg_catalog.length(item.field_value #>> '{}') > 1000
+         when 'website' then pg_catalog.length(item.field_value #>> '{}') > 300
+           or (item.field_value #>> '{}') !~* '^https?://[^[:space:]]+$' and (item.field_value #>> '{}') <> ''
+         else true
+       end
+  ) then
+    raise exception 'partner_profile_patch: invalid profile value' using errcode = '22023';
   end if;
 
   if p_partner_id is null then
@@ -73,7 +95,7 @@ begin
 end;
 $$;
 
-revoke all on function public.partner_profile_patch(jsonb, uuid) from public;
+revoke all on function public.partner_profile_patch(jsonb, uuid) from public, anon;
 grant execute on function public.partner_profile_patch(jsonb, uuid) to authenticated;
 
 comment on function public.partner_profile_patch(jsonb, uuid) is

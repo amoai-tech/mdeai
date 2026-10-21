@@ -54,6 +54,19 @@ describe("SAN-814 partner profile PATCH", () => {
     });
   });
 
+  it("uses an explicitly selected partner only after UUID validation", async () => {
+    const selected = "02597e4d-4852-4584-9c44-35048e75be40";
+    const response = await patch({ partnerId: selected, description: "Updated" });
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("partner_profile_patch", {
+      p_patch: { description: "Updated" },
+      p_partner_id: selected,
+    });
+    expect((await patch({ partnerId: "not-a-uuid", description: "Updated" })).status).toBe(400);
+    expect((await patch({ partnerId: selected, status: "active" })).status).toBe(400);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
   it("maps membership, authorization and multiple-partner errors truthfully", async () => {
     for (const [code, status] of [
       ["P0002", 404],

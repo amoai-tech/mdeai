@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { buildPartnerProfilePatch, profileValuesFromSettings, type PartnerProfileValues } from "@/lib/partners/partner-profile-patch";
 
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Button } from "@/components/ui/button";
@@ -8,18 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-type ProfileValues = {
-  businessName: string;
-  category: string;
-  neighborhood: string;
-  description: string;
-  website: string;
-};
-
 type Props = {
+  partnerId: string;
   partnerType: string;
   partnerStatus: string;
-  initial: ProfileValues;
+  initial: PartnerProfileValues;
 };
 
 const FIELD = "h-11 text-base md:text-sm";
@@ -28,45 +23,45 @@ const FIELD = "h-11 text-base md:text-sm";
  * SAN-814 — owner-scoped business profile form. Saves through the authenticated
  * server route; this component never writes partner data directly.
  */
-export function PartnerProfileForm({ partnerType, partnerStatus, initial }: Props) {
+export function PartnerProfileForm({ partnerId, partnerType, partnerStatus, initial }: Props) {
   const hydrated = useHydrated();
-  const [values, setValues] = useState<ProfileValues>(initial);
+  const router = useRouter();
+  const [values, setValues] = useState<PartnerProfileValues>(initial);
+  const [persisted, setPersisted] = useState<PartnerProfileValues>(initial);
+  const dirty = buildPartnerProfilePatch(values, persisted);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  function update<K extends keyof ProfileValues>(key: K, value: string) {
+  function update<K extends keyof PartnerProfileValues>(key: K, value: string) {
     setValues((previous) => ({ ...previous, [key]: value }));
     setSaved(false);
   }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || Object.keys(dirty).length === 0) return;
     setError(null);
     setSaved(false);
     setSaving(true);
     try {
-      const payload: Record<string, string> = {
-        description: values.description.trim(),
-        website: values.website.trim(),
-      };
-      for (const key of ["businessName", "category", "neighborhood"] as const) {
-        const text = values[key].trim();
-        if (text) payload[key] = text;
-      }
+      const payload = { partnerId, ...dirty };
       const response = await fetch("/api/partners/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const result = (await response.json().catch(() => null)) as
-        | { success?: boolean; error?: { message?: string } }
+        | { success?: boolean; settings?: Record<string, unknown>; error?: { message?: string } }
         | null;
-      if (!response.ok || !result?.success) {
+      if (!response.ok || !result?.success || !result.settings) {
         throw new Error(result?.error?.message ?? "Could not save your profile");
       }
+      const confirmed = profileValuesFromSettings(result.settings);
+      setPersisted(confirmed);
+      setValues(confirmed);
       setSaved(true);
+      router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save your profile");
     } finally {
@@ -185,7 +180,7 @@ export function PartnerProfileForm({ partnerType, partnerStatus, initial }: Prop
         size="lg"
         className="w-full sm:w-auto"
         data-testid="partner-profile-save"
-        disabled={saving || !hydrated}
+        disabled={saving || !hydrated || Object.keys(dirty).length === 0}
       >
         {saving ? "Saving…" : "Save profile"}
       </Button>

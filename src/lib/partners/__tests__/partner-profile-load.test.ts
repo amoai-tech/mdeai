@@ -1,67 +1,59 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadPartnerProfile } from "../partner-profile-load";
 
-function client(membershipResult: unknown, partnerResult?: unknown) {
-  const maybeSingle = vi
-    .fn()
-    .mockResolvedValueOnce(membershipResult)
-    .mockResolvedValueOnce(partnerResult ?? { data: null, error: null });
+const ONE = { id: "partner-1", type: "restaurant", status: "draft", settings: { businessName: "Café Central" } };
+const TWO = { id: "partner-2", type: "nightlife", status: "active", settings: { businessName: "Club Sur" } };
+
+function client(memberships: unknown, partners: unknown = { data: [ONE], error: null }) {
+  const membershipQuery = { eq: vi.fn().mockResolvedValue(memberships) };
+  const partnersQuery = { in: vi.fn().mockResolvedValue(partners) };
   const supabase = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({ maybeSingle })),
-      })),
+    from: vi.fn((table: string) => ({
+      select: vi.fn(() => (table === "partner_members" ? membershipQuery : partnersQuery)),
     })),
   };
-  return { supabase, maybeSingle };
+  return { supabase, membershipQuery, partnersQuery };
 }
 
+const membership = (ids: string[]) => ({
+  data: ids.map((partner_id) => ({ partner_id })),
+  error: null,
+});
+
 describe("loadPartnerProfile (SAN-814)", () => {
-  it("returns error when the membership query fails", async () => {
-    const { supabase } = client({ data: null, error: { code: "XX000" } });
-    await expect(loadPartnerProfile(supabase as never, "user-1")).resolves.toEqual({
-      status: "error",
-    });
+  it("distinguishes a query failure from missing membership", async () => {
+    const failed = client({ data: null, error: { code: "XX000" } });
+    expect(await loadPartnerProfile(failed.supabase as never, "user-1")).toEqual({ status: "error" });
+    const absent = client(membership([]));
+    expect(await loadPartnerProfile(absent.supabase as never, "user-1")).toEqual({ status: "missing" });
   });
 
-  it("returns missing only when the query succeeded with no membership", async () => {
-    const { supabase } = client({ data: null, error: null });
-    await expect(loadPartnerProfile(supabase as never, "user-1")).resolves.toEqual({
-      status: "missing",
-    });
+  it("distinguishes a missing partner row from a successful lookup", async () => {
+    const c = client(membership(["partner-1"]), { data: [], error: null });
+    expect(await loadPartnerProfile(c.supabase as never, "user-1")).toEqual({ status: "error" });
   });
 
-  it("returns error when the partner query fails", async () => {
-    const { supabase } = client(
-      { data: { partner_id: "partner-1" }, error: null },
-      { data: null, error: { code: "XX000" } },
-    );
-    await expect(loadPartnerProfile(supabase as never, "user-1")).resolves.toEqual({
-      status: "error",
+  it("automatically loads exactly one authorized partner", async () => {
+    const c = client(membership(["partner-1"]));
+    expect(await loadPartnerProfile(c.supabase as never, "user-1")).toEqual({
+      status: "loaded", partner: ONE, options: [ONE],
     });
+    expect(c.partnersQuery.in).toHaveBeenCalledWith("id", ["partner-1"]);
   });
 
-  it("returns the partner settings when both queries succeed", async () => {
-    const { supabase } = client(
-      { data: { partner_id: "partner-1" }, error: null },
-      {
-        data: {
-          id: "partner-1",
-          type: "restaurant",
-          status: "draft",
-          settings: { businessName: "Café Central" },
-        },
-        error: null,
-      },
-    );
-    await expect(loadPartnerProfile(supabase as never, "user-1")).resolves.toEqual({
-      status: "loaded",
-      partner: {
-        id: "partner-1",
-        type: "restaurant",
-        status: "draft",
-        settings: { businessName: "Café Central" },
-      },
+  it("requires selection for multiple businesses and allows either membership", async () => {
+    const c = client(membership(["partner-1", "partner-2"]), { data: [ONE, TWO], error: null });
+    expect(await loadPartnerProfile(c.supabase as never, "user-1")).toEqual({
+      status: "selection_required", options: [ONE, TWO],
     });
+    expect((await loadPartnerProfile(c.supabase as never, "user-1", "partner-2")).status).toBe("loaded");
+  });
+
+  it("never queries an unauthorized selected partner", async () => {
+    const c = client(membership(["partner-1"]));
+    expect(await loadPartnerProfile(c.supabase as never, "user-1", "partner-attacker")).toEqual({
+      status: "forbidden",
+    });
+    expect(c.partnersQuery.in).not.toHaveBeenCalled();
   });
 });

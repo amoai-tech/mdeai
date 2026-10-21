@@ -45,22 +45,32 @@ function ProfileLoadError({ message }: { message: string }) {
 }
 
 // skipcq: JS-0067 - Next.js App Router page export; not browser global scope
-export default async function PartnerProfilePage() {
+export default async function PartnerProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ partner?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const selectedPartnerId = typeof params.partner === "string" ? params.partner : undefined;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/partners/profile");
 
-  const profile = await loadPartnerProfile(supabase, user.id);
+  const profile = await loadPartnerProfile(supabase, user.id, selectedPartnerId);
 
   // A failed query is not the same as "no membership". Never send a partner
   // back to signup because Supabase had a transient failure.
-  if (profile.status === "error") {
-    return <ProfileLoadError message="We could not load your partner profile. Try again." />;
+  if (profile.status === "error" || profile.status === "forbidden") {
+    return <ProfileLoadError message={profile.status === "forbidden"
+      ? "You do not have access to the selected business."
+      : "We could not load your partner profile. Try again."} />;
   }
 
   const partner = profile.status === "loaded" ? profile.partner : null;
+  const options = profile.status === "loaded" || profile.status === "selection_required"
+    ? profile.options : [];
 
   const settings = (partner?.settings ?? {}) as Record<string, unknown>;
 
@@ -79,9 +89,28 @@ export default async function PartnerProfilePage() {
             partner team can change them.
           </p>
 
-          {partner ? (
+          {options.length > 1 ? (
+            <nav aria-label="Choose your business" className="mt-6 flex flex-wrap gap-2">
+              {options.map((option) => (
+                <Link
+                  key={option.id}
+                  href={`/partners/profile?partner=${encodeURIComponent(option.id)}`}
+                  aria-current={option.id === partner?.id ? "page" : undefined}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium ${option.id === partner?.id ? "border-accent text-accent" : "border-border text-foreground"}`}
+                >
+                  {readSetting(option.settings, "businessName") || option.type}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+
+          {profile.status === "selection_required" ? (
+            <p className="mt-6 text-sm text-muted-foreground">Choose a business above to edit its profile.</p>
+          ) : partner ? (
             <div className="mt-8">
               <PartnerProfileForm
+                key={partner.id}
+                partnerId={partner.id}
                 partnerType={partner.type}
                 partnerStatus={partner.status}
                 initial={{

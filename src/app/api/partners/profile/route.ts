@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { partnerProfileUpdateSchema } from "@/lib/partners/partner-profile-schema";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +27,10 @@ export async function PATCH(req: Request) {
   } catch {
     return fail("Invalid request body", 400);
   }
-  const parsed = partnerProfileUpdateSchema.safeParse(body);
+  const selector = z.object({ partnerId: z.string().uuid().optional() }).passthrough().safeParse(body);
+  if (!selector.success) return fail("Invalid partner selection", 400);
+  const { partnerId, ...patch } = selector.data;
+  const parsed = partnerProfileUpdateSchema.safeParse(patch);
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Please check your details", 400);
   }
@@ -36,6 +40,7 @@ export async function PATCH(req: Request) {
   // id from this body; the optional selection is re-verified inside the RPC.
   const { data, error } = await supabase.rpc("partner_profile_patch", {
     p_patch: parsed.data,
+    ...(partnerId ? { p_partner_id: partnerId } : {}),
   });
 
   if (error) {

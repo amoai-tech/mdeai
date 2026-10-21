@@ -10,42 +10,53 @@ export type PartnerProfileRecord = {
 };
 
 export type PartnerProfileLoad =
-  | { status: "loaded"; partner: PartnerProfileRecord }
+  | { status: "loaded"; partner: PartnerProfileRecord; options: PartnerProfileRecord[] }
+  | { status: "selection_required"; options: PartnerProfileRecord[] }
+  | { status: "forbidden" }
   | { status: "missing" }
   | { status: "error" };
 
 /**
- * SAN-814 — distinguish "no partner membership" from "the query failed".
- * A transient Supabase error must never send an existing partner to signup.
+ * Load all authorized memberships rather than calling maybeSingle().
+ * A user belonging to multiple businesses must choose one explicitly.
  */
 export async function loadPartnerProfile(
   supabase: SupabaseClient<Database>,
   userId: string,
+  selectedPartnerId?: string,
 ): Promise<PartnerProfileLoad> {
-  const { data: membership, error: membershipError } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("partner_members")
     .select("partner_id")
-    .eq("profile_id", userId)
-    .maybeSingle();
+    .eq("profile_id", userId);
 
   if (membershipError) return { status: "error" };
-  if (!membership) return { status: "missing" };
+  if (!memberships?.length) return { status: "missing" };
 
-  const { data: partner, error: partnerError } = await supabase
+  const allowedIds = [...new Set(memberships.map((row) => row.partner_id))];
+  if (selectedPartnerId && !allowedIds.includes(selectedPartnerId)) {
+    return { status: "forbidden" };
+  }
+
+  const { data: records, error: partnerError } = await supabase
     .from("partners")
     .select("id, type, status, settings")
-    .eq("id", membership.partner_id)
-    .maybeSingle();
+    .in("id", allowedIds);
 
-  if (partnerError || !partner) return { status: "error" };
+  if (partnerError || !records || records.length !== allowedIds.length) {
+    return { status: "error" };
+  }
 
-  return {
-    status: "loaded",
-    partner: {
-      id: partner.id,
-      type: partner.type,
-      status: partner.status,
-      settings: (partner.settings ?? {}) as Record<string, unknown>,
-    },
-  };
+  const options = records.map((partner) => ({
+    id: partner.id,
+    type: partner.type,
+    status: partner.status,
+    settings: (partner.settings ?? {}) as Record<string, unknown>,
+  }));
+  const selectedId = selectedPartnerId ?? (options.length === 1 ? options[0].id : undefined);
+  if (!selectedId) return { status: "selection_required", options };
+
+  const partner = options.find((record) => record.id === selectedId);
+  if (!partner) return { status: "error" };
+  return { status: "loaded", partner, options };
 }
