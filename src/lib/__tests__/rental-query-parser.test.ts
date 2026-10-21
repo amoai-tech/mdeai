@@ -371,3 +371,51 @@ describe("rental-query-parser — vague preferences keep the saved ceiling", () 
     expect(params?.maxPriceMonthly).toBeUndefined();
   });
 });
+
+describe("rental-query-parser — explicit replacements that cannot be applied", () => {
+  it("clears a saved monthly ceiling for a euro budget the parser cannot apply", () => {
+    const text = "my budget is €1500 per month";
+    const params = buildRentalSearchParams(text, {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+  });
+
+  it("clears the saved ceiling in a whole-city refinement with a new unparsable budget", () => {
+    const text = "anywhere in Medellín under €1500 per month";
+    const params = buildRentalSearchParams(text, {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+  });
+
+  it("keeps the saved ceiling for a whole-city reply with no new budget", () => {
+    const params = buildRentalSearchParams("anywhere is fine", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+  });
+});

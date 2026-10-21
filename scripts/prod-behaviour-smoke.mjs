@@ -104,12 +104,17 @@ const EMPTY = /No rentals match|No rentals are available/i;
 // it attribute the rest of the file to the previous function.
 // Monthly budgets are now applied (SAN-1502). The disclosure must therefore say the budget
 // was applied — the old "can't filter by monthly budget" wording is only valid when it was not.
-// Requires the applied amount, or an explicit statement that the budget was not applied.
-// Generic "monthly budget" text on a card is not a disclosure.
-const DISCLOSED = new RegExp(
-  "Applied budget: (?:COP|USD) [0-9,]+ per month|can't filter by monthly budget|budget was not applied",
-  "i",
-);
+// Requires the applied amount and currency, or an explicit statement that the budget was not
+// applied. Generic "monthly budget" text on a card is not a disclosure.
+export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
+  if (/can't filter by monthly budget|budget was not applied/i.test(text)) return true;
+  const match = text.match(/Applied budget:\s*([A-Z]{3})\s*([0-9,]+)\s*per month/i);
+  if (!match) return false;
+  return (
+    match[1].toUpperCase() === expectedCurrency.toUpperCase() &&
+    Number(match[2].replace(/,/g, "")) === expectedMonthly
+  );
+}
 
 /**
  * The #386 regression was a monthly budget silently converted into a nightly cap. The DOM
@@ -122,6 +127,8 @@ export function classifyMonthlyBudgetRequest(
   expectedCurrency = "COP",
 ) {
   const monthly = payload ? payload.maxPriceMonthly : undefined;
+  // The API omits an absent nightly cap; `undefined` and `null` both mean "no nightly cap".
+  // Do not require an explicit `null`, which the real request payload does not send.
   const nightly = payload ? payload.maxPricePerNight : undefined;
   const currency = payload ? payload.budgetCurrency : undefined;
   const stayType = payload ? payload.stayType : undefined;
@@ -197,8 +204,9 @@ function recordRentalResult(label, query) {
   );
   record(
     label + ": monthly budget context is disclosed",
-    DISCLOSED.test(query.text),
-    "budget disclosure present: " + DISCLOSED.test(query.text),
+    disclosureMatches(query.text, EXPECTED_MONTHLY, EXPECTED_CURRENCY),
+    "budget disclosure present: " +
+      disclosureMatches(query.text, EXPECTED_MONTHLY, EXPECTED_CURRENCY),
   );
   record(label + ": no uncaught page exceptions", query.pageErrors.length === 0, query.pageErrors.join(" | ") || "none");
 }

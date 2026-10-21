@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyMonthlyBudgetRequest } from "../prod-behaviour-smoke.mjs";
+import { classifyMonthlyBudgetRequest, disclosureMatches } from "../prod-behaviour-smoke.mjs";
 
 test("accepts the real monthly payload for a 2-million-peso query", () => {
   const result = classifyMonthlyBudgetRequest({
@@ -18,29 +18,37 @@ test("accepts the real monthly payload for a 2-million-peso query", () => {
   assert.match(result.detail, /maxPriceMonthly/);
 });
 
+const VALID = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP", stayType: "monthly" };
+
 test("rejects the historic $2/night cap", () => {
   const result = classifyMonthlyBudgetRequest({
-    neighbourhood: "Laureles",
+    ...VALID,
+    maxPriceMonthly: undefined,
     maxPricePerNight: 2,
   });
   assert.equal(result.ok, false);
 });
 
 test("rejects a payload that sends both a monthly and a nightly ceiling", () => {
-  const result = classifyMonthlyBudgetRequest({
-    maxPriceMonthly: 2_000_000,
-    maxPricePerNight: 2,
-  });
+  const result = classifyMonthlyBudgetRequest({ ...VALID, maxPricePerNight: 2 });
   assert.equal(result.ok, false);
 });
 
 test("rejects a string amount, a near miss, or the wrong monthly amount", () => {
-  assert.equal(classifyMonthlyBudgetRequest({ maxPriceMonthly: "2000000" }).ok, false);
-  assert.equal(classifyMonthlyBudgetRequest({ maxPriceMonthly: 2_000 }).ok, false);
-  assert.equal(
-    classifyMonthlyBudgetRequest({ maxPriceMonthly: 2_000_000.5, budgetCurrency: "COP", stayType: "monthly" }).ok,
-    false,
-  );
+  assert.equal(classifyMonthlyBudgetRequest({ ...VALID, maxPriceMonthly: "2000000" }).ok, false);
+  assert.equal(classifyMonthlyBudgetRequest({ ...VALID, maxPriceMonthly: 2_000 }).ok, false);
+  assert.equal(classifyMonthlyBudgetRequest({ ...VALID, maxPriceMonthly: 2_000_000.5 }).ok, false);
+});
+
+test("disclosure must name the expected currency and amount", () => {
+  const text = "No rentals match. Applied budget: COP 2,000,000 per month.";
+  assert.equal(disclosureMatches(text, 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches(text, 2_000_000, "USD"), false);
+  assert.equal(disclosureMatches(text, 2_100_000, "COP"), false);
+  assert.equal(disclosureMatches("Applied budget: COP 2,000,000 per month", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("I can't filter by monthly budget yet.", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("budget was not applied", 2_000_000, "COP"), true);
+  assert.equal(disclosureMatches("monthly budget on cards", 2_000_000, "COP"), false);
 });
 
 test("requires COP and a monthly stay type, not just the right amount", () => {

@@ -489,15 +489,17 @@ function effectiveLimit(s: RentalQuerySignals): number {
 }
 
 function mergedBudgetFields(
+  text: string,
   q: ConciergeWorkingMemory["lastRentalQuery"],
   s: RentalQuerySignals,
 ): Pick<RentalSearchApiParams, "maxPricePerNight" | "maxPriceMonthly" | "budgetCurrency"> {
   // `hasBudget` is also true for vague preferences ("affordable", "budget apartments") that
-  // carry no amount. Those must not erase a ceiling the renter already gave. Only a parsed
-  // amount with a period replaces the stored budget.
-  const statesNewBudget =
+  // carry no amount. Those must not erase a ceiling the renter already gave. An explicit
+  // amount that cannot be applied (e.g. "€1500 per month") must clear it, or the search would
+  // silently keep filtering with a budget the renter just replaced.
+  const parsedNewBudget =
     s.budgetType != null && (s.maxPriceMonthly != null || s.maxPricePerNight != null);
-  if (!statesNewBudget) {
+  if (!parsedNewBudget && !statesBudget(text)) {
     return {
       maxPricePerNight: q?.maxPricePerNight,
       maxPriceMonthly: q?.maxPriceMonthly,
@@ -547,13 +549,13 @@ export function buildRentalSearchParams(
   const lastQuery = memory.lastRentalQuery;
   if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
     return {
-      minBedrooms: lastQuery.minBedrooms,
-      maxPricePerNight: lastQuery.maxPricePerNight,
-      maxPriceMonthly: lastQuery.maxPriceMonthly,
-      budgetCurrency: lastQuery.budgetCurrency,
+      minBedrooms: s.minBedrooms ?? lastQuery.minBedrooms,
+      // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
+      // message ("anywhere under €1500/month") replaces it instead of copying the stale one.
+      ...mergedBudgetFields(text, lastQuery, s),
       checkIn: lastQuery.checkIn,
       checkOut: lastQuery.checkOut,
-      stayType: lastQuery.budgetType,
+      stayType: s.budgetType ?? lastQuery.budgetType,
       limit,
     };
   }
@@ -562,7 +564,7 @@ export function buildRentalSearchParams(
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
       minBedrooms: s.minBedrooms ?? q.minBedrooms,
-      ...mergedBudgetFields(q, s),
+      ...mergedBudgetFields(text, q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
       stayType: s.budgetType ?? q.budgetType,
@@ -586,7 +588,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
         minBedrooms: s.minBedrooms ?? q?.minBedrooms,
-        ...mergedBudgetFields(q, s),
+        ...mergedBudgetFields(text, q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
         stayType: s.budgetType ?? q?.budgetType,
