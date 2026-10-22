@@ -88,23 +88,36 @@ export function exitCodeFor(status, { strict = false } = {}) {
 export function parseArgs(argv) {
   const asJson = argv.includes("--json");
   const strict = argv.includes("--strict");
-  const claimedIndex = argv.indexOf("--claimed");
-  const claimed = claimedIndex < 0 ? undefined : argv[claimedIndex + 1];
-  if (claimedIndex >= 0 && (typeof claimed !== "string" || !/^[0-9a-f]{7,40}$/i.test(claimed))) {
+  const flags = argv.filter((arg) => arg === "--claimed" || arg.startsWith("--claimed="));
+  if (flags.length > 1) throw new Error("--claimed may only appear once");
+  const flag = flags[0];
+  const claimed = flag === "--claimed"
+    ? argv[argv.indexOf(flag) + 1]
+    : flag?.slice("--claimed=".length);
+  if (flag !== undefined && (typeof claimed !== "string" || !/^[0-9a-f]{7,40}$/i.test(claimed))) {
     throw new Error("--claimed requires a valid 7–40 character hexadecimal commit SHA");
   }
   return { asJson, strict, claimed };
 }
 
-async function resolveRemoteMain(run) {
-  run("git", ["fetch", "origin", "--quiet"]);
-  return run("git", ["rev-parse", "origin/main"]).trim();
+export async function resolveRemoteMain(run) {
+  try {
+    // The check only needs one ref. Avoid fetching unrelated branches and tags.
+    run("git", ["fetch", "--quiet", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"], 30_000);
+  } catch (error) {
+    throw new Error(error?.code === "ETIMEDOUT" ? "git fetch timed out" : "git fetch failed");
+  }
+  try {
+    return run("git", ["rev-parse", "origin/main"]).trim();
+  } catch {
+    throw new Error("could not resolve origin/main");
+  }
 }
 
 async function main(argv) {
   const { execFileSync } = await import("node:child_process");
   const { asJson, strict, claimed } = parseArgs(argv);
-  const run = (file, args) => execFileSync(file, args, { encoding: "utf8", timeout: 10_000 });
+  const run = (file, args, timeout = 10_000) => execFileSync(file, args, { encoding: "utf8", timeout });
   const baseUrl = process.env.MDE_PRODUCTION_URL ?? "https://www.mdeai.co";
 
   let main_ = null;
@@ -113,8 +126,8 @@ async function main(argv) {
 
   try {
     main_ = await resolveRemoteMain(run);
-  } catch {
-    problem = "could not resolve origin/main";
+  } catch (error) {
+    problem = error?.message ?? "could not resolve origin/main";
   }
 
   try {
