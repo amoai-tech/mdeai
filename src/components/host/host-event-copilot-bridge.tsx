@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useAgent,
   useAgentContext,
   useFrontendTool,
   useHumanInTheLoop,
-  UseAgentUpdate,
 } from "@copilotkit/react-core/v2";
 import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
@@ -110,25 +108,17 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     setDraftState((prev) => mergeEventDraft(prev, patch));
   }, []);
 
-  const { agent } = useAgent({
-    agentId: "hostEventAgent",
-    updates: [UseAgentUpdate.OnStateChanged],
-  });
-
-  const agentDraft = agent.state;
-  const mergedDraft = useMemo(() => {
-    if (!agentDraft || typeof agentDraft !== "object") return draft;
-    return mergeEventDraft(draft, agentDraft as Partial<EventDraftState>);
-  }, [draft, agentDraft]);
-
-  const latestDraftRef = useRef(mergedDraft);
+  // Canonical wizard state is owned by this component. Frontend tools and manual
+  // edits both write through setDraftState; stale Mastra working memory must not
+  // replace the fields the host has just reviewed and edited.
+  const latestDraftRef = useRef(draft);
   useEffect(() => {
-    latestDraftRef.current = mergedDraft;
-  }, [mergedDraft]);
+    latestDraftRef.current = draft;
+  }, [draft]);
 
   useAgentContext({
     description: "Roberto's in-progress event draft for the host wizard",
-    value: mergedDraft,
+    value: draft,
   });
 
   // SAN-905 · skip agent.setState on every draft edit — mid-stream pushes
@@ -162,7 +152,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     {
       name: "set_pricing",
       description:
-        "Set minimum ticket price in COP cents, description, optional tiers",
+        "Set minimum ticket price in whole COP (40000 = COP 40,000), description, optional tiers also in whole COP",
       parameters: setPricingParams,
       handler: async (args) => {
         setDraftState((prev) => applySetPricing(prev, args));
@@ -191,5 +181,5 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     [PublishHitlRender],
   );
 
-  return <>{children({ draft: mergedDraft, setDraft })}</>;
+  return <>{children({ draft, setDraft })}</>;
 }

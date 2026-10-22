@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { HostEventCopilotBridge } from "@/components/host/host-event-copilot-bridge";
 import { HostEventForm } from "@/components/host/host-event-form";
 import type { EventDraftState } from "@/lib/types";
+import { HOST_EVENT_INSTRUCTIONS } from "@/mastra/agents/host-event-prompt";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,10 +17,14 @@ type HitlProps = {
 };
 
 let registeredRender: React.ComponentType<HitlProps> | undefined;
+let mockAgentState: Partial<EventDraftState> | undefined;
+const frontendTools: Record<string, string> = {};
 vi.mock("@copilotkit/react-core/v2", () => ({
-  useAgent: () => ({ agent: { state: undefined } }),
+  useAgent: () => ({ agent: { state: mockAgentState } }),
   useAgentContext: () => undefined,
-  useFrontendTool: () => undefined,
+  useFrontendTool: (config: { name: string; description: string }) => {
+    frontendTools[config.name] = config.description;
+  },
   useHumanInTheLoop: (config: { render: React.ComponentType<HitlProps> }) => {
     registeredRender = config.render;
   },
@@ -34,9 +39,48 @@ vi.mock("@/components/host/event-publish-approval-panel", () => ({
 afterEach(() => {
   cleanup();
   registeredRender = undefined;
+  mockAgentState = undefined;
 });
 
 describe("HostEventCopilotBridge publish HITL", () => {
+  it("tells the AI to use whole COP amounts, not payment minor units", () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    expect(frontendTools.set_pricing).toMatch(/whole COP/);
+    expect(HOST_EVENT_INSTRUCTIONS).toContain("40000 means COP 40,000");
+    expect(HOST_EVENT_INSTRUCTIONS).toContain("never cents");
+  });
+
+  it("does not let stale Mastra working memory replace a host's manual edits", () => {
+    mockAgentState = {
+      title: "Old agent title",
+      neighborhood: "Laureles",
+      dateIso: "2026-12-15T20:00",
+      venue: "Son Havana",
+      capacity: 60,
+      priceMinCop: 40000,
+    };
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), {
+      target: { value: "Host corrected title" },
+    });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty(
+      "value",
+      "Host corrected title",
+    );
+    const PublishPanel = registeredRender;
+    if (!PublishPanel) throw new Error("HITL renderer not registered");
+    render(<PublishPanel args={{}} status="executing" />);
+    expect(JSON.parse(screen.getByTestId("captured-publish-draft").textContent ?? "{}"))
+      .toMatchObject({ title: "Host corrected title" });
+  });
   it("reads the visible wizard after edits without re-registering the HITL tool", () => {
     render(
       <HostEventCopilotBridge>
