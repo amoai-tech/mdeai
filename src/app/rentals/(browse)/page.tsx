@@ -3,6 +3,7 @@ import { describeRentalSearchError } from "@/mastra/lib/rental-search-unavailabl
 import { searchRentals, type Rental } from "@/mastra/tools/search-rentals";
 import { createClient } from "@/lib/supabase/server";
 import { parseBrowseFilters, type RentalBrowseSearchParams } from "@/lib/rentals/browse-filters";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 interface Props {
   searchParams: Promise<
@@ -35,7 +36,11 @@ export default async function RentalsPage({ searchParams }: Props) {
 
   // Bad dates fail closed: show the message and run NO search, instead of silently ignoring the
   // dates and listing apartments that may not be free for the stay.
-  if (!dateError) {
+  // The deterministic browser suite verifies the actual browse layout and map sheet,
+  // not Supabase inventory. It uses a placeholder database URL, so a live SSR query
+  // can stall first navigation until Playwright's timeout. This existing test mode
+  // is disabled in production; normal browse always uses the real RLS client.
+  if (!dateError && !isDeterministicE2E()) {
     try {
       const minBedrooms = filters.beds != null ? parseInt(filters.beds, 10) : undefined;
 
