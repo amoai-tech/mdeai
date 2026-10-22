@@ -172,10 +172,14 @@ export default defineConfig({
     ? undefined
     : {
         command: webServerCommand,
-        url: localBaseURL,
+        // A static 200 means the HTTP server is up without waiting for slow home-page data.
+        // Actual auth pages are still exercised by Playwright test assertions.
+        url: new URL("/file.svg", localBaseURL).toString(),
+        stdout: process.env.CI ? "pipe" : "ignore",
+        stderr: "pipe",
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
-        timeout: 120_000,
+        timeout: 240_000,
       },
 });

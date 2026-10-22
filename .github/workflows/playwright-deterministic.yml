@@ -148,6 +148,7 @@ jobs:
 
       - name: Prove safe login redirects and auth guards
         env:
+          DEBUG: pw:webserver
           NODE_ENV: development
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"

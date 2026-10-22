@@ -62,7 +62,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit": "npm audit --audit-level=high",
-    "audit:floor": "npm audit --audit-level=critical",
+    "audit:floor": "node scripts/audit-floor-retry.mjs",
     "audit:copilotkit-v2": "npm run audit:copilotkit-v2:depcruise",
     "audit:copilotkit-v2:depcruise": "depcruise --config .dependency-cruiser.cjs src && node scripts/audit-copilotkit-v2-no-new-v1.mjs",
     "audit:copilotkit-v2:depcruise:proof": "node scripts/audit-copilotkit-v2-depcruise-proof.mjs",
