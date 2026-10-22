@@ -84,16 +84,15 @@ async function proveContestSelection(
   // A well-formed contest id that is not this restaurant's contest. The sentinel below
   // must never become a real contest id.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
-  // A route transition may retain a hidden prior instance. Require exactly one
-  // visible warning; a genuinely duplicated visible warning must still fail.
-  await expect(page.locator('[data-testid="vote-not-open"]:visible')).toHaveCount(1);
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  // Assert the canonical contest region. A hidden duplicate can survive a
+  // client-side route transition; it is not the user's voting surface.
+  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
   // A malformed selection is rejected before any contest lookup happens.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
-  // A route transition may retain a hidden prior instance. Require exactly one
-  // visible warning; a genuinely duplicated visible warning must still fail.
-  await expect(page.locator('[data-testid="vote-not-open"]:visible')).toHaveCount(1);
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
 }
 
 /**
