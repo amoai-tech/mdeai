@@ -35,10 +35,10 @@ export function AppShell({ resolution, children }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex min-h-14 w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-2 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
           <Link
             href="/"
-            className="shrink-0 text-lg font-extrabold tracking-[-0.04em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex min-h-11 shrink-0 items-center text-lg font-extrabold tracking-[-0.04em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             mde·ai
           </Link>
@@ -47,17 +47,17 @@ export function AppShell({ resolution, children }: AppShellProps) {
 
           <nav
             aria-label="Account"
-            className="ml-auto flex items-center gap-1 sm:gap-2"
+            className="ml-auto flex w-full items-center justify-end gap-1 sm:w-auto sm:gap-2"
           >
             <Link
               href="/"
-              className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               Explore
             </Link>
             <Link
               href="/chat"
-              className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               Ask MDE
             </Link>
@@ -69,7 +69,7 @@ export function AppShell({ resolution, children }: AppShellProps) {
                 {email}
               </span>
             ) : null}
-            <SignOutButton />
+            <SignOutButton className="min-h-11" />
           </nav>
         </div>
       </header>

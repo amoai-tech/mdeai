@@ -44,7 +44,7 @@ export function WorkspaceSwitcher({ contexts, active }: WorkspaceSwitcherProps) 
         data-testid="workspace-switcher"
         aria-label={`Switch workspace. Current: ${active?.label ?? "Personal"}`}
         className={cn(
-          "inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-background px-3",
+          "inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background px-3",
           "text-sm font-medium text-foreground transition-colors hover:bg-muted",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         )}

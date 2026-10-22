@@ -112,6 +112,21 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       await expect(page.getByTestId("workspace-switcher-rentals")).toBeVisible();
       await expect(page.getByTestId("workspace-switcher-team")).toBeVisible();
       await expect(page.getByTestId("workspace-switcher-partners")).toHaveCount(0);
+
+      // 390px: no horizontal overflow and every header control is a 44px target.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload();
+      await expect(page.getByTestId("workspace-switcher")).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      expect(overflow).toBe(false);
+      const undersized = await page.evaluate(() =>
+        [...document.querySelectorAll("header a, header button")]
+          .filter((element) => element.getBoundingClientRect().height < 44)
+          .map((element) => element.textContent?.trim() ?? ""),
+      );
+      expect(undersized).toEqual([]);
     } finally {
       await admin.from("user_roles").delete().eq("user_id", identity.userId);
       await admin
@@ -119,6 +134,64 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
         .delete()
         .eq("user_id", identity.userId);
       await deleteThrowawayIdentity(identity);
+    }
+  });
+
+  test("real multi-business choices are scoped to the signed-in user", async ({
+    browser,
+    baseURL,
+  }) => {
+    const origin = baseURL ?? "http://localhost:3001";
+    const owner = await createThrowawayIdentity("san-1575-multipartner");
+    const other = await createThrowawayIdentity("san-1575-outsider");
+    const admin = await getSupabaseAdmin();
+    const createdIds: string[] = [];
+    const ownerContext = await browser.newContext();
+    const otherContext = await browser.newContext();
+
+    try {
+      const { data: partners, error } = await admin.from("partners").insert([
+        { profile_id: owner.userId, type: "venue", status: "draft",
+          settings: { businessName: "SAN1575 First Business" } },
+        { profile_id: owner.userId, type: "developer", status: "draft",
+          settings: { businessName: "SAN1575 Second Business" } },
+        { profile_id: other.userId, type: "venue", status: "draft",
+          settings: { businessName: "SAN1575 Other Business" } },
+      ]).select("id, profile_id");
+      expect(error, error?.message).toBeNull();
+      expect(partners).toHaveLength(3);
+      createdIds.push(...(partners ?? []).map((p) => p.id));
+      const { error: joinError } = await admin.from("partner_members").insert(
+        (partners ?? []).map((p) => ({
+          partner_id: p.id, profile_id: p.profile_id, role: "owner" as const,
+        })),
+      );
+      expect(joinError, joinError?.message).toBeNull();
+
+      const a = await ownerContext.newPage();
+      const b = await otherContext.newPage();
+      await signInAsOnOrigin(a, origin, owner.email);
+      await signInAsOnOrigin(b, origin, other.email);
+      await Promise.all([a.goto("/app"), b.goto("/app")]);
+      await expect(a.getByTestId("workspace-card-partners")).toContainText("Partners");
+      await expect(a.getByTestId("workspace-switcher")).toBeVisible();
+      await a.getByTestId("workspace-switcher").click();
+      await expect(a.getByTestId("workspace-switcher-partners")).toBeVisible();
+      await expect(b.getByTestId("workspace-card-partners"))
+        .toContainText("SAN1575 Other Business");
+      await expect(b.getByText("SAN1575 First Business")).toHaveCount(0);
+      await expect(b.getByText("SAN1575 Second Business")).toHaveCount(0);
+      await b.goto(`/partners/profile?partner=${createdIds[0]}`);
+      await expect(b.getByTestId("partner-profile-load-error")).toBeVisible();
+    } finally {
+      await Promise.allSettled([ownerContext.close(), otherContext.close()]);
+      if (createdIds.length) {
+        const members = await admin.from("partner_members").delete().in("partner_id", createdIds);
+        const partners = await admin.from("partners").delete().in("id", createdIds);
+        expect(members.error, members.error?.message).toBeNull();
+        expect(partners.error, partners.error?.message).toBeNull();
+      }
+      await Promise.all([deleteThrowawayIdentity(owner), deleteThrowawayIdentity(other)]);
     }
   });
 });
