@@ -71,6 +71,12 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       // /app has no chat in Phase 1, so the root concierge provider must not
       // open a runtime connection here.
       expect(copilotRequests).toEqual([]);
+
+      // An expired or cleared session must fail closed, with the exact return path.
+      await page.context().clearCookies();
+      await page.goto("/app");
+      await expect(page).toHaveURL(/\/login\?/);
+      expect(page.url()).toContain(`next=${encodeURIComponent("/app")}`);
     } finally {
       await deleteThrowawayIdentity(identity);
     }
@@ -183,6 +189,15 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       await expect(b.getByText("SAN1575 Second Business")).toHaveCount(0);
       await b.goto(`/partners/profile?partner=${createdIds[0]}`);
       await expect(b.getByTestId("partner-profile-load-error")).toBeVisible();
+
+      // Revoking the membership must remove the destination on the next render.
+      const revoked = await admin
+        .from("partner_members")
+        .delete()
+        .eq("profile_id", owner.userId);
+      expect(revoked.error, revoked.error?.message).toBeNull();
+      await a.goto(`${origin}/app`);
+      await expect(a.getByTestId("workspace-card-partners")).toHaveCount(0);
     } finally {
       await Promise.allSettled([ownerContext.close(), otherContext.close()]);
       if (createdIds.length) {
