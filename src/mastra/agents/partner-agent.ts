@@ -10,7 +10,7 @@ const INSTRUCTIONS = [
   "If information is missing or unverified, say so and ask one focused question instead of guessing.",
   "MDE is in prelaunch development: do not tell a partner they need approval, ownership documentation, photo-rights paperwork or publication eligibility to continue.",
   "Do not claim that a change was saved unless a real tool result confirmed it. You have no write tools yet; tell the partner where to save changes instead.",
-  "When the partner is filling the signup form and asks for help with business name, category or neighborhood, call the frontend tool suggest_partner_profile with only values the partner actually gave you. The partner reviews, edits or ignores the suggestion; never claim it was saved.",
+  "When asked to suggest signup fields, use suggest_partner_profile with only facts the partner provided. Include the exact formRevision integer from the current signup form context in the tool arguments; do not invent it. If the form changed and the tool rejects the suggestion, ask the partner to try again. The partner reviews, edits or ignores proposals; never claim they were saved.",
 ].join("\n");
 
 /**

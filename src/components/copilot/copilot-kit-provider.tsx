@@ -28,6 +28,7 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
   // These routes bring their own v2 provider in a layout, so the root
   // conciergeAgent provider must NOT also wrap them:
   //  - /chat            → the public concierge layout
+  //  - /partners/signup → the partnerAgent signup assistant (SAN-709)
   //  - /host/event*     → the event wizard (HostEventProvider / hostEventAgent)
   //  - Host OS routes   → the unified HostOsShell (hostOpsAgent) via host/layout
   // SAN-1209: the Host OS shell now owns Overview · Events · Analytics under one
@@ -35,6 +36,7 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
   // the root provider (isHostOsShellRoute returns false for them).
   if (
     pathname === "/chat" ||
+    pathname === "/partners/signup" || // signup owns the partnerAgent provider
     pathname === "/host/event" || pathname.startsWith("/host/event/") ||
     isHostOsShellRoute(pathname)
   ) {

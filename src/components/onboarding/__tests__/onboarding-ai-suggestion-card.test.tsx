@@ -54,6 +54,13 @@ function setValue(input: HTMLInputElement, value: string) {
 }
 
 describe("OnboardingAiSuggestionCard (SAN-709)", () => {
+  it("does not persist before explicit form activation", () => {
+    const onAccept = vi.fn();
+    const { container } = mount(onAccept);
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Nothing is saved until");
+  });
+
   it("accepts the proposal without writing anything itself", () => {
     const { container, onAccept } = mount();
     click(container.querySelector('[data-testid="onboarding-suggestion-accept"]'));

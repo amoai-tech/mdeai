@@ -4,21 +4,23 @@ import { useAgentContext, useFrontendTool } from "@copilotkit/react-core/v2";
 import { z } from "zod";
 
 import {
-  parsePartnerProfileSuggestion,
+  isCurrentFormRevision,
+  parseRevisedPartnerSuggestion,
   type PartnerProfileSuggestion,
 } from "@/lib/onboarding/ai-suggestion";
 import type { PartnerSignupAiContext } from "@/lib/onboarding/ai-context";
 
 const suggestionParameters = z.object({
+  formRevision: z.number().int().nonnegative(),
   businessName: z.string().optional(),
   category: z.string().optional(),
   neighborhood: z.string().optional(),
   reason: z.string().optional(),
-});
+}).strict();
 
 type Props = {
   context: PartnerSignupAiContext;
-  onSuggestion: (suggestion: PartnerProfileSuggestion) => void;
+  onSuggestion: (suggestion: PartnerProfileSuggestion, formRevision: number) => void;
 };
 
 /**
@@ -40,18 +42,18 @@ export function OnboardingCopilotBridge({ context, onSuggestion }: Props) {
         "Suggest partner signup fields for the user to review. Use only facts the user provided. Do not save anything.",
       parameters: suggestionParameters,
       handler: async (args) => {
-        const suggestion = parsePartnerProfileSuggestion(args);
-        if (!suggestion) {
-          return {
-            ok: false,
-            reason: "Suggestion did not contain valid profile fields",
-          };
+        if (!isCurrentFormRevision(args.formRevision, context.formRevision)) {
+          return { ok: false, reason: "The signup form changed. Ask for a new suggestion." };
         }
-        onSuggestion(suggestion);
-        return { ok: true };
+        const suggestion = parseRevisedPartnerSuggestion(args, context.formRevision);
+        if (!suggestion) {
+          return { ok: false, reason: "Suggestion did not contain valid profile fields" };
+        }
+        onSuggestion(suggestion, args.formRevision);
+        return { ok: true, state: "awaiting_user_review", saved: false };
       },
     },
-    [onSuggestion],
+    [onSuggestion, context.formRevision],
   );
 
   return null;
