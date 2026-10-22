@@ -32,6 +32,13 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
     const admin = await getSupabaseAdmin();
 
     try {
+      // A signed-in newcomer can complete setup entirely within the /app route.
+      await signInAsOnOrigin(page, origin, identity.email);
+      await page.goto("/app/rentals");
+      await expect(page).toHaveURL(/\/app\/rentals\/onboarding$/);
+      await expect(page.getByTestId("rentals-onboarding")).toBeVisible();
+      await expect(page.getByTestId("ro-ack")).toHaveCount(0);
+
       const landlord = await admin.from("landlord_profiles").insert({
         user_id: identity.userId,
         display_name: "SAN-1578 QA Landlord",

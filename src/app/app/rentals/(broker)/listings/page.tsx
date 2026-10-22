@@ -25,7 +25,7 @@ async function ListingsContent() {
       <RentalsListingsShell
         initialListings={result.ok ? result.listings : []}
         loadError={result.ok ? null : result.message}
-        onboardingHref="/host/rentals/onboarding"
+        onboardingHref="/app/rentals/onboarding"
         homeHref="/app/rentals"
       />
     </main>

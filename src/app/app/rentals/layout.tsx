@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BrokerRentalsGateError } from "@/components/host/rentals/broker-rentals-gate-error";
 import { getBrokerContext } from "@/lib/rentals/get-broker-context";
+import { getBrokerRequestPathname } from "@/lib/rentals/get-broker-request-path";
 
 export const metadata = {
   title: "Rentals · mdeai",
@@ -9,9 +10,8 @@ export const metadata = {
 /**
  * SAN-1578 — broker gate for the /app route family.
  *
- * Mirrors the legacy `(broker)` layout: auth first, then a broker profile.
- * The page bodies are reused, not copied; onboarding still lives at the legacy
- * URL until its /app adapter lands.
+ * Authenticate this route family. A nested (broker) layout checks for a
+ * profile so the onboarding route remains available to new brokers.
  */
 // skipcq: JS-0067 - Next.js App Router layout export
 export default async function AppRentalsLayout({
@@ -22,16 +22,13 @@ export default async function AppRentalsLayout({
   const ctx = await getBrokerContext();
 
   if (ctx.state === "unauthorized") {
-    redirect("/login?next=/app/rentals");
+    const nextPath = await getBrokerRequestPathname("/app/rentals");
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
   if (ctx.state === "error") {
     console.error("[app/rentals] broker context error:", ctx.message);
     return <BrokerRentalsGateError />;
-  }
-
-  if (!ctx.hasBrokerProfile) {
-    redirect("/host/rentals/onboarding");
   }
 
   return children;
