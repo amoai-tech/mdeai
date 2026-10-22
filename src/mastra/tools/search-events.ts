@@ -239,16 +239,30 @@ export async function searchEvents(
   query: EventQuery,
 ): Promise<EventSearchResult> {
   const limit = query.limit ?? 5;
-  // Defer the intelligence module until our event helper exports are initialized.
-  const { searchEventsIntelligent, resolveEventCategoryForQuery } = await import('../lib/intelligence-event-search');
-  const category = resolveEventCategoryForQuery(query.category, query.queryText);
+  // Structured searches need no intelligence module, except the nightlife chip
+  // which deliberately clears its category when no text is present.
+  let intelligence: typeof import('../lib/intelligence-event-search') | null = null;
+  let category = query.category;
+  if (query.queryText?.trim() || query.category === 'nightlife') {
+    try {
+      // Keep the structured PostgREST path available if optional intelligence
+      // cannot initialize (for example from a failed lazy import).
+      intelligence = await import('../lib/intelligence-event-search');
+      category = intelligence.resolveEventCategoryForQuery(query.category, query.queryText);
+    } catch (err) {
+      console.warn(
+        '[search-events] intelligence module unavailable, using structured search:',
+        err instanceof Error ? err.name : 'unknown',
+      );
+    }
+  }
   const normalizedQuery = category === query.category ? query : { ...query, category };
 
-  if (normalizedQuery.queryText?.trim()) {
+  if (normalizedQuery.queryText?.trim() && intelligence) {
     const queryText = normalizedQuery.queryText.trim();
     try {
       const started = Date.now();
-      const intel = await searchEventsIntelligent(normalizedQuery);
+      const intel = await intelligence.searchEventsIntelligent(normalizedQuery);
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText,
