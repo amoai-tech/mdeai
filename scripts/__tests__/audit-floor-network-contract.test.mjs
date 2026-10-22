@@ -7,20 +7,11 @@ import test from "node:test";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const { scripts } = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
-test("audit remains a mandatory critical-vulnerability gate", () => {
-  const audit = scripts["audit:floor"];
-  assert.match(audit, /^npm audit --audit-level=critical(?: |$)/);
-  for (const forbidden of [/--no-audit/, /--offline/, /--audit-level=(?:high|moderate|low|none)/, /\|\|\s*true/, /;\s*exit\s+0/, /--force/]) {
-    assert.doesNotMatch(audit, forbidden);
-  }
-});
-
-test("npm audit bounds its registry wait without disabling failure", () => {
-  const audit = scripts["audit:floor"];
-  const timeout = Number(audit.match(/--fetch-timeout=(\d+)/)?.[1]);
-  const retries = Number(audit.match(/--fetch-retries=(\d+)/)?.[1]);
-  assert.ok(timeout > 0 && timeout <= 30000, "advisory request must not wait the default five minutes");
-  assert.ok(Number.isInteger(retries) && retries >= 0 && retries <= 2, "retry budget must be explicit and bounded");
+test("audit uses exactly the fail-closed critical threshold and bounded npm fetch settings", () => {
+  assert.equal(
+    scripts["audit:floor"],
+    "npm audit --audit-level=critical --fetch-timeout=20000 --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=3000",
+  );
 });
 
 test("security audit runs before expensive floor checks exactly once", () => {
