@@ -78,7 +78,7 @@ test("Git fetch downloads only origin/main with a bounded timeout", async () => 
   const calls = [];
   const run = (file, args, timeout) => {
     calls.push({ file, args, timeout });
-    return args[0] === "rev-parse" ? A + "\\n" : "";
+    return args[0] === "rev-parse" ? A : "";
   };
   assert.equal(await resolveRemoteMain(run), A);
   assert.deepEqual(calls[0], {
