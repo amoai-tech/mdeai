@@ -56,8 +56,11 @@ export function classify({ main, production, claimed, productionIsAncestor = fal
   const mainSha = normalizeSha(main);
   const prodSha = normalizeSha(production);
 
-  if (!mainSha || !prodSha) return "UNKNOWN";
+  // A verified production SHA is enough to disprove a claim, even if GitHub
+  // main could not be fetched or the two commit histories are unrelated.
+  if (!prodSha) return "UNKNOWN";
   if (claimed !== undefined && claimed !== null && !claimMatches(claimed, prodSha)) return "STALE_CLAIM";
+  if (!mainSha) return "UNKNOWN";
   if (mainSha === prodSha) return "CURRENT";
   return productionIsAncestor ? "DEPLOYMENT_PENDING" : "UNKNOWN";
 }
