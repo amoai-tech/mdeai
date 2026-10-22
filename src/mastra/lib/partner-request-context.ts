@@ -56,7 +56,11 @@ export async function loadPartnerRuntimeContext(
     .select("partner_id, role")
     .eq("profile_id", userId);
 
-  if (membershipError || !memberships?.length) return null;
+  if (membershipError || !memberships) {
+    // Database outages must not masquerade as an unselected business.
+    throw new Error("partner_membership_lookup_failed");
+  }
+  if (memberships.length === 0) return null;
 
   const allowed = memberships.filter(
     (row): row is { partner_id: string; role: string } =>
@@ -77,7 +81,11 @@ export async function loadPartnerRuntimeContext(
     .select("id, type, status, settings")
     .eq("id", membership.partner_id)
     .maybeSingle();
-  if (partnerError || !partner) return null;
+  if (partnerError || !partner) {
+    // A selected authorized membership with no readable partner is inconsistent,
+    // not a reason to invite the user to sign up again.
+    throw new Error("partner_profile_lookup_failed");
+  }
 
   const settings = (partner.settings ?? {}) as Record<string, unknown>;
   return {

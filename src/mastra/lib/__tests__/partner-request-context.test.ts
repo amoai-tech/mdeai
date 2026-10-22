@@ -122,15 +122,34 @@ describe("partner request context", () => {
     ).resolves.toBeNull();
   });
 
-  it("returns null for no membership or a membership query failure", async () => {
+  it("returns null only when no membership exists", async () => {
     await expect(
       loadPartnerRuntimeContext(mockClient([], null) as never, "user-1"),
     ).resolves.toBeNull();
+  });
+
+  it("treats membership query failures and unavailable results as errors", async () => {
     await expect(
       loadPartnerRuntimeContext(
         mockClient(null, null, { membership: { code: "XX000" } }) as never,
         "user-1",
       ),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("partner_membership_lookup_failed");
+    await expect(
+      loadPartnerRuntimeContext(mockClient(null, null) as never, "user-1"),
+    ).rejects.toThrow("partner_membership_lookup_failed");
+  });
+
+  it("distinguishes a missing partner row and partner query failure from no membership", async () => {
+    const memberships = [{ partner_id: "partner-1", role: "owner" }];
+    await expect(
+      loadPartnerRuntimeContext(mockClient(memberships, null) as never, "user-1"),
+    ).rejects.toThrow("partner_profile_lookup_failed");
+    await expect(
+      loadPartnerRuntimeContext(
+        mockClient(memberships, null, { partner: { code: "XX000" } }) as never,
+        "user-1",
+      ),
+    ).rejects.toThrow("partner_profile_lookup_failed");
   });
 });
