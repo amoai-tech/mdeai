@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +27,12 @@ function fixtureRoot(files) {
 }
 
 const existsIn = (root) => (path) => existsSync(join(root, path));
+
+function addSupabaseReviewSymlink(root, target = "../../../../.claude/skills/supabase/references/review.md") {
+  const link = join(root, "scripts/pr-agent/skills/supabase/review.md");
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(target, link);
+}
 
 describe("SAN-1312 PR-Agent skill path validation", () => {
   it("never selects a specialist file that the pinned PR-Agent loader ignores", () => {
@@ -72,10 +78,51 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
     const root = fixtureRoot([
       ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
-      "scripts/pr-agent/skills/supabase/review.md",
+      ".claude/skills/supabase/references/review.md",
     ]);
+    addSupabaseReviewSymlink(root);
     const { paths } = selectSkills(SUPABASE_CHANGE);
-    assert.doesNotThrow(() => assertSelectedPathsExist(paths, existsIn(root)));
+    assert.doesNotThrow(() => assertSelectedPathsExist(paths, existsIn(root), root));
+  });
+
+  it("rejects a review symlink to /proc/self/environ even though it exists", () => {
+    const root = fixtureRoot([
+      ".claude/skills/code-review/SKILL.md",
+      "scripts/pr-agent/skills/supabase/SKILL.md",
+    ]);
+    addSupabaseReviewSymlink(root, "/proc/self/environ");
+    assert.throws(
+      () => assertSelectedPathsExist(selectSkills(SUPABASE_CHANGE).paths, existsIn(root), root),
+      /untrusted PR-Agent review resource target/,
+    );
+  });
+
+  it("rejects a review symlink into the wrong domain inside the checkout", () => {
+    const root = fixtureRoot([
+      ".claude/skills/code-review/SKILL.md",
+      "scripts/pr-agent/skills/supabase/SKILL.md",
+      ".claude/skills/mastra/references/review.md",
+    ]);
+    addSupabaseReviewSymlink(root, "../../../../.claude/skills/mastra/references/review.md");
+    assert.throws(
+      () => assertSelectedPathsExist(selectSkills(SUPABASE_CHANGE).paths, existsIn(root), root),
+      /untrusted PR-Agent review resource target/,
+    );
+  });
+
+  it("rejects an escaped symlink at the canonical review file itself", () => {
+    const root = fixtureRoot([
+      ".claude/skills/code-review/SKILL.md",
+      "scripts/pr-agent/skills/supabase/SKILL.md",
+    ]);
+    const canonical = join(root, ".claude/skills/supabase/references/review.md");
+    mkdirSync(dirname(canonical), { recursive: true });
+    symlinkSync("/proc/self/environ", canonical);
+    addSupabaseReviewSymlink(root);
+    assert.throws(
+      () => assertSelectedPathsExist(selectSkills(SUPABASE_CHANGE).paths, existsIn(root), root),
+      /untrusted PR-Agent review resource target/,
+    );
   });
 
   it("rejects bare review.md paths even when they exist", () => {
@@ -99,7 +146,17 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
       assert.match(readFileSync(entrypoint, "utf8"), /^---\nname: mde-pr-review-[a-z-]+\ndescription: [^\n]+\n---\n/);
       assert.equal(lstatSync(resource).isSymbolicLink(), true, name + " review is not copied");
       assert.equal(realpathSync(resource), realpathSync(canonical), name + " resolves to canonical reference");
-      assert.match(readFileSync(resource, "utf8"), /Review invariants/i);
+      const review = readFileSync(resource, "utf8");
+      const invariant = {
+        copilotkit: "Preserve same-origin",
+        mastra: "RequestContext carries request metadata",
+        supabase: "User A must not read",
+        maps: "Do not invent or transform ungrounded coordinates",
+        stripe: "duplicate delivery must not duplicate tickets",
+        nextjs: "Async Request APIs are async-only",
+      }[name];
+      assert.ok(invariant, name + " has a domain-specific expectation");
+      assert.ok(review.includes(invariant), name + " lost substantive guidance: " + invariant);
     }
   });
 
