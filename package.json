@@ -109,6 +109,7 @@
     "push:migration": "npm run preflight:migration && npm run migration:dry-run && node scripts/confirm-migration-push.mjs && npx supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "verify:migrations": "node scripts/verify-production-migrations.mjs",
     "check:release-gates": "node --test scripts/__tests__/*.test.mjs",
+    "check:pr-agent-pinned-loader": "node --test scripts/__tests__/pr-agent-pinned-loader.test.mjs",
     "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs",
     "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts e2e/chat-result-order.spec.ts e2e/chat-workspace-layout.spec.ts e2e/chat-thread-history.spec.ts e2e/maps-layout-mobile.spec.ts e2e/viewing-modal-keyboard.spec.ts e2e/mobile-header.spec.ts e2e/browse-map-close-touch.spec.ts e2e/chat-virtualization.spec.ts e2e/san-1524-contests.spec.ts --project=local-chromium --workers=1",
     "test:e2e:mobile-composer": "playwright test e2e/screens/MOB-CK-001-mobile-composer.spec.ts --project=local-chromium --workers=1",
