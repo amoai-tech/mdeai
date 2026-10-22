@@ -156,10 +156,11 @@ export async function activatePartner(
     partnerId = existing.id;
     // A retry with reviewed fields updates the existing partner instead of
     // creating a second row; merge settings so unrelated keys are preserved.
-    if (input.settings && Object.keys(input.settings).length > 0) {
+    const acceptedSettings = sanitizePartnerSettings(input.settings);
+    if (Object.keys(acceptedSettings).length > 0) {
       const mergedSettings = {
         ...((existing.settings ?? {}) as Record<string, unknown>),
-        ...input.settings,
+        ...acceptedSettings,
       };
       const { error: settingsError } = await db
         .from("partners")

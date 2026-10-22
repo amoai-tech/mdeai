@@ -68,7 +68,7 @@ export function BusinessUrlImportCard({ onApply }: Props) {
         ...(draft.neighborhood ? { neighborhood: draft.neighborhood } : {}),
         ...(draft.website ? { website: draft.website } : {}),
         ...(draft.description ? { description: draft.description } : {}),
-        reason: "Read from " + (draft.sources[0] ?? "the website"),
+        reason: "Suggested from the website — review before saving.",
       }
     : null;
 
@@ -85,7 +85,7 @@ export function BusinessUrlImportCard({ onApply }: Props) {
         </p>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Paste a public business website. We show only what the page states.
+        Paste a public website to suggest details. Review them before saving.
       </p>
       <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={findDetails}>
         <div className="flex-1">
@@ -129,9 +129,20 @@ export function BusinessUrlImportCard({ onApply }: Props) {
             onIgnore={() => setDraft(null)}
           />
           {draft?.sources.length ? (
-            <p className="break-all text-xs text-muted-foreground">
-              Source: {draft.sources.join(", ")}
-            </p>
+            <div className="text-xs text-muted-foreground">
+              <p>Successfully retrieved page:</p>
+              {draft.sources.map((source) => (
+                <a
+                  key={source}
+                  href={source}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block break-all underline underline-offset-2"
+                >
+                  {source}
+                </a>
+              ))}
+            </div>
           ) : null}
         </div>
       ) : null}
