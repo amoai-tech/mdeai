@@ -1,59 +1,68 @@
 ---
 name: openmuse
 description: >-
-  Use when adapting OpenMuse-inspired MDE AI conversation experiences: chat
-  composer send/stop, draft retention, thread/queue behavior, streaming status,
-  grounded result cards, chat-synchronized maps, or mobile chat layouts.
-  Guide the smallest change to existing CopilotKit v2 UI, not an OpenMuse install.
+  Use when improving MDE's existing AI Concierge chat, OpenMuse-style composer,
+  Stop/Retry, queued messages, genuine tool progress, context-aware answers,
+  grounded cards/map pins, search race recovery, or responsive chat/mobile UX.
+  Adapt CopilotKit v2 patterns, not the OpenMuse app or a second chatbot.
 ---
 
-# OpenMuse patterns for MDE
+# OpenMuse — reliable MDE Concierge interaction
 
-## Ownership and limits
+## Owner and boundaries
 
-Guide **chat/search/map/mobile interaction patterns** only. A known CopilotKit API
-or transport bug belongs to [copilotkit](../copilotkit/SKILL.md); agent tools,
-memory and workflows belong to [mastra](../mastra/SKILL.md). Domain policies and
-SQL belong to [real-estate](../real-estate/SKILL.md),
-[maps](../maps/SKILL.md), or [supabase](../supabase/SKILL.md).
-An explicit product issue owns feature implementation; this skill does not
-authorize unrelated feature changes.
+Own **the user-visible conversation/search/map experience**. The user sees one
+MDE AI Concierge, while authorized Mastra specialist agents/tools may operate
+behind it. CopilotKit runtime/transport belongs to [copilotkit](../copilotkit/SKILL.md),
+agents/memory to [mastra](../mastra/SKILL.md), rental data to
+[real-estate](../real-estate/SKILL.md), and DB/RLS to
+[supabase](../supabase/SKILL.md). Do not duplicate the runtime, provider,
+thread store, search engine, maps, or domain workflows.
 
-MDE stays Next.js + CopilotKit v2/AG-UI + Mastra + Supabase. **Do not install
-OpenMuse**, copy React Native components, add a parallel runtime/thread store,
-or fabricate apartment coordinates, prices, sources, photos, or availability.
+Phase A: never add listing eligibility, approval, ownership, photo-rights or
+publishing prerequisites. Keep source attribution, server-side authorization,
+private thread isolation and truthful coordinates, prices and availability.
 
-## Procedure
+## Implementation procedure
 
-1. Verify the current issue, checkout/PR base and actual running user path.
-   Read MDE's current chat, card and map implementations before comparing code.
-2. Read [OpenMuse source map](references/source-map.md) for the **specific**
-   behavior and exact upstream file. Compare its reviewed SHA with upstream;
-   never treat floating `main` as installed-version proof.
-3. Choose **reuse → configure → adapt**. Preserve the existing same-origin
-   `/api/copilotkit` route, CopilotKit v2 hooks, Mastra tool-map names,
-   saved threads, rate limits and user-context/tenant boundaries.
-4. Model source-validated loading, running/stopped, empty, error and success
-   cards. Keep unsent draft on stop/retry, explain queued vs durable work, and
-   place map pins only for actually grounded coordinates.
-5. Make the smallest change *only if the requested task owns that feature*.
-   Test stream/stop/retry/refresh, source/card/map consistency and 390px mobile.
-6. Report files changed, actual observed result, errors, tests and missing
-   evidence. Never claim that reading the upstream example proves MDE works.
+1. **Verify the real path.** Read the SAN task, active PR base, installed
+   CopilotKit v2/AG-UI types and current MDE chat, fast-path hooks, tool renders
+   and map. Compare only the relevant pinned upstream behavior using the
+   [source map](references/source-map.md).
+2. **One UI, correctly scoped context.** Reuse the existing chat-center-panel
+   and canonical /api/copilotkit runtime. Keep user/thread identity server-owned;
+   selected-page IDs/filters are untrusted hints. Selecting A, switching to B,
+   closing the page or logging out must not leak old context.
+3. **Actual progress, not a timer.** Show running/completed/failed/aborted
+   stages only from real run/tool lifecycle events or returned data. Correlate
+   thread + run + tool call; elapsed time may animate or dismiss a label,
+   never assert completed steps or counts. If only coarse states exist, show
+   "Searching…" instead of invented substeps. Owner: SAN-609.
+4. **Never lose a second question.** When a fast-path search is busy, queue the
+   next message, visibly keep it for retry, or return unhandled for Concierge
+   fallback. Never claim "handled" while dropping it. Distinguish in-memory
+   follow-up queues from durable server tasks; Stop preserves unsent drafts
+   and does not imply external work is canceled. Owners: SAN-1559 / SAN-1407.
+5. **Only current results own the map.** Old runs, prior chat's tool calls
+   or virtualized result re-renders must not override newer selected results.
+   Render pins only for verified coordinates. Owner: SAN-1429 for tool render
+   effects and SAN-1407 for ordering.
+6. **Smallest change and proof.** Reuse → configure → model upstream UX →
+   minimal adaptation; never copy React Native. Test rapid overlapping
+   searches (older finishes last), page A→B→clear, long chat virtualization,
+   Stop/Retry, source/card/map agreement, disconnect, keyboard and 390px.
+   Run focused tests, applicable lint/typecheck and exact-head floor.
+   Report observed behavior, failed checks and exact SHA.
 
 ## Example
 
-"Stop clears my apartment-search draft on mobile" → inspect the existing MDE
-composer and thread state; model OpenMuse's stop/preserved-draft behavior;
-fix only the real failing boundary; verify in a browser at 390px.
+"Find Laureles apartments" then "Under COP 4M" before results return:
+both requests remain accounted for. The current map cannot be replaced by a
+stale result; the progress strip cannot claim ranking finished without a
+real ranking-tool completion.
 
-"Create a PostGIS distance index" → **not this skill**; use supabase/maps.
-
-## References and checks
-
-- [Source-to-destination map](references/source-map.md), loaded only for
-  relevant OpenMuse behavior.
+- [Source-to-destination map](references/source-map.md) — pinned source,
+  behavior, MDE owner and verification.
 - [Behavior probes](evals/evals.json) and
-  [Trigger / near-miss probes](evals/trigger-evals.json).
-- Confirm results via targeted tests; `npm run check:skills` only proves
-  skill layout, **not** frontend behavior or correct automatic triggering.
+  [Trigger/near-miss probes](evals/trigger-evals.json).
+- Skill routing/layout tests are not evidence MDE chat works.
