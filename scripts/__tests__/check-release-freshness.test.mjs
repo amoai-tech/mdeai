@@ -70,6 +70,8 @@ test("--claimed requires a valid SHA operand and fails before I/O", () => {
 });
 
 test("unverifiable inputs are UNKNOWN and fail", () => {
+  assert.equal(classify({ main: null, production: A, claimed: B }), "STALE_CLAIM");
+  assert.equal(classify({ main: null, production: A, claimed: A }), "UNKNOWN");
   assert.equal(classify({ main: null, production: A }), "UNKNOWN");
   assert.equal(classify({ main: A, production: null }), "UNKNOWN");
   assert.equal(exitCodeFor("UNKNOWN"), 1);
