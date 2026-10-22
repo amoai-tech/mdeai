@@ -125,8 +125,12 @@ async function main(argv) {
     problem = (problem ? problem + "; " : "") + "production: " + (error?.message ?? String(error));
   }
 
+  // A wrong claim is conclusive whenever production's SHA is verified. Do not
+  // hide it behind a separate Git history failure or unnecessary ancestry lookup.
+  const staleClaim = normalizeSha(production) !== null &&
+    claimed !== undefined && !claimMatches(claimed, production);
   let productionIsAncestor = false;
-  if (!problem && normalizeSha(main_) !== normalizeSha(production)) {
+  if (!problem && !staleClaim && normalizeSha(main_) !== normalizeSha(production)) {
     try {
       // Only a verified ancestor relationship establishes ordinary deployment lag.
       run("git", ["merge-base", "--is-ancestor", production, main_]);
@@ -138,7 +142,7 @@ async function main(argv) {
     }
   }
 
-  const status = problem ? "UNKNOWN" : classify({ main: main_, production, claimed, productionIsAncestor });
+  const status = classify({ main: main_, production, claimed, productionIsAncestor });
 
   if (asJson) {
     console.log(
