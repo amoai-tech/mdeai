@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
@@ -200,21 +200,8 @@ const RentalPriceSidebar = ({
             {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
-        {!isDevelopmentPreview ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            data-testid="rental-detail-ask-cta"
-            disabled={!isInteractive}
-            onClick={onRequest}
-          >
-            Ask a question
-          </Button>
-        ) : null}
-        <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
-          <Heart className="size-4" aria-hidden /> Save
-        </Button>
+        {/* SAN-479: do not show an inert Save or an “Ask” button that opens a viewing form.
+            Restore them only when their existing owning workflows are actually wired. */}
         <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
@@ -244,7 +231,7 @@ const RentalMobileCta = ({
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
-    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
+    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
   >
     <div className="mx-auto flex max-w-6xl items-center gap-2">
       <div className="min-w-0 flex-1">
