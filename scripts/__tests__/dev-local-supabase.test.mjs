@@ -70,6 +70,29 @@ test("refuses a hosted PostgreSQL pooler even when local API is configured", () 
   assert.match(result.stderr, /refusing a non-local/);
 });
 
+test("rejects a malformed DB URL without exposing its password", () => {
+  const marker = "DO_NOT_LOG_THIS_TEST_PASSWORD";
+  const malformed = `postgresql://postgres:${marker}@127.0.0.1:invalid/postgres`;
+  const result = invoke(localCli.replace(
+    "postgresql://postgres:postgres@127.0.0.1:54622/postgres",
+    malformed,
+  ));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /refusing a non-local or wrong-port/);
+  assert.doesNotMatch(result.stderr + result.stdout, new RegExp(marker));
+});
+
+test("rejects a malformed API URL without printing the supplied value", () => {
+  const marker = "DO_NOT_LOG_API_TEST_MARKER";
+  const result = invoke(localCli.replace(
+    "http://127.0.0.1:54621",
+    `http://${marker}#broken:`,
+  ));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /refusing a non-local or wrong-port/);
+  assert.doesNotMatch(result.stderr + result.stdout, new RegExp(marker));
+});
+
 test("refuses missing service credentials", () => {
   const result = invoke(localCli.replace('SERVICE_ROLE_KEY="qa-private"', ""));
   assert.notEqual(result.status, 0);
