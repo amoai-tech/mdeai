@@ -20,7 +20,13 @@
 export function isExpectedGuestStartup401(
   event: unknown,
   isAuthenticated: boolean,
+  sessionLoading = false,
 ): boolean {
+  // An unresolved session must never suppress an error: on a cold route the
+  // fetch fails before getUser() resolves, and a real run failure arriving in
+  // that window would disappear. Report until auth settles; only then can a
+  // 401 be confidently called "expected guest".
+  if (sessionLoading) return false;
   if (isAuthenticated || !event || typeof event !== "object") return false;
   const candidate = event as { code?: unknown; context?: unknown; error?: unknown };
   if (candidate.code !== "runtime_info_fetch_failed") return false;

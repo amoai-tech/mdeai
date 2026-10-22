@@ -67,6 +67,15 @@ describe("guest startup authorization classification", () => {
     expect(isExpectedGuestStartup401(probe401, true)).toBe(false);
   });
 
+  it("never suppresses while the session is still resolving", () => {
+    // A cold route resolves auth after the probe fails; suppressing there would
+    // hide a real run failure behind the guest path.
+    expect(isExpectedGuestStartup401(probe401, false, true)).toBe(false);
+    expect(isExpectedGuestStartup401({ code: "agent_run_failed" }, false, true)).toBe(false);
+    expect(isExpectedGuestStartup401(probe401, true, true)).toBe(false);
+    expect(isExpectedGuestStartup401(probe401, false, false)).toBe(true);
+  });
+
   it("retains real run/auth/network failures and unknown error shapes", () => {
     expect(isExpectedGuestStartup401({ code: "agent_run_failed", context: { runtimeStatus: 401 } }, false)).toBe(false);
     expect(isExpectedGuestStartup401({ code: "runtime_info_fetch_failed", context: { runtimeStatus: 500 } }, false)).toBe(false);

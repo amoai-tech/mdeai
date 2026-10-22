@@ -20,7 +20,6 @@ for (const width of [390, 768, 1440]) {
     expect(pageResponse?.status()).toBe(200);
     const response = await infoResponse;
     expect(response.status()).toBe(401);
-    await expect(page.getByTestId("concierge-error-notice")).toHaveCount(0);
     await expect(page.locator("textarea").first()).toBeVisible();
 
     // Let React process the settled runtime probe without introducing a
@@ -28,6 +27,8 @@ for (const width of [390, 768, 1440]) {
     await page.evaluate(() => new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     }));
+    // One assertion, after the settle: Playwright re-polls it for its default
+    // timeout, so a notice that appears and then clears is still caught.
     await expect(page.getByTestId("concierge-error-notice")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)).toBe(false);
     await page.screenshot({ path: testInfo.outputPath(`guest-chat-${width}.png`) });

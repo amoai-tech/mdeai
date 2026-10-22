@@ -188,7 +188,7 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
-  const { user } = useSession();
+  const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
@@ -206,7 +206,7 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
       onError={(event) => {
-        if (isExpectedGuestStartup401(event, Boolean(user))) return;
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
         reportConciergeError(threadId);
       }}
     >
