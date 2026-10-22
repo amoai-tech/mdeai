@@ -19,8 +19,12 @@ for (const route of ["/rentals", "/restaurants"]) {
     { width: 390, height: 844 },
   ]) {
     test(`${route} mobile map keeps Close out of the map viewport at ${viewport.width}px`, async ({ page }) => {
+      // The first /rentals visit in a cold Next.js dev shard compiles the entire
+      // server route and waits on its data source. That cost is unrelated to
+      // this map-sheet geometry check; keep the UI assertions unchanged.
+      test.slow(route === "/rentals", "Cold /rentals compilation in the deterministic CI shard");
       await page.setViewportSize(viewport);
-      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await page.goto(route, { waitUntil: "commit" });
 
       const trigger = page.getByTestId("browse-map-fab");
       await waitUntilInteractive(trigger, "the Map button");
