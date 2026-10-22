@@ -246,6 +246,25 @@ export function EventPublishApprovalPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         <EventCard {...preview} />
+        <div
+          data-testid="host-event-review-details"
+          className="space-y-2 rounded-md border border-border bg-muted/20 p-3 text-sm"
+        >
+          <p className="font-medium">Details that will be published</p>
+          <p>Capacity: {draft.capacity} people</p>
+          {draft.description.trim() ? <p>Description: {draft.description}</p> : null}
+          {draft.ticketTiers.length > 0 ? (
+            <ul aria-label="Ticket tiers" className="list-inside list-disc space-y-1">
+              {draft.ticketTiers.map((tier, index) => (
+                <li key={index}>
+                  {tier.name}: {tier.priceCop.toLocaleString("en-US")} COP · {tier.quantity} tickets
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Ticket price: {draft.priceMinCop.toLocaleString("en-US")} COP</p>
+          )}
+        </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {receipt ? (
           <div

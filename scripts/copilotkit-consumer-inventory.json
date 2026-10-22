@@ -164,6 +164,11 @@
       "note": "Reads package.json dependency names as data."
     },
     {
+      "file": "src/__tests__/host-event-publish-bridge.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks CopilotKit v2 HITL to prove the registered publish renderer reads the latest edited HostEventForm rather than stale first-render state."
+    },
+    {
       "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
