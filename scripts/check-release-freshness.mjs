@@ -52,13 +52,14 @@ export function claimMatches(claimed, served) {
  * STALE_CLAIM        a report claims a SHA production does not serve
  * UNKNOWN            GitHub, the network or the payload could not be verified
  */
-export function classify({ main, production, claimed }) {
+export function classify({ main, production, claimed, productionIsAncestor = false }) {
   const mainSha = normalizeSha(main);
   const prodSha = normalizeSha(production);
 
   if (!mainSha || !prodSha) return "UNKNOWN";
   if (claimed !== undefined && claimed !== null && !claimMatches(claimed, prodSha)) return "STALE_CLAIM";
-  return mainSha === prodSha ? "CURRENT" : "DEPLOYMENT_PENDING";
+  if (mainSha === prodSha) return "CURRENT";
+  return productionIsAncestor ? "DEPLOYMENT_PENDING" : "UNKNOWN";
 }
 
 /** Throws unless the payload carries a usable commit SHA. Invalid JSON is a failure, not a pass. */
@@ -80,6 +81,18 @@ export function exitCodeFor(status, { strict = false } = {}) {
   return 1;
 }
 
+/** Validate a claim before performing any Git or production network I/O. */
+export function parseArgs(argv) {
+  const asJson = argv.includes("--json");
+  const strict = argv.includes("--strict");
+  const claimedIndex = argv.indexOf("--claimed");
+  const claimed = claimedIndex < 0 ? undefined : argv[claimedIndex + 1];
+  if (claimedIndex >= 0 && (typeof claimed !== "string" || !/^[0-9a-f]{7,40}$/i.test(claimed))) {
+    throw new Error("--claimed requires a valid 7–40 character hexadecimal commit SHA");
+  }
+  return { asJson, strict, claimed };
+}
+
 async function resolveRemoteMain(run) {
   run("git", ["fetch", "origin", "--quiet"]);
   return run("git", ["rev-parse", "origin/main"]).trim();
@@ -87,11 +100,8 @@ async function resolveRemoteMain(run) {
 
 async function main(argv) {
   const { execFileSync } = await import("node:child_process");
-  const run = (file, args) => execFileSync(file, args, { encoding: "utf8" });
-  const asJson = argv.includes("--json");
-  const strict = argv.includes("--strict");
-  const claimedIndex = argv.indexOf("--claimed");
-  const claimed = claimedIndex >= 0 ? argv[claimedIndex + 1] : undefined;
+  const { asJson, strict, claimed } = parseArgs(argv);
+  const run = (file, args) => execFileSync(file, args, { encoding: "utf8", timeout: 10_000 });
   const baseUrl = process.env.MDE_PRODUCTION_URL ?? "https://www.mdeai.co";
 
   let main_ = null;
@@ -115,7 +125,20 @@ async function main(argv) {
     problem = (problem ? problem + "; " : "") + "production: " + (error?.message ?? String(error));
   }
 
-  const status = problem ? "UNKNOWN" : classify({ main: main_, production, claimed });
+  let productionIsAncestor = false;
+  if (!problem && normalizeSha(main_) !== normalizeSha(production)) {
+    try {
+      // Only a verified ancestor relationship establishes ordinary deployment lag.
+      run("git", ["merge-base", "--is-ancestor", production, main_]);
+      productionIsAncestor = true;
+    } catch (error) {
+      problem = error?.status === 1
+        ? "production is not an ancestor of origin/main"
+        : "could not verify production commit ancestry";
+    }
+  }
+
+  const status = problem ? "UNKNOWN" : classify({ main: main_, production, claimed, productionIsAncestor });
 
   if (asJson) {
     console.log(

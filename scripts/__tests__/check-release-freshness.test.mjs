@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   claimMatches,
   classify,
   exitCodeFor,
   normalizeSha,
+  parseArgs,
   readProductionSha,
   shortSha,
 } from "../check-release-freshness.mjs";
@@ -30,7 +33,7 @@ test("main and production agreeing is CURRENT", () => {
 });
 
 test("a newer main with an older production is DEPLOYMENT_PENDING, not a failure", () => {
-  assert.equal(classify({ main: A, production: B }), "DEPLOYMENT_PENDING");
+  assert.equal(classify({ main: A, production: B, productionIsAncestor: true }), "DEPLOYMENT_PENDING");
   assert.equal(exitCodeFor("DEPLOYMENT_PENDING"), 0);
   assert.equal(exitCodeFor("DEPLOYMENT_PENDING", { strict: true }), 1);
 });
@@ -42,7 +45,24 @@ test("a claim production does not serve is STALE_CLAIM", () => {
 
 test("a claim that matches production is accepted", () => {
   assert.equal(classify({ main: A, production: A, claimed: A }), "CURRENT");
-  assert.equal(classify({ main: A, production: B, claimed: B }), "DEPLOYMENT_PENDING");
+  assert.equal(classify({ main: A, production: B, claimed: B, productionIsAncestor: true }), "DEPLOYMENT_PENDING");
+});
+
+test("a differing production SHA is not called normal deployment lag without verified ancestry", () => {
+  assert.equal(classify({ main: A, production: B }), "UNKNOWN");
+  assert.equal(classify({ main: A, production: B, productionIsAncestor: false }), "UNKNOWN");
+  assert.equal(classify({ main: A, production: B, productionIsAncestor: true }), "DEPLOYMENT_PENDING");
+  assert.equal(exitCodeFor("UNKNOWN"), 1);
+});
+
+test("--claimed requires a valid SHA operand and fails before I/O", () => {
+  for (const args of [["--claimed"], ["--claimed", ""], ["--claimed", "--json"], ["--claimed", "abc"]]) {
+    assert.throws(() => parseArgs(args), /--claimed requires/);
+  }
+  assert.deepEqual(parseArgs(["--json", "--claimed", A.slice(0, 9), "--strict"]), {
+    asJson: true, strict: true, claimed: A.slice(0, 9),
+  });
+  assert.equal(parseArgs([]).claimed, undefined);
 });
 
 test("unverifiable inputs are UNKNOWN and fail", () => {
@@ -62,4 +82,16 @@ test("the version payload must carry a real sha", () => {
   assert.throws(() => readProductionSha("<html>"), /did not return JSON/);
   assert.throws(() => readProductionSha("{}"), /no commit sha/);
   assert.throws(() => readProductionSha(JSON.stringify({ sha: "abc" })), /no commit sha/);
+});
+
+test("the CLI fails before any Git call when --claimed lacks a valid operand", () => {
+  const script = fileURLToPath(new URL("../check-release-freshness.mjs", import.meta.url));
+  for (const args of [["--claimed"], ["--claimed", "--strict"], ["--claimed", "invalid"]]) {
+    const result = spawnSync(process.execPath, [script, ...args], {
+      encoding: "utf8", timeout: 3000, env: { ...process.env, PATH: "/nonexistent" },
+    });
+    assert.equal(result.status, 1, `exit status for ${args.join(" ")}`);
+    assert.match(result.stderr, /--claimed requires a valid/);
+    assert.doesNotMatch(result.stderr, /could not resolve origin\/main/);
+  }
 });
