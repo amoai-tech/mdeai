@@ -103,6 +103,108 @@
         }
       ],
       "should_trigger": false
+    },
+    {
+      "id": 4,
+      "prompt": "A broker sees an external portal Submit confirmation disappear after a timeout. Should OpenBot click Submit again?",
+      "expected_output": "No: external outcome unknown, chat Stop/timeout does not undo action. Reconcile remote evidence, audit and run status; no blind duplicate submission; use authenticated server policy and same Concierge.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openbot",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openbot"
+        },
+        {
+          "id": "called-openbot",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openbot"
+        },
+        {
+          "id": "read-openbot",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openbot"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 5,
+      "prompt": "Compare current OpenBot v0.2.0 with old v0.0.14 and describe rollback traps before a broker portal integration.",
+      "expected_output": "SAN-1324 verifies isolated release SHA/AG-UI transport, migration 0052_shared_brokered_accounts, connections after upgrade invisible on downgrade to 0.1.2, signed handoff transition; ADOPT/DEFER, no MDE installation without proof.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openbot",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openbot"
+        },
+        {
+          "id": "called-openbot",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openbot"
+        },
+        {
+          "id": "read-openbot",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openbot"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 6,
+      "prompt": "A renter only needs canonical Supabase rental cards. Decide whether OpenBot should be installed or delegated.",
+      "expected_output": "No browser-only requirement: use existing MDE real-estate/Concierge tools, defer OpenBot; no second rental engine, chat or database.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openbot",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openbot"
+        },
+        {
+          "id": "not-called-openbot",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "openbot"
+        },
+        {
+          "id": "called-real-estate",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "real-estate"
+        },
+        {
+          "id": "read-real-estate",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "real-estate"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": false
     }
   ]
 }
