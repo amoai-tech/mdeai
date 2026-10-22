@@ -20,6 +20,7 @@ import {
   setPartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
 import { readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
+import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
@@ -183,6 +184,9 @@ async function handleCopilotKit(req: NextRequest) {
     //    a consumed body reaches the runtime empty, and an empty stop body is a
     //    thread-wide stop, which is exactly the escalation this ordering exists
     //    to prevent. See Step 11's STOP-4 assertions.
+    // Parse the untrusted business selector before any agent work. It is only
+    // a selector; the RLS-scoped membership lookup below authorizes it.
+    const selectedPartnerId = await readPartnerSelectionFromRun(req);
     const thread = await resolveRequestedThread(req);
     const auth = authorizeCopilotKitRequest(req, { userId, thread });
     if (!auth.allowed) return auth.response;
@@ -211,15 +215,30 @@ async function handleCopilotKit(req: NextRequest) {
 
       // SAN-705: selection travels with this agent run (not a shared cookie).
       // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
-      const selectedPartnerId = await readPartnerSelectionFromRun(req);
+      let partnerContext = null;
       if (selectedPartnerId) {
-        const partnerContext = await loadPartnerRuntimeContext(
+        partnerContext = await loadPartnerRuntimeContext(
           supabase,
           userId,
           selectedPartnerId,
         );
-        if (partnerContext) setPartnerRuntimeContext(requestContext, partnerContext);
+        if (!partnerContext) {
+          return Response.json(
+            { error: "You do not have access to the selected business" },
+            { status: 403 },
+          );
+        }
       }
+
+      // The canonical thread-ownership gate proves the user owns the thread.
+      // This second guard proves the thread was created for the selected business.
+      const bindingError = await enforcePartnerThreadBinding(
+        thread,
+        userId,
+        selectedPartnerId,
+      );
+      if (bindingError) return bindingError;
+      if (partnerContext) setPartnerRuntimeContext(requestContext, partnerContext);
     }
 
     return await buildHandler({ resourceId, userId, requestContext })(req);
