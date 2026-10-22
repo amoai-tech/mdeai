@@ -272,6 +272,8 @@ enough to deliver one complete, verifiable outcome.
   split and records the decision in the PR description.
   Security, correctness, and necessary tests remain mandatory.
 
+Before opening a PR, follow the [canonical PR-readiness checklist](.claude/skills/tasks/references/github-pr.md) for exact file scope, the required implementation/tests, and not staging unrelated worktree changes. Detailed steps belong to that checklist, not a second copy here.
+
 Optimize for the fewest PRs and tasks that deliver complete,
 reviewable, independently verifiable results.
 
