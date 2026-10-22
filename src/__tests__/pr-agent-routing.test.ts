@@ -30,6 +30,12 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["src/proxy.test.ts"])).not.toContain("supabase");
   });
 
+  it("routes standalone SQL outside supabase directories to Supabase guidance", () => {
+    expect(names(["scripts/sql/partner-schema-gate.sql"])).toContain("supabase");
+    expect(names(["tests/fixtures/access-policy.SQL"])).toContain("supabase");
+    expect(names(["docs/sql-reference.md"])).not.toContain("supabase");
+  });
+
   it("routes Mastra changes", () => {
     expect(names(["src/mastra/agents/concierge.ts"])).toEqual([
       "code-review",
