@@ -32,6 +32,7 @@ const COMPLETED_EVENT_PUBLISH = "mde:completed-event-publish";
 
 type CompletedPublish = {
   draftHash: string;
+  reviewId?: string;
   proposalId: string;
   eventId: string;
   slug: string;
@@ -41,6 +42,7 @@ type CompletedPublish = {
 
 function readCompletedPublish(
   draftHash: string,
+  reviewId: string | undefined,
   identity: { approvalRequestId?: string; eventId?: string },
 ): CompletedPublish | null {
   try {
@@ -51,13 +53,15 @@ function readCompletedPublish(
       return null;
     }
     // Content alone is not review identity: a new review of the same event
-    // details must not inherit an older receipt. Require the approval or event
-    // id that the parent draft received from the completed publish.
+    // details must not inherit an older receipt. The HITL tool-call id is the
+    // stable identity for this review; approval/event ids are a fallback when
+    // the parent draft already carries them.
+    const sameReview = Boolean(reviewId) && stored.reviewId === reviewId;
     const sameApproval =
       Boolean(identity.approvalRequestId) &&
       stored.approvalRequestId === identity.approvalRequestId;
     const sameEvent = Boolean(identity.eventId) && stored.eventId === identity.eventId;
-    return sameApproval || sameEvent ? stored : null;
+    return sameReview || sameApproval || sameEvent ? stored : null;
   } catch {
     return null;
   }
@@ -90,6 +94,8 @@ function recoverProposalId(draftHash: string, candidateId: string): string {
 
 type EventPublishApprovalPanelProps = {
   draft: EventDraftState;
+  /** Stable CopilotKit HITL tool-call id; new reviews get a new id. */
+  reviewId?: string;
   status: "inProgress" | "executing" | "complete";
   respond: (decision: ApprovalDecision) => void;
   onPublished?: (payload: {
@@ -102,6 +108,7 @@ type EventPublishApprovalPanelProps = {
 /** F37 — HITL publish card for preview_and_publish. */
 export function EventPublishApprovalPanel({
   draft,
+  reviewId,
   status,
   respond,
   onPublished,
@@ -122,7 +129,7 @@ export function EventPublishApprovalPanel({
       try {
         const hash = await computeDraftHash(EventDraftStateSchema.parse(draft));
         if (!active) return;
-        const stored = readCompletedPublish(hash, {
+        const stored = readCompletedPublish(hash, reviewId, {
           approvalRequestId: draft.approvalRequestId,
           eventId: draft.publishedEventId,
         });
@@ -144,7 +151,7 @@ export function EventPublishApprovalPanel({
     return () => {
       active = false;
     };
-  }, [draft]);
+  }, [draft, reviewId]);
 
   const preview = draftToEventCardProps(draft, {
     slug: draft.publishedSlug ?? "preview",
@@ -201,6 +208,7 @@ export function EventPublishApprovalPanel({
           sessionStorage.removeItem(PENDING_EVENT_PROPOSAL);
           storeCompletedPublish({
             draftHash: proposal.draftHash,
+            reviewId,
             proposalId: proposal.proposalId,
             eventId: outcome.eventId,
             slug: outcome.slug,

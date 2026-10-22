@@ -26,17 +26,6 @@ const success = {
   }),
 };
 
-const APPROVAL_UUID = "11111111-1111-4111-8111-111111111111";
-const restoreSuccess = {
-  ok: true,
-  json: async () => ({
-    success: true,
-    eventId: "event-1",
-    slug: "salsa-night",
-    approvalRequestId: APPROVAL_UUID,
-  }),
-};
-
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
@@ -132,9 +121,16 @@ describe("EventPublishApprovalPanel", () => {
   });
 
   it("restores the committed receipt on remount without publishing again", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(restoreSuccess);
+    const fetchMock = vi.fn().mockResolvedValue(success);
     vi.stubGlobal("fetch", fetchMock);
-    const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    const first = mount(
+      <EventPublishApprovalPanel
+        draft={draft}
+        reviewId="tool-call-1"
+        status="executing"
+        respond={() => {}}
+      />,
+    );
     click(first.querySelector('[data-testid="host-event-approve"]'));
     await vi.waitFor(() => expect(first.textContent).toContain("Event published and saved."));
 
@@ -144,7 +140,8 @@ describe("EventPublishApprovalPanel", () => {
     container = undefined;
     const second = mount(
       <EventPublishApprovalPanel
-        draft={{ ...draft, approvalRequestId: APPROVAL_UUID }}
+        draft={draft}
+        reviewId="tool-call-1"
         status="executing"
         respond={() => {}}
       />,
@@ -157,7 +154,14 @@ describe("EventPublishApprovalPanel", () => {
   it("does not show an old receipt for a new review with the same details", async () => {
     const fetchMock = vi.fn().mockResolvedValue(success);
     vi.stubGlobal("fetch", fetchMock);
-    const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    const first = mount(
+      <EventPublishApprovalPanel
+        draft={draft}
+        reviewId="tool-call-1"
+        status="executing"
+        respond={() => {}}
+      />,
+    );
     click(first.querySelector('[data-testid="host-event-approve"]'));
     await vi.waitFor(() => expect(first.textContent).toContain("Event published and saved."));
 
@@ -165,7 +169,14 @@ describe("EventPublishApprovalPanel", () => {
     first.remove();
     root = undefined;
     container = undefined;
-    const second = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    const second = mount(
+      <EventPublishApprovalPanel
+        draft={draft}
+        reviewId="tool-call-2"
+        status="executing"
+        respond={() => {}}
+      />,
+    );
     expect(second.textContent).not.toContain("Event published and saved.");
     expect(second.querySelector('[data-testid="host-event-approve"]')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
