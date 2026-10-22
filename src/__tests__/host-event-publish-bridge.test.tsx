@@ -9,7 +9,7 @@ import type { EventDraftState } from "@/lib/types";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type HitlProps = {
-  args: { draft?: EventDraftState };
+  args: { draft?: Partial<EventDraftState> };
   status: "inProgress" | "executing" | "complete";
   toolCallId?: string;
   respond?: (result: unknown) => Promise<void>;
@@ -50,7 +50,7 @@ describe("HostEventCopilotBridge publish HITL", () => {
     for (const [id, value] of [
       ["host-event-field-title", "Salsa Night from Wizard"],
       ["host-event-field-neighborhood", "Laureles"],
-      ["host-event-field-date", "2026-12-15T20:00:00-05:00"],
+      ["host-event-field-date", "2026-12-15T20:00"],
       ["host-event-field-venue", "Son Havana"],
       ["host-event-field-capacity", "60"],
       ["host-event-field-price", "40000"],
@@ -60,14 +60,15 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(registeredRender).toBe(PublishPanel);
     if (!PublishPanel) throw new Error("HITL renderer not registered");
 
-    render(<PublishPanel args={{}} status="executing" />);
+    render(<PublishPanel args={{ draft: { description: "Proposed by AI after wizard edits" } }} status="executing" />);
     const reviewed = JSON.parse(
       screen.getByTestId("captured-publish-draft").textContent ?? "{}",
     ) as EventDraftState;
     expect(reviewed).toMatchObject({
       title: "Salsa Night from Wizard",
       neighborhood: "Laureles",
-      dateIso: "2026-12-15T20:00:00-05:00",
+      dateIso: "2026-12-15T20:00-05:00",
+      description: "Proposed by AI after wizard edits",
       venue: "Son Havana",
       capacity: 60,
       priceMinCop: 40000,
