@@ -10,8 +10,20 @@ if [[ "${VERCEL_ENV:-}" == "production" || "${NODE_ENV:-}" == "production" ]]; t
   exit 1
 fi
 
+# An isolated Git worktree may not own the already-running local Supabase stack.
+# Use the CLI's supported --workdir flag when an existing local stack was started
+# from another checkout. Never copy credentials or start a second database.
+supabase_args=(status -o env)
+if [[ -n "${MDE_LOCAL_SUPABASE_WORKDIR:-}" ]]; then
+  if [[ ! -d "$MDE_LOCAL_SUPABASE_WORKDIR/supabase" ]]; then
+    echo "dev-local-supabase: supplied Supabase workdir has no supabase/ directory" >&2
+    exit 1
+  fi
+  supabase_args+=(--workdir "$MDE_LOCAL_SUPABASE_WORKDIR")
+fi
+
 # Capture the local CLI output without echoing its credentials.
-if ! status="$(npx supabase status -o env 2>/dev/null)"; then
+if ! status="$(npx supabase "${supabase_args[@]}" 2>/dev/null)"; then
   echo "dev-local-supabase: start the local stack with 'npx supabase start' first" >&2
   exit 1
 fi
@@ -63,6 +75,16 @@ export NEXT_PUBLIC_SUPABASE_URL="$api_url" SUPABASE_URL="$api_url"
 export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$anon_key" NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
 export SUPABASE_ANON_KEY="$anon_key" SUPABASE_SERVICE_ROLE_KEY="$service_key"
 export DATABASE_URL="$db_url" MASTRA_DEV_LIBSQL=0
+# The local worktree UI uses :3002; never inherit a hosted site URL from .env.
+export NEXT_PUBLIC_SITE_URL="http://localhost:3002"
+
+# PostgresStore uses disableInit: true. A fresh local stack has no vendor-owned
+# mastra_* tables until the existing idempotent, RLS-locking initializer runs.
+# Only run it AFTER validating the loopback API and database above.
+if ! node scripts/init-mastra-schema.mjs; then
+  echo "dev-local-supabase: local Mastra schema initialization failed" >&2
+  exit 1
+fi
 
 echo "dev-local-supabase: local API :54621, local Postgres :54622, Mastra Postgres; UI :3002"
 exec npm run dev:ui:worktree

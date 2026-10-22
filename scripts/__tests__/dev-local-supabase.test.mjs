@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { after, test } from "node:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,15 +11,33 @@ const script = join(repoRoot, "scripts/dev-local-supabase.sh");
 const mockBin = mkdtempSync(join(tmpdir(), "mde-local-supabase-"));
 
 after(() => rmSync(mockBin, { recursive: true, force: true }));
+mkdirSync(join(mockBin, "supabase"));
 
 writeFileSync(
   join(mockBin, "npx"),
-  "#!/bin/bash\n[[ \"$1\" == supabase && \"$2\" == status && \"$3\" == -o && \"$4\" == env ]] || exit 2\nprintf '%s\\n' \"$MOCK_SUPABASE_OUTPUT\"\n",
+  "#!/bin/bash\n[[ \"$1\" == supabase && \"$2\" == status && \"$3\" == -o && \"$4\" == env ]] || exit 2\nif [[ -n \"${MDE_LOCAL_SUPABASE_WORKDIR:-}\" ]]; then\n  [[ \"$5\" == --workdir && \"$6\" == \"$MDE_LOCAL_SUPABASE_WORKDIR\" ]] || exit 6\nfi\nprintf '%s\\n' \"$MOCK_SUPABASE_OUTPUT\"\n",
   { mode: 0o755 },
 );
+// Keep URL validation on real Node, but fake the existing schema initializer so
+// startup order can be proved without accessing any developer database.
+writeFileSync(
+  join(mockBin, "node"),
+  [
+    "#!/bin/bash",
+    'if [[ "$1" == scripts/init-mastra-schema.mjs ]]; then',
+    '  [[ "${MOCK_INIT_FAIL:-0}" != 1 ]] || exit 17',
+    '  echo MOCK_SCHEMA_INITIALIZED',
+    '  exit 0',
+    "fi",
+    `exec ${JSON.stringify(process.execPath)} "$@"`,
+    "",
+  ].join("\n"),
+  { mode: 0o755 },
+);
+
 writeFileSync(
   join(mockBin, "npm"),
-  "#!/bin/bash\n[[ \"$1\" == run && \"$2\" == dev:ui:worktree ]] || exit 3\n[[ \"$MASTRA_DEV_LIBSQL\" == 0 && \"$NEXT_PUBLIC_SUPABASE_URL\" == http://127.0.0.1:54621 && \"$SUPABASE_SERVICE_ROLE_KEY\" == qa-private ]] || exit 4\necho MOCK_LOCAL_UI_STARTED\n",
+  "#!/bin/bash\n[[ \"$1\" == run && \"$2\" == dev:ui:worktree ]] || exit 3\n[[ \"$MASTRA_DEV_LIBSQL\" == 0 && \"$NEXT_PUBLIC_SUPABASE_URL\" == http://127.0.0.1:54621 && \"$SUPABASE_SERVICE_ROLE_KEY\" == qa-private ]] || exit 4\n[[ \"$NEXT_PUBLIC_SITE_URL\" == http://localhost:3002 ]] || exit 5\necho MOCK_LOCAL_UI_STARTED\n",
   { mode: 0o755 },
 );
 
@@ -52,10 +70,40 @@ test("local Supabase starter has valid Bash syntax", () => {
 });
 
 test("starts existing Next.js UI with local Postgres and no printed credentials", () => {
-  const result = invoke(localCli);
+  const result = invoke(localCli, { NEXT_PUBLIC_SITE_URL: "https://www.mdeai.co" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.indexOf("MOCK_SCHEMA_INITIALIZED") < result.stdout.indexOf("MOCK_LOCAL_UI_STARTED"));
+  assert.doesNotMatch(result.stdout + result.stderr, /qa-private|qa-public/);
+});
+
+test("reuses local Supabase started in a different checkout via CLI --workdir", () => {
+  const result = invoke(localCli, { MDE_LOCAL_SUPABASE_WORKDIR: mockBin });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /MOCK_LOCAL_UI_STARTED/);
   assert.doesNotMatch(result.stdout + result.stderr, /qa-private|qa-public/);
+});
+
+test("rejects a nonexistent supplied Supabase workdir", () => {
+  const result = invoke(localCli, {
+    MDE_LOCAL_SUPABASE_WORKDIR: join(mockBin, "missing"),
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /supplied Supabase workdir/);
+  assert.doesNotMatch(result.stdout, /MOCK_LOCAL_UI_STARTED/);
+});
+
+test("schema initialization failure prevents the Next.js UI from starting", () => {
+  const result = invoke(localCli, { MOCK_INIT_FAIL: "1" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /schema initialization failed/);
+  assert.doesNotMatch(result.stdout, /MOCK_LOCAL_UI_STARTED/);
+  assert.doesNotMatch(result.stdout + result.stderr, /qa-private|qa-public/);
+});
+
+test("local Supabase Auth permits the :3002 callback without redirecting to hosted URLs", () => {
+  const config = readFileSync(join(repoRoot, "supabase/config.toml"), "utf8");
+  assert.match(config, /"http:\/\/localhost:3002\/auth\/callback"/);
+  assert.match(config, /"http:\/\/127\.0\.0\.1:3002\/auth\/callback"/);
 });
 
 test("refuses a hosted Supabase API even when local DB is configured", () => {
