@@ -1,6 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
+// Parse once: browser CI needs to know when Next.js is LISTENING, not when the
+// expensive marketing homepage has finished compiling or fetching live data.
+const localWebServerURL = new URL(localBaseURL);
+const localWebServerPort = Number(
+  localWebServerURL.port || (localWebServerURL.protocol === "https:" ? 443 : 80),
+);
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
@@ -172,12 +178,13 @@ export default defineConfig({
     ? undefined
     : {
         command: webServerCommand,
-        // Compile a real auth page during web-server startup instead of
-        // accepting a static favicon that leaves route compilation untested.
-        // /login is exercised by auth-guard.spec.ts and avoids the much
-        // heavier marketing homepage graph on cold CI runners.
-        url: new URL("/login", localBaseURL).toString(),
-        stdout: "pipe", // Playwright normally ignores stdout; retain server diagnostics in CI.
+        // A GET / can compile the full marketing homepage (and depend on external
+        // discovery calls), causing false 120s "startup" failures in cold CI.
+        // Keep baseURL above for real page assertions; only readiness checks the port.
+        port: localWebServerPort,
+        // Playwright otherwise hides server stdout; preserve diagnostics when CI fails.
+        stdout: "pipe",
+        stderr: "pipe",
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
