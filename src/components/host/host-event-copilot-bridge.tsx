@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useAgent,
   useAgentContext,
@@ -62,7 +62,7 @@ type HitlRenderProps = {
 };
 
 function createPublishHitlRender(
-  fallbackDraft: EventDraftState,
+  getLatestDraft: () => EventDraftState,
   setDraft: (patch: Partial<EventDraftState>) => void,
 ) {
   return function HostEventPublishHitlRender({
@@ -71,10 +71,8 @@ function createPublishHitlRender(
     status,
     respond,
   }: HitlRenderProps) {
-    const draftArg = selectPublishDraft(
-      args.draft as Partial<EventDraftState> | undefined,
-      fallbackDraft,
-    );
+    // The stable CopilotKit callback must read the latest reviewed form data.
+    const draftArg = selectPublishDraft(args.draft, getLatestDraft());
     const panelStatus =
       status === "inProgress"
         ? "inProgress"
@@ -123,6 +121,11 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     return mergeEventDraft(draft, agentDraft as Partial<EventDraftState>);
   }, [draft, agentDraft]);
 
+  const latestDraftRef = useRef(mergedDraft);
+  useEffect(() => {
+    latestDraftRef.current = mergedDraft;
+  }, [mergedDraft]);
+
   useAgentContext({
     description: "Roberto's in-progress event draft for the host wizard",
     value: mergedDraft,
@@ -168,10 +171,9 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     [],
   );
 
-  // Stable HITL render — agent passes draft in args; omit mergedDraft to avoid re-register on edits.
+  // Keep the HITL tool stable across form edits, but never capture a stale draft.
   const PublishHitlRender = useMemo(
-    () => createPublishHitlRender(mergedDraft, setDraft),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable render ref
+    () => createPublishHitlRender(() => latestDraftRef.current, setDraft),
     [setDraft],
   );
 

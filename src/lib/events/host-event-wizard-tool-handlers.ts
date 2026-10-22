@@ -1,5 +1,6 @@
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
+  EventDraftStateSchema,
   isDraftReadyForPublish,
   mergeEventDraft,
   type EventDraftState,
@@ -74,16 +75,33 @@ export function publishDecisionDraftPatch(
   return null;
 }
 
+// Reviewable event fields only. Model tool arguments cannot claim publication
+// status or forge approval/receipt identity.
+const publishToolFields = EventDraftStateSchema.pick({
+  title: true,
+  neighborhood: true,
+  dateIso: true,
+  venue: true,
+  priceMinCop: true,
+  capacity: true,
+  description: true,
+  coverPhotoPath: true,
+  ticketTiers: true,
+}).partial();
+
 /**
- * The model can call preview_and_publish with an empty or partial draft even
- * when the visible wizard is complete. Prefer the reviewed wizard state unless
- * the tool supplied values make a complete draft on their own.
+ * Empty tool args use the current reviewed wizard. Valid partial AI fields
+ * merge over that wizard, and the HITL panel shows the exact merged draft before
+ * approval. Malformed or unpublishable AI values fall back to the wizard.
+ * Server authorization, transaction validation and receipt remain authoritative.
  */
 export function selectPublishDraft(
-  argsDraft: Partial<EventDraftState> | undefined,
+  argsDraft: unknown,
   fallbackDraft: EventDraftState,
 ): EventDraftState {
-  if (!argsDraft) return fallbackDraft;
-  const merged = mergeEventDraft(fallbackDraft, argsDraft);
+  if (argsDraft == null) return fallbackDraft;
+  const parsed = publishToolFields.safeParse(argsDraft);
+  if (!parsed.success) return fallbackDraft;
+  const merged = mergeEventDraft(fallbackDraft, parsed.data);
   return isDraftReadyForPublish(merged) ? merged : fallbackDraft;
 }

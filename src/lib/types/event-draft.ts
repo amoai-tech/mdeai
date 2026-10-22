@@ -63,11 +63,14 @@ export function activeHostWizardStep(
   return "basics";
 }
 
+// Nonempty invalid dates passed the old check but failed in the publish RPC.
+const zonedEventDate = z.string().datetime({ offset: true });
+
 export function isDraftReadyForPublish(draft: EventDraftState): boolean {
   return (
     draft.title.trim().length > 0 &&
     draft.neighborhood.trim().length > 0 &&
-    Boolean(draft.dateIso) &&
+    zonedEventDate.safeParse(draft.dateIso).success &&
     draft.venue.trim().length > 0 &&
     draft.capacity > 0 &&
     (draft.ticketTiers.length > 0 || draft.priceMinCop > 0)
