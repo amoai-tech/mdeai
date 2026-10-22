@@ -14,6 +14,7 @@ import {
   activeAiModelId,
   activeAiProvider,
   createNvidiaLanguageModel,
+  nvidiaReasoningEffort,
   structuredOutputProviderOptions,
 } from "@/lib/ai-provider";
 
@@ -101,6 +102,13 @@ describe("NVIDIA model construction", () => {
       nvidia: { reasoningEffort: "none" },
     });
     expect(structuredOutputProviderOptions("gemini")).toBeUndefined();
+  });
+});
+
+describe("NVIDIA reasoning options", () => {
+  it("rejects the unsupported medium mode", () => {
+    vi.stubEnv("MDE_NVIDIA_REASONING_EFFORT", "medium");
+    expect(() => nvidiaReasoningEffort()).toThrow(/MDE_NVIDIA_REASONING_EFFORT/);
   });
 });
 

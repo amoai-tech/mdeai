@@ -99,16 +99,16 @@ function nvidiaProvider(apiKey: string) {
  * structured call sites share one behavior. `MDE_NVIDIA_REASONING_EFFORT`
  * (`none|low|medium|high`) is the escape hatch for a future quality evaluation.
  */
-export type NvidiaReasoningEffort = "none" | "low" | "medium" | "high";
+export type NvidiaReasoningEffort = "none" | "low" | "high";
 
 export function nvidiaReasoningEffort(): NvidiaReasoningEffort {
   const raw = process.env.MDE_NVIDIA_REASONING_EFFORT?.trim().toLowerCase();
   if (!raw) return "none";
-  if (raw === "none" || raw === "low" || raw === "medium" || raw === "high") {
+  if (raw === "none" || raw === "low" || raw === "high") {
     return raw;
   }
   throw new Error(
-    `Invalid MDE_NVIDIA_REASONING_EFFORT "${raw}". Expected none, low, medium or high.`,
+    `Invalid MDE_NVIDIA_REASONING_EFFORT "${raw}". Expected none, low or high.`,
   );
 }
 
