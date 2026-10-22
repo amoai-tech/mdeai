@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EventCard } from "@/components/copilot/event-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +20,43 @@ import {
   buildEventReviewProposal,
   eventPublishReceipt,
 } from "@/lib/events/review-proposal";
-import type { ReviewReceipt } from "@/platform/contracts/review-proposal";
+import {
+  computeDraftHash,
+  type ReviewReceipt,
+} from "@/platform/contracts/review-proposal";
 import { EventDraftStateSchema, type EventDraftState } from "@/lib/types";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 
 const PENDING_EVENT_PROPOSAL = "mde:pending-event-publish";
+const COMPLETED_EVENT_PUBLISH = "mde:completed-event-publish";
+
+type CompletedPublish = {
+  draftHash: string;
+  proposalId: string;
+  eventId: string;
+  slug: string;
+  approvalRequestId?: string;
+  savedAt: string;
+};
+
+function readCompletedPublish(draftHash: string): CompletedPublish | null {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(COMPLETED_EVENT_PUBLISH) ?? "null") as
+      | CompletedPublish
+      | null;
+    return stored?.draftHash === draftHash && stored.eventId && stored.slug ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeCompletedPublish(value: CompletedPublish): void {
+  try {
+    sessionStorage.setItem(COMPLETED_EVENT_PUBLISH, JSON.stringify(value));
+  } catch {
+    // Storage is optional; the database receipt remains the authority.
+  }
+}
 
 /** Keep the same idempotency key if a browser reload follows a lost response. */
 function recoverProposalId(draftHash: string, candidateId: string): string {
@@ -68,6 +100,35 @@ export function EventPublishApprovalPanel({
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ReviewReceipt | null>(null);
   const [lastDecision, setLastDecision] = useState<ApprovalDecision | null>(null);
+
+  // A reload after a committed publish must show the original receipt instead of
+  // opening a fresh review that could publish the same event again.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const hash = await computeDraftHash(EventDraftStateSchema.parse(draft));
+        if (!active) return;
+        const stored = readCompletedPublish(hash);
+        if (!stored) return;
+        setReceipt({
+          proposalId: stored.proposalId,
+          status: "saved",
+          savedId: stored.eventId,
+          readbackUrl: `/events/${encodeURIComponent(stored.slug)}`,
+          message: "Event published and saved.",
+          savedAt: stored.savedAt,
+        });
+        setApprovalRequestId(stored.approvalRequestId);
+        setDecided(true);
+      } catch {
+        // A malformed draft is handled by the normal commit validation.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [draft]);
 
   const preview = draftToEventCardProps(draft, {
     slug: draft.publishedSlug ?? "preview",
@@ -119,8 +180,19 @@ export function EventPublishApprovalPanel({
       }
 
       if (outcome.kind === "published") {
-        try { sessionStorage.removeItem(PENDING_EVENT_PROPOSAL); } catch { /* storage is optional */ }
-        setReceipt(eventPublishReceipt(proposal.proposalId, outcome));
+        const savedReceipt = eventPublishReceipt(proposal.proposalId, outcome);
+        try {
+          sessionStorage.removeItem(PENDING_EVENT_PROPOSAL);
+          storeCompletedPublish({
+            draftHash: proposal.draftHash,
+            proposalId: proposal.proposalId,
+            eventId: outcome.eventId,
+            slug: outcome.slug,
+            approvalRequestId: outcome.approvalRequestId,
+            savedAt: savedReceipt.savedAt ?? new Date().toISOString(),
+          });
+        } catch { /* storage is optional */ }
+        setReceipt(savedReceipt);
         onPublished?.({
           eventId: outcome.eventId,
           slug: outcome.slug,

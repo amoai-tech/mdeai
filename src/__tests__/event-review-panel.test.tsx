@@ -120,6 +120,23 @@ describe("EventPublishApprovalPanel", () => {
     expect(sessionStorage.getItem("mde:pending-event-publish")).toBeNull();
   });
 
+  it("restores the committed receipt on remount without publishing again", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(success);
+    vi.stubGlobal("fetch", fetchMock);
+    const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    click(first.querySelector('[data-testid="host-event-approve"]'));
+    await vi.waitFor(() => expect(first.textContent).toContain("Event published and saved."));
+
+    act(() => root?.unmount());
+    first.remove();
+    root = undefined;
+    container = undefined;
+    const second = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    await vi.waitFor(() => expect(second.textContent).toContain("Event published and saved."));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second.querySelector('[data-testid="host-event-approve"]')).toBeNull();
+  });
+
   it.each(["edit", "rejected"] as const)(
     "does not fabricate a saved receipt for a local %s decision",
     async (decision) => {
