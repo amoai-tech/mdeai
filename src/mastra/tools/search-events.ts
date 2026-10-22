@@ -12,6 +12,7 @@ import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { writeSearchLog } from '../lib/search-logs';
+import { resolveEventCategoryForQuery } from '../lib/event-category-normalization';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -239,24 +240,20 @@ export async function searchEvents(
   query: EventQuery,
 ): Promise<EventSearchResult> {
   const limit = query.limit ?? 5;
-  // Structured searches need no intelligence module, except the nightlife chip
-  // which deliberately clears its category when no text is present.
+  // CK-V2-015: chip semantics must survive an unavailable intelligence module.
+  const category = resolveEventCategoryForQuery(query.category, query.queryText);
+  const normalizedQuery = category === query.category ? query : { ...query, category };
   let intelligence: typeof import('../lib/intelligence-event-search') | null = null;
-  let category = query.category;
-  if (query.queryText?.trim() || query.category === 'nightlife') {
+  if (query.queryText?.trim()) {
     try {
-      // Keep the structured PostgREST path available if optional intelligence
-      // cannot initialize (for example from a failed lazy import).
       intelligence = await import('../lib/intelligence-event-search');
-      category = intelligence.resolveEventCategoryForQuery(query.category, query.queryText);
     } catch (err) {
       console.warn(
         '[search-events] intelligence module unavailable, using structured search:',
-        err instanceof Error ? err.name : 'unknown',
+        err instanceof Error ? err.message : err,
       );
     }
   }
-  const normalizedQuery = category === query.category ? query : { ...query, category };
 
   if (normalizedQuery.queryText?.trim() && intelligence) {
     const queryText = normalizedQuery.queryText.trim();

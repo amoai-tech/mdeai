@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
+import { eventMusicSignals, resolveEventCategoryForQuery } from "./event-category-normalization";
+export { resolveEventCategoryForQuery } from "./event-category-normalization";
 import {
   type EventCard,
   type EventQuery,
@@ -71,33 +73,15 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Remap Events chip category using queryText signals (e.g. nightlife + salsa → music); clears nightlife when queryText absent (CK-V2-015). */
-export function resolveEventCategoryForQuery(
-  category: EventQuery["category"],
-  queryText?: string,
-): EventQuery["category"] {
-  if (!category) return category;
-  const text = queryText?.trim();
-  if (!text) {
-    // Events chip often sets nightlife without queryText — skip strict filter.
-    if (category === "nightlife") return undefined;
-    return category;
-  }
-  const slots = parseEventIntelligenceSlots(text);
-  if ((slots.wantsSalsa || slots.wantsLiveMusic) && category === "nightlife") {
-    return "music";
-  }
-  return category;
-}
-
 /** Extract salsa, live-music, neighborhood, and date-window signals from natural-language query text. */
 export function parseEventIntelligenceSlots(queryText: string): EventIntelligenceSlots { // skipcq: JS-0067
   const q = queryText.toLowerCase().replace(/-/g, " ");
   const slots: EventIntelligenceSlots = {};
   if (/laureles/.test(q)) slots.neighborhood = "Laureles";
   else if (/poblado|provenza/.test(q)) slots.neighborhood = "El Poblado";
-  if (/salsa/.test(q)) slots.wantsSalsa = true;
-  if (/live music|concert|band/.test(q)) slots.wantsLiveMusic = true;
+  const music = eventMusicSignals(q);
+  if (music.wantsSalsa) slots.wantsSalsa = true;
+  if (music.wantsLiveMusic) slots.wantsLiveMusic = true;
   if (/fashion|runway/.test(q)) slots.wantsFashion = true;
   if (/networking|meetup|professional/.test(q)) slots.wantsNetworking = true;
   if (/this weekend|weekend/.test(q)) slots.dateWindow = "this_weekend";
