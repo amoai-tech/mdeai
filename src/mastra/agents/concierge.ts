@@ -52,6 +52,7 @@ export const conciergeWorkingMemorySchema = z.object({
         title: z.string(),
         neighborhood: z.string(),
         nightly_price: z.number(),
+        amenities: z.array(z.string()).optional(),
       }),
     )
     .optional()
@@ -210,7 +211,8 @@ export const conciergeAgent = new Agent({
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one.
+- Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.

@@ -241,7 +241,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("updates the page's cards from the same structured search the chat fast path uses", async () => {
     const onResults = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -256,6 +256,8 @@ describe("RentalAskComposer (SAN-1421)", () => {
       .find((next) => Array.isArray(next.lastRentalResults));
     expect(statePatch?.lastRentalResults).toHaveLength(1);
     expect(statePatch?.lastRentalResults?.[0]?.id).toBe("rnt_1");
+    // Amenities travel verbatim, so the answer can say "balcony" only when the listing does.
+    expect(statePatch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony"]);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/rentals/search");
     expect(JSON.parse(String(init.body)).neighborhood).toBe("Laureles");
@@ -270,7 +272,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("lets a follow-up refine the previous rental question instead of starting over", async () => {
     // A Response body can only be read once, so each request gets its own.
     const fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 })),
+      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 })),
     );
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
@@ -336,7 +338,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
           role: "tool",
           toolCallId: "call-1",
           content: JSON.stringify({
-            results: [{ id: "rnt_1" }, { id: "rnt_2" }],
+            results: [
+              { id: "rnt_1", amenities: ["Balcony", "Wi-Fi"] },
+              { id: "rnt_2", amenities: [] },
+            ],
             budgetNote: "No monthly budget applied",
           }),
         },
@@ -355,6 +360,13 @@ describe("RentalAskComposer (SAN-1421)", () => {
     );
     // The page must not run a second, independent search when the agent already produced the rows.
     expect(fetchMock).not.toHaveBeenCalled();
+    // Amenities reach working memory verbatim: a documented balcony stays, an empty list does not
+    // become "no balcony" (it stays empty, which the answer must read as "not specified").
+    const patch = coagent.setState.mock.calls
+      .map(([value]) => (typeof value === "function" ? value({}) : value))
+      .find((next) => Array.isArray(next.lastRentalResults));
+    expect(patch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony", "Wi-Fi"]);
+    expect(patch?.lastRentalResults?.[1]?.amenities).toEqual([]);
     vi.unstubAllGlobals();
   });
 
@@ -381,6 +393,69 @@ describe("RentalAskComposer (SAN-1421)", () => {
     });
 
     expect(onResults).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current answer when a follow-up produces no rental tool result", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    // First question: the agent's tool result becomes the answer.
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2 bedroom in Laureles" },
+        { id: "a1", role: "assistant", toolCalls: [{ id: "call-1", function: { name: "searchRentalsTool" } }] },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [{ id: "rnt_1" }] }) },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    expect(onResults).toHaveBeenCalledTimes(1);
+
+    // Follow-up: a conversational answer with no tool call. The list must not be replaced by a
+    // fresh search of the question itself (live, this turned 8 apartments into 32).
+    await act(async () => {
+      agent.messages = [
+        ...agent.messages,
+        { id: "u2", role: "user", content: "which of these has a balcony?" },
+        { id: "a2", role: "assistant", content: "The listing details do not specify a balcony." },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+
+    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the current rows after a fallback search when the next turn only asks about amenities", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    // First agent reply has no tool result: structured fallback legitimately fills the page,
+    // and remembers Laureles/2 bedrooms for the next turn.
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A question about THESE rows adds no new filter. The old parameters must not turn it
+    // into a second catalogue search simply because the parser inherits previous filters.
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 15)); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onResults).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
   it("shows a failed rental search but still asks the concierge", async () => {

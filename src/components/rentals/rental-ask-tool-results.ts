@@ -109,6 +109,8 @@ export const payloadRows = (payload: RentalAskResults) =>
     title: r.title,
     neighborhood: r.neighborhood,
     nightly_price: r.nightly_price,
+    // Verbatim from the listing; empty stays empty so the answer can say "not specified".
+    amenities: Array.isArray(r.amenities) ? r.amenities : undefined,
   }));
 
 /** Keep only turns that have text, so tool/state-only messages do not leave blank rows. */
