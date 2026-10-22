@@ -86,6 +86,27 @@ describe("SAN-705 partner thread binding", () => {
     ).toBeNull();
   });
 
+  it("keeps new general Concierge threads independent of partner storage", async () => {
+    expect(
+      await enforcePartnerThreadBinding(
+        { kind: "new", threadId: "t-general-new" },
+        USER,
+        null,
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it("does not bypass partner-thread isolation when storage is unavailable to general chat", async () => {
+    const response = await enforcePartnerThreadBinding(
+      { kind: "existing", threadId: "t-partner", resourceId: USER },
+      USER,
+      null,
+      null,
+    );
+    expect(response?.status).toBe(503);
+  });
+
   it("fails closed when thread storage is unavailable", async () => {
     const response = await enforcePartnerThreadBinding(
       { kind: "existing", threadId: "t-a", resourceId: USER },
