@@ -10,6 +10,7 @@ import {
   selectSkills,
   toRepoPath,
 } from "../select-pr-agent-skills.mjs";
+import { detectDomains } from "../pr-agent/build-evidence.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -48,6 +49,15 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
       "/github/workspace/.claude/skills/code-review/SKILL.md",
       "/github/workspace/scripts/pr-agent/skills/supabase/SKILL.md",
     ]);
+  });
+
+  it("routes standalone SQL consistently through skills and version evidence", () => {
+    for (const file of ["scripts/sql/partner-schema-gate.sql", "tests/fixtures/access-policy.SQL"]) {
+      assert.ok(selectSkills([file]).skills.includes("supabase"), file + " lacks Supabase skill");
+      assert.ok(detectDomains([file]).includes("supabase"), file + " lacks Supabase package evidence");
+    }
+    assert.equal(selectSkills(["docs/sql-reference.md"]).skills.includes("supabase"), false);
+    assert.equal(detectDomains(["docs/sql-reference.md"]).includes("supabase"), false);
   });
 
   it("rejects a missing SKILL.md entrypoint when a resource is present", () => {
