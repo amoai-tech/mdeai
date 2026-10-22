@@ -76,6 +76,16 @@
     },
 
     {
+      "file": "src/components/onboarding/__tests__/onboarding-copilot-bridge.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: checks the v2 frontend tool schema, revision rejection and no-save result."
+    },
+    {
+      "file": "src/components/partners/__tests__/partner-signup-assistant.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: tests proposal Accept/Ignore, stale-form protection and delayed model replies with mocked CopilotKit transport."
+    },
+    {
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."

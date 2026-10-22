@@ -33,6 +33,30 @@ export function parsePartnerProfileSuggestion(
   return parsed.success ? parsed.data : null;
 }
 
+/** An AI proposal must match the form revision from when it was requested. */
+export function isCurrentFormRevision(
+  proposalRevision: unknown,
+  currentRevision: number,
+): boolean {
+  return (
+    typeof proposalRevision === "number" &&
+    Number.isSafeInteger(proposalRevision) &&
+    proposalRevision >= 0 &&
+    proposalRevision === currentRevision
+  );
+}
+
+/** Read model tool arguments without trusting extra keys or a guessed revision. */
+export function parseRevisedPartnerSuggestion(
+  value: unknown,
+  currentRevision: number,
+): PartnerProfileSuggestion | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const { formRevision, ...fields } = value as Record<string, unknown>;
+  if (!isCurrentFormRevision(formRevision, currentRevision)) return null;
+  return parsePartnerProfileSuggestion(fields);
+}
+
 /** Merge only the fields the user accepted; does not write to Supabase. */
 export function applySuggestionToForm<T extends Record<string, unknown>>(
   form: T,

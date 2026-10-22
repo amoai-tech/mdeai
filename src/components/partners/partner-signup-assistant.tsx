@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState, type SetStateAction } from "react";
 import {
   CopilotChat,
   CopilotChatConfigurationProvider,
@@ -46,12 +46,38 @@ export function PartnerSignupAssistant({
   isAuthenticated,
   loginNextPath,
 }: Props) {
-  const [form, setForm] = useState<PartnerSignupFormState>({
-    businessName: "",
-    category: initialCategory ?? "",
-    neighborhood: "",
-  });
-  const [suggestion, setSuggestion] = useState<PartnerProfileSuggestion | null>(null);
+  const [draftState, setDraftState] = useState(() => ({
+    form: {
+      businessName: "",
+      category: initialCategory ?? "",
+      neighborhood: "",
+    } as PartnerSignupFormState,
+    revision: 0,
+  }));
+  const revisionRef = useRef(0);
+  const proposalCounter = useRef(0);
+  const [suggestion, setSuggestion] = useState<{
+    id: number;
+    draft: PartnerProfileSuggestion;
+    formRevision: number;
+  } | null>(null);
+
+  const updateForm = useCallback((next: SetStateAction<PartnerSignupFormState>) => {
+    revisionRef.current += 1;
+    setDraftState((current) => ({
+      form: typeof next === "function" ? next(current.form) : next,
+      revision: current.revision + 1,
+    }));
+  }, []);
+
+  const showSuggestion = useCallback((
+    draft: PartnerProfileSuggestion,
+    formRevision: number,
+  ) => {
+    if (formRevision !== revisionRef.current) return;
+    proposalCounter.current += 1;
+    setSuggestion({ id: proposalCounter.current, draft, formRevision });
+  }, []);
 
   if (!isAuthenticated) {
     return (
@@ -73,8 +99,8 @@ export function PartnerSignupAssistant({
     >
       <CopilotChatConfigurationProvider agentId="partnerAgent">
         <OnboardingCopilotBridge
-          context={buildPartnerSignupAiContext(partnerType, form)}
-          onSuggestion={setSuggestion}
+          context={buildPartnerSignupAiContext(partnerType, draftState.form, draftState.revision)}
+          onSuggestion={showSuggestion}
         />
         <div
           data-testid="partner-signup-assistant"
@@ -82,14 +108,34 @@ export function PartnerSignupAssistant({
         >
           <div className="flex min-w-0 flex-col gap-4">
             {suggestion ? (
-              <OnboardingAiSuggestionCard
-                suggestion={suggestion}
-                onAccept={(accepted) => {
-                  setForm((current) => applySuggestionToForm(current, accepted));
-                  setSuggestion(null);
-                }}
-                onIgnore={() => setSuggestion(null)}
-              />
+              suggestion.formRevision !== draftState.revision ? (
+                <div
+                  role="alert"
+                  data-testid="onboarding-suggestion-stale"
+                  className="rounded-xl border border-amber-500/30 p-4 text-sm"
+                >
+                  <p>Your form changed since this AI suggestion. Ask the assistant for a new suggestion.</p>
+                  <button
+                    type="button"
+                    className="mt-2 underline"
+                    onClick={() => setSuggestion(null)}
+                  >
+                    Dismiss outdated suggestion
+                  </button>
+                </div>
+              ) : (
+                <OnboardingAiSuggestionCard
+                  key={suggestion.id}
+                  suggestion={suggestion.draft}
+                  onAccept={(accepted) => {
+                    // Recheck the latest revision at click-time; not just render-time.
+                    if (revisionRef.current !== suggestion.formRevision) return;
+                    updateForm((current) => applySuggestionToForm(current, accepted));
+                    setSuggestion(null);
+                  }}
+                  onIgnore={() => setSuggestion(null)}
+                />
+              )
             ) : null}
             <PartnerSignupWizard
               partnerType={partnerType}
@@ -97,8 +143,8 @@ export function PartnerSignupAssistant({
               initialCategory={initialCategory}
               isAuthenticated
               loginNextPath={loginNextPath}
-              form={form}
-              onFormChange={setForm}
+              form={draftState.form}
+              onFormChange={updateForm}
             />
           </div>
           <aside
