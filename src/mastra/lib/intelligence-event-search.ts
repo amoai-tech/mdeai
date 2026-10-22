@@ -2,8 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
-import { eventMusicSignals, resolveEventCategoryForQuery } from "./event-category-normalization";
-export { resolveEventCategoryForQuery } from "./event-category-normalization";
+import { parseEventIntelligenceSlots, resolveEventCategoryForQuery, type EventIntelligenceSlots } from "./event-category-normalization";
+export { parseEventIntelligenceSlots, resolveEventCategoryForQuery } from "./event-category-normalization";
+export type { EventIntelligenceSlots } from "./event-category-normalization";
 import {
   type EventCard,
   type EventQuery,
@@ -11,17 +12,7 @@ import {
   extractNeighborhood,
   normalizeEventCurrency,
   dateWindow,
-  type DateWindow,
 } from "../tools/search-events";
-
-export type EventIntelligenceSlots = {
-  neighborhood?: string;
-  wantsSalsa?: boolean;
-  wantsLiveMusic?: boolean;
-  wantsFashion?: boolean;
-  wantsNetworking?: boolean;
-  dateWindow?: DateWindow;
-};
 
 type HybridEventRow = {
   id: string;
@@ -71,22 +62,6 @@ function num(v: number | string | null | undefined): number | undefined {
   if (v === null || v === undefined) return undefined;
   const n = typeof v === "string" ? Number(v) : v;
   return Number.isFinite(n) ? n : undefined;
-}
-
-/** Extract salsa, live-music, neighborhood, and date-window signals from natural-language query text. */
-export function parseEventIntelligenceSlots(queryText: string): EventIntelligenceSlots { // skipcq: JS-0067
-  const q = queryText.toLowerCase().replace(/-/g, " ");
-  const slots: EventIntelligenceSlots = {};
-  if (/laureles/.test(q)) slots.neighborhood = "Laureles";
-  else if (/poblado|provenza/.test(q)) slots.neighborhood = "El Poblado";
-  const music = eventMusicSignals(q);
-  if (music.wantsSalsa) slots.wantsSalsa = true;
-  if (music.wantsLiveMusic) slots.wantsLiveMusic = true;
-  if (/fashion|runway/.test(q)) slots.wantsFashion = true;
-  if (/networking|meetup|professional/.test(q)) slots.wantsNetworking = true;
-  if (/this weekend|weekend/.test(q)) slots.dateWindow = "this_weekend";
-  else if (/tonight|today/.test(q)) slots.dateWindow = "tonight";
-  return slots;
 }
 
 function eventTimeMs(iso: string): number | null { // skipcq: JS-0067

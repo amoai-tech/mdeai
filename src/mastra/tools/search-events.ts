@@ -12,7 +12,7 @@ import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { writeSearchLog } from '../lib/search-logs';
-import { resolveEventCategoryForQuery } from '../lib/event-category-normalization';
+import { parseEventIntelligenceSlots, resolveEventCategoryForQuery } from '../lib/event-category-normalization';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -242,7 +242,14 @@ export async function searchEvents(
   const limit = query.limit ?? 5;
   // CK-V2-015: chip semantics must survive an unavailable intelligence module.
   const category = resolveEventCategoryForQuery(query.category, query.queryText);
-  const normalizedQuery = category === query.category ? query : { ...query, category };
+  const slots = query.queryText?.trim() ? parseEventIntelligenceSlots(query.queryText) : {};
+  const normalizedQuery = {
+    ...query,
+    category,
+    // Explicit user-selected filters outrank inferred text slots.
+    neighborhood: query.neighborhood ?? slots.neighborhood,
+    dateWindow: query.dateWindow ?? slots.dateWindow,
+  };
   let intelligence: typeof import('../lib/intelligence-event-search') | null = null;
   if (query.queryText?.trim()) {
     try {
@@ -306,15 +313,15 @@ export async function searchEvents(
     q = q.in('event_type', dbTypes);
   }
 
-  if (query.neighborhood) {
-    q = q.ilike('address', `%${query.neighborhood}%`);
+  if (normalizedQuery.neighborhood) {
+    q = q.ilike('address', `%${normalizedQuery.neighborhood}%`);
   }
 
   if (typeof query.maxPricePerTicket === 'number') {
     q = q.lte('ticket_price_min', query.maxPricePerTicket);
   }
 
-  const window = dateWindow(query.dateWindow);
+  const window = dateWindow(normalizedQuery.dateWindow);
   if (window.gte) q = q.gte('event_start_time', window.gte);
   if (window.lte) q = q.lte('event_start_time', window.lte);
 
