@@ -1,6 +1,6 @@
 -- SAN-1502 · Search fingerprints follow the listing's own visibility.
--- Development: ordinary listings, including inactive/pending ones, are searchable
--- without business approval; explicit private/fixture rows stay isolated.
+-- Development: ordinary listings, including inactive non-private drafts, are searchable
+-- without approval, publication or ownership; private and fixture rows stay isolated.
 -- Launch: the strict rule returns.
 -- Run with: supabase test db
 begin;
@@ -41,16 +41,16 @@ select is(public.rental_development_active(), true, 'precondition: the database 
 set local role anon;
 select is((select count(*)::int from public.listing_embeddings
             where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D1: anon reads both active and inactive non-private development fingerprints');
+  'D1: anon reads ordinary active and inactive development fingerprints');
 select is((select count(*)::int from public.listing_embeddings
             where listing_id='f1507000-0000-4000-8000-00000000a003'), 1,
-  'D2: inactive non-private development inventory is semantically searchable');
+  'D2: inactive non-private development inventory is searchable semantically');
 select is((select count(*)::int from public.listing_embeddings
             where listing_id in ('f1507000-0000-4000-8000-00000000a002','f1507000-0000-4000-8000-00000000a004')), 0,
   'D2b: explicit private and fixture data remain isolated');
 select is((select count(*)::int from public.rental_signals
             where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D3: anon reads signals for non-private development listings regardless of status');
+  'D3: anon reads score rows for non-private development listings');
 reset role;
 
 -- Development, signed in as an ordinary user.
@@ -58,10 +58,10 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1507000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 select is((select count(*)::int from public.listing_embeddings
             where listing_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D4: signed-in user sees inactive non-private development fingerprints');
+  'D4: ordinary signed-in user sees inactive non-private development fingerprints');
 select is((select count(*)::int from public.rental_signals
             where apartment_id::text like 'f1507000-0000-4000-8000-00000000a00%'), 2,
-  'D5: signed-in user sees inactive non-private development signals');
+  'D5: ordinary signed-in user sees inactive non-private development signals');
 reset role;
 
 -- The helper agrees with the policies for each case.

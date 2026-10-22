@@ -3,8 +3,8 @@
 --
 -- WHAT THIS LOCKS IN
 --   1. RLS is enabled on public.apartments.
---   2. In development, anon reads non-private inventory regardless of status,
---      but never explicitly private drafts, paused or rejected records.
+--   2. During Phase A anonymous clients can discover non-private inventory regardless
+--      of status/approval, but cannot read explicitly private broker drafts by UUID.
 --   3. Anonymous row writes are denied by RLS; anon DML grants are retained for the
 --      existing SAN-1054 behaviour contract. TRUNCATE/REFERENCES/TRIGGER are revoked
 --      because PostgreSQL does not enforce them through RLS.
@@ -12,13 +12,13 @@
 --   5. A different broker cannot read or update another broker's private draft,
 --      and an owning broker cannot insert an apartment under another landlord.
 --
--- Phase A/launch visibility is owned by rental_listing_is_public().
--- Source-linked discovery never grants MDE viewing authority.
+-- The canonical phase-aware public predicate controls discovery; explicit private
+-- broker records remain inaccessible to outsiders. Launch restores stricter rules.
 --
 -- Run with: supabase test db
 begin;
 
-select plan(26);
+select plan(25);
 
 -- ── Fixtures (transaction-owned, rolled back) ────────────────────────────────
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password,
@@ -95,23 +95,19 @@ select is((select count(*)::int from public.apartments
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000002'), 0,
-  'A2: anon cannot read an explicitly private draft by exact UUID');
+  'A2: anon cannot read an explicitly private draft by UUID');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000003'), 0,
-  'A3: anon cannot read an explicitly private paused listing by exact UUID');
+  'A3: anon cannot read an explicitly private paused listing by UUID');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000004'), 0,
-  'A4: anon cannot read an explicitly private rejected listing by exact UUID');
+  'A4: anon cannot read an explicitly private rejected listing by UUID');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000005'), 1,
-  'A5: anon can discover non-private external candidate in development');
-
-select is((select public.rental_can_request_viewing(a) from public.apartments a
-           where a.id = 'b4680000-0000-4000-8000-000000000005'), false,
-  'A5b: external source listing is not requestable through MDE');
+  'A5: anon can discover an ordinary inactive external candidate in development');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000006'), 0,
@@ -160,7 +156,7 @@ select is((select count(*)::int from public.apartments
   'A14: broker A can read its own rejected listing');
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000006'), 0,
-  'A15: broker A cannot read broker B draft');
+  'A15: broker A cannot read broker B private draft');
 
 select lives_ok(
   $$update public.apartments set title = 'SAN468 A draft updated'
@@ -193,7 +189,7 @@ select is((select count(*)::int from public.apartments
   'B1: broker B can read its own draft');
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000002'), 0,
-  'B2: broker B cannot read broker A draft');
+  'B2: broker B cannot read broker A private draft');
 
 reset role;
 

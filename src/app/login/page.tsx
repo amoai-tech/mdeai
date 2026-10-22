@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-8 bg-background">
+    <main id="main-content" tabIndex={-1} className="min-h-screen flex items-center justify-center p-8 bg-background">
       <AuthEmailForm mode="login" nextPath={nextPath} authError={authError} />
     </main>
   );

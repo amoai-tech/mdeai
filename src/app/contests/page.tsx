@@ -182,7 +182,7 @@ export default async function ContestsPage() {
   const result = await listPublicContests();
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-4 py-10 sm:px-6" data-testid="contests-page">
+    <main id="main-content" tabIndex={-1} className="mx-auto min-h-screen max-w-5xl px-4 py-10 sm:px-6" data-testid="contests-page">
       <header className="mb-8 max-w-2xl">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">Medellín</p>
         <h1 className="mt-2 text-balance font-serif text-4xl font-semibold tracking-tight sm:text-5xl">
