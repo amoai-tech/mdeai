@@ -211,7 +211,9 @@ async function handleCopilotKit(req: NextRequest) {
 
       // SAN-705 — resolve the selected business server-side. The cookie is only
       // a selector; loadPartnerRuntimeContext verifies membership through RLS.
-      const selectedPartnerId = req.cookies.get(PARTNER_SELECTION_COOKIE)?.value;
+      // Standard Request-based route tests have no NextRequest.cookies accessor.
+      // Missing selection is a no-context state, not an authorization bypass.
+      const selectedPartnerId = req.cookies?.get(PARTNER_SELECTION_COOKIE)?.value;
       if (selectedPartnerId) {
         const partnerContext = await loadPartnerRuntimeContext(
           supabase,
