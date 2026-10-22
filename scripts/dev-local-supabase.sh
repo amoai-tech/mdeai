@@ -39,8 +39,15 @@ fi
 
 # Fail closed before exporting any credentials: MDE's configured local ports.
 if ! API_URL="$api_url" DB_URL="$db_url" node - <<'NODE'
-const api = new URL(process.env.API_URL);
-const db = new URL(process.env.DB_URL);
+// An uncaught ERR_INVALID_URL includes the supplied URL in the stack trace,
+// which could expose the DB password. Fail without printing either URL.
+let api, db;
+try {
+  api = new URL(process.env.API_URL);
+  db = new URL(process.env.DB_URL);
+} catch {
+  process.exit(1);
+}
 if (api.protocol !== 'http:' || !['localhost','127.0.0.1'].includes(api.hostname) || api.port !== '54621' ||
     !['postgres:','postgresql:'].includes(db.protocol) ||
     !['localhost','127.0.0.1'].includes(db.hostname) || db.port !== '54622') {
