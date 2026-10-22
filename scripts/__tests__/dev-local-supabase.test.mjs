@@ -86,7 +86,7 @@ test("rejects a malformed API URL without printing the supplied value", () => {
   const marker = "DO_NOT_LOG_API_TEST_MARKER";
   const result = invoke(localCli.replace(
     "http://127.0.0.1:54621",
-    `http://${marker}#broken:`,
+    `http://${marker}:INVALID_PORT/`,
   ));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /refusing a non-local or wrong-port/);
