@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   claimMatches,
@@ -93,5 +97,48 @@ test("the CLI fails before any Git call when --claimed lacks a valid operand", (
     assert.equal(result.status, 1, `exit status for ${args.join(" ")}`);
     assert.match(result.stderr, /--claimed requires a valid/);
     assert.doesNotMatch(result.stderr, /could not resolve origin\/main/);
+  }
+});
+test("CLI preserves a proven stale claim even if Git ancestry cannot be established", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mde-release-claim-"));
+  const git = join(dir, "git");
+  // Fake only Git; use a real local HTTP response for /api/version.
+  writeFileSync(git, `#!${process.execPath}
+if (process.argv[2] === "fetch") process.exit(0);
+if (process.argv[2] === "rev-parse") { process.stdout.write("${A}\\n"); process.exit(0); }
+if (process.argv[2] === "merge-base") process.exit(1);
+process.exit(2);
+`);
+  chmodSync(git, 0o755);
+  const server = createServer((_, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ sha: B }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const script = fileURLToPath(new URL("../check-release-freshness.mjs", import.meta.url));
+  try {
+    const run = (claimed) => new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [script, "--json", "--claimed", claimed], {
+        env: {
+          ...process.env,
+          PATH: dir + ":" + (process.env.PATH ?? ""),
+          MDE_PRODUCTION_URL: "http://127.0.0.1:" + server.address().port,
+        },
+      });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, payload: JSON.parse(stdout) }));
+    });
+    const wrong = await run(A);
+    assert.equal(wrong.code, 1);
+    assert.equal(wrong.payload.status, "STALE_CLAIM");
+    const correct = await run(B);
+    assert.equal(correct.code, 1);
+    assert.equal(correct.payload.status, "UNKNOWN");
+    assert.match(correct.payload.problem, /not an ancestor/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
   }
 });
