@@ -67,14 +67,6 @@ function readBusinessName(settings: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function humanize(value: string): string {
-  return value
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export async function loadWorkspaceResolution(
   supabase: WorkspaceLookup,
 ): Promise<WorkspaceResolution> {
@@ -139,7 +131,7 @@ export async function loadWorkspaceResolution(
     }
 
     partnerLabels = partners.map(
-      (partner) => readBusinessName(partner.settings) ?? humanize(partner.type),
+      (partner) => readBusinessName(partner.settings) ?? "Partners",
     );
   }
 
