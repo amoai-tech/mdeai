@@ -1,37 +1,46 @@
 import { google } from "@ai-sdk/google";
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import { parseAiProvider, type AiProvider } from "@/lib/ai-model-ids";
+import { createActiveLanguageModel } from "@/lib/ai-provider";
 import { withTokenUsageTracking } from "./token-usage-middleware";
 
 /**
- * Development-phase default: **gemini-3.5-flash-lite** (all agents).
+ * Development-phase model owner for every Mastra agent and scorer.
  *
- * The id itself lives in `src/lib/ai-model-ids.ts` so that call sites which
- * cannot import this module — `flash-route-classifier.ts` is reachable from the
- * client chat bundle, and this file reaches `node:async_hooks` through the
- * token-usage sink — still share one source of identity. Switching back to
- * `gemini-3.5-flash` is a one-line change there.
+ * Default provider: **Gemini** (`gemini-3.5-flash-lite`). Set
+ * `MDE_AI_PROVIDER=nvidia` to run the existing agents on
+ * **NVIDIA Nemotron 3.5 Super VL** instead. No agent, tool, workflow, route or
+ * frontend code changes when the provider switches — every agent imports
+ * `FLASH_MODEL` from this file.
  *
- * Verified before changing rather than assumed from memory:
+ * Why an AI SDK model object rather than Mastra's `model: "nvidia/..."` router
+ * string: the pinned `@mastra/core@1.74.0` registry does not contain this model,
+ * and COST-001 token tracking is typed to `LanguageModelV2`. See
+ * `src/lib/ai-provider.ts` for the full evidence.
  *
- *   - `gemini-3.5-flash-lite` is a **stable** model id and served a live
- *     `generateContent` call (HTTP 200, `modelVersion: gemini-3.5-flash-lite`);
- *   - the official model page reports **function calling** and **structured
- *     outputs** as supported, which is what MDE's tools and `generateObject`
- *     call sites require. Image generation, Live API and audio generation are
- *     *not* supported by it — these agents do not use them.
+ * The model id lives in `src/lib/ai-model-ids.ts` (no imports) so call sites
+ * that must stay browser-safe — `flash-route-classifier.ts` is reachable from
+ * the client chat bundle — never import this module's `node:async_hooks`
+ * dependency.
  *
- * Wrapped with COST-001 token-usage tracking so every agent model call records
- * its Gemini token usage into the active per-turn sink (token-usage-middleware).
- * The wrapper is transparent — same LanguageModelV2 contract, no behavior change.
- *
- * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
+ * Wrapped with COST-001 token-usage tracking so every model call records its
+ * token usage into the active per-turn sink, regardless of provider. The wrapper
+ * is transparent: same `LanguageModelV2` contract, no behavior change.
  */
-export const FLASH_MODEL = withTokenUsageTracking(
-  google(GEMINI_FLASH_MODEL_ID),
+export const ACTIVE_AI_PROVIDER: AiProvider = parseAiProvider(
+  process.env.MDE_AI_PROVIDER,
 );
-export const PRO_MODEL = withTokenUsageTracking(
-  google("gemini-3.1-pro-preview"),
-);
+
+export const FLASH_MODEL = withTokenUsageTracking(createActiveLanguageModel());
+
+/**
+ * Retained for callers that ask for the "pro" tier. NVIDIA currently has one
+ * selected model, so it reuses the active model there instead of silently
+ * calling Gemini without a Google key.
+ */
+export const PRO_MODEL =
+  ACTIVE_AI_PROVIDER === "nvidia"
+    ? FLASH_MODEL
+    : withTokenUsageTracking(google("gemini-3.1-pro-preview"));
 
 /** Legacy aliases (my-mastra-app used string IDs; mdeapp uses AI SDK) */
 export const CONCIERGE_MODEL = FLASH_MODEL;
