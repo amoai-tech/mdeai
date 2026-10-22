@@ -148,7 +148,7 @@ function gradeTriggerTrace(input, skill, id) {
   return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
 }
 
-test("all 18 SAN-1557 routing probes have executable pass/fail checks", () => {
+test("all SAN-1557 routing probes have executable pass/fail checks", () => {
   let count = 0;
   for (const skill of ["openmuse", "opendots", "openbot"]) {
     const prompts = JSON.parse(readFileSync(".claude/skills/" + skill +
@@ -168,5 +168,5 @@ test("all 18 SAN-1557 routing probes have executable pass/fail checks", () => {
       count++;
     }
   }
-  assert.equal(count, 18);
+  assert.ok(count >= 18, "keep the original 18 routing probes while allowing additions");
 });
