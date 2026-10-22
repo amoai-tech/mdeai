@@ -171,10 +171,13 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     [],
   );
 
+  // Creating the getter doesn't read the ref during bridge render. CopilotKit
+  // calls it later when an actual publish review is rendered.
+  const getLatestDraft = useCallback(() => latestDraftRef.current, []);
   // Keep the HITL tool stable across form edits, but never capture a stale draft.
   const PublishHitlRender = useMemo(
-    () => createPublishHitlRender(() => latestDraftRef.current, setDraft),
-    [setDraft],
+    () => createPublishHitlRender(getLatestDraft, setDraft),
+    [getLatestDraft, setDraft],
   );
 
   useHumanInTheLoop(
