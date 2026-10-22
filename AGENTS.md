@@ -272,13 +272,7 @@ enough to deliver one complete, verifiable outcome.
   split and records the decision in the PR description.
   Security, correctness, and necessary tests remain mandatory.
 
-Before opening a PR:
-
-- Verify every changed file supports the stated outcome.
-- Confirm the PR includes the implementation and tests
-  needed to prove one complete working result.
-- Remove unrelated changes. If work must be split,
-  ensure each PR has a clear, independently testable outcome.
+Before opening a PR, follow the [canonical PR-readiness checklist](.claude/skills/tasks/references/github-pr.md) for exact file scope, the required implementation/tests, and safe handling of unrelated worktree changes. Detailed steps belong to that checklist, not a second copy here.
 
 Optimize for the fewest PRs and tasks that deliver complete,
 reviewable, independently verifiable results.
