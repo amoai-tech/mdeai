@@ -114,11 +114,6 @@
     "anon": true,
     "authenticated": true
   },
-  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents integer)": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "create_broker_onboarding_draft(p_display_name text, p_listing_title text, p_neighborhood text)": {
     "public": false,
     "anon": true,
@@ -351,6 +346,11 @@
   },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
+    "public": true,
     "anon": true,
     "authenticated": true
   }
