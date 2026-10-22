@@ -66,6 +66,20 @@ describe("classifyPublishError", () => {
     ).toMatchObject({ status: 409, code: "DECISION_CONFLICT" });
   });
 
+  it("tells the host how to fix capacity overflow", () => {
+    expect(
+      classifyPublishError({
+        code: "P0001",
+        message: "TICKET_CAPACITY_EXCEEDED",
+      }),
+    ).toEqual({
+      status: 409,
+      code: "TICKET_CAPACITY_EXCEEDED",
+      message:
+        "Ticket quantities exceed the event capacity. Reduce quantities or increase capacity.",
+    });
+  });
+
   it("hides unexpected database messages behind a generic 500", () => {
     expect(
       classifyPublishError({

@@ -12,7 +12,8 @@ export type PublishErrorClassification = {
 
 const KNOWN_CODES = new RegExp(
   "AUTH_REQUIRED|FOREIGN_PROPOSAL|DRAFT_CHANGED|DECISION_CONFLICT|PROPOSAL_NOT_FOUND|" +
-    "PUBLISH_IN_PROGRESS_OR_INCOMPLETE|INVALID_[A-Z_]+|TICKET_QUANTITY_REQUIRED",
+    "PUBLISH_IN_PROGRESS_OR_INCOMPLETE|INVALID_[A-Z_]+|TICKET_QUANTITY_REQUIRED|" +
+    "TICKET_CAPACITY_EXCEEDED",
 );
 
 export function classifyPublishError(
@@ -53,6 +54,15 @@ export function classifyPublishError(
       status: 400,
       code: "INVALID_EVENT_DATE",
       message: "Enter a valid event date and time.",
+    };
+  }
+
+  if (error.message?.includes("TICKET_CAPACITY_EXCEEDED")) {
+    return {
+      status: 409,
+      code: "TICKET_CAPACITY_EXCEEDED",
+      message:
+        "Ticket quantities exceed the event capacity. Reduce quantities or increase capacity.",
     };
   }
 

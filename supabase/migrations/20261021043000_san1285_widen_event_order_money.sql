@@ -43,7 +43,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = 'public'
+set search_path = ''
 as $function$
 declare
   v_ticket  public.event_tickets%rowtype;
@@ -107,7 +107,7 @@ create or replace function public.ticket_checkout_create_pending(
 returns jsonb
 language plpgsql
 security definer
-set search_path to 'public', 'pg_temp'
+set search_path = ''
 as $function$
 declare
   v_ticket   public.event_tickets%rowtype;
@@ -193,7 +193,7 @@ create or replace function public.ticket_payment_refund_v2(
 returns uuid
 language plpgsql
 security definer
-set search_path = 'public'
+set search_path = ''
 as $function$
 declare
   v_order public.event_orders%rowtype;

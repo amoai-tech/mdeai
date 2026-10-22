@@ -350,7 +350,7 @@
     "authenticated": true
   },
   "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
-    "public": true,
+    "public": false,
     "anon": true,
     "authenticated": true
   }
