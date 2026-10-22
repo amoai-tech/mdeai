@@ -42,6 +42,12 @@ function threadItem(page: Page, id: string) {
   return page.locator(`[data-testid="nav-thread-item"][data-thread-id="${id}"]`).first();
 }
 
+// `gotoDeterministicChat` can spend up to 30s navigating, 20s waiting for the
+// chat shell, and 45s waiting for hydration on a cold CI runner. The old 60s
+// budget was smaller than the helper's own allowed wait and produced a false
+// timeout. Keep the assertions strict; only give the cold-start path room.
+test.describe.configure({ timeout: 120_000 });
+
 test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forward", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
