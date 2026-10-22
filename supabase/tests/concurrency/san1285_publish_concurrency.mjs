@@ -117,6 +117,9 @@ try {
   );
   check(Number(cents.rows[0]?.price_cents) === 3000000, "30000 COP is 3000000 Stripe minor units");
 } finally {
+  // A failed step can leave either participant mid-transaction. Close those
+  // transactions before the seed connection deletes the fixtures they hold.
+  await Promise.allSettled([a.query("rollback"), b.query("rollback")]);
   try {
     await seed.query(
       "delete from public.event_tickets where event_id in (select id from public.events where approval_request_id in (select id from public.approval_requests where proposal_id=$1))",
