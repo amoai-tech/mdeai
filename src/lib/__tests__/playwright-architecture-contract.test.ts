@@ -3,16 +3,6 @@ import fs from "node:fs";
 import config from "../../../playwright.config";
 
 describe("SAN-1341 Playwright architecture", () => {
-  it("makes a cold Next server start diagnosable and budgets CI cold compilation", () => {
-    const configSource = fs.readFileSync("playwright.config.ts", "utf8");
-    const ciSource = fs.readFileSync(".github/workflows/playwright-deterministic.yml", "utf8");
-    // Otherwise both Chromium jobs can time out waiting for / without printing why.
-    expect(configSource).toContain('stdout: "pipe"');
-    expect(configSource).toMatch(/timeout: process\.env\.CI \? 300_000 : 120_000/);
-    expect(ciSource).toMatch(/deterministic-chromium:[\s\S]*?timeout-minutes: 25/);
-    expect(ciSource).toMatch(/auth-guard-chromium:[\s\S]*?timeout-minutes: 20/);
-  });
-
   it("separates local browsers from explicitly opted-in production projects", () => {
     const names = (config.projects ?? []).map((project) => project.name);
     expect(names).toEqual(

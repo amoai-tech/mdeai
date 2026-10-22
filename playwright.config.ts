@@ -176,12 +176,6 @@ export default defineConfig({
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
-        // Large Next.js webpack pages can take more than 2 minutes to compile on a
-        // cold GitHub runner; preserve the shorter local feedback loop.
-        timeout: process.env.CI ? 300_000 : 120_000,
-        // Without stdout, Next's compile progress and startup errors disappear
-        // from the CI logs, leaving only an opaque webServer timeout.
-        stdout: "pipe",
-        stderr: "pipe",
+        timeout: 120_000,
       },
 });
