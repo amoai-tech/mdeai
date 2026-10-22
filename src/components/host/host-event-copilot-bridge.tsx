@@ -15,6 +15,7 @@ import {
   applySetPricing,
   applySetVenue,
   publishDecisionDraftPatch,
+  selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
@@ -70,7 +71,10 @@ function createPublishHitlRender(
     status,
     respond,
   }: HitlRenderProps) {
-    const draftArg = (args.draft as EventDraftState | undefined) ?? fallbackDraft;
+    const draftArg = selectPublishDraft(
+      args.draft as Partial<EventDraftState> | undefined,
+      fallbackDraft,
+    );
     const panelStatus =
       status === "inProgress"
         ? "inProgress"

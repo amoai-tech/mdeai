@@ -1,5 +1,6 @@
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
+  isDraftReadyForPublish,
   mergeEventDraft,
   type EventDraftState,
   type EventTicketTierDraft,
@@ -71,4 +72,18 @@ export function publishDecisionDraftPatch(
   if (decision === "rejected") return { status: "rejected" };
   if (decision !== "approved") return { status: "draft" };
   return null;
+}
+
+/**
+ * The model can call preview_and_publish with an empty or partial draft even
+ * when the visible wizard is complete. Prefer the reviewed wizard state unless
+ * the tool supplied values make a complete draft on their own.
+ */
+export function selectPublishDraft(
+  argsDraft: Partial<EventDraftState> | undefined,
+  fallbackDraft: EventDraftState,
+): EventDraftState {
+  if (!argsDraft) return fallbackDraft;
+  const merged = mergeEventDraft(fallbackDraft, argsDraft);
+  return isDraftReadyForPublish(merged) ? merged : fallbackDraft;
 }
