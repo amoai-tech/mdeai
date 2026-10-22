@@ -13,6 +13,7 @@ import {
   normalizeSha,
   parseArgs,
   readProductionSha,
+  resolveRemoteMain,
   shortSha,
 } from "../check-release-freshness.mjs";
 
@@ -67,6 +68,31 @@ test("--claimed requires a valid SHA operand and fails before I/O", () => {
     asJson: true, strict: true, claimed: A.slice(0, 9),
   });
   assert.equal(parseArgs([]).claimed, undefined);
+  assert.equal(parseArgs(["--claimed=" + A]).claimed, A);
+  assert.throws(() => parseArgs(["--claimed="]), /--claimed requires/);
+  assert.throws(() => parseArgs(["--claimed=abc"]), /--claimed requires/);
+  assert.throws(() => parseArgs(["--claimed", A, "--claimed=" + B]), /only appear once/);
+});
+
+test("Git fetch downloads only origin/main with a bounded timeout", async () => {
+  const calls = [];
+  const run = (file, args, timeout) => {
+    calls.push({ file, args, timeout });
+    return args[0] === "rev-parse" ? A + "\\n" : "";
+  };
+  assert.equal(await resolveRemoteMain(run), A);
+  assert.deepEqual(calls[0], {
+    file: "git",
+    args: ["fetch", "--quiet", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main"],
+    timeout: 30_000,
+  });
+  assert.deepEqual(calls[1].args, ["rev-parse", "origin/main"]);
+});
+
+test("timed-out Git fetch returns a precise error", async () => {
+  const timeout = Object.assign(new Error("fetch stalled"), { code: "ETIMEDOUT" });
+  await assert.rejects(resolveRemoteMain(() => { throw timeout; }), /git fetch timed out/);
+  await assert.rejects(resolveRemoteMain(() => { throw new Error("offline"); }), /git fetch failed/);
 });
 
 test("unverifiable inputs are UNKNOWN and fail", () => {
@@ -92,7 +118,7 @@ test("the version payload must carry a real sha", () => {
 
 test("the CLI fails before any Git call when --claimed lacks a valid operand", () => {
   const script = fileURLToPath(new URL("../check-release-freshness.mjs", import.meta.url));
-  for (const args of [["--claimed"], ["--claimed", "--strict"], ["--claimed", "invalid"]]) {
+  for (const args of [["--claimed"], ["--claimed", "--strict"], ["--claimed", "invalid"], ["--claimed="], ["--claimed=invalid"]]) {
     const result = spawnSync(process.execPath, [script, ...args], {
       encoding: "utf8", timeout: 3000, env: { ...process.env, PATH: "/nonexistent" },
     });
@@ -119,8 +145,9 @@ process.exit(2);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const script = fileURLToPath(new URL("../check-release-freshness.mjs", import.meta.url));
   try {
-    const run = (claimed) => new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [script, "--json", "--claimed", claimed], {
+    const run = (claimed, inline = false) => new Promise((resolve, reject) => {
+      const args = inline ? [script, "--json", "--claimed=" + claimed] : [script, "--json", "--claimed", claimed];
+      const child = spawn(process.execPath, args, {
         env: {
           ...process.env,
           PATH: dir + ":" + (process.env.PATH ?? ""),
@@ -135,6 +162,9 @@ process.exit(2);
     const wrong = await run(A);
     assert.equal(wrong.code, 1);
     assert.equal(wrong.payload.status, "STALE_CLAIM");
+    const wrongInline = await run(A, true);
+    assert.equal(wrongInline.code, 1);
+    assert.equal(wrongInline.payload.status, "STALE_CLAIM");
     const correct = await run(B);
     assert.equal(correct.code, 1);
     assert.equal(correct.payload.status, "UNKNOWN");
