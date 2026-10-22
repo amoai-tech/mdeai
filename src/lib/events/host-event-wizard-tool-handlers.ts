@@ -91,6 +91,19 @@ const publishToolFields = EventDraftStateSchema.pick({
 }).partial();
 
 /**
+ * Local datetimes in the Medellín event wizard mean America/Bogota, UTC-05:00
+ * for modern events. Make that offset explicit before preview, hashing and the
+ * PostgreSQL timestamptz cast (whose session TimeZone can be UTC).
+ * An existing explicit offset or Z is authoritative and must not be changed.
+ */
+function normalizeReviewedEventDate(draft: EventDraftState): EventDraftState {
+  const value = draft.dateIso;
+  if (!value || !isValidEventDraftDate(value)) return draft;
+  if (/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value)) return draft;
+  return { ...draft, dateIso: `${value}-05:00` };
+}
+
+/**
  * Empty tool args use the current reviewed wizard. Valid partial AI fields
  * merge over that wizard, and the HITL panel shows the exact merged draft before
  * approval. A malformed AI date is discarded by itself, preserving other valid
@@ -101,9 +114,9 @@ export function selectPublishDraft(
   argsDraft: unknown,
   fallbackDraft: EventDraftState,
 ): EventDraftState {
-  if (argsDraft == null) return fallbackDraft;
+  if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);
   const parsed = publishToolFields.safeParse(argsDraft);
-  if (!parsed.success) return fallbackDraft;
+  if (!parsed.success) return normalizeReviewedEventDate(fallbackDraft);
   // A bad AI date must not silently delete its valid description/price/tier edits.
   // Keep the reviewed date and show the other changes in the approval panel.
   const { dateIso, ...fields } = parsed.data;
@@ -111,5 +124,7 @@ export function selectPublishDraft(
     ? fields
     : parsed.data;
   const merged = mergeEventDraft(fallbackDraft, patch);
-  return isDraftReadyForPublish(merged) ? merged : fallbackDraft;
+  return normalizeReviewedEventDate(
+    isDraftReadyForPublish(merged) ? merged : fallbackDraft,
+  );
 }

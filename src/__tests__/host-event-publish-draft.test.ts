@@ -35,10 +35,23 @@ describe("selectPublishDraft", () => {
     expect(isDraftReadyForPublish(localWizard)).toBe(true);
     expect(selectPublishDraft({ description: "Updated AI description" }, localWizard))
       .toMatchObject({
-        dateIso: "2026-12-15T20:00",
+        dateIso: "2026-12-15T20:00-05:00",
         description: "Updated AI description",
         priceMinCop: 40000,
       });
+  });
+
+  it("normalizes a local wizard date even with empty tool arguments", () => {
+    const localWizard = { ...complete, dateIso: "2026-12-15T20:00" };
+    const result = selectPublishDraft({}, localWizard);
+    expect(result.dateIso).toBe("2026-12-15T20:00-05:00");
+    expect(new Date(result.dateIso!).toISOString()).toBe("2026-12-16T01:00:00.000Z");
+    expect(selectPublishDraft(undefined, localWizard).dateIso).toBe(result.dateIso);
+  });
+
+  it("preserves an explicit agent timezone offset instead of replacing it", () => {
+    expect(selectPublishDraft({ dateIso: "2026-12-15T20:00:00+02:00" }, complete).dateIso)
+      .toBe("2026-12-15T20:00:00+02:00");
   });
 
   it("retains valid AI edits when only its proposed datetime is malformed", () => {
