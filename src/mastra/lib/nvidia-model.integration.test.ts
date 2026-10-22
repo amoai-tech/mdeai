@@ -36,7 +36,7 @@ if (runLive && !API_KEY) {
   );
 }
 
-describe.skipIf(!runLive)("NVIDIA Nemotron 3.5 Super VL live capabilities", () => {
+describe.skipIf(!runLive)("NVIDIA Nemotron 3.5 Lightning live capabilities", () => {
   const model = () => createNvidiaLanguageModel(API_KEY as string);
 
   it("returns schema-valid rental slots with the exact budget", async () => {
@@ -140,7 +140,7 @@ describe.skipIf(!runLive)("Mastra Agent on the NVIDIA model", () => {
 
     const { Agent } = await import("@mastra/core/agent");
     const { createTool } = await import("@mastra/core/tools");
-    const { FLASH_MODEL } = await import("./models");
+    const { CONCIERGE_MODEL } = await import("./models");
     const { resolveAgentModelName } = await import("./mastra-telemetry");
 
     let calls = 0;
@@ -163,7 +163,7 @@ describe.skipIf(!runLive)("Mastra Agent on the NVIDIA model", () => {
       name: "NVIDIA live agent",
       instructions:
         "You are a rental search agent. Use search_rentals for rental searches and never invent listings.",
-      model: FLASH_MODEL,
+      model: CONCIERGE_MODEL,
       tools: { search_rentals: searchRentals },
     });
 

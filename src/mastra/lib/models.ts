@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { parseAiProvider, type AiProvider } from "@/lib/ai-model-ids";
+import { GEMINI_FLASH_MODEL_ID, parseAiProvider, type AiProvider } from "@/lib/ai-model-ids";
 import { createActiveLanguageModel } from "@/lib/ai-provider";
 import { withTokenUsageTracking } from "./token-usage-middleware";
 
@@ -7,10 +7,8 @@ import { withTokenUsageTracking } from "./token-usage-middleware";
  * Development-phase model owner for every Mastra agent and scorer.
  *
  * Default provider: **Gemini** (`gemini-3.5-flash-lite`). Set
- * `MDE_AI_PROVIDER=nvidia` to run the existing agents on
- * **NVIDIA Nemotron 3.5 Super VL** instead. No agent, tool, workflow, route or
- * frontend code changes when the provider switches — every agent imports
- * `FLASH_MODEL` from this file.
+ * `MDE_AI_PROVIDER=nvidia` enables Lightning only for the concierge in PR #509.
+ * Other agents keep the existing Gemini model until separately verified.
  *
  * Why an AI SDK model object rather than Mastra's `model: "nvidia/..."` router
  * string: the pinned `@mastra/core@1.74.0` registry does not contain this model,
@@ -30,19 +28,22 @@ export const ACTIVE_AI_PROVIDER: AiProvider = parseAiProvider(
   process.env.MDE_AI_PROVIDER,
 );
 
-export const FLASH_MODEL = withTokenUsageTracking(createActiveLanguageModel());
+export const FLASH_MODEL = withTokenUsageTracking(google(GEMINI_FLASH_MODEL_ID));
+
+/** PR #509: opt in only the existing concierge (and rental extraction) to NVIDIA. */
+export const ACTIVE_TEXT_MODEL =
+  ACTIVE_AI_PROVIDER === "nvidia"
+    ? withTokenUsageTracking(createActiveLanguageModel())
+    : FLASH_MODEL;
 
 /**
  * Retained for callers that ask for the "pro" tier. NVIDIA currently has one
  * selected model, so it reuses the active model there instead of silently
  * calling Gemini without a Google key.
  */
-export const PRO_MODEL =
-  ACTIVE_AI_PROVIDER === "nvidia"
-    ? FLASH_MODEL
-    : withTokenUsageTracking(google("gemini-3.1-pro-preview"));
+export const PRO_MODEL = withTokenUsageTracking(google("gemini-3.1-pro-preview"));
 
 /** Legacy aliases (my-mastra-app used string IDs; mdeapp uses AI SDK) */
-export const CONCIERGE_MODEL = FLASH_MODEL;
+export const CONCIERGE_MODEL = ACTIVE_TEXT_MODEL;
 export const REASONING_MODEL = FLASH_MODEL;
 export const PLANNING_MODEL = FLASH_MODEL;

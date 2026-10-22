@@ -28,13 +28,12 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
     vi.stubEnv("NVIDIA_API_KEY", "test-key");
 
-    const { ACTIVE_AI_PROVIDER, FLASH_MODEL } = await import("./models");
+    const { ACTIVE_AI_PROVIDER, FLASH_MODEL, CONCIERGE_MODEL } = await import("./models");
 
     expect(ACTIVE_AI_PROVIDER).toBe("nvidia");
-    expect((FLASH_MODEL as unknown as ModelWithId).modelId).toBe(
-      NVIDIA_MODEL_ID,
-    );
-    expect((FLASH_MODEL as unknown as ModelWithId).provider).toBe("nvidia.chat");
+    expect((FLASH_MODEL as unknown as ModelWithId).modelId).toBe(GEMINI_FLASH_MODEL_ID);
+    expect((CONCIERGE_MODEL as unknown as ModelWithId).modelId).toBe(NVIDIA_MODEL_ID);
+    expect((CONCIERGE_MODEL as unknown as ModelWithId).provider).toBe("nvidia.chat");
   });
 
   it("fails loudly when NVIDIA is selected without a key", async () => {

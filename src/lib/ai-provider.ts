@@ -27,11 +27,12 @@ import {
   GEMINI_FLASH_MODEL_ID,
   NVIDIA_API_BASE_URL,
   NVIDIA_MODEL_ID,
+  NVIDIA_SUPER_VL_MODEL_ID,
   parseAiProvider,
   type AiProvider,
 } from "@/lib/ai-model-ids";
 
-export type JsonProviderOptions = Record<string, Record<string, string>>;
+export type JsonProviderOptions = Record<string, { chat_template_kwargs: { enable_thinking: boolean } }>;
 
 /** The provider selected for this server process. */
 export function activeAiProvider(): AiProvider {
@@ -88,16 +89,8 @@ function nvidiaProvider(apiKey: string) {
 }
 
 /**
- * Nemotron is a reasoning model. Left at its default it spends output tokens on
- * hidden reasoning even for "reply OK" (57 reasoning tokens measured
- * 2026-10-22), which costs latency and can exhaust a small output allowance
- * before any visible text arrives — a 64-token stream test returned an empty
- * string. `reasoning_effort: "none"` returned the same answer in 679 ms with 0
- * reasoning tokens.
- *
- * Applied to every NVIDIA call through a transparent proxy, so agents and
- * structured call sites share one behavior. `MDE_NVIDIA_REASONING_EFFORT`
- * (`none|low|medium|high`) is the escape hatch for a future quality evaluation.
+ * Retained Super VL setting, separate from Lightning's chat_template_kwargs.
+ * PR #509 disables Lightning thinking for fast text and rental extraction.
  */
 export type NvidiaReasoningEffort = "none" | "low" | "high";
 
@@ -164,16 +157,21 @@ function withDefaultProviderOptions(
   });
 }
 
-/** Build the NVIDIA chat model without reading `MDE_AI_PROVIDER`. */
-export function createNvidiaLanguageModel(apiKey: string): LanguageModelV2 {
+/** Lightning for text; optionally construct the pre-existing Super VL model. */
+export function createNvidiaLanguageModel(
+  apiKey: string,
+  modelId: typeof NVIDIA_MODEL_ID | typeof NVIDIA_SUPER_VL_MODEL_ID = NVIDIA_MODEL_ID,
+): LanguageModelV2 {
   assertServerRuntime();
   const key = apiKey.trim();
   if (!key) {
     throw new Error("createNvidiaLanguageModel requires a non-empty NVIDIA API key.");
   }
-  const model = nvidiaProvider(key)(NVIDIA_MODEL_ID);
+  const model = nvidiaProvider(key)(modelId);
   return withDefaultProviderOptions(model, {
-    nvidia: { reasoningEffort: nvidiaReasoningEffort() },
+    nvidia: modelId === NVIDIA_MODEL_ID
+      ? { chat_template_kwargs: { enable_thinking: false } }
+      : { reasoningEffort: nvidiaReasoningEffort() },
   });
 }
 
@@ -186,20 +184,17 @@ export function createActiveLanguageModel(): LanguageModelV2 {
 }
 
 /**
- * Explicit options for structured extraction. The NVIDIA model already applies
- * `reasoningEffort`, but passing it here documents the requirement at the call
- * site and survives a future change to the wrapper defaults.
+ * Lightning's enable_thinking flag is different from Super VL's reasoningEffort.
+ * Keep the structured extraction request consistent with its model default.
  */
 export function structuredOutputProviderOptions(
   provider: AiProvider = activeAiProvider(),
 ): JsonProviderOptions | undefined {
   if (provider !== "nvidia") return undefined;
-  return { nvidia: { reasoningEffort: nvidiaReasoningEffort() } };
+  return { nvidia: { chat_template_kwargs: { enable_thinking: false } } };
 }
 
 /**
- * Output allowance for structured calls. The model supports 8,192 output
- * tokens; 1,024 is ample for MDE's slot schemas once thinking is disabled and
- * keeps a runaway generation bounded.
+ * With Lightning thinking disabled, 1,024 tokens bounds small rental schemas.
  */
 export const STRUCTURED_OUTPUT_MAX_TOKENS = 1024;

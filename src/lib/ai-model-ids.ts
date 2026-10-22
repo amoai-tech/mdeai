@@ -34,23 +34,17 @@ export type AiProvider = "gemini" | "nvidia";
 export const DEFAULT_AI_PROVIDER: AiProvider = "gemini";
 
 /** NVIDIA's direct API model id (`POST /v1/chat/completions`). */
-export const NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-super-vl-120b-a12b";
+export const NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b";
+/** Retained original model for compatibility; not used in the PR #509 workflow. */
+export const NVIDIA_SUPER_VL_MODEL_ID = "nvidia/nemotron-3.5-super-vl-120b-a12b";
 
 /**
- * Mastra's *model-router* id for the same model (`provider/model`):
- * `https://mastra.ai/models/providers/nvidia` lists it as
- * `nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b`.
- *
- * Recorded rather than used: MDE's pinned `@mastra/core@1.74.0` ships a static
- * provider registry and generated `ModelRouterModelId` union that do **not**
- * include this model (`nvidia/nemotron-3.5-lightning-30b-a3b` is the newest
- * Nemotron in that build). A router string would fail typecheck today and would
- * also bypass COST-001 token tracking, which is typed to `LanguageModelV2`
- * model objects. MDE therefore builds the same model through the AI SDK
- * provider below; re-evaluate when Mastra's registry ships it.
+ * Historical Mastra router ID uses provider/model format; MDE intentionally
+ * passes direct NVIDIA API model IDs to the existing AI SDK model object.
+ * Model objects preserve COST-001 token tracking on pinned Mastra 1.74.0.
  */
 export const NVIDIA_MASTRA_ROUTER_MODEL_ID =
-  "nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b";
+  "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b";
 
 /** OpenAI-compatible NVIDIA Build/NIM endpoint used by the AI SDK provider. */
 export const NVIDIA_API_BASE_URL = "https://integrate.api.nvidia.com/v1";
@@ -129,24 +123,17 @@ export const GEMINI_MODEL_CAPABILITIES: Record<string, GeminiModelCapabilities> 
 };
 
 /**
- * SAN-1588 — NVIDIA Nemotron 3.5 Super VL capability record.
- *
- * `models.dev` (Mastra's model-data source) lists `tool_call: true`,
- * `reasoning: true`, 1,048,576-token context and 8,192-token output. NVIDIA's
- * OpenAI-compatible endpoint was also proven live on 2026-10-22 through this
- * repository's provider path: a tool call returned
- * `{neighborhood:"Laureles",minBedrooms:2,maxPricePerMonth:3000000}` and a
- * JSON-schema response returned valid structured slots. The live proof is
- * opt-in in `src/mastra/lib/nvidia-model.integration.test.ts`; this record is
- * what ordinary CI can enforce.
+ * SAN-1588 — Lightning is the opt-in text model in PR #509.
+ * Documentation identifies tool calling and JSON output as supported; exact
+ * capability proof remains the opt-in live NVIDIA suite, not this declaration.
  */
 export const NVIDIA_MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [NVIDIA_MODEL_ID]: {
     functionCalling: true,
     structuredOutput: true,
     basis:
-      "models.dev catalog read 2026-10-22 (tool_call true, reasoning true, 1M context / 8K output); " +
-      "live-proven 2026-10-22 via an NVIDIA chat/completions tool call and JSON-schema response.",
+      "NVIDIA Build Lightning 30B-A3B documentation; live local opt-in suite " +
+      "passed 6/6 on 2026-10-22 (JSON slots, rental tool, streaming, token usage, Mastra agent).",
   },
 };
 

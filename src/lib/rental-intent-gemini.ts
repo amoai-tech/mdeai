@@ -5,8 +5,7 @@
  * default, NVIDIA Nemotron when configured). The schema, prompt and regex
  * fallback are unchanged, so switching provider cannot change search semantics.
  *
- * NVIDIA is a reasoning model; `structuredOutputProviderOptions()` disables its
- * thinking budget for this call. Live testing showed the default budget can spend
+ * NVIDIA Lightning uses `enable_thinking: false` for structured calls for this call. Live testing showed the default budget can spend
  * the whole output allowance on reasoning and return truncated JSON.
  */
 import { generateObject } from "ai";

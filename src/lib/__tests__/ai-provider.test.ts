@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { generateText } from "ai";
 import {
   activeModelIdFromEnv,
   AI_MODEL_CAPABILITIES,
@@ -21,6 +22,7 @@ import {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("provider selection", () => {
@@ -46,10 +48,10 @@ describe("provider selection", () => {
 
   it("uses the documented Mastra router id only as a distinct constant", () => {
     expect(NVIDIA_MASTRA_ROUTER_MODEL_ID).toBe(
-      "nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
     );
     expect(NVIDIA_MODEL_ID).toBe(
-      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
     );
     expect(NVIDIA_MODEL_ID).not.toBe(NVIDIA_MASTRA_ROUTER_MODEL_ID);
     expect(NVIDIA_API_BASE_URL).toBe("https://integrate.api.nvidia.com/v1");
@@ -100,7 +102,7 @@ describe("NVIDIA model construction", () => {
 
   it("disables reasoning only for NVIDIA structured calls", () => {
     expect(structuredOutputProviderOptions("nvidia")).toEqual({
-      nvidia: { reasoningEffort: "none" },
+      nvidia: { chat_template_kwargs: { enable_thinking: false } },
     });
     expect(structuredOutputProviderOptions("gemini")).toBeUndefined();
   });
@@ -141,5 +143,32 @@ describe("active provider", () => {
     vi.stubEnv("MDE_AI_PROVIDER", "");
     expect(activeAiProvider()).toBe("gemini");
     expect(activeAiModelId()).toBe(GEMINI_FLASH_MODEL_ID);
+  });
+});
+
+/** Local transport contract: no provider credits, no network requests. */
+describe("Lightning HTTP request", () => {
+  it("sends the correct model and disables thinking with NVIDIA-compatible keys", async () => {
+    let request: Record<string, unknown> | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      request = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({
+        id: "fixture", object: "chat.completion", created: 1,
+        model: NVIDIA_MODEL_ID,
+        choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "ready" } }],
+        usage: { prompt_tokens: 8, completion_tokens: 1, total_tokens: 9 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+
+    const result = await generateText({
+      model: createNvidiaLanguageModel("test-key"),
+      prompt: "Say ready",
+      maxOutputTokens: 64,
+    });
+    expect(result.text).toBe("ready");
+    expect(request?.model).toBe(NVIDIA_MODEL_ID);
+    expect(request?.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(request).not.toHaveProperty("reasoning_effort");
+    expect(request?.max_tokens).toBe(64);
   });
 });
