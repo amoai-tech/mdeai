@@ -4,6 +4,9 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 for (const width of [390, 768, 1440]) {
   test(`guest /chat startup at ${width}px reports no failed AI turn`, async ({ page }, testInfo) => {
+    // Cold CI compiles /chat and /api/copilotkit sequentially on first visit.
+    // Preserve the exact 401 assertion instead of skipping a slow request.
+    test.setTimeout(120_000);
     await page.setViewportSize({ width, height: 900 });
 
     // Observe the real denied runtime-info probe; no mocked auth, provider or agent.
@@ -14,7 +17,7 @@ for (const width of [390, 768, 1440]) {
       } catch {
         return false;
       }
-    }, { timeout: 30_000 });
+    }, { timeout: 90_000 });
 
     const pageResponse = await page.goto("/chat", { waitUntil: "domcontentloaded" });
     expect(pageResponse?.status()).toBe(200);
@@ -27,8 +30,8 @@ for (const width of [390, 768, 1440]) {
     await page.evaluate(() => new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     }));
-    // One assertion, after the settle: Playwright re-polls it for its default
-    // timeout, so a notice that appears and then clears is still caught.
+    // Assert the settled UI after the real startup response; this checks the
+    // final visible state, not every transient DOM mutation during loading.
     await expect(page.getByTestId("concierge-error-notice")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)).toBe(false);
     await page.screenshot({ path: testInfo.outputPath(`guest-chat-${width}.png`) });
