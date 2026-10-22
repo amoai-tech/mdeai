@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# A new push cancels only an older browser run for this SAME PR.
+concurrency:
+  group: playwright-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -54,7 +59,7 @@ jobs:
           CHANGED_FILES="$changed" LABELS="$LABELS" node scripts/ci/browser-scope.mjs
 
   deterministic-chromium:
-    name: deterministic chromium
+    name: deterministic chromium ${{ matrix.shard }}/3
     needs: browser_scope
     # Fail safe: if the scope job itself fails, run the browser suite instead of
     # skipping it. A green run_e2e is the only path that skips Chromium.
@@ -62,6 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +93,7 @@ jobs:
         env:
           NODE_ENV: development
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: shard-${{ matrix.shard }}.zip
           NEXT_TELEMETRY_DISABLED: 1
           E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
@@ -95,16 +105,51 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npm run test:e2e:deterministic
+        run: npm run test:e2e:deterministic -- --shard=${{ matrix.shard }}/3 --reporter=blob,list
 
-      # SAN-522: the mobile composer regression must run against the REAL v2
-      # composer, so it is its own step *without* NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT
-      # (the deterministic adapter replaces the composer and would not cover this).
-      # No Supabase secret is provided, so the signed-in agent case skips.
+      - name: Retain each shard's blob report (including failures)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-blob-shard-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: blob-report/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deterministic-playwright-${{ github.run_id }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            test-results/**
+            tmp/playwright-report/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+
+  # Real CopilotKit v2 composer: NEVER enable NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT.
+  mobile-composer:
+    name: real mobile composer chromium
+    needs: browser_scope
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
       - name: Prove the mobile composer regression
         env:
           NODE_ENV: development
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: mobile-composer.zip
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
@@ -113,18 +158,75 @@ jobs:
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npm run test:e2e:mobile-composer
+        run: npm run test:e2e:mobile-composer -- --reporter=blob,list
 
-      - name: Upload Playwright failure artifacts
+      - name: Retain real-composer blob report (including failures)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-blob-mobile-${{ github.run_attempt }}
+          path: blob-report/*.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload real-composer failure traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: deterministic-playwright-${{ github.run_id }}
-          path: |
-            test-results/**
-            tmp/playwright-report/**
+          name: real-mobile-composer-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/**
           if-no-files-found: ignore
           retention-days: 7
+
+  # Stable overall check: missing blobs, any failed shard, or failed mobile is RED.
+  browser-results:
+    name: browser report + result
+    needs: [browser_scope, deterministic-chromium, mobile-composer]
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install report tooling
+        run: npm ci
+      - name: Download all Playwright blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-blob-*-${{ github.run_attempt }}
+          path: all-blob-reports
+          merge-multiple: true
+      - name: Require every original suite's report
+        run: |
+          set -euo pipefail
+          for name in shard-1.zip shard-2.zip shard-3.zip mobile-composer.zip; do
+            test -s "all-blob-reports/$name" || { echo "::error::Missing $name"; exit 1; }
+          done
+          test "$(find all-blob-reports -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 4
+      - name: Merge shards into one HTML report
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: tmp/playwright-merged-report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+      - name: Upload combined HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-combined-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/playwright-merged-report/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce shard and real-composer results
+        if: always()
+        env:
+          SHARDS_RESULT: ${{ needs.deterministic-chromium.result }}
+          MOBILE_RESULT: ${{ needs.mobile-composer.result }}
+        run: |
+          if [[ "$SHARDS_RESULT" != success || "$MOBILE_RESULT" != success ]]; then
+            echo "::error::Browser jobs failed or did not execute (shards=$SHARDS_RESULT mobile=$MOBILE_RESULT)"
+            exit 1
+          fi
 
   # Run the existing real auth-route browser suite on every PR, in parallel with the
   # long deterministic suite. No E2E_BYPASS_AUTH and NO privileged Supabase secrets:
