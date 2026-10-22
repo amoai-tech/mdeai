@@ -2,6 +2,7 @@ import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
   EventDraftStateSchema,
   isDraftReadyForPublish,
+  isValidEventDraftDate,
   mergeEventDraft,
   type EventDraftState,
   type EventTicketTierDraft,
@@ -92,8 +93,9 @@ const publishToolFields = EventDraftStateSchema.pick({
 /**
  * Empty tool args use the current reviewed wizard. Valid partial AI fields
  * merge over that wizard, and the HITL panel shows the exact merged draft before
- * approval. Malformed or unpublishable AI values fall back to the wizard.
- * Server authorization, transaction validation and receipt remain authoritative.
+ * approval. A malformed AI date is discarded by itself, preserving other valid
+ * proposed fields and the reviewed date. Other invalid or unpublishable values
+ * fall back to the wizard. Server validation remains authoritative.
  */
 export function selectPublishDraft(
   argsDraft: unknown,
@@ -102,6 +104,12 @@ export function selectPublishDraft(
   if (argsDraft == null) return fallbackDraft;
   const parsed = publishToolFields.safeParse(argsDraft);
   if (!parsed.success) return fallbackDraft;
-  const merged = mergeEventDraft(fallbackDraft, parsed.data);
+  // A bad AI date must not silently delete its valid description/price/tier edits.
+  // Keep the reviewed date and show the other changes in the approval panel.
+  const { dateIso, ...fields } = parsed.data;
+  const patch = dateIso !== undefined && !isValidEventDraftDate(dateIso)
+    ? fields
+    : parsed.data;
+  const merged = mergeEventDraft(fallbackDraft, patch);
   return isDraftReadyForPublish(merged) ? merged : fallbackDraft;
 }

@@ -30,6 +30,29 @@ describe("selectPublishDraft", () => {
     expect(selectPublishDraft({ dateIso: "2026-99-99T20:00:00-05:00" }, complete)).toEqual(complete);
   });
 
+  it("accepts local wizard dates without discarding a valid AI description", () => {
+    const localWizard = { ...complete, dateIso: "2026-12-15T20:00" };
+    expect(isDraftReadyForPublish(localWizard)).toBe(true);
+    expect(selectPublishDraft({ description: "Updated AI description" }, localWizard))
+      .toMatchObject({
+        dateIso: "2026-12-15T20:00",
+        description: "Updated AI description",
+        priceMinCop: 40000,
+      });
+  });
+
+  it("retains valid AI edits when only its proposed datetime is malformed", () => {
+    expect(selectPublishDraft({
+      dateIso: "not-a-date",
+      description: "New description",
+      priceMinCop: 50000,
+    }, complete)).toMatchObject({
+      dateIso: complete.dateIso,
+      description: "New description",
+      priceMinCop: 50000,
+    });
+  });
+
   it("handles wrong types without crashing the HITL renderer", () => {
     expect(selectPublishDraft(null, complete)).toEqual(complete);
     expect(selectPublishDraft("not an object", complete)).toEqual(complete);
