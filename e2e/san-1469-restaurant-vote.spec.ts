@@ -148,13 +148,14 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
   });
 
   test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+    // This full signed-in flow compiles multiple routes on a cold CI runner, then
+    // proves a database transaction, cross-browser receipt and replay. In run
+    // 39728843489, the first restaurant page took 62s of the former 120s test
+    // budget. Keep each user-action assertion strict and CI retries disabled.
+    test.setTimeout(300_000);
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
-    // Real network + database work, and CI cold starts are slow. An explicit budget keeps a
-    // slow run a slow run instead of a flaky one; CI runs with --retries=0 so a retry can
-    // never disguise a real failure.
-    test.setTimeout(120_000);
     let cleanupError: unknown = null;
     try {
       const phase = await db.query<{ application_phase: string }>(
