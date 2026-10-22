@@ -19,6 +19,8 @@ export type EventCardProps = {
   currency?: string;
   imageUrl?: string;
   ticketUrl: string;
+  /** Draft review cards cannot sell tickets before a real event exists. */
+  previewOnly?: boolean;
   sourceUrl?: string;
   /** Browse grid — link to `/events/[slug]` without chat handler. */
   detailsHref?: string;
@@ -57,6 +59,7 @@ export function EventCard({
   currency,
   imageUrl,
   ticketUrl,
+  previewOnly = false,
   sourceUrl,
   detailsHref,
   selected,
@@ -129,7 +132,7 @@ export function EventCard({
           From {formatEventCardPrice(pricePerTicket, currency)}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {onBuyTickets ? (
+          {previewOnly ? null : onBuyTickets ? (
             <Button
               type="button"
               size="sm"
