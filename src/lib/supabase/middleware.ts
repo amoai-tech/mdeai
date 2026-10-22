@@ -3,7 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "./env";
 
 // /host marketing landing (SAN-660) is public; wizard + host dashboard paths stay auth-gated.
-const PROTECTED_PREFIXES = ["/host/events", "/host/event", "/trips", "/saved"];
+// SAN-1575: /app is the unified account shell. It is guarded here so a forgotten
+// layout cannot expose account routes; destination layouts still re-check.
+const PROTECTED_PREFIXES = [
+  "/host/events",
+  "/host/event",
+  "/trips",
+  "/saved",
+  "/app",
+];
 // Exact paths that require a session without protecting their subpaths.
 // /me/tickets (wallet list) needs auth, but /me/tickets/[id]?token= is the
 // guest ticket-view flow and must stay reachable without a session.
