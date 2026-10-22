@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { inFilter, gteFilter, lteFilter, addressFilter } = vi.hoisted(() => ({
   inFilter: vi.fn(),
@@ -46,10 +46,18 @@ import { dateWindow, searchEvents } from '../search-events';
 
 describe('Nightlife chip when intelligence import fails', () => {
   beforeEach(() => {
+    // The tool and expected dateWindow() are computed separately. Without a
+    // fixed clock, the 'tonight' lower bound differs by milliseconds in CI.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T09:00:00.000Z'));
     inFilter.mockClear();
     gteFilter.mockClear();
     lteFilter.mockClear();
     addressFilter.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('does NOT filter event_type when Nightlife chip has no text', async () => {
