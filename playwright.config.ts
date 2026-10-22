@@ -175,6 +175,9 @@ export default defineConfig({
         // A cheap static asset confirms Next is accepting requests without compiling the
         // full discovery homepage before the browser journey begins.
         url: new URL("/favicon.ico", localBaseURL).toString(),
+        // Next can announce readiness before the HTTP probe returns in deterministic
+        // test mode. Playwright accepts either signal, then tests real pages normally.
+        wait: { stdout: /Ready in/ },
         // Surface Next startup diagnostics when CI cannot make the server ready.
         stdout: "pipe",
         // A reused server may belong to a different worktree and produce false greens.
