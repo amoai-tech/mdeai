@@ -18,7 +18,9 @@ describe("partnerAgent (SAN-705)", () => {
     expect(text).toContain("no write tools yet");
   });
 
-  it("starts with no write tools, so a chat turn cannot mutate partner data", async () => {
-    await expect(partnerAgent.listTools()).resolves.toEqual({});
+  it("exposes exactly one read-only partner profile tool", async () => {
+    const tools = await partnerAgent.listTools();
+    expect(Object.keys(tools)).toEqual(["getPartnerProfile"]);
+    expect(tools.getPartnerProfile.id).toBe("get-partner-profile");
   });
 });

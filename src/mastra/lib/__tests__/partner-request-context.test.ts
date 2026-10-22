@@ -18,7 +18,40 @@ const context: PartnerRuntimeContext = {
   businessName: "Café Central",
   category: "Café",
   neighborhood: "Laureles",
+  website: "https://cafe.example.com",
+  description: "Coffee and pastries",
 };
+
+function mockClient(
+  memberships: Array<{ partner_id: string; role: string }> | null,
+  partner: Record<string, unknown> | null,
+  errors: { membership?: { code: string } | null; partner?: { code: string } | null } = {},
+) {
+  return {
+    from(table: string) {
+      return {
+        select() {
+          return {
+            eq() {
+              if (table === "partner_members") {
+                return Promise.resolve({
+                  data: memberships,
+                  error: errors.membership ?? null,
+                });
+              }
+              return {
+                maybeSingle: async () => ({
+                  data: partner,
+                  error: errors.partner ?? null,
+                }),
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
 
 describe("partner request context", () => {
   it("round-trips the signed-in partner context", () => {
@@ -32,56 +65,72 @@ describe("partner request context", () => {
     expect(getPartnerRuntimeContext(new RequestContext())).toBeNull();
   });
 
-  it("loads only the membership row visible through the caller's Supabase client", async () => {
-    const supabase = {
-      from(table: string) {
-        return {
-          select() {
-            return {
-              eq() {
-                return {
-                  maybeSingle: async () =>
-                    table === "partner_members"
-                      ? { data: { partner_id: "partner-1", role: "owner" }, error: null }
-                      : {
-                          data: {
-                            id: "partner-1",
-                            type: "venue",
-                            status: "draft",
-                            settings: {
-                              businessName: "Café Central",
-                              category: "Café",
-                              neighborhood: "Laureles",
-                            },
-                          },
-                          error: null,
-                        },
-                };
-              },
-            };
-          },
-        };
+  it("loads the one membership with its saved profile through RLS", async () => {
+    const supabase = mockClient(
+      [{ partner_id: "partner-1", role: "owner" }],
+      {
+        id: "partner-1",
+        type: "venue",
+        status: "draft",
+        settings: {
+          businessName: "Café Central",
+          category: "Café",
+          neighborhood: "Laureles",
+          website: "https://cafe.example.com",
+          description: "Coffee and pastries",
+        },
       },
-    };
+    );
 
-    const loaded = await loadPartnerRuntimeContext(supabase as never, "user-1");
-    expect(loaded).toEqual(context);
+    await expect(
+      loadPartnerRuntimeContext(supabase as never, "user-1"),
+    ).resolves.toEqual(context);
   });
 
-  it("returns null when the signed-in user has no partner membership", async () => {
-    const supabase = {
-      from() {
-        return {
-          select() {
-            return {
-              eq() {
-                return { maybeSingle: async () => ({ data: null, error: null }) };
-              },
-            };
-          },
-        };
-      },
+  it("requires an explicit selection when the user has multiple businesses", async () => {
+    const memberships = [
+      { partner_id: "partner-1", role: "owner" },
+      { partner_id: "partner-2", role: "owner" },
+    ];
+    const partner = {
+      id: "partner-2",
+      type: "venue",
+      status: "draft",
+      settings: { businessName: "Second Café" },
     };
-    await expect(loadPartnerRuntimeContext(supabase as never, "user-1")).resolves.toBeNull();
+
+    await expect(
+      loadPartnerRuntimeContext(mockClient(memberships, partner) as never, "user-1"),
+    ).resolves.toBeNull();
+
+    const selected = await loadPartnerRuntimeContext(
+      mockClient(memberships, partner) as never,
+      "user-1",
+      "partner-2",
+    );
+    expect(selected?.partnerId).toBe("partner-2");
+    expect(selected?.businessName).toBe("Second Café");
+  });
+
+  it("fails closed when the selected business is not a membership", async () => {
+    await expect(
+      loadPartnerRuntimeContext(
+        mockClient([{ partner_id: "partner-1", role: "owner" }], null) as never,
+        "user-1",
+        "partner-2",
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null for no membership or a membership query failure", async () => {
+    await expect(
+      loadPartnerRuntimeContext(mockClient([], null) as never, "user-1"),
+    ).resolves.toBeNull();
+    await expect(
+      loadPartnerRuntimeContext(
+        mockClient(null, null, { membership: { code: "XX000" } }) as never,
+        "user-1",
+      ),
+    ).resolves.toBeNull();
   });
 });

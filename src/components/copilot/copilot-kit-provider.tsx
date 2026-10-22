@@ -17,18 +17,21 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 // Capture replay eligibility at this provider's mount, not at the root layout's mount:
 // a newly persisted turn must not reconnect into itself while its answer is visible.
 function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const { activeThreadId, sessionThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
+  const partnerRoute = pathname === "/partners/profile" || pathname === "/partners/signup";
+  const agentId = partnerRoute ? "partnerAgent" : "conciergeAgent";
 
   return (
     <CopilotKitProvider
-      {...getCopilotKitClientProps("conciergeAgent")}
+      {...getCopilotKitClientProps(agentId)}
       onError={() => reportConciergeError(activeThreadId ?? sessionThreadId)}
     >
       <CopilotChatConfigurationProvider
-        agentId="conciergeAgent"
+        agentId={agentId}
         threadId={activeThreadId ?? sessionThreadId}
         hasExplicitThreadId={shouldReplay}
       >

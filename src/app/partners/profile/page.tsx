@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { MarketingPageShell } from "@/components/marketing/marketing-page-shell";
 import { PartnerProfileForm } from "@/components/partners/partner-profile-form";
+import { PartnerWorkspaceChat } from "@/components/partners/partner-workspace-chat";
 import { loadPartnerProfile } from "@/lib/partners/partner-profile-load";
 import { createClient } from "@/lib/supabase/server";
 
@@ -121,6 +122,18 @@ export default async function PartnerProfilePage({
                   website: readSetting(settings, "website"),
                 }}
               />
+
+              <section
+                aria-label="Partner assistant"
+                data-testid="partner-assistant"
+                className="mt-10 flex h-[60vh] min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm sm:h-[34rem]"
+              >
+                <PartnerWorkspaceChat
+                  partnerId={partner.id}
+                  businessName={readSetting(settings, "businessName") || null}
+                  partnerType={partner.type}
+                />
+              </section>
             </div>
           ) : (
             <div

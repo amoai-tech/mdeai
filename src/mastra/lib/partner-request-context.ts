@@ -13,6 +13,8 @@ export type PartnerRuntimeContext = {
   businessName: string | null;
   category: string | null;
   neighborhood: string | null;
+  website: string | null;
+  description: string | null;
 };
 
 export function setPartnerRuntimeContext(
@@ -47,13 +49,28 @@ function readSetting(
 export async function loadPartnerRuntimeContext(
   supabase: SupabaseClient,
   userId: string,
+  selectedPartnerId?: string,
 ): Promise<PartnerRuntimeContext | null> {
-  const { data: membership, error: membershipError } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("partner_members")
     .select("partner_id, role")
-    .eq("profile_id", userId)
-    .maybeSingle();
-  if (membershipError || !membership) return null;
+    .eq("profile_id", userId);
+
+  if (membershipError || !memberships?.length) return null;
+
+  const allowed = memberships.filter(
+    (row): row is { partner_id: string; role: string } =>
+      typeof row.partner_id === "string" && typeof row.role === "string",
+  );
+  const membership = selectedPartnerId
+    ? allowed.find((row) => row.partner_id === selectedPartnerId)
+    : allowed.length === 1
+      ? allowed[0]
+      : undefined;
+
+  // A selected id is only a selector. If it is not one of the caller's
+  // memberships, or a multi-business account has not selected one, fail closed.
+  if (!membership) return null;
 
   const { data: partner, error: partnerError } = await supabase
     .from("partners")
@@ -72,5 +89,7 @@ export async function loadPartnerRuntimeContext(
     businessName: readSetting(settings, "businessName"),
     category: readSetting(settings, "category"),
     neighborhood: readSetting(settings, "neighborhood"),
+    website: readSetting(settings, "website"),
+    description: readSetting(settings, "description"),
   };
 }
