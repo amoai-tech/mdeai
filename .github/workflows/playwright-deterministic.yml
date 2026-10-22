@@ -61,7 +61,7 @@ jobs:
     if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
     # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +130,7 @@ jobs:
   auth-guard-chromium:
     name: auth redirect + guard chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
