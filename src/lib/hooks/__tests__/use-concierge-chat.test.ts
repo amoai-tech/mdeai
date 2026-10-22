@@ -123,7 +123,8 @@ describe("useConciergeChat — switching conversation mid-reply", () => {
 
   it("does not claim a resolved stream was successful when onError fired", async () => {
     agent.threadId = "thread-1";
-    copilotkit.runAgent.mockImplementation(async () => { reportConciergeError(); });
+    // The live CopilotKit provider forwards the selected thread ID on error.
+    copilotkit.runAgent.mockImplementation(async () => { reportConciergeError("thread-1"); });
     await expect(useConciergeChat().retryLastTurn()).resolves.toBe(false);
     expect(ensureMock).not.toHaveBeenCalled();
   });

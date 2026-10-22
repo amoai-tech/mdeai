@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearConciergeError,
+  getConciergeErrorForThread,
   getConciergeErrorSnapshot,
   reportConciergeError,
 } from "@/lib/concierge-error-store";
@@ -23,6 +24,27 @@ describe("concierge error ownership", () => {
     reportConciergeError("thread-a");
     clearConciergeError("thread-a");
     expect(getConciergeErrorSnapshot()).toEqual({ version: 0, threadId: null });
+  });
+
+  it("never overwrites a newer conversation's notice with a late old error", () => {
+    reportConciergeError("thread-b");
+    reportConciergeError("thread-a");
+    expect(getConciergeErrorForThread("thread-b")).toMatchObject({ threadId: "thread-b" });
+    expect(getConciergeErrorForThread("thread-a")).toMatchObject({ threadId: "thread-a" });
+  });
+
+  it("clears only the named conversation", () => {
+    reportConciergeError("thread-a");
+    reportConciergeError("thread-b");
+    clearConciergeError("thread-a");
+    expect(getConciergeErrorForThread("thread-a").version).toBe(0);
+    expect(getConciergeErrorForThread("thread-b")).toMatchObject({ threadId: "thread-b" });
+  });
+
+  it("never shows a legacy unscoped error in a named conversation", () => {
+    reportConciergeError({ retry: () => {} });
+    expect(getConciergeErrorForThread("thread-b")).toEqual({ version: 0, threadId: null });
+    expect(getConciergeErrorForThread()).toMatchObject({ version: 1, threadId: null });
   });
 
   it("keeps legacy no-thread reports visible", () => {

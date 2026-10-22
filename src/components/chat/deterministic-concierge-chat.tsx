@@ -50,6 +50,9 @@ export function DeterministicConciergeChat() {
       data-testid="concierge-chat-view-mounted"
       data-hydrated={hydrated ? "true" : "false"}
       className="flex min-h-0 flex-1 flex-col justify-end"
+      // The deterministic composer does not use CopilotKit's built-in keyboard lift.
+      // Match the real visible-viewport contract when the keyboard overlays /chat.
+      style={{ paddingBottom: "var(--mde-keyboard-height, 0px)" }}
     >
       {/* The same tail the real transcript renders, above the composer. */}
       <div ref={scrollerRef} className="mx-auto min-h-0 w-full max-w-3xl overflow-y-auto">
@@ -63,6 +66,8 @@ export function DeterministicConciergeChat() {
           <textarea
             data-testid="copilot-chat-textarea"
             aria-label="Type a message"
+            enterKeyHint="send"
+            inputMode="text"
             placeholder="Type a message..."
             disabled={!hydrated}
             value={value}
@@ -81,7 +86,7 @@ export function DeterministicConciergeChat() {
             aria-label="Send"
             disabled={!hydrated || !value.trim() || sending}
             onClick={() => void submit()}
-            className="rounded-full bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+            className="min-h-11 min-w-11 rounded-full bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           >
             {sending ? "Sending…" : "Send"}
           </button>

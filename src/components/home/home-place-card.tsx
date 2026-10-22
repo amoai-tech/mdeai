@@ -18,7 +18,7 @@ function cardHref({ href, query }: Pick<PlaceCardData, "href" | "query">): strin
  * (a tinted header, never a stand-in picture of something that is not that place).
  */
 export function PlaceCard(props: Omit<PlaceCardData, "id">) {
-  const { name, kind, rating, meta, why, image, query, href } = props;
+  const { name, kind, rating, meta, why, image, query, href, imageAlt, imageCredit } = props;
   const hasPhoto = isRenderableRemoteImage(image);
   return (
     <Link href={cardHref({ href, query })} className={`group block rounded-xl ${FOCUS}`}>
@@ -27,7 +27,7 @@ export function PlaceCard(props: Omit<PlaceCardData, "id">) {
           <div className="relative aspect-[4/3] overflow-hidden bg-muted">
             <Image
               src={image}
-              alt={name}
+              alt={imageAlt ?? name}
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -53,6 +53,8 @@ export function PlaceCard(props: Omit<PlaceCardData, "id">) {
             </p>
           )}
           {why && <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{why}</p>}
+          {/* Plain text on purpose: the whole card is a link, and links cannot nest. The link sits in the section's credits line. */}
+          {hasPhoto && imageCredit && <p className="mt-auto pt-1 text-xs text-muted-foreground">{imageCredit.text}</p>}
         </CardContent>
       </Card>
     </Link>

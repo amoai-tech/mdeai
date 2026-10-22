@@ -7,6 +7,7 @@ import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import {
   clearConciergeError,
+  getConciergeErrorForThread,
   getConciergeErrorSnapshot,
   reportConciergeError,
 } from "@/lib/concierge-error-store";
@@ -20,7 +21,8 @@ const retriesInFlight = new WeakSet<object>();
 function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
-  const markThreadSaved = useOptionalThreadNav()?.markThreadSaved;
+  const threadNav = useOptionalThreadNav();
+  const markThreadSaved = threadNav?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
 
@@ -62,15 +64,18 @@ function useLiveConciergeChat() {
     if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
         !agent.messages.some((message) => message.role === "user")) return false;
     const retryThreadId = agent.threadId;
-    const priorError = getConciergeErrorSnapshot();
+    const priorError = getConciergeErrorForThread(retryThreadId);
+    const latestError = getConciergeErrorSnapshot();
     // A notice from another conversation must never replay this agent's turn.
     if (priorError.threadId && priorError.threadId !== retryThreadId) return false;
+    if (priorError.version === 0 && latestError.threadId &&
+        latestError.threadId !== retryThreadId) return false;
     retriesInFlight.add(agent);
     clearConciergeError(retryThreadId);
     try {
       await copilotkit.runAgent({ agent });
       // CopilotKit can surface a stream error via onError without rejecting.
-      const error = getConciergeErrorSnapshot();
+      const error = getConciergeErrorForThread(retryThreadId);
       if (error.version > 0) return false;
       // A thread change during retry must not save/title a different chat.
       if (agent.threadId === retryThreadId) {
@@ -90,6 +95,19 @@ function useLiveConciergeChat() {
   const appendMessage = useCallback(
     async (content: string) => {
       if (!agent) return false;
+      // CopilotKit v2 useAgent() only copies the configured thread ID when the
+      // configuration is explicit. Fresh threads are deliberately non-explicit,
+      // so otherwise the agent invents a different ID and /chat cannot adopt
+      // the saved conversation from this tab after a Rentals send.
+      // Pin only a fresh, authenticated tab before the FIRST run; never
+      // override an explicitly selected or previously persisted thread.
+      if (threadNav?.ready && !threadNav.activeThreadId && !threadNav.hasPersistedThread &&
+          threadNav.sessionThreadId) {
+        // AG-UI's AbstractAgent is a mutable SDK object (the installed useAgent
+        // assigns threadId directly too); this is not React render state.
+        // eslint-disable-next-line react-hooks/immutability
+        agent.threadId = threadNav.sessionThreadId;
+      }
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
@@ -102,7 +120,7 @@ function useLiveConciergeChat() {
       if (agent.threadId) void ensureThreadTitle(agent.threadId);
       return true;
     },
-    [agent, copilotkit, markThreadSaved],
+    [agent, copilotkit, markThreadSaved, threadNav],
   );
 
   return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };

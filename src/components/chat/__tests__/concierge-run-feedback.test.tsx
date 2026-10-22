@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ConciergeRunFeedback } from "@/components/chat/concierge-run-feedback";
+import { ConciergeErrorFeedback, ConciergeStopButton } from "@/components/chat/concierge-run-feedback";
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 
 const mocks = vi.hoisted(() => ({
@@ -28,17 +28,18 @@ vi.mock("@/lib/hooks/use-concierge-chat", () => ({
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
-function mount() {
+function mount(component: React.ReactElement = <ConciergeErrorFeedback />) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => root?.render(<ConciergeRunFeedback />));
+  act(() => root?.render(component));
   return container;
 }
 
 beforeEach(() => {
   clearConciergeError();
   mocks.loading = true;
+  mocks.thread = "thread-a";
   mocks.stop.mockReset();
   mocks.retry.mockReset();
 });
@@ -51,9 +52,9 @@ afterEach(() => {
   clearConciergeError();
 });
 
-describe("ConciergeRunFeedback", () => {
-  it("shows Stop while a run is active and calls the controller", () => {
-    const view = mount();
+describe("Concierge feedback controls", () => {
+  it("keeps Stop in its own control and calls the controller", () => {
+    const view = mount(<ConciergeStopButton />);
     const stop = view.querySelector('[data-testid="concierge-stop"]');
     expect(stop).toBeTruthy();
     expect(stop?.getAttribute("aria-label")).toBe("Stop");
@@ -66,6 +67,7 @@ describe("ConciergeRunFeedback", () => {
     reportConciergeError("thread-a");
     const view = mount();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeTruthy();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')?.getAttribute("role")).toBe("alert");
     act(() => {
       Array.from(view.querySelectorAll("button"))
         .find((button) => button.textContent === "Try again ↻")
@@ -77,8 +79,8 @@ describe("ConciergeRunFeedback", () => {
   it("does not offer Retry during an active run even if an error event arrives", () => {
     reportConciergeError();
     const view = mount();
-    expect(view.querySelector('[data-testid="concierge-stop"]')).toBeTruthy();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+    expect(view.textContent).toBe("");
   });
 
   it("hides and clears a failure from another conversation", () => {
@@ -88,6 +90,29 @@ describe("ConciergeRunFeedback", () => {
     const view = mount();
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
     expect(view.textContent).toBe("");
+  });
+
+  it("uses the failed operation's retry instead of the generic agent retry", () => {
+    mocks.loading = false;
+    const retryOperation = vi.fn();
+    reportConciergeError({ threadId: "thread-a", retry: retryOperation });
+    const view = mount();
+    act(() => {
+      Array.from(view.querySelectorAll("button"))
+        .find((button) => button.textContent === "Try again ↻")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(retryOperation).toHaveBeenCalledTimes(1);
+    expect(mocks.retry).not.toHaveBeenCalled();
+  });
+
+  it("shows the current chat's newer notice after an old chat reports late", () => {
+    mocks.loading = false;
+    mocks.thread = "thread-b";
+    reportConciergeError("thread-b");
+    reportConciergeError("thread-a");
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeTruthy();
   });
 
   it("renders nothing when idle", () => {

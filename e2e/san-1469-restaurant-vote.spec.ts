@@ -84,12 +84,15 @@ async function proveContestSelection(
   // A well-formed contest id that is not this restaurant's contest. The sentinel below
   // must never become a real contest id.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
-  await expect(page.getByTestId("vote-not-open")).toBeVisible();
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  // Assert the canonical contest region. A hidden duplicate can survive a
+  // client-side route transition; it is not the user's voting surface.
+  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
   // A malformed selection is rejected before any contest lookup happens.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
-  await expect(page.getByTestId("vote-not-open")).toBeVisible();
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
 }
 
 /**
@@ -145,13 +148,14 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
   });
 
   test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+    // This full signed-in flow compiles multiple routes on a cold CI runner, then
+    // proves a database transaction, cross-browser receipt and replay. In run
+    // 39728843489, the first restaurant page took 62s of the former 120s test
+    // budget. Keep each user-action assertion strict and CI retries disabled.
+    test.setTimeout(300_000);
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
-    // Real network + database work, and CI cold starts are slow. An explicit budget keeps a
-    // slow run a slow run instead of a flaky one; CI runs with --retries=0 so a retry can
-    // never disguise a real failure.
-    test.setTimeout(120_000);
     let cleanupError: unknown = null;
     try {
       const phase = await db.query<{ application_phase: string }>(

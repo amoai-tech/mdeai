@@ -69,7 +69,7 @@ export default async function ContestDetailPage({
   if (result.status === "not_found") notFound();
   if (result.status === "error") {
     return (
-      <main className="mx-auto min-h-screen max-w-4xl px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto min-h-screen max-w-4xl px-4 py-8">
         <h1 className="font-serif text-2xl font-semibold">Contest</h1>
         <p className="mt-2 text-sm text-foreground" data-testid="contest-error">
           We could not load this contest right now. This is a temporary problem, not a missing contest.
@@ -80,12 +80,14 @@ export default async function ContestDetailPage({
   }
 
   const { contest, nominees } = result;
+  const acceptedTotal = nominees.reduce((sum, nominee) => sum + nominee.audienceAccepted, 0);
+  const testTotal = nominees.reduce((sum, nominee) => sum + nominee.developmentTestTotal, 0);
   const state = contestState(contest);
   const window = contestWindowLabel(contest);
   const cover = contest.coverUrl;
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6" data-testid="contest-page" data-contest-id={contest.id}>
+    <main id="main-content" tabIndex={-1} className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6" data-testid="contest-page" data-contest-id={contest.id}>
       <nav className="mb-4 text-sm">
         <Link className="text-muted-foreground underline" href="/contests">All contests</Link>
       </nav>
@@ -134,10 +136,32 @@ export default async function ContestDetailPage({
         </p>
       </section>
 
+      <section aria-labelledby="contest-standings-heading" className="mb-10">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-standings-heading">
+          Standings
+        </h2>
+
+        <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 sm:p-5" data-testid="contest-standings">
+          <p className="mt-2 text-sm text-foreground" data-testid="standings-summary">
+            <span className="font-semibold">{acceptedTotal}</span> accepted audience vote
+            {acceptedTotal === 1 ? "" : "s"}
+            <span className="mx-2 text-muted-foreground">·</span>
+            <span className="font-semibold">{testTotal}</span> development test vote
+            {testTotal === 1 ? "" : "s"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground" data-testid="standings-state">
+            {acceptedTotal === 0
+              ? "No accepted votes yet — there is no leader or winner."
+              : "Current leaders, not a certified winner. Test votes are shown separately and never counted."}
+          </p>
+        </div>
+      </section>
+
       <section aria-labelledby="contest-nominees">
         <h2 className="mb-3 text-lg font-semibold tracking-tight" id="contest-nominees">
           Restaurants on the ballot
         </h2>
+
         {nominees.length === 0 ? (
           <EmptyState
             description="The organizer has not added any restaurants to this contest yet."

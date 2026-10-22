@@ -9,7 +9,7 @@ Before commit/opening a PR:
 1. Re-read the Linear goal, scope, and Definition of Done.
 2. Inspect the exact diff and changed-file list.
 3. Run the pre-commit gate in [pre-commit.md](pre-commit.md).
-4. Confirm every changed path belongs to this task.
+4. Confirm every changed path belongs to this task: inspect staged, unstaged and untracked paths, stage explicit task files, and preserve unrelated work.
 5. Load the domain skills required by the changed paths.
 6. Verify load-bearing external API assumptions with installed source/types and official sources.
 7. Run the cheapest targeted proof for the actual change.

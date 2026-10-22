@@ -55,6 +55,7 @@ type HostEventCopilotBridgeProps = {
 
 type HitlRenderProps = {
   args: Partial<{ draft: EventDraftState }>;
+  toolCallId?: string;
   status: "inProgress" | "executing" | "complete";
   respond?: (result: unknown) => Promise<void>;
 };
@@ -65,6 +66,7 @@ function createPublishHitlRender(
 ) {
   return function HostEventPublishHitlRender({
     args,
+    toolCallId,
     status,
     respond,
   }: HitlRenderProps) {
@@ -79,6 +81,7 @@ function createPublishHitlRender(
     return (
       <EventPublishApprovalPanel
         draft={draftArg}
+        reviewId={toolCallId}
         status={panelStatus}
         onPublished={({ eventId, slug, approvalRequestId }) => {
           setDraft({

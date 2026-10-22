@@ -63,18 +63,34 @@ export function externalSourceProvider(metadata: unknown): string | null {
  * A date the source did state (`source_explicit_date`, `source_rented_until`) is still shown.
  * Rows without these metadata keys (every ordinary listing) are unaffected.
  */
-const UNCONFIRMED_DATE_BASES = new Set([
+export const UNCONFIRMED_DATE_BASES: ReadonlySet<string> = new Set([
   "source_for_rent_dates_unconfirmed",
   "source_rented_until_past_recheck",
   "source_available_now",
 ]);
+/**
+ * The search filter in availability-filter.ts is BUILT from these two sets (and the rules in
+ * `isAvailabilityUnconfirmed` below), so the card label and the search result cannot disagree.
+ */
+export const UNCONFIRMED_AVAILABILITY_STATUSES: ReadonlySet<string> = new Set(["unconfirmed", "source_claim_unverified"]);
 
 export function isAvailabilityUnconfirmed(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false;
   const meta = metadata as Record<string, unknown>;
-  return (
-    meta.available_from_independently_confirmed === false &&
-    typeof meta.available_from_basis === "string" &&
-    UNCONFIRMED_DATE_BASES.has(meta.available_from_basis)
-  );
+  // SAN-486/SAN-1235: ONE definition, shared with the search filter. If search treats a stored date
+  // as unconfirmed, the card and Details must say so — otherwise a listing could be excluded from
+  // confirmed matches while being displayed as if its date were confirmed.
+  // An explicitly confirmed date wins: a date an owner later confirmed must show again.
+  if (meta.available_from_independently_confirmed === true) return false;
+  if (meta.test_available_from_simulated === true || meta.test_available_from_simulated === "true") {
+    return true;
+  }
+  const status = typeof meta.availability_status === "string" ? meta.availability_status : null;
+  if (status && UNCONFIRMED_AVAILABILITY_STATUSES.has(status)) return true;
+  const basis = typeof meta.available_from_basis === "string" ? meta.available_from_basis : null;
+  if (basis && UNCONFIRMED_DATE_BASES.has(basis)) return true;
+  // A source that actually stated the date keeps it confirmed; anything else marked "not
+  // independently confirmed" is not a confirmed date either.
+  if (meta.available_from_independently_confirmed === false && !basis) return true;
+  return false;
 }

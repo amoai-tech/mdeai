@@ -246,13 +246,51 @@ Owned by `tasks`. The required body sections and the PR readiness sequence live 
 
 A PR body that only restates the diff has added nothing.
 
+### Right-sized PRs and tasks
+
+Keep PRs and Linear tasks as small as practical, but large
+enough to deliver one complete, verifiable outcome.
+
+- One PR = one clear problem, solution, and testable result.
+- Include all code, migrations, tests, and configuration
+  necessary to complete that outcome.
+- Do not add unrelated features, refactors, or task cleanup.
+- Split only when changes have independent outcomes,
+  ownership, risks, dependencies, or release requirements.
+- Do not create separate PRs or Linear tasks for every file,
+  test, minor fix, or implementation step.
+- Prefer extending an existing relevant task over creating
+  duplicates.
+- If a PR becomes difficult to review or verify, reduce its
+  scope without breaking a complete working journey.
+- Preserve security controls, correctness guarantees, and
+  necessary tests regardless of PR size.
+- Escalation trigger: a proposed split omits implementation,
+  migrations, configuration, or tests needed for either PR to
+  pass its required checks independently. Before opening,
+  the maintainer selects one complete PR or a dependency-safe
+  split and records the decision in the PR description.
+  Security, correctness, and necessary tests remain mandatory.
+
+Before opening a PR, follow the [canonical PR-readiness checklist](.claude/skills/tasks/references/github-pr.md) for exact file scope, the required implementation/tests, and not staging unrelated worktree changes. Detailed steps belong to that checklist, not a second copy here.
+
+Optimize for the fewest PRs and tasks that deliver complete,
+reviewable, independently verifiable results.
+
 ## CI and merge approval
 
 `floor` and `mastra-schema-init` are required status checks on `main`. `floor` runs on every PR regardless of base branch, because a stacked PR still needs the same general repository proof; `mastra-schema-init` independently gates the Mastra storage/schema contract.
 
 Advisory analyzers such as Codacy do not gate a merge. Review their findings on the merits: fix valid ones, document verified false positives, and never weaken production behaviour to silence a heuristic. A Codacy `fail` alone never blocks. Known false-positive classes are catalogued in `.claude/skills/code-review/references/ci-review.md` — one of them fires on eight deliberate absolutes in this file, the paragraph you are reading included.
 
-`main` requires one approving review. Administrator bypasses are exceptional: if one is used, record the reason in the affected PR, which required checks passed, and why waiting for normal approval was not appropriate. Production, runtime, database, and deploy changes satisfy normal approval. Prior bypasses and their reasoning are recorded in `docs/07-operations/merge-approval-history.md`.
+`main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that specific case an administrator merge is allowed only when all of the following are true:
+
+- the exact PR head has `floor` and `mastra-schema-init` green;
+- the canonical MDE review (`review / verify-review-result`) is green on that head, with no verified blocking finding;
+- every review thread is resolved (0 unresolved);
+- the PR body records the exception, the exact head SHA, and the checks that passed.
+
+Record each use in `docs/07-operations/merge-approval-history.md` and in the PR. The exception ends when a second collaborator with write access exists; the normal one-approval rule then applies with no bypass.
 
 ## Completion contract
 
