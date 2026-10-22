@@ -26,6 +26,17 @@ const success = {
   }),
 };
 
+const APPROVAL_UUID = "11111111-1111-4111-8111-111111111111";
+const restoreSuccess = {
+  ok: true,
+  json: async () => ({
+    success: true,
+    eventId: "event-1",
+    slug: "salsa-night",
+    approvalRequestId: APPROVAL_UUID,
+  }),
+};
+
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
@@ -121,6 +132,29 @@ describe("EventPublishApprovalPanel", () => {
   });
 
   it("restores the committed receipt on remount without publishing again", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(restoreSuccess);
+    vi.stubGlobal("fetch", fetchMock);
+    const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
+    click(first.querySelector('[data-testid="host-event-approve"]'));
+    await vi.waitFor(() => expect(first.textContent).toContain("Event published and saved."));
+
+    act(() => root?.unmount());
+    first.remove();
+    root = undefined;
+    container = undefined;
+    const second = mount(
+      <EventPublishApprovalPanel
+        draft={{ ...draft, approvalRequestId: APPROVAL_UUID }}
+        status="executing"
+        respond={() => {}}
+      />,
+    );
+    await vi.waitFor(() => expect(second.textContent).toContain("Event published and saved."));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second.querySelector('[data-testid="host-event-approve"]')).toBeNull();
+  });
+
+  it("does not show an old receipt for a new review with the same details", async () => {
     const fetchMock = vi.fn().mockResolvedValue(success);
     vi.stubGlobal("fetch", fetchMock);
     const first = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
@@ -132,9 +166,9 @@ describe("EventPublishApprovalPanel", () => {
     root = undefined;
     container = undefined;
     const second = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
-    await vi.waitFor(() => expect(second.textContent).toContain("Event published and saved."));
+    expect(second.textContent).not.toContain("Event published and saved.");
+    expect(second.querySelector('[data-testid="host-event-approve"]')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(second.querySelector('[data-testid="host-event-approve"]')).toBeNull();
   });
 
   it.each(["edit", "rejected"] as const)(

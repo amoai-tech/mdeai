@@ -39,12 +39,25 @@ type CompletedPublish = {
   savedAt: string;
 };
 
-function readCompletedPublish(draftHash: string): CompletedPublish | null {
+function readCompletedPublish(
+  draftHash: string,
+  identity: { approvalRequestId?: string; eventId?: string },
+): CompletedPublish | null {
   try {
     const stored = JSON.parse(sessionStorage.getItem(COMPLETED_EVENT_PUBLISH) ?? "null") as
       | CompletedPublish
       | null;
-    return stored?.draftHash === draftHash && stored.eventId && stored.slug ? stored : null;
+    if (!stored || stored.draftHash !== draftHash || !stored.eventId || !stored.slug) {
+      return null;
+    }
+    // Content alone is not review identity: a new review of the same event
+    // details must not inherit an older receipt. Require the approval or event
+    // id that the parent draft received from the completed publish.
+    const sameApproval =
+      Boolean(identity.approvalRequestId) &&
+      stored.approvalRequestId === identity.approvalRequestId;
+    const sameEvent = Boolean(identity.eventId) && stored.eventId === identity.eventId;
+    return sameApproval || sameEvent ? stored : null;
   } catch {
     return null;
   }
@@ -109,7 +122,10 @@ export function EventPublishApprovalPanel({
       try {
         const hash = await computeDraftHash(EventDraftStateSchema.parse(draft));
         if (!active) return;
-        const stored = readCompletedPublish(hash);
+        const stored = readCompletedPublish(hash, {
+          approvalRequestId: draft.approvalRequestId,
+          eventId: draft.publishedEventId,
+        });
         if (!stored) return;
         setReceipt({
           proposalId: stored.proposalId,
