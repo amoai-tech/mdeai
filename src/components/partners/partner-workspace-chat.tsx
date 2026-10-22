@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import { CopilotChat, useAgentContext } from "@copilotkit/react-core/v2";
 
-import { PARTNER_SELECTION_COOKIE } from "@/lib/partners/partner-selection";
+import { PARTNER_SELECTION_CONTEXT_DESCRIPTION } from "@/lib/partners/partner-selection";
 
 type Props = {
   partnerId: string;
@@ -19,22 +18,10 @@ type Props = {
  * only presents the contextual partner surface.
  */
 export function PartnerWorkspaceChat({ partnerId, businessName, partnerType }: Props) {
-  // The cookie is a business selector only. The CopilotKit runtime re-verifies
-  // membership with the user-scoped Supabase client before exposing any data.
-  useEffect(() => {
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie =
-      `${PARTNER_SELECTION_COOKIE}=${encodeURIComponent(partnerId)}; Path=/; SameSite=Lax${secure}`;
-    return () => {
-      document.cookie =
-        `${PARTNER_SELECTION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
-    };
-  }, [partnerId]);
-
   useAgentContext({
-    description:
-      "The partner business currently selected in the authenticated profile. Use the read-only getPartnerProfile tool for saved fields; this context is presentation only.",
-    value: { businessName, partnerType },
+    // Per-request presentation + selection. The server rechecks user membership.
+    description: PARTNER_SELECTION_CONTEXT_DESCRIPTION,
+    value: { partnerId, businessName, partnerType },
   });
 
   const welcome = partnerType

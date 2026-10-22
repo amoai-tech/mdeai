@@ -19,7 +19,7 @@ import {
   loadPartnerRuntimeContext,
   setPartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
-import { PARTNER_SELECTION_COOKIE } from "@/lib/partners/partner-selection";
+import { readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
@@ -209,11 +209,9 @@ async function handleCopilotKit(req: NextRequest) {
       // so an authorized test actor's AI search is RLS-scoped to their grant.
       requestContext.set(RENTAL_SUPABASE_KEY, supabase);
 
-      // SAN-705 — resolve the selected business server-side. The cookie is only
-      // a selector; loadPartnerRuntimeContext verifies membership through RLS.
-      // Standard Request-based route tests have no NextRequest.cookies accessor.
-      // Missing selection is a no-context state, not an authorization bypass.
-      const selectedPartnerId = req.cookies?.get(PARTNER_SELECTION_COOKIE)?.value;
+      // SAN-705: selection travels with this agent run (not a shared cookie).
+      // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
+      const selectedPartnerId = await readPartnerSelectionFromRun(req);
       if (selectedPartnerId) {
         const partnerContext = await loadPartnerRuntimeContext(
           supabase,
