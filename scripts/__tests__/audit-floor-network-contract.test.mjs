@@ -22,7 +22,11 @@ test("security audit runs before expensive floor checks exactly once", () => {
     assert.doesNotMatch(command, /\|\|\s*true|continue-on-error/);
   }
   assert.match(scripts.floor, /(?:^|&& )npm test(?: &&|$)/, "Vitest npm test remains mandatory");
-  for (const gate of ["check:skills", "check:db-url-guard", "check:release-gates", "audit:copilotkit-v2", "lint", "typecheck", "check:env:ci", "build", "check:mastra"]) {
+  for (const gate of ["check:skills", "check:db-url-guard", "check:release-gates", "audit:copilotkit-v2", "audit:copilotkit-v2:depcruise:proof", "lint", "typecheck", "check:env:ci", "build", "check:mastra"]) {
     assert.ok(scripts.floor.split(" && ").includes("npm run " + gate), "missing required gate: " + gate);
   }
+  const fastSteps = scripts["floor:fast"].split(" && ");
+  assert.equal(fastSteps.length, 3, "fast floor must contain audit, concurrent checks and build");
+  assert.equal(fastSteps[1], 'concurrently --kill-others-on-fail "npm:lint" "npm:typecheck" "npm:test"');
+  assert.equal(fastSteps[2], "npm run build");
 });
