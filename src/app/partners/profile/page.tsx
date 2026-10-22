@@ -129,6 +129,8 @@ export default async function PartnerProfilePage({
                 className="mt-10 flex h-[60vh] min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm sm:h-[34rem]"
               >
                 <PartnerWorkspaceChat
+                  key={partner.id}
+                  userId={user.id}
                   partnerId={partner.id}
                   businessName={readSetting(settings, "businessName") || null}
                   partnerType={partner.type}
