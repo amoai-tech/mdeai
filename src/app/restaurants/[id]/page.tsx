@@ -29,7 +29,7 @@ export default async function RestaurantDetailPage({
   if (lookup.status === "not_found") notFound();
   if (lookup.status === "error") {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-xl font-semibold">We could not load this restaurant</h1>
         <p className="mt-2 text-sm text-muted-foreground">This is a temporary problem, not a missing restaurant. Please try again.</p>
         <Link className="mt-4 inline-block text-sm font-medium underline" href="/restaurants">Back to restaurants</Link>
@@ -61,7 +61,7 @@ export default async function RestaurantDetailPage({
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-6">
       <Link className="text-sm text-muted-foreground underline" href="/restaurants">Restaurants</Link>
       <div className="mt-4 overflow-hidden rounded-xl border">
         {restaurant.imageUrl ? (

@@ -33,6 +33,17 @@ function skipWithoutContestCredential() {
 }
 
 test.describe("public contest discovery", { tag: ["@contests"] }, () => {
+
+  test("skip link focuses the actual contest main landmark", async ({ page }) => {
+    await page.goto("/contests");
+    const target = page.locator("main#main-content");
+    await expect(target).toHaveCount(1);
+    await page.locator('a[href="#main-content"]').focus();
+    await page.keyboard.press("Enter");
+    await expect(target).toBeFocused();
+    await expect(page).toHaveURL(/#main-content$/);
+  });
+
   test("restaurant directory links to contest discovery", async ({ page }) => {
     await page.goto("/restaurants");
     await expect(page.getByRole("link", { name: "Explore restaurant contests" })).toHaveAttribute("href", "/contests");

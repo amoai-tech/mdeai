@@ -83,6 +83,7 @@ jobs:
       - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           NEXT_TELEMETRY_DISABLED: 1
           E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
@@ -103,6 +104,7 @@ jobs:
       - name: Prove the mobile composer regression
         env:
           NODE_ENV: development
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
@@ -149,6 +151,7 @@ jobs:
       - name: Prove safe login redirects and auth guards
         env:
           NODE_ENV: development
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co

@@ -186,6 +186,8 @@ const mockEmittedOrClauses: string[] = [];
  * grammar — and did: the first version of this fix omitted the wrapping parentheses and only
  * the live probe caught it.
  */
+const orderCalls: Array<{ column: string; nullsFirst: boolean }> = [];
+
 function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
   const filters: Array<(row: Record<string, unknown>) => boolean> = [];
   let limit: number | undefined;
@@ -220,11 +222,22 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
 
   const builder = {
     select: () => builder,
-    eq: () => builder,
+    // Only the currency split matters to these tests; the other columns stay pass-through.
+    eq: (column: string, value: unknown) => {
+      if (column === "currency") filters.push((row) => String(row[column]) === String(value));
+      return builder;
+    },
+    neq: (column: string, value: unknown) => {
+      if (column === "currency") filters.push((row) => String(row[column]) !== String(value));
+      return builder;
+    },
     not: () => builder,
     gte: () => builder,
     lte: () => builder,
-    order: () => builder,
+    order: (column: string, opts?: { ascending?: boolean; nullsFirst?: boolean }) => {
+      orderCalls.push({ column, nullsFirst: opts?.nullsFirst ?? false });
+      return builder;
+    },
     ilike: () => builder,
     or: (clause: string) => {
       mockEmittedOrClauses.push(clause);
@@ -270,6 +283,7 @@ vi.mock("@supabase/supabase-js", () => ({
 
 async function search(query: Record<string, unknown> = {}) {
   const { searchRentals } = await import("../search-rentals");
+  orderCalls.length = 0;
   return searchRentals({ neighborhood: "Laureles", limit: 20, ...query });
 }
 
@@ -501,5 +515,33 @@ describe("formatRentalPrices — the label carries the listing's currency", () =
       nightlyLabel: null,
       monthlyLabel: null,
     });
+  });
+});
+
+describe("ordering must not truncate the matches a monthly budget asks for (SAN-386)", () => {
+  it("orders the monthly figure first when a monthly budget is applied", async () => {
+    await search({ maxPriceMonthly: 3_000_000, budgetCurrency: "COP" });
+    // Monthly matches have no nightly price, so a nightly-first sort would push them past .limit().
+    expect(orderCalls.map((o) => o.column)).toEqual(["price_monthly", "price_daily"]);
+  });
+
+  it("keeps the stored nightly order when no monthly budget is applied", async () => {
+    await search({});
+    expect(orderCalls.map((o) => o.column)).toEqual(["price_daily"]);
+  });
+});
+
+describe("search-rentals tool forwards the stay period", () => {
+  it("accepts stayType in the Mastra input schema and passes it to the query", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
+    const parsed = inputSchema.safeParse({
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.stayType : undefined).toBe("monthly");
+    expect(inputSchema.safeParse({ stayType: "weekly" }).success).toBe(false);
   });
 });
