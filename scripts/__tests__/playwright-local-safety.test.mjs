@@ -85,8 +85,9 @@ test("CI never reuses a developer server even with the reuse opt-in variable", (
   assert.equal(configuredProjects({ PW_REUSE_WEBSERVER: "1", CI: "" }).reuseExistingServer, true);
 });
 
-test("Playwright probes a lightweight local asset instead of compiling the homepage", () => {
-  assert.ok(fs.existsSync("src/app/favicon.ico"), "expected existing public Next.js favicon");
+test("Playwright waits for real login page compilation before browser assertions", () => {
+  assert.ok(fs.existsSync("src/app/login/page.tsx"), "expected real Next.js login route");
   const loaded = configuredProjects({ SMOKE_BASE_URL: "http://localhost:3099", CI: "1" });
-  assert.equal(loaded.webServerURL, "http://localhost:3099/favicon.ico");
+  assert.equal(loaded.webServerURL, "http://localhost:3099/login");
+  assert.notEqual(loaded.webServerURL, loaded.defaultBaseURL + "/favicon.ico");
 });
