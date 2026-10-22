@@ -14,6 +14,7 @@ import {
   activeAiModelId,
   activeAiProvider,
   createNvidiaLanguageModel,
+  nvidiaCallAbortSignal,
   nvidiaReasoningEffort,
   structuredOutputProviderOptions,
 } from "@/lib/ai-provider";
@@ -102,6 +103,22 @@ describe("NVIDIA model construction", () => {
       nvidia: { reasoningEffort: "none" },
     });
     expect(structuredOutputProviderOptions("gemini")).toBeUndefined();
+  });
+});
+
+describe("NVIDIA call cancellation", () => {
+  it("keeps caller cancellation active", () => {
+    const caller = new AbortController();
+    const signal = nvidiaCallAbortSignal(caller.signal, 1_000);
+    caller.abort();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("times out without a caller signal", async () => {
+    const signal = nvidiaCallAbortSignal(undefined, 5);
+    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+    expect(signal.aborted).toBe(true);
+    expect(signal.reason?.name).toBe("TimeoutError");
   });
 });
 

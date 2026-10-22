@@ -112,8 +112,20 @@ export function nvidiaReasoningEffort(): NvidiaReasoningEffort {
   );
 }
 
+/** Bound every NVIDIA generation and its streamed response to a single call clock.
+ * This does not replace a shared deadline for multiple sequential agent calls.
+ */
+export function nvidiaCallAbortSignal(
+  callerSignal?: AbortSignal,
+  timeoutMs = 22_000,
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
+}
+
 type CallOptionsWithProviderOptions = {
   providerOptions?: Record<string, Record<string, unknown>>;
+  abortSignal?: AbortSignal;
 };
 
 /**
@@ -140,7 +152,11 @@ function withDefaultProviderOptions(
             // Explicit call-site options win over MDE's defaults.
             merged[namespace] = { ...values, ...(merged[namespace] ?? {}) };
           }
-          return original.call(target, { ...options, providerOptions: merged });
+          return original.call(target, {
+            ...options,
+            providerOptions: merged,
+            abortSignal: nvidiaCallAbortSignal(options.abortSignal),
+          });
         };
       }
       return Reflect.get(target, prop, receiver);
