@@ -172,7 +172,11 @@ export default defineConfig({
     ? undefined
     : {
         command: webServerCommand,
-        url: localBaseURL,
+        // A cheap static asset confirms Next is accepting requests without compiling the
+        // full discovery homepage before the browser journey begins.
+        url: new URL("/favicon.ico", localBaseURL).toString(),
+        // Surface Next startup diagnostics when CI cannot make the server ready.
+        stdout: "pipe",
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
