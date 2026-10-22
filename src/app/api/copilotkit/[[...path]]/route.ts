@@ -19,7 +19,7 @@ import {
   loadPartnerRuntimeContext,
   setPartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
-import { readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
+import { isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
 import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
@@ -230,14 +230,18 @@ async function handleCopilotKit(req: NextRequest) {
         }
       }
 
-      // The canonical thread-ownership gate proves the user owns the thread.
-      // This second guard proves the thread was created for the selected business.
-      const bindingError = await enforcePartnerThreadBinding(
-        thread,
-        userId,
-        selectedPartnerId,
-      );
-      if (bindingError) return bindingError;
+      // Stop carries no AG-UI business context in CopilotKit v2. The canonical
+      // authenticated thread-owner check has already authorized the caller,
+      // and Stop only cancels a run; it does not replay profile or chat data.
+      // Run/connect MUST still match the persisted selected-business binding.
+      if (!(await isPartnerStopRequest(req))) {
+        const bindingError = await enforcePartnerThreadBinding(
+          thread,
+          userId,
+          selectedPartnerId,
+        );
+        if (bindingError) return bindingError;
+      }
       if (partnerContext) setPartnerRuntimeContext(requestContext, partnerContext);
     }
 

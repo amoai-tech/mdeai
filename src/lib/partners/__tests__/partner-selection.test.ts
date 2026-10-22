@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PARTNER_SELECTION_CONTEXT_DESCRIPTION,
   readPartnerSelectionFromRun,
+  isPartnerStopRequest,
 } from "../partner-selection";
 
 const partnerA = "da1ea4f6-e5b4-4c90-a3a1-2a163413f72d";
@@ -33,6 +34,10 @@ describe("partner selection travels with each run (SAN-705)", () => {
     expect((await tabA.json()).body.messages[0].content).toBe("profile?");
   });
 
+  it("preserves selected business on AG-UI connect so saved partner chats can resume", async () => {
+    expect(await readPartnerSelectionFromRun(run(partnerA, { method: "agent/connect" }))).toBe(partnerA);
+  });
+
   it("does not take selection from concierge or runtime info operations", async () => {
     expect(await readPartnerSelectionFromRun(run(partnerA, { agent: "conciergeAgent" }))).toBeNull();
     expect(await readPartnerSelectionFromRun(run(partnerA, { method: "info" }))).toBeNull();
@@ -44,6 +49,19 @@ describe("partner selection travels with each run (SAN-705)", () => {
     expect(await readPartnerSelectionFromRun(run(partnerA, { contexts: [duplicate, duplicate] }))).toBeNull();
     expect(await readPartnerSelectionFromRun(run("partner-not-a-uuid"))).toBeNull();
     expect(await readPartnerSelectionFromRun(run(partnerA, { contexts: [{ ...duplicate, value: "{" }] }))).toBeNull();
+  });
+
+  it("recognizes partner stop without business context but rejects other agents", async () => {
+    const makeStop = (agentId: string) => new Request("http://localhost/api/copilotkit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "agent/stop", params: { agentId, threadId: "t" }, body: { runId: "r" } }),
+    });
+    const partnerStop = makeStop("partnerAgent");
+    expect(await isPartnerStopRequest(partnerStop)).toBe(true);
+    expect(await readPartnerSelectionFromRun(partnerStop)).toBeNull();
+    expect(await isPartnerStopRequest(makeStop("conciergeAgent"))).toBe(false);
+    expect(await isPartnerStopRequest(run(partnerA))).toBe(false);
   });
 
   it("does not accept a cookie as the selected business", async () => {

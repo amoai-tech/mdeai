@@ -7,7 +7,7 @@ export const PARTNER_SELECTION_CONTEXT_DESCRIPTION = "mde.partnerSelection.v1";
 
 const PARTNER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Extract an untrusted partner ID from this specific partnerAgent run. */
+/** Extract an untrusted partner ID from this partnerAgent run or reconnect. */
 export async function readPartnerSelectionFromRun(request: Request): Promise<string | null> {
   if (request.method !== "POST") return null;
 
@@ -19,7 +19,10 @@ export async function readPartnerSelectionFromRun(request: Request): Promise<str
       body?: { context?: unknown };
     } | null;
 
-    if (envelope?.method !== "agent/run" || envelope.params?.agentId !== "partnerAgent") {
+    if (
+      (envelope?.method !== "agent/run" && envelope?.method !== "agent/connect") ||
+      envelope.params?.agentId !== "partnerAgent"
+    ) {
       return null;
     }
 
@@ -45,5 +48,29 @@ export async function readPartnerSelectionFromRun(request: Request): Promise<str
   } catch {
     // An absent or invalid selector never bypasses auth or membership checks.
     return null;
+  }
+}
+
+/**
+ * CopilotKit v2 sends Stop with a thread ID and optional run ID, but no
+ * useAgentContext. After the canonical user/thread owner check, a Stop for
+ * partnerAgent may proceed without reading or replaying business content.
+ * This does NOT relax the run/connect selection and binding checks.
+ */
+export async function isPartnerStopRequest(request: Request): Promise<boolean> {
+  if (request.method !== "POST") return false;
+  try {
+    const envelope = (await request.clone().json()) as {
+      method?: unknown;
+      params?: { agentId?: unknown; threadId?: unknown };
+    } | null;
+    return (
+      envelope?.method === "agent/stop" &&
+      envelope.params?.agentId === "partnerAgent" &&
+      typeof envelope.params.threadId === "string" &&
+      envelope.params.threadId.trim().length > 0
+    );
+  } catch {
+    return false;
   }
 }
