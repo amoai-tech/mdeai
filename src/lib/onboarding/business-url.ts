@@ -3,16 +3,16 @@
  * This blocks local/private targets and credentials before any provider call.
  */
 function isPrivateHost(host: string): boolean {
-  const name = host.toLowerCase();
+  // URL.hostname includes brackets for IPv6 literals; business signup only
+  // needs public DNS names or public IPv4, not raw IPv6 addresses.
+  if (host.startsWith("[") || host.includes(":")) return true;
+  const name = host.toLowerCase().replace(/\.+$/, "");
   if (
     name === "localhost" ||
     name.endsWith(".localhost") ||
     name.endsWith(".local") ||
     name.endsWith(".internal")
   ) {
-    return true;
-  }
-  if (name === "::1" || name.startsWith("fc") || name.startsWith("fd") || name.startsWith("fe80")) {
     return true;
   }
   const match = name.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);

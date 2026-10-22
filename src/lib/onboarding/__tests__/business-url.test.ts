@@ -25,6 +25,11 @@ describe("business URL safety (SAN-1193)", () => {
       "http://169.254.169.254/latest/meta-data",
       "https://user:pass@example.com",
       "http://service.local",
+      "http://localhost./",
+      "http://foo.localhost./",
+      "http://[::1]/",
+      "http://[::ffff:127.0.0.1]/",
+      "http://[fd00::1]/",
     ]) {
       expect(normalizeBusinessUrl(url)).toBeNull();
       expect(isPublicBusinessUrl(url)).toBe(false);
