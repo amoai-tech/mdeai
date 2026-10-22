@@ -32,6 +32,6 @@ test("security audit runs before expensive floor checks exactly once", () => {
   }
   assert.match(scripts.floor, /(?:^|&& )npm test(?: &&|$)/, "Vitest npm test remains mandatory");
   for (const gate of ["check:skills", "check:db-url-guard", "check:release-gates", "audit:copilotkit-v2", "lint", "typecheck", "check:env:ci", "build", "check:mastra"]) {
-    assert.match(scripts.floor, new RegExp("npm run " + gate.replace(/[.*+?^$()|[\]{}]/g, "\\$&") + "(?:\\s|$)"));
+    assert.ok(scripts.floor.split(" && ").includes("npm run " + gate), "missing required gate: " + gate);
   }
 });
