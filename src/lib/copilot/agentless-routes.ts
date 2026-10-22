@@ -1,7 +1,8 @@
 import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
 
 /**
- * SAN-1575 — routes that must NOT receive the root discovery `conciergeAgent`.
+ * SAN-1575 — routes that must NOT receive the root discovery
+ * `conciergeAgent`.
  *
  * Either the route has no agent, or it mounts its own scoped provider in a
  * layout. Mounting the root provider on top would open a second runtime and can
@@ -11,6 +12,11 @@ import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
  * will render the Host OS shell (`hostOpsAgent`), so it must stay excluded from
  * the discovery provider. A future contextual `/app` chat mounts its own
  * provider inside the page that needs it.
+ *
+ * `/host/rentals*` has a deliberately disabled composer until SAN-1124 ships
+ * the broker bridge, and `/admin/*` has no AI surface at all. Both used to mount
+ * the discovery provider and issue pointless `/api/copilotkit/threads` calls
+ * that the runtime answered with 403.
  */
 export function isAgentlessRoute(pathname: string): boolean {
   return (
@@ -21,6 +27,10 @@ export function isAgentlessRoute(pathname: string): boolean {
     pathname === "/host/event" ||
     pathname.startsWith("/host/event/") ||
     isHostOsShellRoute(pathname) ||
+    pathname === "/host/rentals" ||
+    pathname.startsWith("/host/rentals/") ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
     pathname === "/app" ||
     pathname.startsWith("/app/")
   );

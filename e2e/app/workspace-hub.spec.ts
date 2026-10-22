@@ -210,3 +210,58 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
     }
   });
 });
+
+test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
+  test.skip(!hasE2eEnv(), "Supabase e2e env is not configured");
+
+  test("rentals and admin pages start no agent runtime", async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = baseURL ?? "http://localhost:3001";
+    const identity = await createThrowawayIdentity("san1575-no-agent");
+    const admin = await getSupabaseAdmin();
+
+    try {
+      const role = await admin
+        .from("user_roles")
+        .insert({ user_id: identity.userId, role: "admin" });
+      expect(role.error, role.error?.message).toBeNull();
+      const landlord = await admin.from("landlord_profiles").insert({
+        user_id: identity.userId,
+        display_name: "SAN-1575 no-agent check",
+      });
+      expect(landlord.error, landlord.error?.message).toBeNull();
+
+      await signInAsOnOrigin(page, origin, identity.email);
+
+      const copilotRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/api/copilotkit")) {
+          copilotRequests.push(request.url());
+        }
+      });
+
+      await page.goto("/host/rentals");
+      await expect(
+        page.getByRole("heading", { name: "Your rentals, run by AI" }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests).toEqual([]);
+
+      await page.goto("/admin/contests");
+      await expect(
+        page.getByRole("heading", { name: "Contests", exact: true, level: 1 }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests).toEqual([]);
+    } finally {
+      await admin.from("user_roles").delete().eq("user_id", identity.userId);
+      await admin
+        .from("landlord_profiles")
+        .delete()
+        .eq("user_id", identity.userId);
+      await deleteThrowawayIdentity(identity);
+    }
+  });
+});

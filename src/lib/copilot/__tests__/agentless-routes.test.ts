@@ -30,6 +30,13 @@ describe("isAgentlessRoute", () => {
       "/host/events",
       "/host/dashboard",
       "/host/analytics",
+      "/host/rentals",
+      "/host/rentals/listings",
+      "/host/rentals/onboarding",
+      "/admin",
+      "/admin/contests",
+      "/admin/rentals",
+      "/admin/event-bookings",
     ]) {
       expect(isAgentlessRoute(pathname), pathname).toBe(true);
     }
@@ -46,8 +53,7 @@ describe("isAgentlessRoute", () => {
       "/me/tickets",
       "/partners/profile",
       "/host",
-      "/host/rentals",
-      "/host/rentals/listings",
+      "/host/rentals-report",
     ]) {
       expect(isAgentlessRoute(pathname), pathname).toBe(false);
     }
