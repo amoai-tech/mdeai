@@ -58,6 +58,11 @@ export async function enforcePartnerThreadBinding(
   // A new general thread needs no metadata write, so it does not need storage.
   if (thread.kind === "new" && !partnerId) return null;
 
+  // General Concierge can keep its existing behavior when the privileged store
+  // is unavailable; the canonical owner check still applies, and no partner
+  // context is loaded. Partner selection always fails closed below.
+  if (!service && !partnerId) return null;
+
   if (!service) {
     return Response.json({ error: "Thread storage unavailable" }, { status: 503 });
   }
