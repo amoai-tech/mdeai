@@ -130,6 +130,59 @@ function rowInViewport(scroller: JSHandle<HTMLElement | null>, index: number) {
   }, index);
 }
 
+/**
+ * Drive the real scroll viewport like a user, in ordinary wheel increments.
+ * A single gigantic wheel delta can be swallowed while stick-to-bottom is
+ * releasing its lock; waiting without sending another event cannot recover.
+ * Never set scrollTop or call virtualizer.scrollToIndex: the user gesture is
+ * the behavior this regression must prove.
+ */
+async function wheelUntilRowVisible(
+  page: Page,
+  scroller: JSHandle<HTMLElement | null>,
+  index: number,
+  direction: "up" | "down",
+) {
+  const initial = await scroller.evaluate((node) => node?.scrollTop ?? -1);
+  const point = await scroller.evaluate((node) => {
+    if (!node) throw new Error("Scroll viewport disappeared");
+    const rect = node.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  });
+  await page.mouse.move(point.x, point.y);
+
+  // 500 virtualized rows span ~40k px in CI. Bounded increments exercise the
+  // sticky-bottom release and virtual-window updates instead of one giant event.
+  for (let gesture = 0; gesture < 60; gesture++) {
+    if (await rowInViewport(scroller, index)) return;
+    await page.mouse.wheel(0, direction === "up" ? -1_200 : 1_200);
+    // Wheel dispatch is asynchronous; let the browser handle the event and
+    // React commit the next virtual window before the next real gesture.
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
+  }
+
+  // A final window may mount just after scrolling stops.
+  const visible = await expect.poll(() => rowInViewport(scroller, index), {
+    message: `row ${index} must be reachable by repeated real ${direction} wheel gestures`,
+    timeout: 5_000,
+    intervals: [100, 250],
+  }).toBe(true).then(() => true, () => false);
+  if (!visible) {
+    const ending = await scroller.evaluate((node) => node ? ({
+      scrollTop: node.scrollTop,
+      maxScrollTop: node.scrollHeight - node.clientHeight,
+    }) : null);
+    const layout = await readLayout(page);
+    throw new Error(
+      `Real ${direction} wheel input did not reach row ${index}: ${JSON.stringify({
+        initial, ending, mountedRange: layout.mountedRange, mountedRows: layout.mountedRows,
+      })}`,
+    );
+  }
+}
+
 test.describe(
   "SAN-1357 · CopilotChatView virtualizes a 500-message conversation",
   { tag: ["@critical", "@virtualization"] },
@@ -249,40 +302,14 @@ test.describe(
         "scroll container",
       ).toBe(true);
 
-      // Real wheel gestures, not scripted `scrollTop` assignments: the default
-      // `autoScroll="pin-to-bottom"` view deliberately re-pins itself to the newest message,
-      // and the underlying stick-to-bottom hook only releases that lock on genuine scroll
-      // intent — so a programmatic `scrollTop = 0` is immediately undone. Measured, not
-      // assumed: the programmatic version never brought row 0 into the viewport in 20s.
-      const box = await scroller.evaluate((node: HTMLElement) => {
-        const rect = node.getBoundingClientRect();
-        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      });
-      await page.mouse.move(box.x, box.y);
-
-      // Wheel events do not wait for scrolling or React's virtual window to settle.
-      // Send the real input once, then poll the resulting rendered state separately.
-      // Sending a new wheel on every poll can starve painting on slower CI runners:
-      // the failed CI screenshot showed message 1 visible despite this assertion failing.
-      await page.mouse.wheel(0, -100_000);
-
-      // Up: the first logical row must become reachable again, with its text rendered.
-      await expect
-        .poll(() => rowInViewport(scroller, 0), {
-          timeout: 30_000,
-          intervals: [250],
-        })
-        .toBe(true);
+      // The default CopilotKit view pins to bottom until genuine scroll
+      // intent releases it. Prove the first AND last logical rows are reachable
+      // with real gestures; no JS scrollTop assignment or disabled auto-scroll.
+      await wheelUntilRowVisible(page, scroller, 0, "up");
       await expect(page.getByText(FIRST, { exact: true })).toBeVisible({ timeout: 20_000 });
 
-      // Down: the final logical row must become reachable again.
-      await page.mouse.wheel(0, 100_000);
-      await expect
-        .poll(() => rowInViewport(scroller, LAST_INDEX), {
-          timeout: 30_000,
-          intervals: [250],
-        })
-        .toBe(true);
+      await wheelUntilRowVisible(page, scroller, LAST_INDEX, "down");
+      await expect(page.getByText("Probe message 500 of 500", { exact: true })).toBeVisible();
     });
 
     test("virtualization is enabled, the agent resolved, and the browser is clean", async ({
