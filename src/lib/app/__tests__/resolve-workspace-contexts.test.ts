@@ -109,4 +109,22 @@ describe("loadWorkspaceResolution", () => {
     ]);
     expect(result.contexts[2].label).toBe("Cafe Roma");
   });
+
+  it("labels a business without a name as Partners, never its raw type", async () => {
+    const result = await loadWorkspaceResolution(
+      fakeClient({
+        memberships: { data: [{ partner_id: "p1" }], error: null },
+        partners: {
+          data: [{ id: "p1", type: "host", settings: {} }],
+          error: null,
+        },
+      }),
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.contexts.find((context) => context.kind === "partners")?.label).toBe(
+      "Partners",
+    );
+    expect(result.contexts.map((context) => context.label)).not.toContain("Host");
+  });
 });

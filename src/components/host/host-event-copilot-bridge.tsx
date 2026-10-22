@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useAgent,
   useAgentContext,
   useFrontendTool,
   useHumanInTheLoop,
-  UseAgentUpdate,
 } from "@copilotkit/react-core/v2";
 import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
@@ -15,6 +13,7 @@ import {
   applySetPricing,
   applySetVenue,
   publishDecisionDraftPatch,
+  selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
@@ -61,7 +60,7 @@ type HitlRenderProps = {
 };
 
 function createPublishHitlRender(
-  fallbackDraft: EventDraftState,
+  getLatestDraft: () => EventDraftState,
   setDraft: (patch: Partial<EventDraftState>) => void,
 ) {
   return function HostEventPublishHitlRender({
@@ -70,7 +69,8 @@ function createPublishHitlRender(
     status,
     respond,
   }: HitlRenderProps) {
-    const draftArg = (args.draft as EventDraftState | undefined) ?? fallbackDraft;
+    // The stable CopilotKit callback must read the latest reviewed form data.
+    const draftArg = selectPublishDraft(args.draft, getLatestDraft());
     const panelStatus =
       status === "inProgress"
         ? "inProgress"
@@ -108,20 +108,17 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     setDraftState((prev) => mergeEventDraft(prev, patch));
   }, []);
 
-  const { agent } = useAgent({
-    agentId: "hostEventAgent",
-    updates: [UseAgentUpdate.OnStateChanged],
-  });
-
-  const agentDraft = agent.state;
-  const mergedDraft = useMemo(() => {
-    if (!agentDraft || typeof agentDraft !== "object") return draft;
-    return mergeEventDraft(draft, agentDraft as Partial<EventDraftState>);
-  }, [draft, agentDraft]);
+  // Canonical wizard state is owned by this component. Frontend tools and manual
+  // edits both write through setDraftState; stale Mastra working memory must not
+  // replace the fields the host has just reviewed and edited.
+  const latestDraftRef = useRef(draft);
+  useEffect(() => {
+    latestDraftRef.current = draft;
+  }, [draft]);
 
   useAgentContext({
     description: "Roberto's in-progress event draft for the host wizard",
-    value: mergedDraft,
+    value: draft,
   });
 
   // SAN-905 · skip agent.setState on every draft edit — mid-stream pushes
@@ -155,7 +152,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     {
       name: "set_pricing",
       description:
-        "Set minimum ticket price in COP cents, description, optional tiers",
+        "Set minimum ticket price in whole COP (40000 = COP 40,000), description, optional tiers also in whole COP",
       parameters: setPricingParams,
       handler: async (args) => {
         setDraftState((prev) => applySetPricing(prev, args));
@@ -164,11 +161,14 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     [],
   );
 
-  // Stable HITL render — agent passes draft in args; omit mergedDraft to avoid re-register on edits.
+  // Creating the getter doesn't read the ref during bridge render. CopilotKit
+  // calls it later when an actual publish review is rendered.
+  const getLatestDraft = useCallback(() => latestDraftRef.current, []);
+  // Keep the HITL tool stable across form edits, but never capture a stale draft.
   const PublishHitlRender = useMemo(
-    () => createPublishHitlRender(mergedDraft, setDraft),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable render ref
-    [setDraft],
+    // eslint-disable-next-line react-hooks/refs -- Factory stores the getter but never invokes it during registration; the HITL panel invokes it after commit.
+    () => createPublishHitlRender(getLatestDraft, setDraft),
+    [getLatestDraft, setDraft],
   );
 
   useHumanInTheLoop(
@@ -181,5 +181,5 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     [PublishHitlRender],
   );
 
-  return <>{children({ draft: mergedDraft, setDraft })}</>;
+  return <>{children({ draft, setDraft })}</>;
 }

@@ -1,5 +1,8 @@
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
+  EventDraftStateSchema,
+  isDraftReadyForPublish,
+  isValidEventDraftDate,
   mergeEventDraft,
   type EventDraftState,
   type EventTicketTierDraft,
@@ -71,4 +74,57 @@ export function publishDecisionDraftPatch(
   if (decision === "rejected") return { status: "rejected" };
   if (decision !== "approved") return { status: "draft" };
   return null;
+}
+
+// Reviewable event fields only. Model tool arguments cannot claim publication
+// status or forge approval/receipt identity.
+const publishToolFields = EventDraftStateSchema.pick({
+  title: true,
+  neighborhood: true,
+  dateIso: true,
+  venue: true,
+  priceMinCop: true,
+  capacity: true,
+  description: true,
+  coverPhotoPath: true,
+  ticketTiers: true,
+}).partial();
+
+/**
+ * Local datetimes in the Medellín event wizard mean America/Bogota, UTC-05:00
+ * for modern events. Make that offset explicit before preview, hashing and the
+ * PostgreSQL timestamptz cast (whose session TimeZone can be UTC).
+ * An existing explicit offset or Z is authoritative and must not be changed.
+ */
+function normalizeReviewedEventDate(draft: EventDraftState): EventDraftState {
+  const value = draft.dateIso;
+  if (!value || !isValidEventDraftDate(value)) return draft;
+  if (/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value)) return draft;
+  return { ...draft, dateIso: `${value}-05:00` };
+}
+
+/**
+ * Empty tool args use the current reviewed wizard. Valid partial AI fields
+ * merge over that wizard, and the HITL panel shows the exact merged draft before
+ * approval. A malformed AI date is discarded by itself, preserving other valid
+ * proposed fields and the reviewed date. Other invalid or unpublishable values
+ * fall back to the wizard. Server validation remains authoritative.
+ */
+export function selectPublishDraft(
+  argsDraft: unknown,
+  fallbackDraft: EventDraftState,
+): EventDraftState {
+  if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);
+  const parsed = publishToolFields.safeParse(argsDraft);
+  if (!parsed.success) return normalizeReviewedEventDate(fallbackDraft);
+  // A bad AI date must not silently delete its valid description/price/tier edits.
+  // Keep the reviewed date and show the other changes in the approval panel.
+  const { dateIso, ...fields } = parsed.data;
+  const patch = dateIso !== undefined && !isValidEventDraftDate(dateIso)
+    ? fields
+    : parsed.data;
+  const merged = mergeEventDraft(fallbackDraft, patch);
+  return normalizeReviewedEventDate(
+    isDraftReadyForPublish(merged) ? merged : fallbackDraft,
+  );
 }

@@ -53,6 +53,27 @@ function click(element: Element | null) {
 }
 
 describe("EventPublishApprovalPanel", () => {
+  it("shows the host every ticket tier, capacity and description before publishing", () => {
+    const detailedDraft = EventDraftStateSchema.parse({
+      ...draft,
+      capacity: 60,
+      description: "Hosted salsa event in Laureles",
+      ticketTiers: [
+        { name: "General Admission", priceCop: 40000, quantity: 40 },
+        { name: "VIP", priceCop: 75000, quantity: 20 },
+      ],
+    });
+    const view = mount(
+      <EventPublishApprovalPanel draft={detailedDraft} status="executing" respond={() => {}} />,
+    );
+    const details = view.querySelector('[data-testid="host-event-review-details"]');
+    expect(details?.textContent).toContain("60 people");
+    expect(details?.textContent).toContain("Hosted salsa event in Laureles");
+    expect(details?.textContent).toContain("General Admission: 40,000 COP");
+    expect(details?.textContent).toContain("VIP: 75,000 COP");
+    expect(details?.textContent).toContain("20 tickets");
+  });
+
   it("submits the normalized draft and shows the saved receipt", async () => {
     const fetchMock = vi.fn().mockResolvedValue(success);
     vi.stubGlobal("fetch", fetchMock);

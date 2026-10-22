@@ -59,6 +59,7 @@ export {
   mergeEventDraft,
   activeHostWizardStep,
   isDraftReadyForPublish,
+  isValidEventDraftDate,
   type EventDraftState,
 } from "./types/event-draft";
 
