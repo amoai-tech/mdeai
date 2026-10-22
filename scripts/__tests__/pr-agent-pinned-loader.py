@@ -16,6 +16,12 @@ from pathlib import Path
 
 from pr_agent.algo.skills_loader import discover_skills, format_skills_context
 
+def require(condition: bool, message: str) -> None:
+    """Fail the proof under every Python optimization mode, including -O and -OO."""
+    if not condition:
+        raise AssertionError(message)
+
+
 ROOT = Path("/github/workspace")
 SENTINELS = {
     "copilotkit": "Preserve same-origin",
@@ -29,22 +35,22 @@ SENTINELS = {
 paths = [str(ROOT / ".claude/skills/code-review/SKILL.md")]
 paths += [str(ROOT / f"scripts/pr-agent/skills/{name}/SKILL.md") for name in SENTINELS]
 skills = discover_skills(paths)
-assert len(skills) == len(paths), f"discovered {len(skills)} of {len(paths)} skills"
+require(len(skills) == len(paths), f"discovered {len(skills)} of {len(paths)} skills")
 names = {skill.name for skill in skills}
-assert "code-review" in names, f"universal code review missing: {names}"
+require("code-review" in names, f"universal code review missing: {names}")
 
 for domain, sentence in SENTINELS.items():
     name = f"mde-pr-review-{domain}"
-    assert name in names, f"{name} was not discovered"
+    require(name in names, f"{name} was not discovered")
     context = format_skills_context(
         [skill for skill in skills if skill.name == name], max_tokens=3200
     )
-    assert "#### review.md" in context, f"{domain} review.md was not inlined"
-    assert sentence in context, f"{domain} guidance missing from prompt"
+    require("#### review.md" in context, f"{domain} review.md was not inlined")
+    require(sentence in context, f"{domain} guidance missing from prompt")
 
 # package.json selects all specialists: none may silently drop at the configured budget.
 full_context = format_skills_context(skills, max_tokens=6000)
 for domain, sentence in SENTINELS.items():
-    assert sentence in full_context, f"{domain} guidance dropped from 6000-token context"
+    require(sentence in full_context, f"{domain} guidance dropped from 6000-token context")
 
 print(f"PINNED_SKILLS_LOADER_PASS skills={len(skills)} domains={len(SENTINELS)}")
