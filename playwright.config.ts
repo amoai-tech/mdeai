@@ -172,12 +172,12 @@ export default defineConfig({
     ? undefined
     : {
         command: webServerCommand,
-        // The marketing homepage has an expensive cold webpack graph and is
-        // not a reliable readiness probe for focused auth tests.
-        // favicon.ico is a public asset that bypasses the auth proxy;
-        // browser tests still navigate to real pages and check responses.
-        url: new URL("/favicon.ico", localBaseURL).toString(),
-        stdout: "pipe",
+        // Compile a real auth page during web-server startup instead of
+        // accepting a static favicon that leaves route compilation untested.
+        // /login is exercised by auth-guard.spec.ts and avoids the much
+        // heavier marketing homepage graph on cold CI runners.
+        url: new URL("/login", localBaseURL).toString(),
+        stdout: "pipe", // Playwright normally ignores stdout; retain server diagnostics in CI.
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",
