@@ -176,6 +176,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
   const getLatestDraft = useCallback(() => latestDraftRef.current, []);
   // Keep the HITL tool stable across form edits, but never capture a stale draft.
   const PublishHitlRender = useMemo(
+    // eslint-disable-next-line react-hooks/refs -- Factory stores the getter but never invokes it during registration; the HITL panel invokes it after commit.
     () => createPublishHitlRender(getLatestDraft, setDraft),
     [getLatestDraft, setDraft],
   );
