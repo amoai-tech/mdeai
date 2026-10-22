@@ -2,11 +2,13 @@
  * GEM-RE-002 — structured rental intent (escalation path; regex remains default).
  *
  * SAN-1588: the model is the one selected by `MDE_AI_PROVIDER` (Gemini by
- * default, NVIDIA Nemotron when configured). The schema, prompt and regex
- * fallback are unchanged, so switching provider cannot change search semantics.
+ * default, NVIDIA Lightning when configured). The schema and deterministic
+ * fallback are unchanged; the prompt now preserves an exact monthly COP cap
+ * instead of letting the model convert it to a nightly ceiling.
  *
- * NVIDIA Lightning uses `enable_thinking: false` for structured calls for this call. Live testing showed the default budget can spend
- * the whole output allowance on reasoning and return truncated JSON.
+ * Lightning uses `enable_thinking: false` for this structured call. Leaving the
+ * default thinking budget on can spend the whole output allowance on reasoning
+ * and return truncated JSON.
  */
 import { generateObject } from "ai";
 import {

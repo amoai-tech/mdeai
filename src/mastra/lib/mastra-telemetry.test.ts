@@ -22,6 +22,13 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
     expect(classifyAgentError(new Error("Request aborted by user"))).toBe("client_abort");
     expect(classifyAgentError(Object.assign(new Error("x"), { name: "AbortError" }))).toBe("client_abort");
     expect(classifyAgentError(new Error("operation timed out"))).toBe("timeout");
+    expect(
+      classifyAgentError(
+        Object.assign(new Error("The operation was aborted due to timeout"), {
+          name: "TimeoutError",
+        }),
+      ),
+    ).toBe("timeout");
     expect(classifyAgentError({ status: 429, message: "slow down" })).toBe("rate_limit");
     expect(classifyAgentError({ status: 401, message: "nope" })).toBe("auth");
     expect(classifyAgentError(new Error("zod validation failed"))).toBe("validation");

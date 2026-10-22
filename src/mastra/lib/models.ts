@@ -37,9 +37,9 @@ export const ACTIVE_TEXT_MODEL =
     : FLASH_MODEL;
 
 /**
- * Retained for callers that ask for the "pro" tier. NVIDIA currently has one
- * selected model, so it reuses the active model there instead of silently
- * calling Gemini without a Google key.
+ * Pro tier stays on Gemini regardless of MDE_AI_PROVIDER. No NVIDIA pro-tier
+ * model is selected in this PR, so this still needs a Google key even when the
+ * concierge runs on Lightning.
  */
 export const PRO_MODEL = withTokenUsageTracking(google("gemini-3.1-pro-preview"));
 

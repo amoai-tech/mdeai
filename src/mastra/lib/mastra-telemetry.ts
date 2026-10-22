@@ -75,10 +75,13 @@ export function classifyAgentError(err: unknown): AgentErrorType {
   const status = (err as { status?: number; statusCode?: number } | null)?.status
     ?? (err as { statusCode?: number } | null)?.statusCode;
 
-  if (name === "aborterror" || msg.includes("abort") || msg.includes("cancel"))
-    return "client_abort";
+  // Timeout first: AbortSignal.timeout rejects with "The operation was aborted
+  // due to timeout", which the generic abort branch would otherwise mislabel as
+  // the user leaving the page.
   if (name === "timeouterror" || msg.includes("timeout") || msg.includes("timed out"))
     return "timeout";
+  if (name === "aborterror" || msg.includes("abort") || msg.includes("cancel"))
+    return "client_abort";
   if (status === 429 || msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("resource_exhausted"))
     return "rate_limit";
   if (status === 401 || status === 403 || msg.includes("unauthorized") || msg.includes("permission") || msg.includes("forbidden"))
