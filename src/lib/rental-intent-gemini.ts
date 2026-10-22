@@ -14,6 +14,7 @@ import {
   STRUCTURED_OUTPUT_MAX_TOKENS,
   structuredOutputProviderOptions,
 } from "@/lib/ai-provider";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 import {
   rentalIntentSchema,
   type RentalIntent,
@@ -23,6 +24,7 @@ const rentalIntentObjectSchema = rentalIntentSchema;
 
 const RENTAL_INTENT_PROMPT = `Extract Medellín furnished rental search slots from the user message.
 Return only structured slots — never invent listings, prices from listings, or availability.
+When the user specifies an exact monthly cap in COP, return maxPriceMonthly as the original amount, budgetCurrency "COP", stayType "monthly", and omit maxPricePerNight. Never convert monthly to nightly. For nightly USD, use maxPricePerNight and budgetCurrency "USD".
 If the query is not a rental search, set action to "skip" and confidence below 0.5.
 Phase 1 UI is English; Spanish queries may still yield slots but action may be clarify.`;
 
@@ -42,6 +44,19 @@ export const parseRentalIntentWithGemini = async (
     maxOutputTokens: STRUCTURED_OUTPUT_MAX_TOKENS,
   });
 
+  // Exact user-stated monthly budgets are already parsed by the canonical
+  // deterministic rental parser. Do not let an LLM silently drop or turn a COP
+  // monthly cap into a guessed nightly ceiling (SAN-1588).
+  const exact = buildRentalSearchParams(trimmed, {});
+  if (exact?.maxPriceMonthly != null) {
+    return rentalIntentSchema.parse({
+      ...object,
+      maxPriceMonthly: exact.maxPriceMonthly,
+      budgetCurrency: exact.budgetCurrency,
+      stayType: "monthly",
+      maxPricePerNight: undefined,
+    });
+  }
   return rentalIntentSchema.parse(object);
 };
 
@@ -53,6 +68,8 @@ const SLOT_KEYS = [
   "neighborhood",
   "minBedrooms",
   "maxPricePerNight",
+  "maxPriceMonthly",
+  "budgetCurrency",
   "stayType",
   "checkIn",
   "checkOut",

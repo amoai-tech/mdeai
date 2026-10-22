@@ -65,27 +65,16 @@ function nvidiaApiKey(): string {
   return apiKey;
 }
 
-let cachedNvidia:
-  | { apiKey: string; provider: ReturnType<typeof createOpenAICompatible> }
-  | undefined;
-
 function nvidiaProvider(apiKey: string) {
-  if (cachedNvidia?.apiKey !== apiKey) {
-    cachedNvidia = {
-      apiKey,
-      provider: createOpenAICompatible({
-        name: "nvidia",
-        baseURL: NVIDIA_API_BASE_URL,
-        apiKey,
-        // `response_format: json_schema` is what generateObject needs.
-        supportsStructuredOutputs: true,
-        // Without this the streaming response carries no usage chunk and
-        // COST-001 would record zero tokens for every streamed turn.
-        includeUsage: true,
-      }),
-    };
-  }
-  return cachedNvidia.provider;
+  // This is cheap to construct. Avoid retaining and comparing sensitive API-key
+  // strings in a cache (Codacy security finding on the former direct equality).
+  return createOpenAICompatible({
+    name: "nvidia",
+    baseURL: NVIDIA_API_BASE_URL,
+    apiKey,
+    supportsStructuredOutputs: true,
+    includeUsage: true,
+  });
 }
 
 /**

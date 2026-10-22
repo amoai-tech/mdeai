@@ -59,6 +59,25 @@ describe.skipIf(!runLive)("NVIDIA Nemotron 3.5 Lightning live capabilities", () 
     expect(object.maxPricePerNight).toBe(80);
   }, 60_000);
 
+  it("extracts a precise COP monthly cap without inventing a nightly cap", async () => {
+    const { parseRentalIntentWithActiveModel } = await import("@/lib/rental-intent-gemini");
+    const previousProvider = process.env.MDE_AI_PROVIDER;
+    process.env.MDE_AI_PROVIDER = "nvidia";
+    try {
+      const object = await parseRentalIntentWithActiveModel(
+        "Find 2 bedroom apartments in Laureles under COP 3000000 per month",
+        { signal: AbortSignal.timeout(25_000) },
+      );
+      expect(object?.maxPriceMonthly).toBe(3_000_000);
+      expect(object?.budgetCurrency).toBe("COP");
+      expect(object?.stayType).toBe("monthly");
+      expect(object?.maxPricePerNight).toBeUndefined();
+    } finally {
+      if (previousProvider === undefined) delete process.env.MDE_AI_PROVIDER;
+      else process.env.MDE_AI_PROVIDER = previousProvider;
+    }
+  }, 30_000);
+
   it("calls the rental tool once with a preserved budget", async () => {
     const { toolCalls } = await generateText({
       model: model(),
