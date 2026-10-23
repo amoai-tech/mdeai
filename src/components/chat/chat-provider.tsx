@@ -20,6 +20,8 @@ import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
+import { shouldReportConciergeProviderError } from "@/lib/concierge-error-policy";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -187,6 +189,7 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
@@ -203,7 +206,13 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={() => reportConciergeError(threadId)}
+      onError={() => {
+        // The anonymous runtime info probe is a 401, not a failed concierge turn.
+        // Signed-out visitors get the sign-in CTA when they attempt an AI action.
+        if (shouldReportConciergeProviderError(Boolean(user), sessionLoading)) {
+          reportConciergeError(threadId);
+        }
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
