@@ -22,9 +22,10 @@ describe("Mastra registration in hosted runtimes", () => {
         "evaluationAgent",
         "hostEventAgent",
         "hostOpsAgent",
+        "partnerAgent",
       ]),
     );
-    expect(Object.keys(mastra.listAgents())).toHaveLength(8);
+    expect(Object.keys(mastra.listAgents())).toHaveLength(9);
     const concierge = mastra.getAgentById("concierge-agent");
     expect(concierge).toBeDefined();
     // Removing inherited file tools must preserve the actual discovery actions.

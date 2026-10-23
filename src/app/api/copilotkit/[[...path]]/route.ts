@@ -15,6 +15,12 @@ import { setAuditUserId } from "@/mastra/lib/tool-audit-context";
 import { HOST_SUPABASE_KEY } from "@/mastra/tools/hostops-read-tools";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { logAgentRunForTurn } from "@/mastra/lib/log-agent-run";
+import {
+  loadPartnerRuntimeContext,
+  setPartnerRuntimeContext,
+} from "@/mastra/lib/partner-request-context";
+import { isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
+import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
@@ -178,6 +184,9 @@ async function handleCopilotKit(req: NextRequest) {
     //    a consumed body reaches the runtime empty, and an empty stop body is a
     //    thread-wide stop, which is exactly the escalation this ordering exists
     //    to prevent. See Step 11's STOP-4 assertions.
+    // Parse the untrusted business selector before any agent work. It is only
+    // a selector; the RLS-scoped membership lookup below authorizes it.
+    const selectedPartnerId = await readPartnerSelectionFromRun(req);
     const thread = await resolveRequestedThread(req);
     const auth = authorizeCopilotKitRequest(req, { userId, thread });
     if (!auth.allowed) return auth.response;
@@ -203,6 +212,37 @@ async function handleCopilotKit(req: NextRequest) {
       // SAN-1502 PR2 — rental search tools read this same user-scoped client,
       // so an authorized test actor's AI search is RLS-scoped to their grant.
       requestContext.set(RENTAL_SUPABASE_KEY, supabase);
+
+      // SAN-705: selection travels with this agent run (not a shared cookie).
+      // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
+      let partnerContext = null;
+      if (selectedPartnerId) {
+        partnerContext = await loadPartnerRuntimeContext(
+          supabase,
+          userId,
+          selectedPartnerId,
+        );
+        if (!partnerContext) {
+          return Response.json(
+            { error: "You do not have access to the selected business" },
+            { status: 403 },
+          );
+        }
+      }
+
+      // Stop carries no AG-UI business context in CopilotKit v2. The canonical
+      // authenticated thread-owner check has already authorized the caller,
+      // and Stop only cancels a run; it does not replay profile or chat data.
+      // Run/connect MUST still match the persisted selected-business binding.
+      if (!(await isPartnerStopRequest(req))) {
+        const bindingError = await enforcePartnerThreadBinding(
+          thread,
+          userId,
+          selectedPartnerId,
+        );
+        if (bindingError) return bindingError;
+      }
+      if (partnerContext) setPartnerRuntimeContext(requestContext, partnerContext);
     }
 
     return await buildHandler({ resourceId, userId, requestContext })(req);

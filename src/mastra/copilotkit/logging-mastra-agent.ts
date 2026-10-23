@@ -214,6 +214,7 @@ export const RUNTIME_AGENT_ALLOWLIST = new Set([
   "conciergeAgent",
   "hostEventAgent",
   "hostOpsAgent",
+  "partnerAgent",
   "pingAgent",
 ]);
 

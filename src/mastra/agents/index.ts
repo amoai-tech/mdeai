@@ -11,6 +11,7 @@ export { eventAgent } from "./event-agent";
 export { evaluationAgent } from "./evaluation";
 export { hostEventAgent } from "./host-event";
 export { hostOpsAgent } from "./host-ops";
+export { partnerAgent } from "./partner-agent";
 
 export const MdeState = z.object({
   lastQuery: z.string().default(""),
