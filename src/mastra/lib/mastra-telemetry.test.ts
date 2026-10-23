@@ -82,12 +82,19 @@ describe("resolveAgentModelName (AGT-00C)", () => {
     ).toBe("gemini-3.5-flash");
   });
 
-  it("falls back when model is dynamic or missing", () => {
-    // Asserted against the shared constant, not a literal: the fallback names
-    // the model MDE actually runs, so it must follow the constant rather than
-    // pin whichever model happened to be current when this was written.
-    expect(resolveAgentModelName({})).toBe(GEMINI_FLASH_MODEL_ID);
-    expect(resolveAgentModelName(null, "custom-model")).toBe("custom-model");
+  it("falls back to the selected provider when model is dynamic or missing", () => {
+    try {
+      vi.stubEnv("MDE_AI_PROVIDER", "gemini");
+      expect(resolveAgentModelName({})).toBe(GEMINI_FLASH_MODEL_ID);
+
+      vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+      expect(resolveAgentModelName({})).toBe(NVIDIA_MODEL_ID);
+
+      // A caller-provided fallback always takes precedence.
+      expect(resolveAgentModelName(null, "custom-model")).toBe("custom-model");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("records a Mastra router string instead of attributing it to Gemini", () => {
