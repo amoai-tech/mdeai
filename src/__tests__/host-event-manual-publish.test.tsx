@@ -63,6 +63,39 @@ describe("manual host publish without a working AI provider", () => {
     });
   });
 
+  it("invalidates an open review when the host edits the draft, then reviews the new values", () => {
+    const onPublished = vi.fn();
+    const { rerender } = render(<HostEventManualPublish draft={ready} onPublished={onPublished} />);
+    fireEvent.click(screen.getByTestId("host-event-review-manual"));
+    expect(screen.getByTestId("same-atomic-review-panel")).toBeTruthy();
+
+    rerender(<HostEventManualPublish draft={{ ...ready, title: "Revised Salsa Night", priceMinCop: 50000 }} onPublished={onPublished} />);
+    expect(screen.queryByTestId("same-atomic-review-panel")).toBeNull();
+    expect(screen.getByText(/details changed/i)).toBeTruthy();
+    expect((screen.getByTestId("host-event-review-manual") as HTMLButtonElement).disabled).toBe(false);
+    expect(onPublished).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("host-event-review-manual"));
+    const reviewed = JSON.parse(screen.getByTestId("manual-publish-payload").textContent ?? "{}");
+    expect(reviewed.title).toBe("Revised Salsa Night");
+    expect(reviewed.priceMinCop).toBe(50000);
+  });
+
+  it("keeps the saved receipt visible after the canonical draft status becomes published", () => {
+    const onPublished = vi.fn();
+    const { rerender } = render(<HostEventManualPublish draft={ready} onPublished={onPublished} />);
+    fireEvent.click(screen.getByTestId("host-event-review-manual"));
+    fireEvent.click(screen.getByText("Complete saved event"));
+    rerender(<HostEventManualPublish draft={{
+      ...ready,
+      status: "published",
+      publishedEventId: "event-qa",
+      publishedSlug: "qa-event",
+    }} onPublished={onPublished} />);
+    expect(screen.getByTestId("same-atomic-review-panel")).toBeTruthy();
+    expect((screen.getByTestId("host-event-review-manual") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("cancelling review writes no result and lets the host edit and review again", () => {
     const onPublished = vi.fn();
     render(<HostEventManualPublish draft={ready} onPublished={onPublished} />);
