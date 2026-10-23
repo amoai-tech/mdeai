@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { isDeterministicE2E } from '@/lib/deterministic-e2e';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
@@ -373,7 +374,10 @@ export async function searchRestaurants(
     };
   }
 
-  const client = getSupabaseClient();
+  // Browser CI already expects the curated fallback when the configured fake
+  // Supabase host is unreachable. Skip that network attempt entirely; this
+  // branch is prohibited in production by isDeterministicE2E().
+  const client = isDeterministicE2E() ? null : getSupabaseClient();
 
   const returnFallback = (
     reason: 'no_client' | 'error' | 'empty_db',

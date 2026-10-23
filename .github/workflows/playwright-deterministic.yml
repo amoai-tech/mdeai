@@ -92,6 +92,7 @@ jobs:
       - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
+          PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           PLAYWRIGHT_BLOB_OUTPUT_NAME: shard-${{ matrix.shard }}.zip
           NEXT_TELEMETRY_DISABLED: 1
@@ -100,7 +101,10 @@ jobs:
           NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: DEMO_MAP_ID # Expected on mocked dev maps; avoid repeated warnings.
           NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
@@ -148,11 +152,15 @@ jobs:
       - name: Prove the mobile composer regression
         env:
           NODE_ENV: development
+          PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           PLAYWRIGHT_BLOB_OUTPUT_NAME: mobile-composer.zip
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
@@ -256,7 +264,10 @@ jobs:
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
