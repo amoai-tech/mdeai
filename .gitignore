@@ -18,6 +18,11 @@ node_modules
 # testing
 /coverage
 
+# Codacy Analysis CLI generated local state
+/.codacy/codacy.config.json
+/.codacy/codacy.config.baseline.json
+/.codacy/generated/
+
 # next.js
 /.next/
 /out/
