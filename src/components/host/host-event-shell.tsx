@@ -5,6 +5,7 @@ import { CopilotChat } from "@copilotkit/react-core/v2";
 import { AuthStatus } from "@/components/auth/auth-status";
 import { HostEventCopilotBridge } from "@/components/host/host-event-copilot-bridge";
 import { HostEventForm } from "@/components/host/host-event-form";
+import { HostEventManualPublish } from "@/components/host/host-event-manual-publish";
 import { HostEventPreviewCard } from "@/components/host/host-event-preview-card";
 import { HostEventWorkflowStrip } from "@/components/host/host-event-workflow-strip";
 import { HostNavRail } from "@/components/host/host-nav-rail";
@@ -50,6 +51,17 @@ export function HostEventShell({ userEmail }: HostEventShellProps) {
               <HostEventWorkflowStrip activeStep={activeHostWizardStep(draft)} />
               <HostEventPreviewCard draft={draft} />
               <HostEventForm draft={draft} onChange={setDraft} />
+              <HostEventManualPublish
+                draft={draft}
+                onPublished={({ eventId, slug, approvalRequestId }) => {
+                  setDraft({
+                    status: "published",
+                    publishedEventId: eventId,
+                    publishedSlug: slug,
+                    approvalRequestId,
+                  });
+                }}
+              />
               <div
                 id="host-copilot-chat-region"
                 data-testid="host-copilot-chat-region"

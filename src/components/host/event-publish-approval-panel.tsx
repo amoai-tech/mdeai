@@ -245,7 +245,7 @@ export function EventPublishApprovalPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <EventCard {...preview} />
+        <EventCard {...preview} previewOnly />
         <div
           data-testid="host-event-review-details"
           className="space-y-2 rounded-md border border-border bg-muted/20 p-3 text-sm"

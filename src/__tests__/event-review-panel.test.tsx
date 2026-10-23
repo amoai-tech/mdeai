@@ -80,6 +80,8 @@ describe("EventPublishApprovalPanel", () => {
     const view = mount(<EventPublishApprovalPanel draft={draft} status="executing" respond={() => {}} />);
 
     expect(view.textContent).toContain("Ready to publish?");
+    expect(view.textContent).toContain("$50,000 COP");
+    expect(view.querySelector('[data-testid="event-buy-cta"]')).toBeNull();
     click(view.querySelector('[data-testid="host-event-approve"]'));
 
     await vi.waitFor(() => {
