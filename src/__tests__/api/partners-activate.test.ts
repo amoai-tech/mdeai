@@ -50,6 +50,13 @@ function makeMockDb(state: {
     from(table: string) {
       if (table === "partners") {
         return {
+          update: (patch: Partial<PartnerRow>) => ({
+            eq: async (column: string, value: string) => {
+              const row = partners.find((partner) => column === "id" && partner.id === value);
+              if (row) Object.assign(row, patch);
+              return { error: row ? null : { message: "Partner not found" } };
+            },
+          }),
           select: () => ({
             eq: (col: string, val: string) => ({
               eq: (_col2: string, val2: string) => ({
@@ -60,7 +67,7 @@ function makeMockDb(state: {
                   );
                   return {
                     data: row
-                      ? { id: row.id, type: row.type, status: row.status }
+                      ? { id: row.id, type: row.type, status: row.status, settings: row.settings }
                       : null,
                     error: null,
                   };
@@ -386,6 +393,37 @@ describe("activatePartner", () => {
     expect(result.data.created).toBe(false);
     expect(result.data.partnerId).toBe(PARTNER_ID);
     expect(partners).toHaveLength(1);
+  });
+
+  it("retries with sanitized settings and retains unrelated existing values", async () => {
+    const db = makeMockDb({
+      partners: [{
+        id: PARTNER_ID,
+        profile_id: PROFILE_ID,
+        type: "host",
+        status: "draft",
+        completion_score: 0,
+        settings: { website: "https://existing.example.com", customField: "keep" },
+      }],
+    });
+
+    const result = await activatePartner(db, PROFILE_ID, {
+      type: "host",
+      settings: {
+        description: " Edited description ",
+        website: "javascript:alert(1)",
+        status: "active",
+        category: 123,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(db._state.partners).toHaveLength(1);
+    expect(db._state.partners[0]?.settings).toEqual({
+      website: "https://existing.example.com",
+      customField: "keep",
+      description: "Edited description",
+    });
   });
 
   it("links draft when draftId provided", async () => {

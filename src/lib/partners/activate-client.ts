@@ -10,6 +10,8 @@ export type PartnerSignupFormState = {
   businessName: string;
   category?: string;
   neighborhood?: string;
+  website?: string;
+  description?: string;
 };
 
 export type ActivatePartnerResponse = {
@@ -42,9 +44,14 @@ export function buildActivatePayload(
   const category = form.category?.trim();
   const neighborhood = form.neighborhood?.trim();
 
+  const website = form.website?.trim();
+  const description = form.description?.trim();
+
   if (businessName) settings.businessName = businessName;
   if (category) settings.category = category;
   if (neighborhood) settings.neighborhood = neighborhood;
+  if (website) settings.website = website;
+  if (description) settings.description = description;
 
   return {
     type,

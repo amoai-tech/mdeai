@@ -112,7 +112,7 @@ async function findExistingPartner(
 ) {
   return db
     .from("partners")
-    .select("id, type, status")
+    .select("id, type, status, settings")
     .eq("profile_id", profileId)
     .eq("type", partnerType)
     .maybeSingle();
@@ -154,6 +154,25 @@ export async function activatePartner(
 
   if (existing) {
     partnerId = existing.id;
+    // A retry with reviewed fields updates the existing partner instead of
+    // creating a second row; merge settings so unrelated keys are preserved.
+    const acceptedSettings = sanitizePartnerSettings(input.settings);
+    if (Object.keys(acceptedSettings).length > 0) {
+      const mergedSettings = {
+        ...((existing.settings ?? {}) as Record<string, unknown>),
+        ...acceptedSettings,
+      };
+      const { error: settingsError } = await db
+        .from("partners")
+        .update({ settings: mergedSettings as Json })
+        .eq("id", partnerId);
+      if (settingsError) {
+        return {
+          ok: false,
+          error: { code: "insert_failed", message: settingsError.message },
+        };
+      }
+    }
   } else {
     const { data: inserted, error: insertError } = await db
       .from("partners")
