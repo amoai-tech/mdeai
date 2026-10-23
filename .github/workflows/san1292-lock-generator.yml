@@ -1,0 +1,41 @@
+# Temporary SAN-1292 one-shot lockfile generator.
+# Trigger only on creation of this file on this security branch.
+# Remove this workflow from the PR after lockfile generation is complete.
+name: SAN-1292 Next.js security lock update
+on:
+  push:
+    branches:
+      - security/san-1292-next-16-4-2
+    paths:
+      - .github/workflows/san1292-lock-generator.yml
+permissions:
+  contents: write
+jobs:
+  update-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Regenerate only the patched Next.js dependency family
+        run: |
+          npm install --package-lock-only --ignore-scripts --save-exact next@16.4.2
+          npm install --package-lock-only --ignore-scripts --save-exact --save-dev @next/env@16.4.2 eslint-config-next@16.4.2
+          node -e 'const p=require("./package.json"); if(p.dependencies.next!=="16.4.2"||p.devDependencies["@next/env"]!=="16.4.2"||p.devDependencies["eslint-config-next"]!=="16.4.2")process.exit(1)'
+      - name: Validate lockfile and security audit
+        run: |
+          npm ci --ignore-scripts --no-audit
+          npm audit --audit-level=critical --fetch-timeout=20000 --fetch-retries=1
+      - name: Commit only dependency manifest and lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m "fix(SAN-1292): update Next.js to patched 16.4.2"
+          git push origin HEAD
