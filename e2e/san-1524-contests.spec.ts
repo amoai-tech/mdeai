@@ -58,7 +58,10 @@ async function openFirstContest(page: Page): Promise<{ href: string | null; titl
 
 test.describe("public contest discovery", { tag: ["@contests"] }, () => {
   test("skip link focuses the actual contest main landmark", async ({ page }) => {
-    await page.goto("/contests");
+    // This is the first test in the file: on a cold dev server it pays for the Next.js compile
+    // of /contests plus the app providers, which can exceed the default 60s budget.
+    test.setTimeout(180_000);
+    await page.goto("/contests", { timeout: 120_000 });
     const target = page.locator("main#main-content");
     await expect(target).toHaveCount(1);
     await page.locator('a[href="#main-content"]').focus();
