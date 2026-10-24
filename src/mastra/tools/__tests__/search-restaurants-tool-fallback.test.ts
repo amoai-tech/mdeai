@@ -46,6 +46,23 @@ describe("searchRestaurants fallback + envelope", () => {
     expect(out.results.every((r) => restaurantSchema.safeParse(r).success)).toBe(true);
   });
 
+  it("deterministic CI returns the existing fallback without contacting Supabase", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:9");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+    vi.resetModules();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      const { searchRestaurants: search } = await import("../search-restaurants.js");
+      const out = await search({ limit: 2 });
+      expect(out).toMatchObject({ source: "fallback", total: 5 });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("MA-P0-07 envelope includes results, total, and source", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurants: search } = await import("../search-restaurants.js");

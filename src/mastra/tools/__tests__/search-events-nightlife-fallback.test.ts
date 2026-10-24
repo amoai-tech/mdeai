@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { inFilter, gteFilter, lteFilter, addressFilter } = vi.hoisted(() => ({
   inFilter: vi.fn(),
@@ -46,10 +46,18 @@ import { dateWindow, searchEvents } from '../search-events';
 
 describe('Nightlife chip when intelligence import fails', () => {
   beforeEach(() => {
+    // The tool and expected dateWindow() are computed separately. Without a
+    // fixed clock, the 'tonight' lower bound differs by milliseconds in CI.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T09:00:00.000Z'));
     inFilter.mockClear();
     gteFilter.mockClear();
     lteFilter.mockClear();
     addressFilter.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('does NOT filter event_type when Nightlife chip has no text', async () => {
@@ -73,16 +81,25 @@ describe('Nightlife chip when intelligence import fails', () => {
   });
 
   it('preserves explicit chip filters ahead of inferred slots on fallback', async () => {
-    await searchEvents({
-      queryText: 'salsa events this weekend in Laureles',
-      neighborhood: 'El Poblado',
-      dateWindow: 'tonight',
-      limit: 5,
-    });
-    const tonight = dateWindow('tonight');
-    expect(addressFilter).toHaveBeenCalledWith('address', '%El Poblado%');
-    expect(gteFilter).toHaveBeenCalledWith('event_start_time', tonight.gte);
-    expect(lteFilter).toHaveBeenCalledWith('event_start_time', tonight.lte);
+    // `tonight` lowers the bound to the exact current millisecond, so two calls made even 1ms
+    // apart can never match by equality. That is a clock race, not a contract: freeze Date only
+    // (timers stay real so the mocked query's promises keep resolving) and compare deterministically.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-23T20:00:00.000Z'));
+    try {
+      await searchEvents({
+        queryText: 'salsa events this weekend in Laureles',
+        neighborhood: 'El Poblado',
+        dateWindow: 'tonight',
+        limit: 5,
+      });
+      const tonight = dateWindow('tonight');
+      expect(addressFilter).toHaveBeenCalledWith('address', '%El Poblado%');
+      expect(gteFilter).toHaveBeenCalledWith('event_start_time', tonight.gte);
+      expect(lteFilter).toHaveBeenCalledWith('event_start_time', tonight.lte);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports the import failure message rather than just its Error class', async () => {

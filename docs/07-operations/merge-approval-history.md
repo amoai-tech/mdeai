@@ -131,6 +131,58 @@ This should be fixed deliberately — invite a second reviewer, or scope the rev
 excludes docs-only paths — rather than worked around repeatedly."* Two overrides in two merges is that
 pattern. The structural fix remains open and is the reason a third entry should not be needed.
 
+## 2026-10-23 — PR #513 (restaurant contests premium UI)
+
+**PR:** [#513](https://github.com/amoai-tech/mdeai/pull/513) · **Head:** `674ea925942324cf1fd9aee6e781ef9098c791fe` · **Merge:** `2aca0e73fdc87facc5cce65c3a6bec89a346c6df`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `deterministic Maps contracts`, `auth redirect + guard chromium`,
+`real mobile composer chromium`, `browser report + result`, `Kilo Code Review`, `Vercel`, `Vercel Preview Comments`.
+Unresolved review threads: **0**.
+
+**Caveats:** Codacy reported `action_required` (advisory; no surfaced blocking finding; it does not gate merges here).
+CodeRabbit and Greptile were rate-limited on this head — their green status is **not** review coverage.
+This is the third recorded use of the exception; the structural fix (a second reviewer or a narrower review
+requirement for UI/docs paths) remains open, exactly as the PR #150/#155 entry warned.
+
+**What a reviewer would have been asked:** whether the one extra coordinate read for map pins belongs in the
+contest adapter rather than the RPC, whether routing `HostErrorBoundary` through the new shared
+`AppErrorBoundary` is behaviour-preserving (same `[host-os <label> crashed]` log), and whether the included
+test-only clock fix for an unrelated flaky events test is acceptable in a UI PR.
+
+**Nothing unreviewed rode along:** 22 files, `+2029/−513`. Product behaviour changes are limited to the two
+contest routes, the nominee card/gallery, the map-slot error boundary (shared with Host OS), and the existing
+brand placeholder gaining an optional class. The rest is tests, metadata, and one test-only clock freeze
+(reported to SAN-583).
+
+## 2026-10-24 — PR #516 (stop a vote that can only fail; prove the saved receipt)
+
+**PR:** [#516](https://github.com/amoai-tech/mdeai/pull/516) · **Head:** `193e0bd3bf8a346ed4be6cfb5c69d206ad9271d9` · **Merge:** `27cc26a2acc726531df41fd5dd0e75b2cebb3c35`
+
+**Why:** exactly one collaborator (`amoai-tech`), who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `browser report + result`, `deterministic Maps contracts`,
+`auth redirect + guard chromium`, `real mobile composer chromium`, `Codacy Static Code Analysis`, `Vercel`.
+Unresolved review threads: **0**.
+
+**Caveats:** Greptile was rate-limited on this head; its green status is not review coverage. CodeRabbit passed.
+This is the **fourth recorded use** of the exception. The structural fix (a second reviewer, or a narrower review
+requirement for UI/test-only changes) is still open and is now the blocker to stop this recurring — the previous
+entry's warning stands.
+
+**What a reviewer would have been asked:** whether the saved-vote recovery branches must stay before the new
+`vote-not-open` branch (they do, so a returning voter still sees a receipt after the contest closes), whether
+falling back to the CTA when the contest-options read fails is the right degradation (the cast RPC still refuses
+an invalid vote), and whether updating the canonical vote E2E's draft-sibling expectation is the correct contract
+change rather than weakening the test.
+
+**Nothing unreviewed rode along:** 7 files, `+295/−18` (5 source/test updates, 2 new regression tests). No
+migration, RPC, vote-cast, tally, receipt, RLS, admin or AI change. The authenticated vote proof ran against the
+real project on a hidden fixture and restored its state (draft, original dates, entry unapproved, 0 votes).
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
