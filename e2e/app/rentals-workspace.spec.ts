@@ -96,6 +96,8 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
       await page.getByTestId("ro-submit").click();
       await expect(page).toHaveURL(/\/app\/rentals\/listings$/, { timeout: 45_000 });
 
+      // user_id is UNIQUE and the onboarding RPC uses ON CONFLICT DO NOTHING.
+      // Keep .single() so a missing or duplicate profile remains a visible failure.
       const { data: profile, error: profileError } = await admin
         .from("landlord_profiles")
         .select("id")
@@ -117,6 +119,15 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto("/app/rentals/onboarding");
       await expect(page.getByTestId("rentals-onboarding")).toBeVisible();
+      await expect(page.locator("main")).toHaveCount(1);
+      const onboardingWidths = await page.evaluate(() => ({
+        page: document.documentElement.scrollWidth,
+        screen: window.innerWidth,
+      }));
+      expect(
+        onboardingWidths.page,
+        "no horizontal scrolling on onboarding at 390px",
+      ).toBeLessThanOrEqual(onboardingWidths.screen);
       await page.goto("/app/rentals/listings");
       await expect(page.locator("#main-content").getByTestId("rentals-listings")).toBeVisible();
       await expect(page.locator("main")).toHaveCount(1);
