@@ -76,6 +76,14 @@ describe("Concierge feedback controls", () => {
     expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
   });
 
+  it("does not crash if the agent has not initialized its messages yet", () => {
+    mocks.loading = false;
+    mocks.messages = undefined as unknown as typeof mocks.messages;
+    reportConciergeError("thread-a");
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+  });
+
   it("still shows a failed fast-path retry before an agent message is recorded", () => {
     mocks.loading = false;
     mocks.messages = [];

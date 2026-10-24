@@ -51,7 +51,7 @@ export function ConciergeErrorFeedback() {
   // before the visitor sent anything implies an imaginary failed answer.
   // Real agent turns have a user message; failed fast paths carry their own
   // explicit retry callback even when no agent message was created.
-  const attemptedTurn = agent?.messages.some((message) => message.role === "user") ?? false;
+  const attemptedTurn = agent?.messages?.some((message) => message.role === "user") ?? false;
   if (isLoading || error.version === 0 || (!attemptedTurn && !error.retry)) return null;
 
   return (
