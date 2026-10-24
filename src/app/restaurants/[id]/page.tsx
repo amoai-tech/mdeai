@@ -8,7 +8,8 @@ import {
   fetchRestaurantVoteTarget,
   type RestaurantContestOption,
 } from "@/lib/restaurants/fetch-restaurant-by-id";
-import { RestaurantVotePanel } from "@/components/restaurants/restaurant-vote-panel";
+import { RestaurantVotePanel, type ContestWindow } from "@/components/restaurants/restaurant-vote-panel";
+import { contestState } from "@/lib/restaurants/contest-state";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 
 export const dynamic = "force-dynamic";
@@ -50,12 +51,33 @@ export default async function RestaurantDetailPage({
   let contestOptions: RestaurantContestOption[] = [];
   try {
     voteTarget = await fetchRestaurantVoteTarget(restaurant.id, selectedContestId);
-    if (!voteTarget && !selectedContestId) {
-      contestOptions = await fetchRestaurantContestOptions(restaurant.id);
-    }
+    // One read covers both the ambiguous-contest chooser and the selected contest's real
+    // window. A draft/closed contest must never render an actionable Vote that can only fail.
+    contestOptions = await fetchRestaurantContestOptions(restaurant.id);
   } catch (err) {
     console.error("[restaurant] vote target lookup threw:", err instanceof Error ? err.message : err);
   }
+  const selectedContestOption = voteTarget
+    ? contestOptions.find(
+        (option) => option.contestId.toLowerCase() === voteTarget!.contestId.toLowerCase(),
+      )
+    : undefined;
+  const contestWindow: ContestWindow | null = selectedContestOption
+    ? {
+        state: contestState({
+          id: selectedContestOption.contestId,
+          slug: "",
+          title: selectedContestOption.contestTitle,
+          description: null,
+          status: selectedContestOption.status as "draft" | "live" | "closed" | "archived",
+          startsAt: selectedContestOption.startsAt,
+          endsAt: selectedContestOption.endsAt,
+          coverUrl: null,
+        }),
+        opensAt: selectedContestOption.startsAt,
+        closesAt: selectedContestOption.endsAt,
+      }
+    : null;
   const mapHref =
     restaurant.mapsUrl ??
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
@@ -94,7 +116,7 @@ export default async function RestaurantDetailPage({
         {/* SAN-1483 supplies the canonical contest entry for this restaurant. Until it
             lands there is no honest target, so the panel states that instead of inventing one. */}
         <div className="mt-3">
-          {contestOptions.length > 1 ? (
+          {!selectedContestId && contestOptions.length > 1 ? (
             <div data-testid="vote-contest-chooser">
               <p className="text-sm text-foreground">
                 {restaurant.name} is competing in more than one contest. Choose where to vote.
@@ -114,7 +136,11 @@ export default async function RestaurantDetailPage({
               </ul>
             </div>
           ) : (
-            <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={voteTarget} />
+            <RestaurantVotePanel
+              contestWindow={contestWindow}
+              restaurantName={restaurant.name}
+              voteTarget={voteTarget}
+            />
           )}
         </div>
       </section>
