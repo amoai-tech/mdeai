@@ -73,16 +73,22 @@ describe('Nightlife chip when intelligence import fails', () => {
   });
 
   it('preserves explicit chip filters ahead of inferred slots on fallback', async () => {
-    await searchEvents({
-      queryText: 'salsa events this weekend in Laureles',
-      neighborhood: 'El Poblado',
-      dateWindow: 'tonight',
-      limit: 5,
-    });
-    const tonight = dateWindow('tonight');
-    expect(addressFilter).toHaveBeenCalledWith('address', '%El Poblado%');
-    expect(gteFilter).toHaveBeenCalledWith('event_start_time', tonight.gte);
-    expect(lteFilter).toHaveBeenCalledWith('event_start_time', tonight.lte);
+    // Search and expectation must share the same instant: tonight.gte is Date.now().
+    vi.setSystemTime(new Date('2026-10-23T20:00:00.000Z'));
+    try {
+      await searchEvents({
+        queryText: 'salsa events this weekend in Laureles',
+        neighborhood: 'El Poblado',
+        dateWindow: 'tonight',
+        limit: 5,
+      });
+      const tonight = dateWindow('tonight');
+      expect(addressFilter).toHaveBeenCalledWith('address', '%El Poblado%');
+      expect(gteFilter).toHaveBeenCalledWith('event_start_time', tonight.gte);
+      expect(lteFilter).toHaveBeenCalledWith('event_start_time', tonight.lte);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports the import failure message rather than just its Error class', async () => {
