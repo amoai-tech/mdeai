@@ -115,6 +115,9 @@ export type RestaurantContestOption = {
   entityId: string;
   contestTitle: string;
   status: string;
+  /** Real contest window. The vote panel uses it so a draft/closed contest never offers a vote. */
+  startsAt: string | null;
+  endsAt: string | null;
 };
 
 /**
@@ -142,7 +145,14 @@ export async function fetchRestaurantContestOptions(
 
   const options: RestaurantContestOption[] = [];
   for (const raw of data) {
-    const row = raw as { contest_id?: string; entity_id?: string; contest_title?: string; status?: string };
+    const row = raw as {
+      contest_id?: string;
+      entity_id?: string;
+      contest_title?: string;
+      status?: string;
+      starts_at?: unknown;
+      ends_at?: unknown;
+    };
     if (!row.contest_id || !row.entity_id) continue;
     if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) continue;
     options.push({
@@ -150,6 +160,8 @@ export async function fetchRestaurantContestOptions(
       entityId: row.entity_id,
       contestTitle: row.contest_title ?? "Contest",
       status: row.status ?? "unknown",
+      startsAt: typeof row.starts_at === "string" ? row.starts_at : null,
+      endsAt: typeof row.ends_at === "string" ? row.ends_at : null,
     });
   }
   return options;

@@ -70,23 +70,30 @@ async function proveContestSelection(
   ids: { restaurantId: string; contestId: string },
 ): Promise<void> {
   const { restaurantId, contestId } = ids;
+  // Assert the canonical contest region. A hidden duplicate can survive a
+  // client-side route transition; it is not the user's voting surface.
+  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
   // Read the sibling contest from the database rather than inventing it.
-  const sibling = await db.query<{ contest_id: string; entity_id: string }>(
-    "select e.contest_id, e.id as entity_id from vote.entities e " +
+  const sibling = await db.query<{ contest_id: string; entity_id: string; status: string }>(
+    "select e.contest_id, e.id as entity_id, c.status from vote.entities e " +
       "join vote.contests c on c.id = e.contest_id " +
       "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
     [restaurantId, contestId],
   );
   if (sibling.rows[0]) {
     await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
-    await expect(page.getByTestId("vote-cta")).toBeVisible();
+    if (sibling.rows[0].status === "live") {
+      await expect(contestRegion.getByTestId("vote-cta")).toBeVisible();
+    } else {
+      // A draft/closed sibling is where this page used to offer a Vote the cast RPC was
+      // guaranteed to reject (CONTEST_NOT_OPEN). The window must now win over the button.
+      await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+      await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+    }
   }
   // A well-formed contest id that is not this restaurant's contest. The sentinel below
   // must never become a real contest id.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
-  // Assert the canonical contest region. A hidden duplicate can survive a
-  // client-side route transition; it is not the user's voting surface.
-  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
   await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
   await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
   // A malformed selection is rejected before any contest lookup happens.
