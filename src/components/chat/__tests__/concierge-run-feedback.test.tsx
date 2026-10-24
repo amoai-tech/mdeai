@@ -10,10 +10,15 @@ const mocks = vi.hoisted(() => ({
   thread: "thread-a",
   stop: vi.fn(),
   retry: vi.fn(),
+  messages: [{ role: "user" }],
 }));
 
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useOptionalThreadNav: () => ({ activeThreadId: mocks.thread, sessionThreadId: "thread-a" }),
+}));
+
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  useOptionalConciergeCoAgent: () => ({ agent: { messages: mocks.messages } }),
 }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
@@ -42,6 +47,7 @@ beforeEach(() => {
   mocks.thread = "thread-a";
   mocks.stop.mockReset();
   mocks.retry.mockReset();
+  mocks.messages = [{ role: "user" }];
 });
 
 afterEach(() => {
@@ -60,6 +66,30 @@ describe("Concierge feedback controls", () => {
     expect(stop?.getAttribute("aria-label")).toBe("Stop");
     act(() => stop?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(mocks.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mistake signed-out runtime discovery failure for a failed chat reply", () => {
+    mocks.loading = false;
+    mocks.messages = [];
+    reportConciergeError("thread-a"); // /api/copilotkit { method: "info" } returns 401 before send
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+  });
+
+  it("does not crash if the agent has not initialized its messages yet", () => {
+    mocks.loading = false;
+    mocks.messages = undefined as unknown as typeof mocks.messages;
+    reportConciergeError("thread-a");
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeNull();
+  });
+
+  it("still shows a failed fast-path retry before an agent message is recorded", () => {
+    mocks.loading = false;
+    mocks.messages = [];
+    reportConciergeError({ threadId: "thread-a", retry: vi.fn() });
+    const view = mount();
+    expect(view.querySelector('[data-testid="concierge-error-notice"]')).toBeTruthy();
   });
 
   it("shows Retry after an error and calls the existing-turn retry", () => {
