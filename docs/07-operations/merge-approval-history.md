@@ -183,6 +183,35 @@ change rather than weakening the test.
 migration, RPC, vote-cast, tally, receipt, RLS, admin or AI change. The authenticated vote proof ran against the
 real project on a hidden fixture and restored its state (draft, original dates, entry unapproved, 0 votes).
 
+## 2026-10-24 — PR #509 (NVIDIA Lightning rental concierge)
+
+**PR:** [#509](https://github.com/amoai-tech/mdeai/pull/509) · **Head:** `192499c0794b6178431bb9270f98286e6d297685` · **Merge:** `979e5d5e1229c735cf0cb0a3a0f35359ff9eb3fb`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `deterministic chromium 1/3`, `2/3`, `3/3`,
+`deterministic Maps contracts`, `auth redirect + guard chromium`, `real mobile composer chromium`,
+`browser report + result`, `supabase-acl`, `Kilo Code Review`, `Vercel`, `Vercel Preview Comments`,
+`review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Post-merge main:** `Floor`, `Supabase ACL gates`, `Prod deploy freshness` and `Candidate Runtime Certification` all passed on `979e5d5e12`.
+
+**Evidence:** signed-in NVIDIA `/chat` rendered 3 real rental cards → Details → Schedule viewing CTA; controlled
+`e2e/rental-conversion-journey.spec.ts` persisted exactly one lead + one showing, enforced broker isolation,
+denied an unrelated broker, deduplicated a replay and cleaned up every row; chat-history spec passed 9/9 local repeats.
+
+**Caveats:** qualifying COP rows have null coordinates, so no map pin is the truthful result; Gemini embeddings
+returned HTTP 402 and search used keyword fallback; one live NVIDIA capability call hit the 22s per-call timeout
+and passed on retry. None of these is a rental-code failure.
+
+**What a reviewer would have been asked:** whether the 22s provider call timeout should move relative to the 26s
+turn deadline; whether the monthly-price prompt rule is preferable to changing the existing `nightlyPriceFrom`
+display derivation; and whether unmapped COP inventory is acceptable for this release.
+
+**Nothing unreviewed rode along:** 24 files, `+1154/−65`. Product changes are the NVIDIA provider seam, concierge
+model selection, rental monthly-cap preservation, telemetry and a test-only cold-start fix. No schema, RLS, maps,
+booking, Stripe, UI or new-agent changes.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
