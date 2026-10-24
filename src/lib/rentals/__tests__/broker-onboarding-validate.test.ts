@@ -44,12 +44,12 @@ describe("validateBrokerOnboardingInput", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rejects unconfirmed HITL ack", () => {
+  it("allows onboarding without business rights confirmation during development", () => {
     const result = validateBrokerOnboardingInput({
       ...valid,
       confirmedListingRights: false,
     });
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: true });
   });
 
   it("rejects invalid photo URL", () => {

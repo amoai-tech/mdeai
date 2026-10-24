@@ -73,7 +73,10 @@ describe('Nightlife chip when intelligence import fails', () => {
   });
 
   it('preserves explicit chip filters ahead of inferred slots on fallback', async () => {
-    // Search and expectation must share the same instant: tonight.gte is Date.now().
+    // `tonight` lowers the bound to the exact current millisecond, so two calls made even 1ms
+    // apart can never match by equality. That is a clock race, not a contract: freeze Date only
+    // (timers stay real so the mocked query's promises keep resolving) and compare deterministically.
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-23T20:00:00.000Z'));
     try {
       await searchEvents({

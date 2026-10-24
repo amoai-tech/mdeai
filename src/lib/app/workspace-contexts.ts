@@ -57,7 +57,7 @@ export function buildWorkspaceContexts(
       kind: "rentals",
       label: "Rentals",
       description: "Listings, leads, and viewing requests.",
-      href: "/host/rentals",
+      href: "/app/rentals",
     });
   }
 
