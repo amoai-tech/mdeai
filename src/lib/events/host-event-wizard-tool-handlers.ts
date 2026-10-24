@@ -25,6 +25,35 @@ export type SetPricingArgs = {
   ticketTiers?: EventTicketTierDraft[];
 };
 
+
+/** All event fields the host assistant may propose in one reviewed draft. */
+export type SetEventDraftArgs = Partial<
+  Pick<
+    EventDraftState,
+    | "title"
+    | "neighborhood"
+    | "dateIso"
+    | "venue"
+    | "capacity"
+    | "priceMinCop"
+    | "description"
+    | "ticketTiers"
+  >
+>;
+
+/**
+ * Apply every field the host stated in one frontend-tool call.
+ *
+ * The three single-purpose setters remain as canonical patch primitives, but the
+ * agent gets one tool so a complete request cannot stall after the first field.
+ */
+export function applySetEventDraft(
+  current: EventDraftState,
+  args: SetEventDraftArgs,
+): EventDraftState {
+  return mergeEventDraft(current, args);
+}
+
 /** Pure patch helpers — shared by v1 bridge semantics and v2 useFrontendTool handlers. */
 export function applySetEventBasics(
   current: EventDraftState,
