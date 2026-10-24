@@ -157,6 +157,32 @@ contest routes, the nominee card/gallery, the map-slot error boundary (shared wi
 brand placeholder gaining an optional class. The rest is tests, metadata, and one test-only clock freeze
 (reported to SAN-583).
 
+## 2026-10-24 — PR #516 (stop a vote that can only fail; prove the saved receipt)
+
+**PR:** [#516](https://github.com/amoai-tech/mdeai/pull/516) · **Head:** `193e0bd3bf8a346ed4be6cfb5c69d206ad9271d9` · **Merge:** `27cc26a2acc726531df41fd5dd0e75b2cebb3c35`
+
+**Why:** exactly one collaborator (`amoai-tech`), who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `browser report + result`, `deterministic Maps contracts`,
+`auth redirect + guard chromium`, `real mobile composer chromium`, `Codacy Static Code Analysis`, `Vercel`.
+Unresolved review threads: **0**.
+
+**Caveats:** Greptile was rate-limited on this head; its green status is not review coverage. CodeRabbit passed.
+This is the **fourth recorded use** of the exception. The structural fix (a second reviewer, or a narrower review
+requirement for UI/test-only changes) is still open and is now the blocker to stop this recurring — the previous
+entry's warning stands.
+
+**What a reviewer would have been asked:** whether the saved-vote recovery branches must stay before the new
+`vote-not-open` branch (they do, so a returning voter still sees a receipt after the contest closes), whether
+falling back to the CTA when the contest-options read fails is the right degradation (the cast RPC still refuses
+an invalid vote), and whether updating the canonical vote E2E's draft-sibling expectation is the correct contract
+change rather than weakening the test.
+
+**Nothing unreviewed rode along:** 7 files, `+295/−18` (5 source/test updates, 2 new regression tests). No
+migration, RPC, vote-cast, tally, receipt, RLS, admin or AI change. The authenticated vote proof ran against the
+real project on a hidden fixture and restored its state (draft, original dates, entry unapproved, 0 votes).
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

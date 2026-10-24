@@ -21,14 +21,14 @@ async function ListingsContent() {
   const result = await fetchBrokerListings(supabase, ctx.user.id);
 
   return (
-    <main data-testid="rentals-listings">
+    <div data-testid="rentals-listings">
       <RentalsListingsShell
         initialListings={result.ok ? result.listings : []}
         loadError={result.ok ? null : result.message}
         onboardingHref="/app/rentals/onboarding"
         homeHref="/app/rentals"
       />
-    </main>
+    </div>
   );
 }
 

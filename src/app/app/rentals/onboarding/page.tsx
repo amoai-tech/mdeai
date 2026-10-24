@@ -15,12 +15,11 @@ export default async function AppRentalsOnboardingPage() {
   if (ctx.state === "error") {
     return <BrokerRentalsGateError />;
   }
-  if (ctx.hasBrokerProfile) {
-    redirect("/app/rentals");
-  }
+  // The same RPC creates a new draft for existing brokers and a profile for
+  // newcomers. Do not redirect profile owners away from "Start onboarding".
   return (
-    <main data-testid="host-rentals-onboarding">
+    <div data-testid="host-rentals-onboarding">
       <RentalsOnboardingWizard destination="app" />
-    </main>
+    </div>
   );
 }

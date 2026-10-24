@@ -246,6 +246,7 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     }
     const contest = await openFirstContest(page);
     const contestId = await page.getByTestId("contest-page").getAttribute("data-contest-id");
+    const contestState = await page.getByTestId("contest-state").getAttribute("data-state");
     const nominee = page.locator('[data-testid="contest-nominees"] a').first();
     if ((await nominee.count()) === 0) return;
     const nomineeHref = await nominee.getAttribute("href");
@@ -256,9 +257,17 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
     // waiting for "networkidle" here is a false-hang rather than a readiness signal.
     await page.goto(nomineeHref!);
     await expect(page).toHaveURL(/\/restaurants\//, { timeout: 30_000 });
-    await expect(
-      page.getByRole("region", { name: "Restaurant contest" }),
-    ).toBeVisible();
+    const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
+    await expect(contestRegion).toBeVisible();
+
+    // The ballot must agree with the contest it came from. A draft/closed contest never
+    // renders an actionable Vote (the cast RPC requires a live, in-window contest).
+    if (contestState === "open") {
+      await expect(contestRegion.getByTestId("vote-cta")).toBeVisible();
+    } else {
+      await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+      await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+    }
 
     // Contest context survives the round trip: "All contests" is reachable and reopening the
     // contest keeps the same identity and title.

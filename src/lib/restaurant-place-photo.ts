@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { getPlace } from "@/mastra/lib/google-places-client";
 import { normalizePlaceDetails } from "@/lib/place-details";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
@@ -94,6 +95,9 @@ export async function enrichRestaurantsWithPlacePhotos<
 export async function prepareRestaurantSearchResults(
   results: Restaurant[],
 ): Promise<Restaurant[]> {
+  // The fallback restaurants already contain usable images. Deterministic CI
+  // must not fetch place IDs or contact Google to decorate a fake DB result.
+  if (isDeterministicE2E()) return results;
   const withIds = await attachRestaurantPlaceIds(results);
   return enrichRestaurantsWithPlacePhotos(withIds);
 }
