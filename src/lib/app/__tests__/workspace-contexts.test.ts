@@ -60,12 +60,13 @@ describe("buildWorkspaceContexts", () => {
       "/app/rentals",
       "/host/dashboard",
       "/partners/profile",
-      "/admin/contests",
+      "/app/contests",
     ]);
-    // Personal (SAN-1576) and Rentals (SAN-1578) are proven /app adapters;
-    // the others stay on their working legacy URLs until their adapter ships.
+    // Personal (SAN-1576), Rentals (SAN-1578) and Team contests (SAN-1580)
+    // are proven /app adapters; the others stay on their legacy URLs.
     expect(contexts[0].href).toBe("/app/me");
     expect(contexts[1].href).toBe("/app/rentals");
+    expect(contexts[4].href).toBe("/app/contests");
   });
 });
 
