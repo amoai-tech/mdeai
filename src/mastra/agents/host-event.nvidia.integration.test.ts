@@ -33,7 +33,9 @@ describe.skipIf(process.env.MDE_RUN_LIVE_NVIDIA_CAPABILITY_TESTS !== "1")(
       );
       expect(result.text.trim().length).toBeGreaterThan(15);
       expect(result.text).toMatch(/date|when|venue|where/i);
-      expect(result.text).not.toMatch(/has been published|successfully published|ticket (was|is) issued/i);
+      expect(result.text).not.toMatch(
+        /\b(?:i|we)\s+(?:have\s+)?published\b|\b(?:has|have)\s+been\s+published\b|\bsuccessfully\s+published\b|\bis\s+(?:now\s+)?live\b|\bevent\s+(?:is|was)\s+live\b|\btickets?\s+(?:was|is|were|are)\s+issued\b/i,
+      );
     }, 30_000);
   },
 );
