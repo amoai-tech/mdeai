@@ -9,6 +9,8 @@ import {
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
+import { shouldReportConciergeProviderError } from "@/lib/concierge-error-policy";
+import { useSession } from "@/hooks/use-session";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 import { isAgentlessRoute } from "@/lib/copilot/agentless-routes";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
@@ -17,6 +19,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 // Capture replay eligibility at this provider's mount, not at the root layout's mount:
 // a newly persisted turn must not reconnect into itself while its answer is visible.
 function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { activeThreadId, sessionThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
@@ -25,7 +28,11 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
-      onError={() => reportConciergeError(activeThreadId ?? sessionThreadId)}
+      onError={() => {
+        if (shouldReportConciergeProviderError(Boolean(user), sessionLoading)) {
+          reportConciergeError(activeThreadId ?? sessionThreadId);
+        }
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
