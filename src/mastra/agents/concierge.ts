@@ -10,7 +10,7 @@ import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { FLASH_MODEL } from "../lib/models";
+import { CONCIERGE_MODEL } from "../lib/models";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
@@ -337,6 +337,10 @@ Restaurant listing rules (critical):
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
+Rental price rules (critical):
+- A monthly listing's price is the stored monthly amount in its own currency. Quote it only as a monthly amount (for example "COP 2,400,000/month").
+- Never add a USD, per-night or per-week equivalent for a monthly listing, and never divide a monthly rent by 30. The card owns price display.
+
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.
 - Specific queries (category, date, neighborhood, or "show all") → call search-events immediately (reuse lastEventQuery when set).
@@ -423,7 +427,7 @@ Conversion boundary (do NOT cross):
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
 ${formatEventSourcePromptHint()}`,
-  model: FLASH_MODEL,
+  model: CONCIERGE_MODEL,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing

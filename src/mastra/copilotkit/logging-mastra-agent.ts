@@ -124,6 +124,7 @@ export class LoggingMastraAgent extends MastraAgent {
     // and aborts were silently mislabeled success.
     let status: "success" | "error" = "success";
     let completed = false;
+    let timedOut = false;
     let errorType: AgentErrorType | undefined;
     let errorMessage: string | undefined;
     const runInput =
@@ -151,7 +152,11 @@ export class LoggingMastraAgent extends MastraAgent {
       }),
       finalize(() => {
         // Unsubscribed before completing and without an error = client abort.
-        if (status === "success" && !completed) {
+        if (timedOut) {
+          status = "error";
+          errorType = "timeout";
+          errorMessage = "MDE agent turn timed out after 26 seconds";
+        } else if (status === "success" && !completed) {
           status = "error";
           errorType = "client_abort";
           errorMessage = "stream unsubscribed before completion (client abort)";
@@ -203,8 +208,18 @@ export class LoggingMastraAgent extends MastraAgent {
     // Subscribe inside the sink's async context so model calls triggered by the
     // AG-UI bridge (which starts its work synchronously on subscribe) inherit it.
     return new Observable<BaseEvent>((subscriber) => {
+      // Bound the ENTIRE CopilotKit turn, including tools, agent steps and the
+      // last SSE event. A per-model timeout does not bound multi-step turns.
+      // The error flows through tap/finalize, so ai_runs records the failure.
+      const deadline = setTimeout(() => {
+        timedOut = true;
+        subscriber.error(new Error("MDE agent turn timed out after 26 seconds"));
+      }, 26_000);
       const sub = runWithTokenSink(tokenSink, () => stream.subscribe(subscriber));
-      return () => sub.unsubscribe();
+      return () => {
+        clearTimeout(deadline);
+        sub.unsubscribe();
+      };
     });
   }
 }
