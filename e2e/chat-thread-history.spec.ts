@@ -57,11 +57,15 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
     await threadItem(page, CHAT_B).click();
     await expect(nav).toHaveAttribute("data-active-thread-id", CHAT_B);
 
-    await page.goBack();
+    // The selection uses history.pushState on the SAME /chat document.
+    // Playwright page.goBack() defaults to waiting for a full page "load", which
+    // never fires for a same-document popstate and timed out in CI (#507).
+    // Drive native Back/Forward and wait for the observable thread selection.
+    await page.evaluate(() => window.history.back());
     await expect(nav, "one Back press restores the previous saved chat").toHaveAttribute(
       "data-active-thread-id", CHAT_A, { timeout: 15_000 });
 
-    await page.goForward();
+    await page.evaluate(() => window.history.forward());
     await expect(nav, "Forward returns to the chat that was open after it").toHaveAttribute(
       "data-active-thread-id", CHAT_B, { timeout: 15_000 });
   });

@@ -40,14 +40,27 @@ describe("configured Gemini model capabilities are recorded", () => {
  * do either would pass typecheck, lint and every unit test while failing every
  * real turn — so this asserts both against the live API.
  *
- * Gated on `GOOGLE_GENERATIVE_AI_API_KEY`: CI has no Gemini key, so it skips
- * there rather than failing, and any environment that does run AI gets the
- * proof on demand. Because a skip is not evidence, the CI-enforced contract
- * above carries the part CI can actually enforce.
+ * Explicitly opt-in with MDE_RUN_LIVE_GEMINI_CAPABILITY_TESTS=1 and a funded
+ * GOOGLE_GENERATIVE_AI_API_KEY. Merely having a key in CI must not turn default
+ * unit tests into billable API calls that fail when credits are depleted.
+ * Skipping live tests is not capability proof: the CI-enforced contract above
+ * always runs, and the separate opt-in test is authoritative for live behavior.
+ *
+ * Example:
+ *   MDE_RUN_LIVE_GEMINI_CAPABILITY_TESTS=1 npm exec vitest run src/mastra/lib/models.test.ts
  */
 const hasGeminiKey = Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+const runLiveCapabilityTests =
+  process.env.MDE_RUN_LIVE_GEMINI_CAPABILITY_TESTS === "1";
 
-describe.skipIf(!hasGeminiKey)(
+if (runLiveCapabilityTests && !hasGeminiKey) {
+  throw new Error(
+    "Live Gemini capability tests require GOOGLE_GENERATIVE_AI_API_KEY. " +
+      "Set a funded key or omit MDE_RUN_LIVE_GEMINI_CAPABILITY_TESTS=1 for deterministic tests.",
+  );
+}
+
+describe.skipIf(!runLiveCapabilityTests)(
   `GEMINI_FLASH_MODEL_ID ("${GEMINI_FLASH_MODEL_ID}") live capabilities`,
   () => {
     const model = google(GEMINI_FLASH_MODEL_ID);

@@ -4,7 +4,6 @@ import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRestaurantsIntelligent } from '../lib/intelligence-restaurant-search';
 import { writeSearchLog, type RankExplanationEntry } from '../lib/search-logs';
 
 const cuisineEnum = z.enum([
@@ -324,8 +323,10 @@ export async function searchRestaurants(
 
   if (query.queryText?.trim()) {
     const started = Date.now();
-    let intel: Awaited<ReturnType<typeof searchRestaurantsIntelligent>> | null = null;
+    let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
     try {
+      // Load after this tool initializes: intelligence search reuses its mapping helpers.
+      const { searchRestaurantsIntelligent } = await import('../lib/intelligence-restaurant-search');
       intel = await searchRestaurantsIntelligent(query);
     } catch (err) {
       console.warn('[search-restaurants] intelligent search failed:', err instanceof Error ? err.message : err);

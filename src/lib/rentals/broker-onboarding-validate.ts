@@ -7,7 +7,8 @@ export type BrokerOnboardingFormInput = {
   bathrooms: number;
   monthlyRentCop: number;
   photoUrl: string;
-  confirmedListingRights: boolean;
+  /** Legacy input only; Phase A cannot require business rights approval. */
+  confirmedListingRights?: boolean;
   /** Google Places (New) place id for the selected property; empty when none was picked. */
   placeId: string;
   /** Provider-normalized address from the selected place; empty when none was picked. */
@@ -62,9 +63,6 @@ export function validateBrokerOnboardingInput(
   }
   if (!Number.isFinite(input.monthlyRentCop) || input.monthlyRentCop <= 0) {
     return { ok: false, message: "Monthly rent must be greater than zero." };
-  }
-  if (!input.confirmedListingRights) {
-    return { ok: false, message: "Confirm you can list this property before saving." };
   }
   const placeId = input.placeId.trim();
   if (placeId) {

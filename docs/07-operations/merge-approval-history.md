@@ -131,6 +131,32 @@ This should be fixed deliberately — invite a second reviewer, or scope the rev
 excludes docs-only paths — rather than worked around repeatedly."* Two overrides in two merges is that
 pattern. The structural fix remains open and is the reason a third entry should not be needed.
 
+## 2026-10-23 — PR #513 (restaurant contests premium UI)
+
+**PR:** [#513](https://github.com/amoai-tech/mdeai/pull/513) · **Head:** `674ea925942324cf1fd9aee6e781ef9098c791fe` · **Merge:** `2aca0e73fdc87facc5cce65c3a6bec89a346c6df`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `deterministic Maps contracts`, `auth redirect + guard chromium`,
+`real mobile composer chromium`, `browser report + result`, `Kilo Code Review`, `Vercel`, `Vercel Preview Comments`.
+Unresolved review threads: **0**.
+
+**Caveats:** Codacy reported `action_required` (advisory; no surfaced blocking finding; it does not gate merges here).
+CodeRabbit and Greptile were rate-limited on this head — their green status is **not** review coverage.
+This is the third recorded use of the exception; the structural fix (a second reviewer or a narrower review
+requirement for UI/docs paths) remains open, exactly as the PR #150/#155 entry warned.
+
+**What a reviewer would have been asked:** whether the one extra coordinate read for map pins belongs in the
+contest adapter rather than the RPC, whether routing `HostErrorBoundary` through the new shared
+`AppErrorBoundary` is behaviour-preserving (same `[host-os <label> crashed]` log), and whether the included
+test-only clock fix for an unrelated flaky events test is acceptable in a UI PR.
+
+**Nothing unreviewed rode along:** 22 files, `+2029/−513`. Product behaviour changes are limited to the two
+contest routes, the nominee card/gallery, the map-slot error boundary (shared with Host OS), and the existing
+brand placeholder gaining an optional class. The rest is tests, metadata, and one test-only clock freeze
+(reported to SAN-583).
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

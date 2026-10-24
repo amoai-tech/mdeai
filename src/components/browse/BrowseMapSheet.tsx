@@ -4,6 +4,8 @@ import { useState } from "react";
 import { MapIcon, XIcon } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { BrowseMapFallback } from "@/components/browse/browse-map-fallback";
+import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
@@ -65,11 +67,13 @@ export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
               map once the sheet has finished sliding in. Capped at 520px with a 280px floor, like the chat
               map sheet; `vh` rather than `dvh` so an older browser cannot drop the declaration and blank
               the map again. */}
-          <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
-            <MapsShell>
-              <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
-            </MapsShell>
-          </div>
+          <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
+            <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
+              <MapsShell>
+                <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
+              </MapsShell>
+            </div>
+          </AppErrorBoundary>
         </SheetContent>
       </Sheet>
     </div>

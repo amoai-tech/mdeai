@@ -57,14 +57,14 @@ describe("buildWorkspaceContexts", () => {
     });
     expect(contexts.map((context) => context.href)).toEqual([
       "/saved",
-      "/host/rentals",
+      "/app/rentals",
       "/host/dashboard",
       "/partners/profile",
       "/admin/contests",
     ]);
-    for (const context of contexts) {
-      expect(context.href.startsWith("/app")).toBe(false);
-    }
+    // Rentals is the first adapter proven under /app (SAN-1578); the others
+    // stay on their working legacy URLs until their own adapter ships.
+    expect(contexts[1].href).toBe("/app/rentals");
   });
 });
 
@@ -78,7 +78,7 @@ describe("activeWorkspaceContext", () => {
 
   it("matches a destination and its subpaths", () => {
     expect(activeWorkspaceContext("/saved", contexts)?.kind).toBe("personal");
-    expect(activeWorkspaceContext("/host/rentals/listings", contexts)?.kind).toBe(
+    expect(activeWorkspaceContext("/app/rentals/listings", contexts)?.kind).toBe(
       "rentals",
     );
     expect(activeWorkspaceContext("/admin/contests/123", contexts)?.kind).toBe(
