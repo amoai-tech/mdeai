@@ -65,10 +65,19 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
       ).toHaveAttribute("href", "/app/rentals/listings");
 
       await page.goto("/app/rentals/listings");
-      await expect(page.getByTestId("rentals-listings")).toBeVisible();
+      const visibleWorkspace = page.locator("#main-content");
+      await expect(visibleWorkspace.getByTestId("rentals-listings")).toBeVisible();
+      // /app already provides the sole main landmark. A nested main is invalid.
+      await expect(page.locator("main")).toHaveCount(1);
 
-      // Empty inventory renders the empty state without the domain nav, so
-      // return through the route itself rather than a missing nav link.
+      // An existing broker with no inventory must be able to add a first unit;
+      // the old redirect loop sent "Start onboarding" back to /app/rentals.
+      await expect(page.getByTestId("rentals-listings-empty")).toBeVisible();
+      await page.getByTestId("rentals-listings-onboarding").click();
+      await expect(page).toHaveURL(/\/app\/rentals\/onboarding$/);
+      await expect(page.getByTestId("host-rentals-onboarding")).toBeVisible();
+      await expect(page.locator("main")).toHaveCount(1);
+
       await page.goto("/app/rentals");
       await expect(page).toHaveURL(/\/app\/rentals$/);
       await expect(page.getByTestId("rentals-concierge")).toBeVisible();
