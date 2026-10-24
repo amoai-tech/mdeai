@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ConciergeErrorNotice } from "@/components/chat/concierge-error-notice";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import {
   getConciergeErrorForThread,
   getConciergeErrorForThreadServer,
@@ -37,6 +38,7 @@ export function ConciergeStopButton() {
 export function ConciergeErrorFeedback() {
   const { isLoading, retryLastTurn } = useConciergeChat();
   const nav = useOptionalThreadNav();
+  const { agent } = useOptionalConciergeCoAgent() ?? {};
   const currentThreadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const error = useSyncExternalStore(
     subscribeConciergeError,
@@ -44,7 +46,13 @@ export function ConciergeErrorFeedback() {
     getConciergeErrorForThreadServer,
   );
 
-  if (isLoading || error.version === 0) return null;
+  // CopilotKit's initial anonymous runtime discovery returns 401 by design.
+  // Its provider onError is NOT proof that a chat turn failed; showing Retry
+  // before the visitor sent anything implies an imaginary failed answer.
+  // Real agent turns have a user message; failed fast paths carry their own
+  // explicit retry callback even when no agent message was created.
+  const attemptedTurn = agent?.messages.some((message) => message.role === "user") ?? false;
+  if (isLoading || error.version === 0 || (!attemptedTurn && !error.retry)) return null;
 
   return (
     <div data-testid="concierge-run-feedback">

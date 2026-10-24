@@ -117,6 +117,17 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     hasTouch: true,
   });
 
+  test("guest opening /chat sees no failed reply before sending a message", async ({
+    page,
+  }) => {
+    const { input } = await gotoComposer(page);
+    // Error callbacks from optional runtime discovery must not pretend that
+    // an assistant reply was attempted. This assertion is network-independent:
+    // the unit regression covers the explicit provider error state.
+    await expect(page.getByTestId("concierge-error-notice")).toHaveCount(0);
+    await expect(input).toBeVisible();
+  });
+
   test("uses the current v2 controls and keeps the mobile accessibility contract", async ({
     page,
   }) => {
