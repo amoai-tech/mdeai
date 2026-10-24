@@ -9,9 +9,7 @@ import {
 import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
 import {
-  applySetEventBasics,
-  applySetPricing,
-  applySetVenue,
+  applySetEventDraft,
   publishDecisionDraftPatch,
   selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
@@ -19,27 +17,20 @@ import type { ApprovalDecision } from "@/lib/events/approval-decision";
 import {
   EMPTY_EVENT_DRAFT,
   EventDraftStateSchema,
-  EventTicketTierDraft,
   mergeEventDraft,
   type EventDraftState,
 } from "@/lib/types";
 
-const setEventBasicsParams = z.object({
-  title: z.string(),
-  neighborhood: z.string(),
-  dateIso: z.string().describe("ISO 8601 datetime"),
-});
-
-const setVenueParams = z.object({
-  venue: z.string(),
-  capacity: z.number(),
-});
-
-const setPricingParams = z.object({
-  priceMinCop: z.number(),
-  description: z.string().optional(),
-  ticketTiers: z.array(EventTicketTierDraft).optional(),
-});
+const setEventDraftParams = EventDraftStateSchema.pick({
+  title: true,
+  neighborhood: true,
+  dateIso: true,
+  venue: true,
+  capacity: true,
+  priceMinCop: true,
+  description: true,
+  ticketTiers: true,
+}).partial();
 
 const previewPublishParams = z.object({
   draft: EventDraftStateSchema,
@@ -126,36 +117,15 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
 
   useFrontendTool(
     {
-      name: "set_event_basics",
-      description: "Set event title, neighborhood, and start datetime",
-      parameters: setEventBasicsParams,
-      handler: async (args) => {
-        setDraftState((prev) => applySetEventBasics(prev, args));
-      },
-    },
-    [],
-  );
-
-  useFrontendTool(
-    {
-      name: "set_venue",
-      description: "Set venue name and capacity",
-      parameters: setVenueParams,
-      handler: async (args) => {
-        setDraftState((prev) => applySetVenue(prev, args));
-      },
-    },
-    [],
-  );
-
-  useFrontendTool(
-    {
-      name: "set_pricing",
+      name: "set_event_draft",
       description:
-        "Set minimum ticket price in whole COP (40000 = COP 40,000), description, optional tiers also in whole COP",
-      parameters: setPricingParams,
+        "Apply every event detail the host stated in one call: title, neighborhood, dateIso, venue, capacity, priceMinCop (whole COP), description, optional ticket tiers. Returns the updated draft so the assistant can continue or ask for missing fields.",
+      parameters: setEventDraftParams,
       handler: async (args) => {
-        setDraftState((prev) => applySetPricing(prev, args));
+        const next = applySetEventDraft(latestDraftRef.current, args);
+        latestDraftRef.current = next;
+        setDraftState(next);
+        return { ok: true, draft: next };
       },
     },
     [],
