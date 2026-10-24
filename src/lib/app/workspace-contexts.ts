@@ -87,7 +87,7 @@ export function buildWorkspaceContexts(
       kind: "team",
       label: "MDE Team",
       description: "Contests and protected admin operations.",
-      href: "/admin/contests",
+      href: "/app/contests",
     });
   }
 
@@ -115,6 +115,11 @@ export function activeWorkspaceContext(
     pathname.startsWith("/me/tickets/")
   ) {
     return contexts.find((context) => context.kind === "personal") ?? null;
+  }
+
+  // SAN-1580: the legacy contest admin URLs remain valid and belong to Team.
+  if (pathname === "/admin/contests" || pathname.startsWith("/admin/contests/")) {
+    return contexts.find((context) => context.kind === "team") ?? null;
   }
 
   if (pathname === "/app") {

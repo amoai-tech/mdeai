@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminId } from "@/lib/auth/admin-gate";
 import {
   createAdminContest,
   linkAdminRestaurant,
@@ -10,6 +10,10 @@ import {
   updateAdminContest,
   type ContestStatus,
 } from "@/lib/restaurants/contest-admin";
+import {
+  contestBaseToken,
+  contestDetailHref,
+} from "@/lib/restaurants/contest-admin-paths";
 import { normalizeRestaurantIds } from "@/lib/restaurants/contest-admin-ids";
 import {
   applyLinks,
@@ -22,23 +26,24 @@ import {
 const STATUSES: readonly ContestStatus[] = ["draft", "live", "closed", "archived"];
 
 /**
- * Every action re-checks the session and the admin role server-side. The browser can never
- * choose the actor: it comes from the verified Supabase session, and the RPC re-checks it too.
+ * Every action re-checks the session and the admin role server-side through the
+ * shared SAN-1580 gate. The browser can never choose the actor: it comes from the
+ * verified Supabase session, and the RPC re-checks it too.
  */
-async function requireAdminId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Sign in as an admin to manage contests.");
-  const { data } = await supabase.rpc("is_admin");
-  if (data !== true) throw new Error("Admin access required.");
-  return user.id;
-}
-
 function text(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Both surfaces render the same contest rows, so a write from either one must
+ * refresh both. No second writer exists.
+ */
+function revalidateContestSurfaces(contestId: string): void {
+  revalidatePath("/admin/contests");
+  revalidatePath("/app/contests");
+  revalidatePath("/admin/contests/" + contestId);
+  revalidatePath("/app/contests/" + contestId);
 }
 
 export async function createContestAction(formData: FormData): Promise<void> {
@@ -52,8 +57,10 @@ export async function createContestAction(formData: FormData): Promise<void> {
     requestId: text(formData, "request_id") || null,
   });
 
-  revalidatePath("/admin/contests");
-  redirect("/admin/contests/" + created.contest_id);
+  // `base` is a fixed token (`admin` or `app`), never a destination URL.
+  const base = contestBaseToken(formData.get("base"));
+  revalidateContestSurfaces(created.contest_id);
+  redirect(contestDetailHref(base, created.contest_id));
 }
 
 export async function updateContestAction(formData: FormData): Promise<void> {
@@ -79,8 +86,7 @@ export async function updateContestAction(formData: FormData): Promise<void> {
     endsAt,
   });
 
-  revalidatePath("/admin/contests/" + contestId);
-  revalidatePath("/admin/contests");
+  revalidateContestSurfaces(contestId);
 }
 
 /** What the picker shows after a submission. Never a claim the database did not make. */
@@ -131,7 +137,7 @@ export async function linkRestaurantsAction(
       console.error("[admin] link failed for restaurant", failure.id, failure.reason);
     }
 
-    revalidatePath("/admin/contests/" + contestId);
+    revalidateContestSurfaces(contestId);
     return toBulkState(result.added.length, result.already.length, result.failed, rejected);
   } catch (error) {
     // Authorization, a missing session, or an unexpected failure: say so, never crash the page.
@@ -146,5 +152,5 @@ export async function unlinkRestaurantAction(formData: FormData): Promise<void> 
   if (!contestId || !restaurantId) throw new Error("Missing entry.");
 
   await unlinkAdminRestaurant(actorId, contestId, restaurantId, "manual", text(formData, "request_id") || null);
-  revalidatePath("/admin/contests/" + contestId);
+  revalidateContestSurfaces(contestId);
 }
