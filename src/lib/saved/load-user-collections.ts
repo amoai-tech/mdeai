@@ -1,3 +1,4 @@
+import { PERSONAL_LOAD_ERROR, type Result } from "@/lib/result";
 import { createClient } from "@/lib/supabase/server";
 
 export type SavedCollectionRow = {
@@ -11,7 +12,7 @@ export type SavedCollectionRow = {
 /** Load non-deleted collections for the authenticated user (RLS-scoped). */
 export async function loadUserCollections(
   userId: string,
-): Promise<SavedCollectionRow[]> {
+): Promise<Result<SavedCollectionRow[]>> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("collections")
@@ -22,8 +23,8 @@ export async function loadUserCollections(
 
   if (error) {
     console.error("[saved] loadUserCollections:", error.message);
-    return [];
+    return { status: "error", message: PERSONAL_LOAD_ERROR };
   }
 
-  return (data ?? []) as SavedCollectionRow[];
+  return { status: "ok", value: (data ?? []) as SavedCollectionRow[] };
 }

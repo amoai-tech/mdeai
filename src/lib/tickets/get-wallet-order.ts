@@ -1,3 +1,4 @@
+import { PERSONAL_LOAD_ERROR, type Result } from "@/lib/result";
 import { createClient } from "@/lib/supabase/server";
 import {
   walletOrderPayloadSchema,
@@ -25,13 +26,13 @@ export async function getWalletOrderByToken(
 }
 
 // skipcq: JS-0067, JS-R1005
-export async function listBuyerOrders(): Promise<BuyerOrderListItem[]> {
+export async function listBuyerOrders(): Promise<Result<BuyerOrderListItem[]>> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return [];
+  if (!user) return { status: "ok", value: [] };
 
   const { data, error } = await supabase
     .from("event_orders")
@@ -42,10 +43,13 @@ export async function listBuyerOrders(): Promise<BuyerOrderListItem[]> {
     .in("status", ["paid", "refunded", "partial_refund"])
     .order("created_at", { ascending: false });
 
-  if (error || !data) return [];
+  if (error || !data) {
+    if (error) console.error("[tickets] listBuyerOrders:", error.message);
+    return { status: "error", message: PERSONAL_LOAD_ERROR };
+  }
 
   // skipcq: JS-R1005
-  return data.flatMap((row) => {
+  const orders = data.flatMap((row) => {
     type EventRow = {
       name: string;
       event_start_time: string;
@@ -72,6 +76,8 @@ export async function listBuyerOrders(): Promise<BuyerOrderListItem[]> {
       },
     ];
   });
+
+  return { status: "ok", value: orders };
 }
 
 // skipcq: JS-0067
