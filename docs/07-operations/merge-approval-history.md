@@ -212,6 +212,33 @@ display derivation; and whether unmapped COP inventory is acceptable for this re
 model selection, rental monthly-cap preservation, telemetry and a test-only cold-start fix. No schema, RLS, maps,
 booking, Stripe, UI or new-agent changes.
 
+## 2026-10-24 — PR #520 (MDE Team contests under /app)
+
+**PR:** [#520](https://github.com/amoai-tech/mdeai/pull/520) · **Head:** `b807a686439d7b0103e15e3e809e641864ff797a` · **Merge:** `66d8f0f2f012d4d29e6cb35e07fcf306028bb2ef`
+
+**Why:** exactly one collaborator (`amoai-tech`), who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `browser report + result`, `auth redirect + guard chromium`,
+`real mobile composer chromium`, `deterministic Maps contracts`, `Vercel`. Unresolved review threads: **0**.
+
+**Caveats:** `Codacy Static Code Analysis` was an advisory `fail` with no surfaced blocking finding; Codacy does not
+gate merges here. CodeRabbit passed. Greptile was rate-limited (not review coverage). `Kilo Code Review` was still
+pending at merge time; it is advisory. This is the **fifth recorded use** of the exception. The structural fix
+(a second reviewer, or a narrower review rule for scoped UI/test adapters) remains the real resolution.
+
+**What a reviewer would have been asked:** whether extracting the shared server gate and the shared list/detail
+bodies preserves the legacy `/admin/contests` behaviour exactly; whether the fixed `app`/`admin` base token is a
+sufficient safeguard against an open redirect; and whether the opt-in write E2E's cleanup proof is adequate for a
+production-backed test.
+
+**Nothing unreviewed rode along:** 15 files, `+974/−160` (5 modified admin/shell files, 10 new route/component/test
+files). No migration, RPC, role-store, vote or public discovery change. `/app/me` and SAN-1576-owned files are
+untouched; the SAN-1576 merge conflict was resolved by keeping its Personal `/app/me` and this PR's Team
+`/app/contests`. Production was verified with a throwaway admin (role and identity deleted afterwards): `/app/contests`
+and the public contest detail render, 3 real rows, create form, legacy `/admin/contests` intact, `/app/admin/contests`
+404, guest redirect exact, 390/1440 without overflow.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
