@@ -21,11 +21,16 @@ import { cn } from "@/lib/utils";
 export type RentalsListingsShellProps = {
   initialListings: BrokerListingDetail[];
   loadError: string | null;
+  /** Route family for empty/error recovery links; defaults to legacy host. */
+  onboardingHref?: string;
+  homeHref?: string;
 };
 
 export function RentalsListingsShell({
   initialListings,
   loadError,
+  onboardingHref = "/host/rentals/onboarding",
+  homeHref = "/host/rentals",
 }: RentalsListingsShellProps) {
   const router = useRouter();
   const [listings, setListings] = useState(initialListings);
@@ -160,7 +165,7 @@ export function RentalsListingsShell({
             label: "Start onboarding",
             testId: "rentals-listings-onboarding",
             onClick: () => {
-              router.push("/host/rentals/onboarding");
+              router.push(onboardingHref);
             },
           },
         ]}
@@ -265,7 +270,7 @@ export function RentalsListingsShell({
       >
         <p className="text-xs text-muted-foreground">
           Deep AI workflows (ad copy, multi-turn analysis) live in{" "}
-          <Link href="/host/rentals" className="text-primary hover:underline">
+          <Link href={homeHref} className="text-primary hover:underline">
             Concierge
           </Link>
           .
