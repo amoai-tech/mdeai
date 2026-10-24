@@ -33,6 +33,8 @@ const PROD_SPECS = [
 ];
 
 export default defineConfig({
+  // Only CI opt-in runs this; never on production smoke or ordinary local tests.
+  globalSetup: process.env.PLAYWRIGHT_CI_WARMUP === "1" ? "./e2e/ci-warmup.ts" : undefined,
   testDir: "./e2e",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

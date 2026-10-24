@@ -56,3 +56,30 @@ test("browser scope still fails open to coverage and the auth guard remains inde
   assert.ok(authJob);
   assert.doesNotMatch(authJob, /needs: browser_scope/);
 });
+
+test("all simulated browser lanes fail fast against local-only Supabase", () => {
+  const lanes = [
+    part("  deterministic-chromium:", "  # Real CopilotKit v2 composer:"),
+    part("  mobile-composer:", "  # Stable overall check:"),
+    yaml.split("  auth-guard-chromium:")[1],
+  ];
+  for (const lane of lanes) {
+    assert.ok(lane, "Missing required browser lane");
+    assert.match(lane, /^\s+NEXT_PUBLIC_SUPABASE_URL: http:\/\/127\.0\.0\.1:9$/m);
+    assert.doesNotMatch(lane, /^\s+SUPABASE_SERVICE_ROLE_KEY:/m);
+    assert.doesNotMatch(lane, /^\s+SUPABASE_SECRET_KEY:/m);
+  }
+  assert.match(lanes[0], /^\s+NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"$/m);
+  assert.match(lanes[0], /^\s+E2E_BYPASS_AUTH: "1"$/m);
+  assert.doesNotMatch(lanes[1], /^\s+E2E_BYPASS_AUTH:/m);
+  assert.doesNotMatch(lanes[2], /^\s+E2E_BYPASS_AUTH:/m);
+});
+
+test("cold CI chat compilation runs before test timers only in chat lanes", () => {
+  const shard = part("  deterministic-chromium:", "  # Real CopilotKit v2 composer:");
+  const mobile = part("  mobile-composer:", "  # Stable overall check:");
+  const auth = yaml.split("  auth-guard-chromium:")[1];
+  assert.match(shard, /^\s+PLAYWRIGHT_CI_WARMUP: "1"/m);
+  assert.match(mobile, /^\s+PLAYWRIGHT_CI_WARMUP: "1"/m);
+  assert.doesNotMatch(auth, /^\s+PLAYWRIGHT_CI_WARMUP:/m);
+});
