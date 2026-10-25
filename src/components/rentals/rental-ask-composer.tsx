@@ -117,6 +117,20 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
   };
 }
 
+/**
+ * A refinement is still the same search: if the renter asked for furnished in the first
+ * question, telling them only about the new budget cap would imply the furnishing was applied.
+ * Keep the unsupported request visible for the rest of this page's conversation.
+ */
+function withCarriedNotice(payload: RentalAskResults, labels: readonly string[]): RentalAskResults {
+  const carried = unappliedRentalNotice([...labels]);
+  if (!carried || payload.budgetNotice?.includes("I can't filter by")) return payload;
+  return {
+    ...payload,
+    budgetNotice: [payload.budgetNotice, carried].filter(Boolean).join(" "),
+  };
+}
+
 function isAbortError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -249,6 +263,8 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
   // streaming when a filter change remounted the page belongs to the old filters.
   const acceptToolResults = useRef(false);
   const stopRef = useRef<(() => void) | null>(null);
+  // Requests this search cannot filter, accumulated for this page's conversation.
+  const unappliedRef = useRef<string[]>([]);
 
   // Refinements build on the previous rental question; a remount (filter change) starts fresh.
   const lastQuery = useRef<ConciergeWorkingMemory>({});
@@ -302,10 +318,11 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       appliedSignature.current = signature;
       toolResultSeen.current = true;
       hasAnswer.current = true;
-      onResults(payload);
+      const enriched = withCarriedNotice(payload, unappliedRef.current);
+      onResults(enriched);
       setState((prev) => ({
         ...prev,
-        lastRentalResults: payloadRows(payload),
+        lastRentalResults: payloadRows(enriched),
       }));
     },
     [onResults, setState],
@@ -335,6 +352,10 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
+    // Remember every request this search cannot filter, so a later refinement keeps disclosing it.
+    unappliedRef.current = [
+      ...new Set([...unappliedRef.current, ...unappliedRentalRequests(text)]),
+    ];
     // The first question starts from the filters this page already has. Without this, the
     // supplementary structured search would run a bare query and could ignore the URL filters.
     if (!contextSeeded.current) {
@@ -401,12 +422,13 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
             } else {
               lastQuery.current = found.nextMemory;
               hasAnswer.current = true;
-              onResults(found.payload);
+              const enriched = withCarriedNotice(found.payload, unappliedRef.current);
+              onResults(enriched);
               // The fallback rows also become the agent's referent for "which of these…".
               setState((prev) => ({
                 ...prev,
                 ...found.nextMemory,
-                lastRentalResults: payloadRows(found.payload),
+                lastRentalResults: payloadRows(enriched),
               }));
             }
           }
