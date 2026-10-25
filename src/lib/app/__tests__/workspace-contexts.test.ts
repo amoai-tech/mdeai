@@ -58,14 +58,16 @@ describe("buildWorkspaceContexts", () => {
     expect(contexts.map((context) => context.href)).toEqual([
       "/app/me",
       "/app/rentals",
-      "/host/dashboard",
+      "/app/events",
       "/partners/profile",
       "/app/contests",
     ]);
-    // Personal (SAN-1576), Rentals (SAN-1578) and Team contests (SAN-1580)
-    // are proven /app adapters; the others stay on their legacy URLs.
+    // Personal (SAN-1576), Rentals (SAN-1578), Events (SAN-1577) and Team
+    // contests (SAN-1580) are proven /app adapters; Partners keeps its
+    // existing destination.
     expect(contexts[0].href).toBe("/app/me");
     expect(contexts[1].href).toBe("/app/rentals");
+    expect(contexts[2].href).toBe("/app/events");
     expect(contexts[4].href).toBe("/app/contests");
   });
 });
@@ -108,11 +110,34 @@ describe("activeWorkspaceContext", () => {
     expect(activeWorkspaceContext("/app/rentals", contexts)?.kind).toBe(
       "rentals",
     );
-    expect(activeWorkspaceContext("/app/events/list", contexts)?.kind).toBe(
+    expect(activeWorkspaceContext("/app/events", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/overview", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/analytics", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/new", contexts)?.kind).toBe(
       "events",
     );
     expect(activeWorkspaceContext("/app/contests", contexts)?.kind).toBe("team");
     expect(activeWorkspaceContext("/app/unknown", contexts)).toBeNull();
+  });
+
+  it("keeps legacy Host OS URLs as Events aliases", () => {
+    for (const pathname of [
+      "/host/dashboard",
+      "/host/events",
+      "/host/events/draft-123",
+      "/host/analytics",
+      "/host/event/new",
+    ]) {
+      expect(activeWorkspaceContext(pathname, contexts)?.kind, pathname).toBe(
+        "events",
+      );
+    }
   });
 
   it("returns null for an unrelated public route", () => {

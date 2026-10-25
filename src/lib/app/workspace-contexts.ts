@@ -5,8 +5,9 @@
  * which already-authorized page to open; Supabase RLS and the destination's own
  * server guard remain the authority.
  *
- * Phase 1 links the legacy URLs that already work. Each adapter task (SAN-1576 …
- * SAN-1580) flips its own entry to the /app route once parity is proven.
+ * Adapter tasks (SAN-1576 … SAN-1580) flip their own entry to the /app route
+ * once parity is proven. Legacy URLs remain valid aliases for the same
+ * workspace; they are never a second permission path.
  */
 
 export const WORKSPACE_KINDS = [
@@ -66,7 +67,7 @@ export function buildWorkspaceContexts(
       kind: "events",
       label: "Events",
       description: "Your events, sales, and analytics.",
-      href: "/host/dashboard",
+      href: "/app/events",
     });
   }
 
@@ -120,6 +121,21 @@ export function activeWorkspaceContext(
   // SAN-1580: the legacy contest admin URLs remain valid and belong to Team.
   if (pathname === "/admin/contests" || pathname.startsWith("/admin/contests/")) {
     return contexts.find((context) => context.kind === "team") ?? null;
+  }
+
+  // SAN-1577: the legacy Host OS URLs remain valid aliases for Events, so the
+  // switcher still shows Events when an existing link/bookmark lands there.
+  if (
+    pathname === "/host/dashboard" ||
+    pathname.startsWith("/host/dashboard/") ||
+    pathname === "/host/events" ||
+    pathname.startsWith("/host/events/") ||
+    pathname === "/host/analytics" ||
+    pathname.startsWith("/host/analytics/") ||
+    pathname === "/host/event" ||
+    pathname.startsWith("/host/event/")
+  ) {
+    return contexts.find((context) => context.kind === "events") ?? null;
   }
 
   if (pathname === "/app") {

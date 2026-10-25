@@ -49,9 +49,9 @@
       "note": "SAN-1378 Stage D commit 1: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the wizard gets one shared, non-explicit thread per mount."
     },
     {
-      "file": "src/components/host/host-os-shell.tsx",
+      "file": "src/components/host/host-os-provider.tsx",
       "classification": "keep",
-      "note": "SAN-1378 Stage D commit 2: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the host workspace keeps one shared, non-explicit thread across Overview, Events and Analytics. The CopilotErrorEvent import from @copilotkit/shared is replaced by the v2 provider's own onError type."
+      "note": "SAN-1378 Stage D commit 2 / SAN-1577: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, extracted so the legacy /host shell and the /app/events workspace share one provider boundary. One shared, non-explicit host thread survives Overview, Events and Analytics; the v2 provider's own onError type replaces the old @copilotkit/shared import."
     },
     {
       "file": "src/app/layout.tsx",
