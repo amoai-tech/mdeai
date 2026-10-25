@@ -25,11 +25,26 @@ function withNoSupabaseCredentials() {
   vi.resetModules();
 }
 
-/** A configured but unreachable Supabase project — the real outage case. */
-function withUnreachableSupabase() {
+/**
+ * A configured project whose catalog read fails.
+ *
+ * The failure is injected as an HTTP error response rather than a rejected
+ * `fetch` or a dial to a closed port. Both of those are retried by supabase-js
+ * with backoff (~7s), and a real `connect()` can hang indefinitely on a
+ * firewalled runner — either way the test blows its timeout instead of proving
+ * anything (this is what failed the PR-head `floor` job). A 4xx error settles
+ * immediately and reaches the identical `if (error) -> unavailable` branch.
+ */
+function withFailingSupabaseFetch() {
   vi.stubEnv("NODE_ENV", "test");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:9");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.invalid");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ message: "catalog unavailable" }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    }),
+  );
   vi.resetModules();
 }
 
@@ -60,11 +75,13 @@ describe("searchRestaurants honest data contract", () => {
   });
 
   it("SAN-1468 reports unavailable on a real connection error", async () => {
-    withUnreachableSupabase();
+    withFailingSupabaseFetch();
     const { searchRestaurants: search } = await import("../search-restaurants.js");
 
     const out = await search({ neighborhood: "Laureles", limit: 3 });
 
+    // Proves the catalog read was actually attempted (not the no-client path).
+    expect(globalThis.fetch).toHaveBeenCalled();
     expect(out.source).toBe("unavailable");
     expect(out.results).toEqual([]);
   });
