@@ -26,9 +26,12 @@ vi.mock("next/link", () => ({
 }));
 
 // skipcq: JS-0067 - module-local test helper; not browser global scope
-function renderNav(pathname: string): string {
+function renderNav(
+  pathname: string,
+  basePath: "/host" | "/app/events" = "/host",
+): string {
   mocks.pathname = pathname;
-  return renderToStaticMarkup(<HostOsNav />);
+  return renderToStaticMarkup(<HostOsNav basePath={basePath} />);
 }
 
 describe("HostOsNav", () => {
@@ -58,6 +61,17 @@ describe("HostOsNav", () => {
       html,
     );
     expect(analyticsActive).toBe(true);
+  });
+
+  it("links /app events pages inside /app, not back to legacy host URLs", () => {
+    const html = renderNav("/app/events", "/app/events");
+    expect(html).toContain('href="/app/events/overview"');
+    expect(html).toContain('href="/app/events"');
+    expect(html).toContain('href="/app/events/analytics"');
+    expect(html).not.toContain('href="/host/dashboard"');
+    const eventsActive = /href="\/app\/events"[^>]*aria-current="page"/.test(html);
+    expect(eventsActive).toBe(true);
+    expect(html.split('aria-current="page"').length - 1).toBe(1);
   });
 
   it("shows reserved placeholders as disabled coming-soon, not links", () => {

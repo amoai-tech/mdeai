@@ -30,7 +30,6 @@ export type WorkspaceResolution =
 
 type WorkspaceTables = {
   landlord_profiles: { id: string };
-  events: { id: string };
   partner_members: { partner_id: string };
   partners: { id: string; type: string; settings: unknown };
 };
@@ -83,21 +82,19 @@ export async function loadWorkspaceResolution(
     return { status: "unauthenticated" };
   }
 
-  const [landlord, organizerEvents, memberships, admin] = await Promise.all([
+  const [landlord, memberships, admin] = await Promise.all([
     supabase
       .from("landlord_profiles")
       .select("id")
       .eq("user_id", user.id)
       .limit(1),
-    supabase.from("events").select("id").eq("organizer_id", user.id).limit(1),
     supabase.from("partner_members").select("partner_id").eq("profile_id", user.id),
     supabase.rpc("is_admin"),
   ]);
 
-  if (landlord.error || organizerEvents.error || memberships.error || admin.error) {
+  if (landlord.error || memberships.error || admin.error) {
     console.error("[app] workspace resolution failed", {
       landlord: landlord.error?.message,
-      events: organizerEvents.error?.message,
       partners: memberships.error?.message,
       admin: admin.error?.message,
     });
@@ -137,7 +134,6 @@ export async function loadWorkspaceResolution(
 
   const contexts = buildWorkspaceContexts({
     hasLandlordProfile: (landlord.data?.length ?? 0) > 0,
-    hasOrganizerEvents: (organizerEvents.data?.length ?? 0) > 0,
     partnerLabels,
     isAdmin: admin.data === true,
   });

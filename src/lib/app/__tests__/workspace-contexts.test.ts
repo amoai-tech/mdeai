@@ -7,22 +7,21 @@ import {
 
 const EMPTY: WorkspaceSignals = {
   hasLandlordProfile: false,
-  hasOrganizerEvents: false,
   partnerLabels: [],
   isAdmin: false,
 };
 
 describe("buildWorkspaceContexts", () => {
-  it("always starts with Personal for a signed-in account", () => {
+  it("always offers Personal and Events creation to a signed-in account", () => {
     const contexts = buildWorkspaceContexts(EMPTY);
-    expect(contexts).toHaveLength(1);
+    expect(contexts).toHaveLength(2);
     expect(contexts[0]).toMatchObject({ kind: "personal", href: "/app/me" });
+    expect(contexts[1]).toMatchObject({ kind: "events", href: "/app/events" });
   });
 
-  it("adds only the contexts the account really has, in a stable order", () => {
+  it("keeps private business workspaces in a stable order", () => {
     const contexts = buildWorkspaceContexts({
       hasLandlordProfile: true,
-      hasOrganizerEvents: true,
       partnerLabels: ["Cafe Roma"],
       isAdmin: true,
     });
@@ -37,36 +36,35 @@ describe("buildWorkspaceContexts", () => {
 
   it("uses the business name for one partner and a neutral label for many", () => {
     expect(
-      buildWorkspaceContexts({ ...EMPTY, partnerLabels: ["Cafe Roma"] })[1]
+      buildWorkspaceContexts({ ...EMPTY, partnerLabels: ["Cafe Roma"] })[2]
         .label,
     ).toBe("Cafe Roma");
     expect(
       buildWorkspaceContexts({
         ...EMPTY,
         partnerLabels: ["Cafe Roma", "Roma Norte"],
-      })[1].label,
+      })[2].label,
     ).toBe("Partners");
   });
 
   it("links only destinations that exist today", () => {
     const contexts = buildWorkspaceContexts({
       hasLandlordProfile: true,
-      hasOrganizerEvents: true,
       partnerLabels: ["Cafe Roma"],
       isAdmin: true,
     });
     expect(contexts.map((context) => context.href)).toEqual([
       "/app/me",
       "/app/rentals",
-      "/host/dashboard",
+      "/app/events",
       "/app/partners/profile",
       "/app/contests",
     ]);
-    // Personal (SAN-1576), Rentals (SAN-1578), Partners (SAN-1579) and Team
-    // contests (SAN-1580) are proven /app adapters; Events still links its
-    // existing host dashboard until its own adapter lands.
+    // Personal (SAN-1576), Rentals (SAN-1578), Events (SAN-1577), Partners
+    // (SAN-1579) and Team contests (SAN-1580) are proven /app adapters.
     expect(contexts[0].href).toBe("/app/me");
     expect(contexts[1].href).toBe("/app/rentals");
+    expect(contexts[2].href).toBe("/app/events");
     expect(contexts[3].href).toBe("/app/partners/profile");
     expect(contexts[4].href).toBe("/app/contests");
   });
@@ -75,7 +73,6 @@ describe("buildWorkspaceContexts", () => {
 describe("activeWorkspaceContext", () => {
   const contexts = buildWorkspaceContexts({
     hasLandlordProfile: true,
-    hasOrganizerEvents: true,
     partnerLabels: ["Cafe Roma"],
     isAdmin: true,
   });
@@ -110,7 +107,16 @@ describe("activeWorkspaceContext", () => {
     expect(activeWorkspaceContext("/app/rentals", contexts)?.kind).toBe(
       "rentals",
     );
-    expect(activeWorkspaceContext("/app/events/list", contexts)?.kind).toBe(
+    expect(activeWorkspaceContext("/app/events", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/overview", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/analytics", contexts)?.kind).toBe(
+      "events",
+    );
+    expect(activeWorkspaceContext("/app/events/new", contexts)?.kind).toBe(
       "events",
     );
     expect(activeWorkspaceContext("/app/partners/profile", contexts)?.kind).toBe(
@@ -118,6 +124,20 @@ describe("activeWorkspaceContext", () => {
     );
     expect(activeWorkspaceContext("/app/contests", contexts)?.kind).toBe("team");
     expect(activeWorkspaceContext("/app/unknown", contexts)).toBeNull();
+  });
+
+  it("keeps legacy Host OS URLs as Events aliases", () => {
+    for (const pathname of [
+      "/host/dashboard",
+      "/host/events",
+      "/host/events/draft-123",
+      "/host/analytics",
+      "/host/event/new",
+    ]) {
+      expect(activeWorkspaceContext(pathname, contexts)?.kind, pathname).toBe(
+        "events",
+      );
+    }
   });
 
   it("returns null for an unrelated public route", () => {
