@@ -38,6 +38,7 @@ function normalizeUsage(usage: unknown): NormalizedUsage {
     inputTokens?: number | { total?: number };
     outputTokens?: number | { total?: number };
     totalTokens?: number;
+    raw?: { totalTokenCount?: number };
   };
   const input =
     typeof value.inputTokens === "number"
@@ -47,10 +48,14 @@ function normalizeUsage(usage: unknown): NormalizedUsage {
     typeof value.outputTokens === "number"
       ? value.outputTokens
       : value.outputTokens?.total;
+  // Gemini can report a larger totalTokenCount than input + output when tool
+  // prompts are included. Keep the provider's reported total when present.
   const total =
-    typeof value.totalTokens === "number"
-      ? value.totalTokens
-      : (input ?? 0) + (output ?? 0);
+    typeof value.raw?.totalTokenCount === "number"
+      ? value.raw.totalTokenCount
+      : typeof value.totalTokens === "number"
+        ? value.totalTokens
+        : (input ?? 0) + (output ?? 0);
   return { inputTokens: input, outputTokens: output, totalTokens: total };
 }
 

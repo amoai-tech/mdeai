@@ -145,6 +145,25 @@ describe("withTokenUsageTracking — V3 Gemini (AI SDK 6)", () => {
     expect(sink.calls).toBe(1);
   });
 
+  it("prefers Gemini's reported raw total over the input/output sum", async () => {
+    const model = v3({ input: 80, output: 20 });
+    model.doGenerate = async () => ({
+      usage: {
+        inputTokens: { total: 80 },
+        outputTokens: { total: 20 },
+        raw: { totalTokenCount: 1_000 },
+      },
+    });
+    const wrapped = withTokenUsageTracking(
+      model as unknown as FakeV3Model,
+    );
+    const sink = createTokenSink();
+    await runWithTokenSink(sink, () => wrapped.doGenerate({} as never));
+    expect(sink.totalTokens).toBe(1_000);
+    expect(sink.inputTokens).toBe(80);
+    expect(sink.outputTokens).toBe(20);
+  });
+
   it("records nested V3 usage from the stream finish part", async () => {
     const wrapped = withTokenUsageTracking(
       v3({ input: 200, output: 50 }) as unknown as FakeV3Model,
