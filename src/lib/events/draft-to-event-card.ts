@@ -21,6 +21,7 @@ export function draftToEventCardProps(
     neighborhood: draft.neighborhood || "Medellín",
     startsAt: draft.dateIso ?? new Date().toISOString(),
     pricePerTicket: tierMin > 0 ? tierMin : 0,
+    currency: "COP",
     imageUrl: draft.coverPhotoPath,
     ticketUrl: `/events/${slug}`,
   };
