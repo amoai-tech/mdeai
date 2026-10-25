@@ -7857,6 +7857,10 @@ export type Database = {
       }
     }
     Functions: {
+      partner_profile_patch: {
+        Args: { p_patch: Json; p_partner_id?: string | null }
+        Returns: Json
+      }
       admin_contest_create: {
         Args: {
           p_actor: string

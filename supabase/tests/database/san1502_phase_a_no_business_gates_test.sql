@@ -7,7 +7,7 @@ select is(public.rental_development_active(), true, 'Phase A is explicit in serv
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
           true, 'Phase A exposes active draft-status inventory without moderation review');
 select is(public.rental_listing_is_public('inactive','pending','draft',null,'{}'::jsonb),
-          false, 'Phase A keeps inactive internal drafts out of public search while management remains unrestricted');
+          true, 'Phase A permits pending non-private inventory without status approval');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"inventory_kind":"external_candidate"}'::jsonb),true,
@@ -144,7 +144,7 @@ values
 
 select is((select public.rental_can_request_viewing(a) from public.apartments a
  where a.id='f1506000-0000-4000-8000-000000000098'::uuid), false,
- 'inactive apartments are never requestable in Phase A');
+ 'inactive viewing stays disabled until the atomic RPC is updated and independently proven');
 select is((select public.rental_can_request_viewing(a) from public.apartments a
  where a.id='f1506000-0000-4000-8000-000000000099'::uuid), false,
  'private/internal apartments are never requestable in Phase A');

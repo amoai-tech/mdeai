@@ -1,10 +1,10 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { isDeterministicE2E } from '@/lib/deterministic-e2e';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRestaurantsIntelligent } from '../lib/intelligence-restaurant-search';
 import { writeSearchLog, type RankExplanationEntry } from '../lib/search-logs';
 
 const cuisineEnum = z.enum([
@@ -324,8 +324,10 @@ export async function searchRestaurants(
 
   if (query.queryText?.trim()) {
     const started = Date.now();
-    let intel: Awaited<ReturnType<typeof searchRestaurantsIntelligent>> | null = null;
+    let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
     try {
+      // Load after this tool initializes: intelligence search reuses its mapping helpers.
+      const { searchRestaurantsIntelligent } = await import('../lib/intelligence-restaurant-search');
       intel = await searchRestaurantsIntelligent(query);
     } catch (err) {
       console.warn('[search-restaurants] intelligent search failed:', err instanceof Error ? err.message : err);
@@ -372,7 +374,10 @@ export async function searchRestaurants(
     };
   }
 
-  const client = getSupabaseClient();
+  // Browser CI already expects the curated fallback when the configured fake
+  // Supabase host is unreachable. Skip that network attempt entirely; this
+  // branch is prohibited in production by isDeterministicE2E().
+  const client = isDeterministicE2E() ? null : getSupabaseClient();
 
   const returnFallback = (
     reason: 'no_client' | 'error' | 'empty_db',

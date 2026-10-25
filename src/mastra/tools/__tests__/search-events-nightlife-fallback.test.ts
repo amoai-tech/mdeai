@@ -1,0 +1,117 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { inFilter, gteFilter, lteFilter, addressFilter } = vi.hoisted(() => ({
+  inFilter: vi.fn(),
+  gteFilter: vi.fn(),
+  lteFilter: vi.fn(),
+  addressFilter: vi.fn(),
+}));
+
+// Exercise the real tool and query construction; only the network is replaced.
+vi.mock('@/lib/supabase/server-env', () => ({
+  getSupabaseServerAnonEnv: () => ({
+    url: 'https://example.supabase.co',
+    anonKey: 'test-only',
+  }),
+}));
+
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: () => ({
+    from: () => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        order: () => query,
+        limit: () => query,
+        gte: (column: string, value: string) => { gteFilter(column, value); return query; },
+        lte: (column: string, value: string) => { lteFilter(column, value); return query; },
+        ilike: (column: string, value: string) => { addressFilter(column, value); return query; },
+        in: (column: string, values: string[]) => {
+          inFilter(column, values);
+          return query;
+        },
+        then: (resolve: (value: { data: unknown[]; error: null }) => void) =>
+          Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return query;
+    },
+  }),
+}));
+
+vi.mock('../../lib/intelligence-event-search', () => {
+  throw new Error('intelligence module could not initialize');
+});
+
+import { dateWindow, searchEvents } from '../search-events';
+
+describe('Nightlife chip when intelligence import fails', () => {
+  beforeEach(() => {
+    // The tool and expected dateWindow() are computed separately. Without a
+    // fixed clock, the 'tonight' lower bound differs by milliseconds in CI.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T09:00:00.000Z'));
+    inFilter.mockClear();
+    gteFilter.mockClear();
+    lteFilter.mockClear();
+    addressFilter.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does NOT filter event_type when Nightlife chip has no text', async () => {
+    const result = await searchEvents({ category: 'nightlife', limit: 5 });
+    expect(result.source).toBe('supabase');
+    expect(inFilter).not.toHaveBeenCalled();
+  });
+
+  it('uses the music category for Nightlife + salsa follow-up', async () => {
+    await searchEvents({ category: 'nightlife', queryText: 'live salsa band in Laureles', limit: 5 });
+    expect(inFilter).toHaveBeenCalledWith('event_type', expect.arrayContaining(['music', 'Music']));
+    expect(inFilter.mock.calls.some(([, values]) => values.includes('nightlife'))).toBe(false);
+  });
+
+  it('preserves weekend and Laureles from text when intelligence import fails', async () => {
+    await searchEvents({ queryText: 'salsa events this weekend in Laureles', limit: 5 });
+    const weekend = dateWindow('this_weekend');
+    expect(addressFilter).toHaveBeenCalledWith('address', '%Laureles%');
+    expect(gteFilter).toHaveBeenCalledWith('event_start_time', weekend.gte);
+    expect(lteFilter).toHaveBeenCalledWith('event_start_time', weekend.lte);
+  });
+
+  it('preserves explicit chip filters ahead of inferred slots on fallback', async () => {
+    // `tonight` lowers the bound to the exact current millisecond, so two calls made even 1ms
+    // apart can never match by equality. That is a clock race, not a contract: freeze Date only
+    // (timers stay real so the mocked query's promises keep resolving) and compare deterministically.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-23T20:00:00.000Z'));
+    try {
+      await searchEvents({
+        queryText: 'salsa events this weekend in Laureles',
+        neighborhood: 'El Poblado',
+        dateWindow: 'tonight',
+        limit: 5,
+      });
+      const tonight = dateWindow('tonight');
+      expect(addressFilter).toHaveBeenCalledWith('address', '%El Poblado%');
+      expect(gteFilter).toHaveBeenCalledWith('event_start_time', tonight.gte);
+      expect(lteFilter).toHaveBeenCalledWith('event_start_time', tonight.lte);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports the import failure message rather than just its Error class', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await searchEvents({ queryText: 'salsa music', limit: 5 });
+      expect(warn).toHaveBeenCalledWith(
+        '[search-events] intelligence module unavailable, using structured search:',
+        expect.stringMatching(/mocking a module|intelligence module could not initialize/),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

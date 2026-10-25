@@ -7,7 +7,7 @@ import { MapsUnavailable } from "@/components/maps/map-referer-help";
 describe("MapsUnavailable — what a renter sees", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it.each(["auth-failed", "no-key"] as const)("production shows a plain notice for %s", (reason) => {
+  it.each(["auth-failed", "no-key", "load-failed"] as const)("production shows a plain notice for %s", (reason) => {
     vi.stubEnv("NODE_ENV", "production");
     const html = renderToStaticMarkup(<MapsUnavailable reason={reason} />);
     expect(html).toContain("The map isn&#x27;t available right now");

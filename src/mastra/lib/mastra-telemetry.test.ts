@@ -1,7 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it, vi } from "vitest";
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import { GEMINI_FLASH_MODEL_ID, NVIDIA_MODEL_ID } from "@/lib/ai-model-ids";
 import {
   buildTurnTelemetryMetadata,
   classifyAgentError,
@@ -22,12 +22,23 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
     expect(classifyAgentError(new Error("Request aborted by user"))).toBe("client_abort");
     expect(classifyAgentError(Object.assign(new Error("x"), { name: "AbortError" }))).toBe("client_abort");
     expect(classifyAgentError(new Error("operation timed out"))).toBe("timeout");
+    expect(
+      classifyAgentError(
+        Object.assign(new Error("The operation was aborted due to timeout"), {
+          name: "TimeoutError",
+        }),
+      ),
+    ).toBe("timeout");
     expect(classifyAgentError({ status: 429, message: "slow down" })).toBe("rate_limit");
     expect(classifyAgentError({ status: 401, message: "nope" })).toBe("auth");
     expect(classifyAgentError(new Error("zod validation failed"))).toBe("validation");
     expect(classifyAgentError(new Error("tool execution failed"))).toBe("tool_failure");
     expect(classifyAgentError(new Error("supabase rpc relation missing"))).toBe("database");
     expect(classifyAgentError(new Error("gemini generativelanguage 503"))).toBe("model_failure");
+    expect(
+      classifyAgentError(new Error("NVIDIA integrate.api.nvidia.com 500")),
+    ).toBe("model_failure");
+    expect(classifyAgentError(new Error("nvcf upstream unavailable"))).toBe("model_failure");
     expect(classifyAgentError(new Error("something weird"))).toBe("unknown");
   });
 
@@ -71,12 +82,25 @@ describe("resolveAgentModelName (AGT-00C)", () => {
     ).toBe("gemini-3.5-flash");
   });
 
-  it("falls back when model is dynamic or missing", () => {
-    // Asserted against the shared constant, not a literal: the fallback names
-    // the model MDE actually runs, so it must follow the constant rather than
-    // pin whichever model happened to be current when this was written.
-    expect(resolveAgentModelName({})).toBe(GEMINI_FLASH_MODEL_ID);
-    expect(resolveAgentModelName(null, "custom-model")).toBe("custom-model");
+  it("falls back to the selected provider when model is dynamic or missing", () => {
+    try {
+      vi.stubEnv("MDE_AI_PROVIDER", "gemini");
+      expect(resolveAgentModelName({})).toBe(GEMINI_FLASH_MODEL_ID);
+
+      vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+      expect(resolveAgentModelName({})).toBe(NVIDIA_MODEL_ID);
+
+      // A caller-provided fallback always takes precedence.
+      expect(resolveAgentModelName(null, "custom-model")).toBe("custom-model");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("records a Mastra router string instead of attributing it to Gemini", () => {
+    expect(resolveAgentModelName({ model: NVIDIA_MODEL_ID })).toBe(
+      NVIDIA_MODEL_ID,
+    );
   });
 });
 
@@ -120,6 +144,24 @@ describe("buildTurnTelemetryMetadata (AGT-00C)", () => {
       total_tokens: 160,
     });
     expect(getTokenUsage(context)?.total_tokens).toBe(160);
+  });
+
+  it("attributes an NVIDIA turn to nvidia and flags the unknown rate", () => {
+    const payload = buildTurnTelemetryMetadata({
+      agentMapKey: "conciergeAgent",
+      agent: { model: { modelId: NVIDIA_MODEL_ID } },
+      status: "success",
+      durationMs: 1200,
+      toolSummary: summarizeToolSpans([]),
+      tokens: { input_tokens: 100, output_tokens: 20 },
+    });
+
+    expect(payload.model_name).toBe(NVIDIA_MODEL_ID);
+    expect(payload.provider).toBe("nvidia");
+    // NVIDIA has no production price in the table; the fallback must be marked,
+    // never presented as an exact $0.
+    expect(payload.cost_rate_fallback).toBe(true);
+    expect(payload.estimated_cost_usd).toBeGreaterThan(0);
   });
 });
 

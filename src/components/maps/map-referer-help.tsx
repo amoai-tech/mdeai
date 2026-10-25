@@ -55,6 +55,18 @@ export function MapsUnavailable({ reason }: { reason: MapsUnavailableReason }) {
     );
   }
 
+  if (reason === "load-failed") {
+    if (process.env.NODE_ENV === "production") return <RenterMapNotice testId="map-load-failed" />;
+    return (
+      <div
+        data-testid="map-load-failed"
+        className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground"
+      >
+        <p>The Google Maps script did not load (network, an ad blocker, or an outage). Results are still listed.</p>
+      </div>
+    );
+  }
+
   return <MapRefererHelp />;
 }
 

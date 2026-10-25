@@ -8,9 +8,9 @@
  *
  * Checks
  *   1. /chat is served with a real next build chunk list (fingerprint = etag + chunk hash).
- *   2. A renter asking "2BR in Laureles under 2 million pesos" gets results AND an honest
- *      "I can't filter by monthly budget yet" line (the #386 fix). A silent $2/night cap
- *      would fail this.
+ *   2. A renter asking "2BR in Laureles under 2 million pesos" gets results or an honest
+ *      empty state, sends `maxPriceMonthly: 2000000` (never a $2/night cap), and is told
+ *      which monthly budget was applied.
  *   3. An invalid viewing request returns HTTP 400 with safe renter copy and no SQL text.
  *   4. GitHub's production deployment for this repo matches main, allowing a grace window
  *      right after a merge.
@@ -26,6 +26,9 @@ const REPO = process.env.GITHUB_REPOSITORY || "amoai-tech/mdeai";
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const GRACE_MINUTES = Number(process.env.SHA_GRACE_MINUTES || "20");
 const RENTAL_QUERY = process.env.SMOKE_QUERY || "2BR in Laureles under 2 million pesos";
+// Keep in sync with SMOKE_QUERY: the default query asks for 2 million COP per month.
+const EXPECTED_MONTHLY = Number(process.env.SMOKE_MONTHLY_BUDGET || "2000000");
+const EXPECTED_CURRENCY = process.env.SMOKE_MONTHLY_CURRENCY || "COP";
 
 const results = [];
 function record(name, ok, detail) {
@@ -99,13 +102,98 @@ const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i
 const EMPTY = /No rentals match|No rentals are available/i;
 // Built from a string: the apostrophe in a regex literal desyncs Codacy's JS parser and makes
 // it attribute the rest of the file to the previous function.
-const DISCLOSED = new RegExp("can't filter by monthly budget|budget was not applied", "i");
+// Monthly budgets are now applied (SAN-1502). The disclosure must therefore say the budget
+// was applied — the old "can't filter by monthly budget" wording is only valid when it was not.
+// Requires the applied amount and currency, or an explicit statement that the budget was not
+// applied. Generic "monthly budget" text on a card is not a disclosure.
+export function disclosureMatches(text, expectedMonthly, expectedCurrency) {
+  const lower = String(text).toLowerCase();
+  // This smoke already proves a monthly cap was sent. An unapplied-budget message would
+  // contradict the actual request; do not accept it as a successful disclosure.
+  // Parse without a regex: the page text is untrusted, and a backtracking pattern here has no
+  // value. Format is exactly "Applied budget: COP 2,000,000 per month."
+  const marker = "applied budget:";
+  const start = lower.indexOf(marker);
+  if (start === -1) return false;
+  const rest = text.slice(start + marker.length).trimStart();
+  const currencyEnd = rest.indexOf(" ");
+  if (currencyEnd === -1) return false;
+  const currency = rest.slice(0, currencyEnd).toUpperCase();
+  // Browser innerText may place the next rental/card on a new line. Treat all common
+  // whitespace as token separators, without regex matching against untrusted page text.
+  const whitespace = (char) => char === " " || char === "\n" || char === "\r" || char === "\t" || char === "\u00a0";
+  let i = currencyEnd;
+  while (i < rest.length && whitespace(rest[i])) i += 1;
+  let j = i;
+  while (j < rest.length && !whitespace(rest[j])) j += 1;
+  const amount = Number(rest.slice(i, j).replace(/,/g, ""));
+  // The period is part of the disclosure: "per night" must never satisfy a monthly check.
+  while (j < rest.length && whitespace(rest[j])) j += 1;
+  let periodEnd = j;
+  while (periodEnd < rest.length && !whitespace(rest[periodEnd])) periodEnd += 1;
+  const per = rest.slice(j, periodEnd).toLowerCase();
+  while (periodEnd < rest.length && whitespace(rest[periodEnd])) periodEnd += 1;
+  let unitEnd = periodEnd;
+  while (unitEnd < rest.length && !whitespace(rest[unitEnd])) unitEnd += 1;
+  let unit = rest.slice(periodEnd, unitEnd).toLowerCase();
+  while (unit.endsWith(".") || unit.endsWith(",")) unit = unit.slice(0, -1);
+  return (
+    currency === expectedCurrency.toUpperCase() &&
+    amount === expectedMonthly &&
+    per === "per" &&
+    unit === "month"
+  );
+}
+
+/**
+ * The #386 regression was a monthly budget silently converted into a nightly cap. The DOM
+ * alone cannot distinguish "applied" from "explained", so this asserts the actual request:
+ * a monthly query must carry maxPriceMonthly and no maxPricePerNight cap.
+ */
+export function classifyMonthlyBudgetRequest(
+  payload,
+  expectedMonthly = 2_000_000,
+  expectedCurrency = "COP",
+) {
+  const monthly = payload ? payload.maxPriceMonthly : undefined;
+  // The API omits an absent nightly cap; `undefined` and `null` both mean "no nightly cap".
+  // Do not require an explicit `null`, which the real request payload does not send.
+  const nightly = payload ? payload.maxPricePerNight : undefined;
+  const currency = payload ? payload.budgetCurrency : undefined;
+  const stayType = payload ? payload.stayType : undefined;
+  const ok =
+    monthly === expectedMonthly &&
+    nightly == null &&
+    currency === expectedCurrency &&
+    stayType === "monthly";
+  return {
+    ok,
+    detail: payload
+      ? JSON.stringify({
+          maxPriceMonthly: monthly,
+          maxPricePerNight: nightly,
+          budgetCurrency: currency,
+          stayType,
+        })
+      : "no /api/rentals/search request observed",
+  };
+}
 
 async function runRentalQuery(browser, contextOptions) {
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   const pageErrors = [];
+  let searchRequest = null;
   page.on("pageerror", (err) => pageErrors.push(String(err).slice(0, 200)));
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/rentals/search")) {
+      try {
+        searchRequest = JSON.parse(request.postData() || "{}");
+      } catch {
+        searchRequest = null;
+      }
+    }
+  });
   try {
     await page.goto(BASE + "/chat", { waitUntil: "domcontentloaded", timeout: 60_000 });
     const box = page.locator('[data-testid="copilot-chat-textarea"]');
@@ -121,7 +209,7 @@ async function runRentalQuery(browser, contextOptions) {
     const text = await page.locator("body").innerText();
     const cards = await page.locator('[data-testid="rental-card"]').count();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    return { text, cards, overflow, pageErrors };
+    return { text, cards, overflow, pageErrors, searchRequest };
   } finally {
     await context.close();
   }
@@ -133,10 +221,21 @@ function recordRentalResult(label, query) {
     ANSWERED.test(query.text),
     EMPTY.test(query.text) ? "empty state shown" : "rental cards rendered: " + query.cards,
   );
+  const budgetRequest = classifyMonthlyBudgetRequest(
+    query.searchRequest,
+    EXPECTED_MONTHLY,
+    EXPECTED_CURRENCY,
+  );
   record(
-    label + ": peso budget is disclosed, never silently capped",
-    DISCLOSED.test(query.text),
-    "budget disclosure present: " + DISCLOSED.test(query.text),
+    label + ": monthly budget is sent as a monthly amount, never a nightly cap",
+    budgetRequest.ok,
+    budgetRequest.detail,
+  );
+  record(
+    label + ": monthly budget context is disclosed",
+    disclosureMatches(query.text, EXPECTED_MONTHLY, EXPECTED_CURRENCY),
+    "budget disclosure present: " +
+      disclosureMatches(query.text, EXPECTED_MONTHLY, EXPECTED_CURRENCY),
   );
   record(label + ": no uncaught page exceptions", query.pageErrors.length === 0, query.pageErrors.join(" | ") || "none");
 }
