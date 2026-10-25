@@ -25,6 +25,17 @@ function withNoSupabaseCredentials() {
   vi.resetModules();
 }
 
+/** A configured but unreachable Supabase project — the real outage case. */
+function withUnreachableSupabase() {
+  vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:9");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  vi.resetModules();
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * Restore in a hook, not at the end of each test: an assertion or awaited call
  * that throws would otherwise skip the manual cleanup and leak blank Supabase
@@ -32,18 +43,40 @@ function withNoSupabaseCredentials() {
  */
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
-describe("searchRestaurants fallback + envelope", () => {
-  it("MA-P0-05 returns curated fallback when Supabase client unavailable", async () => {
+describe("searchRestaurants honest data contract", () => {
+  it("SAN-1468 reports an explicit unavailable envelope instead of invented restaurants", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurants: search } = await import("../search-restaurants.js");
 
     const out = await search({ neighborhood: "Laureles", cuisine: "cafe", limit: 3 });
 
-    expect(out.source).toBe("fallback");
-    expect(out.results.length).toBeGreaterThan(0);
-    expect(out.results.every((r) => restaurantSchema.safeParse(r).success)).toBe(true);
+    // A database outage must never become believable fake businesses.
+    expect(out.source).toBe("unavailable");
+    expect(out.results).toEqual([]);
+    expect(out.total).toBe(0);
+  });
+
+  it("SAN-1468 reports unavailable on a real connection error", async () => {
+    withUnreachableSupabase();
+    const { searchRestaurants: search } = await import("../search-restaurants.js");
+
+    const out = await search({ neighborhood: "Laureles", limit: 3 });
+
+    expect(out.source).toBe("unavailable");
+    expect(out.results).toEqual([]);
+  });
+
+  it("SAN-1468 never returns non-UUID placeholder ids to a normal user", async () => {
+    withNoSupabaseCredentials();
+    const { searchRestaurants: search } = await import("../search-restaurants.js");
+
+    const out = await search({ limit: 20 });
+
+    expect(out.results.filter((r) => r.id.startsWith("rst_"))).toEqual([]);
+    expect(out.results.every((r) => UUID_RE.test(r.id))).toBe(true);
   });
 
   it("deterministic CI returns the existing fallback without contacting Supabase", async () => {
@@ -72,7 +105,7 @@ describe("searchRestaurants fallback + envelope", () => {
     expect(out).toMatchObject({
       results: expect.any(Array),
       total: expect.any(Number),
-      source: "fallback",
+      source: "unavailable",
     });
   });
 });
@@ -95,7 +128,7 @@ describe("searchRestaurantsTool execute", () => {
       { writer, requestContext: new RequestContext(), observe: noopObserve },
     )) as { results: unknown[]; total: number; source: string };
 
-    expect(out.results.length).toBeGreaterThan(0);
+    expect(Array.isArray(out.results)).toBe(true);
     expect(out).toMatchObject({
       results: expect.any(Array),
       total: expect.any(Number),
@@ -104,7 +137,7 @@ describe("searchRestaurantsTool execute", () => {
     expect(custom).not.toHaveBeenCalled();
   });
 
-  it("MA-P0-06 execute returns safe envelope without throwing when Supabase unavailable", async () => {
+  it("MA-P0-06 execute returns a safe envelope without throwing when Supabase is unavailable", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurantsTool: tool } = await import("../search-restaurants.js");
     const execute = tool.execute;
@@ -116,9 +149,38 @@ describe("searchRestaurantsTool execute", () => {
         { requestContext: new RequestContext(), observe: noopObserve },
       ),
     ).resolves.toMatchObject({
-      results: expect.any(Array),
-      total: expect.any(Number),
-      source: "fallback",
+      results: [],
+      total: 0,
+      source: "unavailable",
     });
+  });
+});
+
+describe("restaurantSchema is satisfiable by every honest result", () => {
+  it("accepts a row with unknown price tier and unknown rating", async () => {
+    const { rowToRestaurant } = await import("../search-restaurants.js");
+
+    const restaurant = rowToRestaurant({
+      id: "3f0a3f36-4a1e-4a3e-8f3e-000000000001",
+      name: "Test Kitchen",
+      cuisine_types: ["Colombian"],
+      price_level: null as unknown as number,
+      address: null,
+      city: "Medellín",
+      neighborhood: "Laureles",
+      latitude: 6.25,
+      longitude: -75.59,
+      primary_image_url: null,
+      rating: null,
+      tags: null,
+      google_place_id: null,
+      maps_url: null,
+      ai_summary: null,
+    });
+
+    expect(restaurant.priceTier).toBeUndefined();
+    expect(restaurant.rating).toBeUndefined();
+    expect(restaurant.avgPricePerPerson).toBeUndefined();
+    expect(restaurantSchema.safeParse(restaurant).success).toBe(true);
   });
 });
