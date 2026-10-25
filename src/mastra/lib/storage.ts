@@ -33,8 +33,7 @@ function setStorageGlobal(value: StorageSingleton | undefined) {
   globalThis.__mdeaiMastraStorage = value;
 }
 
-function normalizeDatabaseUrl(): string | undefined {
-  const raw = process.env.DATABASE_URL;
+function normalizeConnectionString(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   // Order matters: trim first, then strip wrapping quotes, then trim again. Stripping
   // quotes first would leave them in place for a padded value like `  "postgres://…"  `.
@@ -45,6 +44,29 @@ function normalizeDatabaseUrl(): string | undefined {
   // intended "DATABASE_URL is required in production" error.
   const unquoted = raw.trim().replace(/^"|"$/g, "");
   return unquoted.trim() || undefined;
+}
+
+/**
+ * Resolve the Postgres URL used by Mastra storage.
+ *
+ * Production has two Supabase URLs: `DATABASE_URL` is the application/read path and
+ * `SUPABASE_DB_URL` is the migration/primary write connection. The deployed runtime
+ * must use the primary for Mastra thread/memory writes; using the read-only app URL
+ * fails the first host-event turn with "cannot execute INSERT in a read-only
+ * transaction". Local and test environments keep using `DATABASE_URL`.
+ */
+export function resolveDatabaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const preferred =
+    env.NODE_ENV === "production" && env.SUPABASE_DB_URL
+      ? env.SUPABASE_DB_URL
+      : env.DATABASE_URL;
+  return normalizeConnectionString(preferred);
+}
+
+function normalizeDatabaseUrl(): string | undefined {
+  return resolveDatabaseUrl();
 }
 
 /**
