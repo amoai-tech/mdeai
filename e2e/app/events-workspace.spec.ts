@@ -205,6 +205,7 @@ async function newSignedInPage(browser: Browser, origin: string, email: string):
   return page;
 }
 
+// Named helper: keeps each Playwright test under the complexity limit.
 async function runOrganizerJourney(
   page: Page,
   browser: Browser,

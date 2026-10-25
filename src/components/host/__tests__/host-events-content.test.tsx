@@ -32,6 +32,7 @@ const event: HostEventCardProps = {
 
 afterEach(cleanup);
 
+// DOM assertions (not HTML strings) keep the test aligned with Codacy XSS rules.
 describe("HostEventsContent", () => {
   it("renders the real host rows and an /app create destination", () => {
     const { container } = render(
