@@ -7,6 +7,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractNeighborhood, normalizeEventCurrency } from "@/mastra/tools/search-events";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 import { loadCafeListings } from "@/lib/cafe-browse";
 import { supabaseStorageHost } from "@/lib/images/remote-image-hosts";
 import { formatListingMoney, formatRentalPrices } from "@/lib/rental-display";
@@ -244,13 +245,10 @@ type EventRow = {
 /**
  * QA / test events created through the real host flow must not be recommended to visitors.
  * Applied in the query itself, so they can never crowd real events out of the first rows.
- * Postgres regex: `\y` is a word boundary (`\b` means backspace there), so "Qatar Night Market"
- * and "Testimonial Gala" are kept while "QA SAN-896 …" and "Test event" are dropped.
+ * A shared explicit marker predicate handles QA slugs and bracketed test titles.
  */
-const TEST_EVENT_NAME_PATTERN = "^\\s*(qa|test)\\y";
-
 function eventPriceLabel(min: number | null, currency: string | null): string | null {
-  // An unknown price stays unknown. (The shared browse mapper turns null into 0 = "Free".)
+  // A missing ticket price is unknown, never an invented free admission.
   if (min == null || !Number.isFinite(Number(min))) return null;
   if (Number(min) === 0) return "Free";
   return formatListingMoney(Math.round(Number(min)), normalizeEventCurrency(currency));
@@ -266,7 +264,8 @@ export async function fetchLiveEvents(
     )
     .eq("is_active", true)
     .in("status", ["published", "live"])
-    .not("name", "imatch", TEST_EVENT_NAME_PATTERN)
+    .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER)
     .gte("event_start_time", new Date().toISOString())
     .order("event_start_time", { ascending: true })
     .limit(4);

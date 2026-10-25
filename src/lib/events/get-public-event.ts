@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isEventLookupUuid } from "./event-lookup";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import { parseEventHostDisplay } from "./parse-host-display";
 import type {
   PublicEventDetail,
@@ -114,7 +115,10 @@ export async function getPublicEvent(
       "id, slug, name, description, address, city, event_start_time, event_end_time, primary_image_url, currency, latitude, longitude, status, is_active, details, event_venues ( name, address, city )",
     )
     .in("status", ["published", "live"])
-    .eq("is_active", true);
+    .eq("is_active", true)
+    // Public reads hide explicit QA fixtures; direct admin DB/test access remains available.
+    .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER);
 
   eventQuery = isEventLookupUuid(slugOrId)
     ? eventQuery.eq("id", slugOrId)

@@ -20,7 +20,7 @@ const makeQueryBuilder = (result: {
   error: { message: string } | null;
 }) => {
   const builder: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "order", "limit", "gte", "lte", "ilike", "in"] as const) {
+  for (const method of ["select", "eq", "order", "limit", "gte", "lte", "ilike", "in", "not", "or"] as const) {
     builder[method] = vi.fn(() => builder);
   }
   builder.then = (
@@ -73,9 +73,32 @@ describe("searchEventsIntelligent — coverage branches", () => {
     });
   });
 
+  it("falls back to real structured results when hybrid ranks only QA fixtures", async () => {
+    mocks.embedQueryText.mockResolvedValue([0.1, 0.2]);
+    const client = makeClient({
+      events: { data: [{
+        id: "real", slug: "salsa-real", name: "Salsa Real", event_type: "music",
+        address: "Laureles", city: "Medellín", event_start_time: "2026-06-20T18:00:00.000Z",
+        ticket_price_min: 20000, currency: "COP", primary_image_url: null,
+        latitude: null, longitude: null, maps_url: null,
+      }], error: null },
+      signals: { data: [], error: null },
+      rpc: { data: [{
+        id: "qa", name: "QA SAN-896 example", event_type: "music", address: "Laureles",
+        event_start_time: "2026-06-20T18:00:00.000Z", ticket_price_min: 0,
+        primary_image_url: null, description: null, similarity: 1,
+      }], error: null },
+    });
+    mocks.createClient.mockReturnValue(client);
+    const { searchEventsIntelligent } = await import("../intelligence-event-search");
+    const out = await searchEventsIntelligent({ queryText: "salsa weekend", dateWindow: "any", limit: 5 });
+    expect(out.hybridUsed).toBe(false);
+    expect(out.results.map((row) => row.id)).toEqual(["real"]);
+  });
+
   it("covers hybrid RPC ranking with signal boost", async () => {
     const client = makeClient({
-      events: { data: [], error: null },
+      events: { data: [{ id: "e-hybrid", slug: null }], error: null },
       signals: {
         data: [
           {
@@ -147,7 +170,11 @@ describe("searchEventsIntelligent — coverage branches", () => {
       primary_image_url: null, similarity: 0.9,
     });
     const client = makeClient({
-      events: { data: [], error: null }, signals: { data: [], error: null },
+      // Hybrid hydration must confirm every slug; a missing lookup now falls back safely.
+      events: { data: [
+        { id: "matching", slug: null }, { id: "wrong-date", slug: null },
+        { id: "wrong-neighborhood", slug: null },
+      ], error: null }, signals: { data: [], error: null },
       rpc: { data: [
         row("matching", "Laureles, Medellín", "2026-06-20T20:00:00.000Z"),
         row("wrong-date", "Laureles, Medellín", "2026-07-20T20:00:00.000Z"),

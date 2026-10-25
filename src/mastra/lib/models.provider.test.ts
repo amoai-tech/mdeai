@@ -22,6 +22,7 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     expect((FLASH_MODEL as unknown as ModelWithId).modelId).toBe(
       GEMINI_FLASH_MODEL_ID,
     );
+    // @ai-sdk/google 3.x supplies a V3 language model (pin verified by package-lock).
     expect((FLASH_MODEL as unknown as ModelWithId).specificationVersion).toBe(
       "v3",
     );

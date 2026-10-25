@@ -9,6 +9,7 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from '@/lib/events/public-event-fixtures';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { writeSearchLog } from '../lib/search-logs';
@@ -305,6 +306,8 @@ export async function searchEvents(
     .select('id, name, event_type, address, city, event_start_time, ticket_price_min, currency, primary_image_url, latitude, longitude, maps_url')
     .eq('is_active', true)
     .eq('status', 'published')
+    .not('name', 'imatch', QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER)
     .order('event_start_time', { ascending: true })
     .limit(limit);
 
