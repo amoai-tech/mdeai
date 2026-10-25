@@ -2,9 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   buildEventSearchParams,
   canFastPathEventSearch,
+  visibleEventSearchReasons,
   shouldInstantEventClarify,
 } from "@/lib/event-search-fast-path";
 import type { ConciergeWorkingMemory } from "@/lib/types";
+
+describe("event-search customer-facing reasons", () => {
+  it("converts supported factors into readable facts and hides internal ranking data", () => {
+    expect(visibleEventSearchReasons([
+      { factor: "hybrid_semantic", note: "hybrid_search_events RPC" },
+      { factor: "date_window", note: "this_weekend" },
+      { factor: "salsa_intent", note: "music_energy + nightlife signals" },
+    ])).toEqual(["Date: this weekend", "Salsa and music relevance"]);
+  });
+  it("does not echo unknown/internal factors or untrusted date notes", () => {
+    expect(visibleEventSearchReasons([
+      { factor: "date_window_relaxed", note: "no tonight matches" },
+      { factor: "date_window", note: "untrusted backend note" },
+    ])).toEqual([]);
+  });
+});
 
 describe("event-search-fast-path", () => {
   it("instant clarify for generic city-only query", () => {
