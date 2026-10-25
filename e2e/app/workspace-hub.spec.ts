@@ -112,7 +112,7 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       await expect(page.getByTestId("workspace-card-personal")).toBeVisible();
       await expect(page.getByTestId("workspace-card-rentals")).toBeVisible();
       await expect(page.getByTestId("workspace-card-team")).toBeVisible();
-      await expect(page.getByTestId("workspace-card-events")).toHaveCount(0);
+      await expect(page.getByTestId("workspace-card-events")).toBeVisible();
       await expect(page.getByTestId("workspace-card-partners")).toHaveCount(0);
 
       // Private Rentals and Team appear alongside Personal and Events.
