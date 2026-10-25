@@ -34,7 +34,16 @@ import {
   budgetNotApplied,
   buildRentalSearchParams,
   canFastPathRentalSearch,
+  isWholeCityReply,
+  scoreRentalQuery,
+  statesBudget,
+  type RentalSearchApiParams,
 } from "@/lib/rental-query-parser";
+import {
+  unappliedRentalNotice,
+  unappliedRentalRequests,
+} from "@/lib/rental-display";
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
@@ -56,6 +65,11 @@ const ERROR_COPY_RUN =
 const HEIGHT_VAR = "--mde-ask-composer-height";
 const SEARCH_UNAVAILABLE = "Rental search is temporarily unavailable. Please try again.";
 const SEARCH_FAILED = "Could not search rentals right now. Please try again.";
+const SEARCH_SESSION_EXPIRED = "Your session has expired. Sign in again to keep asking MDE.";
+const SEARCH_FORBIDDEN = "This account cannot search rentals right now.";
+const SEARCH_RATE_LIMITED = "Too many questions right now. Wait a moment, then try again.";
+const BUDGET_NOT_APPLIED =
+  "I could not apply a monthly budget from that question yet, so check the price on each card.";
 
 /** What this page already knows, so the agent answers about the same apartments. */
 export type RentalAskContext = {
@@ -76,6 +90,54 @@ export type RentalAskResults = {
   budgetNotice?: string;
 };
 
+/** The page's allowlisted filters, in the shape the shared parser refines. */
+function contextMemory(context?: RentalAskContext): ConciergeWorkingMemory {
+  const query: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {};
+  if (context?.neighborhood) query.neighborhood = context.neighborhood;
+  const beds = Number(context?.beds);
+  if (Number.isInteger(beds) && beds >= 0) query.minBedrooms = beds;
+  if (context?.from) query.checkIn = context.from;
+  if (context?.through) query.checkOut = context.through;
+  return Object.keys(query).length ? { lastRentalQuery: query } : {};
+}
+
+/** Keep the last search's constraints so the next follow-up refines them instead of starting over. */
+function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory {
+  return {
+    lastRentalQuery: {
+      neighborhood: params.neighborhood,
+      minBedrooms: params.minBedrooms,
+      maxPricePerNight: params.maxPricePerNight,
+      maxPriceMonthly: params.maxPriceMonthly,
+      budgetCurrency: params.budgetCurrency,
+      budgetType: params.stayType,
+      checkIn: params.checkIn,
+      checkOut: params.checkOut,
+    },
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+/**
+ * Why a rental answer cannot be trusted, in words the renter can act on. A 401/403 is an access
+ * problem, not a network blip, so it must not invite a pointless retry.
+ */
+function searchFailureMessage(status: number): string {
+  if (status === 401) return SEARCH_SESSION_EXPIRED;
+  if (status === 403) return SEARCH_FORBIDDEN;
+  if (status === 429) return SEARCH_RATE_LIMITED;
+  if (status === 503) return SEARCH_UNAVAILABLE;
+  return SEARCH_FAILED;
+}
+
 /**
  * The same structured request the chat fast path posts, against the same endpoint.
  * No second search engine: the classification and parameters come from the shared parser.
@@ -83,6 +145,7 @@ export type RentalAskResults = {
 async function searchRentalsForQuestion(
   query: string,
   memory: ConciergeWorkingMemory,
+  signal?: AbortSignal,
 ): Promise<{ payload: RentalAskResults; nextMemory: ConciergeWorkingMemory } | string> {
   // A follow-up can be only a constraint ("under 3M"), which the fast-path gate rejects because it
   // does not look like a new rental search. Once a rental question exists, merge into it.
@@ -98,35 +161,46 @@ async function searchRentalsForQuestion(
     // Match the rental tool's own default (8), so the cards and the agent's answer are drawn
     // from the same rows instead of two different page sizes of the same search.
     body: JSON.stringify({ ...(params ?? { queryText: query }), limit: 8 }),
+    signal,
   });
-  if (response.status === 503) return SEARCH_UNAVAILABLE;
-  if (!response.ok) return SEARCH_FAILED;
-  const data = (await response.json()) as { results?: Rental[]; total?: number };
-  if (!Array.isArray(data.results)) return SEARCH_FAILED;
+  if (!response.ok) return searchFailureMessage(response.status);
+
+  // The route validates its own body, but the browser still owns this trust boundary: a malformed
+  // 200 (a bad row, a negative total) must not replace the cards the renter is looking at.
+  const envelope = (await response.json().catch(() => null)) as {
+    results?: unknown;
+    total?: unknown;
+    budgetNote?: unknown;
+  } | null;
+  if (!envelope || !Array.isArray(envelope.results)) return SEARCH_FAILED;
+  const rows: Rental[] = [];
+  for (const row of envelope.results) {
+    const rental = toDetailRental(row);
+    if (!rental) return SEARCH_FAILED;
+    rows.push(rental);
+  }
+  const total = envelope.total === undefined ? rows.length : envelope.total;
+  if (typeof total !== "number" || !Number.isSafeInteger(total) || total < rows.length) {
+    return SEARCH_FAILED;
+  }
+
+  // Say what the search could not do. A monthly budget that reached the server is applied there;
+  // a request this search cannot filter (furnished, pets, parking…) is named, never implied.
+  const notices = [
+    typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
+    unappliedRentalNotice(unappliedRentalRequests(query)),
+    budgetNotApplied(query, params ?? {}) ? BUDGET_NOT_APPLIED : undefined,
+  ].filter((notice): notice is string => Boolean(notice));
+
   return {
     payload: {
-      results: data.results,
-      total: data.total ?? data.results.length,
+      results: rows,
+      total,
       query,
-      budgetNotice: budgetNotApplied(query, params ?? {})
-        ? "I could not apply a monthly budget from that question yet, so check the price on each card."
-        : undefined,
+      budgetNotice: notices.length ? notices.join(" ") : undefined,
     },
     // A follow-up ("only in Laureles", "under 3M") refines what the renter already asked for.
-    nextMemory: params
-      ? {
-          lastRentalQuery: {
-            neighborhood: params.neighborhood,
-            minBedrooms: params.minBedrooms,
-            maxPricePerNight: params.maxPricePerNight,
-            maxPriceMonthly: params.maxPriceMonthly,
-            budgetCurrency: params.budgetCurrency,
-            budgetType: params.stayType,
-            checkIn: params.checkIn,
-            checkOut: params.checkOut,
-          },
-        }
-      : memory,
+    nextMemory: params ? memoryFromParams(params) : memory,
   };
 }
 
@@ -167,21 +241,67 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
   // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
   const sendInFlight = useRef(false);
   const cancelled = useRef(false);
+  // The supplementary structured search is cancelled on Stop, a new question, or unmount.
+  const abortRef = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
+  const contextSeeded = useRef(false);
+  // Only a question asked from THIS mount may replace this page's cards. A run that was already
+  // streaming when a filter change remounted the page belongs to the old filters.
+  const acceptToolResults = useRef(false);
+  const stopRef = useRef<(() => void) | null>(null);
 
   // Refinements build on the previous rental question; a remount (filter change) starts fresh.
   const lastQuery = useRef<ConciergeWorkingMemory>({});
   // The agent's tool result owns the cards for this turn; the page search is only a fallback.
   const toolResultSeen = useRef(false);
+  // True once this page has shown an answer. A follow-up that produces no rental tool result
+  // ("which of these has a balcony?") must keep that answer, not rerun the question as a search.
+  const hasAnswer = useRef(false);
+  /** A follow-up that names a real filter may refine the search; one that only asks about the
+   *  current rows ("which of these has a balcony?") must not be re-run as a broad catalogue query. */
+  const carriesFilter = (text: string) => {
+    // Inspect this turn alone: buildRentalSearchParams merges saved filters, which would make
+    // a conversational question look like a new search after an earlier fallback.
+    const signals = scoreRentalQuery(text);
+    return signals.hasBudget || statesBudget(text) || signals.hasBedrooms ||
+      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text);
+  };
   const appliedSignature = useRef("");
   const turnId = useRef(0);
   const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
   usePublishHeight(shellElement);
 
+  // A request that outlives the page must never publish into it. The active answer is stopped too:
+  // a filter change remounts this view, and the old question's rows must not land on the new list.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancelled.current = true;
+      abortRef.current?.abort();
+      stopRef.current?.();
+    };
+  }, []);
+
+  // The latest stop function, without re-running the unmount effect when the agent changes.
+  useEffect(() => {
+    stopRef.current = stopActiveRun;
+  }, [stopActiveRun]);
+
   const applyToolResult = useCallback(
     (payload: RentalAskResults, signature: string) => {
-      if (!onResults || cancelled.current || appliedSignature.current === signature) return;
+      if (
+        !onResults ||
+        !acceptToolResults.current ||
+        cancelled.current ||
+        !mounted.current ||
+        appliedSignature.current === signature
+      ) {
+        return;
+      }
       appliedSignature.current = signature;
       toolResultSeen.current = true;
+      hasAnswer.current = true;
       onResults(payload);
       setState((prev) => ({
         ...prev,
@@ -207,6 +327,7 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
     const text = raw.trim();
     if (!text || busy || signedOut || !isReady || sendInFlight.current) return;
     sendInFlight.current = true;
+    acceptToolResults.current = true;
     cancelled.current = false;
     setSending(true);
     setError(null);
@@ -214,19 +335,32 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
-    // Give the agent the page the renter is on: filters first, then the open apartment.
-    // Written before the send so the answer describes these apartments, not a blank page.
+    // The first question starts from the filters this page already has. Without this, the
+    // supplementary structured search would run a bare query and could ignore the URL filters.
+    if (!contextSeeded.current) {
+      contextSeeded.current = true;
+      lastQuery.current = contextMemory(context);
+    }
+    // Record what this question asks for even when the agent's own tool produces the cards, so a
+    // later follow-up ("only under 3M") still refines the neighborhood and size it came from.
+    // The canonical parser decides this, not a second copy of the rules.
+    const parsedForMemory = buildRentalSearchParams(text, lastQuery.current);
+    if (parsedForMemory) lastQuery.current = memoryFromParams(parsedForMemory);
+    // Give the agent the page the renter is on: the question's own constraints first, then the
+    // open apartment. Written before the send so the answer describes these apartments.
+    const questionFilters = lastQuery.current.lastRentalQuery ?? {};
     setState((prev) => ({
       ...prev,
       ...(context?.selectedListingId ? { selectedListingId: context.selectedListingId } : {}),
       lastRentalQuery: {
         ...prev.lastRentalQuery,
-        ...(context?.neighborhood ? { neighborhood: context.neighborhood } : {}),
-        ...(context?.beds ? { minBedrooms: Number(context.beds) } : {}),
-        ...(context?.from ? { checkIn: context.from } : {}),
-        ...(context?.through ? { checkOut: context.through } : {}),
+        ...questionFilters,
       },
     }));
+
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
     const turn = ++turnId.current;
     toolResultSeen.current = false;
     const errorVersionBefore = getConciergeErrorVersion();
@@ -252,14 +386,21 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       // The cards normally come from the agent's own rental tool result. Only when the turn
       // produced none (an off-topic answer, a tool failure) does the page run a structured search,
       // so the renter is not left staring at a stale list.
-      if (onResults && !toolResultSeen.current && turn === turnId.current && !cancelled.current) {
+      if (
+        onResults &&
+        !toolResultSeen.current &&
+        turn === turnId.current &&
+        !cancelled.current &&
+        (!hasAnswer.current || carriesFilter(text))
+      ) {
         try {
-          const found = await searchRentalsForQuestion(text, lastQuery.current);
-          if (!cancelled.current && turn === turnId.current) {
+          const found = await searchRentalsForQuestion(text, lastQuery.current, abort.signal);
+          if (!cancelled.current && mounted.current && turn === turnId.current) {
             if (typeof found === "string") {
               setError(found);
             } else {
               lastQuery.current = found.nextMemory;
+              hasAnswer.current = true;
               onResults(found.payload);
               // The fallback rows also become the agent's referent for "which of these…".
               setState((prev) => ({
@@ -269,13 +410,21 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
               }));
             }
           }
-        } catch {
-          if (!cancelled.current) setError(SEARCH_UNAVAILABLE);
+        } catch (error) {
+          // A superseded or stopped request is not a failure the renter needs to see.
+          if (
+            !cancelled.current &&
+            mounted.current &&
+            turn === turnId.current &&
+            !isAbortError(error)
+          ) {
+            setError(SEARCH_UNAVAILABLE);
+          }
         }
       }
-      setShowTranscript(true);
+      if (mounted.current) setShowTranscript(true);
     } catch {
-      if (!cancelled.current) {
+      if (!cancelled.current && mounted.current) {
         // runAgent may reject after addMessage already persisted the user turn.
         // Treat an attempted send as potentially started; never offer an unsafe resend.
         if (agentSendAttempted) {
@@ -288,12 +437,14 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       }
     } finally {
       sendInFlight.current = false;
-      setSending(false);
+      if (mounted.current) setSending(false);
     }
   }, [appendMessage, busy, draft, signedOut, isReady, onResults, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
+    // Cancel the supplementary search too, so a stopped answer cannot still replace the cards.
+    abortRef.current?.abort();
     stopActiveRun();
   }, [stopActiveRun]);
 
