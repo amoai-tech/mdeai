@@ -59,15 +59,15 @@ describe("buildWorkspaceContexts", () => {
       "/app/me",
       "/app/rentals",
       "/app/events",
-      "/partners/profile",
+      "/app/partners/profile",
       "/app/contests",
     ]);
-    // Personal (SAN-1576), Rentals (SAN-1578), Events (SAN-1577) and Team
-    // contests (SAN-1580) are proven /app adapters; Partners keeps its
-    // existing destination.
+    // Personal (SAN-1576), Rentals (SAN-1578), Events (SAN-1577), Partners
+    // (SAN-1579) and Team contests (SAN-1580) are proven /app adapters.
     expect(contexts[0].href).toBe("/app/me");
     expect(contexts[1].href).toBe("/app/rentals");
     expect(contexts[2].href).toBe("/app/events");
+    expect(contexts[3].href).toBe("/app/partners/profile");
     expect(contexts[4].href).toBe("/app/contests");
   });
 });
@@ -121,6 +121,9 @@ describe("activeWorkspaceContext", () => {
     );
     expect(activeWorkspaceContext("/app/events/new", contexts)?.kind).toBe(
       "events",
+    );
+    expect(activeWorkspaceContext("/app/partners/profile", contexts)?.kind).toBe(
+      "partners",
     );
     expect(activeWorkspaceContext("/app/contests", contexts)?.kind).toBe("team");
     expect(activeWorkspaceContext("/app/unknown", contexts)).toBeNull();
