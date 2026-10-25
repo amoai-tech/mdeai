@@ -269,6 +269,31 @@ cents conversion matches the existing publish contract.
 **Nothing unreviewed rode along:** 8 files, `+154/−63`; no new agent, route, schema/RLS migration, event engine,
 checkout or webhook change.
 
+## 2026-10-25 — PR #521 (vote gate fixture)
+
+**PR:** [#521](https://github.com/amoai-tech/mdeai/pull/521) · **Head:** `f94df9f5020e4ad1c077c9beb5620aa99249fde9` · **Merge:** `75c2104174d2bc97d5e47967173922e011f60703`
+
+**Why:** exactly one collaborator (`amoai-tech`), who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `deterministic chromium 1/3`–`3/3`,
+`browser report + result`, `auth redirect + guard chromium`, `real mobile composer chromium`,
+`review / review`, `review / verify-review-result`, `CodeRabbit`, `Kilo Code Review`,
+`Codacy Static Code Analysis`, `Vercel`. Unresolved review threads: **0**.
+
+**Scope:** one test file (`e2e/san-1469-restaurant-vote.spec.ts`); no workflow, application,
+auth, RPC, or data-contract change. The post-merge `Restaurant voting E2E` on `75c2104174`
+then passed in **1.5m**, and the marked fixture was restored to `draft` with its original
+2026-10-14 → 2026-10-15 window and **0** votes.
+
+**Root cause fixed:** the gate had been red since PR #516 because the configured development
+fixture expired on 2026-10-15; #516 correctly suppresses the vote CTA outside an open window.
+The test now opens only an `is_test_fixture` contest and restores the exact prior window in
+`finally`; a non-fixture contest fails loudly instead of being made votable for CI.
+
+**Caveats:** this is the **sixth recorded use** of the exception. The structural fix (a second
+reviewer, or a narrower review rule for test-only gate corrections) remains the real resolution.
+Four older `san1469-voter-*` identities from Oct 16/22 predate this run; they were left untouched.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
