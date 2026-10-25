@@ -3,6 +3,7 @@
 import { HostOpsCopilotBridge } from "@/components/host/host-ops-copilot-bridge";
 import { HostDashboardOverview } from "@/components/host/host-dashboard-overview";
 import type { HostDashboardState } from "@/lib/types/host-dashboard";
+import type { HostOsBasePath } from "@/lib/host/host-os-nav";
 
 /**
  * SAN-1194 · HOST-DASH-001 — Host Dashboard OS.
@@ -28,6 +29,8 @@ import type { HostDashboardState } from "@/lib/types/host-dashboard";
 
 type HostDashboardOsShellProps = {
   initialDashboard?: HostDashboardState;
+  /** Which URL family the overview quick links should use. */
+  basePath?: HostOsBasePath;
 };
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
@@ -41,6 +44,7 @@ function hostDashboardServerKey(initial?: HostDashboardState): string { // skipc
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function HostDashboardOsShell({ // skipcq: JS-0067
   initialDashboard,
+  basePath = "/host",
 }: HostDashboardOsShellProps) {
   return (
     <HostOpsCopilotBridge
@@ -53,7 +57,7 @@ export function HostDashboardOsShell({ // skipcq: JS-0067
           aria-label="Host dashboard overview"
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         >
-          <HostDashboardOverview state={state} />
+          <HostDashboardOverview state={state} basePath={basePath} />
         </section>
       )}
     </HostOpsCopilotBridge>

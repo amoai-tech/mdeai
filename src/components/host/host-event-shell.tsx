@@ -18,31 +18,61 @@ const HOST_LABELS = {
 
 type HostEventShellProps = {
   userEmail?: string | null;
+  /**
+   * SAN-1577 — render inside the /app AppShell (which owns the single header and
+   * `<main>`). The wizard body, form, approval panel and hostEventAgent provider
+   * are unchanged; only the duplicate legacy chrome/nav is omitted.
+   */
+  embedded?: boolean;
+  /** Legacy fallback; /app passes its Events landing so Back never leaves /app. */
+  backHref?: string;
 };
 
-export function HostEventShell({ userEmail }: HostEventShellProps) {
+export function HostEventShell({
+  userEmail,
+  embedded = false,
+  backHref = "/app/events",
+}: HostEventShellProps) {
   return (
     <HostEventCopilotBridge>
       {({ draft, setDraft }) => (
         <div
           data-testid="host-event-wizard"
-          className="flex min-h-screen flex-col bg-background text-foreground"
+          className={
+            embedded
+              ? "flex min-h-0 flex-col bg-background text-foreground"
+              : "flex min-h-screen flex-col bg-background text-foreground"
+          }
         >
-          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6">
-            <div className="min-w-0">
-              <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">
-                ← mdeai
+          {embedded ? (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-1 py-2">
+              <Link
+                href={backHref}
+                className="inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground"
+              >
+                ← My events
               </Link>
-              <h1 className="text-lg font-semibold sm:text-xl">Create event</h1>
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+              <p className="truncate text-xs text-muted-foreground">
                 {userEmail ? `Signed in as ${userEmail}` : "Host workspace"}
               </p>
             </div>
-            <AuthStatus />
-          </header>
+          ) : (
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6">
+              <div className="min-w-0">
+                <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">
+                  ← mdeai
+                </Link>
+                <h1 className="text-lg font-semibold sm:text-xl">Create event</h1>
+                <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                  {userEmail ? `Signed in as ${userEmail}` : "Host workspace"}
+                </p>
+              </div>
+              <AuthStatus />
+            </header>
+          )}
 
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            <HostNavRail />
+            {embedded ? null : <HostNavRail />}
             <section
               aria-label="Host event chat"
               className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
