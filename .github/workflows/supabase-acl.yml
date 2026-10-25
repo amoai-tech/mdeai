@@ -108,6 +108,32 @@ jobs:
       - name: Replay every migration from scratch
         run: supabase db reset
 
+      # The CLI resolves the one-shot pg_prove image on every `supabase test db` run.
+      # A transient GHCR outage must not fail the gate before a single test executes.
+      # Seed the exact local tag the CLI looks for, trying three registries with retries;
+      # once the tag exists locally, the CLI skips its own network pull.
+      - name: Pre-pull pgTAP runner image with registry fallback
+        run: |
+          set -euo pipefail
+          image="supabase/pg_prove:3.36"
+          local_image="ghcr.io/${image}"
+          if docker image inspect "$local_image" >/dev/null 2>&1; then
+            echo "pg_prove runner already cached: $local_image"
+            exit 0
+          fi
+          for registry in ghcr.io public.ecr.aws docker.io; do
+            for attempt in 1 2 3; do
+              if docker pull "${registry}/${image}"; then
+                docker tag "${registry}/${image}" "$local_image"
+                echo "pg_prove runner cached from ${registry}"
+                exit 0
+              fi
+              sleep $((attempt * 10))
+            done
+          done
+          echo "::error::Unable to pull ${image} from ghcr.io, public.ecr.aws or docker.io"
+          exit 1
+
       # `set -o pipefail` matters: without it a failing `supabase test db` would be masked by
       # `tee` exiting 0, and the job would report green on a red suite. The log is `tee`d so it
       # can be uploaded as an artifact on failure (below); Actions already shows stdout, but an

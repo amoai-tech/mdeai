@@ -12,7 +12,7 @@ import { withTokenUsageTracking } from "./token-usage-middleware";
  *
  * Why an AI SDK model object rather than Mastra's `model: "nvidia/..."` router
  * string: the pinned `@mastra/core@1.74.0` registry does not contain this model,
- * and COST-001 token tracking is typed to `LanguageModelV2`. See
+ * and COST-001 token tracking observes the concrete V2/V3 model contract. See
  * `src/lib/ai-provider.ts` for the full evidence.
  *
  * The model id lives in `src/lib/ai-model-ids.ts` (no imports) so call sites
@@ -22,7 +22,7 @@ import { withTokenUsageTracking } from "./token-usage-middleware";
  *
  * Wrapped with COST-001 token-usage tracking so every model call records its
  * token usage into the active per-turn sink, regardless of provider. The wrapper
- * is transparent: same `LanguageModelV2` contract, no behavior change.
+ * is transparent: same V2/V3 model contract, no behavior change.
  */
 export const ACTIVE_AI_PROVIDER: AiProvider = parseAiProvider(
   process.env.MDE_AI_PROVIDER,

@@ -7,10 +7,10 @@
  *   `ModelRouterModelId` union do **not** contain
  *   `nvidia/nemotron-3.5-super-vl-120b-a12b`, so `model: "nvidia/..."` fails
  *   typecheck on this repository today.
- * - COST-001 wraps a `LanguageModelV2` model object
- *   (`src/mastra/lib/token-usage-middleware.ts`). A Mastra router model has a
- *   different `doGenerate` contract, so routing through it would silently stop
- *   recording `ai_runs` token usage.
+ * - COST-001 wraps the concrete V2/V3 model object
+ *   (`src/mastra/lib/token-usage-middleware.ts`). Gemini 3.x is V3; the retained
+ *   NVIDIA adapter is V2. A Mastra router model has a different `doGenerate`
+ *   contract, so routing through it would silently stop recording `ai_runs` token usage.
  *
  * Both problems disappear when the same NVIDIA endpoint is built through the
  * AI SDK's official OpenAI-compatible provider, which is already the transport
@@ -22,7 +22,6 @@
  */
 import { google } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { LanguageModelV2 } from "@ai-sdk/provider";
 import {
   GEMINI_FLASH_MODEL_ID,
   NVIDIA_API_BASE_URL,
@@ -33,6 +32,12 @@ import {
 } from "@/lib/ai-model-ids";
 
 export type JsonProviderOptions = Record<string, { chat_template_kwargs: { enable_thinking: boolean } }>;
+
+/** Gemini 3.x is V3; the retained NVIDIA adapter is V2. */
+export type GeminiLanguageModel = ReturnType<typeof google>;
+type NvidiaProvider = ReturnType<typeof createOpenAICompatible>;
+export type NvidiaLanguageModel = ReturnType<NvidiaProvider>;
+export type ActiveLanguageModel = GeminiLanguageModel | NvidiaLanguageModel;
 
 /** The provider selected for this server process. */
 export function activeAiProvider(): AiProvider {
@@ -116,14 +121,14 @@ type CallOptionsWithProviderOptions = {
  * the openai-compatible provider reads options from that key, not from
  * `openaiCompatible`.
  */
-function withDefaultProviderOptions(
-  model: LanguageModelV2,
+function withDefaultProviderOptions<T extends NvidiaLanguageModel>(
+  model: T,
   providerOptions: Record<string, Record<string, unknown>>,
-): LanguageModelV2 {
+): T {
   return new Proxy(model, {
     get(target, prop, receiver) {
       if (prop === "doGenerate" || prop === "doStream") {
-        const original = Reflect.get(target, prop, receiver) as (
+        const original = Reflect.get(target, prop, receiver) as unknown as (
           options: CallOptionsWithProviderOptions,
         ) => unknown;
         return (options: CallOptionsWithProviderOptions) => {
@@ -150,7 +155,7 @@ function withDefaultProviderOptions(
 export function createNvidiaLanguageModel(
   apiKey: string,
   modelId: typeof NVIDIA_MODEL_ID | typeof NVIDIA_SUPER_VL_MODEL_ID = NVIDIA_MODEL_ID,
-): LanguageModelV2 {
+): NvidiaLanguageModel {
   assertServerRuntime();
   const key = apiKey.trim();
   if (!key) {
@@ -165,7 +170,7 @@ export function createNvidiaLanguageModel(
 }
 
 /** Build the model selected by `MDE_AI_PROVIDER` (Gemini when unset). */
-export function createActiveLanguageModel(): LanguageModelV2 {
+export function createActiveLanguageModel(): ActiveLanguageModel {
   assertServerRuntime();
   const provider = activeAiProvider();
   if (provider === "nvidia") return createNvidiaLanguageModel(nvidiaApiKey());
