@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
@@ -200,21 +200,8 @@ const RentalPriceSidebar = ({
             {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
-        {!isDevelopmentPreview ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            data-testid="rental-detail-ask-cta"
-            disabled={!isInteractive}
-            onClick={onRequest}
-          >
-            Ask a question
-          </Button>
-        ) : null}
-        <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
-          <Heart className="size-4" aria-hidden /> Save
-        </Button>
+        {/* SAN-479: do not show an inert Save or an “Ask” button that opens a viewing form.
+            Restore them only when their existing owning workflows are actually wired. */}
         <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
@@ -244,7 +231,7 @@ const RentalMobileCta = ({
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
-    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
+    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
   >
     <div className="mx-auto flex max-w-6xl items-center gap-2">
       <div className="min-w-0 flex-1">
@@ -268,6 +255,25 @@ const RentalMobileCta = ({
 const mapsHrefFor = (detail: RentalDetail): string | null => {
   if (detail.latitude == null || detail.longitude == null) return null;
   return `https://www.google.com/maps/search/?api=1&query=${detail.latitude},${detail.longitude}`;
+};
+
+/**
+ * A source link is an untrusted external destination, not proof that the advertiser
+ * is verified. Only permit a parsed HTTPS URL without embedded credentials.
+ * A hostname allowlist would hide legitimate new development inventory; instead
+ * show the exact host and ask the renter before navigating off MDE.
+ */
+const externalListingLinkFor = (value: string | null): { href: string; hostname: string } | null => {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || url.username || url.password || url.port !== "") return null;
+    if (hostname === "mdeai.co" || hostname.endsWith(".mdeai.co")) return null;
+    return { href: url.href, hostname: url.host };
+  } catch {
+    return null;
+  }
 };
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
@@ -320,6 +326,9 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
   const isInteractive = useHydrated();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
+  const sourceLink = (detail.status === "development-preview" || detail.isNotIndependentlyVerified)
+    ? externalListingLinkFor(detail.sourceUrl)
+    : null;
   const requestViewing = () =>
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
 
@@ -397,15 +406,21 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {(detail.status === "development-preview" || detail.isNotIndependentlyVerified) && detail.sourceUrl?.startsWith("https://") && !/^https:\/\/(?:www\.)?mdeai\.co(?:[/:]|$)/i.test(detail.sourceUrl) ? (
+              {sourceLink ? (
                 <a
-                  href={detail.sourceUrl}
+                  href={sourceLink.href}
                   target="_blank"
                   rel="nofollow noopener noreferrer"
                   data-testid="rental-detail-source-link"
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  onClick={(event) => {
+                    if (!window.confirm("You are leaving MDE AI for " + sourceLink.hostname + ". Continue to the external listing?")) {
+                      event.preventDefault();
+                    }
+                  }}
+                  className="inline-flex max-w-full flex-wrap items-center gap-1 text-sm text-primary hover:underline"
                 >
                   <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                  <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
                 </a>
               ) : null}
               {detail.sourceProvider ? (
