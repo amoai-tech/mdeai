@@ -96,3 +96,66 @@ describe("withTokenUsageTracking (COST-001)", () => {
     expect(sink.totalTokens).toBe(0);
   });
 });
+
+describe("withTokenUsageTracking — V3 Gemini (AI SDK 6)", () => {
+  type FakeV3Model = {
+    specificationVersion: string;
+    doGenerate: (...args: never[]) => Promise<{ usage?: unknown }>;
+    doStream: (...args: never[]) => Promise<{ stream: ReadableStream<unknown> }>;
+  };
+  const v3 = (usage: { input?: number; output?: number }) => ({
+    specificationVersion: "v3",
+    provider: "google",
+    modelId: "gemini-3.5-flash-lite",
+    supportedUrls: {},
+    async doGenerate() {
+      return {
+        usage: {
+          inputTokens: { total: usage.input },
+          outputTokens: { total: usage.output },
+        },
+      };
+    },
+    async doStream() {
+      return {
+        stream: streamOf([
+          { type: "text-delta", id: "1", delta: "hi" },
+          {
+            type: "finish",
+            finishReason: "stop",
+            usage: {
+              inputTokens: { total: usage.input },
+              outputTokens: { total: usage.output },
+            },
+          },
+        ] as never),
+      };
+    },
+  });
+
+  it("records nested V3 usage from a generate call", async () => {
+    const wrapped = withTokenUsageTracking(
+      v3({ input: 80, output: 20 }) as unknown as FakeV3Model,
+    );
+    const sink = createTokenSink();
+    await runWithTokenSink(sink, () => wrapped.doGenerate({} as never));
+    expect(sink.inputTokens).toBe(80);
+    expect(sink.outputTokens).toBe(20);
+    expect(sink.totalTokens).toBe(100);
+    expect(sink.calls).toBe(1);
+  });
+
+  it("records nested V3 usage from the stream finish part", async () => {
+    const wrapped = withTokenUsageTracking(
+      v3({ input: 200, output: 50 }) as unknown as FakeV3Model,
+    );
+    const sink = createTokenSink();
+    const seen = await runWithTokenSink(sink, async () => {
+      const { stream } = await wrapped.doStream({} as never);
+      return drain(stream as ReadableStream<LanguageModelV2StreamPart>);
+    });
+    expect(seen).toHaveLength(2);
+    expect(sink.totalTokens).toBe(250);
+    expect(sink.calls).toBe(1);
+  });
+});

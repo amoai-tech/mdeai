@@ -122,7 +122,7 @@
   "dependencies": {
     "@ag-ui/client": "0.0.59",
     "@ag-ui/mastra": "1.1.6",
-    "@ai-sdk/google": "2.0.74",
+    "@ai-sdk/google": "3.0.138",
     "@ai-sdk/openai-compatible": "1.0.39",
     "@base-ui/react": "^1.5.0",
     "@chat-adapter/whatsapp": "4.41.1",
@@ -143,6 +143,7 @@
     "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^2.0.1",
     "@vis.gl/react-google-maps": "^1.8.3",
+    "ai": "6.0.185",
     "chat": "4.41.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
