@@ -57,6 +57,13 @@ describe("createMastraStorage", () => {
     expect(resolveDatabaseUrl()).toBe("postgresql://primary@example.test/db");
   });
 
+  it("falls back to DATABASE_URL when SUPABASE_DB_URL is whitespace-only", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgresql://app@example.test/db");
+    vi.stubEnv("SUPABASE_DB_URL", "   ");
+    expect(resolveDatabaseUrl()).toBe("postgresql://app@example.test/db");
+  });
+
   it("uses DATABASE_URL for development even when SUPABASE_DB_URL is present", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("DATABASE_URL", "postgresql://local@example.test/db");

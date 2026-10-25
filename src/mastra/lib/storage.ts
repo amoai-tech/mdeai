@@ -58,11 +58,11 @@ function normalizeConnectionString(raw: string | undefined): string | undefined 
 export function resolveDatabaseUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  const preferred =
-    env.NODE_ENV === "production" && env.SUPABASE_DB_URL
-      ? env.SUPABASE_DB_URL
-      : env.DATABASE_URL;
-  return normalizeConnectionString(preferred);
+  if (env.NODE_ENV === "production") {
+    const primary = normalizeConnectionString(env.SUPABASE_DB_URL);
+    if (primary) return primary;
+  }
+  return normalizeConnectionString(env.DATABASE_URL);
 }
 
 function normalizeDatabaseUrl(): string | undefined {
