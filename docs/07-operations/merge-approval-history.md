@@ -239,6 +239,36 @@ untouched; the SAN-1576 merge conflict was resolved by keeping its Personal `/ap
 and the public contest detail render, 3 real rows, create form, legacy `/admin/contests` intact, `/app/admin/contests`
 404, guest redirect exact, 390/1440 without overflow.
 
+## 2026-10-25 — PR #510 (NVIDIA Lightning event host)
+
+**PR:** [#510](https://github.com/amoai-tech/mdeai/pull/510) · **Head:** `084cbc2d1fc1ea96300919ffb00ab829d1e63566` · **Merge:** `e2b748a4c64cf8be49958dc37c5a933af7259148`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `auth redirect + guard chromium`, `real mobile composer chromium`,
+`browser report + result`, `Codacy`, `CodeRabbit`, `Vercel`, `Vercel Preview Comments`. Unresolved review threads: **0**.
+
+**Kilo caveat:** the Kilo check was red, but its own review said “No Issues Found | Recommendation: Merge” and listed only
+the five old #509 files after the base had been retargeted to `main`. Recorded as a stale-base/infrastructure red,
+not a finding.
+
+**Evidence:** desktop and 390×844 signed-in host journeys filled the visible form, published one event with the correct
+`General Admission` tier at COP 40,000, and cleaned up; an incomplete request created nothing; replaying the approval
+payload returned the same event id/slug with count 1; unauthenticated replay returned 401. Full Vitest 3,484 passed;
+build, typecheck, focused ESLint and live NVIDIA host test passed.
+
+**Root cause fixed:** host input sanitization kept only the newest user message, discarding the assistant tool call and
+tool result on every continuation, so the model repeated its setter. It now keeps the newest user turn and the messages
+after it.
+
+**What a reviewer would have been asked:** whether that history boundary is correct for host tool continuations; whether
+one `set_event_draft` tool is preferable to the three single-field tools; and whether the published status plus ticket-tier
+cents conversion matches the existing publish contract.
+
+**Nothing unreviewed rode along:** 8 files, `+154/−63`; no new agent, route, schema/RLS migration, event engine,
+checkout or webhook change.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
