@@ -204,12 +204,12 @@ function hybridToEventCard(row: HybridEventRow, rankScore?: number, signalSource
  * hybrid_search_events returns only 11 columns: no coordinates, city, currency or maps link. A card built straight
  * from it has no map pin and a guessed currency, even though the event has them. Re-read those columns for the ranked
  * ids in ONE query and fill only what the RPC row did not carry (the ranking, price and text stay as returned).
- * If the lookup fails the semantic results are kept as they are: no pin is better than no result.
+ * An incomplete lookup cannot establish QA-fixture status; use the filtered structured path instead.
  */
 async function hydrateHybridEventRows(
   client: NonNullable<ReturnType<typeof getAnonClient>>,
   rows: HybridEventRow[],
-): Promise<HybridEventRow[]> {
+): Promise<HybridEventRow[] | null> {
   if (rows.length === 0) return rows;
   try {
     const { data, error } = await client
@@ -218,12 +218,16 @@ async function hydrateHybridEventRows(
       .in("id", rows.map((r) => r.id));
     if (error) {
       console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
-      return rows;
+      return null;
     }
     const byId = new Map((data ?? []).map((e: Record<string, unknown>) => [String(e.id), e]));
+    // Null slug is confirmed valid; missing ID/slug is not a completed fixture check.
+    if (rows.some((row) => !byId.has(row.id) || !Object.hasOwn(byId.get(row.id)!, "slug"))) {
+      console.warn("[intelligence-event-search] incomplete event detail lookup; using structured fallback");
+      return null;
+    }
     return rows.map((row) => {
-      const e = byId.get(row.id);
-      if (!e) return row;
+      const e = byId.get(row.id)!;
       return {
         ...row,
         slug: row.slug ?? (e.slug as string | null),
@@ -239,7 +243,7 @@ async function hydrateHybridEventRows(
       "[intelligence-event-search] event detail lookup rejected:",
       error instanceof Error ? error.message : "unknown error",
     );
-    return rows;
+    return null;
   }
 }
 
@@ -307,13 +311,16 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
         match_count: Math.max(limit * 4, 20),
       });
       if (!error && data?.length) {
-        hybridRows = await hydrateHybridEventRows(client, data as HybridEventRow[]);
-        hybridUsed = true;
-        rankExplanation.push({
-          factor: "hybrid_semantic",
-          score: hybridRows[0]?.similarity ?? 0,
-          note: "hybrid_search_events RPC",
-        });
+        const hydrated = await hydrateHybridEventRows(client, data as HybridEventRow[]);
+        if (hydrated) {
+          hybridRows = hydrated;
+          hybridUsed = true;
+          rankExplanation.push({
+            factor: "hybrid_semantic",
+            score: hybridRows[0]?.similarity ?? 0,
+            note: "hybrid_search_events RPC",
+          });
+        }
       } else if (error) {
         console.warn("[intelligence-event-search] hybrid RPC:", error.message);
       }

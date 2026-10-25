@@ -98,7 +98,7 @@ describe("searchEventsIntelligent — coverage branches", () => {
 
   it("covers hybrid RPC ranking with signal boost", async () => {
     const client = makeClient({
-      events: { data: [], error: null },
+      events: { data: [{ id: "e-hybrid", slug: null }], error: null },
       signals: {
         data: [
           {
