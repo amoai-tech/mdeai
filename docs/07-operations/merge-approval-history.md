@@ -319,6 +319,25 @@ win; and whether the registry fallback belonged in this PR.
 
 **Nothing unreviewed rode along:** 8 files (`package.json`, lockfile, model factory, token middleware, tests,
 workflow); no agent/router/database/Maps/UI behaviour change.
+## 2026-10-25 — PR #526 (production J09 inventory-truth fix)
+
+**PR:** [#526](https://github.com/amoai-tech/mdeai/pull/526) · **Head:** `4ecce1917865666f1acb31255d2271f4cb7135b2` · **Merge:** `af6a0ae76077ddf661a2c31e6b47b8b905b2030c`
+
+**Why:** sole-collaborator repository; author cannot self-approve.
+
+**Green on the exact head:** 16 checks passed, including `floor`, `mastra-schema-init`, browser shards, auth guard,
+Codacy, CodeRabbit and Vercel. Unresolved review threads: **0**.
+
+**Change:** production J09 now asks “events in Medellín” instead of “salsa events this weekend”. The old query was
+truthful but produced the valid empty state because production had no salsa event that weekend; the test then waited
+for a card that could not exist. No application, Auth, RLS, database or workflow behavior changed.
+
+**Evidence:** production J09 passed in 39.1s against `https://www.mdeai.co`; the full `Production Runtime Smoke`
+(ID `121142024890`) passed in 9m58s, including the signed-in route, CopilotKit isolation and full journey steps.
+A prior production Auth failure (`Database error finding users`) had been repaired separately by clearing NULL
+token columns on one orphan test user; admin lookup and signed-in routes now succeed.
+
+**Nothing unreviewed rode along:** one test file.
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
