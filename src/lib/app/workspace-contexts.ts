@@ -78,7 +78,10 @@ export function buildWorkspaceContexts(
           ? signals.partnerLabels[0]
           : "Partners",
       description: "Business profile and partner details.",
-      href: "/partners/profile",
+      // SAN-1579: /app/partners/profile reuses the legacy editor, so the
+      // workspace destination follows the account shell. /partners/profile
+      // remains a supported legacy URL.
+      href: "/app/partners/profile",
     });
   }
 
