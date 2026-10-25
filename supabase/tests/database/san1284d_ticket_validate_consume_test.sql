@@ -1,6 +1,8 @@
--- SAN-1284 · Batch 0D regression suite — ticket_validate_consume is service_role only
+-- SAN-1284 / SAN-1562 · Runtime regression: ticket_validate_consume is service_role only
 --
--- The defect: any visitor holding a valid QR token could call this SECURITY DEFINER RPC directly
+-- Regression for SAN-1562 (20261021031500), already applied in production.
+-- This adds real-role deny/allow probes beyond SAN-1562 catalog assertions.
+-- The defect originally allowed a visitor holding a valid QR token to call this SECURITY DEFINER RPC directly
 -- and mark the ticket used, bypassing every staff / event / signature check that the
 -- `ticket-validate` Edge Function performs first.
 --
@@ -16,7 +18,7 @@
 -- correctly for some other reason. The allow-side call proves service_role still reaches the body
 -- (the Edge Function's path) using a token that matches no ticket, so it writes nothing.
 --
--- Run with: supabase test db
+-- Run with: supabase test db supabase/tests/database/san1284d_ticket_validate_consume_test.sql
 begin;
 
 select plan(8);
