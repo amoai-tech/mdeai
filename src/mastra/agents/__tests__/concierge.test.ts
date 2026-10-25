@@ -89,10 +89,28 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("fewer than 3 rows");
   });
 
-  it("instructions forbid repeating grounded place names in prose", async () => {
+  it("instructions avoid repeating names for a new search but allow a recommendation", async () => {
     const instructions = await conciergeAgent.getInstructions();
-    expect(instructions).toContain("NEVER list cafés or venues by name");
+    expect(instructions).toContain("For a new search, do NOT list cafés or venues by name");
+    expect(instructions).toContain("name at most 2 places from lastGroundedResults");
+    expect(instructions).toContain("Never invent amenities");
     expect(instructions).toContain("View on Google Maps");
+  });
+
+  it("working memory accepts the grounded rows shown on screen", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastIntent: "restaurant_discovery",
+      lastGroundedResults: [
+        {
+          id: "cafe-1",
+          title: "Semilla Café Coworking",
+          area: "Laureles",
+          summary: "Coworking café with reliable Wi-Fi.",
+          rating: 4.7,
+        },
+      ],
+    });
+    expect(parsed.lastGroundedResults?.[0]?.title).toBe("Semilla Café Coworking");
   });
 
   it("instructions tell agent to pass search-grounded-places intent for nightlife and cafés", async () => {

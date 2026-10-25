@@ -1,58 +1,66 @@
 ---
 name: opendots
 description: >-
-  Use when adapting OpenDots-style editable AI proposals into MDE: human
-  review cards, Accept/Edit/Ignore, exact-draft identity, stale-version
-  conflicts, idempotent saves, persisted receipts, or retry/reload recovery.
-  Guide the existing MDE review and write paths, not an OpenDots installation.
+  Use when implementing OpenDots-style user-reviewed AI proposals in MDE:
+  editable drafts in existing forms, Accept/Edit/Ignore, exact-draft binding,
+  source evidence, safe authenticated saves, version conflicts, idempotent
+  retries, or persisted receipts after refresh. Do not install OpenDots.
 ---
 
-# OpenDots review patterns for MDE
+# OpenDots — review and genuinely save AI suggestions
 
-## Ownership and limits
+## Owner and boundaries
 
-Own **how an AI suggestion is presented, reviewed, and confirmed as saved**.
-Use [copilotkit](../copilotkit/SKILL.md) for v2 frontend tool/interrupt hooks,
-[mastra](../mastra/SKILL.md) for backend tool lifecycle and
-[supabase](../supabase/SKILL.md) for authorization/RLS/atomic writes.
-The shared interaction owner is SAN-1548; domain actions stay in domain code.
+Own **AI proposal → user edit/review → confirmed canonical write → durable
+receipt**, not a separate editor/store/approval engine. Shared schema owner:
+SAN-1548 (src/platform/contracts/review-proposal.ts); domain services own
+writes. Use [copilotkit](../copilotkit/SKILL.md) for installed v2 tool/interrupt
+compatibility, [mastra](../mastra/SKILL.md) for agent tools, and
+[supabase](../supabase/SKILL.md) for transactions and tenant RLS.
 
-A user's Accept/Edit/Ignore is **not** a prelaunch business approval,
-property-ownership or publication gate. No duplicate page store, SQLite tables,
-agent, approval engine or blind database writer. No "saved" message until
-server confirmation and persisted readback. Ignore/Cancel writes nothing.
+Accept/Edit/Ignore is user control over AI suggestions, **not** a prelaunch
+business approval or property/photo/publishing eligibility gate. Manual form
+submission remains available. Ignore/Cancel writes nothing.
 
-## Procedure
+## Implementation procedure
 
-1. Identify the exact user action, target record, current MDE screen, server
-   transaction and PR base. Differentiate *proposal received* from *saved*.
-2. Read [OpenDots source map](references/source-map.md) for only the matching
-   review/recovery pattern; confirm reviewed source commit before adaptation.
-3. Reuse MDE's existing field schemas, proposal cards and server-side auth.
-   Bind one draft to its proposal/tool-call ID, source evidence, target version
-   and idempotency key where the shared contract supports it (SAN-1548).
-4. Keep edits visible and editable. Review on the frontend; revalidate user
-   and record access on the server at the actual write. Reject changed-draft
-   retries and stale target versions without overwriting other edits.
-5. Recover a previously committed receipt after timeout or reload; same-draft
-   retries return the existing saved result, never a duplicate write.
-6. Prove Accept/Edit/Ignore, cancel-no-write, missing source, tenant denial,
-   conflict, retry, response loss and persisted readback in the real MDE path.
-   This **skill PR** adds guidance/evals, not product schema or save endpoints.
+1. **Trace one real action.** Identify signed-in actor, target, existing form,
+   allowed fields, API/RPC, transaction and readback. Check actual PR base:
+   signup suggestion UI on #403/#404 may not exist on main. Load the matching
+   pinned [source map](references/source-map.md).
+2. **Model the source accurately.** Upstream OpenDots PageReviewCard.tsx
+   provides approve/save, decline and receipt/conflict recovery; **it has
+   no Edit button**. Implement editing through existing MDE owner forms and
+   bind the *edited final draft*, not the original AI text.
+3. **Bind and revalidate before writing.** Reuse proposalId, target,
+   baseVersion and draftHash from SAN-1548; include tool-call and source
+   identity only if needed. Server must recompute draft binding and authorize
+   each write. A prior upstream receipt missing reviewDraft is a **legacy
+   compatibility exception**, not a safe default for new MDE saves. Changed
+   drafts or stale target revisions reject without overwriting edits.
+4. **Require committed readback.** A schema-valid receipt with status "saved"
+   does not alone prove a database commit. Derive the outcome from the
+   canonical write and authorized readback (real ID/version when available).
+   If a response is lost after commit, recover the identical saved result;
+   don't issue another irreversible write. Cancel/Ignore/deny: zero writes.
+5. **Use existing domain write owner.** Partner profiles reuse SAN-814's
+   merged partner_profile_patch RPC; events reuse existing publishing
+   transactions; rentals reuse existing lead/viewing RPCs. Never copy
+   OpenDots SQLite or add an alternative review database. Migrations belong
+   only to verified domain schema gaps.
+6. **Prove actual behavior.** Exercise Accept/Edit/Ignore, altered same-ID
+   draft, version conflict, two authorized concurrent edits, partner A/B
+   isolation, missing evidence, double-click, response loss and refresh.
+   Inspect actual persisted records, not just toast or HTTP 200. Run
+   focused Vitest/pgTAP/Playwright and exact-head checks.
 
 ## Example
 
-"AI proposes a café name; owner edits then reloads" → inspect current signup
-branch + profile save path; model OpenDots exact-draft review; confirm edited
-value from persisted Supabase state instead of assuming a successful UI click.
+A café owner edits AI-suggested description and confirms. A reload displays
+the *edited* Supabase value; Ignore writes nothing and a duplicate retry
+returns the same persisted outcome.
 
-"Add RLS for partner tables" → **not this skill**; use supabase.
-
-## References and checks
-
-- [Source-to-destination map](references/source-map.md), loaded only for a
-  relevant proposal/receipt change.
+- [Source-to-destination map](references/source-map.md).
 - [Behavior probes](evals/evals.json) and
-  [Trigger / near-miss probes](evals/trigger-evals.json).
-- No business prerequisites during Phase A; preserve technical auth, audit and
-  atomicity. Report known/unknown proof explicitly.
+  [Trigger/near-miss probes](evals/trigger-evals.json).
+- Skill routing is not proof of a real database save.

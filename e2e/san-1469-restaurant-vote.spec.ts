@@ -22,6 +22,56 @@ const entityId = process.env.SAN1469_TEST_ENTITY_ID;
 const dbUrl = process.env.SUPABASE_DB_URL;
 const configured = Boolean(hasE2eEnv() && dbUrl && restaurantId && contestId && entityId);
 
+type ContestWindow = {
+  id: string;
+  status: string;
+  starts_at: Date;
+  ends_at: Date;
+  is_test_fixture: boolean;
+};
+
+/**
+ * SAN-1469's configured fixture was created as a two-day development contest. After
+ * PR #516 correctly stopped offering a vote outside an open contest window, the gate
+ * became red because that fixture ended on 2026-10-15 while the test still expected a CTA.
+ *
+ * Open only a contest explicitly marked `is_test_fixture`; never make a real contest
+ * votable just to satisfy CI. The original status and window are restored in `finally`.
+ * A misconfigured non-fixture contest fails loudly instead of silently weakening the gate.
+ */
+async function openTestFixtureWindow(db: Client, id: string): Promise<ContestWindow | null> {
+  const result = await db.query<ContestWindow>(
+    "select id, status, starts_at, ends_at, is_test_fixture from vote.contests where id = $1",
+    [id],
+  );
+  const contest = result.rows[0];
+  expect(contest, "configured vote contest must exist").toBeTruthy();
+  const now = Date.now();
+  const open =
+    contest.status === "live" &&
+    new Date(contest.starts_at).getTime() <= now &&
+    new Date(contest.ends_at).getTime() > now;
+  if (open) return null;
+
+  expect(
+    contest.is_test_fixture,
+    "the vote E2E may only open a contest marked is_test_fixture",
+  ).toBe(true);
+  await db.query(
+    "update vote.contests set status = 'live', starts_at = now() - interval '1 hour', ends_at = now() + interval '2 hours' where id = $1",
+    [id],
+  );
+  return contest;
+}
+
+async function restoreContestWindow(db: Client, original: ContestWindow | null): Promise<void> {
+  if (!original) return;
+  await db.query(
+    "update vote.contests set status = $2, starts_at = $3, ends_at = $4 where id = $1",
+    [original.id, original.status, original.starts_at, original.ends_at],
+  );
+}
+
 /**
  * A second browser context has NO localStorage key. It must still recover the original
  * receipt through the account-scoped server read — that is what makes voting cross-device.
@@ -70,26 +120,36 @@ async function proveContestSelection(
   ids: { restaurantId: string; contestId: string },
 ): Promise<void> {
   const { restaurantId, contestId } = ids;
+  // Assert the canonical contest region. A hidden duplicate can survive a
+  // client-side route transition; it is not the user's voting surface.
+  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
   // Read the sibling contest from the database rather than inventing it.
-  const sibling = await db.query<{ contest_id: string; entity_id: string }>(
-    "select e.contest_id, e.id as entity_id from vote.entities e " +
+  const sibling = await db.query<{ contest_id: string; entity_id: string; status: string }>(
+    "select e.contest_id, e.id as entity_id, c.status from vote.entities e " +
       "join vote.contests c on c.id = e.contest_id " +
       "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
     [restaurantId, contestId],
   );
   if (sibling.rows[0]) {
     await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
-    await expect(page.getByTestId("vote-cta")).toBeVisible();
+    if (sibling.rows[0].status === "live") {
+      await expect(contestRegion.getByTestId("vote-cta")).toBeVisible();
+    } else {
+      // A draft/closed sibling is where this page used to offer a Vote the cast RPC was
+      // guaranteed to reject (CONTEST_NOT_OPEN). The window must now win over the button.
+      await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+      await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+    }
   }
   // A well-formed contest id that is not this restaurant's contest. The sentinel below
   // must never become a real contest id.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
-  await expect(page.getByTestId("vote-not-open")).toBeVisible();
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
   // A malformed selection is rejected before any contest lookup happens.
   await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
-  await expect(page.getByTestId("vote-not-open")).toBeVisible();
-  await expect(page.getByTestId("vote-cta")).toHaveCount(0);
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
 }
 
 /**
@@ -145,19 +205,25 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
   });
 
   test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+    // This full signed-in flow compiles multiple routes on a cold CI runner, then
+    // proves a database transaction, cross-browser receipt and replay. In run
+    // 39728843489, the first restaurant page took 62s of the former 120s test
+    // budget. Keep each user-action assertion strict and CI retries disabled.
+    test.setTimeout(300_000);
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
-    // Real network + database work, and CI cold starts are slow. An explicit budget keeps a
-    // slow run a slow run instead of a flaky one; CI runs with --retries=0 so a retry can
-    // never disguise a real failure.
-    test.setTimeout(120_000);
     let cleanupError: unknown = null;
+    let originalWindow: ContestWindow | null = null;
     try {
       const phase = await db.query<{ application_phase: string }>(
         "select private.mde_application_phase() as application_phase",
       );
       expect(phase.rows[0]?.application_phase).toBe("development");
+
+      // The gate proves a real vote, so its fixture must actually be open. Only a marked
+      // test fixture is opened, and the exact prior window is restored below.
+      originalWindow = await openTestFixtureWindow(db, contestId!);
 
       // The same restaurant contests more than one event: each contest-specific link must
       // resolve its own ballot, and a wrong one must not borrow another contest's ballot.
@@ -269,6 +335,16 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         cleanupError = err;
         console.error("[san1469] cleanup failed:", err instanceof Error ? err.message : err);
       } finally {
+        // Restore the fixture even when the vote journey failed.
+        try {
+          await restoreContestWindow(db, originalWindow);
+        } catch (err) {
+          cleanupError ??= err;
+          console.error(
+            "[san1469] restoring the contest window failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
         // Always close the connection, even when cleanup threw.
         await db.end().catch(() => {});
       }

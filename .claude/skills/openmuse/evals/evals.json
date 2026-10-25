@@ -79,6 +79,108 @@
           "value": "openmuse"
         },
         {
+          "id": "not-called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-copilotkit",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "copilotkit"
+        },
+        {
+          "id": "read-copilotkit",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "copilotkit"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": false
+    },
+    {
+      "id": 4,
+      "prompt": "A visitor sends an event search and immediately a restaurant query; the second question vanishes while busy. Use MDE OpenMuse guidance to find the canonical ownership and tests.",
+      "expected_output": "SAN-1559 owns busy fast-path messages. Never return handled while dropping them; queue, visible retry or fallback. Inspect event/restaurant/grounded hooks, keep thread/run correlation; test older completion last, 390px, no duplicate response.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "read-openmuse",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openmuse"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 5,
+      "prompt": "The MDE progress bar reports Ranking complete from a timer while Mastra is still searching. What is the smallest correction?",
+      "expected_output": "SAN-609: inspect chat-workflow-context, workflow-progress-strip, workflow-steps. Elapsed time cannot claim completion; use real run/tool events, coarse Searching when needed; prove delayed tool never shows invented status.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
+          "id": "called-openmuse",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "openmuse"
+        },
+        {
+          "id": "read-openmuse",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "openmuse"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 6,
+      "prompt": "Scrolling to an old AI rental result in a 50-message conversation clears the newest map pins. Adapt source pattern without a new map store.",
+      "expected_output": "SAN-1429: older mounted tool render cannot set current pins. Test virtualized old card remount plus later current result, valid sourced coordinates only, thread/run isolation.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-openmuse",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "openmuse"
+        },
+        {
           "id": "called-openmuse",
           "kind": "deterministic",
           "check": "skill_called",

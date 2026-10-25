@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -187,6 +188,7 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
@@ -203,7 +205,10 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={reportConciergeError}
+      onError={(event) => {
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"

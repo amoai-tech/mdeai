@@ -4,17 +4,22 @@ import { useState } from "react";
 import { MapIcon, XIcon } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { BrowseMapFallback } from "@/components/browse/browse-map-fallback";
+import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet() {
+export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="lg:hidden">
       <Button
         variant="default"
         size="sm"
-        className="fixed bottom-6 right-4 z-50 gap-2 shadow-lg"
+        // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
+        // measured, so an expanded transcript or an error row cannot end up underneath the button.
+        className={raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised ? { bottom: "calc(1rem + var(--mde-ask-composer-height, 6rem))" } : undefined}
         onClick={() => setOpen(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"
@@ -62,11 +67,13 @@ export function BrowseMapSheet() {
               map once the sheet has finished sliding in. Capped at 520px with a 280px floor, like the chat
               map sheet; `vh` rather than `dvh` so an older browser cannot drop the declaration and blank
               the map again. */}
-          <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
-            <MapsShell>
-              <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
-            </MapsShell>
-          </div>
+          <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
+            <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
+              <MapsShell>
+                <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
+              </MapsShell>
+            </div>
+          </AppErrorBoundary>
         </SheetContent>
       </Sheet>
     </div>

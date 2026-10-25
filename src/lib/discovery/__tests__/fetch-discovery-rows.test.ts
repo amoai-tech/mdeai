@@ -6,7 +6,8 @@ import {
   fetchLiveEvents,
   fetchLiveRestaurants,
 } from "@/lib/discovery/fetch-discovery-rows";
-import { HomeDiscoveryRowsUI } from "@/components/home/home-discovery-rows";
+import { HomeDiscoverySectionsUI, type DiscoveryData } from "@/components/home/home-discovery-rows";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 
 /** Records every chained filter and resolves with the given rows, whatever the method. */
 function fakeClient(rows: Array<Record<string, unknown>>) {
@@ -47,7 +48,8 @@ describe("homepage events (SAN-1556): only real, upcoming, honestly described", 
   it("excludes QA/test events in the query itself, so they cannot crowd real events out of the first rows", async () => {
     const { client, calls } = fakeClient([]);
     await fetchLiveEvents(client);
-    expect(calls).toContain("not(name,imatch,^\\s*(qa|test)\\y)");
+    expect(calls).toContain(`not(name,imatch,${QA_EVENT_NAME_SQL_PATTERN})`);
+    expect(calls).toContain(`or(${NON_QA_EVENT_SLUG_FILTER})`);
     expect(calls).toContain("limit(4)");
   });
 
@@ -100,13 +102,14 @@ describe("homepage destinations (SAN-1556)", () => {
     id: name, name, category: "Culture", description: `About ${name}`, primary_image_url: null, ...over,
   });
 
-  it("shows each place once, featured places first, and no neighbourhood rows", async () => {
-    const { client, calls } = fakeClient([
-      dest("Catedral Metropolitana"), dest("Parque Arví"), dest("Parque Arví"), dest("Comuna 13"),
+  it("shows each place once and featured places first, leaving the neighbourhood-guide areas to their own section", async () => {
+    const { client } = fakeClient([
+      dest("Catedral Metropolitana"), dest("Parque Arví"), dest("Parque Arví"), dest("Comuna 13", { category: "Neighborhood" }),
+      dest("Laureles", { category: "Neighborhood" }), dest("El Poblado", { category: "Neighborhood" }),
     ]);
     const cards = await fetchLiveDestinations(client);
+    // Comuna 13 is filed under "Neighborhood" but is a place to visit, so it stays (and leads).
     expect(cards.map((c) => c.name)).toEqual(["Comuna 13", "Parque Arví", "Catedral Metropolitana"]);
-    expect(calls).toContain("neq(category,Neighborhood)");
   });
 
   it("shows a photo only when we host it; stock or dead links give an honest text card", async () => {
@@ -126,35 +129,117 @@ describe("homepage destinations (SAN-1556)", () => {
   });
 });
 
-describe("HomeDiscoveryRowsUI (SAN-1556): no stand-in data", () => {
-  const card = { id: "1", name: "Pageant", kind: "Event", rating: null, meta: "", why: "", image: "", query: "q" };
+describe("homepage destination photos (SAN-1556): real, openly licensed, credited", () => {
+  const COMMONS = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13%2C_Medell%C3%ADn_02.jpg/960px-Comuna_13%2C_Medell%C3%ADn_02.jpg";
+  const credit = { author: "Bernard Gagnon", license: "CC BY-SA 4.0", license_url: "https://creativecommons.org/licenses/by-sa/4.0/", source_url: "https://commons.wikimedia.org/wiki/File:Comuna_13,_Medell%C3%ADn_02.jpg", image_url: COMMONS, alt: "Brick houses on the hillsides of Comuna 13" };
+  const dest = (name: string, over: Record<string, unknown> = {}) => ({
+    id: name, name, category: "Culture", description: `About ${name}`, primary_image_url: null, details: {}, ...over,
+  });
 
-  it("renders a row with fewer than four real cards and hides rows with none", () => {
+  it("shows a Commons photo with its credit and descriptive alt text", async () => {
+    const { client } = fakeClient([dest("Comuna 13", { primary_image_url: COMMONS, details: { image_credit: credit } })]);
+    const [card] = await fetchLiveDestinations(client);
+    expect(card.image).toBe(COMMONS);
+    expect(card.imageAlt).toBe("Brick houses on the hillsides of Comuna 13");
+    expect(card.imageCredit).toEqual({ text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url, licenseHref: credit.license_url });
+  });
+
+  it("never shows a Commons photo that has no recorded author, licence and source", async () => {
+    const { client } = fakeClient([
+      dest("No credit", { primary_image_url: COMMONS }),
+      dest("Half credit", { primary_image_url: COMMONS, details: { image_credit: { author: "Someone" } } }),
+      dest("No bound image", { primary_image_url: COMMONS, details: { image_credit: { ...credit, image_url: undefined } } }),
+      dest("No license terms", { primary_image_url: COMMONS, details: { image_credit: { ...credit, license_url: undefined } } }),
+    ]);
+    const cards = await fetchLiveDestinations(client);
+    expect(cards.map((c) => c.image)).toEqual(["", "", "", ""]);
+  });
+
+  it("never attributes a newly changed image to the previous photographer", async () => {
+    const { client } = fakeClient([
+      dest("Stale credit", { primary_image_url: COMMONS, details: { image_credit: { ...credit, image_url: "https://upload.wikimedia.org/wikipedia/commons/thumb/other.jpg" } } }),
+    ]);
+    const [card] = await fetchLiveDestinations(client);
+    expect(card.image).toBe("");
+    expect(card.imageCredit).toBeUndefined();
+  });
+
+  it("keeps the duplicate row that has a usable photo", async () => {
+    const { client } = fakeClient([
+      dest("Parque Arví", { id: "stock", primary_image_url: "https://images.unsplash.com/photo-1.jpg" }),
+      dest("Parque Arví", { id: "credited", primary_image_url: COMMONS, details: { image_credit: credit } }),
+    ]);
+    const cards = await fetchLiveDestinations(client);
+    expect(cards.map((c) => c.id)).toEqual(["credited"]);
+    expect(cards[0].image).toBe(COMMONS);
+  });
+
+  it("renders the photo, its credit text and a credits line with a link outside the card links", () => {
     const html = renderToStaticMarkup(
-      HomeDiscoveryRowsUI({
-        rows: [
-          { id: "events", label: "Upcoming events", href: "/events", ctaLabel: "View all events", cards: [card] },
-          { id: "cafes", label: "Cafés", href: "/cafes", ctaLabel: "Explore cafés", cards: [] },
-        ],
+      HomeDiscoverySectionsUI({
+        data: { destinations: [{ id: "d", name: "Comuna 13", kind: "Neighborhood", rating: null, meta: "", why: "", image: COMMONS, query: "q", imageAlt: "Brick houses on the hillsides of Comuna 13", imageCredit: { text: "Photo: Bernard Gagnon · CC BY-SA 4.0", href: credit.source_url, licenseHref: credit.license_url } }], rentals: [], restaurants: [], cafes: [], events: [] },
       }),
     );
+    expect(html).toContain("<img");
+    expect(html).toContain('alt="Brick houses on the hillsides of Comuna 13"');
+    expect(html).toContain("Photo: Bernard Gagnon · CC BY-SA 4.0");
+    expect(html).toContain("Photo credits, via Wikimedia Commons");
+    expect(html).toContain(`href="${credit.source_url}"`);
+    expect(html).toContain(`href="${credit.license_url}"`);
+    expect(html).toContain("<details");
+  });
+});
+
+describe("HomeDiscoverySectionsUI (SAN-1556): no stand-in data", () => {
+  const none: DiscoveryData = { destinations: [], rentals: [], restaurants: [], cafes: [], events: [] };
+  const card = { id: "1", name: "Pageant", kind: "Event", rating: null, meta: "", why: "", image: "", query: "q" };
+  const render = (data: Partial<DiscoveryData>) =>
+    renderToStaticMarkup(HomeDiscoverySectionsUI({ data: { ...none, ...data } }));
+
+  it("renders only the sections that have real records (fewer than four is fine)", () => {
+    const html = render({ events: [{ ...card, startsAt: "2099-12-06T14:00:00Z", meta: "Sun, Dec 6, 9:00 AM · Free" }] });
     expect(html).toContain("Upcoming events");
     expect(html).toContain("Pageant");
-    expect(html).not.toContain("Cafés");
+    expect(html).not.toContain("Rentals in Medellín");
+    expect(html).not.toContain("Eat and drink");
+    expect(html).not.toContain("Things to see");
+  });
+
+  it("leads an event with its real date, in Medellín time", () => {
+    const html = render({ events: [{ ...card, startsAt: "2099-12-06T03:00:00Z" }] });
+    // 03:00 UTC is still Dec 5 in Medellín (UTC-5).
+    expect(html).toMatch(/Dec<\/span><span[^>]*>5</);
   });
 
   it("shows an honest empty state, with no invented cards, when nothing is available", () => {
-    const html = renderToStaticMarkup(HomeDiscoveryRowsUI({ rows: [{ id: "events", label: "Upcoming events", href: "/events", ctaLabel: "x", cards: [] }] }));
+    const html = render({});
     expect(html).toContain("Recommendations are unavailable right now");
     expect(html).toContain('href="/chat"');
     expect(html).not.toMatch(/unsplash|Carmen|Pergamino|Feria/i);
   });
 
+  it("puts restaurants and cafés in one tabbed section, only offering tabs that have records", () => {
+    const both = render({
+      restaurants: [{ ...card, id: "r", name: "Casa" }],
+      cafes: [{ ...card, id: "c", name: "Tinto" }],
+    });
+    expect(both).toContain("Eat and drink");
+    expect(both).toContain("Restaurants");
+    expect(both).toContain("Cafés");
+    const onlyCafes = render({ cafes: [{ ...card, id: "c", name: "Tinto" }] });
+    expect(onlyCafes).toContain("Tinto");
+    expect(onlyCafes).not.toMatch(/role="tab"/);
+  });
+
   it("shows a star rating only when one exists", () => {
     const rated = { ...card, id: "2", name: "Rated", rating: 4.9 };
-    const html = renderToStaticMarkup(
-      HomeDiscoveryRowsUI({ rows: [{ id: "r", label: "Restaurants", href: "/restaurants", ctaLabel: "x", cards: [card, rated] }] }),
-    );
+    const html = render({ rentals: [card, rated] });
     expect(html.match(/★/g)).toHaveLength(1);
+  });
+
+  it("uses an honest text card, not a stock picture, when a record has no photo", () => {
+    const html = render({ destinations: [{ ...card, id: "d", name: "Plaza Botero", kind: "Culture" }] });
+    expect(html).toContain("Plaza Botero");
+    expect(html).not.toContain("<img");
   });
 });

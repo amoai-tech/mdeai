@@ -444,6 +444,25 @@ describe("SAN-1416: Details action on the card", () => {
  * USD 1,550 rent as "$52/night". A listing that has only a nightly price still shows it.
  */
 describe("RentalBrowseCard — price label", () => {
+  it("identifies USD beside the monthly price so mixed-currency cards are unmistakable", () => {
+    const usd = renderCard({ price_daily: null, price_monthly: 1900, currency: "USD" });
+    const cop = renderCard({ price_daily: null, price_monthly: 2_400_000, currency: "COP" });
+    expect(usd).toContain("$1,900/mo");
+    expect(usd).toContain('data-testid="rental-card-currency"');
+    expect(usd).toContain(">USD</span>");
+    expect(cop).toContain("COP 2,400,000/mo");
+    expect(cop).not.toContain('data-testid="rental-card-currency"');
+  });
+
+  it("labels the primary nightly price for a USD-only listing, and leaves COP nightly alone", () => {
+    const usd = renderCard({ price_daily: 78, price_monthly: null, currency: "USD" });
+    const cop = renderCard({ price_daily: 80_000, price_monthly: null, currency: "COP" });
+    expect(usd).toContain("$78/night");
+    expect(usd).toContain('data-testid="rental-card-nightly-currency"');
+    expect(cop).toContain("COP 80,000/night");
+    expect(cop).not.toContain('data-testid="rental-card-nightly-currency"');
+  });
+
   it("shows the monthly rent and no derived nightly price for a COP monthly listing", () => {
     const html = renderCard({ price_daily: null, price_monthly: 14_500_000, currency: "COP" });
 

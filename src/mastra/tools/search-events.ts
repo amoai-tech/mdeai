@@ -9,10 +9,11 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from '@/lib/events/public-event-fixtures';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchEventsIntelligent, resolveEventCategoryForQuery } from '../lib/intelligence-event-search';
 import { writeSearchLog } from '../lib/search-logs';
+import { parseEventIntelligenceSlots, resolveEventCategoryForQuery } from '../lib/event-category-normalization';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -240,14 +241,33 @@ export async function searchEvents(
   query: EventQuery,
 ): Promise<EventSearchResult> {
   const limit = query.limit ?? 5;
+  // CK-V2-015: chip semantics must survive an unavailable intelligence module.
   const category = resolveEventCategoryForQuery(query.category, query.queryText);
-  const normalizedQuery = category === query.category ? query : { ...query, category };
+  const slots = query.queryText?.trim() ? parseEventIntelligenceSlots(query.queryText) : {};
+  const normalizedQuery = {
+    ...query,
+    category,
+    // Explicit user-selected filters outrank inferred text slots.
+    neighborhood: query.neighborhood ?? slots.neighborhood,
+    dateWindow: query.dateWindow ?? slots.dateWindow,
+  };
+  let intelligence: typeof import('../lib/intelligence-event-search') | null = null;
+  if (query.queryText?.trim()) {
+    try {
+      intelligence = await import('../lib/intelligence-event-search');
+    } catch (err) {
+      console.warn(
+        '[search-events] intelligence module unavailable, using structured search:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 
-  if (normalizedQuery.queryText?.trim()) {
+  if (normalizedQuery.queryText?.trim() && intelligence) {
     const queryText = normalizedQuery.queryText.trim();
     try {
       const started = Date.now();
-      const intel = await searchEventsIntelligent(normalizedQuery);
+      const intel = await intelligence.searchEventsIntelligent(normalizedQuery);
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText,
@@ -286,6 +306,8 @@ export async function searchEvents(
     .select('id, name, event_type, address, city, event_start_time, ticket_price_min, currency, primary_image_url, latitude, longitude, maps_url')
     .eq('is_active', true)
     .eq('status', 'published')
+    .not('name', 'imatch', QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER)
     .order('event_start_time', { ascending: true })
     .limit(limit);
 
@@ -294,15 +316,15 @@ export async function searchEvents(
     q = q.in('event_type', dbTypes);
   }
 
-  if (query.neighborhood) {
-    q = q.ilike('address', `%${query.neighborhood}%`);
+  if (normalizedQuery.neighborhood) {
+    q = q.ilike('address', `%${normalizedQuery.neighborhood}%`);
   }
 
   if (typeof query.maxPricePerTicket === 'number') {
     q = q.lte('ticket_price_min', query.maxPricePerTicket);
   }
 
-  const window = dateWindow(query.dateWindow);
+  const window = dateWindow(normalizedQuery.dateWindow);
   if (window.gte) q = q.gte('event_start_time', window.gte);
   if (window.lte) q = q.lte('event_start_time', window.lte);
 
@@ -327,10 +349,11 @@ export const searchEventsTool = createTool({
     category: categoryEnum.optional(),
     neighborhood: z.string().optional().describe('Medellin neighborhood, e.g. El Poblado, Laureles'),
     maxPricePerTicket: z.number().positive().optional().describe('Max ticket price in USD'),
+    // An omitted date must not override a date inferred from queryText.
+    // Explicit 'any' remains the caller's show-all override.
     dateWindow: z
       .enum(['tonight', 'this_weekend', 'this_week', 'next_week', 'any'])
-      .optional()
-      .default('any'),
+      .optional(),
     limit: z.number().int().min(1).max(20).default(5),
     queryText: z
       .string()

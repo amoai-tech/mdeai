@@ -101,7 +101,6 @@ test.describe("SAN-1092 · RE-DES-005 broker onboarding", () => {
     await expect(page.locator('[data-testid="ro-step-review"]')).toBeVisible();
     await captureEvidence(page, "SAN-1092-onboarding-step3.png");
 
-    await page.locator('[data-testid="ro-ack"]').check();
     await page.locator('[data-testid="ro-submit"]').click();
 
     await page.waitForURL(/\/host\/rentals\/listings/, { timeout: 60_000 });
