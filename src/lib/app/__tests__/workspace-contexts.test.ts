@@ -7,22 +7,21 @@ import {
 
 const EMPTY: WorkspaceSignals = {
   hasLandlordProfile: false,
-  hasOrganizerEvents: false,
   partnerLabels: [],
   isAdmin: false,
 };
 
 describe("buildWorkspaceContexts", () => {
-  it("always starts with Personal for a signed-in account", () => {
+  it("always offers Personal and Events creation to a signed-in account", () => {
     const contexts = buildWorkspaceContexts(EMPTY);
-    expect(contexts).toHaveLength(1);
+    expect(contexts).toHaveLength(2);
     expect(contexts[0]).toMatchObject({ kind: "personal", href: "/app/me" });
+    expect(contexts[1]).toMatchObject({ kind: "events", href: "/app/events" });
   });
 
-  it("adds only the contexts the account really has, in a stable order", () => {
+  it("keeps private business workspaces in a stable order", () => {
     const contexts = buildWorkspaceContexts({
       hasLandlordProfile: true,
-      hasOrganizerEvents: true,
       partnerLabels: ["Cafe Roma"],
       isAdmin: true,
     });
@@ -37,14 +36,14 @@ describe("buildWorkspaceContexts", () => {
 
   it("uses the business name for one partner and a neutral label for many", () => {
     expect(
-      buildWorkspaceContexts({ ...EMPTY, partnerLabels: ["Cafe Roma"] })[1]
+      buildWorkspaceContexts({ ...EMPTY, partnerLabels: ["Cafe Roma"] })[2]
         .label,
     ).toBe("Cafe Roma");
     expect(
       buildWorkspaceContexts({
         ...EMPTY,
         partnerLabels: ["Cafe Roma", "Roma Norte"],
-      })[1].label,
+      })[2].label,
     ).toBe("Partners");
   });
 

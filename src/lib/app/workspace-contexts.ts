@@ -30,7 +30,6 @@ export type WorkspaceContext = {
 
 export type WorkspaceSignals = {
   hasLandlordProfile: boolean;
-  hasOrganizerEvents: boolean;
   /** Business names for authorized partner memberships; empty when none. */
   partnerLabels: string[];
   isAdmin: boolean;
@@ -62,14 +61,15 @@ export function buildWorkspaceContexts(
     });
   }
 
-  if (signals.hasOrganizerEvents) {
-    contexts.push({
-      kind: "events",
-      label: "Events",
-      description: "Your events, sales, and analytics.",
-      href: "/app/events",
-    });
-  }
+  // Phase A: the first-time organizer must reach the real creation wizard.
+  // Displaying a workspace is navigation, never authorization to private data.
+  // Event queries and writes still enforce the user's session and Supabase RLS.
+  contexts.push({
+    kind: "events",
+    label: "Events",
+    description: "Create events, manage sales, and view analytics.",
+    href: "/app/events",
+  });
 
   if (signals.partnerLabels.length > 0) {
     contexts.push({
