@@ -59,8 +59,13 @@ export function resolveDatabaseUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   if (env.NODE_ENV === "production") {
-    const primary = normalizeConnectionString(env.SUPABASE_DB_URL);
-    if (primary) return primary;
+    // Vercel/Supabase exposes the primary pooled URL as POSTGRES_URL; older
+    // deployments only have SUPABASE_DB_URL. Prefer those write-capable URLs
+    // before the read-only application DATABASE_URL.
+    for (const candidate of [env.POSTGRES_URL, env.SUPABASE_DB_URL]) {
+      const primary = normalizeConnectionString(candidate);
+      if (primary) return primary;
+    }
   }
   return normalizeConnectionString(env.DATABASE_URL);
 }
