@@ -283,6 +283,16 @@
       "file": "src/components/rentals/rental-ask-tool-results.ts",
       "classification": "keep",
       "note": "SAN-1421 parsing/selection module extracted from the Ask MDE composer. Imports only the v2 AbstractAgent type to read the agent's rental tool result from the thread; it mounts no provider and starts no run."
+    },
+    {
+      "file": "src/components/rentals/rental-details-tool.tsx",
+      "classification": "keep",
+      "note": "SAN-1421 post-merge frontend tool: openRentalDetails opens the in-page Details panel for an apartment already in the current results. v2 useFrontendTool only; mounts no provider and starts no run."
+    },
+    {
+      "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
     }
   ]
 }
