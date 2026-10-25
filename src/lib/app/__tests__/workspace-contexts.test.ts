@@ -16,7 +16,7 @@ describe("buildWorkspaceContexts", () => {
   it("always starts with Personal for a signed-in account", () => {
     const contexts = buildWorkspaceContexts(EMPTY);
     expect(contexts).toHaveLength(1);
-    expect(contexts[0]).toMatchObject({ kind: "personal", href: "/saved" });
+    expect(contexts[0]).toMatchObject({ kind: "personal", href: "/app/me" });
   });
 
   it("adds only the contexts the account really has, in a stable order", () => {
@@ -48,7 +48,7 @@ describe("buildWorkspaceContexts", () => {
     ).toBe("Partners");
   });
 
-  it("links only destinations that exist today (legacy URLs until parity)", () => {
+  it("links only destinations that exist today", () => {
     const contexts = buildWorkspaceContexts({
       hasLandlordProfile: true,
       hasOrganizerEvents: true,
@@ -56,15 +56,17 @@ describe("buildWorkspaceContexts", () => {
       isAdmin: true,
     });
     expect(contexts.map((context) => context.href)).toEqual([
-      "/saved",
+      "/app/me",
       "/app/rentals",
       "/host/dashboard",
       "/partners/profile",
-      "/admin/contests",
+      "/app/contests",
     ]);
-    // Rentals is the first adapter proven under /app (SAN-1578); the others
-    // stay on their working legacy URLs until their own adapter ships.
+    // Personal (SAN-1576), Rentals (SAN-1578) and Team contests (SAN-1580)
+    // are proven /app adapters; the others stay on their legacy URLs.
+    expect(contexts[0].href).toBe("/app/me");
     expect(contexts[1].href).toBe("/app/rentals");
+    expect(contexts[4].href).toBe("/app/contests");
   });
 });
 
@@ -98,6 +100,9 @@ describe("activeWorkspaceContext", () => {
   it("recognises the future /app routes without granting a workspace", () => {
     expect(activeWorkspaceContext("/app", contexts)?.kind).toBe("personal");
     expect(activeWorkspaceContext("/app/me/saved", contexts)?.kind).toBe(
+      "personal",
+    );
+    expect(activeWorkspaceContext("/app/me/tickets", contexts)?.kind).toBe(
       "personal",
     );
     expect(activeWorkspaceContext("/app/rentals", contexts)?.kind).toBe(

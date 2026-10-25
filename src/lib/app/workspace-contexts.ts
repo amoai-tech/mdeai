@@ -39,7 +39,7 @@ const PERSONAL: WorkspaceContext = {
   kind: "personal",
   label: "Personal",
   description: "Tickets, saved places, and your account.",
-  href: "/saved",
+  href: "/app/me",
 };
 
 /**
@@ -87,7 +87,7 @@ export function buildWorkspaceContexts(
       kind: "team",
       label: "MDE Team",
       description: "Contests and protected admin operations.",
-      href: "/admin/contests",
+      href: "/app/contests",
     });
   }
 
@@ -109,8 +109,17 @@ export function activeWorkspaceContext(
   );
   if (byHref) return byHref;
 
-  if (pathname === "/me/tickets" || pathname.startsWith("/me/tickets/")) {
+  if (
+    pathname === "/saved" ||
+    pathname === "/me/tickets" ||
+    pathname.startsWith("/me/tickets/")
+  ) {
     return contexts.find((context) => context.kind === "personal") ?? null;
+  }
+
+  // SAN-1580: the legacy contest admin URLs remain valid and belong to Team.
+  if (pathname === "/admin/contests" || pathname.startsWith("/admin/contests/")) {
+    return contexts.find((context) => context.kind === "team") ?? null;
   }
 
   if (pathname === "/app") {

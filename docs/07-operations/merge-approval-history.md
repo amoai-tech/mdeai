@@ -183,6 +183,62 @@ change rather than weakening the test.
 migration, RPC, vote-cast, tally, receipt, RLS, admin or AI change. The authenticated vote proof ran against the
 real project on a hidden fixture and restored its state (draft, original dates, entry unapproved, 0 votes).
 
+## 2026-10-24 — PR #509 (NVIDIA Lightning rental concierge)
+
+**PR:** [#509](https://github.com/amoai-tech/mdeai/pull/509) · **Head:** `192499c0794b6178431bb9270f98286e6d297685` · **Merge:** `979e5d5e1229c735cf0cb0a3a0f35359ff9eb3fb`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `deterministic chromium 1/3`, `2/3`, `3/3`,
+`deterministic Maps contracts`, `auth redirect + guard chromium`, `real mobile composer chromium`,
+`browser report + result`, `supabase-acl`, `Kilo Code Review`, `Vercel`, `Vercel Preview Comments`,
+`review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Post-merge main:** `Floor`, `Supabase ACL gates`, `Prod deploy freshness` and `Candidate Runtime Certification` all passed on `979e5d5e12`.
+
+**Evidence:** signed-in NVIDIA `/chat` rendered 3 real rental cards → Details → Schedule viewing CTA; controlled
+`e2e/rental-conversion-journey.spec.ts` persisted exactly one lead + one showing, enforced broker isolation,
+denied an unrelated broker, deduplicated a replay and cleaned up every row; chat-history spec passed 9/9 local repeats.
+
+**Caveats:** qualifying COP rows have null coordinates, so no map pin is the truthful result; Gemini embeddings
+returned HTTP 402 and search used keyword fallback; one live NVIDIA capability call hit the 22s per-call timeout
+and passed on retry. None of these is a rental-code failure.
+
+**What a reviewer would have been asked:** whether the 22s provider call timeout should move relative to the 26s
+turn deadline; whether the monthly-price prompt rule is preferable to changing the existing `nightlyPriceFrom`
+display derivation; and whether unmapped COP inventory is acceptable for this release.
+
+**Nothing unreviewed rode along:** 24 files, `+1154/−65`. Product changes are the NVIDIA provider seam, concierge
+model selection, rental monthly-cap preservation, telemetry and a test-only cold-start fix. No schema, RLS, maps,
+booking, Stripe, UI or new-agent changes.
+
+## 2026-10-24 — PR #520 (MDE Team contests under /app)
+
+**PR:** [#520](https://github.com/amoai-tech/mdeai/pull/520) · **Head:** `b807a686439d7b0103e15e3e809e641864ff797a` · **Merge:** `66d8f0f2f012d4d29e6cb35e07fcf306028bb2ef`
+
+**Why:** exactly one collaborator (`amoai-tech`), who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`,
+`deterministic chromium 1/3`, `2/3`, `3/3`, `browser report + result`, `auth redirect + guard chromium`,
+`real mobile composer chromium`, `deterministic Maps contracts`, `Vercel`. Unresolved review threads: **0**.
+
+**Caveats:** `Codacy Static Code Analysis` was an advisory `fail` with no surfaced blocking finding; Codacy does not
+gate merges here. CodeRabbit passed. Greptile was rate-limited (not review coverage). `Kilo Code Review` was still
+pending at merge time; it is advisory. This is the **fifth recorded use** of the exception. The structural fix
+(a second reviewer, or a narrower review rule for scoped UI/test adapters) remains the real resolution.
+
+**What a reviewer would have been asked:** whether extracting the shared server gate and the shared list/detail
+bodies preserves the legacy `/admin/contests` behaviour exactly; whether the fixed `app`/`admin` base token is a
+sufficient safeguard against an open redirect; and whether the opt-in write E2E's cleanup proof is adequate for a
+production-backed test.
+
+**Nothing unreviewed rode along:** 15 files, `+974/−160` (5 modified admin/shell files, 10 new route/component/test
+files). No migration, RPC, role-store, vote or public discovery change. `/app/me` and SAN-1576-owned files are
+untouched; the SAN-1576 merge conflict was resolved by keeping its Personal `/app/me` and this PR's Team
+`/app/contests`. Production was verified with a throwaway admin (role and identity deleted afterwards): `/app/contests`
+and the public contest detail render, 3 real rows, create form, legacy `/admin/contests` intact, `/app/admin/contests`
+404, guest redirect exact, 390/1440 without overflow.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

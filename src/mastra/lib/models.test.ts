@@ -3,6 +3,8 @@ import { generateObject, generateText, tool } from "ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  activeModelIdFromEnv,
+  AI_MODEL_CAPABILITIES,
   GEMINI_FLASH_MODEL_ID,
   GEMINI_MODEL_CAPABILITIES,
 } from "@/lib/ai-model-ids";
@@ -28,6 +30,19 @@ describe("configured Gemini model capabilities are recorded", () => {
     expect(capabilities.functionCalling, "function calling").toBe(true);
     expect(capabilities.structuredOutput, "structured output").toBe(true);
     expect(capabilities.basis.length).toBeGreaterThan(20);
+  });
+
+  it(`the provider selected by MDE_AI_PROVIDER ("${activeModelIdFromEnv()}") declares both capabilities`, () => {
+    const activeId = activeModelIdFromEnv();
+    const capabilities = AI_MODEL_CAPABILITIES[activeId];
+    expect(
+      capabilities,
+      `No capability record for the active model "${activeId}". Read its official ` +
+        `model page, then add an AI_MODEL_CAPABILITIES entry stating whether it ` +
+        `supports function calling and structured output, and on what basis.`,
+    ).toBeDefined();
+    expect(capabilities.functionCalling, "function calling").toBe(true);
+    expect(capabilities.structuredOutput, "structured output").toBe(true);
   });
 });
 

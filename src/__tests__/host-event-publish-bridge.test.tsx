@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { HostEventCopilotBridge } from "@/components/host/host-event-copilot-bridge";
 import { HostEventForm } from "@/components/host/host-event-form";
 import type { EventDraftState } from "@/lib/types";
@@ -18,12 +18,17 @@ type HitlProps = {
 
 let registeredRender: React.ComponentType<HitlProps> | undefined;
 let mockAgentState: Partial<EventDraftState> | undefined;
-const frontendTools: Record<string, string> = {};
+type FrontendToolConfig = {
+  name: string;
+  description: string;
+  handler?: (args: Record<string, unknown>) => Promise<unknown>;
+};
+const frontendTools: Record<string, FrontendToolConfig> = {};
 vi.mock("@copilotkit/react-core/v2", () => ({
   useAgent: () => ({ agent: { state: mockAgentState } }),
   useAgentContext: () => undefined,
-  useFrontendTool: (config: { name: string; description: string }) => {
-    frontendTools[config.name] = config.description;
+  useFrontendTool: (config: FrontendToolConfig) => {
+    frontendTools[config.name] = config;
   },
   useHumanInTheLoop: (config: { render: React.ComponentType<HitlProps> }) => {
     registeredRender = config.render;
@@ -49,9 +54,37 @@ describe("HostEventCopilotBridge publish HITL", () => {
         {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
       </HostEventCopilotBridge>,
     );
-    expect(frontendTools.set_pricing).toMatch(/whole COP/);
+    expect(frontendTools.set_event_draft.description).toMatch(/whole COP/);
     expect(HOST_EVENT_INSTRUCTIONS).toContain("40000 means COP 40,000");
     expect(HOST_EVENT_INSTRUCTIONS).toContain("never cents");
+  });
+
+  it("applies every stated field in one draft call and returns the draft", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    const tool = frontendTools.set_event_draft;
+    expect(tool?.handler).toBeDefined();
+    let result: unknown;
+    await act(async () => {
+      result = await tool!.handler!({
+        title: "Salsa Night",
+        neighborhood: "Laureles",
+        dateIso: "2026-11-20T20:00:00-05:00",
+        venue: "Son Havana",
+        capacity: 150,
+        priceMinCop: 40000,
+      });
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      draft: { venue: "Son Havana", capacity: 150, priceMinCop: 40000 },
+    });
+    expect(screen.getByTestId("host-event-field-venue")).toHaveProperty("value", "Son Havana");
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "150");
+    expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
   });
 
   it("does not let stale Mastra working memory replace a host's manual edits", () => {

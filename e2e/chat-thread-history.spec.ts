@@ -49,9 +49,15 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
   });
 
   test("A then B, Back restores A, Forward returns to B", async ({ page }) => {
+    // Cold Next.js compilation can consume most of the default 60s budget in CI.
+    // Keep the history assertions strict; only allow the same startup budget as
+    // the sibling refresh/navigation journey.
+    test.setTimeout(100_000);
     await gotoDeterministicChat(page);
     const nav = rail(page);
 
+    await expect(threadItem(page, CHAT_A), "the mocked saved-chat list loads before selection")
+      .toBeVisible({ timeout: 15_000 });
     await threadItem(page, CHAT_A).click();
     await expect(nav).toHaveAttribute("data-active-thread-id", CHAT_A);
     await threadItem(page, CHAT_B).click();
