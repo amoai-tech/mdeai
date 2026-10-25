@@ -170,7 +170,11 @@ describe("searchEventsIntelligent — coverage branches", () => {
       primary_image_url: null, similarity: 0.9,
     });
     const client = makeClient({
-      events: { data: [], error: null }, signals: { data: [], error: null },
+      // Hybrid hydration must confirm every slug; a missing lookup now falls back safely.
+      events: { data: [
+        { id: "matching", slug: null }, { id: "wrong-date", slug: null },
+        { id: "wrong-neighborhood", slug: null },
+      ], error: null }, signals: { data: [], error: null },
       rpc: { data: [
         row("matching", "Laureles, Medellín", "2026-06-20T20:00:00.000Z"),
         row("wrong-date", "Laureles, Medellín", "2026-07-20T20:00:00.000Z"),

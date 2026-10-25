@@ -22,8 +22,9 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     expect((FLASH_MODEL as unknown as ModelWithId).modelId).toBe(
       GEMINI_FLASH_MODEL_ID,
     );
+    // The pinned Google provider currently supplies an AI SDK V2 language model.
     expect((FLASH_MODEL as unknown as ModelWithId).specificationVersion).toBe(
-      "v3",
+      "v2",
     );
   });
 
