@@ -3,6 +3,8 @@
 import { memo } from "react";
 
 import { ConciergeLocalChatMessages } from "@/components/chat/concierge-local-chat-messages";
+import { ConciergeStopButton } from "@/components/chat/concierge-run-feedback";
+import { ConciergeSignInPrompt } from "@/components/chat/concierge-sign-in-prompt";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { EventFastPathPanel } from "@/components/chat/event-fast-path-panel";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
@@ -53,11 +55,13 @@ export const ConciergeTranscriptTail = memo(function ConciergeTranscriptTail({
   return (
     <div data-testid="concierge-transcript-tail" className="flex min-w-0 flex-col">
       <ConciergeLocalChatMessages excludeIds={transcriptMessageIds} />
+      <ConciergeSignInPrompt />
       <RentalFastPathPanel />
       <EventFastPathPanel />
       <GroundedFastPathPanel />
       <RestaurantFastPathPanel />
       <EventResultsPanel />
+      <ConciergeStopButton />
     </div>
   );
 });

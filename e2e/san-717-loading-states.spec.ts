@@ -26,11 +26,16 @@ for (const vp of VIEWPORTS) {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
     test("empty state renders when no rentals match filter", async ({ page }) => {
-      // maxPrice=1 returns 0 results — impossible price floor
-      await page.goto("/rentals?maxPrice=1", { waitUntil: "networkidle" });
+      // Impossible neighborhood filter that will never match. (The old ?maxPrice= trick no
+      // longer works: SAN-1089 retired the USD/night cap, so the param is ignored.)
+      await page.goto("/rentals?neighborhood=ZZNoSuchNeighborhood999", {
+        waitUntil: "networkidle",
+      });
       await expect(page.getByTestId("rentals-browse")).toBeVisible();
       await expect(page.getByTestId("rentals-empty")).toBeVisible();
-      await expect(page.getByText("No rentals matched")).toBeVisible();
+      await expect(
+        page.getByText("No rentals currently match these filters"),
+      ).toBeVisible();
     });
   });
 }

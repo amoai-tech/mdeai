@@ -13,6 +13,10 @@ import {
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
+import {
+  parseGroundedToolResult,
+  resolveGroundedTitle,
+} from "@/lib/parse-grounded-tool-result";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -29,7 +33,7 @@ async function fetchGroundedSearch(
 }
 
 export function useGroundedSearchFastPath() {
-  const { state, setState } = useConciergeCoAgent();
+  const { setState } = useConciergeCoAgent();
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
@@ -50,13 +54,25 @@ export function useGroundedSearchFastPath() {
         Array.isArray((envelope as { results?: unknown[] }).results)
           ? (envelope as { results: unknown[] }).results.length
           : 0;
-      setState({
-        ...(state ?? {}),
+      // The fast path bypasses Mastra, so the cards on screen are invisible to the agent
+      // unless we hand over a compact copy. Follow-ups such as "which of these would you
+      // recommend?" must name a real row and must not invent amenities from nothing.
+      const parsed = parseGroundedToolResult(envelope);
+      const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => ({
+        id: row.id,
+        title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
+        ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
+        ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
+        ...(row.rating != null ? { rating: row.rating } : {}),
+      }));
+      setState((prev) => ({
+        ...(prev ?? {}),
         lastIntent: "restaurant_discovery",
-      });
+        lastGroundedResults,
+      }));
       return { count, pinCount: pins.length };
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, state],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
   );
 
   const runSearch = useCallback(
@@ -77,7 +93,9 @@ export function useGroundedSearchFastPath() {
       } catch (err) {
         console.error("[grounded-fast-path]", err);
         setToolResult(null);
-        return false;
+        // This is a failed café search, not an unhandled intent: report it
+        // to the send pipeline so Try again replays the same search.
+        throw err;
       } finally {
         busyRef.current = false;
       }

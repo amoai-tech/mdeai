@@ -1,7 +1,13 @@
+import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
+import {
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from "@/mastra/lib/rental-search-unavailable";
 import { searchRentals } from "@/mastra/tools/search-rentals";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,11 +17,16 @@ const bodySchema = z.object({
   neighborhood: z.string().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   maxPricePerNight: z.number().positive().optional(),
+  maxPriceMonthly: z.number().positive().safe().optional(),
+  budgetCurrency: z.enum(["COP", "USD"]).optional(),
   limit: z.number().int().min(1).max(20).optional().default(8),
   queryText: z.string().optional(),
-  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  checkIn: z.string().refine(isRealCalendarDate, "checkIn must be a real date, YYYY-MM-DD").optional(),
+  checkOut: z.string().refine(isRealCalendarDate, "checkOut must be a real date, YYYY-MM-DD").optional(),
   stayType: z.enum(["nightly", "monthly", "total_trip"]).optional(),
+}).refine((b) => isOrderedStay(b.checkIn, b.checkOut), {
+  message: "checkOut must not be before checkIn",
+  path: ["checkOut"],
 });
 
 /** Fast path — rental search without conciergeAgent round-trip. */
@@ -38,12 +49,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, minBedrooms, maxPricePerNight, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
+  const { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
   try {
+    // SAN-1502 PR2: the caller's own RLS-governed client, so an authorized test
+    // actor's results include published development fixtures and no one else's do.
+    const supabase = await createClient();
     const {
       results,
       total,
       source,
+      budgetNote,
       hybridUsed,
       embedStatus,
       embedFailureReason,
@@ -53,16 +68,19 @@ export async function POST(req: Request) {
       neighborhood,
       minBedrooms,
       maxPricePerNight,
+      maxPriceMonthly,
+      budgetCurrency,
       limit,
       queryText,
       checkIn,
       checkOut,
       stayType,
-    });
+    }, { client: supabase });
     return NextResponse.json({
       results,
       total,
       source,
+      budgetNote,
       hybridUsed,
       embedStatus,
       embedFailureReason,
@@ -70,7 +88,19 @@ export async function POST(req: Request) {
       rankExplanation,
     });
   } catch (error) {
-    console.error("[api/rentals/search]", error);
+    // SAN-1089: an unreadable database is 503, never `200 + results: []`. The chat fast path
+    // and /rentals key off the status to tell "search unavailable" from "no rentals match".
+    if (isRentalSearchUnavailable(error)) {
+      console.error("[api/rentals/search] unavailable:", error.reason);
+      return NextResponse.json(
+        {
+          error: "rental_search_unavailable",
+          message: "Rental search is temporarily unavailable. Please try again.",
+        },
+        { status: 503, headers: { "Retry-After": "5" } },
+      );
+    }
+    console.error("[api/rentals/search]", describeRentalSearchError(error));
     return NextResponse.json(
       {
         error: "rental_search_failed",

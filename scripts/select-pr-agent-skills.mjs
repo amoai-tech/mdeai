@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // The shared PR-Agent workflow reads these paths inside the action container, which mounts
@@ -8,6 +9,9 @@ import { pathToFileURL } from "node:url";
 const CONTAINER_WORKSPACE = "/github/workspace";
 
 const UNIVERSAL = "code-review";
+// The pinned loader ignores bare review.md paths; these focused entrypoints
+// bundle symlinks to the canonical domain reviews without copying their text.
+const REVIEW_SKILLS_ROOT = CONTAINER_WORKSPACE + "/scripts/pr-agent/skills";
 const SPECIALISTS = [
   "copilotkit",
   "mastra",
@@ -19,7 +23,8 @@ const SPECIALISTS = [
 
 // `src/proxy.ts` is MDE's Next.js auth proxy and delegates to `@/lib/supabase/middleware`.
 const matches = {
-  "supabase": (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
+  // SQL outside supabase/ can still modify authorization, schema or privileges.
+  "supabase": (p) => /\.sql$/i.test(p) || /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
   "mastra": (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   "copilotkit": (p) => /copilotkit|ag-ui/i.test(p),
   "maps": (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),
@@ -51,11 +56,7 @@ export function selectSkills(files) {
   const skills = [UNIVERSAL, ...SPECIALISTS.filter((skill) => selected.has(skill))];
   const paths = ["/github/workspace/.claude/skills/code-review/SKILL.md"];
   for (const skill of skills.slice(1)) {
-    if (skill === "maps") {
-      paths.push("/github/workspace/.claude/skills/maps/SKILL.md");
-    } else {
-      paths.push(`/github/workspace/.claude/skills/${skill}/references/review.md`);
-    }
+    paths.push(REVIEW_SKILLS_ROOT + "/" + skill + "/SKILL.md");
   }
   return {
     skills,
@@ -78,15 +79,47 @@ export function toRepoPath(containerPath) {
 }
 
 /**
- * Fail loudly when any exact file PR-Agent is about to load is absent. A parent `SKILL.md`
- * existing is not sufficient evidence: specialist selections load `references/review.md`.
- * `exists` is injectable so a regression test can prove the check against a fixture tree.
+ * Fail loudly if an entrypoint or its canonical review resource is absent.
+ * Upstream only discovers direct file paths named SKILL.md; bare review.md
+ * previously passed existence checks without providing specialist guidance.
+ * `exists` is injectable for fixture-based tests.
  */
-export function assertSelectedPathsExist(paths, exists = existsSync) {
+export function assertSelectedPathsExist(paths, exists = existsSync, repositoryRoot = process.cwd()) {
+  const root = realpathSync(repositoryRoot);
   for (const containerPath of paths) {
     const repoPath = toRepoPath(containerPath);
+    const skillPath = join(root, repoPath);
+    const location = relative(root, skillPath);
+    if (location === ".." || location.startsWith("../") || location.startsWith("..\\") || location.startsWith("/")) {
+      throw new Error("selected PR-Agent skill escapes checkout: " + repoPath);
+    }
+    if (!repoPath.endsWith("/SKILL.md")) {
+      throw new Error("PR-Agent cannot discover an individual skill not named SKILL.md: " + repoPath);
+    }
     if (!exists(repoPath)) {
-      throw new Error(`required trusted PR-Agent skill missing: ${repoPath} (selected as ${containerPath})`);
+      throw new Error("required trusted PR-Agent skill missing: " + repoPath + " (selected as " + containerPath + ")");
+    }
+    // The upstream loader inlines sibling markdown, following symlinks.
+    // Validate resolved targets before any provider credentials are available.
+    if (realpathSync(skillPath) !== skillPath) {
+      throw new Error("untrusted PR-Agent SKILL.md target: " + repoPath);
+    }
+    if (repoPath.startsWith("scripts/pr-agent/skills/")) {
+      const domain = repoPath.slice("scripts/pr-agent/skills/".length, -"/SKILL.md".length);
+      if (!SPECIALISTS.includes(domain) || repoPath !== "scripts/pr-agent/skills/" + domain + "/SKILL.md") {
+        throw new Error("unexpected PR-Agent specialist path: " + repoPath);
+      }
+      const reviewPath = "scripts/pr-agent/skills/" + domain + "/review.md";
+      if (!exists(reviewPath)) {
+        throw new Error("required trusted PR-Agent review resource missing: " + reviewPath);
+      }
+      const expectedCanonical = join(root, ".claude/skills", domain, "references/review.md");
+      const actual = realpathSync(join(root, reviewPath));
+      // Require the exact canonical file, not merely any path inside the checkout.
+      // An escaped canonical symlink must fail too.
+      if (actual !== expectedCanonical || realpathSync(expectedCanonical) !== expectedCanonical) {
+        throw new Error("untrusted PR-Agent review resource target: " + reviewPath);
+      }
     }
   }
 }

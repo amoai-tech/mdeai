@@ -1,0 +1,50 @@
+[
+  {
+    "id": "using-mde-skills-1",
+    "prompt": "A multi-team MDE request could be a plan, architecture review, or implementation. Pick the single canonical owner first; do not start work.",
+    "should_trigger": true,
+    "expected_owner": "using-mde-skills"
+  },
+  {
+    "id": "using-mde-skills-2",
+    "prompt": "This request combines an AI concierge failure, a release audit, and task-tracker cleanup. Decide who should lead the mixed request without executing it.",
+    "should_trigger": true,
+    "expected_owner": "using-mde-skills"
+  },
+  {
+    "id": "using-mde-skills-3",
+    "prompt": "A proposed change spans ticket delivery, database grants, and launch timing, but the user has not chosen the outcome. Route this ambiguity to one owner.",
+    "should_trigger": true,
+    "expected_owner": "using-mde-skills"
+  },
+  {
+    "id": "using-mde-skills-4",
+    "prompt": "Before any tools run, route an unclear MDE task that might be code review or release verification to exactly one execution skill.",
+    "should_trigger": true,
+    "expected_owner": "using-mde-skills"
+  },
+  {
+    "id": "using-mde-skills-5",
+    "prompt": "Review PR #297 code for security and regression risks; do not assess whether it can merge.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  },
+  {
+    "id": "using-mde-skills-6",
+    "prompt": "Explain what the term PostGIS means to a newcomer; this is only a definition.",
+    "should_trigger": false,
+    "expected_owner": "direct"
+  },
+  {
+    "id": "using-mde-skills-7",
+    "prompt": "The Next.js app crashes on boot; reproduce the failure and identify its root cause.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "using-mde-skills-8",
+    "prompt": "Verify the currently deployed event-ticket checkout is production ready and safely handles retries.",
+    "should_trigger": false,
+    "expected_owner": "prod"
+  }
+]

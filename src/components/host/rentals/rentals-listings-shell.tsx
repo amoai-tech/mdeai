@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import type { BrokerListingDetail } from "@/lib/rentals/broker-listing-detail";
+import type { RentalSelfAttestation } from "@/lib/rentals/run-self-attested-publish";
 import {
   filterBrokerListings,
   type BrokerListingStatusFilter,
@@ -20,11 +21,16 @@ import { cn } from "@/lib/utils";
 export type RentalsListingsShellProps = {
   initialListings: BrokerListingDetail[];
   loadError: string | null;
+  /** Route family for empty/error recovery links; defaults to legacy host. */
+  onboardingHref?: string;
+  homeHref?: string;
 };
 
 export function RentalsListingsShell({
   initialListings,
   loadError,
+  onboardingHref = "/host/rentals/onboarding",
+  homeHref = "/host/rentals",
 }: RentalsListingsShellProps) {
   const router = useRouter();
   const [listings, setListings] = useState(initialListings);
@@ -34,6 +40,8 @@ export function RentalsListingsShell({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [selfAttestedPublishing, setSelfAttestedPublishing] = useState(false);
+  const [selfAttestedError, setSelfAttestedError] = useState<string | null>(null);
 
   const visibleListings = useMemo(
     () => filterBrokerListings(listings, { query, status: statusFilter }),
@@ -48,6 +56,7 @@ export function RentalsListingsShell({
   const handlePublish = useCallback(async (listing: BrokerListingDetail) => {
     setPublishing(true);
     setPublishError(null);
+            setSelfAttestedError(null);
     try {
       const res = await fetch("/api/host/rentals/listings/publish", {
         method: "POST",
@@ -84,6 +93,50 @@ export function RentalsListingsShell({
     }
   }, []);
 
+  const handleSelfAttestedPublish = useCallback(
+    async (listing: BrokerListingDetail, attestation: RentalSelfAttestation) => {
+      setSelfAttestedPublishing(true);
+      setSelfAttestedError(null);
+      try {
+        const res = await fetch("/api/host/rentals/listings/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            apartmentId: listing.id,
+            mode: "self_attested",
+            advertisingAuthority: attestation.advertisingAuthority,
+            photoRights: attestation.photoRights,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          transition?: { apartmentId: string; listingWorkflowStatus: string };
+        };
+        if (!res.ok) {
+          throw new Error(body.error ?? "Publish failed");
+        }
+        if (body.transition) {
+          setListings((prev) =>
+            prev.map((row) =>
+              row.id === body.transition!.apartmentId
+                ? {
+                    ...row,
+                    listingWorkflowStatus: body.transition!
+                      .listingWorkflowStatus as BrokerListingDetail["listingWorkflowStatus"],
+                  }
+                : row,
+            ),
+          );
+        }
+      } catch (e) {
+        setSelfAttestedError(e instanceof Error ? e.message : "Publish failed");
+      } finally {
+        setSelfAttestedPublishing(false);
+      }
+    },
+    [],
+  );
+
   if (loadError) {
     return (
       <EmptyState
@@ -112,7 +165,7 @@ export function RentalsListingsShell({
             label: "Start onboarding",
             testId: "rentals-listings-onboarding",
             onClick: () => {
-              router.push("/host/rentals/onboarding");
+              router.push(onboardingHref);
             },
           },
         ]}
@@ -165,6 +218,7 @@ export function RentalsListingsShell({
           onSelect={(id) => {
             setSelectedId(id);
             setPublishError(null);
+            setSelfAttestedError(null);
           }}
         />
 
@@ -188,6 +242,7 @@ export function RentalsListingsShell({
                 onSelect={(id) => {
                   setSelectedId(id);
                   setPublishError(null);
+            setSelfAttestedError(null);
                 }}
               />
             )}
@@ -201,6 +256,7 @@ export function RentalsListingsShell({
                 onSelect={(id) => {
                   setSelectedId(id);
                   setPublishError(null);
+            setSelfAttestedError(null);
                 }}
               />
             </div>
@@ -214,7 +270,7 @@ export function RentalsListingsShell({
       >
         <p className="text-xs text-muted-foreground">
           Deep AI workflows (ad copy, multi-turn analysis) live in{" "}
-          <Link href="/host/rentals" className="text-primary hover:underline">
+          <Link href={homeHref} className="text-primary hover:underline">
             Concierge
           </Link>
           .
@@ -228,10 +284,14 @@ export function RentalsListingsShell({
         onClose={() => {
           setSelectedId(null);
           setPublishError(null);
+            setSelfAttestedError(null);
         }}
         onPublish={handlePublish}
         publishing={publishing}
         publishError={publishError}
+        onSelfAttestedPublish={handleSelfAttestedPublish}
+        selfAttestedPublishing={selfAttestedPublishing}
+        selfAttestedError={selfAttestedError}
       />
     </div>
   );

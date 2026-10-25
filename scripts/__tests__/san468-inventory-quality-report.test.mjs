@@ -6,6 +6,11 @@ import { fileURLToPath } from "node:url";
 
 const sqlPath = fileURLToPath(new URL("../sql/san468-inventory-quality-report.sql", import.meta.url));
 const pkgPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+// The canonical predicate is redefined by later migrations; point at the newest
+// definition so the required-blocker contract tracks the live function.
+const migrationPath = fileURLToPath(
+  new URL("../../supabase/migrations/20261009090300_san1431_neighborhood_gate.sql", import.meta.url),
+);
 
 /** Write/DDL keywords that would make the "read-only" report a mutation. */
 const WRITE_KEYWORDS = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create)\b/i;
@@ -35,7 +40,7 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
   assert.ok(start > 0 && end > start, "verdict block must exist");
   const verdict = executable.slice(start, end);
   let cursor = 0;
-  for (const flag of ["searchable", "map_ready", "launch_ready", "requestable"]) {
+  for (const flag of ["searchable", "map_ready", "requestable"]) {
     const idx = verdict.indexOf("as " + flag);
     assert.ok(idx > 0, flag + " must be present");
     const expression = verdict.slice(cursor, idx);
@@ -45,8 +50,100 @@ test("every readiness flag excludes metadata.is_test_fixture rows", () => {
     );
     cursor = idx;
   }
+  // launch_ready delegates to the canonical predicate; that predicate excludes fixtures.
+  assert.match(executable, /rental_listing_launch_blockers/);
+  assert.match(readFileSync(migrationPath, "utf8"), /test fixture/);
 });
 
+test("launch_ready requires verified owner, verified property, current freshness and authorized photo", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  // The report delegates the whole launch contract to the canonical predicate.
+  assert.match(executable, /cardinality\(public\.rental_listing_launch_blockers\(f\.id\)\) = 0/);
+  const migration = readFileSync(migrationPath, "utf8");
+  for (const required of [
+    "listing not verified",
+    "no verified owner/agent",
+    "no verified property evidence",
+    "no current active freshness",
+    "no authorized usable photo",
+    "no coordinates",
+    "invalid coordinate pair",
+    "PostGIS location drift",
+    "no canonical property identity",
+    "missing/invalid price or currency",
+    "no current availability evidence",
+    "no owner-control evidence",
+    "no publish permission",
+    "no viewing permission",
+    "no verified coordinate evidence",
+    "no verified neighborhood",
+  ]) {
+    assert.ok(migration.includes(required), "canonical predicate must require " + required);
+  }
+  assert.ok(
+    !/has_freshness_evidence/.test(migration),
+    "the predicate must not accept mere freshness-record existence",
+  );
+});
+
+test("every public flag excludes unverified external candidates", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  const start = executable.indexOf("verdict as (");
+  const end = executable.indexOf("dedup as (");
+  const verdict = executable.slice(start, end);
+  let cursor = 0;
+  for (const flag of ["publicly_eligible", "searchable", "map_ready", "requestable"]) {
+    const idx = verdict.indexOf("as " + flag);
+    assert.ok(idx > 0, flag + " must be present");
+    const expression = verdict.slice(cursor, idx);
+    assert.ok(
+      /not f\.is_external_candidate\s+and/.test(expression),
+      flag + " must exclude unverified external candidates conjunctively",
+    );
+    cursor = idx;
+  }
+});
+
+test("launch gate counts distinct canonical properties, not rows", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /is_canonical_launch_ready/);
+  assert.match(executable, /launch_ready_distinct/);
+  assert.match(executable, /duplicate_launch_ready_rows/);
+  const runner = readFileSync(runnerPath, "utf8");
+  assert.match(
+    runner,
+    /launch_ready_distinct/,
+    "the runner gate must assert distinct canonical properties",
+  );
+});
+
+test("freshness recency window is explicitly defined", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /interval '30 days'/);
+  assert.match(executable, /latest_freshness/);
+});
+
+test("authorized photo requires recorded publishing rights", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /rights_status = 'authorized'/);
+  assert.match(executable, /authorized_image_evidence/);
+});
+
+test("public and launch-ready rows can never carry PostGIS drift", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /publicly_eligible_with_drift/);
+  assert.match(executable, /launch_ready_with_drift/);
+  const runner = readFileSync(runnerPath, "utf8");
+  assert.match(runner, /publicly_eligible_with_drift/);
+  assert.match(runner, /launch_ready_with_drift/);
+});
+test("canonical freshness log takes priority over denormalized fields", () => {
+  const executable = executableLines(readFileSync(sqlPath, "utf8"));
+  assert.match(executable, /has_freshness_denorm_drift/);
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /order by f\.checked_at desc/);
+  assert.match(migration, /v_latest_status = 'active'/);
+});
 test("inventory-quality npm script is wired", () => {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   assert.match(

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import {
   CopilotChatConfigurationProvider,
@@ -10,13 +10,37 @@ import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-co
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { reportConciergeError } from "@/lib/concierge-error-store";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
-import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
+import { isAgentlessRoute } from "@/lib/copilot/agentless-routes";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+
+// A discovery-page provider mounts only when its route needs concierge AI.
+// Capture replay eligibility at this provider's mount, not at the root layout's mount:
+// a newly persisted turn must not reconnect into itself while its answer is visible.
+function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
+  const { activeThreadId, sessionThreadId, hasPersistedThread, restoredThread } = useThreadNav();
+  const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
+  const shouldReplay = Boolean(activeThreadId || restoredThread ||
+    (hasPersistedThread && initialRestorableThread === sessionThreadId));
+
+  return (
+    <CopilotKitProvider
+      {...getCopilotKitClientProps("conciergeAgent")}
+      onError={() => reportConciergeError(activeThreadId ?? sessionThreadId)}
+    >
+      <CopilotChatConfigurationProvider
+        agentId="conciergeAgent"
+        threadId={activeThreadId ?? sessionThreadId}
+        hasExplicitThreadId={shouldReplay}
+      >
+        <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
+      </CopilotChatConfigurationProvider>
+    </CopilotKitProvider>
+  );
+}
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
 function CopilotKitWithThread({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { activeThreadId } = useThreadNav();
   const deterministicE2E = isDeterministicE2E();
 
   // Deterministic browser tests exercise the real app/router with mocked
@@ -25,38 +49,20 @@ function CopilotKitWithThread({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  // These routes bring their own v2 provider in a layout, so the root
-  // conciergeAgent provider must NOT also wrap them:
-  //  - /chat            → the public concierge layout
-  //  - /host/event*     → the event wizard (HostEventProvider / hostEventAgent)
-  //  - Host OS routes   → the unified HostOsShell (hostOpsAgent) via host/layout
-  // SAN-1209: the Host OS shell now owns Overview · Events · Analytics under one
-  // persistent hostOpsAgent provider. Marketing /host and /host/rentals* stay on
-  // the root provider (isHostOsShellRoute returns false for them).
-  if (
-    pathname === "/chat" ||
-    pathname === "/host/event" || pathname.startsWith("/host/event/") ||
-    isHostOsShellRoute(pathname)
-  ) {
+  // Routes that own their agent surface, or have none at all, must not also get
+  // the root conciergeAgent:
+  //  - /login, /signup, /auth/* → no agents
+  //  - /chat                    → public concierge layout provider
+  //  - /host/event*             → event wizard (hostEventAgent)
+  //  - Host OS routes           → HostOsShell (hostOpsAgent)
+  //  - /app                     → shell only in Phase 1; /app/events mounts the
+  //                               Host OS shell. A future contextual chat mounts
+  //                               its own provider in the page that needs it.
+  if (isAgentlessRoute(pathname)) {
     return <>{children}</>;
   }
 
-  return (
-    <CopilotKitProvider
-      {...getCopilotKitClientProps("conciergeAgent")}
-      onError={reportConciergeError}
-    >
-      {/*
-        Non-chat pages (maps, cafés, events). Same thread rule as before the v2
-        move: a saved thread picked in the nav rail is explicit; with none
-        picked, the configuration provider mints one fresh thread per mount.
-        The /chat surface decides its own thread in ChatProvider.
-      */}
-      <CopilotChatConfigurationProvider agentId="conciergeAgent" threadId={activeThreadId}>
-        <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
-      </CopilotChatConfigurationProvider>
-    </CopilotKitProvider>
-  );
+  return <DiscoveryConciergeProvider>{children}</DiscoveryConciergeProvider>;
 }
 
 /** Client wrapper so `onError` can be passed to the provider without Server Component restrictions. */

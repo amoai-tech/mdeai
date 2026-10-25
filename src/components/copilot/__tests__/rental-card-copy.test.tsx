@@ -14,7 +14,7 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
     expect(src).not.toMatch(/Photo soon/i);
   });
 
-  it("rendered Save CTA uses user-facing tooltip, not internal ticket copy", () => {
+  it("does not render a dead Save CTA or internal ticket copy", () => {
     const html = renderToStaticMarkup(
       <RentalCard
         id="rental-1"
@@ -26,7 +26,8 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
         onSelect={() => undefined}
       />,
     );
-    expect(html).toContain('title="Save for later (coming soon)"');
+    expect(html).not.toContain('data-testid="rental-save-cta"');
+    expect(html).not.toMatch(/Save for later/i);
     expect(html).not.toMatch(/SCREEN-/);
     expect(html).not.toMatch(/Photo soon/i);
   });
@@ -94,5 +95,150 @@ describe("SAN-1349 rental card viewing CTA gating", () => {
     );
     expect(html).toContain('data-testid="rental-card"');
     expect(html).toContain("1BR Laureles");
+  });
+});
+
+describe("external source rental cards", () => {
+  it("shows a real monthly COP price, unknown bedrooms, and the original-advertisement link", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-fincaraiz-193916988"
+        listingId="candidate-fincaraiz-193916988"
+        title="Conquistadores"
+        neighborhood="Conquistadores"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={0}
+        bedrooms_unknown
+        tags={["external-source", "not-verified"]}
+        source_url="https://www.fincaraiz.com.co/apartaestudio-en-arriendo-en-conquistadores-medellin/193916988"
+        canScheduleViewing={false}
+        onSchedule={() => undefined}
+      />
+    );
+    expect(html).toContain("COP 2,100,000/mo");
+    expect(html).toContain("Bedrooms unknown");
+    expect(html).toContain("View original listing");
+    expect(html).not.toContain("COP 0/night");
+    expect(html).not.toContain("0 BR");
+    expect(html).not.toContain("Schedule viewing");
+  });
+
+  it("SAN-1502: never links an approved host smuggled behind userinfo", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-1"
+        listingId="candidate-evil-1"
+        title="Phishing"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://attacker@fincaraiz.com.co/phishing"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+    expect(html).not.toContain("attacker@");
+  });
+
+  it("SAN-1502: links the validated, normalized URL rather than the raw value", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-fincaraiz-193916988"
+        listingId="candidate-fincaraiz-193916988"
+        title="Conquistadores"
+        neighborhood="Conquistadores"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://WWW.FINCARAIZ.COM.CO/property/123"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).toContain("View original listing");
+    expect(html).toContain('href="https://www.fincaraiz.com.co/property/123"');
+  });
+
+  it("SAN-1502: never links an arbitrary host", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-2"
+        listingId="candidate-evil-2"
+        title="Bad"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://evil.example.com/fake"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+  });
+});
+
+// SAN-1503 — WE Home rents for COP 14,500,000 a month. Its "nightly" figure is only rent ÷ 30, so the
+// chat card must lead with the monthly rent and not offer "COP 483,333/night".
+describe("SAN-1503 rental card shows the stored monthly rent, not a derived nightly price", () => {
+  const base = { id: "r1", listingId: "a1", title: "WE Home", neighborhood: "El Poblado", bedrooms: 2, onSelect: () => undefined };
+
+  it("hides the derived nightly label when a monthly rent is stored", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...base} nightly_price={483333} price_monthly={14500000} currency="COP" />,
+    );
+    expect(html).toContain("COP 14,500,000/mo");
+    expect(html).not.toContain("/night");
+  });
+
+  it("still shows the nightly price when the listing has no monthly rent", () => {
+    const html = renderToStaticMarkup(<RentalCard {...base} nightly_price={75} />);
+    expect(html).toContain("$75/night");
+  });
+});
+
+describe("SAN-1505 mobile rental photo presentation", () => {
+  const card = {
+    id: "external-1",
+    listingId: "external-1",
+    title: "Laureles apartment",
+    neighborhood: "Laureles",
+    nightly_price: 0,
+    price_monthly: 3_000_000,
+    currency: "COP",
+    bedrooms: 2,
+    tags: ["external-source", "not-verified"],
+    canScheduleViewing: false,
+  } as const;
+
+  it("displays authorized media on phone width without unlocking Schedule viewing", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        {...card}
+        tags={[...card.tags]}
+        photoUrl="https://example.com/approved-apartment.webp"
+        onSchedule={() => undefined}
+      />,
+    );
+    expect(html).toContain('alt="Laureles apartment rental photo in Laureles"');
+    expect(html).toContain("approved-apartment.webp");
+    expect(html).toMatch(/aspect-\[16\/10\]/);
+    expect(html).not.toMatch(/class="hidden[^"]*"[^>]*>\s*<img/);
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("keeps no-photo mobile cards text-only while retaining the desktop fallback", () => {
+    const html = renderToStaticMarkup(<RentalCard {...card} tags={[...card.tags]} />);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("sm:flex");
+    expect(html).toContain("Photo");
+    expect(html).not.toContain('data-testid="rental-schedule-cta"');
   });
 });

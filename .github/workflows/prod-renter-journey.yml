@@ -1,0 +1,123 @@
+# Once a day: the complete renter viewing journey against production.
+#
+# It writes and deletes throwaway brokers, a listing, a lead and a showing, then re-queries
+# every row (leads, showings, apartments, landlord_profiles, profiles, auth users) and fails
+# if anything remains. See e2e/rental-conversion-journey.spec.ts.
+#
+# Anonymous viewing requests are limited to 20 per IP per hour, so this runs once a day and
+# refuses to start if another journey run began in the previous 55 minutes.
+name: Prod renter journey
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prod-renter-journey
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  journey:
+    name: renter viewing journey on production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Respect the hourly viewing-request limit
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # gh api --jq takes one filter string; it does not forward jq's --arg flag.
+          recent=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod-renter-journey.yml/runs?per_page=20" \
+            --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select((.created_at | fromdateiso8601) > (now - 3300))] | length")
+          echo "journey runs in the last 55 minutes: $recent"
+          if [ "$recent" -gt 0 ]; then
+            echo "::notice::another journey run started within the last 55 minutes; skipping to stay inside the 20/hour viewing limit"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run the journey
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_BASE_URL || 'https://www.mdeai.co' }}
+          SAN1205_JOURNEY_E2E: "1"
+          SAN1205_ALLOW_PRODUCTION_WRITES: "1"
+          SAN1205_CANDIDATE_SHA: ${{ github.sha }}
+          # The journey targets production; never boot the local dev server for it.
+          PW_SKIP_WEBSERVER: "1"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        # A write journey must not retry: a retry duplicates fixtures, spends the hourly
+        # anonymous-viewing budget, and can strand rows when the first attempt half-succeeded.
+        run: >-
+          npx playwright test e2e/rental-conversion-journey.spec.ts
+          --project=prod-smoke --retries=0
+          --trace=retain-on-failure
+
+      # A failed production journey is the one run someone has to debug later, but a Playwright
+      # trace can contain cookies, browser storage and request bodies from the session. This
+      # repository is public, so nothing raw is uploaded: the bundle is encrypted with a
+      # repository secret, and with no key configured the step refuses to upload and says so.
+      # always(), not failure(): a timeout cancels the job, where failure() is false.
+      # Limitation: a hard-killed runner cannot run any step, so nothing is preserved then.
+      - name: Encrypt failure artifacts
+        if: always()
+        env:
+          ARTIFACT_KEY: ${{ secrets.PROD_JOURNEY_ARTIFACT_KEY }}
+        run: |
+          set -euo pipefail
+          set --
+          [ -d test-results ] && set -- "$@" test-results
+          [ -d tmp/playwright-report ] && set -- "$@" tmp/playwright-report
+          if [ "$#" -eq 0 ]; then
+            echo "no failure artifacts to encrypt"
+            exit 0
+          fi
+          if [ -z "$ARTIFACT_KEY" ]; then
+            echo "::warning::PROD_JOURNEY_ARTIFACT_KEY is not configured; a trace can contain browser storage, so nothing is uploaded to this public repository"
+            exit 0
+          fi
+          tar -czf journey-artifacts.tgz "$@"
+          printf '%s' "$ARTIFACT_KEY" | openssl enc -aes-256-cbc -pbkdf2 -salt -pass stdin \
+            -in journey-artifacts.tgz -out journey-artifacts.tgz.enc
+          rm -f journey-artifacts.tgz
+          echo "encrypted artifacts ready"
+
+      - name: Upload encrypted failure artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prod-renter-journey-failure-encrypted
+          path: journey-artifacts.tgz.enc
+          if-no-files-found: ignore
+          retention-days: 7

@@ -37,12 +37,22 @@ function sanitizeHostEventAgUiInput(input: RunAgentInput): RunAgentInput {
   const messages = input.messages ?? [];
   if (messages.length <= 1) return input;
 
-  const userMessages = messages.filter((m) => m.role === "user");
-  if (userMessages.length === 0) return input;
+  // Keep the newest user turn AND everything after it. A frontend-tool
+  // continuation ends with the assistant tool-call + tool result; sending only
+  // the user message stranded the model on `set_event_draft` forever because it
+  // never saw that its previous tool call had succeeded.
+  let lastUserIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  if (lastUserIndex < 0) return input;
 
   return {
     ...input,
-    messages: [userMessages[userMessages.length - 1]!],
+    messages: messages.slice(lastUserIndex),
   };
 }
 
@@ -124,6 +134,7 @@ export class LoggingMastraAgent extends MastraAgent {
     // and aborts were silently mislabeled success.
     let status: "success" | "error" = "success";
     let completed = false;
+    let timedOut = false;
     let errorType: AgentErrorType | undefined;
     let errorMessage: string | undefined;
     const runInput =
@@ -151,7 +162,11 @@ export class LoggingMastraAgent extends MastraAgent {
       }),
       finalize(() => {
         // Unsubscribed before completing and without an error = client abort.
-        if (status === "success" && !completed) {
+        if (timedOut) {
+          status = "error";
+          errorType = "timeout";
+          errorMessage = "MDE agent turn timed out after 26 seconds";
+        } else if (status === "success" && !completed) {
           status = "error";
           errorType = "client_abort";
           errorMessage = "stream unsubscribed before completion (client abort)";
@@ -203,8 +218,18 @@ export class LoggingMastraAgent extends MastraAgent {
     // Subscribe inside the sink's async context so model calls triggered by the
     // AG-UI bridge (which starts its work synchronously on subscribe) inherit it.
     return new Observable<BaseEvent>((subscriber) => {
+      // Bound the ENTIRE CopilotKit turn, including tools, agent steps and the
+      // last SSE event. A per-model timeout does not bound multi-step turns.
+      // The error flows through tap/finalize, so ai_runs records the failure.
+      const deadline = setTimeout(() => {
+        timedOut = true;
+        subscriber.error(new Error("MDE agent turn timed out after 26 seconds"));
+      }, 26_000);
       const sub = runWithTokenSink(tokenSink, () => stream.subscribe(subscriber));
-      return () => sub.unsubscribe();
+      return () => {
+        clearTimeout(deadline);
+        sub.unsubscribe();
+      };
     });
   }
 }

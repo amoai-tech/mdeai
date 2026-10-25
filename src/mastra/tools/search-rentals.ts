@@ -1,9 +1,23 @@
 import { createTool } from '@mastra/core/tools';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { formatDateOnly } from '@/lib/rentals/date-only';
+import {
+  isAvailabilityUnconfirmed,
+  isSelfAttested,
+  isExternalSourceListing,
+  externalSourceProvider,
+} from '@/lib/rentals/provenance';
+import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
+import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
+import {
+  RentalSearchUnavailableError,
+  describeRentalSearchError,
+  isRentalSearchUnavailable,
+} from '../lib/rental-search-unavailable';
+import { unappliedRentalRequests } from '@/lib/rental-display';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
 
@@ -19,10 +33,21 @@ export const rentalSchema = z.object({
    */
   currency: z.string(),
   bedrooms: z.number(),
+  /** Dev-preview only: the source advert had no bedroom count, so `bedrooms` stays 0. */
+  bedrooms_unknown: z.boolean().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
+  /**
+   * Public photos for the Details panel (at most `RENTAL_PANEL_PHOTO_LIMIT`); `image` is always the
+   * first. Absent = just `image`.
+   */
+  images: z.array(z.string()).optional(),
+  /** Total photos the listing has, when more than `images` carries (the panel links to the rest). */
+  photo_count: z.number().int().optional(),
   source_url: z.string(),
+  /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
+  source_provider: z.string().optional(),
   /**
    * SAN-1349 — whether this listing may be requested for a viewing right now.
    *
@@ -55,10 +80,26 @@ export const rentalSchema = z.object({
 
 export type Rental = z.infer<typeof rentalSchema>;
 
+/**
+ * How many of an apartment's stored photos travel with each search result for the Details panel.
+ * A managed listing can hold dozens (one has 76); the panel needs a gallery, not the whole set, and
+ * every result is serialized into the page, so the list stays bounded. The panel links to the
+ * listing's own page (`photo_count` says how many there are), which shows every photo.
+ */
+export const RENTAL_PANEL_PHOTO_LIMIT = 12;
+
 export type RentalQuery = {
   neighborhood?: string;
   minBedrooms?: number;
   maxPricePerNight?: number;
+  /**
+   * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
+   * to listings priced in `budgetCurrency`; there is no exchange-rate source in this repository,
+   * so it is never converted or compared across currencies.
+   */
+  maxPriceMonthly?: number;
+  /** Currency `maxPriceMonthly` is expressed in. @default "COP" */
+  budgetCurrency?: string;
   limit?: number;
   queryText?: string;
   checkIn?: string;
@@ -69,7 +110,9 @@ export type RentalQuery = {
 export type RentalSearchResult = {
   results: Rental[];
   total: number;
-  source: 'supabase' | 'mock';
+  /** SAN-1089: only the real database. A search that cannot read it throws instead. */
+  source: 'supabase';
+  budgetNote?: string;
   hybridUsed?: boolean;
   embedStatus?: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -88,6 +131,35 @@ function getSupabaseClient() {
   });
   return _client;
 }
+
+/**
+ * SAN-1502 PR2 — RequestContext key the /api/copilotkit route uses to hand rental
+ * tools the caller's OWN user-scoped, RLS-governed client. Read back by
+ * searchRentalsTool so an authorized test actor's search sees development
+ * fixtures while an anonymous or ordinary caller never does.
+ */
+export const RENTAL_SUPABASE_KEY = 'rentalSupabase';
+
+/** The DB phase is authoritative, never NODE_ENV or a browser-editable flag. */
+export async function readRentalDevelopmentPhase(client: SupabaseClient): Promise<boolean> {
+  // A light test stub may omit RPC; actual Supabase clients always expose it.
+  if (typeof client.rpc !== 'function') return false;
+  const { data, error } = await client.rpc('rental_development_active');
+  if (error) {
+    throw new RentalSearchUnavailableError(`phase_query_failed${error.code ? `:${error.code}` : ''}`);
+  }
+  return data === true;
+}
+
+/**
+ * Optional per-request client. Omit it for the shared anonymous client; pass the
+ * caller's user-scoped client to let RLS decide what they may read.
+ */
+export type RentalSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
 
 export interface ApartmentRow {
   id: string;
@@ -111,6 +183,8 @@ export interface ApartmentRow {
   images: string[] | null;
   host_name: string | null;
   source_url: string | null;
+  /** SAN-1449: provenance metadata decides the "not independently verified" label. */
+  metadata?: unknown;
   available_from: string | null;
   available_to: string | null;
   pet_friendly: boolean;
@@ -130,6 +204,8 @@ export interface ApartmentRow {
   moderation_status: string;
   listing_workflow_status: string;
   status: string;
+  /** PostgreSQL computed column; canonical phase-aware requestability. */
+  rental_can_request_viewing?: boolean | null;
 }
 
 /** The columns that decide whether a listing may be requested for a viewing. */
@@ -140,13 +216,16 @@ export type RentalRequestabilityInput = {
   listing_workflow_status?: string | null;
   available_from?: string | null;
   available_to?: string | null;
+  metadata?: unknown;
+  rental_can_request_viewing?: boolean | null;
 };
 
 /**
  * The timezone the database uses for its availability calendar. `p1_schedule_tour_atomic`
- * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_from` /
- * `available_to`, so the application must read "today" in the same zone or it will disagree
- * with the database for five hours out of every day.
+ * compares `(p_scheduled_at AT TIME ZONE 'America/Bogota')::date` against `available_to`
+ * only — SAN-486 made viewing eligibility independent of the move-in date — so the
+ * application must read "today" in the same zone or it will disagree with the database
+ * for five hours out of every day.
  */
 export const RENTAL_AVAILABILITY_TIME_ZONE = 'America/Bogota';
 
@@ -174,33 +253,9 @@ export function rentalAvailabilityDate(at: Date = new Date()): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-/**
- * SAN-1349 — the application-side mirror of the database's new-request eligibility rule.
- *
- * The database is the authority: `public.p1_schedule_tour_atomic` re-checks ownership,
- * moderation, workflow state and the *selected* viewing time inside the transaction, and a
- * bypassed UI still fails there. This helper exists only so search results and the browse card
- * never advertise an action the database will reject.
- *
- * It fails CLOSED on missing proof. Every predicate is an allow-list, so an absent, null or
- * unexpected value is rejected rather than skipped — the helper can only ever under-claim
- * requestability, never over-claim it. It proves what the UI can actually know: canonical
- * owner, active, approved, published, and the listing's current-date availability window. It
- * cannot know the eventual viewing timestamp, so it must not claim more than that.
- */
-export function isRentalRequestable(
-  row: RentalRequestabilityInput,
-  today: Date = new Date(),
-): boolean {
-  if (!row.landlord_id) return false;
-  // Strict equality on purpose: `undefined` and `null` must reject, not fall through.
-  if (row.status !== 'active') return false;
-  if (row.moderation_status !== 'approved') return false;
-  if (row.listing_workflow_status !== 'published') return false;
-  const isoToday = rentalAvailabilityDate(today);
-  if (row.available_from && row.available_from > isoToday) return false;
-  if (row.available_to && row.available_to < isoToday) return false;
-  return true;
+/** Only the database's computed row-level requestability is authoritative. */
+export function isRentalRequestable(row: RentalRequestabilityInput): boolean {
+  return row.rental_can_request_viewing === true;
 }
 
 /**
@@ -234,6 +289,12 @@ export function nightlyPriceFrom(row: {
  * applied to a listing priced in the same currency.
  */
 export const NIGHTLY_BUDGET_CURRENCY = 'USD';
+
+// A PostgREST .or() expression uses raw filter grammar. Reject all reserved
+// characters before inserting the currency into currency.eq/currency.neq.
+const monthlyBudgetCurrencySchema = z.string()
+  .regex(/^[A-Za-z]{3}$/, 'Budget currency must be a three-letter code')
+  .transform((currency) => currency.toUpperCase());
 
 /**
  * The monthly ceiling equivalent to `Math.round(monthly / 30) <= nightlyCap`.
@@ -274,34 +335,121 @@ export function rentalPricePredicate(maxNightly: number | null): string {
   ].join(',');
 }
 
+/**
+ * The `or=(...)` predicate for a MONTHLY budget in a specific currency.
+ *
+ * `2,900,000 COP <= 3,500,000` is a real comparison; `2,900,000 <= 3500` is a unit error that
+ * silently deletes real supply, so the budget applies **only** to listings in its own currency.
+ * A same-currency listing must carry a stored monthly price to be a confirmed match — a
+ * nightly-only row is never presented as within a monthly budget. Listings in other currencies
+ * are retained (their card shows their own currency) and never compared to this budget.
+ */
+export function rentalMonthlyBudgetPredicate(maxMonthly: number, currency: string): string {
+  if (!Number.isFinite(maxMonthly) || maxMonthly <= 0) {
+    throw new RangeError('Monthly budget must be a finite positive number');
+  }
+  const budgetCurrency = monthlyBudgetCurrencySchema.parse(currency);
+  const sameCurrency = `currency.eq.${budgetCurrency}`;
+  const otherCurrency = `currency.neq.${budgetCurrency}`;
+  return [
+    `and(${otherCurrency},price_daily.not.is.null)`,
+    `and(${otherCurrency},price_monthly.not.is.null)`,
+    `and(${sameCurrency},price_monthly.not.is.null,price_monthly.lte.${maxMonthly})`,
+  ].join(',');
+}
+
+/** The price predicate for whichever budget the caller supplied. Monthly wins when both are set. */
+export function rentalBudgetPredicate(
+  maxNightly: number | null,
+  monthlyBudget: { amount: number; currency: string } | null,
+): string {
+  if (monthlyBudget) {
+    return rentalMonthlyBudgetPredicate(monthlyBudget.amount, monthlyBudget.currency);
+  }
+  return rentalPricePredicate(maxNightly);
+}
+
+/**
+ * The note shown with results when a monthly budget applied. Monthly budgets never compare across
+ * currencies, so say so rather than implying a converted or global match.
+ */
+export const MONTHLY_BUDGET_NOTE =
+  'Only listings priced in the requested currency at or below the monthly budget are confirmed matches. Listings in other currencies are shown without a budget comparison.';
+
+/** The note that matches whichever budget the query applied. */
+export function budgetNoteFor(query: RentalQuery): string | undefined {
+  if (typeof query.maxPriceMonthly === 'number') return MONTHLY_BUDGET_NOTE;
+  return query.maxPricePerNight != null ? EXTERNAL_RENTAL_BUDGET_NOTE : undefined;
+}
+
+/**
+ * Requests this search cannot filter (pets, furnished, parking…), read from the renter's own
+ * words in `queryText`. The card renderer turns them into the same sentence the fast path uses,
+ * so no chat path can imply the filter was applied or drop the request silently.
+ */
+export function unappliedRequestsFor(query: Pick<RentalQuery, 'queryText'>): string[] {
+  const text = query.queryText?.trim();
+  return text ? unappliedRentalRequests(text) : [];
+}
+
+/** The monthly budget implied by a query, or null. */
+export function monthlyBudgetFromQuery(
+  query: RentalQuery,
+): { amount: number; currency: string } | null {
+  if (typeof query.maxPriceMonthly !== 'number') return null;
+  return {
+    amount: query.maxPriceMonthly,
+    currency: monthlyBudgetCurrencySchema.parse(query.budgetCurrency ?? 'COP'),
+  };
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
+  const photos = (r.images ?? []).filter((u): u is string => typeof u === 'string' && u.length > 0);
+  const externalProvider = externalSourceProvider(r.metadata);
   return rentalSchema.parse({
     id: r.id,
     title: r.title,
     neighborhood: r.neighborhood,
     nightly_price: nightlyPrice,
     currency: (r.currency ?? 'USD').toUpperCase(),
+    // Production keeps its existing contract (unknown -> 0). Only the dev preview
+    // opts into null so it can say "Bedrooms unknown" instead of a false "Studio".
     bedrooms: r.bedrooms ?? 0,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
-    image: (r.images ?? [])[0] ?? '',
+    image: photos[0] ?? '',
+    // The Details panel shows `images`; without it a managed listing showed only its cover photo.
+    images: photos.length > 0 ? photos.slice(0, RENTAL_PANEL_PHOTO_LIMIT) : undefined,
+    photo_count: photos.length > RENTAL_PANEL_PHOTO_LIMIT ? photos.length : undefined,
     source_url: r.source_url ?? `https://mdeai.co/rentals/${r.slug ?? r.id}`,
+    source_provider: externalProvider ?? undefined,
     can_schedule_viewing: canScheduleViewing,
     schedule_viewing_url: canScheduleViewing
       ? `https://mdeai.co/rentals/${r.slug ?? r.id}`
       : null,
     host_name: r.host_name ?? 'Host',
-    availability: formatAvailability(r.available_from, r.available_to),
-    tags: deriveTags({
-      amenities: r.amenities ?? [],
-      pet_friendly: r.pet_friendly,
-      parking_included: r.parking_included,
-      minimum_stay_days: r.minimum_stay_days,
-      wifi_speed: r.wifi_speed,
-      price_daily: nightlyPrice,
-    }),
+    // Development discovery includes inactive records. A stored move-in date is
+    // not proof that an inactive listing can actually be rented.
+    availability: r.status !== 'active' || isAvailabilityUnconfirmed(r.metadata)
+      ? 'Availability unconfirmed'
+      : formatAvailability(r.available_from, r.available_to),
+    tags: (() => {
+      const tags = deriveTags({
+        amenities: r.amenities ?? [],
+        pet_friendly: r.pet_friendly,
+        parking_included: r.parking_included,
+        minimum_stay_days: r.minimum_stay_days,
+        wifi_speed: r.wifi_speed,
+        price_daily: nightlyPrice,
+      });
+      if (isSelfAttested(r.metadata)) tags.push('self-attested');
+      // Source attribution is independent of eligibility: use the preserved provenance,
+      // not the removed inventory_kind/allowed_action markers.
+      if (isExternalSourceListing(r.metadata)) tags.push('external-source');
+      return tags;
+    })(),
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
     price_monthly: r.price_monthly != null ? Number(r.price_monthly) : undefined,
@@ -309,12 +457,9 @@ export function rowToRental(r: ApartmentRow): Rental {
 }
 
 function formatAvailability(from: string | null, to: string | null): string {
-  if (!from && !to) return 'Available now';
-  const fmt = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (from && to) return `Available ${fmt(from)} – ${fmt(to)}`;
-  if (from) return `Available from ${fmt(from)}`;
-  return 'Available now';
+  if (!from) return 'Availability unconfirmed';
+  if (to) return `Available ${formatDateOnly(from)} – ${formatDateOnly(to)}`;
+  return `Available from ${formatDateOnly(from)}`;
 }
 
 function deriveTags(row: {
@@ -339,17 +484,6 @@ function deriveTags(row: {
   return tags.length ? tags : ['walkable'];
 }
 
-export function isAvailableForStay(
-  row: { available_from: string | null; available_to: string | null },
-  checkIn?: string,
-  checkOut?: string,
-): boolean {
-  if (!checkIn && !checkOut) return true;
-  if (checkOut && row.available_from && row.available_from > checkOut) return false;
-  if (checkIn && row.available_to && row.available_to < checkIn) return false;
-  return true;
-}
-
 export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
   return [...results].sort((a, b) => {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
@@ -361,235 +495,147 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
 
 async function searchRentalsFromSupabase(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<{ results: Rental[]; total: number; source: 'supabase' }> {
-  const client = getSupabaseClient();
+  const client = options?.client ?? getSupabaseClient();
   if (!client) {
-    throw new Error('Supabase client unavailable');
+    throw new RentalSearchUnavailableError('client_unavailable');
   }
 
   const limit = query.limit ?? 8;
+  // Reuse the caller's already-resolved phase instead of a second RPC round-trip.
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
   // A nightly budget is only comparable within its own currency; see rentalPricePredicate().
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
+  const monthlyBudget = monthlyBudgetFromQuery(query);
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
-  let q = client
-    .from('apartments')
-    .select(
-      'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status',
-      { count: 'exact' },
-    )
-    .eq('status', 'active')
-    .or(rentalPricePredicate(maxNightly))
-    // ponytail: ordering stays on the stored nightly price, so a monthly-only row sorts after
-    // every nightly-priced row and two different currencies are never meaningfully ordered
-    // against each other. Comparing 80,000 COP to 78 USD is the same unit error the predicate
-    // above refuses to make, so a normalised sort would be a lie dressed as a feature.
-    // Upgrade path: once a canonical currency (or an FX source) exists, order by a single
-    // normalised price — a generated column or an RPC, not a bigger `or=(...)`.
-    .order('price_daily', { ascending: true, nullsFirst: false })
-    .limit(limit);
+  const APARTMENT_SELECT =
+    'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing';
 
-  if (query.neighborhood) {
-    q = q.ilike('neighborhood', `%${query.neighborhood}%`);
-  }
-  if (typeof query.minBedrooms === 'number') {
-    q = q.gte('bedrooms', query.minBedrooms);
+  // `head` asks PostgREST for the exact count without shipping the rows, so the alternatives'
+  // total is still reported when the confirmed group already filled the page.
+  const baseQuery = (columns: string = APARTMENT_SELECT, head = false) => {
+    let b = client
+      .from('apartments')
+      .select(columns, head ? { count: 'exact', head: true } : { count: 'exact' });
+    if (!developmentMode) {
+      b = b.eq('status', 'active').not('landlord_id', 'is', null);
+    }
+    if (query.neighborhood) {
+      b = b.ilike('neighborhood', `%${query.neighborhood}%`);
+    }
+    if (typeof query.minBedrooms === 'number') {
+      b = b.gte('bedrooms', query.minBedrooms);
+    }
+    // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
+    // not expired), with "today" as the America/Bogota date the viewing RPC uses.
+    return applyAvailabilityFilters(b, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+      developmentMode,
+    });
+  };
+
+  type BudgetQueryResult = { data: unknown; error: { code?: string } | null; count: number | null };
+  const runQuery = async (q: PromiseLike<BudgetQueryResult>) => {
+    const { data, error, count } = await q;
+    if (error) {
+      // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
+      throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
+    }
+    return { rows: (data ?? []) as ApartmentRow[], count: count ?? 0 };
+  };
+
+  let confirmedRows: ApartmentRow[] = [];
+  let alternativeRows: ApartmentRow[] = [];
+  let total: number;
+  if (monthlyBudget || maxNightly !== null) {
+    // A budget is only comparable inside its own currency, so rows that CONFIRM it must not be
+    // crowded out of the page by cheaper-looking rows in another currency (USD 1,300 sorts before
+    // COP 2,100,000 as a raw number). Fetch the confirmed same-currency set first, then fill the
+    // remainder with the labelled, never-compared alternatives. Ordering stays inside one currency,
+    // so no cross-currency amount comparison is ever made.
+    const budgetCurrency = monthlyBudget ? monthlyBudget.currency : NIGHTLY_BUDGET_CURRENCY;
+    const predicate = rentalBudgetPredicate(maxNightly, monthlyBudget);
+    const confirmed = await runQuery(
+      baseQuery()
+        .eq('currency', budgetCurrency)
+        .or(predicate)
+        .order(monthlyBudget ? 'price_monthly' : 'price_daily', {
+          ascending: true,
+          nullsFirst: false,
+        })
+        .limit(limit),
+    );
+    const remaining = Math.max(0, limit - confirmed.rows.length);
+    // The alternatives' exact count is independent of how many of them fit on this page, so a full
+    // confirmed page still reports the true total instead of dropping the alternatives from it.
+    const countAlternatives = async () => {
+      const { count, error } = await baseQuery('id', true)
+        .neq('currency', budgetCurrency)
+        .or(predicate);
+      if (error) {
+        throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
+      }
+      return count ?? 0;
+    };
+    const alternatives =
+      remaining === 0
+        ? { rows: [] as ApartmentRow[], count: await countAlternatives() }
+        : await runQuery(
+            baseQuery()
+              .neq('currency', budgetCurrency)
+              .or(predicate)
+              .order('price_daily', { ascending: true, nullsFirst: false })
+              .limit(remaining),
+          );
+    confirmedRows = confirmed.rows;
+    alternativeRows = alternatives.rows;
+    total = confirmed.count + alternatives.count;
+  } else {
+    const all = await runQuery(
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).limit(limit),
+    );
+    confirmedRows = all.rows;
+    total = all.count;
   }
 
-  // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-  // SAN-1349: "today" is the America/Bogota date, matching the timezone the viewing RPC uses,
-  // so the query window and isRentalRequestable() cannot disagree near local midnight.
-  const today = rentalAvailabilityDate();
-  const checkInDate = query.checkIn ?? today;
-  q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-  if (query.checkOut) {
-    // available_from IS NULL (available now) OR available_from <= checkOut
-    q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-  }
-
-  const { data, error, count } = await q;
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  let results = ((data ?? []) as ApartmentRow[]).map(rowToRental);
-  if (query.stayType === 'monthly') {
-    results = sortForMonthlyStay(results);
-  }
-  return { results, total: count ?? results.length, source: 'supabase' };
-}
-
-// Fallback mock kept for offline/test environments.
-// SAN-1349: these fixtures carry no ownership proof, so every mock is deliberately NOT
-// requestable (`can_schedule_viewing: false`, `schedule_viewing_url: null`). A mock must never
-// advertise a viewing action that the database would reject.
-const MOCK_RENTALS: Rental[] = [
-  {
-    id: 'rnt_lau_001',
-    title: 'Bright 2BR with Balcony in Laureles',
-    neighborhood: 'Laureles',
-    nightly_price: 78,
-    currency: 'USD',
-    bedrooms: 2,
-    wifi: true,
-    amenities: ['wifi', 'workspace', 'kitchen', 'balcony', 'washer'],
-    image: 'https://images.unsplash.com/photo-rental-lau-001',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Andrés Restrepo',
-    availability: 'Available May 15 – Aug 30, 2026',
-    tags: ['long-stay', 'remote-work', 'walkable'],
-    latitude: 6.2530,
-    longitude: -75.5910,
-  },
-  {
-    id: 'rnt_lau_002',
-    title: 'Modern 1BR Loft near Primer Parque',
-    neighborhood: 'Laureles',
-    nightly_price: 64,
-    currency: 'USD',
-    bedrooms: 1,
-    wifi: true,
-    amenities: ['wifi', 'workspace', 'kitchen', 'gym', 'rooftop'],
-    image: 'https://images.unsplash.com/photo-rental-lau-002',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_002',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Sofía Vélez',
-    availability: 'Available now – Jul 10, 2026',
-    tags: ['solo-traveler', 'remote-work', 'pet-friendly'],
-    latitude: 6.2515,
-    longitude: -75.5922,
-  },
-  {
-    id: 'rnt_lau_003',
-    title: 'Quiet Studio off Avenida Nutibara',
-    neighborhood: 'Laureles',
-    nightly_price: 42,
-    currency: 'USD',
-    bedrooms: 0,
-    wifi: true,
-    amenities: ['wifi', 'kitchen', 'workspace'],
-    image: 'https://images.unsplash.com/photo-rental-lau-003',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_003',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Camila Ortiz',
-    availability: 'Available Jun 1 – Dec 31, 2026',
-    tags: ['budget', 'long-stay', 'quiet'],
-    latitude: 6.2525,
-    longitude: -75.5932,
-  },
-  {
-    id: 'rnt_lau_004',
-    title: 'Spacious 3BR Penthouse · Segundo Parque',
-    neighborhood: 'Laureles',
-    nightly_price: 110,
-    currency: 'USD',
-    bedrooms: 3,
-    wifi: true,
-    amenities: ['wifi', 'pool', 'workspace', 'kitchen', 'washer', 'balcony'],
-    image: 'https://images.unsplash.com/photo-rental-lau-004',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_004',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Miguel Arango',
-    availability: 'Available Jul 1 – Oct 31, 2026',
-    tags: ['family', 'premium', 'long-stay'],
-    latitude: 6.2510,
-    longitude: -75.5905,
-  },
-  {
-    id: 'rnt_lau_005',
-    title: 'Cozy 1BR near La Setenta',
-    neighborhood: 'Laureles',
-    nightly_price: 55,
-    currency: 'USD',
-    bedrooms: 1,
-    wifi: true,
-    amenities: ['wifi', 'kitchen', 'workspace', 'smart-tv'],
-    image: 'https://images.unsplash.com/photo-rental-lau-005',
-    source_url: 'https://mdeai.co/rentals/rnt_lau_005',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Laura Gómez',
-    availability: 'Available now – Sep 30, 2026',
-    tags: ['nightlife', 'walkable', 'solo-traveler'],
-    latitude: 6.2535,
-    longitude: -75.5917,
-  },
-  {
-    id: 'rnt_pob_001',
-    title: 'Sunny 2BR in El Poblado',
-    neighborhood: 'El Poblado',
-    nightly_price: 95,
-    currency: 'USD',
-    bedrooms: 2,
-    wifi: true,
-    amenities: ['wifi', 'pool', 'gym', 'kitchen', 'concierge'],
-    image: 'https://images.unsplash.com/photo-rental-pob-001',
-    source_url: 'https://mdeai.co/rentals/rnt_pob_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Patricia Lopera',
-    availability: 'Available Jun 1 – Aug 31, 2026',
-    tags: ['nightlife', 'walkable', 'gym'],
-    latitude: 6.2090,
-    longitude: -75.5655,
-  },
-  {
-    id: 'rnt_env_001',
-    title: 'Cozy Studio in Envigado',
-    neighborhood: 'Envigado',
-    nightly_price: 38,
-    currency: 'USD',
-    bedrooms: 0,
-    wifi: true,
-    amenities: ['wifi', 'kitchen'],
-    image: 'https://images.unsplash.com/photo-rental-env-001',
-    source_url: 'https://mdeai.co/rentals/rnt_env_001',
-    can_schedule_viewing: false,
-    schedule_viewing_url: null,
-    host_name: 'Juliana Mejía',
-    availability: 'Available now – Aug 15, 2026',
-    tags: ['budget', 'quiet', 'long-stay'],
-    latitude: 6.1750,
-    longitude: -75.5908,
-  },
-];
-
-// skipcq: JS-0067 - module-local helper; not browser global scope
-function searchRentalsFromMock(query: RentalQuery): { results: Rental[]; total: number; source: 'mock' } {
-  let results = MOCK_RENTALS.slice();
-  if (query.neighborhood) {
-    const q = query.neighborhood.toLowerCase();
-    results = results.filter((r) => r.neighborhood.toLowerCase().includes(q));
-  }
-  if (typeof query.minBedrooms === 'number') {
-    const minBedrooms = query.minBedrooms;
-    results = results.filter((r) => r.bedrooms >= minBedrooms);
-  }
-  if (typeof query.maxPricePerNight === 'number') {
-    const maxPricePerNight = query.maxPricePerNight;
-    results = results.filter((r) => r.nightly_price <= maxPricePerNight);
-  }
-  const total = results.length;
-  return { results: results.slice(0, query.limit ?? 8), total, source: 'mock' };
+  // Group order is the contract: confirmed matches first, labelled alternatives after. Monthly
+  // ordering runs INSIDE each group, so it can never move an alternative above a match.
+  const toRentals = (list: ApartmentRow[]) =>
+    query.stayType === 'monthly' ? sortForMonthlyStay(list.map(rowToRental)) : list.map(rowToRental);
+  const results = [...toRentals(confirmedRows), ...toRentals(alternativeRows)];
+  return { results, total, source: 'supabase' };
 }
 
 // Named export for direct workflow calls (sync signature kept for compatibility;
 // internally async — callers that need real DB data should await searchRentals())
 export async function searchRentals(
   query: RentalQuery,
+  options?: RentalSearchOptions,
 ): Promise<RentalSearchResult> {
+  // Direct search callers may bypass the Mastra input schema; validate before
+  // intelligent retrieval or a database filter is constructed.
+  if (query.budgetCurrency !== undefined) monthlyBudgetCurrencySchema.parse(query.budgetCurrency);
+  if (query.maxPriceMonthly !== undefined &&
+      (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
+    throw new RangeError('Monthly budget must be a finite positive number');
+  }
   const limit = query.limit ?? 8;
+  const client = options?.client ?? getSupabaseClient();
+  // Development inventory is already returned by canonical RLS-backed search.
+  // Never add a second, allowlisted external search that can duplicate or hide it.
+  const developmentMode = client ? await readRentalDevelopmentPhase(client) : false;
 
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
-      const intel = await searchRentalsIntelligent(query);
+      // Load after tool initialization; intelligence search reuses our row-mapping helpers.
+      const { searchRentalsIntelligent } = await import('../lib/intelligence-rental-search');
+      const intel = await searchRentalsIntelligent(query, { ...options, developmentPhase: developmentMode });
       const latencyMs = Date.now() - started;
       await writeSearchLog({
         queryText: query.queryText,
@@ -604,9 +650,12 @@ export async function searchRentals(
         groundingUsed: false,
         rankExplanation: intel.rankExplanation,
       });
+      const external = developmentMode ? [] : await getOptionalExternalRentals(query);
+      const mixed = mixRentalResults(intel.results, external, limit);
       return {
-        results: intel.results.slice(0, limit),
-        total: intel.total,
+        results: mixed.results,
+        total: intel.total + mixed.distinctExternal,
+        budgetNote: budgetNoteFor(query),
         source: intel.source,
         hybridUsed: intel.hybridUsed,
         embedStatus: intel.embedStatus,
@@ -617,31 +666,57 @@ export async function searchRentals(
     } catch (err) {
       console.warn(
         '[search-rentals] intelligent search failed, falling back to structured search:',
-        (err as Error).message,
+        describeRentalSearchError(err),
       );
     }
   }
 
   try {
-    const { results, total, source } = await searchRentalsFromSupabase(query);
-    return { results, total, source };
+    const { results, total, source } = await searchRentalsFromSupabase(query, {
+      ...options,
+      developmentPhase: developmentMode,
+    });
+    const external = developmentMode ? [] : await getOptionalExternalRentals(query);
+    const mixed = mixRentalResults(results, external, limit);
+    return {
+      results: mixed.results, total: total + mixed.distinctExternal, source,
+      budgetNote: budgetNoteFor(query),
+    };
   } catch (err) {
-    console.warn(
-      '[search-rentals] Supabase query failed, falling back to mock:',
-      (err as Error).message,
-    );
+    // SAN-1089: there is no demo fallback. An unreadable database is "search unavailable" —
+    // a different answer from a healthy query that matched nothing. Log only a stable reason
+    // code (or the error class name) — never the driver message, which can carry hostnames,
+    // ports or connection details.
+    const reason = describeRentalSearchError(err);
+    console.error('[search-rentals] rental search unavailable:', reason);
+    throw isRentalSearchUnavailable(err) ? err : new RentalSearchUnavailableError(reason);
   }
-  return searchRentalsFromMock(query);
 }
 
 export const searchRentalsTool = createTool({
   id: 'search-rentals',
   description:
-    'Search Medellín rentals by neighborhood, bedrooms, and price. Returns rental cards with source_url and a truthful viewing contract: can_schedule_viewing plus schedule_viewing_url (null when the listing is not requestable). Queries live Supabase apartments table; falls back to demo data if DB is unavailable. Never tell the user a rental can be scheduled when can_schedule_viewing is false.',
+    'Search real Supabase Medellín apartment records using phase-aware RLS. Returns cards and the database-computed can_schedule_viewing contract; unpriced listings are shown as price not provided. Development follow-up requests for external-source records are not provider-confirmed appointments. Never invent listing facts or claim a showing is confirmed. Database outages are errors, never no-results.',
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
+    maxPriceMonthly: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        'Monthly rent ceiling in the listing currency, e.g. 3500000 with budgetCurrency COP. Applied only to listings already priced in that currency.',
+      ),
+    stayType: z
+      .enum(['nightly', 'monthly', 'total_trip'])
+      .optional()
+      .describe(
+        "Stay pricing period. 'monthly' sorts by monthly price and must be set when the renter asks per month; never convert a monthly budget into a nightly cap.",
+      ),
+    budgetCurrency: monthlyBudgetCurrencySchema
+      .optional()
+      .describe('Three-letter budget currency code (e.g. COP). Defaults to COP.'),
     limit: z.number().int().min(1).max(20).default(8),
     queryText: z
       .string()
@@ -655,7 +730,10 @@ export const searchRentalsTool = createTool({
         evidenceText: z.string().nullable().optional(),
       }),
     ),
-    source: z.enum(['supabase', 'mock']),
+    source: z.literal('supabase'),
+    budgetNote: z.string().optional(),
+    /** Requests this search cannot filter (pets, furnished…); the cards must disclose them. */
+    unappliedRequests: z.array(z.string()).optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -669,11 +747,27 @@ export const searchRentalsTool = createTool({
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
-    const { neighborhood, minBedrooms, maxPricePerNight, limit = 8, queryText } = inputData;
-    const { results, source, hybridUsed, rankExplanation } = await runAuditedSearch(
+    const {
+      neighborhood,
+      minBedrooms,
+      maxPricePerNight,
+      maxPriceMonthly,
+      stayType,
+      budgetCurrency,
+      limit = 8,
+      queryText,
+    } = inputData;
+    // SAN-1502 PR2: use the caller's own RLS-governed client when the runtime
+    // supplied one, so an authorized test actor sees development fixtures and
+    // everyone else is unchanged.
+    const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
+      | SupabaseClient
+      | undefined;
+    const options = rentalClient ? { client: rentalClient } : undefined;
+    const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
-      searchRentals,
-      { neighborhood, minBedrooms, maxPricePerNight, limit, queryText },
+      (q: RentalQuery) => searchRentals(q, options),
+      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 
@@ -701,6 +795,8 @@ export const searchRentalsTool = createTool({
         evidenceText: "evidenceText" in r ? (r as { evidenceText?: string | null }).evidenceText : undefined,
       })),
       source,
+      budgetNote,
+      unappliedRequests: unappliedRequestsFor({ queryText }),
       hybridUsed,
       rankExplanation,
     };

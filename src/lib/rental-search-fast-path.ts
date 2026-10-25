@@ -3,19 +3,22 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
-  shouldInstantRentalClarify,
   type RentalSearchApiParams,
 } from "@/lib/rental-query-parser";
 
 export {
   buildRentalSearchParams,
   canFastPathRentalSearch,
-  shouldInstantRentalClarify,
 };
 
 export function rentalsToToolEnvelope(
   cards: Rental[],
-  meta?: { hybridUsed?: boolean; rankExplanation?: Array<{ factor: string; score: number; note: string }> },
+  meta?: {
+    total?: number;
+    hybridUsed?: boolean;
+    rankExplanation?: Array<{ factor: string; score: number; note: string }>;
+    budgetNote?: string;
+  },
 ) {
   return {
     results: cards.map((r) => ({
@@ -23,14 +26,22 @@ export function rentalsToToolEnvelope(
       title: r.title,
       neighborhood: r.neighborhood,
       bedrooms: r.bedrooms,
+      bedrooms_unknown: r.bedrooms_unknown,
       nightly_price: r.nightly_price,
       price_monthly: r.price_monthly,
+      currency: r.currency,
       host_name: r.host_name,
       wifi: r.wifi,
       amenities: r.amenities,
       availability: r.availability,
       photo_url: r.image,
       image_url: r.image,
+      // SAN-1504: the chat Details panel renders the complete result. These were dropped here, so a
+      // fast-path card could not show its photo list, photo count or source provider.
+      image: r.image,
+      images: r.images,
+      photo_count: r.photo_count,
+      source_provider: r.source_provider,
       source_url: r.source_url,
       // SAN-1349: the envelope forwards the requestability contract verbatim. It never
       // recreates the viewing URL — a URL exists only when the tool proved the listing is
@@ -41,10 +52,15 @@ export function rentalsToToolEnvelope(
       latitude: r.latitude,
       longitude: r.longitude,
     })),
-    total: cards.length,
+    // Preserve the backend match count. A short chat result is not the entire
+    // catalog, and explicit "show 3" requests must not turn 42 into "3 total".
+    total: typeof meta?.total === "number" && Number.isSafeInteger(meta.total) && meta.total >= cards.length
+      ? meta.total
+      : cards.length,
     source: "supabase" as const,
     hybridUsed: meta?.hybridUsed,
     rankExplanation: meta?.rankExplanation,
+    budgetNote: meta?.budgetNote,
   };
 }
 

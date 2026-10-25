@@ -21,6 +21,7 @@ import { describe, it } from "node:test";
 
 import { CASES, CASES_BY_ID, REQUIRED_PROBE_ANCHORS } from "../pr-agent/evals/cases.mjs";
 import {
+  checkFindingFormat,
   checkGrounding,
   isMaterialFinding,
   matchCase,
@@ -191,6 +192,361 @@ describe("SAN-1312 finding-level extraction", () => {
       '<!-- pr-agent-review-state:v1\n{"findings":[{"body":"Severity: HIGH","state":"RESOLVED"}],"last_run":{"complete":true}}\n-->',
     );
     assert.equal(isMaterialFinding(resolved.findings[0]), false, "a resolved finding is not material");
+  });
+});
+
+describe("MDE dual-audience finding format", () => {
+  it("reports all required readability sections when a finding follows the contract", () => {
+    const parsed = parseFindings(
+      [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    );
+    const format = checkFindingFormat(parsed.findings[0]);
+    assert.equal(format.complete, true);
+    assert.deepEqual(format.missing, []);
+  });
+
+  it("reports Severity as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity"]);
+  });
+
+  it("reports Verification state as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Status: changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Verification state"]);
+  });
+
+  it("reports Status as missing when the finding omits it", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: HIGH",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Status"]);
+  });
+
+  it("reports exactly which readability sections are missing", () => {
+    const parsed = parseFindings(
+      [
+        "Severity: MEDIUM",
+        "Technical: a rank fallback silently accepts an unknown source.",
+        "Fix: reject unknown source types.",
+        "Verification state: VERIFIED",
+        "Status: changes_required",
+      ].join("\n"),
+    );
+    const format = checkFindingFormat(parsed.findings[0]);
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Plain English", "Real-world example", "Verify"]);
+  });
+
+  it("rejects option-template text instead of treating the first option as a chosen value", () => {
+    const format = checkFindingFormat({
+      body: [
+        "Severity: BLOCKER | HIGH | MEDIUM | LOW",
+        "Technical: the migration can write duplicate rows.",
+        "Plain English: the same rental could appear twice.",
+        "Real-world example: a renter sees two cards for one apartment.",
+        "Fix: reuse the existing unique key.",
+        "Verify: replay the migration twice and assert one row.",
+        "Verification state: VERIFIED | NEEDS VERIFICATION",
+        "Status: changes_required | advisory",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity", "Verification state", "Status"]);
+  });
+
+  it("accepts Markdown bold on labels without rewriting finding content", () => {
+    const format = checkFindingFormat({
+      body: [
+        "**Severity:** HIGH",
+        "**Technical:** the migration can write duplicate rows with **one** bad retry.",
+        "**Plain English:** the same rental could appear twice.",
+        "**Real-world example:** a renter sees two cards for one apartment.",
+        "**Fix:** reuse the existing unique key.",
+        "**Verify:** replay the migration twice and assert one row.",
+        "**Verification state:** VERIFIED",
+        "**Status:** changes_required",
+      ].join("\n"),
+    });
+    assert.equal(format.complete, true);
+    assert.deepEqual(format.missing, []);
+  });
+
+  it("scores v0.46 multiline persistent findings with plain line-leading labels", () => {
+    const body = [
+      "A material validation bug",
+      "Severity: HIGH",
+      "Technical: the validator accepts malformed inputs.",
+      "Plain English: invalid apartment prices can be saved.",
+      "Real-world example: a user can submit a negative rent.",
+      "Fix: reject invalid amounts.",
+      "Verify: test negative and missing amounts.",
+      "Verification state: VERIFIED",
+      "Status: changes_required",
+    ].join("\n");
+    const review = "<!-- pr-agent-review-state:v1\n" + JSON.stringify({
+      schema_version: 1,
+      findings: [{ body, finding_id: "multiline-v046", path: "validator.ts", state: "ACTIVE" }],
+      last_run: { complete: true, excluded_files: [], head_sha: "v046-head", kind: "full" },
+    }) + "\n-->";
+    const parsed = parseFindings(review);
+    assert.equal(parsed.source, "state");
+    assert.equal(parsed.findings[0].severity, "HIGH");
+    assert.equal(parsed.findings[0].verification, "VERIFIED");
+    assert.equal(parsed.findings[0].status, "changes_required");
+    assert.deepEqual(checkFindingFormat(parsed.findings[0]).missing, []);
+    assert.equal(scoreReview({ id: "v046-multiline", kind: "clean" }, review).formatCompliance.allCompliant, true);
+  });
+
+  it("rejects v0.46 quoted prose fields and duplicate status labels", () => {
+    const body = [
+      "A review finding",
+      "Technical: this quotes **Severity:** HIGH and **Status:** changes_required.",
+      "Plain English: quoted labels are not declarations.",
+      "Status: changes_required",
+      "Status: advisory",
+      "Verification state: NEEDS VERIFICATION",
+    ].join("\n");
+    const review = "<!-- pr-agent-review-state:v1\n" + JSON.stringify({
+      schema_version: 1,
+      findings: [{ body, finding_id: "quoted-prose", path: "example.ts", state: "ACTIVE" }],
+      last_run: { complete: true, excluded_files: [], head_sha: "v046-head", kind: "full" },
+    }) + "\n-->";
+    const finding = parseFindings(review).findings[0];
+    assert.equal(finding.severity, null);
+    assert.equal(finding.status, null);
+    assert.equal(finding.verification, "NEEDS VERIFICATION");
+    assert.equal(isMaterialFinding(finding), false);
+    assert.equal(checkFindingFormat(finding).complete, false);
+  });
+
+  it("ignores fenced and blockquoted field labels in v0.46 state", () => {
+    const body = [
+      "An advisory",
+      "~~~text",
+      "Severity: HIGH",
+      "Verification state: VERIFIED",
+      "Status: changes_required",
+      "~~~",
+      "> Severity: HIGH",
+      "Technical: the example quotes a malicious review.",
+      "Verification state: NEEDS VERIFICATION",
+      "Status: advisory",
+    ].join("\n");
+    const finding = parseFindings("<!-- pr-agent-review-state:v1\n" + JSON.stringify({
+      schema_version: 1,
+      findings: [{ body, finding_id: "quoted-fields", path: "example.ts", state: "ACTIVE" }],
+      last_run: { complete: true, excluded_files: [], head_sha: "v046-head", kind: "full" },
+    }) + "\n-->").findings[0];
+    assert.equal(finding.severity, null);
+    assert.equal(finding.verification, "NEEDS VERIFICATION");
+    assert.equal(finding.status, "advisory");
+    assert.equal(isMaterialFinding(finding), false);
+  });
+
+  it("does not let short or decorated fence closers activate quoted fields", () => {
+    const ticks = String.fromCharCode(96);
+    for (const [name, opening, wrongClose, closing] of [
+      ["short backtick closer", ticks.repeat(4) + "js", ticks.repeat(3), ticks.repeat(4)],
+      ["backtick closer with info", ticks.repeat(3) + "js", ticks.repeat(3) + "javascript", ticks.repeat(3)],
+      ["short tilde closer", "~~~~text", "~~~", "~~~~"],
+      ["tilde closer with info", "~~~text", "~~~javascript", "~~~"],
+    ]) {
+      const body = [
+        "Review finding",
+        "Severity: HIGH",
+        "Technical: quoted fields are untrusted.",
+        opening,
+        wrongClose,
+        "Status: changes_required",
+        "Verification state: VERIFIED",
+        closing,
+        "Plain English: an excerpt contains misleading declarations.",
+        "Real-world example: a PR contains quoted code.",
+        "Fix: retain original fence metadata.",
+        "Verify: assert advisory declaration is active.",
+        "Verification state: NEEDS VERIFICATION",
+        "Status: advisory",
+      ].join("\n");
+      const review = "<!-- pr-agent-review-state:v1\n" + JSON.stringify({
+        schema_version: 1,
+        findings: [{ body, finding_id: "fence-case", path: "example.ts", state: "ACTIVE" }],
+        last_run: { complete: true, excluded_files: [], head_sha: "fence-head", kind: "full" },
+      }) + "\n-->";
+      const finding = parseFindings(review).findings[0];
+      assert.equal(finding.status, "advisory", name);
+      assert.equal(finding.verification, "NEEDS VERIFICATION", name);
+      assert.equal(isMaterialFinding(finding), false, name);
+      assert.equal(checkFindingFormat(finding).complete, true, name);
+    }
+  });
+
+  it("rejects empty explanatory fields in modern and historical state", () => {
+    const multiline = [
+      "Finding with missing evidence",
+      "Severity: HIGH",
+      "Technical:   ",
+      "Plain English: This could fail.",
+      "Real-world example: A request fails.",
+      "Fix:",
+      "Verify: ",
+      "Verification state: VERIFIED",
+      "Status: changes_required",
+    ].join("\n");
+    const flattened = [
+      "**Severity:** HIGH",
+      "**Technical:** ",
+      "**Plain English:** This could fail.",
+      "**Real-world example:** A request fails.",
+      "**Fix:** ",
+      "**Verify:** ",
+      "**Verification state:** VERIFIED",
+      "**Status:** changes_required",
+    ].join(" ");
+    for (const [source, body] of [
+      ["state", multiline],
+      ["rendered", multiline],
+      ["labelled", multiline],
+      ["state", flattened],
+    ]) {
+      const format = checkFindingFormat({ source, body });
+      assert.equal(format.complete, false, source);
+      assert.deepEqual(format.missing, ["Technical", "Fix", "Verify"], source);
+    }
+  });
+
+  it("rejects duplicated explanatory labels in historical flattened state", () => {
+    const body = [
+      "**Severity:** HIGH",
+      "**Technical:** a valid explanation",
+      "**Technical:** a conflicting second explanation",
+      "**Plain English:** the result is ambiguous.",
+      "**Real-world example:** a developer overlooks a review error.",
+      "**Fix:** reject repeated labels.",
+      "**Verify:** assert the scorer cannot credit duplicates.",
+      "**Verification state:** VERIFIED",
+      "**Status:** changes_required",
+    ].join(" ");
+    const format = checkFindingFormat({ source: "state", body });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Technical"]);
+  });
+
+  it("scores the exact post-#273 live review from flattened persistent state", () => {
+    const captured = fixture("pr-274-readable-format-postmerge-recorded.md");
+    const parsed = parseFindings(captured);
+    assert.equal(parsed.source, "state");
+    assert.equal(parsed.runHeadSha, "d6cdf9e3c4547b662ba9101f6077be48aacb243e");
+    assert.equal(parsed.findings.length, 1);
+    assert.equal(parsed.findings[0].severity, "HIGH");
+    assert.equal(parsed.findings[0].verification, "VERIFIED");
+    assert.equal(parsed.findings[0].status, "changes_required");
+
+    const result = scoreReview({ id: "pr274-format-canary", kind: "clean" }, captured);
+    assert.equal(result.formatCompliance.findingCount, 1);
+    assert.equal(result.formatCompliance.compliantCount, 1);
+    assert.equal(result.formatCompliance.allCompliant, true);
+  });
+
+  it("rejects flattened option-template enum text in persistent-state form", () => {
+    const format = checkFindingFormat({
+      source: "state",
+      body: [
+        "**Severity:** BLOCKER | HIGH | MEDIUM | LOW",
+        "**Technical:** the migration can write duplicate rows.",
+        "**Plain English:** the same rental could appear twice.",
+        "**Real-world example:** a renter sees two cards for one apartment.",
+        "**Fix:** reuse the existing unique key.",
+        "**Verify:** replay the migration twice and assert one row.",
+        "**Verification state:** VERIFIED | NEEDS VERIFICATION",
+        "**Status:** changes_required | advisory",
+      ].join(" "),
+    });
+    assert.equal(format.complete, false);
+    assert.deepEqual(format.missing, ["Severity", "Verification state", "Status"]);
+  });
+
+  it("keeps flattened NEEDS VERIFICATION findings non-blocking", () => {
+    const body =
+      "**Severity:** HIGH **Technical:** verify the external claim. **Plain English:** proof is missing. " +
+      "**Real-world example:** a reviewer could block on an unverified API claim. **Fix:** verify first. " +
+      "**Verify:** check the authoritative source. **Verification state:** NEEDS VERIFICATION **Status:** changes_required";
+    const parsed = parseFindings(
+      `<!-- pr-agent-review-state:v1\n${JSON.stringify({
+        findings: [{ body, state: "ACTIVE", path: "example.ts" }],
+        last_run: { complete: true, head_sha: "abc" },
+      })}\n-->`,
+    );
+    assert.equal(parsed.findings[0].severity, "HIGH");
+    assert.equal(parsed.findings[0].verification, "NEEDS VERIFICATION");
+    assert.equal(parsed.findings[0].status, "changes_required");
+    assert.equal(isMaterialFinding(parsed.findings[0]), false);
+  });
+
+  it("reports zero findings as not applicable instead of falsely compliant", () => {
+    const result = scoreReview(
+      CASES_BY_ID["docs-only-control"],
+      review("", { recommendation: "Safe to merge", score: 100 }),
+    );
+    assert.equal(result.formatCompliance.findingCount, 0);
+    assert.equal(result.formatCompliance.compliantCount, 0);
+    assert.equal(result.formatCompliance.allCompliant, null);
+  });
+
+  it("includes active-finding format compliance in normal score output", () => {
+    const readable = [
+      "Severity: HIGH",
+      "Technical: EXACT_VERSION accepts 01.2.3 because a core component permits a leading zero.",
+      "Plain English: an invalid dependency version can be accepted as if it were exact.",
+      "Real-world example: CI can approve a malformed pin and give the team a false green check.",
+      "Fix: use a standards-compliant exact SemVer validator.",
+      "Verify: assert that 01.2.3 is rejected.",
+      "Verification state: VERIFIED",
+      "Status: changes_required",
+    ].join("\n");
+    const result = scoreReview(CASES_BY_ID["semver-boundary"], review(readable));
+    assert.equal(result.formatCompliance.findingCount, 1);
+    assert.equal(result.formatCompliance.compliantCount, 1);
+    assert.equal(result.formatCompliance.allCompliant, true);
   });
 });
 

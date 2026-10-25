@@ -118,6 +118,57 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
     });
   });
 
+  // SAN-1486 — true SSR + hydration regression, not a formatter-only unit test.
+  // The published fixture uses UTC 2026-10-19T21:00Z → 2026-10-20T02:00Z.
+  // Across visitor time zones it must always display Oct 19, 4–9 PM Medellín.
+  test.describe("Medellín event timezone hydration", () => {
+    const eventPath = "/events/a1b2c3d4-0001-0001-0001-000000000006";
+    const expectedSchedule = "Mon, Oct 19, 4:00 PM – 9:00 PM";
+
+    for (const [device, viewport] of [
+      ["desktop", DESKTOP_VIEWPORT],
+      ["mobile", MOBILE_VIEWPORT],
+    ] as const) {
+      for (const timezoneId of ["UTC", "America/Bogota", "America/New_York"] as const) {
+        test.describe(`${device} ${timezoneId}`, () => {
+          // Reuse the normal Playwright page fixture so authenticated preview
+          // storage state can be supplied without weakening deployment protection.
+          test.use({ viewport, timezoneId });
+
+          test("server HTML and hydrated date agree", async ({ page }) => {
+            const errors: string[] = [];
+            page.on("pageerror", (error) => errors.push(error.message));
+            page.on("console", (message) => {
+              if (
+                message.type() === "error" &&
+                /hydration|react error #418|server rendered html/i.test(message.text())
+              ) {
+                errors.push(message.text());
+              }
+            });
+
+            const response = await page.goto(eventPath, { waitUntil: "domcontentloaded" });
+            expect(response?.status()).toBe(200);
+            expect(await response!.text()).toContain(expectedSchedule);
+            await expect(page.getByTestId("event-detail-page")).toBeVisible();
+            await page.waitForLoadState("load");
+            const schedule = page
+              .getByTestId("event-detail-page")
+              .locator("p:visible")
+              .filter({ hasText: expectedSchedule });
+            await expect(schedule).toHaveText(expectedSchedule);
+
+            // Exercise a real navigation after hydration instead of fixed sleeps.
+            // React mismatches on this page surface as page/console errors.
+            await page.getByRole("link", { name: "Back to chat" }).click();
+            await expect(page).toHaveURL(/\/chat(?:[/?#]|$)/);
+            expect(errors, `hydration errors on ${device}/${timezoneId}`).toEqual([]);
+          });
+        });
+      }
+    }
+  });
+
   test.describe("mobile", () => {
     test.use({ viewport: MOBILE_VIEWPORT });
 

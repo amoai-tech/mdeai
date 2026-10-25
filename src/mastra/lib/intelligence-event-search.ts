@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
+import { parseEventIntelligenceSlots, resolveEventCategoryForQuery, type EventIntelligenceSlots } from "./event-category-normalization";
+export { parseEventIntelligenceSlots, resolveEventCategoryForQuery } from "./event-category-normalization";
+export type { EventIntelligenceSlots } from "./event-category-normalization";
 import {
   type EventCard,
   type EventQuery,
@@ -9,17 +12,7 @@ import {
   extractNeighborhood,
   normalizeEventCurrency,
   dateWindow,
-  type DateWindow,
 } from "../tools/search-events";
-
-export type EventIntelligenceSlots = {
-  neighborhood?: string;
-  wantsSalsa?: boolean;
-  wantsLiveMusic?: boolean;
-  wantsFashion?: boolean;
-  wantsNetworking?: boolean;
-  dateWindow?: DateWindow;
-};
 
 type HybridEventRow = {
   id: string;
@@ -69,40 +62,6 @@ function num(v: number | string | null | undefined): number | undefined {
   if (v === null || v === undefined) return undefined;
   const n = typeof v === "string" ? Number(v) : v;
   return Number.isFinite(n) ? n : undefined;
-}
-
-/** Remap Events chip category using queryText signals (e.g. nightlife + salsa → music); clears nightlife when queryText absent (CK-V2-015). */
-export function resolveEventCategoryForQuery(
-  category: EventQuery["category"],
-  queryText?: string,
-): EventQuery["category"] {
-  if (!category) return category;
-  const text = queryText?.trim();
-  if (!text) {
-    // Events chip often sets nightlife without queryText — skip strict filter.
-    if (category === "nightlife") return undefined;
-    return category;
-  }
-  const slots = parseEventIntelligenceSlots(text);
-  if ((slots.wantsSalsa || slots.wantsLiveMusic) && category === "nightlife") {
-    return "music";
-  }
-  return category;
-}
-
-/** Extract salsa, live-music, neighborhood, and date-window signals from natural-language query text. */
-export function parseEventIntelligenceSlots(queryText: string): EventIntelligenceSlots { // skipcq: JS-0067
-  const q = queryText.toLowerCase().replace(/-/g, " ");
-  const slots: EventIntelligenceSlots = {};
-  if (/laureles/.test(q)) slots.neighborhood = "Laureles";
-  else if (/poblado|provenza/.test(q)) slots.neighborhood = "El Poblado";
-  if (/salsa/.test(q)) slots.wantsSalsa = true;
-  if (/live music|concert|band/.test(q)) slots.wantsLiveMusic = true;
-  if (/fashion|runway/.test(q)) slots.wantsFashion = true;
-  if (/networking|meetup|professional/.test(q)) slots.wantsNetworking = true;
-  if (/this weekend|weekend/.test(q)) slots.dateWindow = "this_weekend";
-  else if (/tonight|today/.test(q)) slots.dateWindow = "tonight";
-  return slots;
 }
 
 function eventTimeMs(iso: string): number | null { // skipcq: JS-0067
@@ -198,6 +157,48 @@ function hybridToEventCard(row: HybridEventRow, rankScore?: number, signalSource
   return hybridRowToEventCard(row, rankScore, signalSource);
 }
 
+/**
+ * hybrid_search_events returns only 11 columns: no coordinates, city, currency or maps link. A card built straight
+ * from it has no map pin and a guessed currency, even though the event has them. Re-read those columns for the ranked
+ * ids in ONE query and fill only what the RPC row did not carry (the ranking, price and text stay as returned).
+ * If the lookup fails the semantic results are kept as they are: no pin is better than no result.
+ */
+async function hydrateHybridEventRows(
+  client: NonNullable<ReturnType<typeof getAnonClient>>,
+  rows: HybridEventRow[],
+): Promise<HybridEventRow[]> {
+  if (rows.length === 0) return rows;
+  try {
+    const { data, error } = await client
+      .from("events")
+      .select("id, city, currency, latitude, longitude, maps_url")
+      .in("id", rows.map((r) => r.id));
+    if (error) {
+      console.warn("[intelligence-event-search] event detail lookup failed:", error.message);
+      return rows;
+    }
+    const byId = new Map((data ?? []).map((e: Record<string, unknown>) => [String(e.id), e]));
+    return rows.map((row) => {
+      const e = byId.get(row.id);
+      if (!e) return row;
+      return {
+        ...row,
+        city: row.city ?? (e.city as string | null),
+        currency: row.currency ?? (e.currency as string | null),
+        latitude: row.latitude ?? (e.latitude as number | null),
+        longitude: row.longitude ?? (e.longitude as number | null),
+        maps_url: row.maps_url ?? (e.maps_url as string | null),
+      };
+    });
+  } catch (error) {
+    console.warn(
+      "[intelligence-event-search] event detail lookup rejected:",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return rows;
+  }
+}
+
 /** Maps hybrid RPC / structured rows to EventCard — venue = full address (matches search-events rowToCard). */
 // skipcq: JS-0067 - ES module export; not browser global scope
 // skipcq: JS-R1005 - card field mapping mirrors search-events rowToCard
@@ -262,7 +263,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
         match_count: Math.max(limit * 4, 20),
       });
       if (!error && data?.length) {
-        hybridRows = data as HybridEventRow[];
+        hybridRows = await hydrateHybridEventRows(client, data as HybridEventRow[]);
         hybridUsed = true;
         rankExplanation.push({
           factor: "hybrid_semantic",
@@ -333,25 +334,14 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
   }
 
   const window = dateWindow(dw);
-  let scored = hybridRows
-    .filter((row) => {
-      if (!window.gte && !window.lte) return true;
-      const t = row.event_start_time;
-      if (!t) return false;
-      return isWithinDateWindow(t, window);
-    })
+  // Semantic ranking is never permission to relax an explicit search constraint.
+  // On zero exact matches return an empty result: the existing chat fast-path
+  // can offer upcoming alternatives with a clear "nothing for tonight" label.
+  const scored = hybridRows
+    .filter((row) => eventMatchesDateWindow(row.event_start_time, window))
+    .filter((row) => !neighborhood ||
+      (row.address ?? "").toLocaleLowerCase().includes(neighborhood.toLocaleLowerCase()))
     .map((row, idx) => scoreHybridEventRow(row, idx, signalMap, slots, neighborhood));
-
-  if (!scored.length && hybridRows.length && (window.gte || window.lte)) {
-    rankExplanation.push({
-      factor: "date_window_relaxed",
-      score: 0,
-      note: `no ${dw} matches — showing nearest ranked events`,
-    });
-    scored = hybridRows.map((row, idx) =>
-      scoreHybridEventRow(row, idx, signalMap, slots, neighborhood),
-    );
-  }
 
   if (dw !== "any") {
     rankExplanation.push({ factor: "date_window", score: 1, note: dw });

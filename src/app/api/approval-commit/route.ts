@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApprovalCommitInputSchema } from "@/lib/events/approval-commit-schema";
+import { computeDraftHash } from "@/platform/contracts/review-proposal";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSupabaseAnonAuthHeaders,
@@ -26,6 +27,22 @@ export async function POST(req: Request) {
       },
       { status: 400 },
     );
+  }
+
+  if (parsed.data.draftHash) {
+    const actual = await computeDraftHash(parsed.data.draft);
+    if (actual !== parsed.data.draftHash) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "This draft changed after review. Start a new review.",
+            code: "DRAFT_CHANGED",
+          },
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const supabase = await createClient();

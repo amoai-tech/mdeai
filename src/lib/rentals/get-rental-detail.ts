@@ -1,6 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
-import { isRentalRequestable, searchRentals } from "@/mastra/tools/search-rentals";
+import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
+import { readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
+import {
+  isAvailabilityUnconfirmed,
+  isSelfAttested,
+  isExternalSourceListing,
+  externalSourceProvider,
+} from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -33,12 +40,23 @@ export type RentalDetail = {
   latitude: number | null;
   longitude: number | null;
   status: string | null;
+  /** The advertiser's own listing, when this is an external candidate (never for MDE-owned rows). */
+  sourceUrl: string | null;
+  /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
+  sourceProvider: string | null;
+  /** External-source listing (Phase A keeps it requestable, but the CTA must be truthful). */
+  isExternalSource: boolean;
   /**
    * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
    * ownership + workflow + availability proof the database enforces. Every scheduling
    * surface reads this instead of assuming a detail page is requestable.
    */
   canScheduleViewing: boolean;
+  /**
+   * Display an honest provenance notice for self-attested and third-party ads,
+   * without changing their development eligibility or booking permissions.
+   */
+  isNotIndependentlyVerified: boolean;
 };
 
 const UUID_RE =
@@ -70,15 +88,6 @@ const str = (value: unknown): string | null => {
   return typeof value === "string" && value.trim() ? value : null;
 };
 
-// skipcq: JS-0067 - module-local helper; not browser global scope
-const rentalSlugFromSourceUrl = (sourceUrl: string): string | null => {
-  try {
-    return new URL(sourceUrl).pathname.split("/").filter(Boolean).pop() ?? null;
-  } catch {
-    return sourceUrl.split("?")[0].split("/").filter(Boolean).pop() ?? null;
-  }
-};
-
 /** Map a raw `apartments` row to the detail view-model. Exported for unit tests. */
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDetail {
@@ -101,80 +110,48 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     description: str(row.description),
     houseRules: str(row.house_rules),
     hostName: str(row.host_name),
-    availableFrom: str(row.available_from),
+    // A placeholder date is not shown as a move-in date; the calendar then says availability is pending.
+    availableFrom: isAvailabilityUnconfirmed(row.metadata) ? null : str(row.available_from),
     availableTo: str(row.available_to),
     minimumStayDays: num(row.minimum_stay_days),
     maximumStayDays: num(row.maximum_stay_days),
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     status: str(row.status),
-    // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
-    // treats as unproven rather than as a reason to offer the CTA.
-    canScheduleViewing: isRentalRequestable({
-      landlord_id: str(row.landlord_id),
-      status: str(row.status),
-      moderation_status: str(row.moderation_status),
-      listing_workflow_status: str(row.listing_workflow_status),
-      available_from: str(row.available_from),
-      available_to: str(row.available_to),
-    }),
+    sourceUrl: str(row.source_url),
+    sourceProvider: externalSourceProvider(row.metadata),
+    isExternalSource: isExternalSourceListing(row.metadata),
+    // Computed by Supabase under the server-controlled phase, not mirrored in UI.
+    canScheduleViewing: row.rental_can_request_viewing === true,
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isExternalSourceListing(row.metadata),
   };
 }
 
 /**
  * Load one published rental by id or slug. Returns null for missing/unpublished
- * (RLS scopes anon reads to active listings). No Supabase env → dev/mock fallback
- * via the search tool's mock list (so the page renders locally without a DB).
+ * (RLS scopes anon reads to active listings). No Supabase env → throws
+ * RentalSearchUnavailableError; there are no demo detail pages (SAN-1089).
  */
 // skipcq: JS-0067, JS-R1005 - ES module export; intentional db-path + mock-fallback branching, not a bug
-export async function getRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
-  const client = getClient();
+export async function getRentalDetail(
+  idOrSlug: string,
+  options?: { client?: SupabaseClient | null },
+): Promise<RentalDetail | null> {
+  const client = options?.client ?? getClient();
   if (!client) {
-    return getMockRentalDetail(idOrSlug);
+    // SAN-1089: no demo detail pages. The page renders its "couldn't load" state for this.
+    throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const apartmentsQuery = client.from("apartments").select("*").eq("status", "active").limit(1);
+  const developmentMode = await readRentalDevelopmentPhase(client);
+  let apartmentsQuery = client.from("apartments")
+    .select("*, rental_can_request_viewing").limit(1);
+  if (!developmentMode) apartmentsQuery = apartmentsQuery.eq("status", "active");
   const field = UUID_RE.test(idOrSlug) ? "id" : "slug";
   const { data, error } = await apartmentsQuery.eq(field, idOrSlug).maybeSingle();
   if (error) {
-    throw new Error(`[get-rental-detail] supabase error: ${error.message}`);
+    // Only the stable code travels; the driver message can carry hostnames and ports (SAN-1089).
+    throw new RentalSearchUnavailableError(`detail_query_failed${error.code ? `:${error.code}` : ""}`);
   }
   return data ? mapApartmentRowToDetail(data as Record<string, unknown>) : null;
-}
-
-// skipcq: JS-0067 - ES module export; testable mock fallback helper
-export async function getMockRentalDetail(idOrSlug: string): Promise<RentalDetail | null> {
-  const { results } = await searchRentals({ limit: 24 });
-  const hit = results.find((rental) => rental.id === idOrSlug || rentalSlugFromSourceUrl(rental.source_url) === idOrSlug);
-  if (!hit) return null;
-
-  return {
-    id: hit.id,
-    slug: null,
-    title: hit.title,
-    neighborhood: hit.neighborhood,
-    address: null,
-    bedrooms: hit.bedrooms,
-    bathrooms: null,
-    maxGuests: null,
-    priceNightly: hit.nightly_price,
-    priceMonthly: null,
-    currency: hit.currency,
-    deposit: null,
-    amenities: hit.amenities,
-    buildingAmenities: [],
-    images: hit.image ? [hit.image] : [],
-    description: null,
-    houseRules: null,
-    hostName: hit.host_name,
-    availableFrom: null,
-    availableTo: null,
-    minimumStayDays: null,
-    maximumStayDays: null,
-    latitude: hit.latitude ?? null,
-    longitude: hit.longitude ?? null,
-    status: "active",
-    // Mock rentals carry no ownership proof, so they are never requestable (SAN-1349).
-    canScheduleViewing: hit.can_schedule_viewing && hit.schedule_viewing_url != null,
-  };
 }

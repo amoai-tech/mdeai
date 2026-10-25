@@ -1,6 +1,6 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { searchRentals } from '../tools/search-rentals';
+import { searchRentals, RENTAL_SUPABASE_KEY, type RentalSearchOptions } from '../tools/search-rentals';
 
 const rentalSchema = z.object({
   id: z.string(),
@@ -9,6 +9,8 @@ const rentalSchema = z.object({
   nightly_price: z.number(),
   currency: z.literal('USD'),
   bedrooms: z.number(),
+  /** Matches the search-tool schema; the workflow keeps rendering its USD nightly label. */
+  bedrooms_unknown: z.boolean().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
@@ -59,13 +61,16 @@ const searchStep = createStep({
     total: z.number(),
     preference: queryInputSchema.shape.preference,
   }),
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData, requestContext }) => {
+    // Mastra forwards the invoking agent's request context to workflow steps.
+    // Pass its user-scoped Supabase client along; anonymous callers keep RLS anon access.
+    const client = requestContext?.get(RENTAL_SUPABASE_KEY) as RentalSearchOptions['client'];
     const out = await searchRentals({
       neighborhood: inputData.neighborhood,
       minBedrooms: inputData.minBedrooms,
       maxPricePerNight: inputData.maxPricePerNight,
       limit: inputData.limit ?? 8,
-    });
+    }, client ? { client } : undefined);
     const results = out.results.map((r) => ({
       ...r,
       currency: 'USD' as const,

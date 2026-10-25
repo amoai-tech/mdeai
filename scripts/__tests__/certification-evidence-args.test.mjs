@@ -104,8 +104,89 @@ test("requires --source-type and --source-url together", () => {
   );
 });
 
+test("parses and validates photo publishing rights", () => {
+  const ok = parseCertificationEvidenceArgs([
+    ...BASE,
+    "--image-url=https://example.com/a.jpg",
+    "--image-rights=authorized",
+  ]);
+  assert.equal(ok.ok, true, ok.errors.join("; "));
+  assert.equal(ok.value.imageRights, "authorized");
+  assert.equal(
+    parseCertificationEvidenceArgs([...BASE, "--image-url=https://example.com/a.jpg", "--image-rights=maybe"]).ok,
+    false,
+  );
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--image-rights=authorized"]).ok, false);
+});
+const VERIFIED = [
+  ...BASE,
+  "--verification-status=verified",
+  "--verified-by=750e8400-e29b-41d4-a716-446655440002",
+];
+
+test("parses the listing-specific approvals the launch gate reads", () => {
+  const parsed = parseCertificationEvidenceArgs([
+    ...VERIFIED,
+    "--owner-control=verified",
+    "--publish-permission=granted",
+    "--viewings-permission=granted",
+    "--coordinate-receipt=verified",
+    "--neighborhood=Laureles",
+  ]);
+  assert.equal(parsed.ok, true, parsed.errors.join("; "));
+  assert.equal(parsed.value.ownerControl, "verified");
+  assert.equal(parsed.value.publishPermission, "granted");
+  assert.equal(parsed.value.viewingsPermission, "granted");
+  assert.equal(parsed.value.coordinateReceipt, "verified");
+  assert.equal(parsed.value.neighborhood, "Laureles");
+});
+
+test("refuses listing approvals without a verified property status", () => {
+  const parsed = parseCertificationEvidenceArgs([...BASE, "--owner-control=verified"]);
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.errors.join(" "), /verification-status=verified/);
+});
+
+test("refuses permission and control values outside the live contract", () => {
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--publish-permission=yes"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--viewings-permission=maybe"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--owner-control=approved"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--coordinate-receipt=yes"]).ok, false);
+});
+
+test("refuses placeholder neighborhoods and accepts a real one", () => {
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=Pending verification"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=unknown"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--neighborhood=El Poblado"]).ok, true);
+});
+
 test("does not treat --database-url as a certification argument", () => {
   const parsed = parseCertificationEvidenceArgs([...BASE, "--database-url=postgresql://example/db"]);
   assert.equal(parsed.ok, true, parsed.errors.join("; "));
   assert.equal(parsed.value.databaseUrl, undefined);
+});
+
+test("records a move-in receipt that names the exact date and the evidence reviewed (SAN-486)", () => {
+  const parsed = parseCertificationEvidenceArgs([
+    ...VERIFIED,
+    "--move-in-verified-for=2026-11-01",
+    "--move-in-evidence=signed lease start + reviewer site visit",
+  ]);
+  assert.equal(parsed.ok, true, parsed.errors.join("; "));
+  assert.equal(parsed.value.moveInVerifiedFor, "2026-11-01");
+  assert.equal(parsed.value.moveInEvidence, "signed lease start + reviewer site visit");
+});
+
+test("refuses a move-in receipt with an impossible date, a missing evidence note, or no verified status", () => {
+  const evidence = "--move-in-evidence=lease";
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--move-in-verified-for=2026-02-31", evidence]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, "--move-in-verified-for=2026-11-01"]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...VERIFIED, evidence]).ok, false);
+  assert.equal(parseCertificationEvidenceArgs([...BASE, "--move-in-verified-for=2026-11-01", evidence]).ok, false);
+});
+
+test("does not accept the obsolete generic --availability flag as a receipt", () => {
+  const parsed = parseCertificationEvidenceArgs([...VERIFIED, "--availability=verified"]);
+  assert.equal(parsed.value.moveInVerifiedFor, null);
+  assert.equal("availability" in parsed.value, false);
 });

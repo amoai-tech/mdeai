@@ -32,7 +32,7 @@ export function BrowseLayout({
       <header className="sticky top-0 z-10 -mx-4 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex items-start gap-3">
           <Link
-            href="/"
+            href="/chat"
             aria-label="Back to chat"
             className="mt-1 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-border hover:bg-muted"
           >
@@ -43,7 +43,7 @@ export function BrowseLayout({
             <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <Link
-            href="/"
+            href="/chat"
             className="hidden text-sm text-primary hover:underline sm:inline"
           >
             Ask concierge
@@ -57,7 +57,9 @@ export function BrowseLayout({
       {mapSlot ? (
         <div className="lg:flex lg:items-start lg:gap-6">
           <div className="min-w-0 flex-1">{children}</div>
-          <aside className="w-full lg:w-[400px] lg:shrink-0">{mapSlot}</aside>
+          {/* self-stretch: the sticky map column can only stick within this wrapper, so the wrapper
+              must be as tall as the list. Without it the column scrolls away with the page. */}
+          <aside className="w-full lg:w-[400px] lg:shrink-0 lg:self-stretch">{mapSlot}</aside>
         </div>
       ) : (
         children

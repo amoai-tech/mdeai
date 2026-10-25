@@ -1,12 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bed, Bath, Users, Building2, MapPin, Heart } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { RentalAvailabilityCalendar } from "@/components/rentals/rental-availability-calendar";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { GalleryImage } from "@/components/rentals/gallery-image";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
@@ -24,8 +35,11 @@ const specLabel = (count: number | null, one: string, many: string): React.React
 
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
-  const cover = detail.images[0];
-  const rest = detail.images.slice(1, 5);
+  const [showAll, setShowAll] = useState(false);
+  // Every stored photo is reachable: the mosaic leads with five, the rest sit behind "Show all".
+  const allImages = detail.images;
+  const images = allImages.slice(0, 5);
+  const cover = images[0];
   if (!cover) {
     return (
       <div
@@ -36,31 +50,88 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
       </div>
     );
   }
+  const rest = images.slice(1);
   return (
-    <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={cover}
-        alt={`${detail.title} in ${detail.neighborhood}`}
-        data-testid="rental-detail-cover"
-        className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
-        loading="eager"
-      />
-      {rest.length > 0 ? (
-        <div className="hidden grid-cols-2 gap-2 sm:grid">
-          {rest.map((src, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={src}
-              src={src}
-              alt={`${detail.title} photo ${index + 2}`}
-              className="aspect-square w-full rounded-lg bg-muted object-cover"
-              loading="lazy"
-            />
-          ))}
+    <>
+      {/* Desktop: cover plus up to four thumbnails. */}
+      <div
+        data-testid="rental-detail-gallery-desktop"
+        className="hidden gap-2 sm:grid sm:grid-cols-[2fr_1fr]"
+      >
+        <GalleryImage
+          src={cover}
+          alt={`${detail.title} in ${detail.neighborhood}`}
+          testId="rental-detail-cover"
+          className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+          loading="eager"
+        />
+        {rest.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {rest.map((src, index) => (
+              <GalleryImage
+                key={src}
+                src={src}
+                alt={`${detail.title} photo ${index + 2}`}
+                className="aspect-square w-full rounded-lg bg-muted object-cover"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Desktop: the photos beyond the first five, on demand. */}
+      {allImages.length > images.length ? (
+        <div className="hidden sm:block">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="rental-detail-show-all-photos"
+            aria-expanded={showAll}
+            onClick={() => setShowAll((open) => !open)}
+          >
+            {showAll ? "Show fewer photos" : `Show all ${allImages.length} photos`}
+          </Button>
+          {showAll ? (
+            <div data-testid="rental-detail-all-photos" className="mt-3 grid grid-cols-3 gap-2">
+              {allImages.map((src, index) => (
+                <GalleryImage
+                  key={src}
+                  src={src}
+                  alt={`${detail.title} photo ${index + 1} of ${allImages.length}`}
+                  className="aspect-[4/3] w-full rounded-lg bg-muted object-cover"
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
-    </div>
+
+      {/* Mobile: every photo reachable by swipe or the next/previous controls. */}
+      <Carousel
+        className="sm:hidden"
+        data-testid="rental-detail-gallery-mobile"
+        opts={{ loop: false, align: "start" }}
+      >
+        <CarouselContent>
+          {allImages.map((src, index) => (
+            <CarouselItem key={src}>
+              <GalleryImage
+                src={src}
+                alt={`${detail.title} photo ${index + 1}`}
+                testId={`rental-detail-slide-${index + 1}`}
+                className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+        <CarouselPrevious className="left-2" />
+        <CarouselNext className="right-2" />
+      </Carousel>
+    </>
   );
 };
 
@@ -68,7 +139,8 @@ const RentalGallery = ({ detail }: { detail: RentalDetail }) => {
 const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
   <div className="flex flex-wrap gap-2" data-testid="rental-detail-specs">
     <Badge variant="secondary" className="gap-1 font-normal">
-      <Bed className="size-3.5" aria-hidden /> {specLabel(detail.bedrooms, "bed", "beds")}
+      <Bed className="size-3.5" aria-hidden />{" "}
+      {detail.bedrooms == null ? "Bedrooms unknown" : specLabel(detail.bedrooms, "bed", "beds")}
     </Badge>
     <Badge variant="secondary" className="gap-1 font-normal">
       <Bath className="size-3.5" aria-hidden /> {specLabel(detail.bathrooms, "bath", "baths")}
@@ -77,6 +149,15 @@ const RentalSpecs = ({ detail }: { detail: RentalDetail }) => (
       <Users className="size-3.5" aria-hidden />{" "}
       {detail.maxGuests != null ? `${detail.maxGuests} guests` : <Pending />}
     </Badge>
+    {detail.isNotIndependentlyVerified ? (
+      <Badge
+        variant="outline"
+        className="font-normal"
+        data-testid="rental-self-attested-label"
+      >
+        Not independently verified
+      </Badge>
+    ) : null}
   </div>
 );
 
@@ -88,12 +169,20 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isInteractive,
+  isExternalSource = false,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   hostName: string | null;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
+  isDevelopmentPreview?: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
 
@@ -107,23 +196,26 @@ const RentalPriceSidebar = ({
           ) : null}
         </div>
         {canRequestViewing ? (
-          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
-            Request viewing
+          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" disabled={!isInteractive} onClick={onRequest}>
+            {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          data-testid="rental-detail-ask-cta"
-          onClick={onRequest}
-        >
-          Ask a question
-        </Button>
+        {!isDevelopmentPreview ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            data-testid="rental-detail-ask-cta"
+            disabled={!isInteractive}
+            onClick={onRequest}
+          >
+            Ask a question
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
           <Heart className="size-4" aria-hidden /> Save
         </Button>
-        <p className="text-center text-xs text-muted-foreground">{REQUEST_ONLY}</p>
+        <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
     </aside>
@@ -135,11 +227,20 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isInteractive,
+  isExternalSource = false,
+  isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
+  /** Preview details must not imply that payment is handled with an unverified host. */
+  isDevelopmentPreview?: boolean;
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
@@ -150,11 +251,13 @@ const RentalMobileCta = ({
         <div className="truncate font-mono text-sm font-semibold">
           {prices.monthlyLabel ?? prices.nightlyLabel ?? PENDING}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">{REQUEST_ONLY}</div>
+        <div className="truncate text-[11px] text-muted-foreground">
+          {isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}
+        </div>
       </div>
       {canRequestViewing ? (
-        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
-          Request viewing
+        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" disabled={!isInteractive} onClick={onRequest}>
+          {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
         </Button>
       ) : null}
     </div>
@@ -169,10 +272,10 @@ const mapsHrefFor = (detail: RentalDetail): string | null => {
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function RentalDetailView({ detail }: { detail: RentalDetail }) {
+export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
   return (
     <RentalUiProvider>
-      <RentalDetailInner detail={detail} />
+      <RentalDetailInner detail={detail} backHref={backHref} />
       <ScheduleViewingModal />
     </RentalUiProvider>
   );
@@ -210,8 +313,11 @@ function RentalDescription({ description }: { description?: string | null }) {
 }
 
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
-function RentalDetailInner({ detail }: { detail: RentalDetail }) {
+function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
   const { openScheduleViewing } = useRentalUi();
+  // The HTML arrives before client event handlers do. Do not show a clickable
+  // action that silently loses a renter's first tap before hydration.
+  const isInteractive = useHydrated();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
   const requestViewing = () =>
@@ -220,8 +326,10 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
   return (
     // skipcq: JS-0415 - detailed sectioned layout is intentional for readability and stable test selectors
     <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
+      {/* A saved viewing request must be visible where it was made, not only in the chat. */}
+      <LeadConfirmationBanner />
       <Link
-        href="/rentals"
+        href={detail.status === "development-preview" ? "/dev/rentals" : backHref}
         data-testid="rental-detail-back"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
@@ -275,19 +383,37 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
               {detail.neighborhood || <Pending />}
               {detail.address ? ` · ${detail.address}` : ""}
             </p>
-            {mapsHref ? (
-              <a
-                href={mapsHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="rental-detail-map-link"
-                className="mt-1 inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                <MapPin className="size-3.5" aria-hidden /> View on map
-              </a>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
-            )}
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              {mapsHref ? (
+                <a
+                  href={mapsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="rental-detail-map-link"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <MapPin className="size-3.5" aria-hidden /> View on map
+                </a>
+              ) : (
+                <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
+              )}
+              {(detail.status === "development-preview" || detail.isNotIndependentlyVerified) && detail.sourceUrl?.startsWith("https://") && !/^https:\/\/(?:www\.)?mdeai\.co(?:[/:]|$)/i.test(detail.sourceUrl) ? (
+                <a
+                  href={detail.sourceUrl}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  data-testid="rental-detail-source-link"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                </a>
+              ) : null}
+              {detail.sourceProvider ? (
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-detail-source-label">
+                  Source: {detail.sourceProvider}
+                </p>
+              ) : null}
+            </div>
           </section>
         </div>
 
@@ -296,6 +422,9 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isInteractive={isInteractive}
+          isExternalSource={detail.isExternalSource}
+          isDevelopmentPreview={detail.status === "development-preview"}
         />
       </div>
 
@@ -303,6 +432,9 @@ function RentalDetailInner({ detail }: { detail: RentalDetail }) {
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isInteractive={isInteractive}
+        isExternalSource={detail.isExternalSource}
+        isDevelopmentPreview={detail.status === "development-preview"}
       />
     </main>
   );

@@ -13,6 +13,7 @@ import { mastra } from "@/mastra";
 import { getLocalAgentsWithLogging } from "@/mastra/copilotkit/logging-mastra-agent";
 import { setAuditUserId } from "@/mastra/lib/tool-audit-context";
 import { HOST_SUPABASE_KEY } from "@/mastra/tools/hostops-read-tools";
+import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { logAgentRunForTurn } from "@/mastra/lib/log-agent-run";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
@@ -199,6 +200,9 @@ async function handleCopilotKit(req: NextRequest) {
       // user-scoped rental client through agent tools.
       // getHostContext reads it back.
       requestContext.set(HOST_SUPABASE_KEY, supabase);
+      // SAN-1502 PR2 — rental search tools read this same user-scoped client,
+      // so an authorized test actor's AI search is RLS-scoped to their grant.
+      requestContext.set(RENTAL_SUPABASE_KEY, supabase);
     }
 
     return await buildHandler({ resourceId, userId, requestContext })(req);

@@ -18,6 +18,7 @@ import {
   publishActionLabel,
   publishRequiresAck,
 } from "@/lib/rentals/resolve-publish-rpc";
+import type { RentalSelfAttestation } from "@/lib/rentals/run-self-attested-publish";
 import { ListingWorkflowPill } from "@/components/host/rentals/listing-workflow-pill";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +34,12 @@ type RentalsListingsDrawerProps = {
   onPublish: (listing: BrokerListingDetail) => Promise<void>;
   publishing: boolean;
   publishError: string | null;
+  onSelfAttestedPublish: (
+    listing: BrokerListingDetail,
+    attestation: RentalSelfAttestation,
+  ) => Promise<void>;
+  selfAttestedPublishing: boolean;
+  selfAttestedError: string | null;
 };
 
 export function RentalsListingsDrawer({
@@ -42,14 +49,24 @@ export function RentalsListingsDrawer({
   onPublish,
   publishing,
   publishError,
+  onSelfAttestedPublish,
+  selfAttestedPublishing,
+  selfAttestedError,
 }: RentalsListingsDrawerProps) {
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [ack, setAck] = useState(false);
+  const [advertisingAuthority, setAdvertisingAuthority] = useState(false);
+  const [photoRights, setPhotoRights] = useState(false);
   const [leads, setLeads] = useState<BrokerListingLeadSummary[]>([]);
   const [showings, setShowings] = useState<BrokerListingShowingSummary[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoadedFor, setDetailLoadedFor] = useState<string | null>(null);
+
+  // The two attestation flags intentionally live in this component. The shell renders
+  // <RentalsListingsDrawer key={selectedId} ...>, so selecting another apartment remounts
+  // this drawer and both flags start cleared. Do not lift them to a parent without also
+  // resetting on selection, or one apartment's attestation could leak into the next.
 
   const loadDetail = useCallback(async (apartmentId: string): Promise<boolean> => {
     setDetailLoading(true);
@@ -234,6 +251,58 @@ export function RentalsListingsDrawer({
               >
                 {publishing ? "Working…" : actionLabel}
               </Button>
+            ) : null}
+
+            {listing.listingWorkflowStatus !== "published" &&
+            listing.listingWorkflowStatus !== "rejected" ? (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Publish for development — not independently verified
+                </p>
+                <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-advertising">
+                  <input
+                    type="checkbox"
+                    data-testid="listings-attest-advertising"
+                    id="r2-attest-advertising"
+                    checked={advertisingAuthority}
+                    onChange={(e) => setAdvertisingAuthority(e.target.checked)}
+                    className="mt-1 size-4 rounded border-border"
+                  />
+                  <span>
+                    Optional: I can confirm advertising authority. Not required for development.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm" htmlFor="r2-attest-photos">
+                  <input
+                    type="checkbox"
+                    data-testid="listings-attest-photos"
+                    id="r2-attest-photos"
+                    checked={photoRights}
+                    onChange={(e) => setPhotoRights(e.target.checked)}
+                    className="mt-1 size-4 rounded border-border"
+                  />
+                  <span>Optional: I can confirm photo-use rights. Not required for development.</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="lx-publish-self-attested"
+                  disabled={selfAttestedPublishing}
+                  onClick={() =>
+                    void onSelfAttestedPublish(listing, { advertisingAuthority, photoRights })
+                  }
+                  className="w-full"
+                >
+                  {selfAttestedPublishing
+                    ? "Working…"
+                    : "Publish now (not independently verified)"}
+                </Button>
+                {selfAttestedError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {selfAttestedError}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
 
             {publishError ? (

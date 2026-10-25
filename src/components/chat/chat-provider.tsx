@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -176,9 +177,8 @@ function SavedThreadHistory({
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
  *   continues that exact thread.
- * - Otherwise the chat runs on a fresh, NON-explicit thread: new on every visit
- *   to /chat and on every New Chat, so a new conversation never writes into an
- *   old one and does not try to reconnect to a thread that has never run.
+ * - Otherwise the chat uses the root per-tab thread, shared with other pages.
+ *   New Chat mints a fresh ID; only a persisted thread is reconnected.
  *
  * One `CopilotChatConfigurationProvider` owns that choice for every consumer on
  * the page (chat, map sync, tools), so they cannot drift onto different threads.
@@ -187,36 +187,51 @@ function SavedThreadHistory({
  * `useThreadNav` is the single source of truth; nothing here calls the
  * configuration provider's imperative setters.
  */
-export function ChatProvider({ children }: { children: ReactNode }) {
-  const { activeThreadId, newChatCount } = useThreadNav();
-
-  // React's "adjust state when a prop changes" pattern: a new id the moment
-  // New Chat is pressed, with no intermediate render on the old thread.
-  const [fresh, setFresh] = useState(() => ({
-    newChatCount,
-    threadId: crypto.randomUUID(),
-  }));
-  if (fresh.newChatCount !== newChatCount) {
-    setFresh({ newChatCount, threadId: crypto.randomUUID() });
-  }
+function LiveChatProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
+  const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
+  const threadId = activeThreadId ?? sessionThreadId;
+  // A successfully saved live turn must NOT immediately reconnect/replay itself.
+  // Remember whether this tab's thread was already saved when /chat mounted;
+  // when the user returns after visiting Rentals, it is now safe to replay.
+  const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
+  // A refresh/reopen adopts the stored conversation AFTER auth resolves, which
+  // is later than the mount-time capture above; that stored conversation is
+  // exactly what must be replayed.
+  const shouldReplay = Boolean(activeThreadId || restoredThread ||
+    (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={reportConciergeError}
+      onError={(event) => {
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
-        threadId={activeThreadId ?? fresh.threadId}
-        hasExplicitThreadId={activeThreadId !== undefined}
+        threadId={threadId}
+        hasExplicitThreadId={shouldReplay}
       >
-        {activeThreadId !== undefined && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={activeThreadId}>{children}</SavedThreadHistory>
+        {threadId && shouldReplay && !isDeterministicE2E() ? (
+          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
         ) : (
           children
         )}
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
   );
+}
+
+/**
+ * Deterministic E2E renders its own chat and coagent stand-ins. Do not mount
+ * the live CopilotKit provider: it can initiate agent/connection requests
+ * while the browser is hydrating a test that exercises only local fast paths.
+ * The production path remains the unchanged LiveChatProvider.
+ */
+export function ChatProvider({ children }: { children: ReactNode }) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <LiveChatProvider>{children}</LiveChatProvider>;
 }

@@ -81,16 +81,34 @@ Do not report style trivia already handled by formatters/linters unless it chang
 
 ## Finding format
 
-For every actionable finding provide:
+For every actionable finding, write for both the engineer fixing it and the product owner deciding whether it matters:
 
-```text
-Severity: HIGH | MEDIUM | LOW
-Category: correctness | security | data | reliability | architecture | test-gap | maintainability | performance
-Evidence: file:line + exact behavior
-Why it matters: concrete failure/user impact
-Smallest safe fix: bounded recommendation
-Verification: exact test/probe that proves the fix
+When PR-Agent uses this skill, every finding lives in `key_issues_to_review[].issue_content`. Make that block itself the readable review. Do not return one prose paragraph.
+
+Use this exact YAML shape:
+
+```yaml
+issue_content: |
+  **Severity:** HIGH
+
+  **Technical:** concrete defect + affected file/function/schema + exact evidence + why it is technically incorrect
+
+  **Plain English:** consequence in 1-2 short sentences with minimal jargon
+
+  **Real-world example:** one realistic MDE user/operator/developer failure scenario
+
+  **Fix:** smallest safe bounded change using existing MDE patterns
+
+  **Verify:** exact deterministic test/probe that proves the fix
+
+  **Verification state:** VERIFIED
+
+  **Status:** changes_required
 ```
+
+Choose exactly one allowed value: Severity = BLOCKER/HIGH/MEDIUM/LOW; Verification state = VERIFIED/NEEDS VERIFICATION; Status = changes_required/advisory. Never print the option list in a finding. If every field cannot be filled, omit the finding instead of returning an unstructured paragraph.
+
+Keep the sections concise and non-repetitive. BLOCKER/HIGH findings must make the reason to delay merge understandable in Plain English.
 
 Use `NOISE` when a reviewer/bot comment is disproven by current-head evidence.
 

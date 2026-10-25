@@ -17,7 +17,7 @@ import {
   eventVenueBookingWorkflow,
   salesInsightWorkflow,
 } from "./workflows";
-import { workspace } from "./workspaces";
+import { getRuntimeWorkspace } from "./workspaces";
 import { scorers } from "./scorers";
 
 const LOG_LEVEL = (process.env.LOG_LEVEL as LogLevel) || "info";
@@ -39,7 +39,7 @@ export const mastra = new Mastra({
     eventVenueBookingWorkflow,
     salesInsightWorkflow,
   },
-  workspace,
+  workspace: getRuntimeWorkspace(),
   scorers,
   storage: getMastraStorage(),
   logger: new ConsoleLogger({

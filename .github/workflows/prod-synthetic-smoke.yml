@@ -113,6 +113,12 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          # J14 proves a real signed-in follow-up, so this step needs the same QA
+          # credentials the isolation proof above already uses. No other step is widened.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PW_SKIP_WEBSERVER: "1"
         run: npm run test:e2e:prod-journey-j05-j20
 

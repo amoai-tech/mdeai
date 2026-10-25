@@ -89,10 +89,28 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("fewer than 3 rows");
   });
 
-  it("instructions forbid repeating grounded place names in prose", async () => {
+  it("instructions avoid repeating names for a new search but allow a recommendation", async () => {
     const instructions = await conciergeAgent.getInstructions();
-    expect(instructions).toContain("NEVER list cafés or venues by name");
+    expect(instructions).toContain("For a new search, do NOT list cafés or venues by name");
+    expect(instructions).toContain("name at most 2 places from lastGroundedResults");
+    expect(instructions).toContain("Never invent amenities");
     expect(instructions).toContain("View on Google Maps");
+  });
+
+  it("working memory accepts the grounded rows shown on screen", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastIntent: "restaurant_discovery",
+      lastGroundedResults: [
+        {
+          id: "cafe-1",
+          title: "Semilla Café Coworking",
+          area: "Laureles",
+          summary: "Coworking café with reliable Wi-Fi.",
+          rating: 4.7,
+        },
+      ],
+    });
+    expect(parsed.lastGroundedResults?.[0]?.title).toBe("Semilla Café Coworking");
   });
 
   it("instructions tell agent to pass search-grounded-places intent for nightlife and cafés", async () => {
@@ -376,6 +394,36 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(out).not.toHaveProperty("selectedListingId");
     expect(out.lastRentalQuery).toEqual({ minBedrooms: 0 });
     expect("budgetType" in out.lastRentalQuery).toBe(false);
+  });
+
+  it("strips padded numeric/enum rental fields so a blank monthly budget cannot fail validation", () => {
+    const parsed = conciergeMemoryInput.safeParse({
+      lastRentalQuery: {
+        neighborhood: "",
+        minBedrooms: null,
+        maxPricePerNight: "",
+        maxPriceMonthly: " ",
+        budgetCurrency: "",
+        budgetType: "",
+        genericAskPending: null,
+        checkIn: "",
+        checkOut: null,
+      },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.lastRentalQuery : undefined).toEqual({});
+  });
+
+  it("keeps real rental values, including 0 and a real currency", () => {
+    const parsed = conciergeMemoryInput.safeParse({
+      lastRentalQuery: { minBedrooms: 0, maxPriceMonthly: 3_500_000, budgetCurrency: "COP" },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success ? parsed.data.lastRentalQuery : undefined).toEqual({
+      minBedrooms: 0,
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP",
+    });
   });
 
   it("the strict canonical schema still rejects blanks (tolerance is at the tool boundary only)", () => {

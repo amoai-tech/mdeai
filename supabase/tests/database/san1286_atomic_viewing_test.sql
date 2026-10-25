@@ -54,14 +54,14 @@ values
 -- canonically owned. `san1286-inactive` intentionally stays outside the published state.
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
-   landlord_id, available_to)
+   landlord_id, available_from, available_to)
 values
   ('a2860000-0000-4000-8000-000000000010', 'SAN-1286 Active', 'san1286-active', 'Laureles',
-   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2099-12-31'),
+   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2026-01-01', '2099-12-31'),
   ('a2860000-0000-4000-8000-000000000011', 'SAN-1286 Inactive', 'san1286-inactive', 'Laureles',
-   'inactive', 'approved', 'paused', 'a2860000-0000-4000-8000-000000000021', '2099-12-31'),
+   'inactive', 'approved', 'paused', 'a2860000-0000-4000-8000-000000000021', '2026-01-01', '2099-12-31'),
   ('a2860000-0000-4000-8000-000000000012', 'SAN-1286 Other', 'san1286-other', 'Laureles',
-   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2099-12-31');
+   'active', 'approved', 'published', 'a2860000-0000-4000-8000-000000000021', '2026-01-01', '2099-12-31');
 
 -- Fixture integrity: the two listings these tests expect to be requestable really do satisfy
 -- every SAN-1349 eligibility precondition. Without this, a later edit could quietly make the

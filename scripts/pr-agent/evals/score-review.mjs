@@ -69,6 +69,8 @@ function invalidState(reason) {
     runComplete: null,
     runKind: null,
     runHeadSha: null,
+    excludedFiles: null,
+    schemaVersion: null,
     findings: [],
   };
 }
@@ -95,8 +97,76 @@ const STATUS_LABEL_RE = /(?:^|\n)[ \t]*(?:status|merge status)[ \t]*[:=][ \t]*["
 const VERIFICATION_LABEL_RE =
   /(?:^|\n)[ \t]*verification(?:[ \t]+state)?[ \t]*[:=][ \t]*["'`*]*[ \t]*([^\n]*)/i;
 
+const FLATTENED_STATE_FIELD_NAMES = [
+  "Severity",
+  "Technical",
+  "Plain English",
+  "Real-world example",
+  "Fix",
+  "Verify",
+  "Verification state",
+  "Status",
+];
+
+/**
+ * PR-Agent v0.45.0 flattens persistent findings; v0.46.0 preserves line breaks.
+ * Require line-leading fields for modern multiline state and exact bold labels for
+ * historical flattened state; never infer labels from embedded prose.
+ */
+function stateFieldValue(body, label) {
+  const text = String(body ?? "");
+  if (text.includes("\n")) {
+    const prefixes = [label + ":", "**" + label + ":**", "**" + label + "**:"];
+    let fence = null;
+    const matches = [];
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      // A closing fence must use the opener's character and at least its length;
+      // trailing info text is allowed on openers, but never on closers.
+      const run = /^(\x60{3,}|~{3,})(.*)$/.exec(trimmed);
+      if (fence !== null) {
+        if (run && run[1][0] === fence.char && run[1].length >= fence.length && run[2].trim() === "") {
+          fence = null;
+        }
+        continue;
+      }
+      if (run) {
+        fence = { char: run[1][0], length: run[1].length };
+        continue;
+      }
+      const fieldLine = trimmed.replace(/^[-*]\s+/, "");
+      const prefix = prefixes.find((value) => fieldLine.toLowerCase().startsWith(value.toLowerCase()));
+      if (prefix) matches.push(fieldLine.slice(prefix.length).trim());
+    }
+    // Fail closed when there is no label or the model repeats a field.
+    return matches.length === 1 && matches[0].length > 0 ? matches[0] : null;
+  }
+  const lower = text.toLowerCase();
+  const marker = `**${label.toLowerCase()}:**`;
+  const start = lower.indexOf(marker);
+  // A repeated historical label makes the field ambiguous; never credit the first value.
+  if (start < 0 || lower.indexOf(marker, start + marker.length) !== -1) return null;
+
+  const valueStart = start + marker.length;
+  const nextStarts = FLATTENED_STATE_FIELD_NAMES
+    .map((name) => lower.indexOf(`**${name.toLowerCase()}:**`, valueStart))
+    .filter((index) => index >= 0);
+  const valueEnd = nextStarts.length > 0 ? Math.min(...nextStarts) : text.length;
+  const value = text.slice(valueStart, valueEnd).trim();
+  return value.length > 0 ? value : null;
+}
+
+function stateEnumValue(body, label, values) {
+  const raw = stateFieldValue(body, label);
+  if (raw === null) return null;
+  return values.find((value) => raw.toLowerCase() === value.toLowerCase()) ?? null;
+}
+
 /** The declared status, or null when the finding does not declare one. */
-function readStatus(body) {
+function readStatus(body, source = "unknown") {
+  if (source === "state") {
+    return stateEnumValue(body, "Status", ["changes_required", "advisory"])?.toLowerCase() ?? null;
+  }
   const raw = (STATUS_LABEL_RE.exec(body)?.[1] ?? "").trim();
   if (/^changes_required\b/i.test(raw)) return "changes_required";
   if (/^advisory\b/i.test(raw)) return "advisory";
@@ -108,7 +178,12 @@ function readStatus(body) {
  * NEEDS VERIFICATION, not null: a merge gate must fail closed on an ambiguous claim, and
  * "Verification state: NOT VERIFIED" must never be read as proof.
  */
-function readVerification(body) {
+function readVerification(body, source = "unknown") {
+  if (source === "state") {
+    const raw = stateFieldValue(body, "Verification state");
+    if (raw === null) return null;
+    return stateEnumValue(body, "Verification state", ["VERIFIED", "NEEDS VERIFICATION"]) ?? "NEEDS VERIFICATION";
+  }
   const match = VERIFICATION_LABEL_RE.exec(body);
   if (!match) return null;
   const raw = match[1].trim();
@@ -126,14 +201,83 @@ function toFinding(rawBody, meta = {}) {
   return {
     title: firstLine(body),
     body,
-    severity: SEVERITY_LABEL_RE.exec(body)?.[1]?.toUpperCase() ?? null,
-    status: readStatus(body),
-    verification: readVerification(body),
+    severity:
+      meta.source === "state"
+        ? stateEnumValue(body, "Severity", ["BLOCKER", "HIGH", "MEDIUM", "LOW"])?.toUpperCase() ?? null
+        : SEVERITY_LABEL_RE.exec(body)?.[1]?.toUpperCase() ?? null,
+    status: readStatus(body, meta.source),
+    verification: readVerification(body, meta.source),
     hasEvidence: /\bevidence\s*:/i.test(body),
     hasFailureScenario: /\bfailure scenario\s*:/i.test(body),
     state: String(meta.state ?? "").toUpperCase() || null,
     path: meta.path ?? null,
+    // Grounded location carried by the persistent state (SAN-1552). Additive: scoring never reads
+    // these, but a fix-prompt renderer must recover the authoritative line range and identity
+    // from the same parser instead of scraping the marker a second time.
+    findingId: meta.findingId ?? null,
+    lineStart: Number.isInteger(meta.lineStart) ? meta.lineStart : null,
+    lineEnd: Number.isInteger(meta.lineEnd) ? meta.lineEnd : null,
+    lastSeenHeadSha: meta.lastSeenHeadSha ?? null,
     source: meta.source ?? "unknown",
+  };
+}
+
+const FINDING_FORMAT_FIELDS = [
+  [
+    "Severity",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Severity(?:\*\*)?\s*:(?:\*\*)?\s*(?:BLOCKER|HIGH|MEDIUM|LOW)(?:\*\*)?\s*$/im,
+  ],
+  ["Technical", /(?:^|\n)[ \t>*-]*(?:\*\*)?Technical(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Plain English", /(?:^|\n)[ \t>*-]*(?:\*\*)?Plain English(?:\*\*)?\s*:(?:\*\*)?/i],
+  [
+    "Real-world example",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Real-world example(?:\*\*)?\s*:(?:\*\*)?/i,
+  ],
+  ["Fix", /(?:^|\n)[ \t>*-]*(?:\*\*)?Fix(?:\*\*)?\s*:(?:\*\*)?/i],
+  ["Verify", /(?:^|\n)[ \t>*-]*(?:\*\*)?Verify(?:\*\*)?\s*:(?:\*\*)?/i],
+  [
+    "Verification state",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Verification state(?:\*\*)?\s*:(?:\*\*)?\s*(?:VERIFIED|NEEDS VERIFICATION)(?:\*\*)?\s*$/im,
+  ],
+  [
+    "Status",
+    /(?:^|\n)[ \t>*-]*(?:\*\*)?Status(?:\*\*)?\s*:(?:\*\*)?\s*(?:changes_required|advisory)(?:\*\*)?\s*$/im,
+  ],
+];
+
+/** Report whether one finding follows MDE's complete eight-field dual-audience review format. */
+export function checkFindingFormat(finding) {
+  const body = String(finding?.body ?? "");
+  let present;
+
+  if (finding?.source === "state") {
+    present = FLATTENED_STATE_FIELD_NAMES.filter((name) => {
+      if (name === "Severity") {
+        return stateEnumValue(body, name, ["BLOCKER", "HIGH", "MEDIUM", "LOW"]) !== null;
+      }
+      if (name === "Verification state") {
+        return stateEnumValue(body, name, ["VERIFIED", "NEEDS VERIFICATION"]) !== null;
+      }
+      if (name === "Status") {
+        return stateEnumValue(body, name, ["changes_required", "advisory"]) !== null;
+      }
+      return stateFieldValue(body, name) !== null;
+    });
+  } else {
+    present = FINDING_FORMAT_FIELDS.filter(([name, pattern]) => {
+      if (!pattern.test(body)) return false;
+      if (["Technical", "Plain English", "Real-world example", "Fix", "Verify"].includes(name)) {
+        return stateFieldValue(body, name) !== null;
+      }
+      return true;
+    }).map(([name]) => name);
+  }
+
+  const missing = FLATTENED_STATE_FIELD_NAMES.filter((name) => !present.includes(name));
+  return {
+    complete: missing.length === 0,
+    present,
+    missing,
   };
 }
 
@@ -214,8 +358,20 @@ export function parseFindings(text) {
       runComplete: payload.last_run?.complete ?? null,
       runKind: payload.last_run?.kind ?? null,
       runHeadSha: payload.last_run?.head_sha ?? null,
+      excludedFiles: Array.isArray(payload.last_run?.excluded_files)
+        ? payload.last_run.excluded_files
+        : null,
+      schemaVersion: payload.schema_version ?? null,
       findings: payload.findings.map((entry) =>
-        toFinding(entry.body, { state: entry.state, path: entry.path ?? null, source: "state" }),
+        toFinding(entry.body, {
+          state: entry.state,
+          path: entry.path ?? null,
+          source: "state",
+          findingId: entry.finding_id ?? null,
+          lineStart: entry.line_start,
+          lineEnd: entry.line_end,
+          lastSeenHeadSha: entry.last_seen_head_sha ?? null,
+        }),
       ),
     };
   }
@@ -239,6 +395,8 @@ export function parseFindings(text) {
     runComplete: null,
     runKind: null,
     runHeadSha: null,
+    excludedFiles: null,
+    schemaVersion: null,
     findings: merged,
   };
 }
@@ -387,6 +545,10 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
   const activeFindings = findings.filter((finding) => finding.state !== "RESOLVED");
   const blocking = blockingVerdict(signals, findings);
   const materialFindings = findings.filter(isMaterialFinding);
+  const formatChecks = activeFindings.map((finding) => ({
+    finding: finding.title,
+    ...checkFindingFormat(finding),
+  }));
 
   const base = {
     id: caseDef.id,
@@ -394,6 +556,13 @@ export function scoreReview(caseDef, reviewText, { sourceText = null } = {}) {
     findings,
     findingCount: findings.length,
     materialFindings: materialFindings.map((finding) => finding.title),
+    formatCompliance: {
+      findingCount: formatChecks.length,
+      compliantCount: formatChecks.filter((entry) => entry.complete).length,
+      // Zero findings means there is no finding format to evaluate. Never report that as a pass.
+      allCompliant: formatChecks.length === 0 ? null : formatChecks.every((entry) => entry.complete),
+      findings: formatChecks,
+    },
     findingSource: parsed.source,
     stateValid: parsed.stateValid,
     stateError: parsed.stateError,

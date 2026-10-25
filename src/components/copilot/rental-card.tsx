@@ -8,7 +8,8 @@ import {
   type RentalResultRow,
 } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
-import { Calendar, Heart } from "lucide-react";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
+import { Calendar } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -17,7 +18,7 @@ export type RentalCardProps = RentalResultRow & {
   photoUrl?: string;
   /** Override the data-pin-id attribute used for map↔card sync (UX-024).
    *  Defaults to `id` when omitted. */
-  pinId?: string;
+  pinId?: string | null;
   /** data-testid for the card root element. Defaults to "rental-card". */
   testId?: string;
   selected?: boolean;
@@ -42,6 +43,7 @@ export type RentalCardProps = RentalResultRow & {
   resultKind?: ResultKind;
 };
 
+/** Display a rental search result without inventing map identity or viewing rights. */
 export function RentalCard({
   id,
   title,
@@ -50,6 +52,8 @@ export function RentalCard({
   price_monthly,
   currency,
   bedrooms,
+  bedrooms_unknown,
+  source_url,
   photoUrl,
   availability,
   wifi,
@@ -62,16 +66,19 @@ export function RentalCard({
   searchParams,
   onSelect,
   onSchedule,
-  onSave,
   onOpenDetails,
   canScheduleViewing,
 }: RentalCardProps) {
-  // The listing's own currency — never assumed USD.
+  // The listing's own currency — never assumed USD. A stored monthly rent leads: the nightly figure
+  // would only be rent ÷ 30, so it is not shown as an offer (same rule as the /rentals browse card).
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    nightly_price,
+    tags?.includes("external-source") || price_monthly != null ? null : nightly_price,
     price_monthly,
     currency,
   );
+  // SAN-1502: the validated, normalized URL is BOTH the guard and the destination. Rendering the
+  // raw `source_url` would let the checked value and the linked value differ.
+  const externalSourceUrl = approvedExternalSourceUrl(source_url);
   const benefits = rentalBenefitBadges({
     id,
     title,
@@ -114,14 +121,14 @@ export function RentalCard({
   const showScheduleCta = canScheduleViewing === true && Boolean(onSchedule);
 
   const media = photoUrl ? (
-    <div className="hidden w-[200px] shrink-0 sm:block">
+    <div className="w-full shrink-0 sm:w-[200px]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={photoUrl}
         alt={photoAlt}
         width={200}
         height={120}
-        className="h-[120px] w-[200px] rounded-md object-cover"
+        className="aspect-[16/10] w-full rounded-md object-cover sm:aspect-auto sm:h-[120px] sm:w-[200px]"
         loading="lazy"
       />
     </div>
@@ -138,7 +145,7 @@ export function RentalCard({
     <VenueCardShell
       testId={testId}
       resultKind="rental"
-      pinId={pinId ?? id}
+      pinId={pinId === null ? undefined : pinId ?? id}
       selected={selected}
       featured={featured}
       ariaLabel={cardLabel}
@@ -170,16 +177,27 @@ export function RentalCard({
 
       <p className="mt-0.5 text-xs text-muted-foreground">
         {neighborhood}
-        {bedrooms != null ? ` · ${bedrooms} BR` : ""}
+        {bedrooms_unknown ? " · Bedrooms unknown" : bedrooms != null
+          ? ` · ${bedrooms === 0 ? "Studio" : `${bedrooms} BR`}` : ""}
       </p>
 
-      {nightlyLabel ? (
+      {nightlyLabel || monthlyLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-            {nightlyLabel}
-          </span>
+          {nightlyLabel ? (
+            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+              {nightlyLabel}
+            </span>
+          ) : null}
           {monthlyLabel ? (
-            <span className="text-xs text-muted-foreground">{monthlyLabel}</span>
+            <span
+              className={
+                nightlyLabel
+                  ? "text-xs text-muted-foreground"
+                  : "inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary"
+              }
+            >
+              {monthlyLabel}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -191,6 +209,18 @@ export function RentalCard({
       <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
         {matchReason}
       </p>
+
+      {tags?.includes("self-attested") ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal"
+            data-testid="rental-self-attested-label"
+          >
+            Not independently verified
+          </Badge>
+        </div>
+      ) : null}
 
       {benefits.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -212,6 +242,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="outline"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-details-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -221,11 +252,23 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
+        {tags?.includes("external-source") && externalSourceUrl ? (
+          <a
+            href={externalSourceUrl}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            data-testid="rental-original-listing-cta"
+            className="inline-flex h-8 min-h-11 items-center rounded-md border px-3 text-sm lg:min-h-0"
+          >
+            View original listing
+          </a>
+        ) : null}
         {showScheduleCta ? (
           <Button
             type="button"
             size="sm"
             variant="default"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-schedule-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -236,21 +279,6 @@ export function RentalCard({
             Schedule viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="rental-save-cta"
-          disabled
-          title="Save for later (coming soon)"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSave?.();
-          }}
-        >
-          <Heart className="size-3.5" aria-hidden />
-          Save
-        </Button>
       </div>
     </VenueCardShell>
   );

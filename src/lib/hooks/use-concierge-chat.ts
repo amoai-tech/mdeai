@@ -3,11 +3,26 @@
 import { useCallback } from "react";
 import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import {
+  clearConciergeError,
+  getConciergeErrorForThread,
+  getConciergeErrorSnapshot,
+  reportConciergeError,
+} from "@/lib/concierge-error-store";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+
+// runAgent awaits detachActiveRun before isRunning becomes true. Two quick
+// Retry clicks can otherwise start the same turn twice, even across hook users.
+const retriesInFlight = new WeakSet<object>();
 
 /** Shared concierge chat controller for v2 routes. */
-export function useConciergeChat() {
+function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
+  const threadNav = useOptionalThreadNav();
+  const markThreadSaved = threadNav?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
 
@@ -44,19 +59,96 @@ export function useConciergeChat() {
     agent?.setState({});
   }, [agent, stopActiveRun]);
 
+  const retryLastTurn = useCallback(async () => {
+    // Never start an empty/previous turn or a concurrent replay.
+    if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
+        !agent.messages.some((message) => message.role === "user")) return false;
+    const retryThreadId = agent.threadId;
+    const priorError = getConciergeErrorForThread(retryThreadId);
+    const latestError = getConciergeErrorSnapshot();
+    // A notice from another conversation must never replay this agent's turn.
+    if (priorError.threadId && priorError.threadId !== retryThreadId) return false;
+    if (priorError.version === 0 && latestError.threadId &&
+        latestError.threadId !== retryThreadId) return false;
+    retriesInFlight.add(agent);
+    clearConciergeError(retryThreadId);
+    try {
+      await copilotkit.runAgent({ agent });
+      // CopilotKit can surface a stream error via onError without rejecting.
+      const error = getConciergeErrorForThread(retryThreadId);
+      if (error.version > 0) return false;
+      // A thread change during retry must not save/title a different chat.
+      if (agent.threadId === retryThreadId) {
+        markThreadSaved?.(retryThreadId);
+        if (retryThreadId) void ensureThreadTitle(retryThreadId);
+      }
+      return true;
+    } catch (error) {
+      console.error("[concierge-retry]", error);
+      if (agent.threadId === retryThreadId) reportConciergeError(retryThreadId);
+      return false;
+    } finally {
+      retriesInFlight.delete(agent);
+    }
+  }, [agent, copilotkit, markThreadSaved]);
+
   const appendMessage = useCallback(
     async (content: string) => {
       if (!agent) return false;
+      // CopilotKit v2 useAgent() only copies the configured thread ID when the
+      // configuration is explicit. Fresh threads are deliberately non-explicit,
+      // so otherwise the agent invents a different ID and /chat cannot adopt
+      // the saved conversation from this tab after a Rentals send.
+      // Pin only a fresh, authenticated tab before the FIRST run; never
+      // override an explicitly selected or previously persisted thread.
+      if (threadNav?.ready && !threadNav.activeThreadId && !threadNav.hasPersistedThread &&
+          threadNav.sessionThreadId) {
+        // AG-UI's AbstractAgent is a mutable SDK object (the installed useAgent
+        // assigns threadId directly too); this is not React render state.
+        // eslint-disable-next-line react-hooks/immutability
+        agent.threadId = threadNav.sessionThreadId;
+      }
       agent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
         content,
       });
       await copilotkit.runAgent({ agent });
+      // Only completed turns are recorded as saved, never a freshly minted UUID.
+      markThreadSaved?.(agent.threadId);
+      // Title the persisted conversation without delaying the user or navigation.
+      if (agent.threadId) void ensureThreadTitle(agent.threadId);
       return true;
     },
-    [agent, copilotkit],
+    [agent, copilotkit, markThreadSaved, threadNav],
   );
 
-  return { isLoading, reset, stopActiveRun, appendMessage, isRuntimeUnavailable };
+  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };
 }
+
+// The deterministic E2E surface answers fast paths locally; it must not mount
+// or access the live agent/runtime. Every live hook caller retains the same
+// interface so the session reset can still clear its local fast-path contexts.
+const deterministicChat = {
+  isLoading: false,
+  reset: () => {},
+  stopActiveRun: () => {},
+  retryLastTurn: async () => false,
+  appendMessage: async (content: string) => {
+    void content;
+    return false;
+  },
+  isRuntimeUnavailable: () => true,
+};
+function useDeterministicConciergeChat() {
+  return deterministicChat;
+}
+
+/**
+ * Select once per build/module: Next inlines the non-production E2E flag in
+ * client bundles. This preserves React hook order (no conditional hook calls),
+ * and production always selects the unchanged live CopilotKit implementation.
+ */
+export const useConciergeChat = isDeterministicE2E()
+  ? useDeterministicConciergeChat
+  : useLiveConciergeChat;

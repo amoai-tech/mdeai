@@ -34,3 +34,51 @@ between budget runs if a prior session triggered a CopilotKit POST storm.
 
 Do not run `npx playwright test - <<'EOF'` — Playwright ignores inline stdin and runs the
 full discovered suite.
+
+## SAN-1549 — one-command signed-in QA smoke
+
+Run from the repository root (the TypeScript test is a file, **not** a Bash command):
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:e2e:qa-signin
+```
+
+This **opt-in** smoke uses `e2e/fixtures.ts` and `e2e/helpers/auth.ts` to obtain a
+real Supabase email-OTP session for the existing read-only QA account (and
+refuses auto-creating it if missing). No
+manual password, inbox, global `storageState` setup project, or `E2E_BYPASS_AUTH`
+is necessary. The script auto-starts the configured local Next.js server on
+`:3001` (unless `PW_SKIP_WEBSERVER=1`); a legitimate authenticated `/saved`
+response must be HTTP 200, show the user's saved content/empty state, and
+never show the sign-in prompt.
+
+**Secrets:** supply `NEXT_PUBLIC_SUPABASE_URL`, the publishable/anon key,
+and `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) through an
+ignored `.env.local` or CI secret store. Never print, commit or upload these
+secrets, Supabase session cookies, Playwright traces, storage-state JSON or
+authenticated screenshots. On a clean worktree, provide the env locally
+without committing it. Missing credentials must make this explicit smoke fail,
+not skip to green. Playwright 1.61 may create `error-context.md` with page content
+on a failed assertion even when trace/screenshot/video are off; treat local
+`test-results/` and HTML reports as sensitive and never publish them from
+authenticated runs. There is no supported `error-context: "off"` test option.
+
+**Negative path:** `npm run test:e2e:auth` runs the existing signed-out
+guard suite independently; do not globally authenticate its contexts.
+For deployed authenticated smoke use the existing `prod-smoke` test
+`e2e/prod-signed-in-route.spec.ts` with `PROD_SMOKE_BASE_URL` and
+`PW_SKIP_WEBSERVER=1`. Its origin-aware session helper is intentionally
+different from this local-only smoke.
+
+**Role/data-changing tests:** use distinct, real auth identities and the
+existing cleanup helpers; this shared QA account is for read-only smoke.
+Role/RLS and cross-user isolation proof belongs to the existing rental
+and account-security test tasks, not this smoke command.
+
+**Ubuntu 26.04:** Playwright v1.60 cannot download Chromium on this OS;
+use the repository's updated Playwright lockfile and matching browser.
+If a browser binary is missing, run `npx playwright install chromium`.
+For debugging, run:
+`npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.

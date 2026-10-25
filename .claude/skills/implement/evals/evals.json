@@ -1,0 +1,42 @@
+{
+  "skill_name": "implement",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Implement the previously specified fix for a duplicate rental lead. Reuse the existing transactional RPC and write a focused retry test. Do not build a second lead service.",
+      "expected_output": "Inspects existing owner, changes minimal scope, tests replay and authorization before stating outcome.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Inspects existing owner, changes minimal scope, tests replay and authorization before stating outcome."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Fix the mobile chat composer regression in the existing component and add a Playwright regression, without touching other UI.",
+      "expected_output": "Scopes change to affected component, proves mobile journey, does not over-refactor.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Scopes change to affected component, proves mobile journey, does not over-refactor."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Implement the approved event ticket webhook fix. Ensure retries never create two tickets and preserve Stripe signature validation.",
+      "expected_output": "Requires domain payment safety and independent S4 verification, shows test evidence.",
+      "files": [],
+      "expectations": [
+        "Identify the correct scope and user-visible outcome without inventing evidence",
+        "Preserve the owning workflow's authorization, security and no-false-success rules",
+        "State precise verification and any unknowns rather than claiming unrun tests",
+        "Requires domain payment safety and independent S4 verification, shows test evidence."
+      ]
+    }
+  ]
+}

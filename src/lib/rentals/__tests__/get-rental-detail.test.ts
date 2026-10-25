@@ -1,18 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { searchRentals } from "@/mastra/tools/search-rentals";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 import { getRentalDetail, mapApartmentRowToDetail } from "../get-rental-detail";
 
-// Partial mock: the real `isRentalRequestable` must stay live because
-// `mapApartmentRowToDetail` now derives `canScheduleViewing` from it (SAN-1349).
-// Mocking it out would make the requestability tests assert against a stub.
-vi.mock("@/mastra/tools/search-rentals", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/mastra/tools/search-rentals")>()),
-  searchRentals: vi.fn(),
-}));
-
 /**
- * `getRentalDetail` only falls back to the mock catalogue when **no** Supabase
- * credential name resolves. MDE-ENV-002 made the server accept the public names
+ * `getRentalDetail` has no demo catalogue (SAN-1089): when **no** Supabase
+ * credential name resolves it throws instead of inventing a rental. MDE-ENV-002 made the server accept the public names
  * too, so clearing the server-only pair is no longer sufficient — CI sets
  * `NEXT_PUBLIC_SUPABASE_URL`, which would otherwise build a real client.
  */
@@ -33,7 +25,6 @@ beforeEach(() => {
     savedCredentials.set(name, env[name]);
     delete env[name];
   }
-  vi.mocked(searchRentals).mockReset();
 });
 
 afterEach(() => {
@@ -45,6 +36,36 @@ afterEach(() => {
 });
 
 describe("SAN-1202 · mapApartmentRowToDetail", () => {
+  it("discloses a third-party advertisement as unverified without blocking Phase A viewing", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "external-001",
+      status: "active",
+      title: "Laureles apartment",
+      source_url: "https://www.fincaraiz.com.co/example",
+      metadata: { source_record_type: "third_party_advertisement", availability_status: "unconfirmed" },
+      available_from: null,
+      rental_can_request_viewing: true,
+    });
+    expect(detail.isNotIndependentlyVerified).toBe(true);
+    expect(detail.sourceUrl).toBe("https://www.fincaraiz.com.co/example");
+    expect(detail.availableFrom).toBeNull();
+    expect(detail.canScheduleViewing).toBe(true);
+    // SAN-1502 — the detail CTA must read as an MDE follow-up for an external source.
+    expect(detail.isExternalSource).toBe(true);
+  });
+
+  it("does not treat an activated development import as an external source", () => {
+    const detail = mapApartmentRowToDetail({
+      id: "ca000000-0000-4000-8000-000000000001",
+      status: "active",
+      title: "Activated import",
+      metadata: { mde_managed_development: true, source_record_type: "third_party_advertisement" },
+      rental_can_request_viewing: true,
+    });
+    expect(detail.isExternalSource).toBe(false);
+  });
+
+
   it("maps a full apartments row to the detail view-model", () => {
     const rentalDetail = mapApartmentRowToDetail({
       id: "abc",
@@ -75,40 +96,23 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(rentalDetail.images).toHaveLength(2);
   });
 
-  // SAN-1349 — the detail page must not offer a viewing request for a listing the database
-  // would reject. Requestability is derived from the same ownership + workflow + availability
-  // proof, and fails closed when any part of it is missing.
+  // SAN-1502 — requestability has exactly ONE owner: the database's computed
+  // `rental_can_request_viewing` column, evaluated under the server-controlled phase.
+  // Details must not re-derive it from ownership/workflow/availability columns, and it
+  // fails closed when the projection did not return the column.
   describe("canScheduleViewing", () => {
-    const ownedRow = {
-      id: "abc",
-      title: "Bright Laureles 2BR",
-      neighborhood: "Laureles",
-      status: "active",
-      moderation_status: "approved",
-      listing_workflow_status: "published",
-      landlord_id: "11111111-1111-4111-8111-111111111111",
-      available_from: null,
-      available_to: null,
-    };
+    const someRow = { id: "abc", title: "Bright Laureles 2BR", neighborhood: "Laureles" };
 
-    it("is true for an owned, active, approved, published, available listing", () => {
-      expect(mapApartmentRowToDetail(ownedRow).canScheduleViewing).toBe(true);
+    it("is true only when the database computed the row requestable", () => {
+      expect(mapApartmentRowToDetail({ ...someRow, rental_can_request_viewing: true }).canScheduleViewing).toBe(true);
     });
 
-    it("is false when the listing has no canonical owner", () => {
-      expect(mapApartmentRowToDetail({ ...ownedRow, landlord_id: null }).canScheduleViewing).toBe(false);
+    it("is false when the database computed it not requestable", () => {
+      expect(mapApartmentRowToDetail({ ...someRow, rental_can_request_viewing: false }).canScheduleViewing).toBe(false);
     });
 
-    it("is false when the listing is unapproved or unpublished", () => {
-      expect(
-        mapApartmentRowToDetail({ ...ownedRow, moderation_status: "pending" }).canScheduleViewing,
-      ).toBe(false);
-      expect(
-        mapApartmentRowToDetail({ ...ownedRow, listing_workflow_status: "draft" }).canScheduleViewing,
-      ).toBe(false);
-    });
-
-    it("fails closed when the ownership columns are absent from the row", () => {
+    it("fails closed when the computed column is absent from the row", () => {
+      expect(mapApartmentRowToDetail(someRow).canScheduleViewing).toBe(false);
       expect(mapApartmentRowToDetail({ id: "x", title: "Studio", neighborhood: "El Poblado" }).canScheduleViewing).toBe(false);
     });
   });
@@ -138,34 +142,10 @@ describe("SAN-1202 · mapApartmentRowToDetail", () => {
     expect(rentalDetail.bedrooms).toBeNull();
   });
 
-  it("matches mock rentals by source_url slug and keeps unknown fields null", async () => {
-    vi.mocked(searchRentals).mockResolvedValue({
-      total: 1,
-      source: "mock",
-      results: [
-        {
-          id: "rnt_lau_001",
-          title: "Bright 2BR with Balcony in Laureles",
-          neighborhood: "Laureles",
-          nightly_price: 78,
-          currency: "USD",
-          bedrooms: 2,
-          wifi: true,
-          amenities: ["wifi"],
-          image: "",
-          source_url: "https://mdeai.co/rentals/laureles-2br-balcony",
-          can_schedule_viewing: true,
-          schedule_viewing_url: "https://mdeai.co/rentals/laureles-2br-balcony/schedule-viewing",
-          host_name: "Andrés Restrepo",
-          availability: "Available now",
-          tags: [],
-        },
-      ],
-    });
-
-    const rentalDetail = await getRentalDetail("laureles-2br-balcony");
-
-    expect(rentalDetail?.id).toBe("rnt_lau_001");
-    expect(rentalDetail?.priceMonthly).toBeNull();
+  it("throws RentalSearchUnavailableError — never a demo rental — when no Supabase credentials resolve", async () => {
+    await expect(getRentalDetail("rnt_lau_001")).rejects.toBeInstanceOf(RentalSearchUnavailableError);
+    await expect(getRentalDetail("laureles-2br-balcony")).rejects.toBeInstanceOf(
+      RentalSearchUnavailableError,
+    );
   });
 });

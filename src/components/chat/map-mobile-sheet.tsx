@@ -1,23 +1,26 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Map, MapPin } from "lucide-react";
+import { Map, MapPin, XIcon } from "lucide-react";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
+  SheetClose,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
 import { useMapContext } from "@/platform/maps/map-context";
 
 function MapSheetBody({ open }: { open: boolean }) {
   const { pins } = useMapContext();
+  const mapsStatus = useMapsStatus();
   const visiblePins = pins.filter((pin) => pin.source !== "mock");
-  const showEmpty = visiblePins.length === 0;
+  const showEmpty = visiblePins.length === 0 && mapsStatus !== "auth-failed";
 
   return (
     <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
@@ -101,8 +104,34 @@ export function MapMobileSheet() {
           side="bottom"
           className="flex max-h-[calc(85dvh-env(safe-area-inset-bottom,0px))] min-h-[75dvh] flex-col p-0 pb-[env(safe-area-inset-bottom,0px)]"
           data-testid="map-sheet-content"
+          showCloseButton={false}
+          onKeyDownCapture={(event) => {
+            if (
+              event.key !== "Escape" ||
+              event.nativeEvent.isComposing ||
+              !(event.target instanceof Element) ||
+              !event.target.closest('[data-testid="chat-map"]')
+            ) {
+              return;
+            }
+            setUserMapOpen(false);
+          }}
         >
-          <SheetHeader className="border-b border-border px-4 py-3 text-left">
+          <SheetClose
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute right-3 top-3 z-10 size-11"
+                aria-label="Close"
+              />
+            }
+          >
+            <XIcon aria-hidden />
+            <span className="sr-only">Close</span>
+          </SheetClose>
+          <SheetHeader className="border-b border-border px-4 py-3 pr-16 text-left">
             <SheetTitle>Map</SheetTitle>
             <SheetDescription>
               Tap a pin or close to return to chat. Escape closes this sheet.

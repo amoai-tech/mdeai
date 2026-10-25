@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type ConsoleMessage, type Page, type Request } from "@playwright/test";
 import {
   ensureChatInputVisible,
   hideCopilotWebInspector,
@@ -90,7 +90,32 @@ export const groundedPlace = {
   fieldMaskVersion: "places-v1",
 };
 
-export async function mockFastPaths(page: Page) {
+/**
+ * Google's own source for `groundedPlace`, as the grounding tool returns it. Its name differs from the
+ * card title on purpose: the card must show Google's name (SAN-878).
+ */
+export const groundedSource = {
+  source: "google_maps_grounding",
+  placeUri: groundedPlace.mapsUrl,
+  title: "Deterministic Coffee Lab & Roastery",
+};
+
+export async function mockFastPaths(page: Page, options: { mockThreads?: boolean } = {}) {
+  // Most deterministic chat pages mount the nav rail and GET /api/threads.
+  // Never let those cases call the real Supabase-backed endpoint in CI.
+  // Tests owning a custom saved-thread fixture must explicitly opt out so a
+  // last-registered route cannot mask their thread list (Playwright LIFO order).
+  if (options.mockThreads !== false) {
+    await page.route("**/api/threads", (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "x-mde-e2e-fixture": "threads" },
+        body: JSON.stringify({ threads: [] }),
+      });
+    });
+  }
   await page.route("**/api/restaurants/search", async (route) => {
     await route.fulfill({
       status: 200,
@@ -118,7 +143,7 @@ export async function mockFastPaths(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({
         results: [groundedPlace],
-        attribution: [],
+        attribution: [groundedSource],
         source: "mock",
         metadata: { venueKind: "cafe" },
       }),
@@ -155,13 +180,51 @@ export async function chooseRestaurantFilter(page: Page) {
 }
 
 export async function gotoDeterministicChat(page: Page) {
-  const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
-  expect(response?.ok()).toBe(true);
-  await hideCopilotWebInspector(page);
-  const chat = page.getByTestId("concierge-chat-view-mounted");
-  await expect(chat).toBeVisible({ timeout: 20_000 });
-  await expect(chat).toHaveAttribute("data-hydrated", "true", {
-    timeout: 30_000,
-  });
-  await ensureChatInputVisible(page);
+  // Only emit diagnostics when the navigation/hydration assertion fails; keep
+  // passing runs quiet and preserve the original error as the cause.
+  const failures: string[] = [];
+  const record = (label: string, detail: string) => {
+    if (failures.length < 15) failures.push(`${label}: ${detail.slice(0, 220)}`);
+  };
+  const onPageError = (error: Error) => record("pageerror", error.message);
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === "error") record("console", message.text());
+  };
+  const onRequestFailed = (request: Request) => {
+    const path = new URL(request.url()).pathname;
+    record("requestfailed", `${request.method()} ${path} ${request.failure()?.errorText ?? ""}`);
+  };
+  page.on("pageerror", onPageError);
+  page.on("console", onConsole);
+  page.on("requestfailed", onRequestFailed);
+  try {
+    const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    expect(response?.ok()).toBe(true);
+    await hideCopilotWebInspector(page);
+    const chat = page.getByTestId("concierge-chat-view-mounted");
+    await expect(chat).toBeVisible({ timeout: 20_000 });
+    // Next.js dev can cold-compile client chunks on a shared GitHub runner.
+    // Wait on actual hydration (never a fixed sleep); a failure still reports
+    // the DOM state and browser/network errors below.
+    await expect(chat).toHaveAttribute("data-hydrated", "true", {
+      timeout: 45_000,
+    });
+    await ensureChatInputVisible(page);
+  } catch (error) {
+    const snapshot = await page.evaluate(() => ({
+      readyState: document.readyState,
+      chatHydrated: document.querySelector('[data-testid="concierge-chat-view-mounted"]')
+        ?.getAttribute("data-hydrated") ?? "missing",
+      chatCount: document.querySelectorAll('[data-testid="concierge-chat-view-mounted"]').length,
+    })).catch(() => ({ readyState: "unavailable", chatHydrated: "unavailable", chatCount: -1 }));
+    throw new Error(
+      `Deterministic chat did not initialize: ${JSON.stringify(snapshot)}; ` +
+      `browser errors: ${JSON.stringify(failures)}`,
+      { cause: error },
+    );
+  } finally {
+    page.off("pageerror", onPageError);
+    page.off("console", onConsole);
+    page.off("requestfailed", onRequestFailed);
+  }
 }

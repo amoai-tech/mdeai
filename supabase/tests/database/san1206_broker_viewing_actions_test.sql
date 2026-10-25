@@ -103,14 +103,14 @@ values ('a1206000-0000-4000-8000-000000000004', 'admin');
 -- and is still refused on this one.
 insert into public.apartments
   (id, title, slug, neighborhood, status, moderation_status, listing_workflow_status,
-   landlord_id, available_to)
+   landlord_id, available_from, available_to)
 values
   ('b1206000-0000-4000-8000-000000000001', 'SAN1206 owned requestable', 'san1206-owned',
    'Laureles', 'active', 'approved', 'published',
-   'a1206000-0000-4000-8000-000000000011', '2099-12-31'),
+   'a1206000-0000-4000-8000-000000000011', '2026-01-01', '2099-12-31'),
   ('b1206000-0000-4000-8000-000000000002', 'SAN1206 other requestable', 'san1206-other',
    'Poblado', 'active', 'approved', 'published',
-   'a1206000-0000-4000-8000-000000000012', '2099-12-31');
+   'a1206000-0000-4000-8000-000000000012', '2026-01-01', '2099-12-31');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · CONTRACT SURFACE — the broker transition RPC and its ACL.

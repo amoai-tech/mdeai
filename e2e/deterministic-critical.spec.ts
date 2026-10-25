@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import {
   gotoMarketingHome,
   submitHomeHeroQuery,
@@ -17,6 +18,25 @@ import {
 test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await mockFastPaths(page);
+  });
+
+  test("shared fast-path mocks intercept the nav rail thread fetch without Supabase", async ({ page }) => {
+    // A cold Next.js compile can take longer than the default 30s network wait.
+    // Keep this test-specific budget above the 45s hydration timeout.
+    test.setTimeout(90_000);
+    // Prove the fixture itself supplied this response. A 200 from an external
+    // service (or a quiet catch in useNavThreads) must not satisfy this test.
+    const threadResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/threads" &&
+        response.request().method() === "GET",
+      { timeout: 60_000 },
+    );
+    await gotoDeterministicChat(page);
+    const response = await threadResponse;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-mde-e2e-fixture"]).toBe("threads");
+    expect(await response.json()).toEqual({ threads: [] });
   });
 
   test("Home → Chat sends one restaurant query and renders mocked results", async ({
@@ -101,5 +121,41 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
 
     await expect(page.getByTestId("rental-card")).toHaveCount(1);
     await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(0);
+  });
+
+  test("mobile map sheet closes on Escape before the focused map can swallow it", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoDeterministicChat(page);
+
+    const trigger = page.getByTestId("map-sheet-trigger");
+    await trigger.click();
+
+    const sheet = page.getByTestId("map-sheet-content");
+    await expect(sheet).toBeVisible();
+
+    await page.evaluate(() => {
+      const map = document.querySelector(
+        '[data-testid="map-sheet-content"] [data-testid="chat-map"]',
+      );
+      if (!map) throw new Error("no map in the sheet");
+
+      const focusTarget = document.createElement("div");
+      focusTarget.tabIndex = 0;
+      focusTarget.setAttribute("data-testid", "map-focus-target");
+      map.appendChild(focusTarget);
+
+      // Model Google Maps consuming keyboard events on its own container.
+      map.addEventListener("keydown", (event) => event.stopPropagation());
+      focusTarget.focus();
+    });
+
+    await expect(page.getByTestId("map-focus-target")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+
+    await expect(sheet).toBeHidden({ timeout: 10_000 });
+    await expect(trigger).toBeFocused();
   });
 });

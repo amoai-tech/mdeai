@@ -1,0 +1,38 @@
+[
+  {
+    "id": "errors-1",
+    "prompt": "Our web app started returning 500 after deploy. Diagnose the failure; no code changes.",
+    "should_trigger": true,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "errors-2",
+    "prompt": "Find the root cause of this intermittent reservation duplicate; inspect retry and DB path.",
+    "should_trigger": true,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "errors-3",
+    "prompt": "The Playwright test fails with a timeout; figure out why it is flaky.",
+    "should_trigger": true,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "errors-4",
+    "prompt": "What does an HTTP 403 status code mean in general?",
+    "should_trigger": false,
+    "expected_owner": "direct"
+  },
+  {
+    "id": "errors-5",
+    "prompt": "Create a focused regression test plan for our rental checkout.",
+    "should_trigger": false,
+    "expected_owner": "tests"
+  },
+  {
+    "id": "errors-6",
+    "prompt": "Audit PR #258 before it is merged and report merge blockers.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  }
+]

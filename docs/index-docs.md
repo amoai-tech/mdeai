@@ -279,6 +279,21 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
 | Strategy | [`08-strategy/README.md`](08-strategy/README.md) | Markdown | Current |
 | Strategy | [`08-strategy/ai-services.md`](08-strategy/ai-services.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/01-prompt.md`](08-strategy/competitors/mindtrip/01-prompt.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/02-report-mindtrip.md`](08-strategy/competitors/mindtrip/02-report-mindtrip.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/03-report-Mindtrip vs. MDE AI.md`](08-strategy/competitors/mindtrip/03-report-Mindtrip%20vs.%20MDE%20AI.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/README.md`](08-strategy/competitors/mindtrip/README.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/mde-gaps-and-fixes.md`](08-strategy/competitors/mindtrip/mde-gaps-and-fixes.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/01-home.md`](08-strategy/competitors/mindtrip/screens/01-home.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/02-chat-results-desktop.md`](08-strategy/competitors/mindtrip/screens/02-chat-results-desktop.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/03-chat-results-phone.md`](08-strategy/competitors/mindtrip/screens/03-chat-results-phone.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/04-map-column.md`](08-strategy/competitors/mindtrip/screens/04-map-column.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/05-detail-panel.md`](08-strategy/competitors/mindtrip/screens/05-detail-panel.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/06-save-to-collection.md`](08-strategy/competitors/mindtrip/screens/06-save-to-collection.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/07-booking-options-outbound.md`](08-strategy/competitors/mindtrip/screens/07-booking-options-outbound.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/08-room-page.md`](08-strategy/competitors/mindtrip/screens/08-room-page.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/09-checkout-guest-and-payment.md`](08-strategy/competitors/mindtrip/screens/09-checkout-guest-and-payment.md) | Markdown | Current |
+| Strategy | [`08-strategy/competitors/mindtrip/screens/10-booking-confirmation.md`](08-strategy/competitors/mindtrip/screens/10-booking-confirmation.md) | Markdown | Current |
 | Strategy | [`08-strategy/financial-model.md`](08-strategy/financial-model.md) | Markdown | Current |
 | Strategy | [`08-strategy/growth-strategy.md`](08-strategy/growth-strategy.md) | Markdown | Current |
 | Strategy | [`08-strategy/market-research.md`](08-strategy/market-research.md) | Markdown | Current |

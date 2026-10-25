@@ -8,6 +8,7 @@ import {
   event,
   gotoDeterministicChat,
   groundedPlace,
+  groundedSource,
   mockFastPaths,
   rental,
   typeAndSubmit,
@@ -86,6 +87,18 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     await mockFastPaths(page);
   });
 
+  test("deterministic chat does not connect the live CopilotKit transport", async ({ page }) => {
+    const copilotkitRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/copilotkit") {
+        copilotkitRequests.push(request.method());
+      }
+    });
+    await gotoDeterministicChat(page);
+    expect(copilotkitRequests, "local fast-path tests must not start the live AI transport")
+      .toEqual([]);
+  });
+
   for (const viewport of VIEWPORTS) {
     test(`rental results are above the composer at ${viewport.width}px (${viewport.name})`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -115,18 +128,91 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     );
   });
 
+  test("a failed first event search offers Retry outside the empty transcript", async ({ page }) => {
+    let eventRequests = 0;
+    const agentRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/copilotkit")) {
+        agentRequests.push(request.method());
+      }
+    });
+    // Override the default success fixture: initial 503, then recovered event search.
+    await page.route("**/api/events/search", async (route) => {
+      eventRequests += 1;
+      await route.fulfill({
+        status: eventRequests === 1 ? 503 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          eventRequests === 1
+            ? { error: "temporarily unavailable" }
+            : { results: [event], total: 1, source: "mock" },
+        ),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    await expect(page.getByTestId("concierge-run-feedback")).toHaveCount(0);
+    await typeAndSubmit(page, EVENT_QUERY);
+
+    const feedback = page.getByTestId("concierge-run-feedback");
+    await expect(feedback.getByRole("button", { name: /try again/i })).toBeVisible();
+    // Guard the actual PR contract: Retry belongs to the permanently mounted panel,
+    // not to the transcript tail (which CopilotKit omits on a first-message failure).
+    expect(await feedback.evaluate(
+      (el) => el.closest('[data-testid="concierge-transcript-tail"]') === null,
+    )).toBe(true);
+    expect(eventRequests, "one initial failed event request").toBe(1);
+    await feedback.getByRole("button", { name: /try again/i }).click();
+
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    expect(eventRequests, "one failed request plus one Retry request").toBe(2);
+    expect(agentRequests, "the event retry must not call the AI agent").toEqual([]);
+  });
+
   test("grounded-place results are above the composer", async ({ page }) => {
     await gotoDeterministicChat(page);
     const response = waitForPost(page, "/api/grounded/search");
     await typeAndSubmit(page, GROUNDED_QUERY);
     expect((await response).ok()).toBe(true);
     await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    // SAN-878 — Google's rule for grounded results: the source is shown with the card, named, linked to
+    // its URL, attributed as "Google Maps", and never translated.
+    const source = page.getByTestId("grounded-card").getByTestId("grounding-attribution");
+    await expect(source).toBeVisible();
+    await expect(source).toContainText("Google Maps");
+    // The name and the link are Google's own annotation, not the card's title or its own URL.
+    await expect(source).toHaveText(`Source: Google Maps · ${groundedSource.title}`);
+    await expect(source.locator('[translate="no"]')).toHaveText("Google Maps");
+    await expect(source.getByRole("link")).toHaveAttribute("href", groundedSource.placeUri);
     await expectReadsBefore(
       page.getByTestId("grounded-fast-path-panel"),
       "the grounded-place results",
       composer(page),
       "the message box",
     );
+  });
+
+  test("a curated fallback café never claims Google Maps as its source", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    await page.route("**/api/grounded/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [groundedPlace],
+          attribution: [],
+          source: "grounding",
+          metadata: { venueKind: "cafe", fallback: "curated" },
+        }),
+      });
+    });
+    const response = waitForPost(page, "/api/grounded/search");
+    await typeAndSubmit(page, GROUNDED_QUERY);
+    expect((await response).ok()).toBe(true);
+
+    await expect(page.getByTestId("grounded-card")).toHaveCount(1);
+    await expect(page.getByTestId("grounding-attribution")).toHaveCount(0);
+    await expect(page.getByText("Google-verified candidate")).toHaveCount(0);
   });
 
   test("a later search of another kind replaces the earlier results (grounded → event → rental)", async ({ page }) => {
@@ -418,5 +504,34 @@ test.describe("SAN-1422 map pins match the results", { tag: ["@critical", "@dete
       "the message box",
     );
     await expectNoSidewaysScroll(page);
+  });
+});
+
+/**
+ * SAN-407 · the message box must not accept input before the page can act on it.
+ *
+ * The composer is server-rendered, so it appears before the page's JavaScript attaches. Typing or
+ * pressing Enter in that gap did nothing and the typed text was wiped on load (3 of 6 early sends
+ * lost on production). With JavaScript switched off the page is exactly what a renter sees in that
+ * gap: the box must be disabled, and it must work once the page is live.
+ */
+test.describe("SAN-407 the message box is not usable before the page can send", { tag: ["@critical", "@deterministic"] }, () => {
+  test.describe("server-rendered page, JavaScript not yet running", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("the textarea is disabled so a first message cannot be typed into nothing", async ({ page }) => {
+      await page.goto("/chat", { waitUntil: "domcontentloaded" });
+      const input = page.getByPlaceholder(/type a message/i).first();
+      await expect(input).toBeVisible({ timeout: 30_000 });
+      await expect(input).toBeDisabled();
+    });
+  });
+
+  test("once the page is live the box is enabled and a first message is sent, not lost", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const input = page.getByPlaceholder(/type a message/i).first();
+    await expect(input).toBeEnabled({ timeout: 30_000 });
+    await typeAndSubmit(page, "Search apartments Medellín");
+    await expect(page.getByText("Search apartments Medellín", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
   });
 });

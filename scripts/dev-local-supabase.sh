@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Run the real MDE UI with local Supabase Auth + Postgres-backed Mastra memory.
+# Uses the existing app, storage, and routes; does not write secrets to files.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+if [[ "${VERCEL_ENV:-}" == "production" || "${NODE_ENV:-}" == "production" ]]; then
+  echo "dev-local-supabase: refuse to start in a production environment" >&2
+  exit 1
+fi
+
+# An isolated Git worktree may not own the already-running local Supabase stack.
+# Use the CLI's supported --workdir flag when an existing local stack was started
+# from another checkout. Never copy credentials or start a second database.
+supabase_args=(status -o env)
+if [[ -n "${MDE_LOCAL_SUPABASE_WORKDIR:-}" ]]; then
+  if [[ ! -d "$MDE_LOCAL_SUPABASE_WORKDIR/supabase" ]]; then
+    echo "dev-local-supabase: supplied Supabase workdir has no supabase/ directory" >&2
+    exit 1
+  fi
+  supabase_args+=(--workdir "$MDE_LOCAL_SUPABASE_WORKDIR")
+fi
+
+# Capture the local CLI output without echoing its credentials.
+if ! status="$(npx supabase "${supabase_args[@]}" 2>/dev/null)"; then
+  echo "dev-local-supabase: start the local stack with 'npx supabase start' first" >&2
+  exit 1
+fi
+
+api_url="" db_url="" anon_key="" service_key=""
+while IFS='=' read -r name value; do
+  name="${name#export }"
+  # Supabase CLI uses KEY="value"; strip surrounding single/double quotes.
+  if [[ "${value:-}" == \"*\" || "${value:-}" == \'*\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  case "$name" in
+    API_URL) api_url="$value" ;;
+    DB_URL) db_url="$value" ;;
+    ANON_KEY) anon_key="$value" ;;
+    SERVICE_ROLE_KEY) service_key="$value" ;;
+  esac
+done <<< "$status"
+unset status
+
+if [[ -z "$api_url" || -z "$db_url" || -z "$anon_key" || -z "$service_key" ]]; then
+  echo "dev-local-supabase: local API, DB, anon or service credentials missing" >&2
+  exit 1
+fi
+
+# Fail closed before exporting any credentials: MDE's configured local ports.
+if ! API_URL="$api_url" DB_URL="$db_url" node - <<'NODE'
+// An uncaught ERR_INVALID_URL includes the supplied URL in the stack trace,
+// which could expose the DB password. Fail without printing either URL.
+let api, db;
+try {
+  api = new URL(process.env.API_URL);
+  db = new URL(process.env.DB_URL);
+} catch {
+  process.exit(1);
+}
+if (api.protocol !== 'http:' || !['localhost','127.0.0.1'].includes(api.hostname) || api.port !== '54621' ||
+    !['postgres:','postgresql:'].includes(db.protocol) ||
+    !['localhost','127.0.0.1'].includes(db.hostname) || db.port !== '54622') {
+  process.exit(1);
+}
+NODE
+then
+  echo "dev-local-supabase: refusing a non-local or wrong-port Supabase target" >&2
+  exit 1
+fi
+
+export NEXT_PUBLIC_SUPABASE_URL="$api_url" SUPABASE_URL="$api_url"
+export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$anon_key" NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
+export SUPABASE_ANON_KEY="$anon_key" SUPABASE_SERVICE_ROLE_KEY="$service_key"
+export DATABASE_URL="$db_url" MASTRA_DEV_LIBSQL=0
+# The local worktree UI uses :3002; never inherit a hosted site URL from .env.
+export NEXT_PUBLIC_SITE_URL="http://localhost:3002"
+
+# PostgresStore uses disableInit: true. A fresh local stack has no vendor-owned
+# mastra_* tables until the existing idempotent, RLS-locking initializer runs.
+# Only run it AFTER validating the loopback API and database above.
+if ! node scripts/init-mastra-schema.mjs; then
+  echo "dev-local-supabase: local Mastra schema initialization failed" >&2
+  exit 1
+fi
+
+echo "dev-local-supabase: local API :54621, local Postgres :54622, Mastra Postgres; UI :3002"
+exec npm run dev:ui:worktree

@@ -1,0 +1,128 @@
+{
+  "skill_name": "errors",
+  "version": "1.1.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We have a reproducible MDE defect: rental search shows no apartments although rows exist in Supabase. Give only the FIRST TWO steps you would take to diagnose it and which project guide applies; do not actually troubleshoot, execute commands, or change anything. Use the project skills that the coding assistant should follow.",
+      "expected_output": "Confirms actual error and affected runtime before suggesting a small scoped fix; makes no code changes.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "A renter clicks Request Viewing and receives 403 while search still works. Diagnose the failing journey and distinguish RLS from the UI.",
+      "expected_output": "Traces UI to backend to Supabase authorization, identifies evidence needed, does not bypass authorization.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "The CI TypeScript step is red only on one PR. Please find the precise regression and show how to reproduce it.",
+      "expected_output": "Checks exact branch and error, isolates regression before proposing changes.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "agent-loaded-errors",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "errors"
+        },
+        {
+          "id": "errors-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "errors"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 4,
+      "prompt": "Explain the difference between server-side rendering and client-side rendering in Next.js. Nothing is failing; this is a simple conceptual comparison.",
+      "expected_output": "Answers the conceptual question without invoking the MDE errors skill.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        {
+          "id": "catalog-exposes-errors",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "errors"
+        },
+        {
+          "id": "does-not-load-errors",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "errors"
+        },
+        {
+          "id": "completes-explanation",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    }
+  ]
+}

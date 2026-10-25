@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatEventCardPrice } from "@/lib/events/format-event";
+import { EVENT_TIME_ZONE, formatEventCardPrice } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ function formatStartsAt(iso: string) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(new Date(iso));
   } catch {
     return iso;
@@ -83,9 +84,11 @@ export function EventBrowseCard({
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
-    event.pricePerTicket <= 0
-      ? "Free"
-      : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
+    event.pricePerTicket === null
+      ? "See tickets"
+      : event.pricePerTicket === 0
+        ? "Free"
+        : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
 
   return (
     <VenueCardShell
@@ -110,7 +113,7 @@ export function EventBrowseCard({
           >
             Details
           </Link>
-          {event.ticketUrl.startsWith("http") ? (
+          {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
             <Link
               href={event.ticketUrl}
               target="_blank"

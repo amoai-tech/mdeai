@@ -1,5 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { applyAvailabilityFilters } from "@/lib/rentals/availability-filter";
+import { RentalSearchUnavailableError } from "./rental-search-unavailable";
 import {
   embedQueryTextDetailed,
   vectorLiteral,
@@ -9,10 +11,12 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  monthlyBudgetFromQuery,
   nightlyPriceFrom,
   rentalAvailabilityDate,
-  rentalPricePredicate,
+  rentalBudgetPredicate,
   rowToRental,
+  readRentalDevelopmentPhase,
   sortForMonthlyStay,
 } from "../tools/search-rentals";
 
@@ -87,6 +91,8 @@ function num(v: number | string | null | undefined): number | undefined {
 
 /** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
 const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+/** Bound the hybrid RPC wait separately from the Gemini embedding request. */
+const RENTAL_HYBRID_RPC_TIMEOUT_MS = 5000;
 
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
@@ -111,12 +117,20 @@ function rentalSignalBoost(slots: RentalIntelligenceSlots, s: RentalSignalRow): 
   return boost;
 }
 
+/** SAN-1502 PR2: optional per-request, RLS-governed client. */
+export type IntelligenceSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
+
 export async function searchRentalsIntelligent(
   query: RentalQuery & { queryText?: string },
+  options?: IntelligenceSearchOptions,
 ): Promise<{
   results: IntelligenceRentalResult[];
   total: number;
-  source: "supabase" | "mock";
+  source: "supabase";
   hybridUsed: boolean;
   embedStatus: EmbedStatus;
   embedFailureReason?: EmbedFailureReason;
@@ -129,19 +143,73 @@ export async function searchRentalsIntelligent(
   const slots = queryText ? parseRentalIntelligenceSlots(queryText) : {};
   const neighborhood = query.neighborhood ?? slots.neighborhood;
   const rankExplanation: RankExplanationEntry[] = [];
-  const client = getAnonClient();
+  const client = options?.client ?? getAnonClient();
 
   if (!client) {
-    return {
-      results: [],
-      total: 0,
-      source: "mock",
-      hybridUsed: false,
-      embedStatus: "skipped",
-      rankExplanation,
-      slots,
-    };
+    // SAN-1089: a missing client is an outage, not an empty marketplace. It used to return
+    // `source: "mock"` with zero rows, which every caller treated as a successful search.
+    throw new RentalSearchUnavailableError("client_unavailable");
   }
+
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
+
+  /**
+   * The canonical keyword/list query, shared by the normal path and the
+   * "hybrid produced nothing eligible" fallback. Returns both the search-shaped
+   * rows and the canonical apartments rows, so the fallback never queries them twice.
+   */
+  const runKeywordSearch = async (): Promise<{
+    rows: HybridListingRow[];
+    apartments: Record<string, unknown>[];
+  }> => {
+    let q = client
+      .from("apartments")
+      .select(
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
+      )
+      .order("price_daily", { ascending: true, nullsFirst: false })
+      .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      q = q.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
+    }
+    if (!developmentMode) q = q.eq("status", "active").not("landlord_id", "is", null);
+    if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
+    if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
+    // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
+    // not expired), "today" being the America/Bogota date the viewing RPC uses.
+    q = applyAvailabilityFilters(q, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+      developmentMode,
+    });
+    const { data, error } = await q;
+    if (error) {
+      throw new RentalSearchUnavailableError(
+        `keyword_query_failed${error.code ? `:${error.code}` : ""}`,
+      );
+    }
+    const apartments = (data ?? []) as Record<string, unknown>[];
+    const rows = apartments.map((r) => ({
+      id: String(r.id),
+      title: String(r.title),
+      description: null,
+      neighborhood: r.neighborhood as string | null,
+      city: null,
+      price_monthly: (r.price_monthly as number | string | null) ?? null,
+      currency: (r.currency as string | null) ?? null,
+      bedrooms: r.bedrooms as number | null,
+      bathrooms: null,
+      rating: null,
+      images: r.images as string[] | null,
+      amenities: r.amenities as string[] | null,
+      pet_friendly: null,
+      furnished: null,
+      status: (r.status as string | null) ?? null,
+      similarity: 0,
+    }));
+    return { rows, apartments };
+  };
 
   let hybridRows: HybridListingRow[] = [];
   let hybridUsed = false;
@@ -149,6 +217,9 @@ export async function searchRentalsIntelligent(
   let embedFailureReason: EmbedFailureReason | undefined;
   let embedHttpStatus: number | undefined;
 
+  // Use the same hybrid RPC in both phases. Development visibility belongs to
+  // canonical Supabase RLS, not a second AI-only eligibility switch. When the
+  // embedding or RPC is unavailable, the shared keyword path still works.
   if (queryText) {
     const embedResult = await embedQueryTextDetailed(queryText);
     if (embedResult.ok) {
@@ -157,7 +228,7 @@ export async function searchRentalsIntelligent(
         query_text: queryText,
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
-      });
+      }).abortSignal(AbortSignal.timeout(RENTAL_HYBRID_RPC_TIMEOUT_MS));
       if (error) {
         // Supabase JS retries transient PostgREST failures. If the RPC still
         // fails, preserve search availability by degrading to the keyword path.
@@ -197,75 +268,41 @@ export async function searchRentalsIntelligent(
   }
 
   if (!hybridUsed) {
-    let q = client
-      .from("apartments")
-      .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
-      )
-      .eq("status", "active")
-      // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
-      // which listings are priced or how a nightly budget applies across currencies.
-      .or(rentalPricePredicate(
-        typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-      ))
-      .order("price_daily", { ascending: true, nullsFirst: false })
-      .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
-    if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
-    if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
-    const today = rentalAvailabilityDate();
-    const checkInDate = query.checkIn ?? today;
-    q = q.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-    if (query.checkOut) {
-      q = q.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
-    }
-    const { data, error } = await q;
-    if (error) {
-      throw new Error(`keyword fallback query failed: ${error.message}`);
-    }
-    const apartments = data ?? [];
-    hybridRows = apartments.map((r: Record<string, unknown>) => ({
-      id: String(r.id),
-      title: String(r.title),
-      description: null,
-      neighborhood: r.neighborhood as string | null,
-      city: null,
-      price_monthly: (r.price_monthly as number | string | null) ?? null,
-      currency: (r.currency as string | null) ?? null,
-      bedrooms: r.bedrooms as number | null,
-      bathrooms: null,
-      rating: null,
-      images: r.images as string[] | null,
-      amenities: r.amenities as string[] | null,
-      pet_friendly: null,
-      furnished: null,
-      status: "active",
-      similarity: 0,
-    }));
+    hybridRows = (await runKeywordSearch()).rows;
   }
 
-  const ids = hybridRows.map((r) => r.id);
+  let ids = hybridRows.map((r) => r.id);
   const aptMap = new Map<string, Record<string, unknown>>();
 
   if (ids.length) {
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status",
+        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
-      .in("id", ids);
-    // Always exclude expired rentals: available_to IS NULL (open-ended) OR available_to >= checkIn || today.
-    // SAN-1349: America/Bogota "today", matching the viewing RPC's timezone.
-    const today = rentalAvailabilityDate();
-    const checkInDate = query.checkIn ?? today;
-    aptQ = aptQ.or(`available_to.is.null,available_to.gte.${checkInDate}`);
-    if (query.checkOut) {
-      aptQ = aptQ.or(`available_from.is.null,available_from.lte.${query.checkOut}`);
+      .in("id", ids)
+      // RLS applies customer eligibility and authorized development visibility.
+      // Preserve the shared status and budget filters without reimposing publication gates.
+;
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      aptQ = aptQ.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
     }
+    if (!developmentMode) aptQ = aptQ.eq("status", "active").not("landlord_id", "is", null);
+    if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
+    if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
+    // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
+    // not expired), "today" being the America/Bogota date the viewing RPC uses.
+    aptQ = applyAvailabilityFilters(aptQ, {
+      checkIn: query.checkIn,
+      checkOut: query.checkOut,
+      today: rentalAvailabilityDate(),
+      developmentMode,
+    });
     const { data: aptRows, error: aptError } = await aptQ;
     if (aptError) {
-      throw new Error(`apartment detail query failed: ${aptError.message}`);
+      throw new RentalSearchUnavailableError(
+        `detail_query_failed${aptError.code ? `:${aptError.code}` : ""}`,
+      );
     }
     for (const row of aptRows ?? []) {
       aptMap.set(row.id as string, row as Record<string, unknown>);
@@ -274,6 +311,24 @@ export async function searchRentalsIntelligent(
     // or the default current-date guard), so only keep hybrid rows that survived it.
     const availableIds = new Set(aptMap.keys());
     hybridRows = hybridRows.filter((r) => availableIds.has(r.id));
+  }
+
+  // The hybrid RPC ranks a bounded candidate window BEFORE the eligibility,
+  // budget, location and availability filters above run, so a perfectly eligible
+  // apartment outside that window would otherwise be reported as "no results".
+  // When every hybrid candidate is filtered out, fall back to the canonical
+  // keyword search instead of showing an empty marketplace (SAN-1502 PR2).
+  if (hybridUsed && hybridRows.length === 0) {
+    const keyword = await runKeywordSearch();
+    hybridUsed = false;
+    hybridRows = keyword.rows;
+    for (const row of keyword.apartments) aptMap.set(String(row.id), row);
+    ids = hybridRows.map((r) => r.id);
+    rankExplanation.push({
+      factor: "hybrid_filtered_empty",
+      score: 0,
+      note: "hybrid candidates were all ineligible — canonical keyword fallback",
+    });
   }
 
   const signalMap = new Map<string, RentalSignalRow>();
@@ -407,7 +462,9 @@ export async function searchRentalsIntelligent(
       can_schedule_viewing: false,
       schedule_viewing_url: null,
       host_name: "Host",
-      availability: "Available now",
+      // No canonical row survived the availability filter, so ownership is unproven and
+      // this row is never requestable. Do not claim a stay date we cannot verify.
+      availability: "Availability unconfirmed",
       tags: [],
       rankScore,
       signalSource: sig?.source ?? undefined,

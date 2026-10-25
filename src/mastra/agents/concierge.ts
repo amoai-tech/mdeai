@@ -10,11 +10,12 @@ import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { FLASH_MODEL } from "../lib/models";
+import { CONCIERGE_MODEL } from "../lib/models";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
+import { buildConciergeChannels } from "./whatsapp-channels";
 
 export const conciergeWorkingMemorySchema = z.object({
   lastIntent: z
@@ -35,6 +36,8 @@ export const conciergeWorkingMemorySchema = z.object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
       maxPricePerNight: z.number().optional(),
+      maxPriceMonthly: z.number().positive().optional(),
+      budgetCurrency: z.enum(['COP', 'USD']).optional(),
       budgetType: z.enum(['nightly', 'monthly', 'total_trip']).optional(),
       genericAskPending: z.boolean().optional(),
       checkIn: z.string().optional().describe('ISO date YYYY-MM-DD'),
@@ -108,6 +111,20 @@ export const conciergeWorkingMemorySchema = z.object({
   mapUi: MapUiStateSchema.partial()
     .optional()
     .describe('Map summary mirror — pin ids/counts/viewport only, never full MapPin[]. Send only what changed.'),
+  lastGroundedResults: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        area: z.string().optional(),
+        summary: z.string().optional(),
+        rating: z.number().optional(),
+      }),
+    )
+    .optional()
+    .describe(
+      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here.',
+    ),
 });
 
 /**
@@ -116,8 +133,21 @@ export const conciergeWorkingMemorySchema = z.object({
  * treated as "no value"; a real value, `0`, `false` and `[]` are never touched.
  */
 const PADDED_FIELDS = {
-  root: ['selectedListingId', 'selectedEventId'],
-  lastRentalQuery: ['neighborhood', 'budgetType', 'checkIn', 'checkOut'],
+  root: ['selectedListingId', 'selectedEventId', 'lastGroundedResults'],
+  // Every optional field on this object is padded by the model with ""/null at some
+  // point, so all of them are listed — a numeric field the model blanks must not reach
+  // z.number().positive(), or the whole memory update fails and the budget is lost.
+  lastRentalQuery: [
+    'neighborhood',
+    'minBedrooms',
+    'maxPricePerNight',
+    'maxPriceMonthly',
+    'budgetCurrency',
+    'budgetType',
+    'genericAskPending',
+    'checkIn',
+    'checkOut',
+  ],
   lastEventQuery: ['category', 'neighborhood', 'dateWindow'],
   lastRestaurantQuery: ['neighborhood', 'cuisine', 'vibe', 'priceTier'],
 } as const;
@@ -168,7 +198,7 @@ export const conciergeAgent = new Agent({
   instructions: `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
 # Tools
-- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known.
+- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - search-grounded-places intent param (optional, pass only when confident): intent "nightlife" for clubs, discotecas, reggaeton, cocktail bars, salsa bars, rooftop bars, bar crawl, "venues tonight", "where to party" — including generic nightlife phrasing without bar keywords (e.g. "popular venues in Provenza tonight"); intent "cafe" for coffee, coworking, laptop-friendly caf\u00e9s; omit intent when ambiguous or mixed. Never intent "nightlife" for sit-down restaurant meals (use search-restaurants) or ticketed events (use search-events — event category "nightlife" is different).
@@ -178,12 +208,13 @@ export const conciergeAgent = new Agent({
 - When mapUi.viewport is set and the user asks about places near what they see on the map, pass search-grounded-places locationBias: { latitude: mapUi.viewport.lat, longitude: mapUi.viewport.lng }.
 
 # Working memory rules (very important)
-You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
+You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
 - After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:
@@ -218,22 +249,21 @@ Confidence examples:
   "digital nomad rental in Laureles near cafes"         → hasNomad+neighborhood → confidence 0.72 → search now with queryText
   "quiet rental near cafes and gyms in Laureles"        → hasCafeOrGym+quiet+neighborhood → confidence 0.62 → search now with queryText
   "cheap studio anywhere"                               → hasBudget+hasBedrooms → confidence 0.7  → search now
-  "top rentals in laureles provenza"                    → sub-neighborhood only → confidence 0.4  → ask first
-  "list top rentals laureles medellin"                  → neighborhood only     → confidence 0.35 → ask first
-  "show me apartments"                                  → nothing specific      → confidence 0.2  → ask first
+  "top rentals in laureles provenza"                    → sub-neighborhood only → confidence 0.4  → search now with queryText
+  "list top rentals laureles medellin"                  → neighborhood only     → confidence 0.35 → search now with queryText
+  "show me apartments"                                  → nothing specific      → confidence 0.2  → search now with queryText
 
 Decision rules (in order):
 1. lastRentalQuery EXISTS in working memory → skip gate entirely, refine and search.
 2. hasBudget AND user named a Medellín neighborhood (Laureles, Poblado, Envigado, etc.) → confidence ≥ 0.65 → call search-rentals immediately.
 3. confidence ≥ 0.6 → call search-rentals immediately. Do not ask anything.
-4. confidence < 0.6 AND no lastRentalQuery → send exactly ONE grouped clarification, then search on the next reply.
+4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter\'s own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
 
-Clarification format (one message, never bullet-point questions):
-  What dates, budget, and setup are you looking for?
-  Example: 1BR remote-work apartment under $80/night for June.
+Optional refinement (ONE short question, only AFTER the results, never before them):
+  Want to narrow by neighborhood or monthly budget?
 
 Hard rules for the gate:
-- Ask at most ONCE per fresh session. After one clarification answer, always search.
+- Offer at most ONE refinement per fresh session, and only after showing results. Never block a search on an answer.
 - Never send "What's your budget?" and "How many bedrooms?" as separate turns.
 - Never ask if the user already gave 2 of (budget, bedrooms, vibe/use-case).
 - This gate applies ONLY to rental searches. Events use the event clarification gate below.
@@ -263,13 +293,14 @@ Hard rules for the event gate:
 - NEVER say "Found N events" unless search-events ran in the SAME turn.
 
 # Output formatting (grounded places — UI renders photo cards)
-After search-grounded-places, the frontend renders photo cards (rating, price, hours, map pins, Open in Google Maps) — do NOT repeat place names, descriptions, neighborhoods, or Maps links in prose.
+After a NEW search-grounded-places call, the frontend renders photo cards (rating, price, hours, map pins, Open in Google Maps) — do NOT repeat place names, descriptions, neighborhoods, or Maps links in prose.
 
 Grounded listing rules (critical):
-- NEVER list cafés or venues by name in your reply.
+- For a new search, do NOT list cafés or venues by name in your reply.
+- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating. Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
 - NEVER include "View on Google Maps", bullet lists, or numbered lists of places in text.
-- Reply in at most 2 short sentences: (1) how many matches and which area, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
-- If the user filters ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
+- Reply in at most 2 short sentences: (1) how many matches and which area, or the recommendation, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
+- If the user adds a new filter ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
 - When re-calling search-grounded-places for nightlife bar/club discovery, pass intent: "nightlife" again. For café-only follow-ups, pass intent: "cafe".
 
 # Output formatting (restaurants — UI renders cards)
@@ -306,6 +337,10 @@ Restaurant listing rules (critical):
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
+Rental price rules (critical):
+- A monthly listing's price is the stored monthly amount in its own currency. Quote it only as a monthly amount (for example "COP 2,400,000/month").
+- Never add a USD, per-night or per-week equivalent for a monthly listing, and never divide a monthly rent by 30. The card owns price display.
+
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.
 - Specific queries (category, date, neighborhood, or "show all") → call search-events immediately (reuse lastEventQuery when set).
@@ -336,7 +371,7 @@ If the search returns zero results:
 Never reply with an empty list and no recovery.
 
 # Follow-up behavior
-- "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
+- "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
 - "compare X and Y" → side-by-side: price, bedrooms, amenities, availability, host. End with one short recommendation sentence.
@@ -387,11 +422,12 @@ Conversion boundary (do NOT cross):
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
+- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row.
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
 ${formatEventSourcePromptHint()}`,
-  model: FLASH_MODEL,
+  model: CONCIERGE_MODEL,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing
@@ -409,6 +445,7 @@ ${formatEventSourcePromptHint()}`,
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: getDefaultInputProcessors(),
+  channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input
   // tokens — and latency — on busy threads without changing follow-up behavior.

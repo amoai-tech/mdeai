@@ -1,91 +1,49 @@
-# MDE Skills Index
+# MDE skill inventory and routing
 
-Canonical skill root: `.claude/skills/`
+Canonical: [`.claude/skills/`](./) · Codex exposure: [`.agents/skills/`](../../.agents/skills/) · Ownership: [`AGENTS.md`](../../AGENTS.md).
 
-This scorecard evaluates the post-PR #107 skill architecture against current MDE usage and Anthropic Skill Creator guidance:
-https://github.com/anthropics/claude-plugins-official/blob/main/plugins/skill-creator/skills/skill-creator/SKILL.md
+**Snapshot:** SAN-1557 skill catalog based on reviewed `origin/main` `01d29fe83f` (2026-10-20). Counts below are definitions and mechanical structure only, not executed agent success rates. Recompute on later commits.
 
-## Score meaning
+## Inventory
 
-Scores are audit scores, not benchmark pass rates. They combine:
-- trigger/ownership clarity
-- current MDE correctness
-- progressive disclosure and context size
-- duplication/overlap risk
-- references/scripts reuse
-- eval/test coverage
+Each name below is an active canonical skill, exposed through a corresponding relative-symlink mirror. Categories organize discovery; for ambiguous requests, `using-mde-skills` routes to one owner, and the short requested workflow normally takes precedence over a deep/domain reference.
 
-| Score | Meaning |
-|---:|---|
-| 95–100 | Production-strong; maintain and benchmark |
-| 90–94 | Strong; small improvements |
-| 80–89 | Useful but needs targeted cleanup/evals |
-| 70–79 | Significant overlap or maintenance risk |
-| <70 | Consolidate, move, or remove from active discovery |
+- **Routing and implementation (11):** [`using-mde-skills`](./using-mde-skills/SKILL.md), [`tasks`](./tasks/SKILL.md), [`implement`](./implement/SKILL.md), [`plan`](./plan/SKILL.md), [`architect`](./architect/SKILL.md), [`efficient`](./efficient/SKILL.md), [`ponytail`](./ponytail/SKILL.md), [`refactor`](./refactor/SKILL.md), [`cleanup`](./cleanup/SKILL.md), [`roadmap`](./roadmap/SKILL.md), [`outcomes`](./outcomes/SKILL.md).
+- **Review, assurance, and release (11):** [`code-review`](./code-review/SKILL.md), [`review`](./review/SKILL.md), [`praudit`](./praudit/SKILL.md), [`task-verifier`](./task-verifier/SKILL.md), [`merge`](./merge/SKILL.md), [`prod`](./prod/SKILL.md), [`launch`](./launch/SKILL.md), [`progress`](./progress/SKILL.md), [`errors`](./errors/SKILL.md), [`systematic-debugging`](./systematic-debugging/SKILL.md), [`e2e`](./e2e/SKILL.md).
+- **Testing and browser tooling (3):** [`tests`](./tests/SKILL.md), [`testing`](./testing/SKILL.md), [`playwright-cli`](./playwright-cli/SKILL.md).
+- **Business and platform domains (10):** [`real-estate`](./real-estate/SKILL.md), [`events`](./events/SKILL.md), [`supabase`](./supabase/SKILL.md), [`mastra`](./mastra/SKILL.md), [`copilotkit`](./copilotkit/SKILL.md), [`gemini`](./gemini/SKILL.md), [`maps`](./maps/SKILL.md), [`cloudinary`](./cloudinary/SKILL.md), [`stripe`](./stripe/SKILL.md), [`nextjs`](./nextjs/SKILL.md).
+- **Upstream interaction-pattern adapters (3):** [`openmuse`](./openmuse/SKILL.md) for chat/cards/maps/mobile, [`opendots`](./opendots/SKILL.md) for review/edit/receipt, [`openbot`](./openbot/SKILL.md) for optional external computer-use coworker. Each augments the existing `copilotkit`/`mastra`/domain skills; none installs a new runtime.
+- **Product design, docs, and authoring (11):** [`frontend-design`](./frontend-design/SKILL.md), [`uiux`](./uiux/SKILL.md), [`wireframe`](./wireframe/SKILL.md), [`mermaid`](./mermaid/SKILL.md), [`mermaid-diagrams`](./mermaid-diagrams/SKILL.md), [`docs`](./docs/SKILL.md), [`research`](./research/SKILL.md), [`prompt`](./prompt/SKILL.md), [`skills`](./skills/SKILL.md), [`writing-skills`](./writing-skills/SKILL.md), [`whatsapp`](./whatsapp/SKILL.md).
+- **Issue lifecycle, migration, and analysis (4):** [`linear-task`](./linear-task/SKILL.md), [`linear-audit`](./linear-audit/SKILL.md), [`migration`](./migration/SKILL.md), [`codacy`](./codacy/SKILL.md).
 
-## Current architecture
+## Distinct responsibilities
 
-`tasks` owns task lifecycle/execution. `task-verifier` independently proves merge safety and Done. Domain skills remain specialist owners; `code-review` owns universal PR/diff review.
-## Skill scorecard
+| Intent | Execution owner | Supporting boundary |
+| --- | --- | --- |
+| Unknown failure/root cause | `errors` | `systematic-debugging` for root-cause methodology |
+| Existing code diff | `code-review` | `review` instead when responding to *existing* reviewer feedback |
+| PR merge-readiness decision | `praudit` | `task-verifier` independently challenges completion |
+| Implement a scoped change | `implement` | `tasks` for worktrees/PR lifecycle; domain skill for applicable rules |
+| Define coverage vs run tests | `tests` vs `testing` | `e2e` owns a full user journey; `playwright-cli` runs browser mechanics |
+| Post-merge check vs production certification | `merge` vs `prod` | `task-verifier` proves any final Done assertion |
+| Rental, event, AI, or data contracts | `real-estate`, `events`, `mastra`, `supabase` | Do not replace the user-requested workflow owner with every mentioned domain |
+| Skills authoring | `skills` / `writing-skills` | Keep distinct until paired agent benchmarks establish a safe consolidation |
+| Diagrams | `mermaid` / `mermaid-diagrams` | Keep distinct until paired agent benchmarks establish a safe consolidation |
 
-| Skill | Score /100 | Decision | Main improvement |
-|---|---:|---|---|
-| `cloudinary` | 89 | KEEP CONDITIONAL | Verify Cloudinary is actually active before triggering |
-| `code-review` | 98 | KEEP | Universal PR/diff review; CI-specific invariants live in `references/ci-review.md` |
-| `copilotkit` | 97 | KEEP | Maintain version/source verification and v2 entrypoint accuracy |
-| `events` | 91 | KEEP | Add domain references only as event rules grow |
-| `frontend-design` | 94 | KEEP | Canonical visual-design owner; 3/3 paired behavior evals passed after consolidation |
-| `gemini` | 96 | KEEP | Maintain current-model/provider evidence |
-| `maps` | 94 | KEEP + IMPROVE | Add trigger and behavior evals |
-| `mastra` | 97 | KEEP | Maintain package-family/runtime verification |
-| `mermaid-diagrams` | 93 | KEEP + IMPROVE | Add 2–3 realistic diagram-selection evals |
-| `nextjs` | 98 | KEEP | Single Next.js/React/Vercel owner; 5/5 paired behavior/routing evals passed after consolidation |
-| `playwright-cli` | 86 | KEEP + CLARIFY | Browser execution specialist; `testing` owns test strategy |
-| `ponytail` | 93 | KEEP + BENCHMARK | Owner for reuse-before-build, source receipts, and the evidence split; eval pack added — next, measure the diff-size effect with and without the skill |
-| `real-estate` | 94 | KEEP + IMPROVE | Canonical superskill is consolidated; add realistic domain evals |
-| `research` | 95 | KEEP | Maintain primary-source/evidence discipline |
-| `stripe` | 94 | KEEP | Maintain payment/idempotency safety |
-| `supabase` | 98 | KEEP | Strong canonical owner; maintain live-schema evidence |
-| `systematic-debugging` | 96 | KEEP | Maintain root-cause-before-fix behavior |
-| `task-verifier` | 98 | KEEP + BENCHMARK | Add explicit Quick/Standard/Adversarial eval suite |
-| `tasks` | 98 | KEEP + BENCHMARK | Add lifecycle/worktree/PR/post-merge eval suite |
-| `testing` | 97 | KEEP | Single owner for TDD, test strategy, execution, interpretation, and regression proof |
-| `using-mde-skills` | 96 | KEEP + EXPAND EVALS | Add near-miss trigger tests and ownership conflicts |
-| `wireframe` | 91 | KEEP + IMPROVE | Add responsive/AI-HITL design evals |
-| `writing-skills` | 94 | KEEP | Keep aligned with Anthropic eval/benchmark workflow |
+## Mechanical coverage (definitions, not agent executions)
 
-**Overall audit score: 94.7/100.**
+| Metric | Current candidate | What is actually verified |
+| --- | ---: | --- |
+| Canonical active skills | **53** | Exists as `SKILL.md` with metadata |
+| Mirrored symlink entries | **160** | File/directory exposures point back to canonical owners |
+| Skills with behavioral `evals.json` | **32/53** | JSON definitions, not executed behavior tests |
+| Skills with `trigger-evals.json` | **20/53** | Positive and near-miss case definitions, not routing pass rate |
+| Defined trigger probes | **150** | Parsed cases across trigger files |
+| Defined behavioral probes | **123** | Parsed cases across behavior files |
+| Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 
-## Remove / consolidate decisions
+The `npm run check:skills` command enforces skill/mirror layout and vendored upstream integrity. `node --test scripts/__tests__/skill-evals-conformance.test.mjs` checks case-file structure. Neither command actually invokes Claude/Codex for each case or establishes routing accuracy; that needs an agent-run benchmark on a stable commit.
 
-| Candidate | Decision | Reason |
-|---|---|---|
-| former `mde-vercel` + former `nextjs-review` + local `vercel-composition-patterns` + local `vercel-react-best-practices` + `nextjs` | Consolidated | `nextjs` is the single domain owner; React composition/performance plus Vercel and review invariants load from `nextjs/references/` |
-| `testing` + former `tdd` | Consolidated | `testing` now owns TDD, strategy, execution, interpretation, and regression proof |
-| `code-review` + former `ci-review` | Consolidated | CI review invariants now live under `code-review/references/ci-review.md` |
-| `playwright-cli` + `testing` | Do not merge | `testing` chooses proof strategy; `playwright-cli` executes browser work |
-| `frontend-design` + local `ui-ux-pro-max` | Consolidated | `frontend-design` owns visual direction; MDE-relevant UX patterns load from its reference instead of a competing design owner |
-| former specialist `*-review` skills | Consolidated | Domain-specific invariants live with the domain owner; universal PR/diff review lives in `code-review` |
-## Task 1 · Highest-priority actions
+**Next measurement:** execute a representative fixed set with real agent runtimes, grade correct owner/false triggers/unauthorized actions and compare a candidate to its baseline. Record attempts, passes/failures, token/tool use, and exact revision. Do not assign unmeasured quality scores.
 
-1. **Keep skill-integrity CI mandatory** — fail when `.agents/skills` contains real files, symlinks break, a canonical skill lacks `SKILL.md`, frontmatter names mismatch, retired owners reappear, or stale repo paths return.
-2. **Expand routing evals** — add realistic positive + near-miss cases to critical routers and domain owners.
-3. **Benchmark critical owners** — especially `tasks`, `task-verifier`, `using-mde-skills`, and consolidated domain owners.
-4. **Benchmark consolidated `nextjs`** — exercise framework, Vercel, performance, and review-reference trigger/collision cases.
-5. **Clarify `testing` ↔ `playwright-cli`** — `testing` selects the proof ladder; `playwright-cli` performs browser automation and Playwright-specific mechanics.
-6. **Keep templates and archives outside active discovery** — template content lives in `docs/templates/skill/`; retired Linear material lives in `docs/_archive/skills/linear/`.
-7. **Benchmark `real-estate`** — the duplicate has already been consolidated on current `main`; add realistic marketplace, MLS-near-miss, lead, and neighborhood evals.
-
-## Task 2 · Anthropic best-practice checkpoints
-
-Use these rules for every skill change:
-
-- Keep `name` + `description` accurate; the description must say both **what** the skill does and **when** it should trigger.
-- Prefer `SKILL.md` under ~500 lines; move detailed material to `references/` and deterministic work to `scripts/`.
-- Use imperative, reusable instructions and explain why important constraints exist.
-- Create 2–3 realistic eval prompts for new or materially changed skills.
-- For existing skills, compare the changed skill against an old snapshot/baseline instead of judging only the new output.
-- Add objective assertions when the output is objectively verifiable; use human review for subjective quality.
-- Optimize descriptions with realistic should-trigger and should-not-trigger queries, especially near-misses.
-
-Reference: https://github.com/anthropics/claude-plugins-official/blob/main/plugins/skill-creator/skills/skill-creator/SKILL.md
+**Consolidation status:** Retain `skills` + `writing-skills` and `mermaid` + `mermaid-diagrams` until measured improvement is repeatable. See [the paired baseline experiment](../../docs/07-operations/skill-overlap-benchmark-2026-10-14.md), which found some regressions; do not treat its limited single-prompt runs as global skill quality scores.

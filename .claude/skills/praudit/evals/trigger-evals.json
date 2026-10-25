@@ -1,0 +1,38 @@
+[
+  {
+    "id": "praudit-1",
+    "prompt": "Audit PR #258 for merge readiness against the latest main.",
+    "should_trigger": true,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "praudit-2",
+    "prompt": "Before merging the rental RLS PR, check exact head CI and critical security flows.",
+    "should_trigger": true,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "praudit-3",
+    "prompt": "Give a merge/no-merge assessment of the current PR diff and all unresolved comments.",
+    "should_trigger": true,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "praudit-4",
+    "prompt": "Review this code snippet for memory leaks; there is no PR.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  },
+  {
+    "id": "praudit-5",
+    "prompt": "Clean up worktrees after a PR was already merged.",
+    "should_trigger": false,
+    "expected_owner": "merge"
+  },
+  {
+    "id": "praudit-6",
+    "prompt": "Find the root cause of a failing browser route; there is no PR to audit.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  }
+]

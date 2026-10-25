@@ -17,8 +17,23 @@
  *   node --env-file=.env.local scripts/record-rental-certification-evidence.mjs \
  *     --apartment-id=<uuid> --checked-at=<iso> --freshness-status=active \
  *     --confirm-write=true [--image-url=…] [--source-type=… --source-url=…] \
- *     [--verification-status=… --verified-by=<uuid> --notes=…]
+ *     [--verification-status=… --verified-by=<uuid> --notes=…] \
+ *     [--owner-control=verified|unverified --publish-permission=granted|not_granted] \
+ *     [--viewings-permission=granted|not_granted --coordinate-receipt=verified|unverified] \
+ *     [--move-in-verified-for=YYYY-MM-DD --move-in-evidence="<what was reviewed>"] \
+ *     [--neighborhood="Laureles"] [--update-verification=true]
+ *
+ * A FUTURE move-in date needs a receipt naming that exact date (--move-in-verified-for) plus the
+ * evidence reviewed (--move-in-evidence); the reviewer is --verified-by and must not be the
+ * listing owner (the launch gate enforces that). Moving available_from later needs a new receipt.
+ *
+ * Listing-specific approvals (owner-control / publish / viewings / coordinate receipt)
+ * are written into public.property_verifications.metadata — the fields the canonical
+ * launch gate reads — and require --verification-status=verified. --neighborhood sets
+ * the reviewed apartments.neighborhood. An existing verification row is only changed
+ * with --update-verification=true, so a reviewed change is always explicit.
  */
+import { createHash } from "node:crypto";
 import pg from "pg";
 import { parseCertificationEvidenceArgs } from "./lib/certification-evidence-args.mjs";
 
@@ -55,6 +70,7 @@ function hostOf(url) {
 function isLoopbackHost(host) {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
+
 const parsedDb = (() => {
   try {
     return new URL(dbUrl);
@@ -135,6 +151,19 @@ try {
     );
   }
 
+  // SAN-1431 §4.1: a real, independently reviewed neighborhood. Writing it here
+  // keeps the intake on the existing apartments column the launch gate reads.
+  let neighborhoodSet = 0;
+  if (v.neighborhood) {
+    const nb = await client.query(
+      `update public.apartments set neighborhood = $2
+        where id = $1::uuid and neighborhood is distinct from $2
+        returning id`,
+      [v.apartmentId, v.neighborhood],
+    );
+    neighborhoodSet = nb.rowCount ?? 0;
+  }
+
   let grounding = 0;
   if (v.sourceType && v.sourceUrl) {
     const g = await client.query(
@@ -150,37 +179,65 @@ try {
     grounding = g.rowCount ?? 0;
   }
 
+  // SAN-1431 §4.2: listing-specific approvals live in property_verifications.metadata,
+  // the same fields the canonical launch gate reads. Only explicitly supplied facts
+  // are written; nothing is inferred.
+  const verifyMetadata = {};
+  if (v.ownerControl) verifyMetadata.owner_control = v.ownerControl;
+  if (v.publishPermission) verifyMetadata.publish_permission = v.publishPermission;
+  if (v.viewingsPermission) verifyMetadata.viewings_permission = v.viewingsPermission;
+  if (v.coordinateReceipt) verifyMetadata.coordinates = v.coordinateReceipt;
+  // SAN-486: the receipt names the exact move-in date it covers, so it cannot authorize a different one.
+  if (v.moveInVerifiedFor) verifyMetadata.move_in_verified_for = v.moveInVerifiedFor;
+  if (v.moveInEvidence) verifyMetadata.move_in_evidence = v.moveInEvidence;
+  const verifyMetadataJson = JSON.stringify(verifyMetadata);
+
   let verification = 0;
   if (v.verificationStatus) {
     if (!v.verifiedBy) {
       throw new Error("--verified-by is required with --verification-status");
     }
     // property_verifications is UNIQUE(apartment_id): one verification per listing.
-    // Identical evidence is a no-op; different evidence must be an explicit update,
-    // never a silent skip that leaves a stale status behind.
+    // Identical evidence is a no-op; different evidence must be an explicit update
+    // (--update-verification=true), never a silent skip that leaves stale facts.
     const { rows: priorVerification } = await client.query(
-      `select status, verified_by, notes from public.property_verifications
+      `select status, verified_by, notes, metadata from public.property_verifications
         where apartment_id = $1::uuid limit 1`,
       [v.apartmentId],
     );
     if (priorVerification.length === 0) {
       const pv = await client.query(
-        `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at)
-         values ($1::uuid, $2::uuid, $3, $4, $5::timestamptz)
+        `insert into public.property_verifications (apartment_id, verified_by, status, notes, verified_at, metadata)
+         values ($1::uuid, $2::uuid, $3, $4, $5::timestamptz, $6::jsonb)
          returning id`,
-        [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt],
+        [v.apartmentId, v.verifiedBy, v.verificationStatus, v.notes, v.checkedAt, verifyMetadataJson],
       );
       verification = pv.rowCount ?? 0;
     } else {
       const prior = priorVerification[0];
+      const priorMetadata = prior.metadata ?? {};
       const identical =
         prior.status === v.verificationStatus &&
         prior.verified_by === v.verifiedBy &&
-        (prior.notes ?? "") === (v.notes ?? "");
+        (prior.notes ?? "") === (v.notes ?? "") &&
+        // The update path merges supplied keys, so equality is subset semantics:
+        // a rerun that supplies a subset of matching approvals is still a no-op.
+        Object.entries(verifyMetadata).every(([key, value]) => priorMetadata[key] === value);
       if (!identical) {
-        throw new Error(
-          `apartment already has a "${prior.status}" verification; refusing to overwrite it with "${v.verificationStatus}". Use an explicit update workflow.`,
+        if (!v.updateVerification) {
+          throw new Error(
+            `apartment already has a "${prior.status}" verification; refusing to overwrite it with "${v.verificationStatus}". Re-run with --update-verification=true to record the reviewed change explicitly.`,
+          );
+        }
+        const pv = await client.query(
+          `update public.property_verifications
+              set status = $2, verified_by = $3::uuid, notes = $4, verified_at = $5::timestamptz,
+                  metadata = coalesce(metadata, '{}'::jsonb) || $6::jsonb
+            where apartment_id = $1::uuid
+            returning id`,
+          [v.apartmentId, v.verificationStatus, v.verifiedBy, v.notes, v.checkedAt, verifyMetadataJson],
         );
+        verification = pv.rowCount ?? 0;
       }
     }
   }
@@ -197,6 +254,25 @@ try {
     imageAdded = img.rowCount ?? 0;
   }
 
+  // SAN-468 5.4 - authorized photo evidence. The apartment `images` array alone is
+  // not proof of publishing rights, so the recorder writes an explicit
+  // rental_listing_images row carrying the rights state when one is supplied.
+  let imageEvidenceAdded = 0;
+  if (v.imageUrl && v.imageRights) {
+    const storagePath = `external/${createHash("sha1").update(v.imageUrl).digest("hex")}`;
+    const evidence = await client.query(
+      `insert into public.rental_listing_images
+         (listing_id, storage_path, source_url, rights_status, rights_evidence)
+       select $1::uuid, $2, $3, $4, $5
+        where not exists (
+          select 1 from public.rental_listing_images
+           where listing_id = $1::uuid and source_url = $3)
+       returning id`,
+      [v.apartmentId, storagePath, v.imageUrl, v.imageRights, v.notes],
+    );
+    imageEvidenceAdded = evidence.rowCount ?? 0;
+  }
+
   await client.query("commit");
   inTransaction = false;
 
@@ -207,16 +283,17 @@ try {
             coalesce(array_length(images, 1), 0) as image_count,
             (select count(*)::int from public.rental_freshness_log where listing_id = $1::uuid) as freshness_rows,
             (select count(*)::int from public.rental_grounding where apartment_id = $1::uuid) as grounding_rows,
-            (select count(*)::int from public.property_verifications where apartment_id = $1::uuid) as verification_rows
+            (select count(*)::int from public.property_verifications where apartment_id = $1::uuid) as verification_rows,
+            (select count(*)::int from public.rental_listing_images where listing_id = $1::uuid) as image_evidence_rows
        from public.apartments where id = $1::uuid`,
     [v.apartmentId],
   );
 
   console.log(
-    `Wrote: freshness_log+${freshnessRows} grounding+${grounding} verification+${verification} image+${imageAdded}`,
+    `Wrote: freshness_log+${freshnessRows} grounding+${grounding} verification+${verification} image+${imageAdded} image_evidence+${imageEvidenceAdded} neighborhood=${neighborhoodSet}`,
   );
   console.log(
-    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows}`,
+    `After: freshness=${after.freshness_status} · last_checked_at=${after.last_checked_at?.toISOString?.() ?? after.last_checked_at ?? "null"} · images=${after.image_count} · freshness_rows=${after.freshness_rows} grounding_rows=${after.grounding_rows} verification_rows=${after.verification_rows} image_evidence_rows=${after.image_evidence_rows}`,
   );
 } catch (err) {
   if (inTransaction) {

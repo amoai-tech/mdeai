@@ -12,6 +12,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// These tests exercise the canonical verified-inventory path only.
+ // The separate source-linked public discovery path has its own regression tests.
+vi.mock("@/lib/rentals/public-external-discovery", () => ({
+  searchPublicExternalRentals: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../../lib/intelligence-rental-search", () => ({
   searchRentalsIntelligent: vi.fn().mockResolvedValue({
     results: [],
@@ -182,6 +188,8 @@ describe("searchRentals — date params pass-through to intelligent path", () =>
         stayType: "monthly",
         queryText: "digital nomad rental Laureles june 1 to 30",
       }),
+      // SAN-1502: the phase is resolved once by searchRentals and threaded through.
+      expect.objectContaining({ developmentPhase: false }),
     );
   });
 

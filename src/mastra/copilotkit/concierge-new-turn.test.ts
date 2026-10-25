@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { EMPTY } from "rxjs";
+import { EMPTY, NEVER } from "rxjs";
 import type { RunAgentInput } from "@ag-ui/client";
 import { MastraAgent } from "@ag-ui/mastra";
 import { LoggingMastraAgent, trimToNewestTurn } from "./logging-mastra-agent";
@@ -90,7 +90,61 @@ describe("LoggingMastraAgent.run — which agents get the trimmed input", () => 
     expect(sent("hostEventAgent", history)).toEqual([u("3", "q2")]);
   });
 
+  it("host event agent keeps the current turn's tool call and result", () => {
+    const toolCall = {
+      id: "2",
+      role: "assistant" as const,
+      content: "",
+      toolCalls: [{ id: "tc", type: "function" as const, function: { name: "set_event_draft", arguments: "{}" } }],
+    };
+    const toolResult = { id: "3", role: "tool" as const, toolCallId: "tc", content: "{\"ok\":true}" };
+    const messages = [u("1", "old"), a("2", "old"), u("4", "create salsa"), toolCall, toolResult] as RunAgentInput["messages"];
+    expect(sent("hostEventAgent", messages)).toEqual([u("4", "create salsa"), toolCall, toolResult]);
+  });
+
   it("other agents: untouched", () => {
     expect(sent("hostOpsAgent", history)).toEqual(history);
+  });
+});
+
+describe("SAN-1588 full turn deadline", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("does not report a timeout after an early client unsubscribe", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(NEVER);
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    const errors: unknown[] = [];
+    const sub = agent.run(input([u("1", "find rentals")])).subscribe({error: (err) => errors.push(err)});
+    sub.unsubscribe();
+    await vi.advanceTimersByTimeAsync(26_001);
+    expect(errors).toHaveLength(0);
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({status:"error", errorType:"client_abort"}));
+  });
+
+  it("errors and persists timeout when the agent never emits an event", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(NEVER);
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent",
+      agentMapKey: "conciergeAgent",
+      agent: {} as never,
+      resourceId: "user-1",
+      persistTurnLog: persist,
+    });
+    const errors: unknown[] = [];
+    agent.run(input([u("1", "find rentals")])).subscribe({ error: (error) => errors.push(error) });
+    await vi.advanceTimersByTimeAsync(26_001);
+    expect(errors).toHaveLength(1);
+    expect(String(errors[0])).toMatch(/timed out/);
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({status:"error", errorType:"timeout"}));
   });
 });

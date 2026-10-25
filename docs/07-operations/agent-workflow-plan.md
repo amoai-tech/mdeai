@@ -220,6 +220,7 @@ All agents should start from the same repository reality.
 - Use `AGENTS.md` as the shared repo contract when working through GitHub/Desktop/Work-style tooling.
 - At the start of substantial repository work, explicitly read `AGENTS.md`, `todo.md`, the Linear issue, and affected docs/source.
 - Do not rely on old chat context when current repo/Linear evidence is available.
+- For substantial MDE work, choose the short skill matching the requested outcome and explicitly read `.claude/skills/<name>/SKILL.md` through Desktop Commander or GitHub when available. Repo skills are not automatically installed into ChatGPT.
 
 ## Task 8 · Agent completion and handoff rules
 

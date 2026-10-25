@@ -1,425 +1,256 @@
-import { Suspense } from "react";
-import Image from "next/image";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+import { EventListRow, PlaceCard } from "@/components/home/home-place-card";
+import { HomeEatDrinkTabs } from "@/components/home/home-eat-drink-tabs";
 import {
   fetchLiveRentals,
   fetchLiveRestaurants,
   fetchLiveCafes,
   fetchLiveEvents,
+  fetchLiveDestinations,
+  type PlaceCardData,
 } from "@/lib/discovery/fetch-discovery-rows";
 
-// ─── Types (exported so fetcher can reuse) ────────────────────────────────────
+// Every card comes from a real record. A section with no real records is not rendered —
+// there is no stand-in data (SAN-1556). Each section has its own weight on purpose: rentals are
+// the photo-led main event, eat & drink share tabs, events lead with their date.
 
-export interface PlaceCardData {
-  id: string;
-  name: string;
-  kind: string;
-  rating: number;
-  meta: string;
-  why: string;
-  image: string;
-  query: string;
+export interface DiscoveryData {
+  destinations: PlaceCardData[];
+  rentals: PlaceCardData[];
+  restaurants: PlaceCardData[];
+  cafes: PlaceCardData[];
+  events: PlaceCardData[];
 }
 
-interface RowData {
+const CARD_GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4";
+const SECTION_LINK =
+  "inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+
+function Section({
+  id,
+  title,
+  intro,
+  link,
+  tone = "plain",
+  children,
+}: {
   id: string;
-  label: string;
-  href: string;
-  ctaLabel: string;
-  cards: PlaceCardData[];
-}
-
-// ─── Static curated fallback data ────────────────────────────────────────────
-// Used when live data is unavailable or returns fewer than 4 results.
-
-const STATIC_ROWS: RowData[] = [
-  {
-    id: "rentals",
-    label: "Rentals near you",
-    href: "/rentals",
-    ctaLabel: "Browse all rentals",
-    cards: [
-      {
-        id: "r1",
-        name: "Modern Studio, Laureles",
-        kind: "Rental",
-        rating: 4.8,
-        meta: "From $850 / mo",
-        why: "Quiet street, 3-min walk to cafés. Bills included, fast Wi-Fi.",
-        image:
-          "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Studio apartment for rent in Laureles Medellín",
-      },
-      {
-        id: "r2",
-        name: "1BR Apartment, El Poblado",
-        kind: "Rental",
-        rating: 4.6,
-        meta: "From $1,100 / mo",
-        why: "Parque Lleras 5-min walk. Rooftop pool, full-time concierge.",
-        image:
-          "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "1 bedroom apartment for rent in El Poblado Medellín",
-      },
-      {
-        id: "r3",
-        name: "2BR House, Envigado",
-        kind: "Rental",
-        rating: 4.9,
-        meta: "From $1,250 / mo",
-        why: "Local neighbourhood feel at half the Poblado price. Quiet, leafy block.",
-        image:
-          "https://images.unsplash.com/photo-1484154218962-a197022b5858?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "2 bedroom house for rent in Envigado Medellín",
-      },
-      {
-        id: "r4",
-        name: "Furnished 1BR, Laureles",
-        kind: "Rental",
-        rating: 4.7,
-        meta: "From $950 / mo",
-        why: "Newly renovated. Walkable to Éxito, gym in building.",
-        image:
-          "https://images.unsplash.com/photo-1493809842364-78817add7ffb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Furnished apartment for rent in Laureles Medellín",
-      },
-    ],
-  },
-  {
-    id: "restaurants",
-    label: "Top restaurants",
-    href: "/restaurants",
-    ctaLabel: "See all restaurants",
-    cards: [
-      {
-        id: "rs1",
-        name: "Carmen",
-        kind: "Fine dining",
-        rating: 4.9,
-        meta: "El Poblado · $$$$",
-        why: "Colombia's most-awarded restaurant. Book two weeks ahead — worth it.",
-        image:
-          "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Carmen restaurant El Poblado Medellín reservation",
-      },
-      {
-        id: "rs2",
-        name: "El Cielo",
-        kind: "Tasting menu",
-        rating: 4.8,
-        meta: "El Poblado · $$$$",
-        why: "12-course Colombian molecular experience. Michelin-level, local prices.",
-        image:
-          "https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "El Cielo tasting menu Medellín booking",
-      },
-      {
-        id: "rs3",
-        name: "Mercado del Río",
-        kind: "Food hall",
-        rating: 4.7,
-        meta: "El Centro · $$",
-        why: "30+ stalls under one roof. Perfect for groups with different tastes.",
-        image:
-          "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Mercado del Río food hall El Centro Medellín",
-      },
-      {
-        id: "rs4",
-        name: "La Mar",
-        kind: "Ceviche",
-        rating: 4.6,
-        meta: "Laureles · $$$",
-        why: "Best Peruvian in the city. Long queues on weekends — arrive by noon.",
-        image:
-          "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "La Mar ceviche restaurant Laureles Medellín",
-      },
-    ],
-  },
-  {
-    id: "cafes",
-    label: "Cafés to work from",
-    href: "/cafes",
-    ctaLabel: "Explore cafés",
-    cards: [
-      {
-        id: "c1",
-        name: "Pergamino",
-        kind: "Specialty",
-        rating: 4.9,
-        meta: "El Poblado · $",
-        why: "Gold standard. Roastery on-site, fast Wi-Fi, no time limit on seats.",
-        image:
-          "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Pergamino café El Poblado Medellín work from",
-      },
-      {
-        id: "c2",
-        name: "Velvet",
-        kind: "Third wave",
-        rating: 4.8,
-        meta: "Laureles · $",
-        why: "Quieter than Pergamino. Great pour-overs, power sockets at every seat.",
-        image:
-          "https://images.unsplash.com/photo-1447933601403-0c6688de566e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Velvet café Laureles Medellín work laptop",
-      },
-      {
-        id: "c3",
-        name: "Café Revolución",
-        kind: "Creative hub",
-        rating: 4.7,
-        meta: "Laureles · $",
-        why: "Communal tables, reliable internet, weekly events. Freelancer favourite.",
-        image:
-          "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Café Revolución Laureles Medellín freelance workspace",
-      },
-      {
-        id: "c4",
-        name: "Azafrán",
-        kind: "Bakery + café",
-        rating: 4.6,
-        meta: "El Poblado · $",
-        why: "Fresh pastries every morning, outdoor terrace open until 8pm.",
-        image:
-          "https://images.unsplash.com/photo-1517244683847-7456b63c5969?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Azafrán bakery café El Poblado Medellín",
-      },
-    ],
-  },
-  {
-    id: "events",
-    label: "Upcoming events",
-    href: "/events",
-    ctaLabel: "View all events",
-    cards: [
-      {
-        id: "e1",
-        name: "Salsa Night — Teatro Metro",
-        kind: "Nightlife",
-        rating: 4.8,
-        meta: "Tonight · Free entry",
-        why: "Live orchestra, open dance floor. All levels welcome — Medellín at its best.",
-        image:
-          "https://images.unsplash.com/photo-1504609813442-a8924e83f76e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Salsa night events Medellín this week",
-      },
-      {
-        id: "e2",
-        name: "Feria de las Flores",
-        kind: "Festival",
-        rating: 4.9,
-        meta: "This weekend · Free",
-        why: "The city's biggest annual festival. Silleterros parade, food, live music.",
-        image:
-          "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Feria de las Flores Medellín schedule events",
-      },
-      {
-        id: "e3",
-        name: "Art Week Medellín",
-        kind: "Culture",
-        rating: 4.6,
-        meta: "Next week · Free",
-        why: "50+ galleries open late, free entry. Best with the guided walking tour.",
-        image:
-          "https://images.unsplash.com/photo-1541961017774-22349e4a1262?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Art Week Medellín galleries events tickets",
-      },
-      {
-        id: "e4",
-        name: "Craft Beer Festival",
-        kind: "Food & drink",
-        rating: 4.7,
-        meta: "Sat · $12 entry",
-        why: "40 local breweries, live music, street food. Biggest beer event of the year.",
-        image:
-          "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=480&q=75",
-        query: "Craft beer festival Medellín Laureles tickets",
-      },
-    ],
-  },
-];
-
-// ─── PlaceCard ────────────────────────────────────────────────────────────────
-
-function PlaceCard({
-  name,
-  kind,
-  rating,
-  meta,
-  why,
-  image,
-  query,
-}: Omit<PlaceCardData, "id">) {
+  title: string;
+  intro?: string;
+  link?: { href: string; label: string; testId: string };
+  tone?: "plain" | "tinted";
+  children: ReactNode;
+}) {
   return (
-    <Link
-      href={`/chat?q=${encodeURIComponent(query)}`}
-      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    <section
+      id={id}
+      aria-labelledby={`${id}-heading`}
+      className={`${tone === "tinted" ? "bg-muted/40" : "bg-background"} py-12 md:py-16`}
     >
-      <Card className="h-full overflow-hidden transition-all duration-200 group-hover:border-primary/30 group-hover:shadow-md motion-reduce:transition-none">
-        {/* Image */}
-        <div className="relative h-36 overflow-hidden bg-muted">
-          {image ? (
-            <Image
-              src={image}
-              alt={name}
-              fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
-              sizes="(max-width: 640px) 50vw, 25vw"
-            />
-          ) : (
-            <div className="h-full w-full bg-muted" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-          {/* Kind pill */}
-          <Badge
-            variant="secondary"
-            className="absolute left-2 top-2 bg-background/85 text-[10px] font-semibold backdrop-blur-sm"
-          >
-            {kind}
-          </Badge>
-        </div>
-
-        {/* Content */}
-        <CardContent className="flex flex-col gap-1.5 p-3">
-          <p className="line-clamp-1 text-sm font-semibold text-foreground">
-            {name}
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-accent">★ {rating}</span>
-            <span className="text-xs text-muted-foreground">{meta}</span>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+          <div className="max-w-2xl">
+            <h2 id={`${id}-heading`} className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+              {title}
+            </h2>
+            {intro && <p className="mt-1.5 text-base text-muted-foreground">{intro}</p>}
           </div>
-          {/* Why line — concierge insight */}
-          <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {why}
-          </p>
-        </CardContent>
-      </Card>
-    </Link>
+          {link && (
+            <Link href={link.href} data-testid={link.testId} className={SECTION_LINK}>
+              {link.label}
+              <ArrowRightIcon className="size-4" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        {children}
+      </div>
+    </section>
   );
 }
 
-// ─── PlaceCard Skeleton ───────────────────────────────────────────────────────
-
-function PlaceCardSkeleton() {
+function Cards({ cards }: { cards: PlaceCardData[] }) {
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="h-36 bg-muted animate-pulse" />
-      <div className="p-3 flex flex-col gap-2">
-        <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
-        <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
-        <div className="space-y-1">
-          <div className="h-3 w-full bg-muted rounded animate-pulse" />
-          <div className="h-3 w-4/5 bg-muted rounded animate-pulse" />
-        </div>
-      </div>
+    <div className={CARD_GRID}>
+      {cards.map(({ id, ...card }) => (
+        <PlaceCard key={id} {...card} />
+      ))}
     </div>
+  );
+}
+
+/** Compact, keyboard-accessible attribution below linked photo cards (no nested links). */
+function PhotoCredits({ cards }: { cards: PlaceCardData[] }) {
+  const credited = cards.filter((card) => card.imageCredit);
+  if (credited.length === 0) return null;
+  return (
+    <details className="rounded-lg border border-border/60 px-4 py-2 text-sm text-muted-foreground">
+      <summary className="min-h-11 cursor-pointer list-item rounded-sm py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        Photo credits, via Wikimedia Commons
+      </summary>
+      <ul className="space-y-2 pb-2">
+        {credited.map((card) => (
+          <li key={card.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span>{card.name}:</span>
+            <a
+              href={card.imageCredit!.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {card.imageCredit!.text.replace(/^Photo: /, "")}
+            </a>
+            {card.imageCredit!.licenseHref && (
+              <a
+                href={card.imageCredit!.licenseHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Licence terms
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
 // ─── Pure render component ────────────────────────────────────────────────────
 
-function HomeDiscoveryRowsUI({ rows }: { rows: RowData[] }) {
-  return (
-    <section aria-label="Discover Medellín" className="bg-background py-10 md:py-14">
-      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8">
-        {rows.map(({ id, label, href, ctaLabel, cards }) => (
-          <div key={id} className="flex flex-col gap-4">
-            {/* Row header */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground md:text-lg">
-                {label}
-              </h2>
-              <Link
-                href={href}
-                data-testid={`discovery-cta-${id}`}
-                className="flex items-center gap-1 text-xs font-medium text-primary transition-colors duration-200 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 motion-reduce:transition-none"
-              >
-                {ctaLabel}
-                <ArrowRightIcon className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
+export function HomeDiscoverySectionsUI({ data }: { data: DiscoveryData }) {
+  const { destinations, rentals, restaurants, cafes, events } = data;
+  const hasEatDrink = restaurants.length > 0 || cafes.length > 0;
 
-            {/* Card grid */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {cards.map((card) => (
-                <PlaceCard key={card.id} {...card} />
-              ))}
-            </div>
+  if (!destinations.length && !rentals.length && !hasEatDrink && !events.length) {
+    return (
+      <section aria-label="Discover Medellín" className="bg-background py-12 md:py-16">
+        <div className="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl font-semibold text-foreground">Recommendations are unavailable right now</h2>
+          <p className="text-base text-muted-foreground">Ask the concierge and it will search for you.</p>
+          <Link
+            href="/chat"
+            data-testid="discovery-empty-cta"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 text-base font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Ask the concierge
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      {destinations.length > 0 && (
+        <Section
+          id="things-to-see"
+          title="Things to see in Medellín"
+          intro="Places from our city guide. Ask the concierge about any of them."
+          link={{
+            href: `/chat?q=${encodeURIComponent("What are the best things to see in Medellín?")}`,
+            label: "Ask the concierge",
+            testId: "discovery-cta-destinations",
+          }}
+        >
+          <Cards cards={destinations} />
+          <PhotoCredits cards={destinations} />
+        </Section>
+      )}
+
+      {rentals.length > 0 && (
+        <Section
+          id="rentals"
+          title="Rentals in Medellín"
+          intro="Photos and monthly prices, shown in each listing's own currency."
+          link={{ href: "/rentals", label: "Browse all rentals", testId: "discovery-cta-rentals" }}
+          tone="tinted"
+        >
+          <Cards cards={rentals} />
+        </Section>
+      )}
+
+      {hasEatDrink && (
+        <Section
+          id="eat-and-drink"
+          title="Eat and drink"
+          intro="Restaurants and cafés from our listings. Looking for a night out? See nightlife."
+          link={{ href: "/nightlife", label: "Nightlife", testId: "discovery-cta-nightlife" }}
+        >
+          <HomeEatDrinkTabs restaurants={restaurants} cafes={cafes} />
+        </Section>
+      )}
+
+      {events.length > 0 && (
+        <Section
+          id="events"
+          title="Upcoming events"
+          intro="Real events with their real dates."
+          link={{ href: "/events", label: "View all events", testId: "discovery-cta-events" }}
+          tone="tinted"
+        >
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {events.map(({ id, ...event }) => (
+              <EventListRow key={id} {...event} />
+            ))}
           </div>
-        ))}
-      </div>
-    </section>
+        </Section>
+      )}
+    </>
   );
 }
 
-// ─── Skeleton (exported for Suspense fallback) ────────────────────────────────
+// ─── Skeleton (Suspense fallback) ─────────────────────────────────────────────
 
 export function HomeDiscoveryRowsSkeleton() {
   return (
-    <section
-      aria-label="Discover Medellín"
-      aria-busy="true"
-      className="bg-background py-10 md:py-14"
-    >
-      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 sm:px-6 lg:px-8">
-        {Array.from({ length: 4 }).map((_, rowIdx) => (
-          <div key={rowIdx} className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="h-5 w-36 bg-muted rounded animate-pulse" />
-              <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+    <section aria-label="Discover Medellín" aria-busy="true" className="bg-background py-12 md:py-16">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
+        <div className={CARD_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-xl border bg-card">
+              <div className="aspect-[4/3] animate-pulse bg-muted" />
+              <div className="flex flex-col gap-2 p-4">
+                <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, cardIdx) => (
-                <PlaceCardSkeleton key={cardIdx} />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-// ─── Async inner — fetches live data, falls back to static per row ─────────────
+// ─── Async inner — fetches live data; failed or empty sections are simply left out ─
+
+const EMPTY: PlaceCardData[] = [];
 
 async function HomeDiscoveryRowsInner() {
   const supabase = await createClient();
 
-  const [rentalsResult, restaurantsResult, cafesResult, eventsResult] =
-    await Promise.allSettled([
-      fetchLiveRentals(supabase),
-      fetchLiveRestaurants(supabase),
-      fetchLiveCafes(supabase),
-      fetchLiveEvents(supabase),
-    ]);
+  const names = ["rentals", "restaurants", "cafes", "events", "destinations"] as const;
+  const results = await Promise.allSettled([
+    fetchLiveRentals(supabase),
+    fetchLiveRestaurants(supabase),
+    fetchLiveCafes(),
+    fetchLiveEvents(supabase),
+    fetchLiveDestinations(supabase),
+  ]);
 
-  /** Return live cards if we got ≥ 4; otherwise fall back to static curation. */
-  function resolveRow(
-    result: PromiseSettledResult<PlaceCardData[]>,
-    staticCards: PlaceCardData[],
-  ): PlaceCardData[] {
-    if (result.status === "fulfilled" && result.value.length >= 4) {
-      return result.value.slice(0, 4);
+  const [rentals, restaurants, cafes, events, destinations] = results.map((result, i) => {
+    if (result.status === "rejected") {
+      console.error("[home-discovery] %s failed", names[i], result.reason);
+      return EMPTY;
     }
-    return staticCards;
-  }
+    return result.value;
+  });
 
-  const rows: RowData[] = [
-    { ...STATIC_ROWS[0], cards: resolveRow(rentalsResult, STATIC_ROWS[0].cards) },
-    { ...STATIC_ROWS[1], cards: resolveRow(restaurantsResult, STATIC_ROWS[1].cards) },
-    { ...STATIC_ROWS[2], cards: resolveRow(cafesResult, STATIC_ROWS[2].cards) },
-    { ...STATIC_ROWS[3], cards: resolveRow(eventsResult, STATIC_ROWS[3].cards) },
-  ];
-
-  return <HomeDiscoveryRowsUI rows={rows} />;
+  return <HomeDiscoverySectionsUI data={{ rentals, restaurants, cafes, events, destinations }} />;
 }
 
 // ─── Public export — self-contained with Suspense skeleton ───────────────────

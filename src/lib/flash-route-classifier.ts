@@ -1,11 +1,19 @@
 /**
  * SAN-872 · INT-023-A — Gemini Flash structured router for ambiguous concierge prompts.
  * Runs only when FLASH_ROUTE=1 and regex confidence is in the ambiguous band (or low-confidence venue collision).
+ *
+ * SAN-1588: this path stays on Gemini even when `MDE_AI_PROVIDER=nvidia`.
+ * Nemotron 3.5 Super VL is a reasoning model; live structured calls measured
+ * 0.6 s at best and up to 69 s / a multi-minute hang across runs, against this
+ * classifier's 800 ms ceiling. Routing it here would abort nearly every
+ * ambiguous turn and fall back to regex anyway, so the honest behavior is to
+ * skip the call.
  */
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import { GEMINI_FLASH_MODEL_ID, parseAiProvider } from "@/lib/ai-model-ids";
+import { isWholeCityReply } from "@/lib/rental-query-parser";
 // Uses the raw Gemini model (not the COST-001-wrapped FLASH_MODEL): this module
 // is reachable from the client chat bundle, and the wrapped model pulls in the
 // server-only node:async_hooks token sink. Same model *id* via
@@ -123,6 +131,8 @@ export async function classifyRouteWithFlash(
 ): Promise<FlashRouteResult | null> {
   const trimmed = text.trim();
   if (!trimmed || !process.env.GOOGLE_GENERATIVE_AI_API_KEY) return null;
+  // NVIDIA is selected for the agents, not for this 800 ms path (see header).
+  if (parseAiProvider(process.env.MDE_AI_PROVIDER) === "nvidia") return null;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FLASH_ROUTE_TIMEOUT_MS);
@@ -188,9 +198,26 @@ export function mergeRegexAndFlashClassification(
 
 export async function resolveRouterClassification(
   text: string,
-  options?: { lastIntent?: RouterIntent },
+  options?: { lastIntent?: RouterIntent; inRentalSearch?: boolean },
 ): Promise<FlashRouteClassification> {
   const regex = classifyRouterIntent(text);
+
+  // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the
+  // assistant, which anonymous visitors cannot reach. Right after a rental search it is the renter
+  // widening that search: keep it on the rental fast path, which resets the neighborhood (SAN-407).
+  // Only a plain whole-city reply qualifies, so "Is Medellín safe at night?" still goes to the assistant.
+  const inRentalSearch = options?.inRentalSearch ?? options?.lastIntent === "rental_search";
+  if (inRentalSearch && regex.routingTarget === "agent" && isWholeCityReply(text)) {
+    return {
+      ...regex,
+      intent: "rental_search",
+      confidence: 0.7,
+      reason: "whole-city follow-up to a rental search",
+      action: "search_now",
+      routingTarget: "rental",
+      source: "regex",
+    };
+  }
 
   if (!shouldInvokeFlashClassifier(regex, text)) {
     return { ...regex, source: "regex" };
