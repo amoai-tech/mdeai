@@ -50,7 +50,6 @@ describe("buildWorkspaceContexts", () => {
   it("links only destinations that exist today", () => {
     const contexts = buildWorkspaceContexts({
       hasLandlordProfile: true,
-      hasOrganizerEvents: true,
       partnerLabels: ["Cafe Roma"],
       isAdmin: true,
     });
@@ -74,7 +73,6 @@ describe("buildWorkspaceContexts", () => {
 describe("activeWorkspaceContext", () => {
   const contexts = buildWorkspaceContexts({
     hasLandlordProfile: true,
-    hasOrganizerEvents: true,
     partnerLabels: ["Cafe Roma"],
     isAdmin: true,
   });
