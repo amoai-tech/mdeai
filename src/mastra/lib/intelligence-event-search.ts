@@ -334,25 +334,14 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
   }
 
   const window = dateWindow(dw);
-  let scored = hybridRows
-    .filter((row) => {
-      if (!window.gte && !window.lte) return true;
-      const t = row.event_start_time;
-      if (!t) return false;
-      return isWithinDateWindow(t, window);
-    })
+  // Semantic ranking is never permission to relax an explicit search constraint.
+  // On zero exact matches return an empty result: the existing chat fast-path
+  // can offer upcoming alternatives with a clear "nothing for tonight" label.
+  const scored = hybridRows
+    .filter((row) => eventMatchesDateWindow(row.event_start_time, window))
+    .filter((row) => !neighborhood ||
+      (row.address ?? "").toLocaleLowerCase().includes(neighborhood.toLocaleLowerCase()))
     .map((row, idx) => scoreHybridEventRow(row, idx, signalMap, slots, neighborhood));
-
-  if (!scored.length && hybridRows.length && (window.gte || window.lte)) {
-    rankExplanation.push({
-      factor: "date_window_relaxed",
-      score: 0,
-      note: `no ${dw} matches — showing nearest ranked events`,
-    });
-    scored = hybridRows.map((row, idx) =>
-      scoreHybridEventRow(row, idx, signalMap, slots, neighborhood),
-    );
-  }
 
   if (dw !== "any") {
     rankExplanation.push({ factor: "date_window", score: 1, note: dw });

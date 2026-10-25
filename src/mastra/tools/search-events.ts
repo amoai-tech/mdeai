@@ -346,10 +346,11 @@ export const searchEventsTool = createTool({
     category: categoryEnum.optional(),
     neighborhood: z.string().optional().describe('Medellin neighborhood, e.g. El Poblado, Laureles'),
     maxPricePerTicket: z.number().positive().optional().describe('Max ticket price in USD'),
+    // An omitted date must not override a date inferred from queryText.
+    // Explicit 'any' remains the caller's show-all override.
     dateWindow: z
       .enum(['tonight', 'this_weekend', 'this_week', 'next_week', 'any'])
-      .optional()
-      .default('any'),
+      .optional(),
     limit: z.number().int().min(1).max(20).default(5),
     queryText: z
       .string()
