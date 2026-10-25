@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
+import { restaurantSearchDisplayName, rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
 
 const SELECT_FIELDS =
   "id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary";
@@ -58,7 +58,16 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
 
   if (error) return { status: "error" };
   if (!data) return { status: "not_found" };
-  return { status: "found", restaurant: rowToRestaurant(data as unknown as RestaurantRow) };
+  const restaurant = rowToRestaurant(data as unknown as RestaurantRow);
+  return {
+    status: "found",
+    // Cards and Details must share the same location-qualified label. Supabase retains
+    // each venue's canonical name, ID, and Google place ID.
+    restaurant: {
+      ...restaurant,
+      name: restaurantSearchDisplayName(restaurant.name, restaurant.id),
+    },
+  };
 }
 
 /**
@@ -106,6 +115,9 @@ export type RestaurantContestOption = {
   entityId: string;
   contestTitle: string;
   status: string;
+  /** Real contest window. The vote panel uses it so a draft/closed contest never offers a vote. */
+  startsAt: string | null;
+  endsAt: string | null;
 };
 
 /**
@@ -133,7 +145,14 @@ export async function fetchRestaurantContestOptions(
 
   const options: RestaurantContestOption[] = [];
   for (const raw of data) {
-    const row = raw as { contest_id?: string; entity_id?: string; contest_title?: string; status?: string };
+    const row = raw as {
+      contest_id?: string;
+      entity_id?: string;
+      contest_title?: string;
+      status?: string;
+      starts_at?: unknown;
+      ends_at?: unknown;
+    };
     if (!row.contest_id || !row.entity_id) continue;
     if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) continue;
     options.push({
@@ -141,6 +160,8 @@ export async function fetchRestaurantContestOptions(
       entityId: row.entity_id,
       contestTitle: row.contest_title ?? "Contest",
       status: row.status ?? "unknown",
+      startsAt: typeof row.starts_at === "string" ? row.starts_at : null,
+      endsAt: typeof row.ends_at === "string" ? row.ends_at : null,
     });
   }
   return options;

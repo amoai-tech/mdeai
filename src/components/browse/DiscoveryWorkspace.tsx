@@ -17,6 +17,12 @@ export type DiscoveryWorkspaceProps = {
   children: ReactNode;
   /** Right column on desktop: the map, optionally with a details panel over it. */
   rightPanel: ReactNode;
+  /**
+   * SAN-1421 — the page's own chat entry point, pinned to the bottom of the results column.
+   * Optional on purpose: this layout still renders with no chat stack at all, and the caller decides
+   * which conversation (if any) belongs on its page.
+   */
+  askComposer?: ReactNode;
 };
 
 /**
@@ -31,7 +37,7 @@ export type DiscoveryWorkspaceProps = {
  * shared conversation per browser tab (SAN-1088).
  */
 export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
-  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel } = props;
+  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer } = props;
   return (
     <div
       data-testid={testId}
@@ -72,6 +78,15 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
 
         {notice}
         <div className="px-4 pb-24 sm:px-6 lg:pb-6">{children}</div>
+
+        {askComposer ? (
+          <div
+            data-testid="workspace-ask-composer"
+            className="sticky bottom-0 z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90"
+          >
+            {askComposer}
+          </div>
+        ) : null}
       </main>
 
       <aside

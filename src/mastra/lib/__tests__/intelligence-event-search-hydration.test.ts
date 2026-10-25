@@ -53,13 +53,20 @@ const clientWith = (events: Result, fallback: Result = { data: [], error: null }
 
 describe("searchEventsIntelligent — hybrid results are completed from the event record", () => {
   beforeEach(() => {
+    // The fixture starts on June 20, 2026; keep it in the future so the
+    // real hybrid date filter can run without depending on the wall clock.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-18T12:00:00.000Z"));
     vi.stubEnv("SUPABASE_URL", "https://test.supabase.co");
     vi.stubEnv("SUPABASE_ANON_KEY", "test-anon-key");
     mocks.createClient.mockReset();
     mocks.embedQueryText.mockReset();
     mocks.embedQueryText.mockResolvedValue([0.1, 0.2]);
   });
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
 
   it("gives a semantic result its map coordinates, city, currency and maps link", async () => {
     const { client, eventsBuilder } = clientWith({

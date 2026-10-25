@@ -10,6 +10,9 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+vi.mock("@/lib/chat/thread-nav-context", () => ({
+  useOptionalThreadNav: () => ({ activeThreadId: "thread-b", sessionThreadId: "thread-b" }),
+}));
 const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
 const supa = vi.hoisted(() => ({ getUser: vi.fn() }));
@@ -111,7 +114,7 @@ describe("onAgentSend never leaves the renter with nothing", () => {
 
   it("adds only the notice when CopilotKit swallows the run failure and reports it", async () => {
     chat.appendMessage.mockImplementation(async () => {
-      reportConciergeError(); // what the provider's onError does when the run fails
+      reportConciergeError("thread-b"); // provider's onError reports the current thread
       return true;
     });
     await act(async () => {
@@ -130,6 +133,17 @@ describe("onAgentSend never leaves the renter with nothing", () => {
     expect(handled).toBe(true);
     expect(shown.map((m) => m.role)).toEqual(["assistant"]);
     expect(shown[0].content).toBe(AGENT_UNAVAILABLE_MESSAGE);
+  });
+
+  it("does not report a different conversation's late failure as this agent's failure", async () => {
+    chat.appendMessage.mockImplementation(async () => {
+      reportConciergeError("thread-a");
+      return true;
+    });
+    await act(async () => {
+      await handlers.onAgentSend("hello from thread B");
+    });
+    expect(shown).toEqual([]);
   });
 
   it("adds nothing when the agent takes the message", async () => {

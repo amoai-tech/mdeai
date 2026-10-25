@@ -9,12 +9,13 @@ export function ConciergeErrorNotice({ onRetry }: Props) {
   return (
     <div
       data-testid="concierge-error-notice"
+      role="alert"
       className="copilotKitMessage copilotKitAssistantMessage"
     >
       <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
         <p className="font-medium text-destructive">Something went wrong</p>
         <p className="mt-0.5 text-muted-foreground">
-          The concierge timed out — please try again.
+          The assistant could not finish this reply. Please try again.
         </p>
         <button
           type="button"

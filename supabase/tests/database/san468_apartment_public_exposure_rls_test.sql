@@ -3,8 +3,8 @@
 --
 -- WHAT THIS LOCKS IN
 --   1. RLS is enabled on public.apartments.
---   2. Anonymous clients see only `status = 'active'` inventory, and never a draft,
---      paused, rejected, or fail-closed external candidate row — even by exact UUID.
+--   2. During Phase A anonymous clients can discover non-private inventory regardless
+--      of status/approval, but cannot read explicitly private broker drafts by UUID.
 --   3. Anonymous row writes are denied by RLS; anon DML grants are retained for the
 --      existing SAN-1054 behaviour contract. TRUNCATE/REFERENCES/TRIGGER are revoked
 --      because PostgreSQL does not enforce them through RLS.
@@ -12,8 +12,8 @@
 --   5. A different broker cannot read or update another broker's private draft,
 --      and an owning broker cannot insert an apartment under another landlord.
 --
--- The public predicate remains `status = 'active'`; tightening it to approved +
--- published is SAN-386's canonical search-eligibility call (SAN-468 §4.2).
+-- The canonical phase-aware public predicate controls discovery; explicit private
+-- broker records remain inaccessible to outsiders. Launch restores stricter rules.
 --
 -- Run with: supabase test db
 begin;
@@ -47,19 +47,19 @@ values
    'a4680000-0000-4000-8000-000000000011', '{}'::jsonb),
   ('b4680000-0000-4000-8000-000000000002', 'SAN468 A draft', 'san468-a-draft',
    'Laureles', 'inactive', 'pending', 'draft',
-   'a4680000-0000-4000-8000-000000000011', '{}'::jsonb),
+   'a4680000-0000-4000-8000-000000000011', '{"visibility":"private"}'::jsonb),
   ('b4680000-0000-4000-8000-000000000003', 'SAN468 A paused', 'san468-a-paused',
    'Laureles', 'inactive', 'approved', 'paused',
-   'a4680000-0000-4000-8000-000000000011', '{}'::jsonb),
+   'a4680000-0000-4000-8000-000000000011', '{"visibility":"private"}'::jsonb),
   ('b4680000-0000-4000-8000-000000000004', 'SAN468 A rejected', 'san468-a-rejected',
    'Laureles', 'inactive', 'rejected', 'draft',
-   'a4680000-0000-4000-8000-000000000011', '{}'::jsonb),
+   'a4680000-0000-4000-8000-000000000011', '{"visibility":"private"}'::jsonb),
   ('b4680000-0000-4000-8000-000000000005', 'SAN468 external candidate', 'san468-candidate',
    'Laureles', 'inactive', 'pending', 'draft', null,
    '{"inventory_kind":"external_candidate"}'::jsonb),
   ('b4680000-0000-4000-8000-000000000006', 'SAN468 B draft', 'san468-b-draft',
    'Laureles', 'inactive', 'pending', 'draft',
-   'a4680000-0000-4000-8000-000000000012', '{}'::jsonb);
+   'a4680000-0000-4000-8000-000000000012', '{"visibility":"private"}'::jsonb);
 
 -- ── Catalog ──────────────────────────────────────────────────────────────────
 select is(
@@ -95,23 +95,23 @@ select is((select count(*)::int from public.apartments
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000002'), 0,
-  'A2: anon cannot read a draft by exact UUID');
+  'A2: anon cannot read an explicitly private draft by UUID');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000003'), 0,
-  'A3: anon cannot read a paused listing by exact UUID');
+  'A3: anon cannot read an explicitly private paused listing by UUID');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000004'), 0,
-  'A4: anon cannot read a rejected listing by exact UUID');
+  'A4: anon cannot read an explicitly private rejected listing by UUID');
 
 select is((select count(*)::int from public.apartments
-           where id = 'b4680000-0000-4000-8000-000000000005'), 0,
-  'A5: anon cannot read a fail-closed external candidate');
+           where id = 'b4680000-0000-4000-8000-000000000005'), 1,
+  'A5: anon can discover an ordinary inactive external candidate in development');
 
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000006'), 0,
-  'A6: anon cannot read another broker draft');
+  'A6: anon cannot read another broker explicitly private draft');
 
 select throws_ok(
   $$insert into public.apartments (title, slug, neighborhood)
@@ -156,7 +156,7 @@ select is((select count(*)::int from public.apartments
   'A14: broker A can read its own rejected listing');
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000006'), 0,
-  'A15: broker A cannot read broker B draft');
+  'A15: broker A cannot read broker B private draft');
 
 select lives_ok(
   $$update public.apartments set title = 'SAN468 A draft updated'
@@ -189,7 +189,7 @@ select is((select count(*)::int from public.apartments
   'B1: broker B can read its own draft');
 select is((select count(*)::int from public.apartments
            where id = 'b4680000-0000-4000-8000-000000000002'), 0,
-  'B2: broker B cannot read broker A draft');
+  'B2: broker B cannot read broker A private draft');
 
 reset role;
 

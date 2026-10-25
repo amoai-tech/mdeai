@@ -10,7 +10,7 @@ import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { FLASH_MODEL } from "../lib/models";
+import { CONCIERGE_MODEL } from "../lib/models";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
@@ -111,6 +111,20 @@ export const conciergeWorkingMemorySchema = z.object({
   mapUi: MapUiStateSchema.partial()
     .optional()
     .describe('Map summary mirror — pin ids/counts/viewport only, never full MapPin[]. Send only what changed.'),
+  lastGroundedResults: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        area: z.string().optional(),
+        summary: z.string().optional(),
+        rating: z.number().optional(),
+      }),
+    )
+    .optional()
+    .describe(
+      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here.',
+    ),
 });
 
 /**
@@ -119,7 +133,7 @@ export const conciergeWorkingMemorySchema = z.object({
  * treated as "no value"; a real value, `0`, `false` and `[]` are never touched.
  */
 const PADDED_FIELDS = {
-  root: ['selectedListingId', 'selectedEventId'],
+  root: ['selectedListingId', 'selectedEventId', 'lastGroundedResults'],
   // Every optional field on this object is padded by the model with ""/null at some
   // point, so all of them are listed — a numeric field the model blanks must not reach
   // z.number().positive(), or the whole memory update fails and the budget is lost.
@@ -194,12 +208,13 @@ export const conciergeAgent = new Agent({
 - When mapUi.viewport is set and the user asks about places near what they see on the map, pass search-grounded-places locationBias: { latitude: mapUi.viewport.lat, longitude: mapUi.viewport.lng }.
 
 # Working memory rules (very important)
-You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
+You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
 - After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:
@@ -278,13 +293,14 @@ Hard rules for the event gate:
 - NEVER say "Found N events" unless search-events ran in the SAME turn.
 
 # Output formatting (grounded places — UI renders photo cards)
-After search-grounded-places, the frontend renders photo cards (rating, price, hours, map pins, Open in Google Maps) — do NOT repeat place names, descriptions, neighborhoods, or Maps links in prose.
+After a NEW search-grounded-places call, the frontend renders photo cards (rating, price, hours, map pins, Open in Google Maps) — do NOT repeat place names, descriptions, neighborhoods, or Maps links in prose.
 
 Grounded listing rules (critical):
-- NEVER list cafés or venues by name in your reply.
+- For a new search, do NOT list cafés or venues by name in your reply.
+- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating. Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
 - NEVER include "View on Google Maps", bullet lists, or numbered lists of places in text.
-- Reply in at most 2 short sentences: (1) how many matches and which area, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
-- If the user filters ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
+- Reply in at most 2 short sentences: (1) how many matches and which area, or the recommendation, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
+- If the user adds a new filter ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
 - When re-calling search-grounded-places for nightlife bar/club discovery, pass intent: "nightlife" again. For café-only follow-ups, pass intent: "cafe".
 
 # Output formatting (restaurants — UI renders cards)
@@ -320,6 +336,10 @@ Restaurant listing rules (critical):
 
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
+
+Rental price rules (critical):
+- A monthly listing's price is the stored monthly amount in its own currency. Quote it only as a monthly amount (for example "COP 2,400,000/month").
+- Never add a USD, per-night or per-week equivalent for a monthly listing, and never divide a monthly rent by 30. The card owns price display.
 
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.
@@ -402,11 +422,12 @@ Conversion boundary (do NOT cross):
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
+- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row.
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
 ${formatEventSourcePromptHint()}`,
-  model: FLASH_MODEL,
+  model: CONCIERGE_MODEL,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing

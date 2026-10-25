@@ -18,6 +18,8 @@ export type RentalsConciergeShellProps = {
   /** SAN-1204 · real broker data loaded on the server; never fetched in the browser. */
   dashboard?: BrokerDashboardView | null;
   loadError?: string | null;
+  /** Route family for the domain nav; defaults to the legacy host tree. */
+  basePath?: string;
 };
 
 /**
@@ -29,6 +31,7 @@ export function RentalsConciergeShell({
   workspaceMode = "concierge",
   dashboard = null,
   loadError = null,
+  basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
 
@@ -37,7 +40,7 @@ export function RentalsConciergeShell({
       data-testid="rentals-concierge"
       className="flex min-h-[calc(100dvh-7rem)] flex-col gap-3 md:min-h-[calc(100dvh-5rem)]"
     >
-      <HostRentalsNav />
+      <HostRentalsNav basePath={basePath} />
 
       <div
         className={cn(

@@ -1,9 +1,15 @@
 /**
- * COST-001 — single source of truth for Gemini token pricing.
+ * COST-001 — single source of truth for model token pricing.
  *
  * No price literals anywhere else in the codebase. Rates are USD per 1M tokens.
  * Unknown models fall back to the highest known rate and are flagged, so a new
  * model never silently logs $0.
+ *
+ * NVIDIA (SAN-1588) is deliberately absent. models.dev currently lists the
+ * Nemotron trial at $0, but NVIDIA's trial terms are evaluation-only and MDE has
+ * no production price for the model. An unknown provider therefore takes the
+ * flagged `FALLBACK_RATE` (never a fabricated $0), and `ai_runs.metadata`
+ * carries `cost_rate_fallback: true` so the number is read as an estimate.
  *
  * **Source of every rate below.** Read from the official pricing page on
  * 2026-09-26, "Standard" tier, quoted verbatim:

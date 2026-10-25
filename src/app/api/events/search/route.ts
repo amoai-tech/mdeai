@@ -10,10 +10,10 @@ export const maxDuration = 10;
 const bodySchema = z.object({
   category: z.enum(["music", "food", "culture", "sport", "nightlife"]).optional(),
   neighborhood: z.string().optional(),
+  // Omitted means infer from queryText; explicit "any" means show all upcoming.
   dateWindow: z
     .enum(["tonight", "this_weekend", "this_week", "next_week", "any"])
-    .optional()
-    .default("any"),
+    .optional(),
   limit: z.number().int().min(1).max(20).optional().default(10),
   queryText: z.string().optional(),
 });

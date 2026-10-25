@@ -22,6 +22,14 @@ describe("remote image allowlist", () => {
     expect(isRenderableRemoteImage("not a url")).toBe(false);
   });
 
+  it("allows Wikimedia Commons files only, not other paths or hosts of that site", () => {
+    const commons = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Comuna_13.jpg/960px-Comuna_13.jpg";
+    expect(isRenderableRemoteImage(commons)).toBe(true);
+    expect(isRenderableRemoteImage("https://upload.wikimedia.org/w/index.php?title=x")).toBe(false);
+    expect(isRenderableRemoteImage("https://commons.wikimedia.org/wiki/File:X.jpg")).toBe(false);
+    expect(isRenderableRemoteImage(commons.replace("https:", "http:"))).toBe(false);
+  });
+
   it("allows the Supabase storage host only under the public object prefix", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abcdefgh.supabase.co");
     expect(

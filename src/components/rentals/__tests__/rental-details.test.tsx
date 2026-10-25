@@ -153,6 +153,19 @@ afterEach(async () => {
 });
 
 describe("/rentals Details panel — desktop", () => {
+  it("clears the old Details selection when rental URL filters change", async () => {
+    await mount();
+    await click(detailsButton(MAPPED_SLUG));
+    expect(byId("rental-details-panel")).not.toBeNull();
+
+    // Next App Router navigation can update props without remounting the component tree.
+    // The old rental selection must not survive a new catalogue/filter context.
+    act(() => {
+      root.render(<RentalBrowseView {...viewProps(NINE)} neighborhood="Laureles" />);
+    });
+    expect(byId("rental-details-panel")).toBeNull();
+  });
+
   it("fixtures are the nine approved ads: seven mapped, two not, four approved photos each", () => {
     expect(NINE).toHaveLength(9);
     expect(NINE.filter((r) => r.latitude != null)).toHaveLength(MAPPED);
@@ -407,6 +420,37 @@ describe("RentalDetailsPanel — states", () => {
     expect(byId("rental-details-external-note")).not.toBeNull();
     expect(byId("rental-details-schedule-cta")?.textContent).toContain("Request MDE follow-up");
     expect(byId("rental-details-schedule-cta")?.textContent).not.toContain("Schedule viewing");
+  });
+
+  it("identifies USD explicitly beside the price, but does not duplicate COP", async () => {
+    await renderPanel({ ...baseRentalOf(), currency: "USD", price_monthly: 1900 });
+    expect(byId("rental-details-price")?.textContent).toBe("$1,900/mo");
+    expect(byId("rental-details-currency")?.textContent).toBe("USD");
+    await renderPanel(baseRentalOf());
+    expect(byId("rental-details-price")?.textContent).toContain("COP ");
+    expect(byId("rental-details-currency")).toBeNull();
+  });
+
+  it("identifies USD on a nightly-only price too, and leaves COP nightly unbadged", async () => {
+    // NINE are source-linked ads, which never show a nightly price. Use a managed listing.
+    const managed = { ...baseRentalOf(), tags: [] as string[] };
+    await renderPanel({
+      ...managed,
+      currency: "USD",
+      price_monthly: undefined,
+      nightly_price: 78,
+    });
+    expect(byId("rental-details-price")?.textContent).toBe("~$2,340/mo");
+    expect(byId("rental-details-currency")?.textContent).toBe("USD");
+
+    await renderPanel({
+      ...managed,
+      currency: "COP",
+      price_monthly: undefined,
+      nightly_price: 80_000,
+    });
+    expect(byId("rental-details-price")?.textContent).toBe("~COP 2,400,000/mo");
+    expect(byId("rental-details-currency")).toBeNull();
   });
 
   it("states a missing price as not provided instead of showing zero", async () => {

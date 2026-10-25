@@ -3,6 +3,9 @@ import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { isQaEventFixture, NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 import { embedQueryText, vectorLiteral } from "./query-embedding";
 import type { RankExplanationEntry } from "./search-logs";
+import { parseEventIntelligenceSlots, resolveEventCategoryForQuery, type EventIntelligenceSlots } from "./event-category-normalization";
+export { parseEventIntelligenceSlots, resolveEventCategoryForQuery } from "./event-category-normalization";
+export type { EventIntelligenceSlots } from "./event-category-normalization";
 import {
   type EventCard,
   type EventQuery,
@@ -10,17 +13,7 @@ import {
   extractNeighborhood,
   normalizeEventCurrency,
   dateWindow,
-  type DateWindow,
 } from "../tools/search-events";
-
-export type EventIntelligenceSlots = {
-  neighborhood?: string;
-  wantsSalsa?: boolean;
-  wantsLiveMusic?: boolean;
-  wantsFashion?: boolean;
-  wantsNetworking?: boolean;
-  dateWindow?: DateWindow;
-};
 
 type HybridEventRow = {
   id: string;
@@ -71,40 +64,6 @@ function num(v: number | string | null | undefined): number | undefined {
   if (v === null || v === undefined) return undefined;
   const n = typeof v === "string" ? Number(v) : v;
   return Number.isFinite(n) ? n : undefined;
-}
-
-/** Remap Events chip category using queryText signals (e.g. nightlife + salsa → music); clears nightlife when queryText absent (CK-V2-015). */
-export function resolveEventCategoryForQuery(
-  category: EventQuery["category"],
-  queryText?: string,
-): EventQuery["category"] {
-  if (!category) return category;
-  const text = queryText?.trim();
-  if (!text) {
-    // Events chip often sets nightlife without queryText — skip strict filter.
-    if (category === "nightlife") return undefined;
-    return category;
-  }
-  const slots = parseEventIntelligenceSlots(text);
-  if ((slots.wantsSalsa || slots.wantsLiveMusic) && category === "nightlife") {
-    return "music";
-  }
-  return category;
-}
-
-/** Extract salsa, live-music, neighborhood, and date-window signals from natural-language query text. */
-export function parseEventIntelligenceSlots(queryText: string): EventIntelligenceSlots { // skipcq: JS-0067
-  const q = queryText.toLowerCase().replace(/-/g, " ");
-  const slots: EventIntelligenceSlots = {};
-  if (/laureles/.test(q)) slots.neighborhood = "Laureles";
-  else if (/poblado|provenza/.test(q)) slots.neighborhood = "El Poblado";
-  if (/salsa/.test(q)) slots.wantsSalsa = true;
-  if (/live music|concert|band/.test(q)) slots.wantsLiveMusic = true;
-  if (/fashion|runway/.test(q)) slots.wantsFashion = true;
-  if (/networking|meetup|professional/.test(q)) slots.wantsNetworking = true;
-  if (/this weekend|weekend/.test(q)) slots.dateWindow = "this_weekend";
-  else if (/tonight|today/.test(q)) slots.dateWindow = "tonight";
-  return slots;
 }
 
 function eventTimeMs(iso: string): number | null { // skipcq: JS-0067
@@ -395,25 +354,14 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
   }
 
   const window = dateWindow(dw);
-  let scored = hybridRows
-    .filter((row) => {
-      if (!window.gte && !window.lte) return true;
-      const t = row.event_start_time;
-      if (!t) return false;
-      return isWithinDateWindow(t, window);
-    })
+  // Semantic ranking is never permission to relax an explicit search constraint.
+  // On zero exact matches return an empty result: the existing chat fast-path
+  // can offer upcoming alternatives with a clear "nothing for tonight" label.
+  const scored = hybridRows
+    .filter((row) => eventMatchesDateWindow(row.event_start_time, window))
+    .filter((row) => !neighborhood ||
+      (row.address ?? "").toLocaleLowerCase().includes(neighborhood.toLocaleLowerCase()))
     .map((row, idx) => scoreHybridEventRow(row, idx, signalMap, slots, neighborhood));
-
-  if (!scored.length && hybridRows.length && (window.gte || window.lte)) {
-    rankExplanation.push({
-      factor: "date_window_relaxed",
-      score: 0,
-      note: `no ${dw} matches — showing nearest ranked events`,
-    });
-    scored = hybridRows.map((row, idx) =>
-      scoreHybridEventRow(row, idx, signalMap, slots, neighborhood),
-    );
-  }
 
   if (dw !== "any") {
     rankExplanation.push({ factor: "date_window", score: 1, note: dw });

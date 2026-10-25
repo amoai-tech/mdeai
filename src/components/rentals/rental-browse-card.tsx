@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -104,11 +104,13 @@ function RentalBrowseCardMedia({
   title,
   neighborhood,
   nightlyLabel,
+  currency,
 }: {
   imageUrl?: string;
   title: string;
   neighborhood: string;
   nightlyLabel: string | null;
+  currency?: string;
 }) {
   // A failed Storage request must fall back to the normal placeholder, not a broken image.
   const [imageFailed, setImageFailed] = useState(false);
@@ -135,8 +137,16 @@ function RentalBrowseCardMedia({
         />
       )}
       {nightlyLabel ? (
-        <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
+        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
           {nightlyLabel}
+          {currency?.toUpperCase() === "USD" ? (
+            <span
+              className="rounded bg-foreground/10 px-1 text-[10px] font-normal"
+              data-testid="rental-card-nightly-currency"
+            >
+              USD
+            </span>
+          ) : null}
         </span>
       ) : null}
     </div>
@@ -217,6 +227,7 @@ export function RentalBrowseCard({
               title={rental.title}
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
+              currency={rental.currency}
             />
           </button>
         ) : (
@@ -225,6 +236,7 @@ export function RentalBrowseCard({
             title={rental.title}
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}
+            currency={rental.currency}
           />
         )
       }
@@ -235,6 +247,7 @@ export function RentalBrowseCard({
               type="button"
               size="sm"
               variant="secondary"
+              className="min-h-11 lg:min-h-0"
               data-testid={`rental-details-cta-${rental.id}`}
               onClick={(event) => {
                 event.stopPropagation();
@@ -250,7 +263,7 @@ export function RentalBrowseCard({
               size="sm"
               variant="default"
               data-testid="rental-schedule-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-11 lg:min-h-0")}
               onClick={(e) => {
                 e.stopPropagation();
                 onSchedule?.();
@@ -274,23 +287,13 @@ export function RentalBrowseCard({
               target="_blank"
               rel="nofollow noopener noreferrer"
               data-testid={`rental-card-source-${rental.id}`}
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-11 lg:min-h-0")}
               onClick={(event) => event.stopPropagation()}
             >
               <ExternalLink data-icon="inline-start" aria-hidden />
               View original listing
             </a>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            data-testid="rental-save-cta"
-            disabled
-            title="Save for later (coming soon)"
-          >
-            <Heart data-icon="inline-start" aria-hidden />
-            Save
-          </Button>
         </div>
       }
     >
@@ -361,7 +364,14 @@ export function RentalBrowseCard({
       </div>
 
       {monthlyLabel ? (
-        <p className="mt-1.5 text-xs text-muted-foreground">{monthlyLabel}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
       ) : !nightlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
       ) : null}

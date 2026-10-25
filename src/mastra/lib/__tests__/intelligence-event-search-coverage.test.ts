@@ -163,7 +163,33 @@ describe("searchEventsIntelligent — coverage branches", () => {
     expect(result.results[0]?.signalSource).toBe("hybrid-signals");
   });
 
-  it("covers structured query filtering and relaxed fallback", async () => {
+  it("honors explicit neighborhood and date filters after hybrid ranking", async () => {
+    const row = (id: string, address: string, start: string) => ({
+      id, name: id, description: null, event_type: "music", address,
+      city: "Medellín", event_start_time: start, ticket_price_min: 25,
+      primary_image_url: null, similarity: 0.9,
+    });
+    const client = makeClient({
+      events: { data: [], error: null }, signals: { data: [], error: null },
+      rpc: { data: [
+        row("matching", "Laureles, Medellín", "2026-06-20T20:00:00.000Z"),
+        row("wrong-date", "Laureles, Medellín", "2026-07-20T20:00:00.000Z"),
+        row("wrong-neighborhood", "El Poblado, Medellín", "2026-06-20T20:00:00.000Z"),
+      ], error: null },
+    });
+    mocks.createClient.mockReturnValue(client);
+    mocks.embedQueryText.mockResolvedValueOnce([0.1, 0.2]);
+    const { searchEventsIntelligent } = await import("../intelligence-event-search");
+    const result = await searchEventsIntelligent({
+      queryText: "salsa in Poblado this weekend", neighborhood: "Laureles",
+      dateWindow: "this_weekend", limit: 10,
+    });
+    expect(result.hybridUsed).toBe(true);
+    expect(result.results.map((event) => event.id)).toEqual(["matching"]);
+    expect(result.rankExplanation.map((entry) => entry.factor)).not.toContain("date_window_relaxed");
+  });
+
+  it("does not relax a weekend filter when no exact event matches", async () => {
     const client = makeClient({
       events: {
         data: [
@@ -215,11 +241,10 @@ describe("searchEventsIntelligent — coverage branches", () => {
     expect(client.from).toHaveBeenCalledWith("events");
     expect(client.from).toHaveBeenCalledWith("event_signals");
     expect(result.hybridUsed).toBe(false);
-    expect(result.rankExplanation.map((entry) => entry.factor)).toContain("date_window_relaxed");
+    expect(result.rankExplanation.map((entry) => entry.factor)).not.toContain("date_window_relaxed");
     expect(result.rankExplanation.map((entry) => entry.factor)).toContain("date_window");
     expect(result.rankExplanation.map((entry) => entry.factor)).toContain("salsa_intent");
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.signalSource).toBe("event_signals");
-    expect(result.results[0]?.sourceUrl).toBe("https://maps.example.com/future");
+    expect(result.results).toHaveLength(0);
+    expect(result.total).toBe(0);
   });
 });
