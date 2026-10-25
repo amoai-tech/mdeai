@@ -86,6 +86,33 @@ describe("rental detail — external preview fields", () => {
     expect(link?.getAttribute("rel")).toContain("nofollow");
   });
 
+  it("shows the real destination and requires confirmation before opening an external source", async () => {
+    await render(preview({ sourceUrl: "https://newsource.example/listing/42" }));
+    const link = document.querySelector<HTMLAnchorElement>('[data-testid="rental-detail-source-link"]');
+    expect(link?.getAttribute("href")).toBe("https://newsource.example/listing/42");
+    expect(link?.textContent).toContain("newsource.example");
+    expect(link?.getAttribute("rel")).toContain("noopener");
+    const confirmation = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => { link?.dispatchEvent(click); });
+    expect(confirmation).toHaveBeenCalledWith(expect.stringContaining("newsource.example"));
+    expect(click.defaultPrevented).toBe(true);
+    confirmation.mockRestore();
+  });
+
+  it.each([
+    "http://external.example/listing",
+    "https://attacker@newsource.example/listing",
+    "https://user:pass@newsource.example/listing",
+    "https://mdeai.co/rentals/1",
+    "https://www.mdeai.co/rentals/1",
+    "javascript:alert(1)",
+    "not-a-url",
+  ])("rejects malformed or misleading original listing URL %s", async (sourceUrl) => {
+    await render(preview({ sourceUrl }));
+    expect(document.querySelector('[data-testid="rental-detail-source-link"]')).toBeNull();
+  });
+
   it("links to the original advertisement on an active, attributed external listing", async () => {
     const external = mapApartmentRowToDetail({
       ...row, status: "active", source_url: "https://www.fincaraiz.com.co/apartaestudio/193916988",

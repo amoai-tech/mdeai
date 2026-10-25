@@ -257,6 +257,25 @@ const mapsHrefFor = (detail: RentalDetail): string | null => {
   return `https://www.google.com/maps/search/?api=1&query=${detail.latitude},${detail.longitude}`;
 };
 
+/**
+ * A source link is an untrusted external destination, not proof that the advertiser
+ * is verified. Only permit a parsed HTTPS URL without embedded credentials.
+ * A hostname allowlist would hide legitimate new development inventory; instead
+ * show the exact host and ask the renter before navigating off MDE.
+ */
+const externalListingLinkFor = (value: string | null): { href: string; hostname: string } | null => {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || url.username || url.password || url.port !== "") return null;
+    if (hostname === "mdeai.co" || hostname.endsWith(".mdeai.co")) return null;
+    return { href: url.href, hostname: url.host };
+  } catch {
+    return null;
+  }
+};
+
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
@@ -307,6 +326,9 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
   const isInteractive = useHydrated();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
+  const sourceLink = (detail.status === "development-preview" || detail.isNotIndependentlyVerified)
+    ? externalListingLinkFor(detail.sourceUrl)
+    : null;
   const requestViewing = () =>
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
 
@@ -384,15 +406,21 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {(detail.status === "development-preview" || detail.isNotIndependentlyVerified) && detail.sourceUrl?.startsWith("https://") && !/^https:\/\/(?:www\.)?mdeai\.co(?:[/:]|$)/i.test(detail.sourceUrl) ? (
+              {sourceLink ? (
                 <a
-                  href={detail.sourceUrl}
+                  href={sourceLink.href}
                   target="_blank"
                   rel="nofollow noopener noreferrer"
                   data-testid="rental-detail-source-link"
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  onClick={(event) => {
+                    if (!window.confirm("You are leaving MDE AI for " + sourceLink.hostname + ". Continue to the external listing?")) {
+                      event.preventDefault();
+                    }
+                  }}
+                  className="inline-flex max-w-full flex-wrap items-center gap-1 text-sm text-primary hover:underline"
                 >
                   <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                  <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
                 </a>
               ) : null}
               {detail.sourceProvider ? (
