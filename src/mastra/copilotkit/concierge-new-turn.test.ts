@@ -90,6 +90,18 @@ describe("LoggingMastraAgent.run — which agents get the trimmed input", () => 
     expect(sent("hostEventAgent", history)).toEqual([u("3", "q2")]);
   });
 
+  it("host event agent keeps the current turn's tool call and result", () => {
+    const toolCall = {
+      id: "2",
+      role: "assistant" as const,
+      content: "",
+      toolCalls: [{ id: "tc", type: "function" as const, function: { name: "set_event_draft", arguments: "{}" } }],
+    };
+    const toolResult = { id: "3", role: "tool" as const, toolCallId: "tc", content: "{\"ok\":true}" };
+    const messages = [u("1", "old"), a("2", "old"), u("4", "create salsa"), toolCall, toolResult] as RunAgentInput["messages"];
+    expect(sent("hostEventAgent", messages)).toEqual([u("4", "create salsa"), toolCall, toolResult]);
+  });
+
   it("other agents: untouched", () => {
     expect(sent("hostOpsAgent", history)).toEqual(history);
   });

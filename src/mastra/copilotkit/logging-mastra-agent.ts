@@ -37,12 +37,22 @@ function sanitizeHostEventAgUiInput(input: RunAgentInput): RunAgentInput {
   const messages = input.messages ?? [];
   if (messages.length <= 1) return input;
 
-  const userMessages = messages.filter((m) => m.role === "user");
-  if (userMessages.length === 0) return input;
+  // Keep the newest user turn AND everything after it. A frontend-tool
+  // continuation ends with the assistant tool-call + tool result; sending only
+  // the user message stranded the model on `set_event_draft` forever because it
+  // never saw that its previous tool call had succeeded.
+  let lastUserIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  if (lastUserIndex < 0) return input;
 
   return {
     ...input,
-    messages: [userMessages[userMessages.length - 1]!],
+    messages: messages.slice(lastUserIndex),
   };
 }
 
