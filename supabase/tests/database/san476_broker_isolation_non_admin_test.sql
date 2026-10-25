@@ -94,17 +94,17 @@ values
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select is(
-  public.has_role('a4760000-0000-4000-8000-000000000001', 'admin'), false,
+  exists (select 1 from public.user_roles where user_id = 'a4760000-0000-4000-8000-000000000001'::uuid and role = 'admin'::public.user_role and (expires_at is null or expires_at > now())), false,
   'A1: owning broker holds no admin role'
 );
 
 select is(
-  public.has_role('a4760000-0000-4000-8000-000000000001', 'super_admin'), false,
+  exists (select 1 from public.user_roles where user_id = 'a4760000-0000-4000-8000-000000000001'::uuid and role = 'super_admin'::public.user_role and (expires_at is null or expires_at > now())), false,
   'A2: owning broker holds no super_admin role'
 );
 
 select is(
-  public.has_role('a4760000-0000-4000-8000-000000000002', 'admin'), false,
+  exists (select 1 from public.user_roles where user_id = 'a4760000-0000-4000-8000-000000000002'::uuid and role = 'admin'::public.user_role and (expires_at is null or expires_at > now())), false,
   'A3: the other broker holds no admin role either'
 );
 
