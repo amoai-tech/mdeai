@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostEventsContent } from "@/components/host/host-events-content";
 import type { HostEventCardProps } from "@/components/host/host-event-card";
 
@@ -29,9 +30,11 @@ const event: HostEventCardProps = {
   slug: "san-1577-salsa",
 };
 
+afterEach(cleanup);
+
 describe("HostEventsContent", () => {
   it("renders the real host rows and an /app create destination", () => {
-    const html = renderToStaticMarkup(
+    const { container } = render(
       <HostEventsContent
         events={[event]}
         error={null}
@@ -39,17 +42,16 @@ describe("HostEventsContent", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="host-events-list"');
-    expect(html).toContain("SAN-1577 Salsa Night");
-    expect(html).toContain('data-testid="host-events-new"');
-    expect(html).toContain('href="/app/events/new"');
-    expect(html).toContain("<div");
-    // /app/events must not add a nested main landmark inside AppShell.
-    expect(html).not.toContain("<main");
+    expect(screen.getByTestId("host-events-list")).toBeTruthy();
+    expect(screen.getByText("SAN-1577 Salsa Night")).toBeTruthy();
+    expect(screen.getByTestId("host-events-new").getAttribute("href")).toBe(
+      "/app/events/new",
+    );
+    expect(container.querySelector("main")).toBeNull();
   });
 
   it("shows the error state, never the empty list, when the query failed", () => {
-    const html = renderToStaticMarkup(
+    render(
       <HostEventsContent
         events={[]}
         error="permission denied"
@@ -57,13 +59,13 @@ describe("HostEventsContent", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="host-events-error"');
-    expect(html).not.toContain('data-testid="host-events-empty"');
-    expect(html).not.toContain('data-testid="host-events-list"');
+    expect(screen.getByTestId("host-events-error")).toBeTruthy();
+    expect(screen.queryByTestId("host-events-empty")).toBeNull();
+    expect(screen.queryByTestId("host-events-list")).toBeNull();
   });
 
   it("shows the empty state with a working first-event CTA", () => {
-    const html = renderToStaticMarkup(
+    render(
       <HostEventsContent
         events={[]}
         error={null}
@@ -72,10 +74,13 @@ describe("HostEventsContent", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="host-events-empty"');
-    expect(html).toContain('data-testid="host-events-create-cta"');
-    expect(html).toContain('href="/host/event/new"');
-    expect(html).toContain('href="/chat"');
-    expect(html).not.toContain('data-testid="host-events-error"');
+    expect(screen.getByTestId("host-events-empty")).toBeTruthy();
+    expect(
+      screen.getByTestId("host-events-create-cta").getAttribute("href"),
+    ).toBe("/host/event/new");
+    expect(screen.getByRole("link", { name: /chat/i }).getAttribute("href")).toBe(
+      "/chat",
+    );
+    expect(screen.queryByTestId("host-events-error")).toBeNull();
   });
 });
