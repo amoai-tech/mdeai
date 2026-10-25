@@ -294,6 +294,31 @@ The test now opens only an `is_test_fixture` contest and restores the exact prio
 reviewer, or a narrower review rule for test-only gate corrections) remains the real resolution.
 Four older `san1469-voter-*` identities from Oct 16/22 predate this run; they were left untouched.
 
+## 2026-10-25 — PR #525 (AI SDK 6 Gemini provider upgrade)
+
+**PR:** [#525](https://github.com/amoai-tech/mdeai/pull/525) · **Head:** `154f74f15749c09b4f1226d4f00ed2b5fa1ec4fb` · **Merge:** `e2094de3e43cf9f11155a54ba815a1dbcea3e3a9`
+
+**Why:** the repository has exactly one collaborator, `amoai-tech`, who is also the PR author; GitHub cannot record a self-approval.
+
+**Green on the exact head:** 18 checks passed, including `floor`, `mastra-schema-init`, `review / review`,
+`review / verify-review-result`, `supabase-acl`, deterministic Chromium 1/3–3/3, deterministic Maps,
+auth guard, mobile composer, Codacy, CodeRabbit, Kilo and Vercel. Unresolved review threads: **0**.
+
+**Evidence:** `@ai-sdk/google@3.0.138` + direct `ai@6.0.185`; V3 Gemini / V2 NVIDIA model factory;
+normalized token usage including Gemini’s `raw.totalTokenCount`; 3,496 Vitest passed; 544 Mastra tests passed;
+build/typecheck/lint passed; live Gemini structured output and tool call passed; post-merge `Floor`,
+`Supabase ACL gates`, `Prod deploy freshness`, `Prod behaviour smoke` and `Candidate Runtime Certification` passed.
+
+**CI correction:** the first exact-head `supabase-acl` run failed before any test because `ghcr.io` timed out
+pulling `supabase/pg_prove:3.36`. The workflow now pre-pulls that image from `ghcr.io`, `public.ecr.aws` or
+`docker.io` with retries and tags the exact local name the CLI resolves; the rerun and post-merge ACL gate passed.
+
+**Reviewer questions:** whether Google 3.0.138 is the right 3.x pin against `ai@6.0.185`; whether the structural
+V2/V3 token boundary is preferable to a direct provider-type dependency; whether Gemini’s raw total should always
+win; and whether the registry fallback belonged in this PR.
+
+**Nothing unreviewed rode along:** 8 files (`package.json`, lockfile, model factory, token middleware, tests,
+workflow); no agent/router/database/Maps/UI behaviour change.
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
