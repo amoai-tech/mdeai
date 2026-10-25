@@ -85,6 +85,28 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+/** A row with every required `rentalSchema` field, so the browser-side validator accepts it. */
+function rental(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    title: `Apartment ${id}`,
+    neighborhood: "Laureles",
+    nightly_price: 120_000,
+    currency: "COP",
+    bedrooms: 2,
+    wifi: true,
+    amenities: ["balcony"],
+    image: "https://example.com/photo.jpg",
+    source_url: "https://example.com/listing",
+    can_schedule_viewing: true,
+    schedule_viewing_url: null,
+    host_name: "MDE",
+    availability: "available",
+    tags: [],
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   chat.appendMessage.mockReset().mockResolvedValue(true);
   chat.stopActiveRun.mockReset();
@@ -241,7 +263,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("updates the page's cards from the same structured search the chat fast path uses", async () => {
     const onResults = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
+      new Response(
+        JSON.stringify({ results: [rental("rnt_1", { amenities: ["Balcony"] })], total: 1 }),
+        { status: 200 },
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -272,7 +297,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it("lets a follow-up refine the previous rental question instead of starting over", async () => {
     // A Response body can only be read once, so each request gets its own.
     const fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 })),
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ results: [rental("rnt_1", { amenities: ["Balcony"] })], total: 1 }),
+          { status: 200 },
+        ),
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
@@ -323,7 +353,11 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
     render(<RentalAskComposer onResults={onResults} />);
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
 
     await act(async () => {
       agent.messages = [
@@ -339,8 +373,8 @@ describe("RentalAskComposer (SAN-1421)", () => {
           toolCallId: "call-1",
           content: JSON.stringify({
             results: [
-              { id: "rnt_1", amenities: ["Balcony", "Wi-Fi"] },
-              { id: "rnt_2", amenities: [] },
+              rental("rnt_1", { amenities: ["Balcony", "Wi-Fi"] }),
+              rental("rnt_2", { amenities: [] }),
             ],
             budgetNote: "No monthly budget applied",
           }),
@@ -367,6 +401,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
       .find((next) => Array.isArray(next.lastRentalResults));
     expect(patch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony", "Wi-Fi"]);
     expect(patch?.lastRentalResults?.[1]?.amenities).toEqual([]);
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
     vi.unstubAllGlobals();
   });
 
@@ -387,7 +425,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
           role: "assistant",
           toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
         },
-        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [{ id: "rnt_1" }] }) },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [rental("rnt_1")] }) },
       ];
       agent.listeners.forEach((listener) => listener());
     });
@@ -399,18 +437,31 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
     render(<RentalAskComposer onResults={onResults} />);
 
     // First question: the agent's tool result becomes the answer.
+    type("2 bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
     await act(async () => {
       agent.messages = [
         { id: "u1", role: "user", content: "2 bedroom in Laureles" },
         { id: "a1", role: "assistant", toolCalls: [{ id: "call-1", function: { name: "searchRentalsTool" } }] },
-        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [{ id: "rnt_1" }] }) },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")] }),
+        },
       ];
       agent.listeners.forEach((listener) => listener());
     });
     expect(onResults).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
 
     // Follow-up: a conversational answer with no tool call. The list must not be replaced by a
     // fresh search of the question itself (live, this turned 8 apartments into 32).
@@ -434,7 +485,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
 
   it("keeps the current rows after a fallback search when the next turn only asks about amenities", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ id: "rnt_1", amenities: ["Balcony"] }], total: 1 }), { status: 200 }),
+      new Response(
+        JSON.stringify({ results: [rental("rnt_1", { amenities: ["Balcony"] })], total: 1 }),
+        { status: 200 },
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
     const onResults = vi.fn();
@@ -561,6 +615,264 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const transcript = screen.getByTestId("rental-ask-transcript");
     expect(transcript.textContent).toContain("cheaper 2BR in Laureles");
     expect(transcript.textContent).toContain("Here are three under 3M COP.");
+  });
+
+  it("refuses a malformed 200 row instead of putting it on the page", async () => {
+    const onResults = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ results: [{ id: "rnt_1" }], total: 1 }), { status: 200 }),
+      ),
+    );
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("Could not search rentals");
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses a 200 whose total is not a valid count", async () => {
+    const onResults = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ results: [rental("rnt_1")], total: -1 }), { status: 200 }),
+      ),
+    );
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(await screen.findByTestId("rental-ask-error")).not.toBeNull();
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    [401, "session has expired"],
+    [403, "cannot search rentals"],
+    [429, "Too many questions"],
+  ])("turns HTTP %i into an access message the renter can act on", async (status, message) => {
+    const onResults = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status })));
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect((await screen.findByTestId("rental-ask-error")).textContent).toContain(message);
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("cancels the supplementary search when the answer is stopped", async () => {
+    const onResults = vi.fn();
+    let signal: AbortSignal | undefined;
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return new Promise<Response>(() => {});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId("rental-ask-stop"));
+
+    expect(signal?.aborted).toBe(true);
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("starts the first structured search from the filters the page already has", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <RentalAskComposer
+        onResults={onResults}
+        context={{
+          neighborhood: "Laureles",
+          beds: "2",
+          from: "2026-11-01",
+          through: "2026-11-30",
+          selectedListingId: "rnt_9",
+        }}
+      />,
+    );
+    // A refinement with no new filters of its own must keep the page's neighborhood, size and dates.
+    type("something cheaper");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      checkIn: "2026-11-01",
+      checkOut: "2026-11-30",
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("names a request the rental search cannot filter instead of implying it applied", async () => {
+    const onResults = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+      ),
+    );
+    render(<RentalAskComposer onResults={onResults} />);
+    type("furnished 2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(onResults.mock.calls[0][0].budgetNotice).toContain("can't filter by furnished");
+    vi.unstubAllGlobals();
+  });
+
+  it("passes the tool's own unapplied requests through to the cards", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("pet friendly 2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "pet friendly 2BR in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")], unappliedRequests: ["pet-friendly"] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by pet-friendly") }),
+    );
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
+  });
+
+  it("names an unapplied request from the question even when the tool omitted it", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("furnished 2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+    );
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
+  });
+
+  it("ignores a tool result with a row that is not a real rental", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2BR in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [{ id: "rnt_1" }] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).not.toHaveBeenCalled();
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
+  });
+
+  it("does not let a run from the previous filters replace the remounted page's cards", async () => {
+    // A filter change remounts the workspace. The old question's answer may still be streaming;
+    // it belongs to the old filters and must not rewrite the new page's list.
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "2BR in Envigado" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    expect(onResults).not.toHaveBeenCalled();
+  });
+
+  it("stops an in-flight answer when a filter change unmounts the page", () => {
+    chat.isLoading = true;
+    const { unmount } = render(<RentalAskComposer onResults={vi.fn()} />);
+    unmount();
+    expect(chat.stopActiveRun).toHaveBeenCalledTimes(1);
   });
 
   it("publishes its rendered height so the phone Map button can clear it", async () => {
