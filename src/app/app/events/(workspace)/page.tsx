@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { HostEventsContent } from "@/components/host/host-events-content";
 import { eventRowToHostCardProps } from "@/lib/events/event-row-to-host-card";
+import { getServerUser } from "@/lib/auth/session";
 import { loadHostEvents } from "@/lib/events/load-host-events";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,9 +17,7 @@ export const metadata = {
 // skipcq: JS-0067 - Next.js App Router page export
 export default async function AppEventsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await getServerUser();
 
   if (!user) redirect("/login?next=/app/events");
 

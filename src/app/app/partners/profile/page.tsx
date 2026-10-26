@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { PartnerProfileContent } from "@/components/partners/partner-profile-content";
 import { loadPartnerProfile } from "@/lib/partners/partner-profile-load";
+import { getServerUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -41,9 +42,7 @@ export default async function AppPartnerProfilePage({
     typeof params.partner === "string" ? params.partner : undefined;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await getServerUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(loginPath(selectedPartnerId))}`);
 
   const profile = await loadPartnerProfile(supabase, user.id, selectedPartnerId);

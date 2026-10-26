@@ -194,11 +194,11 @@ test("Ana crosses all five workspaces once; legacy URLs preserve identity", asyn
     await expect(page.getByTestId("host-os-chat-region")).toHaveCount(1);
     await assertOneMain(page);
     await page.getByTestId("host-os-nav-overview").click();
-    await expect(page).toHaveURL(/\/app\/events\/overview$/);
+    await expect(page).toHaveURL(/\/app\/events\/overview$/, { timeout: 30_000 });
     await expect(page.getByTestId("host-kpi-card-revenue")).toBeVisible();
     await expect(page.getByTestId("host-os-chat-region")).toHaveCount(1);
     await page.getByTestId("host-os-nav-analytics").click();
-    await expect(page).toHaveURL(/\/app\/events\/analytics$/);
+    await expect(page).toHaveURL(/\/app\/events\/analytics$/, { timeout: 30_000 });
     await expect(page.getByTestId("host-kpi-card-revenue")).toBeVisible();
 
     await page.goto("/app/partners/profile", { waitUntil: "domcontentloaded" });

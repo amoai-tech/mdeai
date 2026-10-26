@@ -69,7 +69,7 @@ export function PartnerProfileContent({
         basePath={basePath}
         message={
           profile.status === "forbidden"
-            ? "You do not have access to the selected business."
+            ? "This business is not available for this account."
             : "We could not load your partner profile. Try again."
         }
       />
