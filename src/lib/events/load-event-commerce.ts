@@ -9,7 +9,7 @@ export type EventOrderRow = {
   id: string;
   short_id: string;
   status: string;
-  total_cents: number;
+  total_cents: number | null;
   currency: string;
   quantity: number;
   created_at: string;
@@ -77,7 +77,7 @@ export async function loadEventCommerce(
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false })
-    .limit(ORDER_LIMIT);
+    .limit(ORDER_LIMIT + 1);
 
   if (ordersError) {
     console.error("[load-event-commerce] orders query failed:", ordersError.message);
@@ -88,11 +88,16 @@ export async function loadEventCommerce(
     p_event_id: eventId,
   });
 
-  const rows = ((orders ?? []) as EventOrderRow[]).map((row) => ({
+  // Fetch one extra row to detect truncation; the screen shows recent orders,
+  // not a lifetime aggregate. Never pass null through Number(null) => 0.
+  const truncated = (orders?.length ?? 0) > ORDER_LIMIT;
+  const rows = ((orders ?? []).slice(0, ORDER_LIMIT) as EventOrderRow[]).map((row) => ({
     ...row,
-    total_cents: Number(row.total_cents),
-    quantity: Number(row.quantity),
+    total_cents: row.total_cents == null ? null : Number(row.total_cents),
+    quantity: row.quantity == null ? 0 : Number(row.quantity),
   }));
+  const summary = summarizeEventOrders(rows);
+  if (truncated) summary.complete = false;
 
   const kpisRaw = (dashboard as { kpis?: { tickets_sold?: number; checked_in?: number } } | null)
     ?.kpis;
@@ -110,7 +115,7 @@ export async function loadEventCommerce(
         price_cents: Number(tier.price_cents),
       })),
       orders: rows,
-      summary: summarizeEventOrders(rows),
+      summary,
       kpis:
         kpisRaw && typeof kpisRaw.tickets_sold === "number"
           ? {

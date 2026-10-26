@@ -45,9 +45,21 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
   function run(eventId: string, action: AdminEventAction) {
     setPendingId(eventId);
     startTransition(async () => {
-      const outcome = await setAdminEventState(eventId, action);
-      setResults((current) => ({ ...current, [eventId]: outcome }));
-      setPendingId(null);
+      try {
+        const outcome = await setAdminEventState(eventId, action);
+        setResults((current) => ({ ...current, [eventId]: outcome }));
+      } catch {
+        setResults((current) => ({
+          ...current,
+          [eventId]: {
+            ok: false,
+            code: "FAILED",
+            message: "Could not save this change. Try again.",
+          },
+        }));
+      } finally {
+        setPendingId(null);
+      }
     });
   }
 
@@ -93,7 +105,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={pendingId === row.id}
+                        disabled={pendingId !== null}
                         onClick={() => run(row.id, "unpublish")}
                         data-testid="admin-event-unpublish"
                       >
@@ -103,7 +115,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                       <Button
                         type="button"
                         size="sm"
-                        disabled={pendingId === row.id}
+                        disabled={pendingId !== null}
                         onClick={() => run(row.id, "publish")}
                         data-testid="admin-event-publish"
                       >
@@ -115,7 +127,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={pendingId === row.id}
+                        disabled={pendingId !== null}
                         onClick={() => run(row.id, "restore")}
                         data-testid="admin-event-restore"
                       >

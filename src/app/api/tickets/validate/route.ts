@@ -78,6 +78,33 @@ export async function POST(request: Request) {
     );
   }
 
+  // Existing event_check_ins permits a null attendee_id for rejected unknown
+  // scans. Persist the actual scanner, event and result without linking a
+  // foreign attendee to the host's event or inventing a matching identity.
+  const device = request.headers.get("user-agent")?.slice(0, 200) ?? null;
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    null;
+  async function recordOutcome(
+    attendeeId: string | null,
+    result: string,
+    details: Record<string, unknown> = {},
+  ) {
+    const auditArgs = {
+      p_event_id: eventId,
+      p_attendee_id: attendeeId,
+      p_qr_token: token,
+      p_scanned_by: user.id,
+      p_result: result,
+      p_details: details as Json,
+      ...(device ? { p_scanner_device: device } : {}),
+      ...(ip ? { p_ip_address: ip } : {}),
+    };
+    const { error } = await service.rpc("record_check_in", auditArgs as never);
+    if (error) console.error("[tickets/validate] record_check_in failed:", error.message);
+  }
+
   const { data: attendee, error: attendeeError } = await service
     .from("event_attendees")
     .select("id, event_id, status, qr_used_at, full_name")
@@ -88,12 +115,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "TOKEN_LOOKUP_FAILED" }, { status: 500 });
   }
   if (!attendee) {
+    await recordOutcome(null, "unknown_token");
     return NextResponse.json(
       { ok: false, code: "UNKNOWN_TICKET", message: "This QR is not a ticket." },
       { status: 404 },
     );
   }
   if ((attendee as { event_id: string }).event_id !== eventId) {
+    await recordOutcome(null, "wrong_event");
     return NextResponse.json(
       { ok: false, code: "WRONG_EVENT", message: "This ticket belongs to another event." },
       { status: 409 },
@@ -116,36 +145,7 @@ export async function POST(request: Request) {
   };
   const result = outcome.result ?? "unknown_token";
 
-  const device = request.headers.get("user-agent")?.slice(0, 200) ?? null;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    null;
-
-  // Best-effort audit row for every terminal scan outcome, not only success.
-  const audited = ["consumed", "already_used", "event_ended", "refunded", "cancelled", "pending_payment"];
-  if (audited.includes(result)) {
-    // The generated signature marks the nullable audit columns (scanner_device,
-    // ip_address) as required non-null strings. Omit them when unknown instead
-    // of writing a fabricated value, and cast the args once here.
-    const auditArgs = {
-      p_event_id: eventId,
-      p_attendee_id: (attendee as { id: string }).id,
-      p_qr_token: token,
-      p_scanned_by: user.id,
-      p_result: result,
-      p_details: (outcome.details ?? {}) as Json,
-      ...(device ? { p_scanner_device: device } : {}),
-      ...(ip ? { p_ip_address: ip } : {}),
-    };
-    const { error: recordError } = await service.rpc(
-      "record_check_in",
-      auditArgs as never,
-    );
-    if (recordError) {
-      console.error("[tickets/validate] record_check_in failed:", recordError.message);
-    }
-  }
+  await recordOutcome((attendee as { id: string }).id, result, outcome.details ?? {});
 
   return NextResponse.json(
     {

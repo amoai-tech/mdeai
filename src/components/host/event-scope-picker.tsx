@@ -35,7 +35,7 @@ export function EventScopePicker({
       <select
         id={`${testId}-select`}
         data-testid={testId}
-        defaultValue={selectedId}
+        value={selectedId}
         onChange={(change) => {
           const next = change.target.value;
           if (next) router.push(`${basePath}?event=${encodeURIComponent(next)}`);

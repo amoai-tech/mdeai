@@ -95,29 +95,35 @@ export default async function AppEventTicketsPage({ searchParams }: PageProps) {
         />
       </header>
 
+      {!summary.complete ? (
+        <p role="status" data-testid="host-tickets-incomplete" className="text-sm text-amber-700">
+          Totals are unavailable because some order amounts are missing or the recent-order
+          limit was reached. Review the actual orders; do not treat this as total revenue.
+        </p>
+      ) : null}
       <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <dt className="text-xs uppercase text-muted-foreground">Revenue (paid)</dt>
           <dd className="mt-1 text-lg font-semibold" data-testid="tickets-kpi-revenue">
-            {formatMoney(summary.revenueCents, currency)}
+            {summary.complete ? formatMoney(summary.revenueCents, currency) : "—"}
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <dt className="text-xs uppercase text-muted-foreground">Tickets sold</dt>
           <dd className="mt-1 text-lg font-semibold" data-testid="tickets-kpi-sold">
-            {summary.ticketsSold}
+            {summary.complete ? summary.ticketsSold : "—"}
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <dt className="text-xs uppercase text-muted-foreground">Orders</dt>
           <dd className="mt-1 text-lg font-semibold" data-testid="tickets-kpi-orders">
-            {summary.orderCount}
+            {summary.complete ? summary.orderCount : "—"}
           </dd>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <dt className="text-xs uppercase text-muted-foreground">Checked in</dt>
           <dd className="mt-1 text-lg font-semibold" data-testid="tickets-kpi-checked-in">
-            {commerce.kpis?.checkedIn ?? 0}
+            {commerce.kpis?.checkedIn ?? "—"}
           </dd>
         </div>
       </dl>
@@ -190,7 +196,7 @@ export default async function AppEventTicketsPage({ searchParams }: PageProps) {
                       {STATUS_LABEL[(order.status ?? "").toLowerCase()] ?? order.status}
                     </td>
                     <td className="py-2 pr-3">{order.quantity}</td>
-                    <td className="py-2 pr-3">{formatMoney(order.total_cents, order.currency)}</td>
+                    <td className="py-2 pr-3">{order.total_cents == null ? "—" : formatMoney(order.total_cents, order.currency)}</td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {new Date(order.created_at).toLocaleString("en-US", {
                         timeZone: "America/Bogota",
