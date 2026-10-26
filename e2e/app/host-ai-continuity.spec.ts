@@ -73,7 +73,7 @@ test("SAN-1209: Host conversation restores after reload and rejects foreign user
     // SSR can display the textarea before CopilotKit hydrates. Retry typing
     // until the real React composer enables Send; a visible textarea alone
     // does not prove the client input handler is mounted.
-    const sendButton = rail.locator('button[data-slot="button"]').last();
+    const sendButton = rail.getByTestId("copilot-send-button");
     await expect(async () => {
       await editor.fill("");
       await editor.pressSequentially(prompt, { delay: 8 });
