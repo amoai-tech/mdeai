@@ -40,7 +40,7 @@ describe("signed-in Ask MDE tool delivery", () => {
   it("publishes the current search only after the agent finishes, exactly once", async () => {
     let resolveRun: (() => void) | undefined;
     harness.append.mockImplementation(() => new Promise<boolean>((resolve) => {
-      resolveRun = () => resolve(true);
+      resolveRun = () => { resolve(true); };
     }));
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
