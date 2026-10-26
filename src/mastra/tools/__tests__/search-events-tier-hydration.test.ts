@@ -9,11 +9,12 @@ const card = (id: string): EventCard => ({
 });
 
 function clientWithResult(data: unknown, error: {message: string} | null = null) {
+  const response = Promise.resolve({ data, error });
   const chain = {
     select: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    then: (resolve: (...args: [unknown]) => unknown) => Promise.resolve({data,error}).then(resolve),
+    then: response.then.bind(response),
   };
   return {
     client: {from: vi.fn().mockReturnValue(chain)} as unknown as NonNullable<Parameters<typeof hydrateEventTicketOffers>[1]>,
