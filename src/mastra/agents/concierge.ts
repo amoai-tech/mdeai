@@ -455,6 +455,8 @@ ${formatEventSourcePromptHint()}`,
   // generated function call. Never retry after a completed step/tool action.
   // Mastra's built-in transient error processors stay enabled by default.
   errorProcessors: [geminiMalformedFirstStepRetry],
+  // One carefully scoped first-step correction, not up to three implicit replays.
+  maxProcessorRetries: 1,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing

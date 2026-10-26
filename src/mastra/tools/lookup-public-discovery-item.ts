@@ -27,7 +27,13 @@ export async function lookupPublicDiscoveryItem(
 ): Promise<{ found: boolean; data: Record<string, unknown> | null }> {
   const cfg = SOURCE[input.page];
   // Safe fixed projections only; no user-supplied table/column names.
-  let query = client.from(cfg.table).select(cfg.fields).eq("id", input.id);
+  // Grounded Google Place IDs are not venue_anchors UUIDs. Use the explicit
+  // public google_place_id only for café/nightlife hints; a matching active
+  // public anchor is still required by RLS and by the venue kind predicate.
+  const venuePage = input.page === "cafes" || input.page === "nightlife";
+  const isUuid = /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(input.id);
+  const lookupColumn = venuePage && !isUuid ? "google_place_id" : "id";
+  let query = client.from(cfg.table).select(cfg.fields).eq(lookupColumn, input.id);
   if (input.page === "cafes" || input.page === "nightlife") {
     query = query.eq("kind", input.page === "cafes" ? "cafe" : "nightclub");
   }

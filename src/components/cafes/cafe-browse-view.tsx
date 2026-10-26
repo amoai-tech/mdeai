@@ -114,7 +114,7 @@ function CafeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows ? <BrowseMapSheet /> : null}
+    {activeRows ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 import {
@@ -34,7 +34,9 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
   ]) {
     test(scenario.route + " keeps two AI turns and grounded browse results", async ({ page }) => {
       test.setTimeout(240_000);
-      await signInAsOnOrigin(page, base, identity!.email);
+      const email = identity?.email;
+      if (!email) throw new Error("QA identity was not created");
+      await signInAsOnOrigin(page, base, email);
       if (isPreview) await establishVercelAutomationBypass(page, base, process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "");
       const failures: string[] = [];
       page.on("pageerror", (error) => failures.push(error.message));
@@ -47,8 +49,8 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
       await page.goto(new URL("/" + scenario.route, base).toString(), { waitUntil: "domcontentloaded" });
       const input = page.getByTestId("discovery-ask-input");
       const send = page.getByTestId("discovery-ask-send");
-      for (let index = 0; index < scenario.queries.length; index++) {
-        const question = scenario.queries[index]!;
+      let index = 0;
+      for (const question of scenario.queries) {
         await expect(input).toBeVisible({ timeout: 45_000 });
         await input.fill(question);
         await expect(send).toBeEnabled({ timeout: 45_000 });
@@ -60,24 +62,32 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
             const text = el.textContent?.trim() ?? "";
             return text.startsWith("MDE:") && text.length > 4;
           }).length), { timeout: 110_000 }).toBeGreaterThan(index);
+        index++;
       }
-      await expect(page.getByTestId("discovery-ask-history")).toContainText(scenario.queries[0]!);
-      await expect(page.getByTestId("discovery-ask-history")).toContainText(scenario.queries[1]!);
+      for (const query of scenario.queries) {
+        await expect(page.getByTestId("discovery-ask-history")).toContainText(query);
+      }
       expect(failures).toEqual([]);
       expect(responses.some((code) => code === 200)).toBe(true);
       expect(responses.some((code) => code >= 400 && code !== 401)).toBe(false);
-      if (evidence) {
-        mkdirSync(evidence, { recursive: true });
-        await page.screenshot({ path: join(evidence, scenario.route + "-two-turn-1440.png"), fullPage: true });
-      }
       // The browser sees only real tool outputs: a no-match result is acceptable,
       // but a search that yielded no tool result cannot be called a verified cards journey.
       if (scenario.route === "cafes" || scenario.route === "nightlife") {
         await expect(page.getByTestId("discovery-grounded-results")).toBeVisible({ timeout: 15_000 });
       }
+      if (scenario.route === "events") {
+        // A truthful empty state is valid; assistant text without a resolved
+        // catalog state is not a verified event discovery journey.
+        await expect(page.getByTestId("guest-event-results-count").or(page.getByTestId("events-empty")).first())
+          .toBeVisible({ timeout: 15_000 });
+      }
       if (scenario.route === "restaurants") {
         await expect(page.getByTestId("restaurants-grid")).toBeVisible({ timeout: 15_000 });
         await expect(page.getByTestId("restaurants-browse")).toContainText("Ask MDE —", { timeout: 15_000 });
+      }
+      if (evidence) {
+        await mkdir(evidence, { recursive: true });
+        await page.screenshot({ path: join(evidence, scenario.route + "-two-turn-1440.png"), fullPage: true });
       }
     });
   }

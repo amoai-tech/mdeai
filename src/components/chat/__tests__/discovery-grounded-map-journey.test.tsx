@@ -35,9 +35,11 @@ describe("SAN-1390 — real grounded card to canonical map context", () => {
     const cards = screen.getAllByTestId("discovery-grounded-card");
     expect(cards).toHaveLength(2);
     expect(cards[0]?.getAttribute("data-pin-id")).toBe("grounded-google-a");
-    fireEvent.click(cards[0]!);
+    const [cardA, cardB] = cards;
+    if (!cardA || !cardB) throw new Error("Both grounded result cards are required");
+    fireEvent.click(cardA);
     expect(cards[0]?.getAttribute("data-selected")).toBe("true");
-    fireEvent.click(cards[1]!);
+    fireEvent.click(cardB);
     expect(cards[1]?.getAttribute("data-selected")).toBe("true");
     expect(screen.getByTestId("map-truth").textContent).toContain('"selectedPinId":"grounded-google-b"');
     view.rerender(<Journey rows={[]} />);
