@@ -8,7 +8,7 @@ import { clearConciergeError, getConciergeErrorForThread } from "@/lib/concierge
 const session = vi.hoisted(() => ({
   loading: true,
   user: null as { id: string } | null,
-  onError: null as ((event: unknown) => void) | null,
+  onError: null as ((...args: [unknown]) => void) | null,
 }));
 
 vi.mock("@/hooks/use-session", () => ({
@@ -34,7 +34,7 @@ vi.mock("@copilotkit/react-core/v2", () => ({
     onError,
   }: {
     children: React.ReactNode;
-    onError: (event: unknown) => void;
+    onError: (...args: [unknown]) => void;
   }) => {
     session.onError = onError;
     return children;
@@ -50,7 +50,7 @@ let root: Root;
 let container: HTMLDivElement;
 
 function render() {
-  act(() => root.render(<ChatProvider><span>Chat</span></ChatProvider>));
+  act(() => { root.render(<ChatProvider><span>Chat</span></ChatProvider>); });
 }
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  act(() => root.unmount());
+  act(() => { root.unmount(); });
   container.remove();
   clearConciergeError();
 });
@@ -72,7 +72,7 @@ afterEach(() => {
 describe("guest CopilotKit startup while session resolves", () => {
   it("never shows a failed-turn notice for a guest's early 401", () => {
     render();
-    act(() => session.onError?.(startup401));
+    act(() => { session.onError?.(startup401); });
     expect(getConciergeErrorForThread("guest-thread").version).toBe(0);
     session.loading = false;
     render();
@@ -81,7 +81,7 @@ describe("guest CopilotKit startup while session resolves", () => {
 
   it("reports a pending 401 when the session resolves authenticated", () => {
     render();
-    act(() => session.onError?.(startup401));
+    act(() => { session.onError?.(startup401); });
     session.user = { id: "user-a" };
     session.loading = false;
     render();
@@ -90,7 +90,7 @@ describe("guest CopilotKit startup while session resolves", () => {
 
   it("immediately reports a real agent-run failure even before auth settles", () => {
     render();
-    act(() => session.onError?.({ code: "agent_run_failed" }));
+    act(() => { session.onError?.({ code: "agent_run_failed" }); });
     expect(getConciergeErrorForThread("guest-thread").version).toBeGreaterThan(0);
   });
 });
