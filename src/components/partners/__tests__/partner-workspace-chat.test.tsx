@@ -38,8 +38,10 @@ async function show(userId: string, partnerId: string) {
     await Promise.resolve();
   });
   const element = container.querySelector("[data-testid='business-thread']");
-  expect(element).not.toBeNull();
-  return element!.getAttribute("data-thread-id");
+  if (!element) {
+    throw new Error("Partner chat thread element was not rendered");
+  }
+  return element.getAttribute("data-thread-id");
 }
 
 beforeEach(() => {
@@ -50,7 +52,9 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => root.unmount());
+  await act(() => {
+    root.unmount();
+  });
   container.remove();
 });
 
