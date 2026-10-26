@@ -30,6 +30,18 @@ function useLiveConciergeChat() {
     currentCopilotkitRef.current = copilotkit;
   }, [agent, copilotkit]);
   const threadNav = useOptionalThreadNav();
+  const selectedThreadId = threadNav?.activeThreadId ?? threadNav?.sessionThreadId;
+  const currentSelectedThreadRef = useRef(selectedThreadId);
+  const mountedRef = useRef(true);
+  // The runtime handshake can outlive this chat subtree or its selected
+  // thread. React cleanup invalidates old sends before any agent write.
+  useEffect(() => {
+    currentSelectedThreadRef.current = selectedThreadId;
+  }, [selectedThreadId]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const markThreadSaved = threadNav?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
@@ -49,14 +61,20 @@ function useLiveConciergeChat() {
    * fails closed without starting an agent run or retrying any action.
    */
   const waitForRuntimeReady = useCallback(async (maxWaitMs = 6_000): Promise<boolean> => {
+    const requestedThread = currentSelectedThreadRef.current;
+    const stillCurrent = () =>
+      mountedRef.current && currentSelectedThreadRef.current === requestedThread;
     const ready = () =>
+      stillCurrent() &&
       String(currentCopilotkitRef.current.runtimeConnectionStatus) === "connected" &&
       Boolean(currentAgentRef.current);
     if (ready()) return true;
-    if (String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
+    if (!stillCurrent() ||
+        String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
     const deadline = Date.now() + maxWaitMs;
     while (Date.now() < deadline) {
       await new Promise<void>((resolve) => setTimeout(resolve, 125));
+      if (!stillCurrent()) return false;
       if (ready()) return true;
       if (String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
     }
@@ -122,6 +140,9 @@ function useLiveConciergeChat() {
 
   const appendMessage = useCallback(
     async (content: string) => {
+      // A saved-thread switch or unmount during readiness must never
+      // run a queued question against the newly selected conversation.
+      if (!mountedRef.current || currentSelectedThreadRef.current !== selectedThreadId) return false;
       const currentAgent = currentAgentRef.current;
       if (!currentAgent) return false;
       // CopilotKit v2 useAgent() only copies the configured thread ID when the
@@ -148,7 +169,7 @@ function useLiveConciergeChat() {
       if (currentAgent.threadId) void ensureThreadTitle(currentAgent.threadId);
       return true;
     },
-    [markThreadSaved, threadNav],
+    [markThreadSaved, selectedThreadId, threadNav],
   );
 
   return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable, waitForRuntimeReady };
