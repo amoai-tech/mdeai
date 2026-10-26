@@ -1,5 +1,15 @@
+import type { ProcessAPIErrorArgs } from "@mastra/core/processors";
 import { describe, expect, it } from "vitest";
 import { geminiMalformedFirstStepRetry } from "../gemini-malformed-retry";
+
+function messageList(activeParts: string[] = [], previousParts: string[] = []) {
+  return {
+    get: { all: { db: () => [
+      { id: "older", role: "assistant", content: { parts: previousParts.map((type) => ({ type })) } },
+      { id: "active", role: "assistant", content: { parts: activeParts.map((type) => ({ type })) } },
+    ] } },
+  } as unknown as ProcessAPIErrorArgs["messageList"];
+}
 
 const malformed = {
   code: "AGENT_STREAM_ERROR",
@@ -7,7 +17,14 @@ const malformed = {
   message: 'Agent stream finished with finishReason "error" (provider reported "MALFORMED_FUNCTION_CALL")',
 };
 
-const firstStep = { error: malformed, retryCount: 0, stepNumber: 0, steps: [] };
+const firstStep = {
+  error: malformed,
+  retryCount: 0,
+  stepNumber: 0,
+  steps: [],
+  messageId: "active",
+  messageList: messageList(),
+};
 
 describe("SAN-1396 Gemini malformed function-call recovery", () => {
   it("allows exactly one retry before any tool step completed", () => {
@@ -38,6 +55,27 @@ describe("SAN-1396 Gemini malformed function-call recovery", () => {
     ]) {
       expect(geminiMalformedFirstStepRetry.processAPIError({ ...firstStep, error })).toBeUndefined();
     }
+  });
+
+  it("refuses a retry when the current assistant message contains a tool invocation", () => {
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: messageList(["tool-invocation"]),
+    })).toBeUndefined();
+  });
+
+  it("does not confuse a tool call in earlier chat history with this first-step retry", () => {
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: messageList([], ["tool-invocation"]),
+    })).toEqual({ retry: true });
+  });
+
+  it("fails closed when the current assistant message cannot be identified", () => {
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageId: undefined,
+    })).toBeUndefined();
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: undefined as never,
+    })).toBeUndefined();
   });
 
   it("recognizes the exact provider finish reason in a wrapped error cause", () => {
