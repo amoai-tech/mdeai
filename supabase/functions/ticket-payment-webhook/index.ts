@@ -27,9 +27,10 @@
  *     (task 008) regardless. The email is delight, not the source of truth.
  */
 import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
+import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
@@ -201,22 +202,24 @@ function paymentIntentIdFromSession(session: Stripe.Checkout.Session): string | 
 async function finalizePaidOrder(
   orderId: string,
   paymentIntentId: string,
+  amount: number | null,
+  currency: string | null,
   service: SupabaseClient,
+  sessionId: string,
 ) {
+  // The webhook signature authenticates Stripe, NOT whether a payment matches
+  // this particular order. Compare the settled amount, currency and identity.
+  const { data: order, error: lookupError } = await service.from("event_orders")
+    .select("id,total_cents,currency,status,stripe_session_id,stripe_payment_intent")
+    .eq("id", orderId).maybeSingle();
+  if (lookupError) throw new Error("PAYMENT_ORDER_LOOKUP_FAILED");
+  assertPaidOrderMatches(order, { amount, currency, paymentIntentId, sessionId });
   const { data, error } = await service.rpc("ticket_payment_finalize", {
     p_order_id: orderId,
     p_payment_intent_id: paymentIntentId,
   });
-  if (error) {
-    const msg = error.message ?? "";
-    if (msg.includes("ORDER_NOT_FOUND") || msg.includes("ORDER_BAD_STATE")) {
-      console.error(
-        `ticket_payment_finalize: ${msg} for order=${orderId} pi=${paymentIntentId}`,
-      );
-      return;
-    }
-    throw new Error(`ticket_payment_finalize failed: ${msg}`);
-  }
+  if (error) throw new Error("ticket_payment_finalize failed: " + error.message);
+
   try {
     await maybeSendTicketEmail(data as TicketFinalizeData | null);
   } catch (emailErr) {
@@ -238,7 +241,7 @@ async function handleCheckoutSessionPaid(
     );
     return;
   }
-  if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+  if (session.payment_status !== "paid") {
     console.log(
       `checkout session not paid yet; session=${session.id} status=${session.payment_status}`,
     );
@@ -251,7 +254,7 @@ async function handleCheckoutSessionPaid(
     );
     return;
   }
-  await finalizePaidOrder(orderId, piId, service);
+  await finalizePaidOrder(orderId, piId, session.amount_total, session.currency, service, session.id);
 }
 
 async function handleCheckoutSessionExpired(
@@ -288,7 +291,28 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: Supabas
     );
     return;
   }
-  await finalizePaidOrder(orderId, pi.id, service);
+  if (pi.status !== "succeeded") return;
+  // Stripe's signed PaymentIntent proves a payment exists, not that it was
+  // created by the Checkout Session reserved for this particular order.
+  const { data: order, error: orderError } = await service.from("event_orders")
+    .select("stripe_session_id").eq("id", orderId).maybeSingle();
+  if (orderError || !order) throw new Error("PAYMENT_ORDER_LOOKUP_FAILED");
+  if (!order.stripe_session_id) {
+    // Stripe can send the PI webhook before ticket-checkout persists its
+    // Session ID. Return 500 so Stripe retries; NEVER fulfill unbound PI data.
+    throw new Error("PAYMENT_SESSION_NOT_READY");
+  }
+  const stripe = getStripe();
+  if (!stripe) throw new Error("PAYMENT_STRIPE_NOT_CONFIGURED");
+  const session = await stripe.checkout.sessions.retrieve(order.stripe_session_id);
+  assertCheckoutSessionBindsPayment(session, {
+    sessionId: order.stripe_session_id,
+    orderId,
+    paymentIntentId: pi.id,
+    amount: pi.amount_received,
+    currency: pi.currency,
+  });
+  await finalizePaidOrder(orderId, pi.id, pi.amount_received, pi.currency, service, session.id);
 }
 async function handleRefund(charge: Stripe.Charge, service: SupabaseClient) {
   // R5 fix: charge.payment_intent is `string | Stripe.PaymentIntent | null`.
