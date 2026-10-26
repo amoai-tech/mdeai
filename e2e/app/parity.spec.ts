@@ -182,7 +182,10 @@ test("Ana crosses all five workspaces once; legacy URLs preserve identity", asyn
     await expect(page.getByTestId("rentals-concierge")).toBeVisible();
     await assertOneMain(page);
     await page.goto("/app/rentals/listings", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("rentals-listings")).toBeVisible();
+    // Production keeps a hidden route-cache copy; assert the visible workspace.
+    await expect(
+      page.locator("#main-content").getByTestId("rentals-listings"),
+    ).toBeVisible();
     await assertOneMain(page);
 
     await page.goto("/app/events", { waitUntil: "domcontentloaded" });
