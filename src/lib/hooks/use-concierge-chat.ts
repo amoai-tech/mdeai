@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
@@ -21,6 +21,14 @@ const retriesInFlight = new WeakSet<object>();
 function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
+  // A send can begin while the runtime is connecting. Keep the most recent
+  // agent after the connection changes instead of using a stale closure.
+  const currentAgentRef = useRef(agent);
+  const currentCopilotkitRef = useRef(copilotkit);
+  useEffect(() => {
+    currentAgentRef.current = agent;
+    currentCopilotkitRef.current = copilotkit;
+  }, [agent, copilotkit]);
   const threadNav = useOptionalThreadNav();
   const markThreadSaved = threadNav?.markThreadSaved;
 
@@ -34,6 +42,25 @@ function useLiveConciergeChat() {
     () => String(copilotkit.runtimeConnectionStatus) !== "connected",
     [copilotkit],
   );
+
+  // A healthy cold-start /info handshake may still be "connecting" when
+  // a signed-in person sends. Give the EXISTING runtime a bounded chance
+  // to connect instead of falsely answering "assistant unavailable".
+  // A real error fails immediately; no new run/engine or duplicate send.
+  const waitForRuntimeReady = useCallback(async (maxWaitMs = 6_000): Promise<boolean> => {
+    const ready = () =>
+      String(currentCopilotkitRef.current.runtimeConnectionStatus) === "connected" &&
+      Boolean(currentAgentRef.current);
+    if (ready()) return true;
+    if (String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 125));
+      if (ready()) return true;
+      if (String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
+    }
+    return ready();
+  }, []);
 
   // Stop a reply that is still streaming before switching conversation.
   // CopilotKit 1.75.0 clears the view on a thread switch but leaves an
@@ -94,7 +121,8 @@ function useLiveConciergeChat() {
 
   const appendMessage = useCallback(
     async (content: string) => {
-      if (!agent) return false;
+      const currentAgent = currentAgentRef.current;
+      if (!currentAgent) return false;
       // CopilotKit v2 useAgent() only copies the configured thread ID when the
       // configuration is explicit. Fresh threads are deliberately non-explicit,
       // so otherwise the agent invents a different ID and /chat cannot adopt
@@ -105,25 +133,24 @@ function useLiveConciergeChat() {
           threadNav.sessionThreadId) {
         // AG-UI's AbstractAgent is a mutable SDK object (the installed useAgent
         // assigns threadId directly too); this is not React render state.
-        // eslint-disable-next-line react-hooks/immutability
-        agent.threadId = threadNav.sessionThreadId;
+        currentAgent.threadId = threadNav.sessionThreadId;
       }
-      agent.addMessage({
+      currentAgent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
         content,
       });
-      await copilotkit.runAgent({ agent });
+      await currentCopilotkitRef.current.runAgent({ agent: currentAgent });
       // Only completed turns are recorded as saved, never a freshly minted UUID.
-      markThreadSaved?.(agent.threadId);
+      markThreadSaved?.(currentAgent.threadId);
       // Title the persisted conversation without delaying the user or navigation.
-      if (agent.threadId) void ensureThreadTitle(agent.threadId);
+      if (currentAgent.threadId) void ensureThreadTitle(currentAgent.threadId);
       return true;
     },
-    [agent, copilotkit, markThreadSaved, threadNav],
+    [markThreadSaved, threadNav],
   );
 
-  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };
+  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable, waitForRuntimeReady };
 }
 
 // The deterministic E2E surface answers fast paths locally; it must not mount
@@ -139,6 +166,7 @@ const deterministicChat = {
     return false;
   },
   isRuntimeUnavailable: () => true,
+  waitForRuntimeReady: async () => false,
 };
 function useDeterministicConciergeChat() {
   return deterministicChat;

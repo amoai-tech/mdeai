@@ -23,7 +23,7 @@ export const AGENT_UNAVAILABLE_MESSAGE =
 
 /** Fast-path + agent handlers for sendConciergeUserMessage (CopilotChat + ?q=). */
 export function useConciergeSendHandlers(): ConciergeSendHandlers {
-  const { appendMessage, isRuntimeUnavailable, retryLastTurn } = useConciergeChat();
+  const { appendMessage, waitForRuntimeReady, retryLastTurn } = useConciergeChat();
   const nav = useOptionalThreadNav();
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
@@ -53,7 +53,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // (CopilotKit reports that through onError and still resolves, or it rejects), the question is
   // already in the transcript, so only the notice is added. sendConciergeUserMessage clears the
   // error signal at the start of every send, so a non-zero version here belongs to this run.
-  const onAgentSend = useCallback(
+  const performAgentSend = useCallback(
     async (text: string) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
@@ -76,7 +76,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         return true;
       }
       try {
-        if (!isRuntimeUnavailable() && (await appendMessage(text))) {
+        if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
           if (getConciergeErrorForThread(threadId).version === 0) return true;
@@ -92,8 +92,27 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
   );
+
+  // A cold-runtime wait must not turn two clicks (or a submit retry) into two
+  // agent runs. Coalesce identical pending questions, serialize distinct ones,
+  // and release each key after its send finishes so deliberate later repeats work.
+  const pendingAgentSendsRef = useRef(new Map<string, Promise<boolean>>());
+  const lastAgentSendRef = useRef<Promise<void>>(Promise.resolve());
+  const onAgentSend = useCallback((text: string): Promise<boolean> => {
+    const existing = pendingAgentSendsRef.current.get(text);
+    if (existing) return existing;
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text));
+    pendingAgentSendsRef.current.set(text, pending);
+    lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
+    void pending.finally(() => {
+      if (pendingAgentSendsRef.current.get(text) === pending) {
+        pendingAgentSendsRef.current.delete(text);
+      }
+    }).catch(() => undefined);
+    return pending;
+  }, [performAgentSend]);
 
   useEffect(() => {
     agentSendRef.current = onAgentSend;
