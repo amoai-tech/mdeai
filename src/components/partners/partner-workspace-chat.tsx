@@ -1,8 +1,9 @@
 "use client";
 
-import { CopilotChat, useAgentContext } from "@copilotkit/react-core/v2";
+import { CopilotChat, CopilotChatConfigurationProvider, CopilotKitProvider, useAgentContext } from "@copilotkit/react-core/v2";
 import { useEffect, useState } from "react";
 
+import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { getPartnerChatThreadId } from "@/lib/partners/partner-chat-thread";
 
 import { PARTNER_SELECTION_CONTEXT_DESCRIPTION } from "@/lib/partners/partner-selection";
@@ -21,7 +22,7 @@ type Props = {
  * per-user/per-business conversation ID, avoiding replaying the general
  * Concierge or another partner’s conversation under this business.
  */
-export function PartnerWorkspaceChat({ userId, partnerId, businessName, partnerType }: Props) {
+function PartnerChatContent({ userId, partnerId, businessName, partnerType }: Props) {
   const [threadId, setThreadId] = useState<string | null>(null);
   useEffect(() => {
     let storage: Storage | null = null;
@@ -67,5 +68,21 @@ export function PartnerWorkspaceChat({ userId, partnerId, businessName, partnerT
         <p role="status" className="p-4 text-sm text-muted-foreground">Connecting your business assistant…</p>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Both partner profile URLs are intentionally root-agentless. Give only this
+ * authenticated business chat one route-local partnerAgent provider, not
+ * a second root Concierge or an unrelated cross-business thread.
+ */
+export function PartnerWorkspaceChat(props: Props) {
+  return (
+    <CopilotKitProvider {...getCopilotKitClientProps("partnerAgent")} enableInspector={false}>
+      <CopilotChatConfigurationProvider agentId="partnerAgent">
+        <PartnerChatContent {...props} />
+      </CopilotChatConfigurationProvider>
+    </CopilotKitProvider>
   );
 }

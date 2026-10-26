@@ -21,14 +21,12 @@ const USER = { data: { user: { id: "user-1", email: "ana@example.com" } }, error
 function fakeClient(options: {
   auth?: { data: { user: unknown }; error: { message: string } | null };
   landlord?: Result;
-  events?: Result;
   memberships?: Result;
   partners?: Result;
   admin?: { data: boolean | null; error: { message: string } | null };
 }) {
   const tables: Record<string, Result> = {
     landlord_profiles: options.landlord ?? EMPTY,
-    events: options.events ?? EMPTY,
     partner_members: options.memberships ?? EMPTY,
     partners: options.partners ?? EMPTY,
   };
@@ -49,6 +47,13 @@ describe("loadWorkspaceResolution", () => {
       fakeClient({ auth: { data: { user: null }, error: null } }),
     );
     expect(result.status).toBe("unauthenticated");
+  });
+
+  it("lets an authenticated first-time organizer discover Events without an event row", async () => {
+    const result = await loadWorkspaceResolution(fakeClient({}));
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.contexts.map((context) => context.kind)).toEqual(["personal", "events"]);
   });
 
   it("turns an auth failure into a recoverable error", async () => {
@@ -104,9 +109,28 @@ describe("loadWorkspaceResolution", () => {
     expect(result.contexts.map((context) => context.kind)).toEqual([
       "personal",
       "rentals",
+      "events",
       "partners",
       "team",
     ]);
-    expect(result.contexts[2].label).toBe("Cafe Roma");
+    expect(result.contexts[3].label).toBe("Cafe Roma");
+  });
+
+  it("labels a business without a name as Partners, never its raw type", async () => {
+    const result = await loadWorkspaceResolution(
+      fakeClient({
+        memberships: { data: [{ partner_id: "p1" }], error: null },
+        partners: {
+          data: [{ id: "p1", type: "host", settings: {} }],
+          error: null,
+        },
+      }),
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.contexts.find((context) => context.kind === "partners")?.label).toBe(
+      "Partners",
+    );
+    expect(result.contexts.map((context) => context.label)).not.toContain("Host");
   });
 });

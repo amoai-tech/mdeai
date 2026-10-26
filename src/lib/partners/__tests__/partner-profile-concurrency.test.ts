@@ -91,5 +91,8 @@ integration("partner_profile_patch concurrency", () => {
       await admin.query("delete from auth.users where id = $1", [userId]).catch(() => {});
       await admin.end().catch(() => {});
     }
-  });
+    // Seven setup queries plus two row-locked transactions routinely take 4–5s
+    // on a busy local database. The default 5s budget measured scheduling, not
+    // the merge; 15s keeps the same concurrent-write assertion without a retry.
+  }, 15_000);
 });

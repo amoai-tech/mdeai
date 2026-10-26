@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import {
   rankVenueAnchorRows,
@@ -31,6 +32,9 @@ const ANCHOR_SIGNAL_SELECT =
 let _client: ReturnType<typeof createClient> | null = null;
 
 function getSupabaseClient() {
+  // Treat fake database credentials as unavailable in local deterministic CI;
+  // use the existing empty/error path rather than waiting for network timeouts.
+  if (isDeterministicE2E()) return null;
   if (_client) return _client;
   const env = getSupabaseServerAnonEnv();
   if (!env) return null;

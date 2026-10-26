@@ -7,6 +7,8 @@ vi.mock("@copilotkit/react-core/v2", async () => {
   const React = await import("react");
   return {
     useAgentContext: vi.fn(),
+    CopilotKitProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+    CopilotChatConfigurationProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
     CopilotChat: ({ threadId }: { threadId: string }) =>
       React.createElement("div", { "data-testid": "business-thread", "data-thread-id": threadId }),
   };

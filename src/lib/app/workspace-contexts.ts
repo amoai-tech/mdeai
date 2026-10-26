@@ -5,8 +5,9 @@
  * which already-authorized page to open; Supabase RLS and the destination's own
  * server guard remain the authority.
  *
- * Phase 1 links the legacy URLs that already work. Each adapter task (SAN-1576 …
- * SAN-1580) flips its own entry to the /app route once parity is proven.
+ * Adapter tasks (SAN-1576 … SAN-1580) flip their own entry to the /app route
+ * once parity is proven. Legacy URLs remain valid aliases for the same
+ * workspace; they are never a second permission path.
  */
 
 export const WORKSPACE_KINDS = [
@@ -29,7 +30,6 @@ export type WorkspaceContext = {
 
 export type WorkspaceSignals = {
   hasLandlordProfile: boolean;
-  hasOrganizerEvents: boolean;
   /** Business names for authorized partner memberships; empty when none. */
   partnerLabels: string[];
   isAdmin: boolean;
@@ -39,7 +39,7 @@ const PERSONAL: WorkspaceContext = {
   kind: "personal",
   label: "Personal",
   description: "Tickets, saved places, and your account.",
-  href: "/saved",
+  href: "/app/me",
 };
 
 /**
@@ -57,18 +57,19 @@ export function buildWorkspaceContexts(
       kind: "rentals",
       label: "Rentals",
       description: "Listings, leads, and viewing requests.",
-      href: "/host/rentals",
+      href: "/app/rentals",
     });
   }
 
-  if (signals.hasOrganizerEvents) {
-    contexts.push({
-      kind: "events",
-      label: "Events",
-      description: "Your events, sales, and analytics.",
-      href: "/host/dashboard",
-    });
-  }
+  // Phase A: the first-time organizer must reach the real creation wizard.
+  // Displaying a workspace is navigation, never authorization to private data.
+  // Event queries and writes still enforce the user's session and Supabase RLS.
+  contexts.push({
+    kind: "events",
+    label: "Events",
+    description: "Create events, manage sales, and view analytics.",
+    href: "/app/events",
+  });
 
   if (signals.partnerLabels.length > 0) {
     contexts.push({
@@ -78,7 +79,10 @@ export function buildWorkspaceContexts(
           ? signals.partnerLabels[0]
           : "Partners",
       description: "Business profile and partner details.",
-      href: "/partners/profile",
+      // SAN-1579: /app/partners/profile reuses the legacy editor, so the
+      // workspace destination follows the account shell. /partners/profile
+      // remains a supported legacy URL.
+      href: "/app/partners/profile",
     });
   }
 
@@ -87,7 +91,7 @@ export function buildWorkspaceContexts(
       kind: "team",
       label: "MDE Team",
       description: "Contests and protected admin operations.",
-      href: "/admin/contests",
+      href: "/app/contests",
     });
   }
 
@@ -109,8 +113,32 @@ export function activeWorkspaceContext(
   );
   if (byHref) return byHref;
 
-  if (pathname === "/me/tickets" || pathname.startsWith("/me/tickets/")) {
+  if (
+    pathname === "/saved" ||
+    pathname === "/me/tickets" ||
+    pathname.startsWith("/me/tickets/")
+  ) {
     return contexts.find((context) => context.kind === "personal") ?? null;
+  }
+
+  // SAN-1580: the legacy contest admin URLs remain valid and belong to Team.
+  if (pathname === "/admin/contests" || pathname.startsWith("/admin/contests/")) {
+    return contexts.find((context) => context.kind === "team") ?? null;
+  }
+
+  // SAN-1577: the legacy Host OS URLs remain valid aliases for Events, so the
+  // switcher still shows Events when an existing link/bookmark lands there.
+  if (
+    pathname === "/host/dashboard" ||
+    pathname.startsWith("/host/dashboard/") ||
+    pathname === "/host/events" ||
+    pathname.startsWith("/host/events/") ||
+    pathname === "/host/analytics" ||
+    pathname.startsWith("/host/analytics/") ||
+    pathname === "/host/event" ||
+    pathname.startsWith("/host/event/")
+  ) {
+    return contexts.find((context) => context.kind === "events") ?? null;
   }
 
   if (pathname === "/app") {

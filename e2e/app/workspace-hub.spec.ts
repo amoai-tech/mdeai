@@ -40,7 +40,7 @@ test.describe("SAN-1575 /app guard", { tag: ["@app", "@auth"] }, () => {
 test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
   test.skip(!hasE2eEnv(), "Supabase e2e env is not configured");
 
-  test("a new customer sees Personal only and starts no agent runtime", async ({
+  test("a new customer sees Personal and Events creation with no root agent runtime", async ({
     page,
     baseURL,
   }) => {
@@ -60,13 +60,17 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       await expect(page.getByTestId("workspace-grid")).toBeVisible();
       await expect(page.getByTestId("workspace-card-personal")).toBeVisible();
       await expect(page.getByTestId("workspace-card-rentals")).toHaveCount(0);
-      await expect(page.getByTestId("workspace-card-events")).toHaveCount(0);
+      await expect(page.getByTestId("workspace-card-events")).toBeVisible();
+      await expect(
+        page.getByTestId("workspace-card-events").getByRole("link", { name: /Open/ }),
+      ).toHaveAttribute("href", "/app/events");
       await expect(page.getByTestId("workspace-card-partners")).toHaveCount(0);
       await expect(page.getByTestId("workspace-card-team")).toHaveCount(0);
 
-      // One context: the switcher is a label, not a menu.
-      await expect(page.getByTestId("workspace-current")).toHaveText("Personal");
-      await expect(page.getByTestId("workspace-switcher")).toHaveCount(0);
+      // Events is available before the first event; the switcher has two choices.
+      await expect(page.getByTestId("workspace-switcher")).toBeVisible();
+      await page.getByTestId("workspace-switcher").click();
+      await expect(page.getByTestId("workspace-switcher-events")).toBeVisible();
 
       // /app has no chat in Phase 1, so the root concierge provider must not
       // open a runtime connection here.
@@ -108,14 +112,15 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
       await expect(page.getByTestId("workspace-card-personal")).toBeVisible();
       await expect(page.getByTestId("workspace-card-rentals")).toBeVisible();
       await expect(page.getByTestId("workspace-card-team")).toBeVisible();
-      await expect(page.getByTestId("workspace-card-events")).toHaveCount(0);
+      await expect(page.getByTestId("workspace-card-events")).toBeVisible();
       await expect(page.getByTestId("workspace-card-partners")).toHaveCount(0);
 
-      // More than one context: the switcher lists exactly these three.
+      // Private Rentals and Team appear alongside Personal and Events.
       await expect(page.getByTestId("workspace-switcher")).toBeVisible();
       await page.getByTestId("workspace-switcher").click();
       await expect(page.getByTestId("workspace-switcher-personal")).toBeVisible();
       await expect(page.getByTestId("workspace-switcher-rentals")).toBeVisible();
+      await expect(page.getByTestId("workspace-switcher-events")).toBeVisible();
       await expect(page.getByTestId("workspace-switcher-team")).toBeVisible();
       await expect(page.getByTestId("workspace-switcher-partners")).toHaveCount(0);
 
@@ -207,6 +212,61 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
         expect(partners.error, partners.error?.message).toBeNull();
       }
       await Promise.all([deleteThrowawayIdentity(owner), deleteThrowawayIdentity(other)]);
+    }
+  });
+});
+
+test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
+  test.skip(!hasE2eEnv(), "Supabase e2e env is not configured");
+
+  test("rentals and admin pages start no agent runtime", async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = baseURL ?? "http://localhost:3001";
+    const identity = await createThrowawayIdentity("san1575-no-agent");
+    const admin = await getSupabaseAdmin();
+
+    try {
+      const role = await admin
+        .from("user_roles")
+        .insert({ user_id: identity.userId, role: "admin" });
+      expect(role.error, role.error?.message).toBeNull();
+      const landlord = await admin.from("landlord_profiles").insert({
+        user_id: identity.userId,
+        display_name: "SAN-1575 no-agent check",
+      });
+      expect(landlord.error, landlord.error?.message).toBeNull();
+
+      await signInAsOnOrigin(page, origin, identity.email);
+
+      const copilotRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/api/copilotkit")) {
+          copilotRequests.push(request.url());
+        }
+      });
+
+      await page.goto("/host/rentals");
+      await expect(
+        page.getByRole("heading", { name: "Your rentals, run by AI" }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests).toEqual([]);
+
+      await page.goto("/admin/contests");
+      await expect(
+        page.getByRole("heading", { name: "Contests", exact: true, level: 1 }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests).toEqual([]);
+    } finally {
+      await admin.from("user_roles").delete().eq("user_id", identity.userId);
+      await admin
+        .from("landlord_profiles")
+        .delete()
+        .eq("user_id", identity.userId);
+      await deleteThrowawayIdentity(identity);
     }
   });
 });

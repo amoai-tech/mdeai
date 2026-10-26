@@ -10,7 +10,7 @@ import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { FLASH_MODEL } from "../lib/models";
+import { CONCIERGE_MODEL } from "../lib/models";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
@@ -52,6 +52,7 @@ export const conciergeWorkingMemorySchema = z.object({
         title: z.string(),
         neighborhood: z.string(),
         nightly_price: z.number(),
+        amenities: z.array(z.string()).optional(),
       }),
     )
     .optional()
@@ -210,10 +211,11 @@ export const conciergeAgent = new Agent({
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one.
+- Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
-- For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
 - For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
 
 # Neighborhood intelligence (Medellín-native)
@@ -337,6 +339,10 @@ Restaurant listing rules (critical):
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
+Rental price rules (critical):
+- A monthly listing's price is the stored monthly amount in its own currency. Quote it only as a monthly amount (for example "COP 2,400,000/month").
+- Never add a USD, per-night or per-week equivalent for a monthly listing, and never divide a monthly rent by 30. The card owns price display.
+
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.
 - Specific queries (category, date, neighborhood, or "show all") → call search-events immediately (reuse lastEventQuery when set).
@@ -368,6 +374,7 @@ Never reply with an empty list and no recovery.
 
 # Follow-up behavior
 - "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
+- "show me the details" / "open details" / "details for the first/second one" on rentals → this is a FRONTEND ACTION, not a search. When openRentalDetails is available, call it with the listingId (or the 1-based index) and STOP. Do NOT call search-rentals for a details request, and do not answer with a description instead of calling the tool. Use the first result when no listing is named. If the apartment or position is not in the current results, say so; never open a different listing.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
 - "compare X and Y" → side-by-side: price, bedrooms, amenities, availability, host. End with one short recommendation sentence.
@@ -423,7 +430,7 @@ Conversion boundary (do NOT cross):
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
 ${formatEventSourcePromptHint()}`,
-  model: FLASH_MODEL,
+  model: CONCIERGE_MODEL,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing

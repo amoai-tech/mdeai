@@ -12,6 +12,7 @@ const event: PublishedEventListItem = {
   neighborhood: "Laureles",
   startsAt: "2026-06-13T03:00:00+00:00",
   pricePerTicket: 25,
+  canBuyTickets: true,
   currency: "USD",
   ticketUrl: "https://example.com/tickets",
   category: "music",
@@ -46,6 +47,23 @@ describe("EventBrowseCard", () => {
     );
     const headingIndex = html.indexOf("<h3");
     expect(heroIndex).toBeLessThan(headingIndex);
+  });
+
+  it("never claims Free or Buy tickets when no active tier exists", () => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />,
+    );
+    expect(html).toContain("See tickets");
+    expect(html).not.toContain(">Free<");
+    expect(html).not.toContain('data-testid="event-buy-cta"');
+    expect(html).toContain('data-testid="event-details-cta"');
+  });
+
+  it("uses a real COP tier price instead of the event summary currency", () => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={{ ...event, pricePerTicket: 40000, currency: "COP" }} />,
+    );
+    expect(html).toContain("From $40,000 COP");
   });
 
   it("renders image hero when imageUrl is set", () => {

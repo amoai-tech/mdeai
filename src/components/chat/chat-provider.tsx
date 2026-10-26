@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -172,6 +173,25 @@ function SavedThreadHistory({
 }
 
 /**
+ * Replay a saved thread's messages inside an already-configured CopilotKit provider.
+ *
+ * `/chat` owns its provider; discovery routes (Rentals, Events, Restaurants…) already get
+ * `CopilotChatConfigurationProvider` from `copilot-kit-provider`, so they only need the history
+ * replay. Without this, the thread id survives a refresh but the inline Ask MDE transcript comes
+ * back empty and the page shows the plain catalogue.
+ */
+export function SavedThreadReplay({
+  threadId,
+  children,
+}: {
+  threadId: string;
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+}
+
+/**
  * The /chat concierge surface, and the one place its thread is decided.
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
@@ -187,6 +207,7 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
@@ -203,7 +224,10 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={() => reportConciergeError(threadId)}
+      onError={(event) => {
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"

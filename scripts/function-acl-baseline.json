@@ -109,11 +109,6 @@
     "anon": true,
     "authenticated": true
   },
-  "check_rate_limit(p_key text, p_max integer, p_window_seconds integer)": {
-    "public": false,
-    "anon": true,
-    "authenticated": true
-  },
   "create_broker_onboarding_draft(p_display_name text, p_listing_title text, p_neighborhood text)": {
     "public": false,
     "anon": true,
@@ -136,11 +131,6 @@
   },
   "event_dashboard_summary(p_event_id uuid)": {
     "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "fn_join_wait_list(p_ticket_type_id uuid, p_user_id uuid, p_email text, p_phone text)": {
-    "public": true,
     "anon": false,
     "authenticated": true
   },
@@ -170,8 +160,8 @@
     "authenticated": true
   },
   "has_role(_user_id uuid, _role user_role)": {
-    "public": true,
-    "anon": true,
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "hybrid_search_events(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
@@ -282,11 +272,6 @@
   "publish_verified_rental(p_apartment_id uuid, p_actor_id uuid)": {
     "public": false,
     "anon": false,
-    "authenticated": true
-  },
-  "redeem_promo_code(p_event_id uuid, p_code text, p_ticket_id uuid)": {
-    "public": true,
-    "anon": true,
     "authenticated": true
   },
   "register_new_project_buyer(p_project_id uuid, p_idempotency_key text, p_qualification jsonb, p_email text, p_phone text, p_name text)": {

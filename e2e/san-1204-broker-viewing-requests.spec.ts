@@ -219,7 +219,9 @@ async function assertRequestContent(page: Page, fixture: Fixture, run: string): 
   );
   await expect(card).toContainText(`SAN1204 requestable ${run}`);
   await expect(card).toContainText(`Sofia ${run}`);
-  await expect(card).toContainText(/scheduled/i);
+  // A persisted `scheduled` row is pending broker confirmation and must read "Requested".
+  await expect(card).toHaveAttribute("data-status", "scheduled");
+  await expect(card).toContainText(/Requested/i);
   await expect(
     card.locator(`[data-testid="viewing-request-time-${fixture.showingId}"]`),
     "the viewing time must be the listing-local time, not the server's",
