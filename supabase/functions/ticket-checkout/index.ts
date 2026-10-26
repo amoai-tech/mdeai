@@ -36,7 +36,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
-import { deriveCheckoutAccessToken } from "../_shared/checkout-access-token.ts";
+import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
 // rather than crashing the function on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
@@ -121,6 +121,15 @@ Deno.serve(async (req) => {
       return jsonResponse(errorBody("IDEMPOTENCY_KEY_REUSED", "Use a new key when checkout details change"), 409, req);
     }
     if (cached.response.success && cached.response.data?.stripe_session_url) {
+      const { data: previous, error: previousError } = await service
+        .from("event_orders").select("status")
+        .eq("id", cached.response.data.order_id).maybeSingle();
+      if (previousError || !previous) {
+        return jsonResponse(errorBody("CHECKOUT_ORDER_LOOKUP_FAILED", "Could not verify the existing checkout"), 503, req);
+      }
+      if (duplicateCheckoutCode(previous.status) === "CHECKOUT_KEY_CANCELLED") {
+        return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED", "This checkout was cancelled; start a new checkout with a new key"), 409, req);
+      }
       return jsonResponse(cached.response, 200, req);
     }
     return jsonResponse(errorBody("CHECKOUT_IN_PROGRESS", "Checkout is still being prepared; retry shortly"), 409, req);
@@ -186,6 +195,15 @@ Deno.serve(async (req) => {
     // The unique token constraint rejects a concurrent duplicate *inside*
     // the reservation transaction; it never holds a second seat.
     if (rpcError.code === "23505") {
+      const { data: previous, error: previousError } = await service
+        .from("event_orders").select("status")
+        .eq("access_token", accessToken).maybeSingle();
+      if (previousError) {
+        return jsonResponse(errorBody("CHECKOUT_ORDER_LOOKUP_FAILED", "Could not verify the existing checkout"), 503, req);
+      }
+      if (duplicateCheckoutCode(previous?.status) === "CHECKOUT_KEY_CANCELLED") {
+        return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED", "This checkout was cancelled; start a new checkout with a new key"), 409, req);
+      }
       return jsonResponse(errorBody("CHECKOUT_IN_PROGRESS", "Existing checkout is being prepared; retry shortly"), 409, req);
     }
     const httpStatus = code === "OUT_OF_STOCK" ? 409 : 400;
@@ -267,10 +285,17 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // 6. Persist stripe_session_id (best-effort — webhook still works via metadata.order_id).
-  await service.from("event_orders").update({
-    stripe_session_id: session.id,
-  }).eq("id", rpcData.order_id);
+  // 6. Persist session identity BEFORE returning a payment URL.
+  // Stripe may deliver payment_intent.succeeded first; the webhook returns
+  // 500 and retries if this binding is not yet present, never issuing tickets.
+  const { data: savedSession, error: sessionSaveError } = await service
+    .from("event_orders").update({ stripe_session_id: session.id })
+    .eq("id", rpcData.order_id).is("stripe_session_id", null)
+    .select("stripe_session_id").maybeSingle();
+  if (sessionSaveError || savedSession?.stripe_session_id !== session.id) {
+    console.error("ticket-checkout: Stripe Session binding not persisted", sessionSaveError);
+    return jsonResponse(errorBody("CHECKOUT_SESSION_NOT_PERSISTED", "Could not finish preparing checkout; contact support"), 503, req);
+  }
   // 7. Cache idempotency response.
   const result = {
     request_hash: requestHash,

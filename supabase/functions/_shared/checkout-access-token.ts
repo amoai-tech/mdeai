@@ -10,3 +10,10 @@ export async function deriveCheckoutAccessToken(secret: string, checkoutKey: str
   ));
   return Array.from(bytes).map((v) => v.toString(16).padStart(2, "0")).join("");
 }
+
+/** Reusing a key after cancellation is terminal; only pending holds are retryable. */
+export function duplicateCheckoutCode(
+  status: string | null | undefined,
+): "CHECKOUT_KEY_CANCELLED" | "CHECKOUT_IN_PROGRESS" {
+  return status === "cancelled" ? "CHECKOUT_KEY_CANCELLED" : "CHECKOUT_IN_PROGRESS";
+}

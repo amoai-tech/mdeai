@@ -11,7 +11,7 @@ export interface StripePaymentEvidence {
   amount: number | null;
   currency: string | null;
   paymentIntentId: string;
-  sessionId?: string;
+  sessionId: string;
 }
 
 export function assertPaidOrderMatches(
@@ -32,12 +32,50 @@ export function assertPaidOrderMatches(
       order.currency.toLowerCase() !== evidence.currency.toLowerCase()) {
     throw new Error("PAYMENT_CURRENCY_MISMATCH");
   }
-  if (order.stripe_session_id && evidence.sessionId &&
-      order.stripe_session_id !== evidence.sessionId) {
+  // A signed PaymentIntent alone is not evidence that it belongs to this
+  // checkout. Missing persistence is a retryable webhook race, never a bypass.
+  if (!order.stripe_session_id || !evidence.sessionId) {
+    throw new Error("PAYMENT_SESSION_NOT_READY");
+  }
+  if (order.stripe_session_id !== evidence.sessionId) {
     throw new Error("PAYMENT_SESSION_MISMATCH");
   }
   if (order.status === "paid" &&
       order.stripe_payment_intent !== evidence.paymentIntentId) {
     throw new Error("PAYMENT_INTENT_MISMATCH");
+  }
+}
+/** Verify the stored Stripe Checkout Session, not merely PI metadata.order_id. */
+export function assertCheckoutSessionBindsPayment(
+  session: {
+    id: string;
+    metadata: { [key: string]: string } | null;
+    payment_intent: string | { id: string } | null;
+    payment_status: string;
+    amount_total: number | null;
+    currency: string | null;
+  },
+  expected: {
+    sessionId: string;
+    orderId: string;
+    paymentIntentId: string;
+    amount: number;
+    currency: string;
+  },
+): void {
+  const sessionPi = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+  if (session.id !== expected.sessionId ||
+      session.metadata?.order_id !== expected.orderId ||
+      sessionPi !== expected.paymentIntentId) {
+    throw new Error("PAYMENT_SESSION_MISMATCH");
+  }
+  if (session.payment_status !== "paid") {
+    throw new Error("PAYMENT_SESSION_NOT_PAID");
+  }
+  if (session.amount_total !== expected.amount ||
+      session.currency?.toLowerCase() !== expected.currency.toLowerCase()) {
+    throw new Error("PAYMENT_SESSION_AMOUNT_MISMATCH");
   }
 }
