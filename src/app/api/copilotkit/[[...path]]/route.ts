@@ -18,6 +18,7 @@ import { logAgentRunForTurn } from "@/mastra/lib/log-agent-run";
 import {
   loadPartnerRuntimeContext,
   setPartnerRuntimeContext,
+  type PartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
 import { isPartnerAgentRunOrConnect, isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
 import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
@@ -221,7 +222,7 @@ async function handleCopilotKit(req: NextRequest) {
 
       // SAN-705: selection travels with this agent run (not a shared cookie).
       // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
-      let partnerContext = null;
+      let partnerContext: PartnerRuntimeContext | null = null;
       if (isPartnerRun) {
         // A missing selector is allowed only when membership resolves exactly
         // one business. Multi-business users must select explicitly.
