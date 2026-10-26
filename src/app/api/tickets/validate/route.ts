@@ -1,8 +1,8 @@
+import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import type { Json } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,83 +78,54 @@ export async function POST(request: Request) {
     );
   }
 
-  const scannerUserId = user.id;
-  const privilegedClient = service;
-
-  // Existing event_check_ins permits a null attendee_id for rejected unknown
-  // scans. Persist the actual scanner, event and result without linking a
-  // foreign attendee to the host's event or inventing a matching identity.
+  // The wrapper reuses the existing consume + audit RPCs within one DB
+  // transaction. If the audit insert fails, the consume update rolls back.
   const device = request.headers.get("user-agent")?.slice(0, 200) ?? null;
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    null;
-  async function recordOutcome(
-    attendeeId: string | null,
-    result: string,
-    details: Record<string, unknown> = {},
-  ) {
-    const auditArgs = {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    ?? request.headers.get("x-real-ip");
+  // Never allow an invalid forwarded value to fail the INET audit insert.
+  const ip = forwarded && isIP(forwarded) ? forwarded : null;
+
+  let outcome: { result?: string; details?: Record<string, unknown> };
+  try {
+    const { data, error } = await service.rpc("ticket_validate_consume_audited", {
       p_event_id: eventId,
-      p_attendee_id: attendeeId,
       p_qr_token: token,
-      p_scanned_by: scannerUserId,
-      p_result: result,
-      p_details: details as Json,
-      ...(device ? { p_scanner_device: device } : {}),
-      ...(ip ? { p_ip_address: ip } : {}),
-    };
-    const { error } = await privilegedClient.rpc("record_check_in", auditArgs as never);
-    if (error) console.error("[tickets/validate] record_check_in failed:", error.message);
+      p_scanned_by: user.id,
+      p_scanner_device: device,
+      p_ip_address: ip,
+    });
+    if (error) {
+      console.error("[tickets/validate] atomic scan failed:", error.message);
+      return NextResponse.json({ ok: false, code: "CONSUME_FAILED" }, { status: 500 });
+    }
+    outcome = (data ?? {}) as { result?: string; details?: Record<string, unknown> };
+  } catch (error) {
+    console.error("[tickets/validate] atomic scan threw:", error);
+    return NextResponse.json({ ok: false, code: "CONSUME_FAILED" }, { status: 500 });
   }
 
-  const { data: attendee, error: attendeeError } = await service
-    .from("event_attendees")
-    .select("id, event_id, status, qr_used_at, full_name")
-    .eq("qr_token", token)
-    .maybeSingle();
-
-  if (attendeeError) {
-    return NextResponse.json({ ok: false, code: "TOKEN_LOOKUP_FAILED" }, { status: 500 });
-  }
-  if (!attendee) {
-    await recordOutcome(null, "unknown_token");
+  if (outcome.result === "unknown_token") {
     return NextResponse.json(
       { ok: false, code: "UNKNOWN_TICKET", message: "This QR is not a ticket." },
       { status: 404 },
     );
   }
-  if ((attendee as { event_id: string }).event_id !== eventId) {
-    await recordOutcome(null, "wrong_event");
+  if (outcome.result === "wrong_event") {
     return NextResponse.json(
       { ok: false, code: "WRONG_EVENT", message: "This ticket belongs to another event." },
       { status: 409 },
     );
   }
-
-  const { data: consumed, error: consumeError } = await service.rpc(
-    "ticket_validate_consume",
-    { p_qr_token: token },
-  );
-
-  if (consumeError) {
-    console.error("[tickets/validate] consume failed:", consumeError.message);
+  const result = outcome.result;
+  if (!result) {
     return NextResponse.json({ ok: false, code: "CONSUME_FAILED" }, { status: 500 });
   }
-
-  const outcome = (consumed ?? {}) as {
-    result?: string;
-    details?: Record<string, unknown>;
-  };
-  const result = outcome.result ?? "unknown_token";
-
-  await recordOutcome((attendee as { id: string }).id, result, outcome.details ?? {});
 
   return NextResponse.json(
     {
       ok: result === "consumed",
       result,
-      attendeeName: (attendee as { full_name: string | null }).full_name,
       details: outcome.details ?? {},
     },
     { status: result === "consumed" ? 200 : 409 },

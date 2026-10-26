@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 const state = vi.hoisted(() => ({
   user: { id: "host-a" } as { id: string } | null,
   attendee: null as null | { id: string; event_id: string },
+  failAudit: false,
   records: [] as Array<{ name: string; args: Record<string, unknown> }>,
 }));
 const EVENT_ID = "11111111-1111-4111-8111-111111111111";
@@ -20,16 +22,15 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceRoleClient: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: state.attendee, error: null }),
-        }),
-      }),
-    }),
     rpc: (name: string, args: Record<string, unknown>) => {
       state.records.push({ name, args });
-      return Promise.resolve({ data: name === "ticket_validate_consume" ? { result: "consumed" } : "log-id", error: null });
+      if (state.failAudit) return Promise.resolve({ data: null, error: { message: "audit insert failed" } });
+      const result = !state.attendee
+        ? "unknown_token"
+        : state.attendee.event_id !== EVENT_ID
+          ? "wrong_event"
+          : "consumed";
+      return Promise.resolve({ data: { result }, error: null });
     },
   }),
 }));
@@ -43,27 +44,37 @@ function scan() {
 beforeEach(() => {
   state.user = { id: "host-a" };
   state.attendee = null;
+  state.failAudit = false;
   state.records.length = 0;
 });
-describe("ticket scan rejection audit", () => {
-  it("persists unknown token without inventing attendee identity", async () => {
+describe("atomic ticket validation and audit", () => {
+  it("audits unknown code inside the single authorized RPC", async () => {
     expect((await scan()).status).toBe(404);
     expect(state.records).toHaveLength(1);
-    expect(state.records[0]).toMatchObject({
-      name: "record_check_in",
-      args: { p_event_id: EVENT_ID, p_attendee_id: null, p_scanned_by: "host-a", p_result: "unknown_token" },
-    });
+    expect(state.records[0]).toMatchObject({ name: "ticket_validate_consume_audited",
+      args: { p_event_id: EVENT_ID, p_scanned_by: "host-a" } });
   });
-  it("records wrong event without consuming or linking a foreign attendee id", async () => {
+  it("rejects a foreign event without linking the foreign attendee", async () => {
     state.attendee = { id: "foreign-attendee", event_id: "22222222-2222-4222-8222-222222222222" };
     expect((await scan()).status).toBe(409);
     expect(state.records).toHaveLength(1);
-    expect(state.records[0]).toMatchObject({
-      name: "record_check_in",
-      args: { p_event_id: EVENT_ID, p_attendee_id: null, p_result: "wrong_event" },
-    });
   });
-  it("rejects guests before touching the privileged scanner client", async () => {
+  it("returns a saved success only after the atomic RPC returns consumed", async () => {
+    state.attendee = { id: "attendee-a", event_id: EVENT_ID };
+    const response = await scan();
+    expect(response.status).toBe(200);
+    expect((await response.json()).result).toBe("consumed");
+    expect(state.records).toHaveLength(1);
+  });
+  it("does not report admission if the database audit operation fails", async () => {
+    state.attendee = { id: "attendee-a", event_id: EVENT_ID };
+    state.failAudit = true;
+    const response = await scan();
+    expect(response.status).toBe(500);
+    expect((await response.json()).ok).toBe(false);
+    expect(state.records).toHaveLength(1);
+  });
+  it("rejects guests before creating the privileged client", async () => {
     state.user = null;
     expect((await scan()).status).toBe(401);
     expect(state.records).toHaveLength(0);
