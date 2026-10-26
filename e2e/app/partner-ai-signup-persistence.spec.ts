@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   createThrowawayIdentity,
@@ -22,6 +22,62 @@ test.use({
 });
 test.describe.configure({ timeout: 120_000 });
 
+/** Apply a source-backed proposal to the real controlled form, without saving. */
+async function reviewWebsiteSuggestion(page: Page): Promise<string> {
+  const name = "QA Café " + randomUUID().slice(0, 8);
+  await page.getByLabel("Business name").fill(name);
+  await page.getByLabel("Category", { exact: true }).fill("Cafe");
+  await page.getByLabel("Neighborhood", { exact: true }).fill("Old value");
+
+  // Only the external Gemini response is deterministic here.
+  // The actual browser UI, activation endpoint, Auth and database are real.
+  await page.route("**/api/partners/onboarding/url-draft", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        draft: {
+          category: "Café from website",
+          neighborhood: "Laureles",
+          description: "Synthetic website description",
+          sources: ["https://example.org/"],
+        },
+      }),
+    }),
+  );
+
+  const input = page.getByTestId("business-url-input");
+  const findDetails = page.getByTestId("business-url-submit");
+  // App Router may show interactive HTML before React has attached the
+  // controlled input handler. Retry filling until the real submit enables.
+  await expect(async () => {
+    await input.fill("");
+    await input.fill("https://example.org/");
+    await expect(findDetails).toBeEnabled({ timeout: 1200 });
+  }).toPass({ timeout: 12_000, intervals: [250, 500, 1000] });
+
+  await findDetails.click();
+  await expect(page.getByTestId("onboarding-suggestion-card")).toBeVisible();
+  await expect(page.getByLabel("Neighborhood", { exact: true })).toHaveValue(
+    "Old value",
+  );
+  await page.getByTestId("onboarding-suggestion-accept").click();
+  await expect(page.getByLabel("Neighborhood", { exact: true })).toHaveValue(
+    "Laureles",
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+  ).toBe(false);
+  await page.screenshot({
+    path: "tmp/qa/san1193-rebased/accepted-390.png",
+    fullPage: true,
+  });
+  return name;
+}
+
 test("website proposal needs acceptance; save and concurrent edits persist without duplicates", async ({
   page,
   baseURL,
@@ -35,57 +91,7 @@ test("website proposal needs acceptance; save and concurrent edits persist witho
     await page.goto("/partners/signup?type=venue", { waitUntil: "load" });
     await expect(page.getByTestId("partner-signup-assistant")).toBeVisible();
 
-    const name = "QA Café " + randomUUID().slice(0, 8);
-    await page.getByLabel("Business name").fill(name);
-    await page.getByLabel("Category", { exact: true }).fill("Cafe");
-    await page.getByLabel("Neighborhood", { exact: true }).fill("Old value");
-
-    // Only the external Gemini response is deterministic here.
-    // The actual browser UI, activation endpoint, Auth and database are real.
-    await page.route("**/api/partners/onboarding/url-draft", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          draft: {
-            category: "Café from website",
-            neighborhood: "Laureles",
-            description: "Synthetic website description",
-            sources: ["https://example.org/"],
-          },
-        }),
-      }),
-    );
-
-    const input = page.getByTestId("business-url-input");
-    const findDetails = page.getByTestId("business-url-submit");
-    // App Router may show interactive HTML before React has attached the
-    // controlled input handler. Retry filling until the real submit enables.
-    await expect(async () => {
-      await input.fill("");
-      await input.fill("https://example.org/");
-      await expect(findDetails).toBeEnabled({ timeout: 1200 });
-    }).toPass({ timeout: 12_000, intervals: [250, 500, 1000] });
-
-    await findDetails.click();
-    await expect(page.getByTestId("onboarding-suggestion-card")).toBeVisible();
-    await expect(page.getByLabel("Neighborhood", { exact: true })).toHaveValue(
-      "Old value",
-    );
-    await page.getByTestId("onboarding-suggestion-accept").click();
-    await expect(page.getByLabel("Neighborhood", { exact: true })).toHaveValue(
-      "Laureles",
-    );
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-    ).toBe(false);
-    await page.screenshot({
-      path: "tmp/qa/san1193-rebased/accepted-390.png",
-      fullPage: true,
-    });
+    const name = await reviewWebsiteSuggestion(page);
 
     const waitForSave = page.waitForResponse(
       (response) =>
