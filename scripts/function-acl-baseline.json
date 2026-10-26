@@ -331,8 +331,8 @@
   },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
-    "anon": true,
-    "authenticated": true
+    "anon": false,
+    "authenticated": false
   },
   "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
     "public": false,

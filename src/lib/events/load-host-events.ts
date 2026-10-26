@@ -28,6 +28,7 @@ export async function loadHostEvents(
     )
     .eq("organizer_id", userId)
     .order("event_start_time", { ascending: false })
+    .order("id", { ascending: true }) // Stable tie-breaker for matching legacy/app views.
     .limit(HOST_EVENTS_LIMIT);
 
   if (error) {

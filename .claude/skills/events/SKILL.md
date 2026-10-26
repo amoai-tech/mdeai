@@ -16,6 +16,14 @@ Own event-domain behavior. Stack implementation details remain with `copilotkit`
 - Domain writes must remain organization/user scoped.
 - Do not duplicate event state across UI, agent state, and database without an explicit source-of-truth contract.
 
+## Workspace surfaces (/app canonical, /host compatibility)
+
+- `/app/events` is the canonical Events workspace. Existing `/host/*` routes remain usable aliases, with shared feature bodies and data loaders rather than page-local copies.
+- Change `host-events-content`, `HostDashboardOsShell`, `HostAnalyticsShell`, `HostEventShell`, `src/lib/events/load-host-events.ts`, or `src/lib/events/load-host-dashboard.ts` at their shared owner; keep route-specific navigation/layout separate.
+- New surfaces have one canonical `/app` address. Do not create a placeholder with no working action behind it.
+- Reuse the existing Host OS context and `HostEventProvider` for wizard/edit AI; do not nest a competing CopilotKit provider.
+- When adding a route, extend the existing Events workspace parity proof rather than creating a second fixture harness.
+
 ## Workflow
 
 1. Identify the persona and surface: host creation, discovery, ticket purchase, saved event, or admin operations.

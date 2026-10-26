@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 export type AdminGate =
   | { status: "guest" }
   | { status: "denied"; userId: string }
+  | { status: "error"; message: string }
   | { status: "ok"; userId: string };
 
 /** Read the session and the canonical admin flag. No rendering, no redirect. */
@@ -26,7 +27,13 @@ export async function getAdminGate(): Promise<AdminGate> {
   } = await supabase.auth.getUser();
   if (!user) return { status: "guest" };
 
-  const { data } = await supabase.rpc("is_admin");
+  const { data, error } = await supabase.rpc("is_admin");
+  if (error) {
+    return {
+      status: "error",
+      message: "We could not verify admin access. Try again.",
+    };
+  }
   return data === true
     ? { status: "ok", userId: user.id }
     : { status: "denied", userId: user.id };
@@ -43,6 +50,9 @@ export async function requireAdminId(): Promise<string> {
   }
   if (gate.status === "denied") {
     throw new Error("Admin access required.");
+  }
+  if (gate.status === "error") {
+    throw new Error(gate.message);
   }
   return gate.userId;
 }

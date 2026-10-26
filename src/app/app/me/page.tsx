@@ -58,7 +58,7 @@ export default async function MyAccountPage() {
 
   const [saved, tickets] = await Promise.all([
     loadUserCollections(user.id),
-    listBuyerOrders(),
+    listBuyerOrders(user.id),
   ]);
 
   const failure =
