@@ -9,10 +9,18 @@
 --   the existing in-function authorization check.
 begin;
 
-revoke execute on function public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb)
-  from public, anon, authenticated;
-grant execute on function public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb)
-  to service_role;
+-- The attribution function is present in the live database but not reproduced
+-- by the earlier replay baseline (SAN-1284). Do not make a new database reset
+-- fail over a missing optional function. When present in production, its caller
+-- privileges are restricted exactly as below.
+do $migration$
+begin
+  if to_regprocedure('public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb)') is not null then
+    execute 'revoke execute on function public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb) from public, anon, authenticated';
+    execute 'grant execute on function public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb) to service_role';
+  end if;
+end
+$migration$;
 
 revoke execute on function public.is_suppressed(text,text)
   from public, anon, authenticated;
