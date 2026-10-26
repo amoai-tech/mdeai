@@ -171,6 +171,12 @@ async function cleanupOrganizer(
   return failures;
 }
 
+async function eventCardIds(page: Page): Promise<(string | null)[]> {
+  return page.getByTestId("host-event-card").evaluateAll((cards) =>
+    cards.map((card) => card.getAttribute("data-event-id")),
+  );
+}
+
 async function assertOneMainAndNoOverflow(page: Page, label: string): Promise<void> {
   await expect(page.locator("main"), `${label}: AppShell must own the only main`).toHaveCount(1);
   const widths = await page.evaluate(() => ({
@@ -255,6 +261,9 @@ async function runOrganizerJourney(
     await expect(page.getByText(robertoDraft.name)).toBeVisible();
     await expect(page.getByText(sofiaDraft.name)).toHaveCount(0);
     await expect(page.getByTestId("host-event-card")).toHaveCount(2);
+    const appEventIds = await eventCardIds(page);
+    expect(appEventIds).toHaveLength(2);
+    expect(appEventIds.every(Boolean)).toBe(true);
     await assertOneMainAndNoOverflow(page, "desktop events");
     await assertWorkspaceChrome(page, "desktop events");
     await expect(page.getByText("My events")).toBeVisible();
@@ -281,6 +290,7 @@ async function runOrganizerJourney(
     await expect(page.getByTestId("host-kpi-card-revenue")).toContainText("1,800");
     await expect(page.getByTestId("host-kpi-card-tickets")).toContainText("2");
     await expect(page.getByTestId("host-kpi-card-orders")).toContainText("1");
+    const appRevenue = await page.getByTestId("host-kpi-card-revenue").innerText();
     await expect(page.getByTestId("host-os-chat-region")).toHaveAttribute(
       "data-qa-same-workspace",
       "yes",
@@ -346,6 +356,8 @@ async function runOrganizerJourney(
     await expect(page.getByText(robertoLive.name)).toBeVisible();
     await expect(page.getByText(robertoDraft.name)).toBeVisible();
     await expect(page.getByText(sofiaDraft.name)).toHaveCount(0);
+    expect(await eventCardIds(page), "legacy and /app must show identical event IDs/order")
+      .toEqual(appEventIds);
     await expect(page.locator("main")).toHaveCount(1);
     // Legacy /host/events still uses the original Host OS shell/nav.
     await expect(page.getByTestId("host-os-shell")).toHaveCount(1);
@@ -354,6 +366,8 @@ async function runOrganizerJourney(
     await page.goto("/host/dashboard", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("host-dashboard")).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("host-kpi-card-revenue")).toContainText("1,800");
+    expect(await page.getByTestId("host-kpi-card-revenue").innerText())
+      .toBe(appRevenue);
     await expect(page.getByTestId("host-os-shell")).toHaveCount(1);
 
     await page.goto("/host/analytics", { waitUntil: "domcontentloaded" });
