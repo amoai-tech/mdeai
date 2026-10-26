@@ -467,6 +467,9 @@ export function EventResults({ result }: { result: unknown }) {
       neighborhood?: string;
       startsAt: string;
       pricePerTicket?: number | null;
+      currency?: string;
+      canBuyTickets?: boolean;
+      ticketUrl?: string;
       imageUrl?: string;
       sourceUrl?: string;
       mapsUrl?: string | null;
@@ -489,6 +492,9 @@ export function EventResults({ result }: { result: unknown }) {
         neighborhood: e.neighborhood ?? "Medellín",
         startsAt: e.startsAt,
         pricePerTicket: e.pricePerTicket ?? null,
+        currency: e.currency,
+        canBuyTickets: e.canBuyTickets,
+        ticketUrl: e.ticketUrl,
         imageUrl: e.imageUrl,
         sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
       })),
