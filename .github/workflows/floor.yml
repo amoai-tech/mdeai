@@ -238,7 +238,13 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: codacy-analysis analyze . --config-file .codacy/eslint9-ci.json --tool ESLint9 --diff "$BASE_SHA" --no-log --output-format json --output "$RUNNER_TEMP/codacy-eslint-diff.json"
+        shell: bash
+        run: |
+          set +e
+          codacy-analysis analyze . --config-file .codacy/eslint9-ci.json --tool ESLint9 --diff "$BASE_SHA" --no-log --output-format json --output "$RUNNER_TEMP/codacy-eslint-diff.json"
+          analysis_exit=$?
+          set -e
+          node scripts/check-codacy-eslint-diff.mjs "$RUNNER_TEMP/codacy-eslint-diff.json" "$BASE_SHA" "$analysis_exit"
 
       - name: Preserve complete Codacy report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
