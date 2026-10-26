@@ -174,6 +174,11 @@
       "note": "Factory-mocks CopilotKit v2 HITL to prove the registered publish renderer reads the latest edited HostEventForm rather than stale first-render state."
     },
     {
+      "file": "src/components/chat/__tests__/chat-provider-startup-race.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks the v2 chat provider to prove a 401 during auth loading is deferred, suppressed for guests, and reported for signed-in users while true run failures remain visible."
+    },
+    {
       "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
