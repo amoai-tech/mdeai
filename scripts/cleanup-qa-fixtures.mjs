@@ -84,7 +84,7 @@ try {
   }
 
   fs.mkdirSync("tmp/qa", { recursive: true });
-  const backup = `tmp/qa/qa-cleanup-backup-${Date.now()}.json`;
+  const backup = "tmp/qa/qa-cleanup-backup.json";
   fs.writeFileSync(
     backup,
     JSON.stringify({ createdAt: new Date().toISOString(), events: selected.rows, children }, null, 2),

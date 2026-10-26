@@ -8,7 +8,7 @@ Production is the only Supabase project, so QA runs must not leave labelled rows
 cd /home/sk/mdeai
 set -a; . ./.env; set +a
 npm run qa:cleanup                  # dry run: names and order counts
-npm run qa:cleanup -- --apply       # delete, after writing tmp/qa/qa-cleanup-backup-*.json
+npm run qa:cleanup -- --apply       # delete, after writing `tmp/qa/qa-cleanup-backup.json`
 ```
 
 The allowlist is fixed in `scripts/cleanup-qa-fixtures.mjs`:
@@ -31,4 +31,4 @@ Run after any production QA session, and at most once daily. A safe cron shape i
 
 Do not put service-role credentials in the crontab or a GitHub workflow variable that is visible to pull requests. Use the machine's ignored `.env` or a protected secret store.
 
-The scheduled workflow `.github/workflows/qa-fixture-cleanup.yml` runs this daily on `main` and defaults manual runs to dry run. It never runs on pull requests.
+The scheduled workflow `.github/workflows/qa-fixture-cleanup.yml` runs this daily on `main`; manual runs are read-only dry runs. It never runs on pull requests. Apply manually with `npm run qa:cleanup -- --apply`.
