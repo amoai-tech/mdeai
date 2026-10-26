@@ -11,11 +11,11 @@ export type AdminEventActionResult =
   | { ok: true; status: string }
   | { ok: false; code: "FORBIDDEN" | "NOT_FOUND" | "INVALID" | "FAILED"; message: string };
 
-const NEXT_STATE: Record<AdminEventAction, { status: string; is_active: boolean }> = {
-  publish: { status: "published", is_active: true },
-  unpublish: { status: "draft", is_active: false },
-  restore: { status: "draft", is_active: true },
-};
+const NEXT_STATE = new Map<AdminEventAction, { status: string; is_active: boolean }>([
+  ["publish", { status: "published", is_active: true }],
+  ["unpublish", { status: "draft", is_active: false }],
+  ["restore", { status: "draft", is_active: true }],
+]);
 
 /**
  * SAN-515 — Super Admin event state change.
@@ -36,7 +36,7 @@ export async function setAdminEventState(
   if (!z.string().uuid().safeParse(eventId).success) {
     return { ok: false, code: "INVALID", message: "Unknown event id." };
   }
-  const next = NEXT_STATE[action];
+  const next = NEXT_STATE.get(action);
   if (!next) return { ok: false, code: "INVALID", message: "Unknown action." };
 
   const gate = await getAdminGate();

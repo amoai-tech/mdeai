@@ -196,6 +196,9 @@ export function TicketScanner({ eventId, eventName }: Props) {
     hint: "Ticket not accepted.",
   } : null;
 
+  const attendeeName = result?.details?.attendee_name ?? result?.attendeeName;
+  const ticketTier = result?.details?.ticket_tier;
+
   return (
     <div className="space-y-6" data-testid="ticket-scanner">
       <header className="space-y-1">
@@ -268,10 +271,10 @@ export function TicketScanner({ eventId, eventName }: Props) {
             <p className="text-xl font-bold" data-testid="scanner-result-title">
               {copy.title}
             </p>
-            {result?.details?.attendee_name ?? result?.attendeeName ? (
+            {attendeeName ? (
               <p className="mt-1 text-sm">
-                {result?.details?.attendee_name ?? result?.attendeeName}
-                {result?.details?.ticket_tier ? ` · ${result.details.ticket_tier}` : ""}
+                {attendeeName}
+                {ticketTier ? ` · ${ticketTier}` : ""}
               </p>
             ) : null}
             {result?.details?.used_at ? (

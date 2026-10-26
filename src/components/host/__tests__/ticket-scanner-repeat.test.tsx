@@ -26,7 +26,7 @@ describe("camera ticket check-in", () => {
     });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, result: "consumed" }),
+      json: () => Promise.resolve({ ok: true, result: "consumed" }),
     });
     vi.stubGlobal("fetch", fetchMock);
 

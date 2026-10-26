@@ -81,7 +81,7 @@ export default async function AdminEventsPage({ searchParams }: PageProps) {
           const params = new URLSearchParams();
           if (filter !== "all") params.set("status", filter);
           if (showInactive) params.set("inactive", "1");
-          const href = params.size ? `/app/admin/events?${params}` : "/app/admin/events";
+          const href = params.size ? `/app/admin/events?${params.toString()}` : "/app/admin/events";
           const active = filter === requested;
           return (
             <a
