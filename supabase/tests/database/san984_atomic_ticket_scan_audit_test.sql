@@ -20,8 +20,12 @@ declare
   v_order uuid;
   v_actor uuid;
 begin
-  select id into v_actor from auth.users limit 1;
-  if v_actor is null then raise exception 'local QA requires seeded auth user'; end if;
+  -- CI begins with zero auth users. Create our own test actor; ROLLBACK
+  -- removes the actor and any profile rows produced by auth triggers.
+  insert into auth.users(id, email, aud, role)
+  values (gen_random_uuid(), 'san984-qa-actor@example.invalid',
+          'authenticated', 'authenticated')
+  returning id into v_actor;
   insert into public.events(name,event_start_time,event_end_time,status,is_active)
   values ('SAN-984 local atomic scan fixture',now()+interval '1 day',now()+interval '2 days','draft',true)
   returning id into v_event;
