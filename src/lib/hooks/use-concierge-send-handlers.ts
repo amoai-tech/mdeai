@@ -53,6 +53,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // (CopilotKit reports that through onError and still resolves, or it rejects), the question is
   // already in the transcript, so only the notice is added. sendConciergeUserMessage clears the
   // error signal at the start of every send, so a non-zero version here belongs to this run.
+  /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
     async (text: string) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
@@ -95,11 +96,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
   );
 
-  // A cold-runtime wait must not turn two clicks (or a submit retry) into two
-  // agent runs. Coalesce identical pending questions, serialize distinct ones,
-  // and release each key after its send finishes so deliberate later repeats work.
+  // A cold-runtime wait must not turn two clicks into two agent runs.
   const pendingAgentSendsRef = useRef(new Map<string, Promise<boolean>>());
   const lastAgentSendRef = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * Coalesce identical in-flight questions and serialize distinct questions.
+   * Release each key after completion so later deliberate repeats still work.
+   */
   const onAgentSend = useCallback((text: string): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;

@@ -43,10 +43,11 @@ function useLiveConciergeChat() {
     [copilotkit],
   );
 
-  // A healthy cold-start /info handshake may still be "connecting" when
-  // a signed-in person sends. Give the EXISTING runtime a bounded chance
-  // to connect instead of falsely answering "assistant unavailable".
-  // A real error fails immediately; no new run/engine or duplicate send.
+  /**
+   * Await the existing CopilotKit handshake before a signed-in first send.
+   * A connecting runtime may succeed within six seconds; an error or timeout
+   * fails closed without starting an agent run or retrying any action.
+   */
   const waitForRuntimeReady = useCallback(async (maxWaitMs = 6_000): Promise<boolean> => {
     const ready = () =>
       String(currentCopilotkitRef.current.runtimeConnectionStatus) === "connected" &&
