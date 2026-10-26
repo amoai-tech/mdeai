@@ -21,6 +21,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -103,6 +104,7 @@ function RentalBrowseViewInner({
     [shownResults],
   );
 
+  const duplicateNotes = useMemo(() => duplicateListingNotes(shownResults), [shownResults]);
   useBrowseMapSync(pins, "rental");
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
@@ -280,6 +282,7 @@ function RentalBrowseViewInner({
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={scheduleFor(r)}
+                    duplicateNote={duplicateNotes.get(r.id)}
                     onDetails={() => openDetailsFor(r)}
                   />
                 );

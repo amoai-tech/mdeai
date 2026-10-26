@@ -7,6 +7,7 @@ import {
   CopilotKitProvider,
 } from "@copilotkit/react-core/v2";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
+import { SavedThreadReplay } from "@/components/chat/chat-provider";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
@@ -20,6 +21,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
   const { user, loading: sessionLoading } = useSession();
   const { activeThreadId, sessionThreadId, hasPersistedThread, restoredThread } = useThreadNav();
+  const threadId = activeThreadId ?? sessionThreadId;
   const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
@@ -46,7 +48,15 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
         threadId={activeThreadId ?? sessionThreadId}
         hasExplicitThreadId={shouldReplay}
       >
-        <ConciergeCoAgentProvider>{children}</ConciergeCoAgentProvider>
+        <ConciergeCoAgentProvider>
+          {shouldReplay && threadId ? (
+            // Discovery routes already own the provider; they still need the saved messages,
+            // otherwise a refresh keeps the thread id but loses the visible conversation.
+            <SavedThreadReplay threadId={threadId}>{children}</SavedThreadReplay>
+          ) : (
+            children
+          )}
+        </ConciergeCoAgentProvider>
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
   );

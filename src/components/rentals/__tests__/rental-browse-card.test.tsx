@@ -56,7 +56,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
 
 function renderCard(
   overrides: Partial<ApartmentRow> = {},
-  props: { selected?: boolean; onSchedule?: (() => void) | undefined } = {},
+  props: { selected?: boolean; onSchedule?: (() => void) | undefined; duplicateNote?: string } = {},
 ) {
   // `?? vi.fn()` would mask a deliberate `onSchedule: undefined`, which is exactly the case
   // the "no handler → no CTA" test needs to exercise.
@@ -66,6 +66,7 @@ function renderCard(
       rental={rowToRental(apartmentRow(overrides))}
       onSelect={vi.fn()}
       onSchedule={hasHandler ? props.onSchedule : vi.fn()}
+      duplicateNote={props.duplicateNote}
       selected={props.selected}
     />,
   );
@@ -98,6 +99,10 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("fails closed when the row projection omits the computed column", () => {
     const html = renderCard({ rental_can_request_viewing: null });
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("labels a duplicate row instead of hiding it", () => {
+    expect(renderCard({}, { duplicateNote: "Also listed as #1" })).toContain("Also listed as #1");
   });
 
   it("still renders the listing itself when the CTA is withheld", () => {

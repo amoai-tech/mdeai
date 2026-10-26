@@ -377,6 +377,12 @@ describe("RentalDetailsPanel — states", () => {
     });
   }
 
+  it("exposes the exact listing id on the panel for card/pin/Details parity", async () => {
+    await renderPanel(baseRentalOf());
+    const panel = container.querySelector('[data-testid="rental-details-panel"]');
+    expect(panel?.getAttribute("data-listing-id")).toBe(baseRentalOf().id);
+  });
+
   it("shows a placeholder, not a broken image, when there are no photos", async () => {
     await renderPanel({ ...baseRentalOf(), image: "", images: [] });
     expect(byId("rental-details-no-photos")).not.toBeNull();

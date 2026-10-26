@@ -264,6 +264,7 @@ export function RentalDetailsPanel({ rental, onClose, onSchedule }: DetailsProps
     <aside
       aria-labelledby="rental-details-title"
       data-testid="rental-details-panel"
+      data-listing-id={rental.id}
       className="absolute inset-0 z-10 overflow-y-auto bg-card p-4"
       onKeyDown={onKeyDown}
     >
@@ -292,6 +293,7 @@ export function RentalDetailsSheet({ rental, onClose, onSchedule }: DetailsProps
         showCloseButton={false}
         className="max-h-[90vh] overflow-y-auto p-4"
         data-testid="rental-details-sheet"
+        data-listing-id={rental.id}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
