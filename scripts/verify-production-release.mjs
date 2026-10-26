@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 const BASE = process.env.PROD_URL ?? "https://www.mdeai.co";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const vercelCwd = process.env.MDE_VERCEL_CWD ?? repoRoot;
-const expected = process.argv[2] ?? process.env.RELEASE_SHA ?? execFileSync("git", ["rev-parse", "origin/main"], { encoding: "utf8" }).trim();
+let expected;
+try {
+  expected = process.argv[2] ?? process.env.RELEASE_SHA ?? execFileSync("git", ["rev-parse", "origin/main"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+} catch (error) {
+  console.error(`✗ could not resolve the expected SHA: ${error instanceof Error ? error.message : String(error)}`);
+  console.error("  Fetch origin/main or pass the SHA explicitly: npm run verify:production -- <sha>");
+  process.exit(1);
+}
 const project = process.env.MDE_VERCEL_PROJECT_ID ?? "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB";
 const org = process.env.MDE_VERCEL_ORG_ID ?? "team_OPBk3bdOXAg6fpYnL4vxnLZd";
 const env = { ...process.env, VERCEL_PROJECT_ID: project, VERCEL_ORG_ID: org };
@@ -28,7 +35,7 @@ try {
   const out = execFileSync("vercel", ["ls", "mdeai", "--prod", "--json"], { env, cwd: vercelCwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   deployment = parseJson(out).deployments?.[0];
   if (!deployment) throw new Error("no production deployment returned");
-  const sha = deployment.meta?.githubCommitSha ?? deployment.meta?.githubCommitSha;
+  const sha = deployment.meta?.githubCommitSha;
   if (deployment.state === "READY" && sha === expected) ok(`latest production deployment READY at ${expected.slice(0, 10)}`);
   else bad(`latest deployment ${deployment.url} is ${deployment.state} at ${String(sha).slice(0, 10)}, expected READY ${expected.slice(0, 10)}`);
 } catch (error) {
