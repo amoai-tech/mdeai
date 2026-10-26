@@ -35,6 +35,12 @@ const BENEFIT_MAP: Array<{ re: RegExp; label: string }> = [
   { re: /\bsafe|security\b/i, label: "Secure building" },
 ];
 
+/** One whole-unit amount in its own currency: USD keeps the `$`, every other currency gets its code. */
+export function formatListingMoney(amount: number, currency: string = "USD"): string {
+  const unit = (currency || "USD").toUpperCase();
+  return `${unit === "USD" ? "$" : `${unit} `}${amount.toLocaleString("en-US")}`;
+}
+
 /**
  * Format a listing's prices in **the listing's own currency**.
  *
@@ -58,9 +64,7 @@ export function formatRentalPrices(
   if (!hasNightly && !hasMonthly) {
     return { nightlyLabel: null, monthlyLabel: null };
   }
-  const unit = (currency || "USD").toUpperCase();
-  const money = (amount: number) =>
-    `${unit === "USD" ? "$" : `${unit} `}${amount.toLocaleString("en-US")}`;
+  const money = (amount: number) => formatListingMoney(amount, currency);
   return {
     nightlyLabel: hasNightly ? `${money(nightly)}/night` : null,
     monthlyLabel: hasMonthly
@@ -200,6 +204,8 @@ export type FastPathRentalSummaryOptions = {
   generic?: boolean;
   /** The renter named a budget the search did not apply — say so instead of implying it did. */
   budgetNotApplied?: boolean;
+  /** The monthly budget the search actually applied, e.g. "COP 2,000,000 per month". */
+  appliedBudget?: string;
 };
 
 /**
@@ -213,7 +219,11 @@ export function fastPathRentalSummary(
 ): string {
   if (count === 0) {
     const budgetNote =
-      (options.budgetNotApplied ? " Your budget was not applied to this search." : "") +
+      (options.budgetNotApplied
+        ? " Your budget was not applied to this search."
+        : options.appliedBudget
+          ? ` Applied budget: ${options.appliedBudget}.`
+          : "") +
       (options.unappliedRequests?.length
         ? ` ${emptyRentalNotice(options.unappliedRequests)}`
         : "");
@@ -226,6 +236,8 @@ export function fastPathRentalSummary(
   let text = withMapCoverage(`Found ${count} rental${count === 1 ? "" : "s"}`, count, pinCount);
   if (options.budgetNotApplied) {
     text += " I can't filter by monthly budget yet, so check the price on each card.";
+  } else if (options.appliedBudget) {
+    text += ` Applied budget: ${options.appliedBudget}.`;
   }
   const unapplied = unappliedRentalNotice(options.unappliedRequests ?? []);
   if (unapplied) text += ` ${unapplied}`;

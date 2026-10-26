@@ -84,9 +84,11 @@ export function EventBrowseCard({
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
-    event.pricePerTicket <= 0
-      ? "Free"
-      : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
+    event.pricePerTicket === null
+      ? "See tickets"
+      : event.pricePerTicket === 0
+        ? "Free"
+        : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
 
   return (
     <VenueCardShell
@@ -111,7 +113,7 @@ export function EventBrowseCard({
           >
             Details
           </Link>
-          {event.ticketUrl.startsWith("http") ? (
+          {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
             <Link
               href={event.ticketUrl}
               target="_blank"

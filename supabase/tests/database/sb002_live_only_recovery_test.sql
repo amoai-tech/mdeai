@@ -7,7 +7,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(25);
+select plan(26);
 
 -- ── the 8 recovered tables ────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ select is(
 -- Spot-check exact signatures, not just names.
 select ok(to_regprocedure('public.outbox_enqueue(text,text,text,jsonb,uuid)') is not null,
           'outbox_enqueue has its production signature');
-select ok(to_regprocedure('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])') is not null,
+select ok(to_regprocedure('public.ticket_payment_refund_v2(uuid,bigint,text,text,uuid,text,uuid[])') is not null,
           'ticket_payment_refund_v2 has its production signature');
 
 -- ── quarantined on purpose — these MUST stay absent ───────────────────────────
@@ -77,9 +77,9 @@ select ok(to_regprocedure('public.fn_record_conversion(text,text,text,text,text,
           or not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                           where n.nspname='public' and p.proname='fn_record_conversion'),
           'dead fn_record_conversion is NOT recreated');
-select ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                       where n.nspname = 'public' and p.proname = 'hybrid_search_events'),
-          'fts-blocked hybrid_search_events stays deferred until fts_content is recovered');
+select ok(exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'public' and p.proname = 'hybrid_search_events'),
+          'hybrid_search_events is recovered by SAN-1305 once fts_content exists');
 select ok(not exists (select 1 from pg_trigger tg
                         join pg_class c on c.oid = tg.tgrelid
                         join pg_namespace n on n.oid = c.relnamespace
@@ -104,7 +104,7 @@ select lives_ok(
   $$select public.is_suppressed('email', 'nobody@example.com')$$,
   'is_suppressed() runs against the recovered suppression_list');
 
--- ── EXECUTE grants must match production, not PostgreSQL's defaults ───────────
+-- ── EXECUTE grants must match the SAN-1562 boundary, not PostgreSQL defaults ──
 -- `create or replace function` grants EXECUTE to PUBLIC by default. The two
 -- revoke_*_security_definer_rpcs migrations run EARLIER than the recovery, so they
 -- cannot cover these functions. Without the explicit ACL block these assertions fail.
@@ -125,7 +125,13 @@ select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  1, 'authenticated CAN execute ticket_payment_refund_v2 (as in production)');
+  0, 'authenticated CANNOT execute ticket_payment_refund_v2 (SAN-1562 boundary)');
+
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'ticket_payment_refund_v2'
+      and has_function_privilege('service_role', p.oid, 'EXECUTE')),
+  1, 'service_role CAN execute ticket_payment_refund_v2');
 
 -- ── referential integrity restored ────────────────────────────────────────────
 -- 20260503130000_out_of_band_orphan_tables.sql adds this FK only if public.outbox

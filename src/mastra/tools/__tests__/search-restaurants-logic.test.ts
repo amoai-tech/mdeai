@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mapCuisineFromTypes, priceLevelToTier, estimateAvgPriceFromLevel, restaurantSchema, searchRestaurants } from '../search-restaurants.js';
+import { mapCuisineFromTypes, priceLevelToTier, rowToRestaurant, restaurantSchema, searchRestaurants, restaurantSearchDisplayName } from '../search-restaurants.js';
 
 vi.mock('../../lib/intelligence-restaurant-search', () => ({
   searchRestaurantsIntelligent: vi.fn().mockResolvedValue({ results: [], hybridUsed: false }),
@@ -40,23 +40,104 @@ describe('priceLevelToTier', () => {
     expect(priceLevelToTier(0)).toBe('$');
     expect(priceLevelToTier(99)).toBe('$$$$');
   });
+
+  it('SAN-1468 returns no tier when the catalog has no price_level', () => {
+    expect(priceLevelToTier(null)).toBeUndefined();
+    expect(priceLevelToTier(undefined)).toBeUndefined();
+    expect(priceLevelToTier(Number.NaN)).toBeUndefined();
+  });
 });
 
-describe('estimateAvgPriceFromLevel', () => {
-  it('returns monotonic anchors', () => {
-    expect(estimateAvgPriceFromLevel(1)).toBeLessThan(estimateAvgPriceFromLevel(4));
+describe('rowToRestaurant — truthful price and rating (SAN-1468)', () => {
+  const baseRow = {
+    id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95',
+    name: 'Test Restaurant',
+    cuisine_types: ['Colombian'],
+    price_level: 3,
+    address: 'Carrera 40 #10-20',
+    city: 'Medellín',
+    neighborhood: 'El Poblado',
+    latitude: 6.2098,
+    longitude: -75.5663,
+    primary_image_url: null,
+    rating: 4.5,
+    tags: ['cozy'],
+    google_place_id: null,
+    maps_url: null,
+    ai_summary: null,
+  };
+
+  it('keeps the real price tier but never invents a USD per-person amount', () => {
+    const r = rowToRestaurant(baseRow);
+    expect(r.priceTier).toBe('$$$');
+    // public.restaurants stores no per-person amount, so any number would be invented
+    expect(r.avgPricePerPerson).toBeUndefined();
+    expect(r.currency).toBeUndefined();
+  });
+
+  it('preserves a null rating as unknown rather than zero', () => {
+    const r = rowToRestaurant({ ...baseRow, rating: null });
+    expect(r.rating).toBeUndefined();
+    expect(restaurantSchema.safeParse(r).success).toBe(true);
+  });
+
+  it('keeps a real zero rating distinct from unknown', () => {
+    const r = rowToRestaurant({ ...baseRow, rating: 0 });
+    expect(r.rating).toBe(0);
   });
 });
 
 describe('searchRestaurants — intelligent search fallback', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
-  it('falls back to curated list when intelligent search returns empty results', async () => {
+  /** The honest contract must not depend on ambient credentials in the test shell. */
+  function blankSupabaseCredentials() {
+    for (const name of [
+      'SUPABASE_URL',
+      'NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    ]) {
+      vi.stubEnv(name, '');
+    }
+  }
+
+  it('reuses the real catalog instead of inventing restaurants when intelligent search is empty', async () => {
+    blankSupabaseCredentials();
     const result = await searchRestaurants({ queryText: 'rooftop dinner Provenza', limit: 5 });
-    expect(result.source).toBe('fallback');
-    expect(result.results.length).toBeGreaterThan(0);
+    // Intelligent search returned nothing and no catalog is reachable: the honest
+    // answer is "unavailable", never a curated list of believable fake businesses.
+    expect(result.source).toBe('unavailable');
+    expect(result.results).toEqual([]);
+    expect(result.results.some((r) => r.id.startsWith('rst_'))).toBe(false);
+  });
+});
+
+describe('El Cielo labels in the intelligent chat search path', () => {
+  it('preserves both real result IDs and distinguishes their on-screen names', async () => {
+    const { searchRestaurantsIntelligent } = await import('../../lib/intelligence-restaurant-search');
+    const base = {
+      cuisine: 'international', neighborhood: 'El Poblado', priceTier: '$$$',
+      avgPricePerPerson: 30, currency: 'USD', rating: 4.5, vibe: [], imageUrl: '',
+      sourceUrl: 'https://mdeai.co/restaurants/example',
+    };
+    vi.mocked(searchRestaurantsIntelligent).mockResolvedValueOnce({
+      results: [
+        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'El Cielo' },
+        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'El Cielo' },
+      ],
+      source: 'supabase', hybridUsed: false,
+    } as never);
+
+    const result = await searchRestaurants({ queryText: 'restaurants in El Poblado', limit: 5 });
+    expect(result.results.map(({ id, name }) => [id, name])).toEqual([
+      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'El Cielo · Elcielo Hotel'],
+      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'El Cielo · Carrera 40'],
+    ]);
   });
 });
 
@@ -81,7 +162,7 @@ describe('neighborhood sanitization', () => {
       neighborhood: "Laureles,),*weird'input",
       limit: 5,
     });
-    expect(result.source).toBe('fallback');
+    expect(result.source).toBe('unavailable');
   });
 });
 
@@ -129,5 +210,21 @@ describe('restaurantSchema — MASTRA-048 enrichment fields', () => {
     const result = restaurantSchema.parse(baseRestaurant);
     expect(result.mapsUrl).toBeUndefined();
     expect(result.aiSummary).toBeUndefined();
+  });
+});
+
+
+describe('restaurant search display names — real El Cielo locations', () => {
+  it('distinguishes both venues without changing their stored names or IDs', () => {
+    expect(restaurantSearchDisplayName('El Cielo', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('El Cielo · Elcielo Hotel');
+    expect(restaurantSearchDisplayName('El Cielo', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
+      .toBe('El Cielo · Carrera 40');
+  });
+
+  it('does not rename any other restaurants or unknown El Cielo records', () => {
+    expect(restaurantSearchDisplayName('El Cielo', 'some-other-id')).toBe('El Cielo');
+    expect(restaurantSearchDisplayName('El Cielo Café', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('El Cielo Café');
   });
 });

@@ -94,6 +94,7 @@ export function useRestaurantSearchFastPath() {
       userText: string,
       params: RestaurantSearchApiParams,
       chip?: RestaurantFilterChip,
+      propagateFailure = false,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
@@ -122,6 +123,9 @@ export function useRestaurantSearchFastPath() {
       } catch (err) {
         console.error("[restaurant-fast-path]", err);
         setToolResult(null);
+        // Chat sends report failures through operation-aware Retry;
+        // filter-chip searches keep their non-throwing failure result.
+        if (propagateFailure) throw err;
         return false;
       } finally {
         busyRef.current = false;
@@ -184,7 +188,7 @@ export function useRestaurantSearchFastPath() {
       if (!params) return false;
 
       clearLocalMessages();
-      return runSearch(trimmed, params);
+      return runSearch(trimmed, params, undefined, true);
     },
     [
       clarifyKind,

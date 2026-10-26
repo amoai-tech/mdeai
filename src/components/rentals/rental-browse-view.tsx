@@ -10,8 +10,19 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
+import {
+  RentalAskComposer,
+  type RentalAskDetailsOutcome,
+  type RentalAskResults,
+} from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
+import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -61,9 +72,17 @@ function RentalBrowseViewInner({
   previewMode = false,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
+  // The inline composer and this Details tool share the one concierge provider. Without it
+  // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
+  const coAgent = useOptionalConciergeCoAgent();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
+  // SAN-1421 — an answer asked for on this page replaces the list and its pins until the renter
+  // clears it, so the cards always describe the question they can still see.
+  const [ask, setAsk] = useState<RentalAskResults | null>(null);
+  const shownResults = ask?.results ?? results;
+  const shownTotal = ask?.total ?? total;
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -78,13 +97,14 @@ function RentalBrowseViewInner({
 
   const pins = useMemo(
     () =>
-      results.flatMap((r) => {
+      shownResults.flatMap((r) => {
         const pin = rentalToMapPin(r);
         return pin ? [pin] : [];
       }),
-    [results],
+    [shownResults],
   );
 
+  const duplicateNotes = useMemo(() => duplicateListingNotes(shownResults), [shownResults]);
   useBrowseMapSync(pins, "rental");
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
@@ -95,16 +115,43 @@ function RentalBrowseViewInner({
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsRental = useMemo(
-    () => (detailsId ? (results.find((r) => r.id === detailsId) ?? null) : null),
-    [detailsId, results],
+    () => (detailsId ? (shownResults.find((r) => r.id === detailsId) ?? null) : null),
+    [detailsId, shownResults],
   );
   const closeDetails = useCallback(() => setDetailsId(null), []);
+  // One path for a card click and for the agent's "show me the details": the same panel, the same
+  // selected pin, and the same `selectedListingId` the next question carries.
+  const openDetailsFor = useCallback(
+    (rental: Rental) => {
+      setDetailsId(rental.id);
+      const pinId = `rental-${rental.id}`;
+      if (mappedIds.has(pinId)) panToPin(pinId);
+    },
+    [mappedIds, panToPin],
+  );
+  // The composer's deterministic "show me the details" path uses the same panel and resolver.
+  const openDetailsFromCommand = useCallback(
+    (target: DetailsCommand): RentalAskDetailsOutcome => {
+      if (shownResults.length === 0) {
+        return { ok: false, message: "No apartments are shown yet. Ask MDE to search first." };
+      }
+      const rental = resolveRentalForDetails(shownResults, target);
+      if (!rental) {
+        return { ok: false, message: `There is no apartment ${target.index} in the current results.` };
+      }
+      openDetailsFor(rental);
+      return { ok: true };
+    },
+    [shownResults, openDetailsFor],
+  );
   const scheduleFor = (r: Rental) => () =>
     openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
 
   // Public browse includes source-linked external ads alongside verified inventory.
   // Do not claim every result is verified or available for MDE viewing requests.
-  const subtitle = previewMode
+  const subtitle = ask
+    ? `Ask MDE — ${formatCountSubtitle(shownTotal, shownResults.length)}`
+    : previewMode
     ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
     : error
       ? "Long-stay apartments in Medellín"
@@ -114,6 +161,9 @@ function RentalBrowseViewInner({
 
   return (
     <>
+      {coAgent && !isDeterministicE2E() ? (
+        <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
+      ) : null}
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
@@ -146,6 +196,13 @@ function RentalBrowseViewInner({
             }
           />
         }
+        askComposer={
+          <RentalAskComposer
+            onResults={setAsk}
+            onOpenDetails={openDetailsFromCommand}
+            context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
+          />
+        }
       >
         <section className="mt-4" aria-label="Rental listings">
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
@@ -176,7 +233,25 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {!error && !dateError && results.length === 0 ? (
+          {ask ? (
+            <div
+              data-testid="rental-ask-answer"
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="text-muted-foreground">Answer to: </span>
+                <span className="font-medium">{ask.query}</span>
+              </span>
+              {ask.budgetNotice ? (
+                <span className="w-full text-xs text-muted-foreground">{ask.budgetNotice}</span>
+              ) : null}
+              <Button variant="ghost" size="sm" onClick={() => setAsk(null)} data-testid="rental-ask-answer-clear">
+                Clear
+              </Button>
+            </div>
+          ) : null}
+
+          {!error && !dateError && shownResults.length === 0 ? (
             <EmptyState
               testId="rentals-empty"
               title="No rentals currently match these filters"
@@ -189,13 +264,13 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {!error && !dateError && results.length > 0 ? (
+          {!error && !dateError && shownResults.length > 0 ? (
             <div
               className={RENTAL_RESULTS_GRID}
-              aria-label={`${results.length} rentals`}
+              aria-label={`${shownResults.length} rentals`}
               data-testid="rentals-grid"
             >
-              {results.map((r) => {
+              {shownResults.map((r) => {
                 const pinId = `rental-${r.id}`;
                 return (
                   <RentalBrowseCard
@@ -207,11 +282,8 @@ function RentalBrowseViewInner({
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={scheduleFor(r)}
-                    onDetails={() => {
-                      setDetailsId(r.id);
-                      // A mapped rental also becomes the selected pin; an unmapped one gets none.
-                      if (mappedIds.has(pinId)) panToPin(pinId);
-                    }}
+                    duplicateNote={duplicateNotes.get(r.id)}
+                    onDetails={() => openDetailsFor(r)}
                   />
                 );
               })}
@@ -220,7 +292,7 @@ function RentalBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet />
+      <BrowseMapSheet raised />
       {detailsRental && !isLgUp ? (
         <RentalDetailsSheet
           rental={detailsRental}
@@ -237,7 +309,10 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
-        <RentalBrowseViewInner {...props} />
+        <RentalBrowseViewInner
+          key={JSON.stringify([props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+          {...props}
+        />
       </BrowseMapContextShell>
       <ScheduleViewingModal />
     </RentalUiProvider>

@@ -11,8 +11,9 @@ import {
 import { gotoConcierge } from "./helpers/maps-layout";
 
 /**
- * SAN-1413 · a signed-in saved conversation survives leaving Chat, refresh and
- * Back/Forward — proven against real persisted messages, not a mocked store.
+ * SAN-1413 / SAN-1088 · a signed-in saved conversation survives
+ * Chat → Rentals → Events → Chat, refresh, browser Back/Forward and tab switches
+ * — proven against real persisted messages, not a mocked store.
  *
  * The rows are seeded directly into the existing Mastra tables (the same
  * production storage the app uses) so the proof is deterministic and does not
@@ -92,6 +93,31 @@ async function expectOnlyThisChat(page: Page, shown: SeededChat, hidden?: Seeded
   }
 }
 
+/** Navigate real browse links without reselecting or resetting the active chat. */
+async function browseRentalsAndEventsThenReturnToChat(page: Page) {
+  // ── Chat → Rentals → Events → Chat (same tab, actual in-app links) ──────
+  await page.getByTestId("nav-rentals-link").first().click();
+  await page.waitForURL("**/rentals", { timeout: 30_000 });
+  await expect(page.getByTestId("rentals-browse")).toBeVisible();
+  // The SAN-1421 inline composer is not yet present on main; testing that
+  // send/reply handoff requires its owning task to finish the UI separately.
+  // This test proves that navigating the existing discovery workspaces does
+  // not change the selected conversation, without claiming composer parity.
+  await page.getByTestId("nav-events-link").first().click();
+  await page.waitForURL("**/events", { timeout: 30_000 });
+  await expect(page.getByTestId("events-browse")).toBeVisible();
+  await page.getByRole("link", { name: "Ask concierge", exact: true }).click();
+  await page.waitForURL("**/chat", { timeout: 30_000 });
+  // Browser navigation preserves identity even after both route providers
+  // have unmounted and the /chat provider must reconnect and replay A.
+  await page.goBack();
+  await expect(page.getByTestId("events-browse")).toBeVisible();
+  await page.goForward();
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 20_000, message: "Forward returns to Chat" })
+    .toBe("/chat");
+}
+
 test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", () => {
   test.skip(!enabled, "Set PROD_SMOKE_BASE_URL to the deployment under test");
 
@@ -107,7 +133,7 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
     if (camila) await deleteThrowawayIdentity(camila);
   });
 
-  test("the selected saved chat survives Chat → Rentals → Chat, refresh and Back/Forward", async ({ page, browser }) => {
+  test("the selected saved chat survives Chat → Rentals → Events → Chat, refresh and Back/Forward", async ({ page, browser }) => {
     test.setTimeout(300_000);
     sofia = await createThrowawayIdentity("qa-san1413");
     const chatA = await seedChat(sofia.userId, "Laureles apartment", `san1413-a-${randomUUID().slice(0, 8)}`);
@@ -141,13 +167,7 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
     expect(titled.error).toBeNull();
     expect(titled.data?.metadata).toEqual(seededMetadata);
 
-    // ── Chat → Rentals → Chat (the same tab, real navigation) ────────────────
-    await page.getByTestId("nav-rentals-link").first().click();
-    await page.waitForURL("**/rentals", { timeout: 30_000 });
-    await page.goBack();
-    await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 20_000, message: "Back returns to Chat" })
-      .toBe("/chat");
+    await browseRentalsAndEventsThenReturnToChat(page);
     await expect(rail(page), "returning keeps the same conversation").toHaveAttribute(
       "data-active-thread-id", chatA.threadId, { timeout: 20_000 });
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
@@ -159,6 +179,19 @@ test.describe("SAN-1413 saved chat continuity on a real signed-in deployment", (
       "data-active-thread-id", chatA.threadId, { timeout: 30_000 });
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
     await expectOnlyThisChat(page, chatA, chatB);
+
+    // Separate browser tabs share sign-in, not conversation selection.
+    const otherTab = await page.context().newPage();
+    try {
+      await otherTab.goto(new URL("/chat", baseUrl).toString(), { waitUntil: "domcontentloaded" });
+      await openSaved(otherTab, chatB.threadId);
+      await expectOnlyThisChat(otherTab, chatB, chatA);
+      await expect(rail(page), "the original tab still has A selected")
+        .toHaveAttribute("data-active-thread-id", chatA.threadId);
+      await expectOnlyThisChat(page, chatA, chatB);
+    } finally {
+      await otherTab.close();
+    }
 
     // ── A → B → Back → Forward ───────────────────────────────────────────────
     await openSaved(page, chatB.threadId);

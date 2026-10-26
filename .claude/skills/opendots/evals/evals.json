@@ -1,0 +1,198 @@
+{
+  "skill_name": "opendots",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A partner edits the AI-generated café name, clicks Accept, and reloads. Explain the smallest OpenDots-inspired review flow and files to inspect.",
+      "expected_output": "Map OpenDots review card and decision to existing partner flow, save through authorized MDE endpoint, read back persisted value. Acceptance criteria: References PageReviewCard.tsx and page-review-decision.ts; Checks proposal identity, changed draft and receipt readback; Never claims a save happened before persisted confirmation.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "A retry repeats a profile suggestion after a response timeout; an older edit is already stored. Prevent duplicates and stale overwrites.",
+      "expected_output": "Use existing MDE server action/RPC and idempotency/version checks modeled on OpenDots, not SQLite copied schema. Acceptance criteria: Same-draft retry recovers saved receipt; Modified draft yields conflict; canceled suggestion writes nothing; No second editor store, ownership gate or unsafe approval system.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "The owner rejects an AI-suggested event description. Does the product need a publishing approval gate to handle Ignore?",
+      "expected_output": "Explain Ignore/Cancel as review interaction with no writes; existing development publishing/booking remains unblocked. Acceptance criteria: Distinguishes optional AI user review from business certification; Requires server-side tenant auth on eventual writes; Reports no false data or saved-action success.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 4,
+      "prompt": "OpenDots PageReviewCard has no Edit button. An MDE café owner edits the suggested text in the existing form then confirms. Which code should handle editing and saving?",
+      "expected_output": "PageReviewCard models approval/decline/recovery only; edit in MDE existing partner form. Bind edited final draft to proposalId/draftHash, save through SAN-814 authenticated RPC and read back real result.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 5,
+      "prompt": "An old OpenDots receipt without reviewDraft is returned when an AI suggestion changed. Can MDE reuse that permissive behavior for a new proposal?",
+      "expected_output": "No: legacy compatibility exception, not acceptable for new MDE saves. Reject mismatched same-ID drafts; require exact final draft binding, server version check, previous committed result readback and tenant authorization.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 6,
+      "prompt": "A response times out after server committed an event. The UI generates status saved but there is no savedId. Prove the correct OpenDots action.",
+      "expected_output": "Schema-valid saved status alone is not commit proof. Resolve existing canonical event write, fetch real saved ID/version/readback, retry same draft idempotently; never issue duplicate irreversible write or fabricate receipt.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-opendots",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "opendots"
+        },
+        {
+          "id": "called-opendots",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "opendots"
+        },
+        {
+          "id": "read-opendots",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "opendots"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import { activeModelIdFromEnv } from "@/lib/ai-model-ids";
 import { recordMastraRun, type AgentType, type AiRunStatus } from "./ai-runs";
 
 export interface AgentLoggingMeta {
@@ -56,7 +56,7 @@ export async function logAgentRunForTurn(opts: TurnLogInput): Promise<void> {
     error_message: opts.errorMessage ?? null,
     error_type: opts.errorType ?? null,
     duration_ms: opts.durationMs,
-    model_name: opts.modelName ?? GEMINI_FLASH_MODEL_ID,
+    model_name: opts.modelName ?? activeModelIdFromEnv(),
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens,

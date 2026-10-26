@@ -8,7 +8,8 @@ import {
   fetchRestaurantVoteTarget,
   type RestaurantContestOption,
 } from "@/lib/restaurants/fetch-restaurant-by-id";
-import { RestaurantVotePanel } from "@/components/restaurants/restaurant-vote-panel";
+import { RestaurantVotePanel, type ContestWindow } from "@/components/restaurants/restaurant-vote-panel";
+import { contestState } from "@/lib/restaurants/contest-state";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function RestaurantDetailPage({
   if (lookup.status === "not_found") notFound();
   if (lookup.status === "error") {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-xl font-semibold">We could not load this restaurant</h1>
         <p className="mt-2 text-sm text-muted-foreground">This is a temporary problem, not a missing restaurant. Please try again.</p>
         <Link className="mt-4 inline-block text-sm font-medium underline" href="/restaurants">Back to restaurants</Link>
@@ -39,8 +40,9 @@ export default async function RestaurantDetailPage({
 
   const { restaurant } = lookup;
   const meta = [restaurant.neighborhood, restaurant.cuisine].filter(Boolean).join(" · ");
-  // priceTier/rating are derived estimates from the catalog; never present them as confirmed facts.
-  const hasRating = typeof restaurant.rating === "number" && restaurant.rating > 0;
+  // priceTier/rating come from the catalog; unknown values stay unstated, never zero.
+  const catalogRating =
+    typeof restaurant.rating === "number" && restaurant.rating > 0 ? restaurant.rating : null;
   const hasCoords = restaurant.latitude != null && restaurant.longitude != null;
   // SAN-1483 supplies the canonical contest entry; null keeps the honest not-open state.
   // A failing vote lookup must never take down the whole restaurant page.
@@ -50,18 +52,39 @@ export default async function RestaurantDetailPage({
   let contestOptions: RestaurantContestOption[] = [];
   try {
     voteTarget = await fetchRestaurantVoteTarget(restaurant.id, selectedContestId);
-    if (!voteTarget && !selectedContestId) {
-      contestOptions = await fetchRestaurantContestOptions(restaurant.id);
-    }
+    // One read covers both the ambiguous-contest chooser and the selected contest's real
+    // window. A draft/closed contest must never render an actionable Vote that can only fail.
+    contestOptions = await fetchRestaurantContestOptions(restaurant.id);
   } catch (err) {
     console.error("[restaurant] vote target lookup threw:", err instanceof Error ? err.message : err);
   }
+  const selectedContestOption = voteTarget
+    ? contestOptions.find(
+        (option) => option.contestId.toLowerCase() === voteTarget!.contestId.toLowerCase(),
+      )
+    : undefined;
+  const contestWindow: ContestWindow | null = selectedContestOption
+    ? {
+        state: contestState({
+          id: selectedContestOption.contestId,
+          slug: "",
+          title: selectedContestOption.contestTitle,
+          description: null,
+          status: selectedContestOption.status as "draft" | "live" | "closed" | "archived",
+          startsAt: selectedContestOption.startsAt,
+          endsAt: selectedContestOption.endsAt,
+          coverUrl: null,
+        }),
+        opensAt: selectedContestOption.startsAt,
+        closesAt: selectedContestOption.endsAt,
+      }
+    : null;
   const mapHref =
     restaurant.mapsUrl ??
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-6">
       <Link className="text-sm text-muted-foreground underline" href="/restaurants">Restaurants</Link>
       <div className="mt-4 overflow-hidden rounded-xl border">
         {restaurant.imageUrl ? (
@@ -84,7 +107,7 @@ export default async function RestaurantDetailPage({
         <h2 className="text-lg font-semibold" id="restaurant-details">Restaurant details</h2>
         <p className="mt-1 text-xs text-muted-foreground" data-testid="detail-estimates">
           {restaurant.priceTier ? "Price " + restaurant.priceTier + " (estimated)" : "Price not available"}
-          {hasRating ? " · Rated " + restaurant.rating.toFixed(1) + " in catalog" : " · Rating not available"}
+          {catalogRating != null ? " · Rated " + catalogRating.toFixed(1) + " in catalog" : " · Rating not available"}
         </p>
         {restaurant.aiSummary ? <p className="mt-3 text-sm text-foreground">{restaurant.aiSummary}</p> : null}
       </section>
@@ -94,7 +117,7 @@ export default async function RestaurantDetailPage({
         {/* SAN-1483 supplies the canonical contest entry for this restaurant. Until it
             lands there is no honest target, so the panel states that instead of inventing one. */}
         <div className="mt-3">
-          {contestOptions.length > 1 ? (
+          {!selectedContestId && contestOptions.length > 1 ? (
             <div data-testid="vote-contest-chooser">
               <p className="text-sm text-foreground">
                 {restaurant.name} is competing in more than one contest. Choose where to vote.
@@ -114,7 +137,11 @@ export default async function RestaurantDetailPage({
               </ul>
             </div>
           ) : (
-            <RestaurantVotePanel restaurantName={restaurant.name} voteTarget={voteTarget} />
+            <RestaurantVotePanel
+              contestWindow={contestWindow}
+              restaurantName={restaurant.name}
+              voteTarget={voteTarget}
+            />
           )}
         </div>
       </section>

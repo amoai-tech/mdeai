@@ -7857,6 +7857,10 @@ export type Database = {
       }
     }
     Functions: {
+      partner_profile_patch: {
+        Args: { p_patch: Json; p_partner_id?: string | null }
+        Returns: Json
+      }
       admin_contest_create: {
         Args: {
           p_actor: string
@@ -7922,6 +7926,14 @@ export type Database = {
       }
       vote_restaurant_contest_options: {
         Args: { p_restaurant_id: string }
+        Returns: Json
+      }
+      contest_public_list: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      contest_public_get: {
+        Args: { p_ref: string }
         Returns: Json
       }
       _postgis_deprecate: {

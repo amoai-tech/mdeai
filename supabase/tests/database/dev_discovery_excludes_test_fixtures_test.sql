@@ -2,7 +2,7 @@
 -- Proves: ordinary signed-in users read ordinary development listings (including imported external
 -- candidates and test_mode MDE-managed development inventory) but not explicit test fixtures,
 -- private or internal records; the authorized tester and an administrator still read the fixture;
--- anonymous visitors see ordinary development inventory only; launch grants nothing extra.
+-- anonymous visitors see ordinary development inventory (including inactive non-private rows); launch grants nothing extra.
 --
 -- The rule lives in ONE place: rental_listing_is_public() via anyone_can_view_active_apartments.
 -- Run with: supabase test db
@@ -49,8 +49,8 @@ select is((select count(*)::int from public.apartments where id = '00000000-0000
   'development: an ordinary signed-in user reads an ordinary development listing (no moderation, owner, rights or verification needed)');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a002'), 1,
   'development: and an imported external candidate');
-select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a007'), 0,
-  'development: unrelated user cannot see another broker inactive draft');
+select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a007'), 1,
+  'development: ordinary inactive listing remains discoverable without business status gates');
 select is((select count(*)::int from public.apartments where id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but not an explicit test fixture');
 select is((select count(*)::int from public.apartments where id = '00000000-0000-4000-8000-00000053a003'), 0,
@@ -78,8 +78,8 @@ reset role;
 -- ── anonymous visitors: ordinary development listings are public through the canonical rule -----------------
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006', '00000000-0000-4000-8000-00000053a007')), 3,
-  'development: anonymous visitor reads active development records, not inactive drafts');
+select is((select count(*)::int from public.apartments where id in ('00000000-0000-4000-8000-00000053a001', '00000000-0000-4000-8000-00000053a002', '00000000-0000-4000-8000-00000053a006', '00000000-0000-4000-8000-00000053a007')), 4,
+  'development: anonymous visitor reads ordinary development inventory including inactive rows');
 select is((select count(*)::int from public.apartments where id::text in ('00000000-0000-4000-8000-00000053a003', '00000000-0000-4000-8000-00000053a004', '00000000-0000-4000-8000-00000053a005') or id = current_setting('mde.fx_fixture')::uuid), 0,
   'development: but never a test fixture, a kind-marked fixture, a private or an internal record');
 reset role;

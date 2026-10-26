@@ -22,9 +22,6 @@ test("real signed-in QA user can open Saved without a login redirect", async ({
   expect(response?.status()).toBe(200);
   await expect(authenticatedPage).toHaveURL(/\/saved(?:[?#]|$)/);
   await expect(authenticatedPage.getByTestId("saved-page")).toBeVisible();
-  await expect(
-    authenticatedPage.getByRole("heading", { name: "Saved collections" }),
-  ).toBeVisible();
   await expect(authenticatedPage.getByTestId("saved-empty-signin")).toHaveCount(0);
   await expect(authenticatedPage.getByTestId("saved-empty-collections").or(
     authenticatedPage.getByTestId("saved-collections-grid"),

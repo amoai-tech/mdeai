@@ -3,7 +3,7 @@ import fs from "node:fs";
 import config from "../../../playwright.config";
 
 describe("SAN-1341 Playwright architecture", () => {
-  it("separates deterministic, cross-browser, and production projects", () => {
+  it("separates local browsers from explicitly opted-in production projects", () => {
     const names = (config.projects ?? []).map((project) => project.name);
     expect(names).toEqual(
       expect.arrayContaining([
@@ -14,9 +14,10 @@ describe("SAN-1341 Playwright architecture", () => {
         "critical-cross-browser-chromium",
         "critical-cross-browser-firefox",
         "critical-cross-browser-webkit",
-        "prod-smoke",
       ]),
     );
+    // Direct local discovery cannot even select production by accident.
+    expect(names).not.toContain("prod-smoke");
   });
 
   it("does not impose production-scale serialization globally", () => {
@@ -57,13 +58,10 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(spec).not.toContain("waitForTimeout(");
   });
 
-  it("keeps production smoke serialized with a long timeout", () => {
-    const prod = (config.projects ?? []).find(
-      (project) => project.name === "prod-smoke",
-    );
-    expect(prod).toBeDefined();
-    expect(prod?.workers).toBe(1);
-    expect(prod?.timeout).toBeGreaterThanOrEqual(300_000);
+  it("keeps opted-in production smoke serialized with a long timeout", () => {
+    const source = fs.readFileSync("playwright.config.ts", "utf8");
+    expect(source).toMatch(/name: "prod-smoke"[\s\S]*?workers: 1,[\s\S]*?timeout: 600_000/);
+    // The actual opt-in/omission is exercised by playwright-local-safety.test.mjs.
   });
   it("mounts a deterministic chat adapter without CopilotKit transport for local PR tests", () => {
     const panel = fs.readFileSync(
@@ -112,11 +110,29 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(provider).toContain("isDeterministicE2E()");
   });
 
-  it("does not retain browser traces for live production smoke", () => {
-    const prod = (config.projects ?? []).find(
-      (project) => project.name === "prod-smoke",
+  it("retains a production journey trace only on failure, via its workflow", () => {
+    const source = fs.readFileSync("playwright.config.ts", "utf8");
+    // Opted-in production projects keep private trace capture off by default.
+    expect(source).toMatch(/name: "prod-smoke"[\s\S]*?trace: "off"/);
+    // The nightly journey opts into failure-only evidence and disables the CI retry that would
+    // repeat a real write journey. Pin that here so the policy cannot drift silently.
+    const workflow = fs.readFileSync(
+      ".github/workflows/prod-renter-journey.yml",
+      "utf8",
     );
-    expect(prod?.use?.trace).toBe("off");
+    expect(workflow).toContain("--trace=retain-on-failure");
+    // Playwright has no --screenshot CLI flag; screenshots are config-owned and a trace already
+    // contains them. Passing it made the workflow die before any test ran.
+    expect(workflow).not.toContain("--screenshot");
+    expect(workflow).toContain("--retries=0");
+    expect(workflow).toContain('PW_SKIP_WEBSERVER: "1"');
+    expect(workflow).not.toMatch(/--trace=on\b/);
+    // The evidence upload must survive a timeout or a cancelled job, and must never publish raw
+    // browser state: this repository is public, so traces are encrypted or not uploaded at all.
+    expect(workflow).toMatch(/Upload encrypted failure artifacts[\s\S]{0,220}if: always\(\)/);
+    expect(workflow).toContain("PROD_JOURNEY_ARTIFACT_KEY");
+    expect(workflow).toContain("openssl enc -aes-256-cbc");
+    expect(workflow).not.toMatch(/\n\s+test-results\/\n/);
   });
   it("keeps auth and deterministic cross-browser contracts isolated", () => {
     for (const name of [
@@ -261,8 +277,11 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(prod).toContain('tag: ["@prod", "@smoke"]');
   });
 
-  it("never reuses an existing web server in CI", () => {
+  it("never silently reuses an existing worktree server", () => {
     const configText = fs.readFileSync("playwright.config.ts", "utf8");
-    expect(configText).toContain("reuseExistingServer: !process.env.CI");
+    expect(configText).toContain('reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1"');
+    if (!process.env.PW_REUSE_WEBSERVER && config.webServer && !Array.isArray(config.webServer)) {
+      expect(config.webServer.reuseExistingServer).toBe(false);
+    }
   });
 });

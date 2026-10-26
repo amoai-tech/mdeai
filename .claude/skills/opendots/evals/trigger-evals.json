@@ -1,0 +1,56 @@
+[
+  {
+    "id": "opendots-1",
+    "prompt": "The signup AI suggests a café description; add Accept, Edit and Ignore with real persisted receipt on reload, based on OpenDots.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-2",
+    "prompt": "Adapt OpenDots saved-review recovery so the same tool call and draft cannot create two event changes.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-3",
+    "prompt": "Review an AI-edited profile draft for stale version conflicts and let the partner amend it before saving.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-4",
+    "prompt": "Create a new table and RLS policy for property addresses; no AI review or suggestion UI is involved.",
+    "should_trigger": false,
+    "expected_owner": "supabase"
+  },
+  {
+    "id": "opendots-5",
+    "prompt": "Troubleshoot the CopilotKit /api/copilotkit stream returning 401 before authentication.",
+    "should_trigger": false,
+    "expected_owner": "copilotkit"
+  },
+  {
+    "id": "opendots-6",
+    "prompt": "Redesign the café list page spacing and imagery without any AI proposals or editing workflow.",
+    "should_trigger": false,
+    "expected_owner": "frontend-design"
+  },
+  {
+    "id": "opendots-7",
+    "prompt": "A café owner edits an AI-proposed description, commits it, then loses the HTTP response. Restore the saved OpenDots receipt.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-8",
+    "prompt": "Compare an old review receipt with no draft snapshot against a changed OpenDots proposal.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-9",
+    "prompt": "Improve standalone restaurant card photos without AI suggestions or user-reviewed actions.",
+    "should_trigger": false,
+    "expected_owner": "frontend-design"
+  }
+]

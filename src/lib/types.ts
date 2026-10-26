@@ -25,6 +25,9 @@ export type ConciergeWorkingMemory = {
     title: string;
     neighborhood: string;
     nightly_price: number;
+    /** Amenities exactly as the listing records them. Missing or empty means "not specified",
+     *  never "does not have it". */
+    amenities?: string[];
   }>;
   selectedListingId?: string;
   lastEventQuery?: {
@@ -59,6 +62,7 @@ export {
   mergeEventDraft,
   activeHostWizardStep,
   isDraftReadyForPublish,
+  isValidEventDraftDate,
   type EventDraftState,
 } from "./types/event-draft";
 

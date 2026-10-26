@@ -49,24 +49,38 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
   });
 
   test("A then B, Back restores A, Forward returns to B", async ({ page }) => {
+    // Cold Next.js compilation can consume most of the default 60s budget in CI.
+    // Keep the history assertions strict; only allow the same startup budget as
+    // the sibling refresh/navigation journey.
+    test.setTimeout(100_000);
     await gotoDeterministicChat(page);
     const nav = rail(page);
 
+    await expect(threadItem(page, CHAT_A), "the mocked saved-chat list loads before selection")
+      .toBeVisible({ timeout: 15_000 });
     await threadItem(page, CHAT_A).click();
     await expect(nav).toHaveAttribute("data-active-thread-id", CHAT_A);
     await threadItem(page, CHAT_B).click();
     await expect(nav).toHaveAttribute("data-active-thread-id", CHAT_B);
 
-    await page.goBack();
+    // The selection uses history.pushState on the SAME /chat document.
+    // Playwright page.goBack() defaults to waiting for a full page "load", which
+    // never fires for a same-document popstate and timed out in CI (#507).
+    // Drive native Back/Forward and wait for the observable thread selection.
+    await page.evaluate(() => window.history.back());
     await expect(nav, "one Back press restores the previous saved chat").toHaveAttribute(
       "data-active-thread-id", CHAT_A, { timeout: 15_000 });
 
-    await page.goForward();
+    await page.evaluate(() => window.history.forward());
     await expect(nav, "Forward returns to the chat that was open after it").toHaveAttribute(
       "data-active-thread-id", CHAT_B, { timeout: 15_000 });
   });
 
   test("refresh, leaving to Rentals and re-entering /chat keep the same saved chat", async ({ page }) => {
+    // The first /rentals server component cold-compiles and handles the deliberately
+    // unavailable database in PR CI. Allow that route budget without raising the
+    // timeout for unrelated navigation and history tests.
+    test.setTimeout(100_000);
     await gotoDeterministicChat(page);
     const nav = rail(page);
     await threadItem(page, CHAT_B).click();
@@ -79,8 +93,10 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
       "data-active-thread-id", CHAT_B, { timeout: 20_000 });
 
     await page.getByTestId("nav-rentals-link").first().click();
-    await page.waitForURL("**/rentals", { timeout: 20_000 });
-    await page.goBack();
+    // React navigation is complete when the URL commits; waiting for full load
+    // includes unrelated third-party assets and the cold dev-server build.
+    await page.waitForURL("**/rentals", { waitUntil: "commit", timeout: 45_000 });
+    await page.goBack({ waitUntil: "domcontentloaded" });
     await expect(nav, "returning from Rentals keeps the conversation").toHaveAttribute(
       "data-active-thread-id", CHAT_B, { timeout: 20_000 });
 
