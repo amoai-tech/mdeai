@@ -412,14 +412,22 @@ function LiveComposer({
     // Give the agent the page the renter is on: the question's own constraints first, then the
     // open apartment. Written before the send so the answer describes these apartments.
     const questionFilters = lastQuery.current.lastRentalQuery ?? {};
-    setState((prev) => ({
-      ...prev,
-      ...(context?.selectedListingId ? { selectedListingId: context.selectedListingId } : {}),
-      lastRentalQuery: {
-        ...prev.lastRentalQuery,
-        ...questionFilters,
-      },
-    }));
+    setState((prev) => {
+      const next = {
+        ...prev,
+        lastRentalQuery: {
+          ...prev.lastRentalQuery,
+          ...questionFilters,
+        },
+      };
+      // An explicitly cleared Details selection must not leave the previous
+      // apartment in the next agent turn's working memory (SAN-737).
+      if (context && "selectedListingId" in context) {
+        if (context.selectedListingId) next.selectedListingId = context.selectedListingId;
+        else delete next.selectedListingId;
+      }
+      return next;
+    });
 
     abortRef.current?.abort();
     const abort = new AbortController();
