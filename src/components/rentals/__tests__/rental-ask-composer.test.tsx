@@ -68,7 +68,7 @@ vi.mock("@/lib/concierge-error-store", () => ({
 }));
 vi.mock("@/lib/deterministic-e2e", () => ({ isDeterministicE2E: () => false }));
 
-import { RentalAskComposer } from "../rental-ask-composer";
+import { RentalAskComposer, type RentalAskDetailsOutcome } from "../rental-ask-composer";
 
 function type(text: string) {
   fireEvent.change(screen.getByLabelText("Ask MDE about rentals"), { target: { value: text } });
@@ -126,6 +126,41 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("RentalAskComposer (SAN-1421)", () => {
+  it("opens the first apartment locally for the exact details command, without a model search", async () => {
+    const onResults = vi.fn();
+    const onOpenDetails = vi.fn((): RentalAskDetailsOutcome => ({ ok: true }));
+    render(<RentalAskComposer onResults={onResults} onOpenDetails={onOpenDetails} />);
+    type("Show me the details.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(onOpenDetails).toHaveBeenCalledWith({ index: 1 });
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(onResults).not.toHaveBeenCalled();
+    await waitFor(() => expect(draftValue()).toBe(""));
+  });
+
+  it("opens the named position and refuses a position that is not on the page", async () => {
+    const onOpenDetails = vi.fn(
+      (target: { index?: number }): RentalAskDetailsOutcome =>
+        target.index === 2
+          ? { ok: true }
+          : { ok: false, message: `There is no apartment ${target.index} in the current results.` },
+    );
+    render(<RentalAskComposer onOpenDetails={onOpenDetails} />);
+
+    type("Show me the details for the second apartment.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onOpenDetails).toHaveBeenCalledWith({ index: 2 });
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+
+    type("Show me the details for the tenth apartment.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onOpenDetails).toHaveBeenLastCalledWith({ index: 10 });
+    expect(await screen.findByTestId("rental-ask-error")).not.toBeNull();
+    expect(screen.getByTestId("rental-ask-error").textContent).toContain("There is no apartment 10");
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
   it("sends one message on Enter and clears the box on success", async () => {
     render(<RentalAskComposer />);
     type("  cheaper two-bedroom apartments in Laureles  ");

@@ -50,7 +50,7 @@ export function RentalDetailsFrontendTool({
       // 100-run depth limit while the composer stays busy.
       followUp: false,
       description:
-        "Open the in-page Details panel for an apartment already in the current rental results. Use when the renter asks to see or open the details of an apartment, the first/selected one, or a result by id. Do not use for a new search.",
+        "Open the in-page Details panel for an apartment already in the current rental results. Call this immediately when the renter says 'show me the details', 'open details', or asks for the first/selected apartment's details. This is a UI action, not a search: do not call search-rentals for it. Do not use it to find new apartments.",
       parameters: openRentalDetailsParams,
       handler: async ({ listingId, index }) => {
         const current = resultsRef.current;
