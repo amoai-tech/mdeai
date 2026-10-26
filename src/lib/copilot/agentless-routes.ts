@@ -24,9 +24,10 @@ export function isAgentlessRoute(pathname: string): boolean {
     pathname === "/signup" ||
     pathname.startsWith("/auth/") ||
     pathname === "/chat" ||
-    pathname === "/partners/profile" ||
     pathname === "/me/tickets" ||
     pathname.startsWith("/me/tickets/") ||
+    pathname === "/partners/profile" ||
+    pathname === "/partners/signup" ||
     pathname === "/host/event" ||
     pathname.startsWith("/host/event/") ||
     isHostOsShellRoute(pathname) ||

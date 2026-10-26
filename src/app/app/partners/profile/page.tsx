@@ -50,6 +50,7 @@ export default async function AppPartnerProfilePage({
   return (
     <div data-testid="app-partner-profile">
       <PartnerProfileContent
+          userId={user.id}
         profile={profile}
         basePath="/app/partners/profile"
       />

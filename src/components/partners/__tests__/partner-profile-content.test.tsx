@@ -3,6 +3,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PartnerProfileContent } from "@/components/partners/partner-profile-content";
+
+vi.mock("@/components/partners/partner-workspace-chat", () => ({
+  PartnerWorkspaceChat: ({ userId, partnerId }: { userId: string; partnerId: string }) => (
+    <div data-testid="business-chat" data-user-id={userId} data-partner-id={partnerId} />
+  ),
+}));
 import type { PartnerProfileLoad } from "@/lib/partners/partner-profile-load";
 
 vi.mock("next/link", () => ({
@@ -38,7 +44,7 @@ const SUR = {
 };
 
 function renderProfile(profile: PartnerProfileLoad, basePath: string) {
-  return render(<PartnerProfileContent profile={profile} basePath={basePath} />);
+  return render(<PartnerProfileContent profile={profile} basePath={basePath} userId="test-authenticated-user" />);
 }
 
 afterEach(cleanup);
@@ -74,6 +80,8 @@ describe("PartnerProfileContent (SAN-1579)", () => {
       screen.getByRole("link", { name: "Café Norte" }).getAttribute("aria-current"),
     ).toBe("page");
     expect(screen.getByTestId("partner-profile-form")).toBeTruthy();
+    expect(screen.getByTestId("business-chat").getAttribute("data-partner-id")).toBe(NOR.id);
+    expect(screen.getByTestId("business-chat").getAttribute("data-user-id")).toBe("test-authenticated-user");
     expect(screen.getByRole("button", { name: /save profile/i })).toBeTruthy();
   });
 

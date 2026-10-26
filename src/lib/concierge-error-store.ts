@@ -22,10 +22,9 @@ export function isExpectedGuestStartup401(
   isAuthenticated: boolean,
   sessionLoading = false,
 ): boolean {
-  // An unresolved session must never suppress an error: on a cold route the
-  // fetch fails before getUser() resolves, and a real run failure arriving in
-  // that window would disappear. Report until auth settles; only then can a
-  // 401 be confidently called "expected guest".
+  // An unresolved session cannot be classified as a guest: a cold 401 may
+  // precede getUser(). The caller defers only the known runtime-info 401;
+  // genuine run failures stay visible immediately.
   if (sessionLoading) return false;
   if (isAuthenticated || !event || typeof event !== "object") return false;
   const candidate = event as { code?: unknown; context?: unknown; error?: unknown };
@@ -41,19 +40,20 @@ export function isExpectedGuestStartup401(
   return statusFromContext === 401 || statusFromError === 401;
 }
 
-/** Decide what to do with a runtime-info 401 while Supabase auth resolves.
- * Never discard a possibly signed-in user's failed runtime lookup before
- * their identity is known; the caller defers and replays it after settlement.
- * An actual failed AI turn is never deferred or ignored.
+/**
+ * A guest's expected runtime-info 401 can arrive before getUser() finishes.
+ * Defer only that startup probe; once auth settles, discard it for a guest
+ * or report it for a signed-in user. Never defer a real agent-run failure.
  */
-export function classifyConciergeProviderError(
+export function classifyConciergeStartupError(
   event: unknown,
   isAuthenticated: boolean,
   sessionLoading: boolean,
-): "defer" | "ignore" | "report" {
-  if (!isExpectedGuestStartup401(event, false)) return "report";
-  if (sessionLoading) return "defer";
-  return isAuthenticated ? "report" : "ignore";
+): "ignore" | "defer" | "report" {
+  if (sessionLoading && !isAuthenticated && isExpectedGuestStartup401(event, false)) {
+    return "defer";
+  }
+  return isExpectedGuestStartup401(event, isAuthenticated, sessionLoading) ? "ignore" : "report";
 }
 
 export type ConciergeErrorSnapshot = {

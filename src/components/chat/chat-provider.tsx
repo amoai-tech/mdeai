@@ -19,7 +19,7 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { classifyConciergeProviderError, reportConciergeError } from "@/lib/concierge-error-store";
+import { classifyConciergeStartupError, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -212,16 +212,6 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
-  // The runtime info 401 can arrive before Supabase resolves the session.
-  // Hold only that known startup probe; a signed-in user still sees it as an
-  // error once their identity is confirmed, while a guest does not.
-  const pendingRuntimeInfo401 = useRef<{ threadId: string | undefined } | null>(null);
-  useEffect(() => {
-    if (sessionLoading || pendingRuntimeInfo401.current === null) return;
-    const { threadId: failedThread } = pendingRuntimeInfo401.current;
-    pendingRuntimeInfo401.current = null;
-    if (user) reportConciergeError(failedThread);
-  }, [sessionLoading, user]);
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
   // Remember whether this tab's thread was already saved when /chat mounted;
   // when the user returns after visiting Rentals, it is now safe to replay.
@@ -232,17 +222,27 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
+  // The runtime-info 401 may arrive before the guest session finishes loading.
+  // Don't show a false failed-turn notice or hide a signed-in auth failure.
+  const pendingStartup401 = useRef<string | undefined | null>(null);
+  useEffect(() => {
+    if (sessionLoading || pendingStartup401.current === null) return;
+    const failedThreadId = pendingStartup401.current;
+    pendingStartup401.current = null;
+    if (user && failedThreadId === threadId) reportConciergeError(failedThreadId);
+  }, [sessionLoading, user, threadId]);
+
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
       onError={(event) => {
-        const decision = classifyConciergeProviderError(event, Boolean(user), sessionLoading);
+        const decision = classifyConciergeStartupError(event, Boolean(user), sessionLoading);
+        if (decision === "ignore") return;
         if (decision === "defer") {
-          pendingRuntimeInfo401.current = { threadId };
+          pendingStartup401.current = threadId;
           return;
         }
-        if (decision === "ignore") return;
         reportConciergeError(threadId);
       }}
     >

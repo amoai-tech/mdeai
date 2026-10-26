@@ -14,6 +14,9 @@ const authorizeMock = vi.hoisted(() =>
 const resolveRequestedThreadMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ kind: "none" })),
 );
+const partnerBindingMock = vi.hoisted(() => vi.fn());
+const loadPartnerRuntimeContextMock = vi.hoisted(() => vi.fn());
+const setPartnerRuntimeContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@copilotkit/runtime/v2", () => ({
   CopilotRuntime: vi.fn(function CopilotRuntime() {
@@ -34,6 +37,13 @@ vi.mock("@/lib/copilotkit-auth", () => ({
 }));
 vi.mock("@/lib/copilotkit-thread-ownership", () => ({
   resolveRequestedThread: resolveRequestedThreadMock,
+}));
+vi.mock("@/lib/partners/partner-thread-binding", () => ({
+  enforcePartnerThreadBinding: partnerBindingMock,
+}));
+vi.mock("@/mastra/lib/partner-request-context", () => ({
+  loadPartnerRuntimeContext: loadPartnerRuntimeContextMock,
+  setPartnerRuntimeContext: setPartnerRuntimeContextMock,
 }));
 vi.mock("@/lib/copilotkit-distributed-rate-limit", () => ({
   checkCopilotKitDistributedIpHardCeiling: (...args: unknown[]) => ipHardCeilingMock(...args),
@@ -75,6 +85,11 @@ function setupStandardMocks() {
   distributedRateLimitMock.mockReset();
   authorizeMock.mockReset();
   resolveRequestedThreadMock.mockReset();
+  partnerBindingMock.mockReset();
+  partnerBindingMock.mockResolvedValue(null);
+  loadPartnerRuntimeContextMock.mockReset();
+  loadPartnerRuntimeContextMock.mockResolvedValue(null);
+  setPartnerRuntimeContextMock.mockReset();
 
   // Authorized by default: this suite tests the rate-limit/try-catch ordering,
   // not the authorization decision, which has its own suite.
@@ -196,9 +211,71 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
     // Identity must be established before the authorization decision is taken.
     const getUserOrder = getUserMock.mock.invocationCallOrder[0]!;
     const authorizeOrder = authorizeMock.mock.invocationCallOrder[0]!;
+    const bindingOrder = partnerBindingMock.mock.invocationCallOrder[0]!;
     const handleOrder = handleRequestMock.mock.invocationCallOrder[0]!;
     expect(getUserOrder).toBeLessThan(authorizeOrder);
-    expect(authorizeOrder).toBeLessThan(handleOrder);
+    expect(authorizeOrder).toBeLessThan(bindingOrder);
+    expect(bindingOrder).toBeLessThan(handleOrder);
+  });
+
+  it("rejects a different-business binding before the runtime executes", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    loadPartnerRuntimeContextMock.mockResolvedValue({ userId: "user-a", partnerId: "cafe-a" });
+    resolveRequestedThreadMock.mockResolvedValue({
+      kind: "existing",
+      threadId: "business-a-thread",
+      resourceId: "user-a",
+    });
+    partnerBindingMock.mockResolvedValueOnce(
+      Response.json({ error: "This conversation belongs to a different business" }, { status: 403 }),
+    );
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/run",
+      params: { agentId: "partnerAgent" },
+      body: { threadId: "business-a-thread" },
+    })) as never);
+    expect(res.status).toBe(403);
+    expect(partnerBindingMock).toHaveBeenCalledTimes(1);
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("binds partner run without a selector to the sole authorized membership", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    loadPartnerRuntimeContextMock.mockResolvedValue({ userId: "user-a", partnerId: "sole-business" });
+    resolveRequestedThreadMock.mockResolvedValue({ kind: "new", threadId: "new-business-thread" });
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/run",
+      params: { agentId: "partnerAgent" },
+      body: { threadId: "new-business-thread", context: [] },
+    })) as never);
+    expect(res.status).toBe(200);
+    expect(loadPartnerRuntimeContextMock).toHaveBeenCalledWith(expect.anything(), "user-a", undefined);
+    expect(partnerBindingMock).toHaveBeenCalledWith(
+      { kind: "new", threadId: "new-business-thread" }, "user-a", "sole-business",
+    );
+    expect(setPartnerRuntimeContextMock).toHaveBeenCalled();
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects ambiguous/no partner membership before binding or Mastra execution", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "user-a" } } });
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/connect", params: { agentId: "partnerAgent" },
+      body: { threadId: "new-business-thread", context: [] },
+    })) as never);
+    expect(res.status).toBe(403);
+    expect(partnerBindingMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an anonymous partner agent without a selector before runtime execution", async () => {
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/run", params: { agentId: "partnerAgent" },
+      body: { threadId: "anon-thread", context: [] },
+    })) as never);
+    expect(res.status).toBe(401);
+    expect(partnerBindingMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).not.toHaveBeenCalled();
   });
 
   it("passes the resolved thread owner into the auth decision", async () => {

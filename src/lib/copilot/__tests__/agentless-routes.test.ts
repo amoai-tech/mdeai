@@ -34,12 +34,23 @@ describe("isAgentlessRoute", () => {
       "/host/rentals/listings",
       "/host/rentals/onboarding",
       "/partners/profile",
+      "/partners/signup",
       "/me/tickets",
       "/me/tickets/abc",
       "/admin",
       "/admin/contests",
       "/admin/rentals",
       "/admin/event-bookings",
+    ]) {
+      expect(isAgentlessRoute(pathname), pathname).toBe(true);
+    }
+  });
+
+  it("keeps legacy wallet list and QR detail off the discovery provider", () => {
+    for (const pathname of [
+      "/me/tickets",
+      "/me/tickets/",
+      "/me/tickets/order-123",
     ]) {
       expect(isAgentlessRoute(pathname), pathname).toBe(true);
     }
@@ -53,6 +64,8 @@ describe("isAgentlessRoute", () => {
       "/nightlife",
       "/trips",
       "/saved",
+      "/me",
+      "/me/tickets-help",
       "/host",
       "/host/rentals-report",
     ]) {

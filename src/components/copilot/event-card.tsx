@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEventCardPrice } from "@/lib/events/format-event";
+import { EVENT_TIME_ZONE, formatEventCardPrice } from "@/lib/events/format-event";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type EventCardProps = {
@@ -40,6 +40,7 @@ function formatStartsAt(iso: string) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(new Date(iso));
   } catch {
     return iso;
