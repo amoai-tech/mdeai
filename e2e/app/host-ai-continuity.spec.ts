@@ -112,6 +112,22 @@ test("SAN-1209: Host conversation restores after reload and rejects foreign user
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("host-os-chat-region")).toContainText(marker, { timeout: 45_000 });
 
+    // The transcript must be readable on a real 390px phone, not merely in
+    // the DOM underneath the persistent composer or placeholder inbox.
+    const restoredRail = page.getByTestId("host-os-chat-region");
+    const restoredMessage = restoredRail.getByText(new RegExp(marker)).first();
+    await restoredMessage.scrollIntoViewIfNeeded();
+    await expect(restoredMessage).toBeVisible();
+    const messageRect = await restoredMessage.boundingBox();
+    const composerRect = await restoredRail.locator("textarea").first().boundingBox();
+    expect(messageRect).not.toBeNull();
+    expect(composerRect).not.toBeNull();
+    expect(messageRect!.y + messageRect!.height)
+      .toBeLessThanOrEqual(composerRect!.y - 4);
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 2,
+    )).toBe(false);
+
     // Once the restored provider reconnects, it must select the original thread.
     await expect.poll(() => agentThreads.filter((t) => t === durableId).length, {
       timeout: 25_000, intervals: [500, 1000],
