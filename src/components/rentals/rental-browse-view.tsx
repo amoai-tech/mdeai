@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
@@ -13,7 +13,6 @@ import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/ren
 import {
   RentalAskComposer,
   type RentalAskDetailsOutcome,
-  type RentalAskResults,
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
@@ -22,12 +21,8 @@ import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-t
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
-import {
-  askFilterSignature,
-  clearStoredAskResults,
-  readStoredAskResults,
-  writeStoredAskResults,
-} from "@/lib/rentals/ask-results-storage";
+import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
+import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
@@ -87,25 +82,15 @@ function RentalBrowseViewInner({
   const { openScheduleViewing } = useRentalUi();
   // SAN-1421 — an answer asked for on this page replaces the list and its pins until the renter
   // clears it, so the cards always describe the question they can still see.
-  const threadId = useOptionalThreadNav()?.sessionThreadId;
+  const nav = useOptionalThreadNav();
+  // The provider uses the active saved thread when selected, not always the tab's
+  // original session ID. Keep the result cache attached to that same conversation.
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const askSignature = useMemo(
     () => askFilterSignature({ neighborhood, beds, from, through }),
     [neighborhood, beds, from, through],
   );
-  // The saved thread restores the transcript; this restores the result set it was talking about.
-  // Asked state wins; otherwise use the stored answer for this thread/filters, unless the renter
-  // explicitly cleared it. Derived during render so a late-restored thread id needs no setState.
-  const [ask, setAsk] = useState<RentalAskResults | null>(null);
-  const [cleared, setCleared] = useState(false);
-  const restoredAsk = useMemo(
-    () => (ask || cleared ? null : readStoredAskResults(threadId, askSignature)),
-    [ask, cleared, threadId, askSignature],
-  );
-  const activeAsk = ask ?? restoredAsk;
-  useEffect(() => {
-    if (activeAsk) writeStoredAskResults(threadId, askSignature, activeAsk);
-    else clearStoredAskResults(threadId);
-  }, [activeAsk, threadId, askSignature]);
+  const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
   const filterState = { neighborhood, beds, from, through };
@@ -223,10 +208,7 @@ function RentalBrowseViewInner({
         }
         askComposer={
           <RentalAskComposer
-            onResults={(next) => {
-              setCleared(false);
-              setAsk(next);
-            }}
+            onResults={acceptResults}
             onOpenDetails={openDetailsFromCommand}
             context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
           />
@@ -276,11 +258,7 @@ function RentalBrowseViewInner({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setCleared(true);
-                  setAsk(null);
-                  clearStoredAskResults(threadId);
-                }}
+                onClick={clearResults}
                 data-testid="rental-ask-answer-clear"
               >
                 Clear
@@ -343,11 +321,13 @@ function RentalBrowseViewInner({
 
 /** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
+  const nav = useOptionalThreadNav();
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
         <RentalBrowseViewInner
-          key={JSON.stringify([props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+          key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
           {...props}
         />
       </BrowseMapContextShell>

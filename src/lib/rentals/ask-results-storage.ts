@@ -1,3 +1,4 @@
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import type { RentalAskResults } from "@/components/rentals/rental-ask-composer";
 
 /**
@@ -40,7 +41,10 @@ function isAskResults(value: unknown): value is RentalAskResults {
   const candidate = value as Partial<RentalAskResults>;
   return (
     Array.isArray(candidate.results) &&
+    candidate.results.every((row) => toDetailRental(row) !== null) &&
     typeof candidate.total === "number" &&
+    Number.isFinite(candidate.total) &&
+    candidate.total >= candidate.results.length &&
     typeof candidate.query === "string"
   );
 }
