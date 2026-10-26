@@ -102,8 +102,8 @@ test("website proposal needs acceptance; save and concurrent edits persist witho
     const response = await waitForSave;
     const payload = (await response.json()) as { partnerId?: string };
     expect(response.status()).toBe(201);
-    expect(payload.partnerId).toBeTruthy();
-    const partnerId = payload.partnerId!;
+    const partnerId = payload.partnerId ?? "";
+    expect(partnerId).not.toBe("");
     createdIds.push(partnerId);
 
     const created = await admin
@@ -170,7 +170,7 @@ test("website proposal needs acceptance; save and concurrent edits persist witho
     const owned = await admin.from("partners").select("id").eq("profile_id", actor.userId);
     const ids = [...new Set([...createdIds, ...(owned.data ?? []).map((row) => row.id)])];
     await cleanupFixtures(admin, ids, [actor]);
-    if (owned.error) throw new Error("QA cleanup ownership read failed: " + owned.error.message);
+    expect(owned.error, "QA cleanup ownership read failed").toBeNull();
     console.log("PARTNER_QA_CLEANUP VERIFIED");
   }
 });
