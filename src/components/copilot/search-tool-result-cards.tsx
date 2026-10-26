@@ -450,7 +450,9 @@ export function EventResults({ result }: { result: unknown }) {
     venue: string;
     neighborhood: string;
     startsAt: string;
-    pricePerTicket: number;
+    pricePerTicket: number | null;
+    canBuyTickets?: boolean;
+    ticketUrl?: string;
     currency?: string;
     imageUrl?: string;
     sourceUrl?: string;
@@ -464,7 +466,7 @@ export function EventResults({ result }: { result: unknown }) {
       venue?: string;
       neighborhood?: string;
       startsAt: string;
-      pricePerTicket?: number;
+      pricePerTicket?: number | null;
       imageUrl?: string;
       sourceUrl?: string;
       mapsUrl?: string | null;
@@ -486,7 +488,7 @@ export function EventResults({ result }: { result: unknown }) {
         venue: e.venue ?? "Medellín",
         neighborhood: e.neighborhood ?? "Medellín",
         startsAt: e.startsAt,
-        pricePerTicket: e.pricePerTicket ?? 0,
+        pricePerTicket: e.pricePerTicket ?? null,
         imageUrl: e.imageUrl,
         sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
       })),
@@ -532,7 +534,7 @@ export function EventResults({ result }: { result: unknown }) {
           {rows.map((e) => {
           const pinId = eventPinId(e.id);
           const hasPin = pinnedIds.has(pinId);
-          const ticketUrl = `/events/${e.id}`;
+          const ticketUrl = e.ticketUrl ?? `/events/${e.id}`;
           const selectOnMap = () => {
             if (hasPin) panToPin(pinId);
           };
@@ -547,6 +549,8 @@ export function EventResults({ result }: { result: unknown }) {
               venue: e.venue,
               startsAt: e.startsAt,
               pricePerTicket: e.pricePerTicket,
+              currency: e.currency,
+              canBuyTickets: e.canBuyTickets === true,
               imageUrl: e.imageUrl,
               ticketUrl,
             });
@@ -561,6 +565,7 @@ export function EventResults({ result }: { result: unknown }) {
               neighborhood={e.neighborhood}
               startsAt={e.startsAt}
               pricePerTicket={e.pricePerTicket}
+              canBuyTickets={e.canBuyTickets === true}
               currency={e.currency}
               imageUrl={e.imageUrl}
               ticketUrl={ticketUrl}

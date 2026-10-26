@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEventSearchParams,
+  eventCardsToToolEnvelope,
   canFastPathEventSearch,
   visibleEventSearchReasons,
   shouldInstantEventClarify,
@@ -197,6 +198,30 @@ describe("event-search-fast-path", () => {
       expect(
         buildEventSearchParams("show all events in Medellín", {})?.queryText,
       ).toBeUndefined();
+    });
+  });
+});
+
+describe("SAN-1250 honest ticket offer transport", () => {
+  it("preserves real prices, currency, ticket URL and Buy availability in the fast path envelope", () => {
+    const envelope = eventCardsToToolEnvelope([
+      { id: "tierless", title: "Parade", category: "culture",
+        venue: "Medellín", neighborhood: "Poblado",
+        startsAt: "2027-02-24T01:00:00Z",
+        pricePerTicket: null, currency: "USD", imageUrl: "",
+        canBuyTickets: false, ticketUrl: "/events/parade" },
+      { id: "paid", title: "Reina", category: "culture",
+        venue: "Medellín", neighborhood: "Poblado",
+        startsAt: "2027-02-24T01:00:00Z",
+        pricePerTicket: 40000, currency: "COP", imageUrl: "",
+        canBuyTickets: true, ticketUrl: "/events/reina" },
+    ]);
+    expect(envelope.results[0]).toMatchObject({
+      pricePerTicket: null, canBuyTickets: false, ticketUrl: "/events/parade",
+    });
+    expect(envelope.results[1]).toMatchObject({
+      pricePerTicket: 40000, currency: "COP",
+      canBuyTickets: true, ticketUrl: "/events/reina",
     });
   });
 });
