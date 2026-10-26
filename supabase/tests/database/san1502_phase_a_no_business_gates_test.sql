@@ -95,7 +95,7 @@ select is((select public.rental_can_request_viewing(a) from public.apartments a
 -- requests it. No physical or immutable GENERATED column is needed.
 select is((select a.rental_can_request_viewing from public.apartments a
  where a.id=current_setting('mde.san1502_phase_fixture')::uuid),
- false, 'PostgREST computed viewing field resolves through row notation without making fixtures requestable');
+ true, 'PostgREST computed viewing field allows marked development fixtures during Phase A');
 
 select is((select count(*)::integer from information_schema.columns
  where table_schema='public' and table_name='apartments'
