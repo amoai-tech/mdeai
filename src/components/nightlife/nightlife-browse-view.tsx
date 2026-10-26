@@ -1,6 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useState } from "react";
+import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
+import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
+import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
+import { DiscoveryGroundedResults } from "@/components/chat/discovery-grounded-results";
+import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
+import { useMapContext } from "@/platform/maps/map-context";
+import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { MoonStar } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
@@ -29,13 +37,20 @@ type NightlifeBrowseViewProps = {
   vibe: NightlifeVibe | null;
 };
 
-export function NightlifeBrowseView({
+function NightlifeBrowseViewInner({
   results,
   error,
   neighborhood,
   vibe,
 }: NightlifeBrowseViewProps) {
   const retryHref = buildFilterUrl({ neighborhood, vibe });
+  const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
+  const activeRows = searched?.scope === retryHref ? searched.rows : null;
+  const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
+    if (result.page === "nightlife") setSearched({ scope: retryHref, rows: result.rows });
+  }, [retryHref]);
+  const { selectedPinId } = useMapContext();
+  const selectedId = activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
 
   const notice = (
     <p
@@ -48,19 +63,21 @@ export function NightlifeBrowseView({
 
   return (
     <>
-    <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} />
+    <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="nightlife"
-      askComposer={<DiscoveryAskComposer page="nightlife" />}
+      askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} />}
+      rightPanel={activeRows ? <BrowseMapPanel fill /> : undefined}
       testId="nightlife-page"
       title="Nightlife"
-      subtitle="Clubs & bars in Medellín — browse without chat"
+      subtitle="Clubs & bars in Medellín"
       filterBar={
         <NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />
       }
       notice={notice}
     >
       <section className="mt-6" aria-label="Nightlife listings">
+        <DiscoveryGroundedResults rows={activeRows} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -79,7 +96,7 @@ export function NightlifeBrowseView({
           </div>
         ) : null}
 
-        {!error && results.length === 0 ? (
+        {!error && activeRows === null && results.length === 0 ? (
           <EmptyState
             testId="nightlife-empty"
             title="No nightlife venues matched"
@@ -88,7 +105,7 @@ export function NightlifeBrowseView({
           />
         ) : null}
 
-        {!error && results.length > 0 ? (
+        {!error && activeRows === null && results.length > 0 ? (
           <div
             className="grid auto-rows-fr gap-4 sm:grid-cols-2"
             aria-label={`${results.length} nightlife venues`}
@@ -107,6 +124,11 @@ export function NightlifeBrowseView({
         ) : null}
       </section>
     </DiscoveryWorkspace>
+    {activeRows ? <BrowseMapSheet /> : null}
     </>
   );
+}
+
+export function NightlifeBrowseView(props: NightlifeBrowseViewProps) {
+  return <BrowseMapContextShell><NightlifeBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

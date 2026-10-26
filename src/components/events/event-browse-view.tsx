@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import { CalendarDays } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
@@ -49,10 +50,49 @@ export function EventBrowseView({
   dateWindow,
   price,
 }: EventBrowseViewProps) {
-  const [guestSelection, setGuestSelection] = useState<{ scope: string; ids: string[] } | null>(null);
+  const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [loadingIds, setLoadingIds] = useState(false);
+  const inFlight = useRef<AbortController | null>(null);
   const scope = buildFilterUrl({ category, neighborhood, dateWindow, price });
-  const guestIds = guestSelection?.scope === scope ? new Set(guestSelection.ids) : null;
-  const shownEvents = guestIds ? results.filter((event) => guestIds.has(event.id)) : results;
+  useEffect(() => () => inFlight.current?.abort(), []);
+
+  // Re-fetch returned IDs through the canonical public event catalog: tool prices
+  // are NOT ticket-tier prices and must never drive a "Free" or checkout CTA.
+  const resolveIds = useCallback(async (ids: string[]) => {
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+    setLookupError(null);
+    setLoadingIds(true);
+    try {
+      if (ids.length === 0) {
+        setResolved({ scope, rows: [] });
+        return;
+      }
+      const url = "/api/events/public?limit=20&ids=" + encodeURIComponent(ids.join(","));
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error("Could not confirm event details. Please try again.");
+      const payload: unknown = await res.json();
+      if (!payload || typeof payload !== "object" || !("results" in payload) || !Array.isArray(payload.results)) {
+        throw new Error("Invalid event catalog response.");
+      }
+      const allowed = new Set(ids);
+      const rows = payload.results.filter((r: unknown): r is PublishedEventListItem =>
+        r !== null && typeof r === "object" && "id" in r && typeof r.id === "string" &&
+        allowed.has(r.id) && "title" in r && typeof r.title === "string" &&
+        "startsAt" in r && typeof r.startsAt === "string") as PublishedEventListItem[];
+      if (!controller.signal.aborted) setResolved({ scope, rows });
+    } catch (e) {
+      if (!controller.signal.aborted) setLookupError(e instanceof Error ? e.message : "Could not load events.");
+    } finally {
+      if (!controller.signal.aborted) setLoadingIds(false);
+    }
+  }, [scope]);
+  const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
+    if (result.page === "events") void resolveIds(result.ids);
+  }, [resolveIds]);
+  const shownEvents = resolved?.scope === scope ? resolved.rows : results;
   const retryHref = buildFilterUrl({
     category,
     neighborhood,
@@ -67,9 +107,9 @@ export function EventBrowseView({
     <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} />
     <DiscoveryWorkspace
       activeSlug="events"
-      askComposer={<DiscoveryAskComposer page="events" guestEvents={{
+      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} guestEvents={{
         category, neighborhood, dateWindow,
-        onEventIds: (ids) => setGuestSelection({ scope, ids }),
+        onEventIds: (ids) => void resolveIds(ids),
       }} />}
       testId="events-browse"
       title="Events in Medellín"
@@ -84,7 +124,9 @@ export function EventBrowseView({
       }
     >
       <section className="mt-6" aria-label="Event listings">
-        {guestIds ? <p data-testid="guest-event-results-count" className="mb-3 text-sm text-muted-foreground">{shownEvents.length} matching events in the currently displayed public catalog. Prices and ticket actions come from published ticket data, not AI guesses.</p> : null}
+        {loadingIds ? <p role="status" className="mb-3 text-sm">Confirming event details…</p> : null}
+        {lookupError ? <p role="alert" className="mb-3 text-sm text-destructive">{lookupError}</p> : null}
+        {resolved?.scope === scope ? <p data-testid="guest-event-results-count" className="mb-3 text-sm text-muted-foreground">{shownEvents.length} matching events from the public catalog. Ticket prices and booking actions come from actual ticket tiers.</p> : null}
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"

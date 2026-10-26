@@ -10,6 +10,7 @@ import { useTurns } from "@/components/rentals/rental-ask-tool-results";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { ArrowUp, Square } from "lucide-react";
 import type { DiscoveryPage } from "@/components/chat/discovery-page-context";
+import { getLatestDiscoveryToolResult, type DiscoveryAgentResult } from "./discovery-tool-results";
 
 type EventGuestOptions = {
   category?: "music" | "food" | "culture" | "sport" | "nightlife" | null;
@@ -65,7 +66,7 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
 }
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
-function LiveComposer({ page, guestEvents }: { page: DiscoveryPage; guestEvents?: EventGuestOptions }) {
+function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
   const { appendMessage, stopActiveRun, isLoading, isRuntimeUnavailable } = useConciergeChat();
@@ -87,12 +88,17 @@ function LiveComposer({ page, guestEvents }: { page: DiscoveryPage; guestEvents?
     setSending(true);
     setError(null);
     setDraft("");
+    const startIndex = agent?.messages.length ?? 0;
     try {
       const saved = await appendMessage(message);
       if (!saved && !cancelled.current) {
         setError("MDE could not send your question. Please try again.");
         setDraft((current) => current || message);
       } else if (!cancelled.current) {
+        if (onAgentResults && agent) {
+          const result = getLatestDiscoveryToolResult(agent.messages, page, startIndex);
+          if (result) onAgentResults(result);
+        }
         setShowHistory(true);
       }
     } catch {
@@ -102,7 +108,7 @@ function LiveComposer({ page, guestEvents }: { page: DiscoveryPage; guestEvents?
       inFlight.current = false;
       setSending(false);
     }
-  }, [appendMessage, busy, draft, isReady, isRuntimeUnavailable, signedOut]);
+  }, [agent, appendMessage, busy, draft, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -139,10 +145,10 @@ function LiveComposer({ page, guestEvents }: { page: DiscoveryPage; guestEvents?
   );
 }
 
-export function DiscoveryAskComposer({ page, guestEvents }: { page: DiscoveryPage; guestEvents?: EventGuestOptions }) {
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} />;
 }

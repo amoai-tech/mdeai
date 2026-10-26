@@ -8,6 +8,7 @@ import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
+import { lookupPublicDiscoveryItemTool } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_MODEL } from "../lib/models";
@@ -199,6 +200,7 @@ export const conciergeAgent = new Agent({
   instructions: `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
 # Tools
+- lookup-public-discovery-item: when a user asks about the currently open item ("this apartment", "this restaurant", "this event", "this cafe", "this club"), call this server-side RLS lookup with the current page and selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts. A client-selected ID is not authorization. If the row is missing, say you cannot verify. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
 - search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
@@ -444,6 +446,7 @@ ${formatEventSourcePromptHint()}`,
     searchRestaurantsTool,
     searchAttractionsTool,
     searchGroundedPlacesTool,
+    lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
   },

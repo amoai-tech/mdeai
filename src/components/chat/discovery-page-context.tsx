@@ -32,7 +32,9 @@ export function publicDiscoveryContext(
     route: `/${page}`,
     filters: safeFilters,
     // The caller must select an ID from its *rendered* public results. This is not authority.
-    selectedPublicEntityId: selectedId && /^[a-f\d-]{36}$/i.test(selectedId) ? selectedId : null,
+    selectedPublicEntityId: selectedId && (page === "cafes" || page === "nightlife"
+      ? /^[A-Za-z0-9_-]{6,128}$/.test(selectedId)
+      : /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(selectedId)) ? selectedId : null,
   };
 }
 

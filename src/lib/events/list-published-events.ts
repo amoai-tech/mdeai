@@ -29,6 +29,8 @@ export type PublishedEventListItem = {
 };
 
 export type ListPublishedEventsQuery = {
+  /** Exact public event IDs, for rendering the same catalog cards after Ask MDE. */
+  ids?: string[];
   category?: EventCategory;
   neighborhood?: string;
   dateWindow?: DateWindow;
@@ -130,6 +132,8 @@ export async function listPublishedEvents(
     .or(NON_QA_EVENT_SLUG_FILTER)
     .eq("event_tickets.is_active", true)
     .eq("event_tickets.is_hidden", false);
+
+  if (query.ids) q = q.in("id", query.ids);
 
   if (query.category) {
     q = q.in("event_type", dbEventTypesForCategory(query.category));

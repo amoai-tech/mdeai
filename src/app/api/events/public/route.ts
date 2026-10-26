@@ -16,6 +16,7 @@ const querySchema = z.object({
   price: z.enum(["free", "paid"]).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(24),
   offset: z.coerce.number().int().min(0).optional().default(0),
+  ids: z.array(z.string().regex(/^[a-f\\d]{8}(-[a-f\\d]{4}){3}-[a-f\\d]{12}$/i)).min(1).max(20).optional(),
 });
 
 /** DATA-036 — public published-events catalog for `/events` browse (SAN-518). */
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
     price: url.searchParams.get("price") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
     offset: url.searchParams.get("offset") ?? undefined,
+    ids: url.searchParams.has("ids") ? url.searchParams.get("ids")!.split(",") : undefined,
   });
 
   if (!parsed.success) {
