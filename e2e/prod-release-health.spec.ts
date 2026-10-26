@@ -53,7 +53,7 @@ test("production host agent replies and persists a thread", async ({ page, baseU
       .getByTestId("host-os-chat-region")
       .getByTestId("copilot-assistant-message");
     await expect
-      .poll(async () => ((await replies.last().innerText()) ?? "").trim().length, {
+      .poll(async () => (await replies.last().innerText()).trim().length, {
         timeout: 60_000,
       })
       .toBeGreaterThan(0);
