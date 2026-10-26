@@ -23,7 +23,8 @@ describe("summarizeEventOrders", () => {
     expect(summary.buckets.pending.count).toBe(1);
     expect(summary.buckets.refunded.count).toBe(1);
     expect(summary.buckets.cancelled.count).toBe(1);
-    expect(summary.complete).toBe(true);
+    // Gross partial-refund amounts are not proof of net money retained.
+    expect(summary.complete).toBe(false);
   });
 
   it("keeps an unknown status out of revenue instead of guessing", () => {
@@ -38,6 +39,11 @@ describe("summarizeEventOrders", () => {
     expect(summary.complete).toBe(false);
     expect(summary.revenueCents).toBe(4_000_000);
     expect(summary.buckets.paid.count).toBe(2);
+  });
+
+  it("does not claim exact net revenue for a partial refund without refund amount", () => {
+    const summary = summarizeEventOrders([row("paid", 600, 1), row("partial_refund", 500, 1)]);
+    expect(summary.complete).toBe(false);
   });
 
   it("handles an empty event honestly", () => {

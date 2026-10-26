@@ -55,6 +55,9 @@ export function summarizeEventOrders(rows: readonly OrderSummaryRow[]): EventOrd
 
   for (const row of rows) {
     const key = keyFor(row.status);
+    // event_orders has no refunded_amount column, so partial-refund *net*
+    // cannot be reconstructed. Do not present gross as retained revenue.
+    if (key === "partial_refund") complete = false;
     const amount = row.total_cents;
     const quantity = row.quantity ?? 0;
     const bucket = buckets[key];

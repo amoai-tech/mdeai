@@ -78,6 +78,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const scannerUserId = user.id;
+  const privilegedClient = service;
+
   // Existing event_check_ins permits a null attendee_id for rejected unknown
   // scans. Persist the actual scanner, event and result without linking a
   // foreign attendee to the host's event or inventing a matching identity.
@@ -95,13 +98,13 @@ export async function POST(request: Request) {
       p_event_id: eventId,
       p_attendee_id: attendeeId,
       p_qr_token: token,
-      p_scanned_by: user.id,
+      p_scanned_by: scannerUserId,
       p_result: result,
       p_details: details as Json,
       ...(device ? { p_scanner_device: device } : {}),
       ...(ip ? { p_ip_address: ip } : {}),
     };
-    const { error } = await service.rpc("record_check_in", auditArgs as never);
+    const { error } = await privilegedClient.rpc("record_check_in", auditArgs as never);
     if (error) console.error("[tickets/validate] record_check_in failed:", error.message);
   }
 
