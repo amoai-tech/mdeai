@@ -6,8 +6,8 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/events" }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: null, loading: false }) }));
 vi.mock("@/lib/deterministic-e2e", () => ({ isDeterministicE2E: () => false }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useOptionalConciergeCoAgent: () => ({ agent: { messages: [] }, isReady: false }),
-  useConciergeCoAgent: () => ({ agent: { messages: [] }, isReady: false }),
+  useOptionalConciergeCoAgent: () => ({ agent: { messages: [], subscribe: () => ({ unsubscribe: () => {} }) }, isReady: false }),
+  useConciergeCoAgent: () => ({ agent: { messages: [], subscribe: () => ({ unsubscribe: () => {} }) }, isReady: false }),
 }));
 vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => [] }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({ useConciergeChat: () => ({

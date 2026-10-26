@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
@@ -78,6 +78,29 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
   const [showHistory, setShowHistory] = useState(false);
   const inFlight = useRef(false);
   const cancelled = useRef(false);
+  // A run's tool result may arrive in a separate agent update from its final text.
+  // Retain the submitting page/filter callback rather than re-scoping old results
+  // to filters changed while an answer is streaming.
+  const pendingResult = useRef<{ since: number; emit: (result: DiscoveryAgentResult) => void } | null>(null);
+  useEffect(() => {
+    if (!agent) return;
+    const publishCompletedResult = () => {
+      const pending = pendingResult.current;
+      if (!pending || agent.isRunning || cancelled.current) return;
+      const result = getLatestDiscoveryToolResult(agent.messages, page, pending.since);
+      if (!result) return;
+      pendingResult.current = null; // exactly once, regardless of subsequent message updates
+      pending.emit(result);
+    };
+    const subscription = agent.subscribe({
+      onMessagesChanged: publishCompletedResult,
+      onRunFinalized: publishCompletedResult,
+    });
+    return () => {
+      pendingResult.current = null; // never deliver an old page's results after navigation
+      subscription.unsubscribe();
+    };
+  }, [agent, page]);
   const signedOut = !sessionLoading && !user;
   const busy = sending || isLoading;
   const send = useCallback(async () => {
@@ -89,15 +112,21 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
     setError(null);
     setDraft("");
     const startIndex = agent?.messages.length ?? 0;
+    pendingResult.current = onAgentResults ? { since: startIndex, emit: onAgentResults } : null;
     try {
       const saved = await appendMessage(message);
       if (!saved && !cancelled.current) {
         setError("MDE could not send your question. Please try again.");
         setDraft((current) => current || message);
       } else if (!cancelled.current) {
-        if (onAgentResults && agent) {
-          const result = getLatestDiscoveryToolResult(agent.messages, page, startIndex);
-          if (result) onAgentResults(result);
+        // Catch the case where runAgent resolved after the last subscription event.
+        const pending = pendingResult.current;
+        if (pending && agent) {
+          const result = getLatestDiscoveryToolResult(agent.messages, page, pending.since);
+          if (result) {
+            pendingResult.current = null;
+            pending.emit(result);
+          }
         }
         setShowHistory(true);
       }
@@ -105,6 +134,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
       // The turn may already have been committed to the thread. Never blindly append it again.
       if (!cancelled.current) setError("The response was interrupted. Check the conversation before retrying.");
     } finally {
+      pendingResult.current = null;
       inFlight.current = false;
       setSending(false);
     }
@@ -135,7 +165,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
         <div className="flex items-end gap-2">
           <label className="sr-only" htmlFor={`discovery-ask-input-${page}`}>Ask MDE about {page}</label>
           <textarea id={`discovery-ask-input-${page}`} data-testid="discovery-ask-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} rows={1} placeholder={`Ask about ${page}…`} className="min-h-11 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-base focus-visible:ring-2 focus-visible:ring-ring sm:text-sm" />
-          {busy ? <button type="button" data-testid="discovery-ask-stop" className="flex size-11 items-center justify-center rounded-lg border" aria-label="Stop response" onClick={() => { cancelled.current = true; stopActiveRun(); }}><Square className="size-4" /></button>
+          {busy ? <button type="button" data-testid="discovery-ask-stop" className="flex size-11 items-center justify-center rounded-lg border" aria-label="Stop response" onClick={() => { cancelled.current = true; pendingResult.current = null; stopActiveRun(); }}><Square className="size-4" /></button>
             : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={() => void send()}><ArrowUp className="size-4" /></button>}
         </div>
       )}
