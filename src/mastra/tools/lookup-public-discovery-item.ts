@@ -36,7 +36,9 @@ export async function lookupPublicDiscoveryItem(
   const row = data as unknown as Record<string, unknown>;
   return {
     found: true,
-    data: Object.fromEntries(cfg.fields.split(", ").filter((column) => column in row).map((column) => [column, row[column]])),
+    // Project by iterating returned entries, not indexing a record with dynamic keys.
+    data: Object.fromEntries(Object.entries(row).filter(([column]) =>
+      cfg.fields.split(", ").includes(column))),
   };
 }
 

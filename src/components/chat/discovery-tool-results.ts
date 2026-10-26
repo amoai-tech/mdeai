@@ -51,9 +51,9 @@ export function getLatestDiscoveryToolResult(
     }
   });
   // The latest complete tool owns the current cards; don't resurrect an older search from another page.
-  for (let index = messages.length - 1; index >= Math.max(0, since); index--) {
-    const m = messages[index];
-    if (m?.role !== "tool" || !m.toolCallId) continue;
+  // Iterate a copied slice newest-first; never index agent messages using a computed key.
+  for (const m of messages.slice(Math.max(0, since)).reverse()) {
+    if (m.role !== "tool" || !m.toolCallId) continue;
     const category = toolCategory(calls.get(m.toolCallId) ?? "");
     if (!category || !isFinishedToolPayload(m.content, { rowArray: true })) continue;
     if (category === "restaurants") {

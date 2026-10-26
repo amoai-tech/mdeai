@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => {
       return { unsubscribe: vi.fn(() => { agent.subscriber = null; }) };
     }),
   };
-  return { agent, append: vi.fn<(...args: string[]) => Promise<boolean>>() };
+  return { agent, append: vi.fn<() => Promise<boolean>>() };
 });
 vi.mock("next/navigation", () => ({ usePathname: () => "/restaurants" }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: { id: "test-user" }, loading: false }) }));
@@ -38,8 +38,10 @@ afterEach(() => {
 
 describe("signed-in Ask MDE tool delivery", () => {
   it("publishes the current search only after the agent finishes, exactly once", async () => {
-    let resolveRun: ((value: boolean) => void) | undefined;
-    harness.append.mockImplementation(() => new Promise<boolean>((resolve) => { resolveRun = resolve; }));
+    let resolveRun: (() => void) | undefined;
+    harness.append.mockImplementation(() => new Promise<boolean>((resolve) => {
+      resolveRun = () => resolve(true);
+    }));
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
     fireEvent.change(screen.getByTestId("discovery-ask-input"), { target: { value: "Italian in Laureles" } });
@@ -63,7 +65,10 @@ describe("signed-in Ask MDE tool delivery", () => {
     });
     expect(onAgentResults).toHaveBeenCalledTimes(1);
     expect(onAgentResults).toHaveBeenCalledWith({ page: "restaurants", rows: [expect.objectContaining({ id: "r1" })] });
-    await act(async () => resolveRun?.(true));
+    await act(async () => {
+      resolveRun?.();
+      await Promise.resolve(); // flush the completed run's state update
+    });
     expect(onAgentResults).toHaveBeenCalledTimes(1);
   });
 });

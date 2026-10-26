@@ -10,7 +10,7 @@ function client(data: Record<string, unknown> | null) {
       trace.push(name === "id" ? { id: value } : { kind: value });
       return this;
     },
-    async maybeSingle() { return { data, error: null }; },
+    maybeSingle() { return Promise.resolve({ data, error: null }); },
   };
   return {
     trace,
