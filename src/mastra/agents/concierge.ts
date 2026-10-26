@@ -11,7 +11,7 @@ import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { lookupPublicDiscoveryItemTool } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { CONCIERGE_MODEL } from "../lib/models";
+import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
@@ -449,7 +449,7 @@ Conversion boundary (do NOT cross):
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
 ${formatEventSourcePromptHint()}`,
-  model: CONCIERGE_MODEL,
+  model: CONCIERGE_AGENT_MODEL,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing

@@ -41,6 +41,26 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     expect((CONCIERGE_MODEL as unknown as ModelWithId).specificationVersion).toBe("v2");
   });
 
+  it("falls back to Gemini when NVIDIA is slow without retrying the same model", async () => {
+    vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+    vi.stubEnv("NVIDIA_API_KEY", "test-key");
+    const { CONCIERGE_AGENT_MODEL } = await import("./models");
+    expect(Array.isArray(CONCIERGE_AGENT_MODEL)).toBe(true);
+    if (!Array.isArray(CONCIERGE_AGENT_MODEL)) throw new Error("expected fallback models");
+    expect(CONCIERGE_AGENT_MODEL).toHaveLength(2);
+    expect(CONCIERGE_AGENT_MODEL.map((entry) => entry.model.modelId)).toEqual([
+      NVIDIA_MODEL_ID, GEMINI_FLASH_MODEL_ID,
+    ]);
+    expect(CONCIERGE_AGENT_MODEL.map((entry) => entry.maxRetries)).toEqual([0, 0]);
+    expect(CONCIERGE_AGENT_MODEL[0]?.modelSettings?.timeout?.stepMs).toBeLessThan(22_000);
+  });
+
+  it("uses only Gemini when the NVIDIA switch is disabled", async () => {
+    vi.stubEnv("MDE_AI_PROVIDER", "gemini");
+    const { CONCIERGE_AGENT_MODEL } = await import("./models");
+    expect(Array.isArray(CONCIERGE_AGENT_MODEL)).toBe(false);
+  });
+
   it("fails loudly when NVIDIA is selected without a key", async () => {
     vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
     vi.stubEnv("NVIDIA_API_KEY", "");
