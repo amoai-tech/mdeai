@@ -1,5 +1,7 @@
 "use client";
 
+import { formatEventCardPrice } from "@/lib/events/format-event";
+
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -94,7 +96,11 @@ export function VenueDetailSheet() {
     venueDetail?.kind === "rental" && venueDetail.nightlyPrice != null
       ? `$${venueDetail.nightlyPrice.toLocaleString("en-US")}/night`
       : venueDetail?.kind === "event"
-        ? `$${venueDetail.pricePerTicket.toLocaleString("en-US")} ticket`
+        ? venueDetail.pricePerTicket === null
+          ? "Price TBD"
+          : venueDetail.pricePerTicket === 0
+            ? "Free"
+            : `From ${formatEventCardPrice(venueDetail.pricePerTicket, venueDetail.currency)}`
         : undefined;
 
   const eventStep =

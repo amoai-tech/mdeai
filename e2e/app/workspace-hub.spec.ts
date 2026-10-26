@@ -239,8 +239,21 @@ test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
       await expect(page.getByRole("link", { name: "Back to chat" }).first()).toHaveAttribute(
         "href", "/chat",
       );
-      await page.waitForLoadState("networkidle");
+      // React may keep background connections open; the visible page state
+      // above is the readiness signal. Allow the browser to flush the
+      // settled component effects before asserting no agent traffic.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
       expect(copilotRequests, "legacy wallet must not mount a discovery agent").toEqual([]);
+
+      // The rehosted personal wallet must also avoid the root Concierge.
+      await page.goto("/app/me/tickets");
+      await expect(page.getByRole("heading", { name: "Tickets", exact: true })).toBeVisible();
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
+      expect(copilotRequests, "personal wallet must not mount a discovery agent").toEqual([]);
 
       // This signed-in buyer has no such order. The existing server-side
       // ownership check must keep its normal recovery UI, not start AI.
@@ -248,7 +261,12 @@ test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
       await expect(
         page.getByText("Open this page from your ticket email link", { exact: false }),
       ).toBeVisible();
-      await page.waitForLoadState("networkidle");
+      // React may keep background connections open; the visible page state
+      // above is the readiness signal. Allow the browser to flush the
+      // settled component effects before asserting no agent traffic.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
       expect(copilotRequests, "ticket detail must not mount a discovery agent").toEqual([]);
 
       // Email-linked ticket detail remains reachable by guests (the token is
@@ -258,7 +276,12 @@ test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
       await expect(
         page.getByText("Open this page from your ticket email link", { exact: false }),
       ).toBeVisible();
-      await page.waitForLoadState("networkidle");
+      // React may keep background connections open; the visible page state
+      // above is the readiness signal. Allow the browser to flush the
+      // settled component effects before asserting no agent traffic.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
       expect(copilotRequests).toEqual([]);
     } finally {
       await deleteThrowawayIdentity(identity);

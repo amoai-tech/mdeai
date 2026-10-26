@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { summarizeEventTicketOffer, type EventTicketTier } from "./event-ticket-offer";
 import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 import {
@@ -60,15 +61,7 @@ type EventBrowseRow = {
   primary_image_url: string | null;
   ticket_url: string | null;
   status: string;
-  event_tickets?: {
-    price_cents: number;
-    currency: string;
-    qty_total: number;
-    qty_sold: number;
-    qty_pending: number;
-    sale_starts_at: string | null;
-    sale_ends_at: string | null;
-  }[];
+  event_tickets?: EventTicketTier[];
 };
 
 const EVENT_LIST_SELECT =
@@ -77,18 +70,7 @@ const EVENT_LIST_SELECT =
 export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventListItem {
   const slug = row.slug?.trim() || row.id;
   const ticketUrl = row.ticket_url?.trim() || `/events/${slug}`;
-  const tiers = [...(row.event_tickets ?? [])].sort(
-    (a, b) => a.price_cents - b.price_cents,
-  );
-  const now = Date.now();
-  const availableTiers = tiers.filter(
-    (tier) =>
-      tier.qty_total > tier.qty_sold + tier.qty_pending &&
-      (!tier.sale_starts_at || Date.parse(tier.sale_starts_at) <= now) &&
-      (!tier.sale_ends_at || Date.parse(tier.sale_ends_at) >= now),
-  );
-  const cheapest = availableTiers[0] ?? tiers[0];
-  const canBuyTickets = availableTiers.length > 0;
+  const offer = summarizeEventTicketOffer(row.event_tickets);
 
   return {
     id: row.id,
@@ -98,9 +80,9 @@ export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventList
     venue: row.address ?? "Medellín",
     neighborhood: extractNeighborhood(row.address, row.city),
     startsAt: row.event_start_time,
-    pricePerTicket: cheapest ? cheapest.price_cents / 100 : null,
-    canBuyTickets,
-    currency: normalizeEventCurrency(cheapest?.currency ?? row.currency),
+    pricePerTicket: offer.pricePerTicket,
+    canBuyTickets: offer.canBuyTickets,
+    currency: normalizeEventCurrency(offer.currency ?? row.currency),
     imageUrl: row.primary_image_url ?? undefined,
     ticketUrl,
     category: mapCategory(row.event_type),

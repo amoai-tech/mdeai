@@ -9,7 +9,7 @@ import {
   type BookingCheckoutTarget,
 } from "@/components/modals/booking-checkout-modal";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
-import { formatEventSchedule } from "@/lib/events/format-event";
+import { EVENT_TIME_ZONE, formatEventCardPrice, formatEventSchedule } from "@/lib/events/format-event";
 import type { PublicEventDetail } from "@/lib/events/types";
 import type { EventVenueDetail } from "@/components/chat/rental-ui-context";
 import type { PublicEventLoadState } from "@/hooks/use-public-event-detail";
@@ -120,6 +120,7 @@ export function EventVenueDetailBody({
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
+                timeZone: EVENT_TIME_ZONE,
               }).format(new Date(detail.startsAt))}
           </dd>
         </div>
@@ -129,7 +130,11 @@ export function EventVenueDetailBody({
         </div>
         <div>
           <dt className="text-muted-foreground">From</dt>
-          <dd>${detail.pricePerTicket.toLocaleString("en-US")}</dd>
+          <dd>{detail.pricePerTicket === null
+            ? "Price TBD"
+            : detail.pricePerTicket === 0
+              ? "Free"
+              : formatEventCardPrice(detail.pricePerTicket, detail.currency)}</dd>
         </div>
       </dl>
 
@@ -163,14 +168,16 @@ export function EventVenueDetailBody({
       ) : null}
 
       <div className="flex flex-col gap-2 pt-2">
-        <Button
-          type="button"
-          data-testid="venue-detail-buy-cta"
-          onClick={() => onStepChange("checkout")}
-        >
-          <Ticket className="size-4" aria-hidden />
-          Buy tickets
-        </Button>
+        {detail.canBuyTickets === true ? (
+          <Button
+            type="button"
+            data-testid="venue-detail-buy-cta"
+            onClick={() => onStepChange("checkout")}
+          >
+            <Ticket className="size-4" aria-hidden />
+            Buy tickets
+          </Button>
+        ) : null}
         <Link
           href={detail.ticketUrl}
           className={cn(
