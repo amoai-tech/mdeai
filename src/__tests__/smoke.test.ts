@@ -29,9 +29,10 @@ describe("mdeapp smoke", () => {
         "evaluationAgent",
         "hostEventAgent",
         "hostOpsAgent",
+        "partnerAgent",
       ]),
     );
-    expect(keys).toHaveLength(8);
+    expect(keys).toHaveLength(9);
   });
 
   it("hostEventAgent is registered", () => {

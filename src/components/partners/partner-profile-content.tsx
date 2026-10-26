@@ -1,12 +1,15 @@
 import Link from "next/link";
 
 import { PartnerProfileForm } from "@/components/partners/partner-profile-form";
+import { PartnerWorkspaceChat } from "@/components/partners/partner-workspace-chat";
 import type { PartnerProfileLoad } from "@/lib/partners/partner-profile-load";
 import { profileValuesFromSettings } from "@/lib/partners/partner-profile-patch";
 
 type PartnerProfileContentProps = {
   /** Result of the single server loader; all five states are rendered honestly. */
   profile: PartnerProfileLoad;
+  /** Verified server session user ID; never inferred from business selection. */
+  userId: string;
   /**
    * Route that owns this screen. Business-selection links stay on the same
    * surface, so the legacy page and the /app page never bounce between shells.
@@ -56,6 +59,7 @@ function ProfileLoadError({
 export function PartnerProfileContent({
   profile,
   basePath,
+  userId,
 }: PartnerProfileContentProps) {
   // A failed query is not the same as "no membership". Never send a partner
   // back to signup because Supabase had a transient failure.
@@ -123,6 +127,19 @@ export function PartnerProfileContent({
             partnerStatus={partner.status}
             initial={values}
           />
+          <section
+            aria-label="Partner assistant"
+            data-testid="partner-assistant"
+            className="mt-10 flex h-[60vh] min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm sm:h-[34rem]"
+          >
+            <PartnerWorkspaceChat
+              key={userId + ":" + partner.id}
+              userId={userId}
+              partnerId={partner.id}
+              businessName={values.businessName || null}
+              partnerType={partner.type}
+            />
+          </section>
         </div>
       ) : (
         <div
