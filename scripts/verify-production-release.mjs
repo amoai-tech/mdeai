@@ -56,8 +56,21 @@ try {
 try {
   const app = await fetch(`${BASE}/app`, { redirect: "manual" });
   const location = app.headers.get("location") ?? "";
-  if (app.status === 307 && location.includes("/login?next=%2Fapp")) ok(`/app redirects to login with exact next`);
-  else bad(`/app returned ${app.status} -> ${location}`);
+  let target;
+  try {
+    target = new URL(location, BASE);
+  } catch {
+    target = null;
+  }
+  if (
+    app.status === 307 &&
+    target?.pathname === "/login" &&
+    target.searchParams.get("next") === "/app"
+  ) {
+    ok("/app redirects to /login with next=/app");
+  } else {
+    bad(`/app returned ${app.status} -> ${location}`);
+  }
   const login = await fetch(`${BASE}/login`);
   if (login.status === 200) ok("/login returns 200");
   else bad(`/login returned ${login.status}`);
@@ -66,6 +79,13 @@ try {
 }
 
 if (failures.length === 0) {
+  const missing = [
+    ["NEXT_PUBLIC_SUPABASE_URL", env.NEXT_PUBLIC_SUPABASE_URL],
+    ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY", env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+    ["SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY", env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY],
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length > 0) bad(`Supabase E2E env missing: ${missing.join(", ")}`);
+  else {
   const pw = spawnSync(
     "npx",
     ["playwright", "test", "e2e/prod-release-health.spec.ts", "--project=prod-smoke", "--reporter=list"],
@@ -84,6 +104,7 @@ if (failures.length === 0) {
   );
   if (pw.status !== 0) bad("host-agent health check failed");
   else ok("host agent replied and persisted a thread");
+  }
 }
 
 if (failures.length > 0) {
