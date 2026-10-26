@@ -298,6 +298,16 @@
       "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
       "classification": "test-only",
       "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
+    },
+    {
+      "file": "src/components/copilot/__tests__/event-results-map-neutral.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-546 J09 mocks pinned CopilotKit v2 agent hooks to verify empty-event suggestion clicks trigger a real concierge run, while malformed and unavailable event results display an error."
+    },
+    {
+      "file": "src/components/copilot/search-tool-result-cards.tsx",
+      "classification": "keep",
+      "note": "SAN-546 J09: v2 useAgent and useCopilotKit submit empty-event suggestions through the existing conciergeAgent; no additional provider."
     }
   ]
 }

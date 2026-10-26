@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
+import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -20,7 +22,7 @@ import type { ParsedGroundedToolResult } from "@/lib/parse-grounded-tool-result"
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
-import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
@@ -431,13 +433,50 @@ export function RentalResults({
   );
 }
 
+/** Real follow-up actions for empty event results, using the existing Concierge agent. */
+function EventSearchEmptyState() {
+  const { agent, isReady } = useAgent({ agentId: "conciergeAgent" });
+  const { copilotkit } = useCopilotKit();
+  const [failed, setFailed] = useState(false);
+  const sendQuery = async (query: string) => {
+    if (!isReady || agent.isRunning) return;
+    setFailed(false);
+    try {
+      agent.addMessage({ id: crypto.randomUUID(), role: "user", content: query });
+      await copilotkit.runAgent({ agent });
+    } catch {
+      setFailed(true);
+    }
+  };
+  return (
+    <>
+      <EmptyState
+        testId="events-empty"
+        title="No events found"
+        description="Try a different date range or neighborhood."
+        suggestions={[
+          { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: !isReady || agent.isRunning, onClick: () => void sendQuery("Show events this weekend in Medellín") },
+          { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: !isReady || agent.isRunning, onClick: () => void sendQuery("Show salsa events in El Poblado") },
+        ]}
+      />
+      {!isReady || agent.isRunning ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
+      {failed ? <ToolErrorChip testId="events-suggestion-error" message="Couldn't run that search. Please try again." /> : null}
+    </>
+  );
+}
+
 export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
   const { setRows, setWebCitations } = useEventSearchResults();
   const listRef = useRef<HTMLDivElement>(null);
+  const raw = unwrapAgUiToolPayload(result);
+  const validEnvelope = !!raw && typeof raw === "object" && !Array.isArray(raw) &&
+    Array.isArray((raw as { results?: unknown }).results);
   const envelope = normalizeToolEnvelope(result);
   const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);
+  const searchUnavailable = !validEnvelope ||
+    (envelope.source === "fallback" && (envelope.results?.length ?? 0) === 0);
   // SAN-1422 — an event without trusted coordinates is a usable card with no pin, so it must not
   // pan, select or highlight a map target that does not exist.
   const pinnedIds = useMemo(
@@ -476,6 +515,7 @@ export function EventResults({ result }: { result: unknown }) {
         typeof c.title === "string",
     );
     if (list.length === 0) {
+      setRows([]);
       setWebCitations(validCitations);
       return;
     }
@@ -517,16 +557,13 @@ export function EventResults({ result }: { result: unknown }) {
           </ul>
         </div>
       ) : null}
-      {rows.length === 0 ? (
-        <EmptyState
-          testId="events-empty"
-          title="No events found"
-          description="Try a different date range or neighborhood."
-          suggestions={[
-            { label: "Events this weekend", testId: "events-empty-suggest-weekend" },
-            { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa" },
-          ]}
+      {searchUnavailable ? (
+        <ToolErrorChip
+          testId="events-search-error"
+          message="Event search is temporarily unavailable. Please try again."
         />
+      ) : rows.length === 0 ? (
+        <EventSearchEmptyState />
       ) : (
         <div ref={listRef} className="flex flex-col gap-2 py-2">
           {rows.map((e) => {

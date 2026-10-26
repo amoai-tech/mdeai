@@ -21,6 +21,7 @@ import {
   signInAsOnOrigin,
 } from "./helpers/auth";
 import { expectProtectedRouteLoginRedirect } from "./helpers/screen-evidence";
+import { waitForVerticalTerminalState } from "./helpers/vertical-terminal-state";
 
 const isProd = Boolean(process.env.PROD_SMOKE_BASE_URL?.trim());
 const outDir =
@@ -89,7 +90,9 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await page.screenshot({ path: path.join(outDir, "j08-restaurant-detail.png") });
   });
 
-  test("J09 — event buy CTA (checkout or login redirect)", async ({ page }) => {
+  test("J09 — events answer is a real card or the explicit empty state", async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     await gotoHome(page);
     // Inventory-dependent: production may legitimately have no salsa event
@@ -97,12 +100,22 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     // the catalog has any upcoming salsa event, without inventing inventory.
     await sendConciergeMessage(page, "events in Medellín");
     await waitForCopilotIdle(page, 150_000);
-    const eventCard = page.locator('[data-testid="event-card"]').first();
-    await eventCard.waitFor({ state: "visible", timeout: 120_000 });
-    const buy = eventCard.getByRole("link", { name: /buy|tickets/i }).first();
-    if (await buy.isVisible().catch(() => false)) {
-      await buy.click();
-      await page.waitForURL(/\/(login|events\/)/, { timeout: 30_000 });
+
+    // Reuse SAN-1366's canonical terminal-state contract rather than a
+    // locator.or() assertion: simultaneous cards and empty UI must not be
+    // silently accepted, nor may an error masquerade as an empty marketplace.
+    const terminal = await waitForVerticalTerminalState(page, "events", 120_000);
+    if (terminal.state === "results") {
+      const card = page.locator('[data-testid="event-card"]:visible').first();
+      const buy = card.getByRole("link", { name: /buy|tickets/i }).first();
+      if (await buy.isVisible()) {
+        await buy.click();
+        await page.waitForURL(/\/(login|events\/)/, { timeout: 30_000 });
+      }
+    } else {
+      await expect(page.getByTestId("events-empty").first()).toContainText(/no events/i);
+      // These suggestions are actionable buttons, not decorative chips.
+      await expect(page.getByTestId("events-empty-suggest-weekend").first()).toBeEnabled();
     }
     await page.screenshot({ path: path.join(outDir, "j09-event-cta.png") });
   });

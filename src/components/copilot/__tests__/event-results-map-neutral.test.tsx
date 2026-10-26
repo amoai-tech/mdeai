@@ -12,8 +12,17 @@ const ui = vi.hoisted(() => ({
   panToPin: vi.fn(),
   openVenueDetail: vi.fn(),
   selectedPinId: null as string | null,
+  addMessage: vi.fn(),
+  runAgent: vi.fn(async () => {}),
 }));
 
+vi.mock("@copilotkit/react-core/v2", () => ({
+  useAgent: () => ({
+    agent: { addMessage: ui.addMessage, isRunning: false },
+    isReady: true,
+  }),
+  useCopilotKit: () => ({ copilotkit: { runAgent: ui.runAgent } }),
+}));
 vi.mock("@/platform/maps/map-context", () => ({
   useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin }),
 }));
@@ -69,6 +78,8 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   ui.panToPin.mockReset();
   ui.openVenueDetail.mockReset();
+  ui.addMessage.mockReset();
+  ui.runAgent.mockReset();
   ui.selectedPinId = null;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -105,5 +116,37 @@ describe("event cards on the map", () => {
     ui.selectedPinId = "event-mapped";
     render();
     expect(container.querySelector('[data-pin-id="event-mapped"]')?.getAttribute("data-selected")).toBe("true");
+  });
+});
+
+
+describe("EventResults empty and unavailable states", () => {
+  function showResult(result: unknown) {
+    act(() => root.render(<EventResults result={result} />));
+  }
+
+  it("shows a genuine empty state with follow-up suggestions that run the existing Concierge", async () => {
+    showResult({ results: [], total: 0, source: "supabase" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).toBeNull();
+    const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
+    expect(weekend).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => (weekend as HTMLButtonElement).click());
+    expect(ui.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: "user",
+      content: "Show events this weekend in Medellín",
+    }));
+    expect(ui.runAgent).toHaveBeenCalledOnce();
+  });
+
+  it("does not disguise an unavailable database as a healthy empty market", () => {
+    showResult({ results: [], total: 0, source: "fallback" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
+  });
+
+  it("does not disguise malformed tool output as a healthy empty market", () => {
+    showResult({ total: 0, source: "supabase" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
   });
 });
