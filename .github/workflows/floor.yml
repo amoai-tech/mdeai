@@ -182,3 +182,100 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
           MASTRA_CHAT_MEMORY_DURABILITY: "1"
         run: npx vitest run src/mastra/lib/chat-memory-durability.integration.test.ts
+
+  # Codacy's hosted ESLint runners do not load our Next.js dependencies reliably.
+  # Analyze with this checkout's npm ci, then upload the full Codacy-native report.
+  # Fork PRs never receive the repository upload token.
+  codacy-eslint:
+    name: codacy-eslint
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install MDE dependencies
+        run: npm ci
+
+      - name: Install pinned Codacy Analysis CLI
+        run: npm install --global --ignore-scripts @codacy/analysis-cli@0.24.0
+
+      - name: Analyze ESLint9 and reject analyzer failures
+        shell: bash
+        run: |
+          set +e
+          codacy-analysis analyze . --config-file .codacy/eslint9-ci.json --tool ESLint9 --no-log --output-format json --output "$RUNNER_TEMP/codacy-eslint.json"
+          analysis_exit=$?
+          set -e
+          # Exit 1 can mean lint findings. Reject missing/crashed analyzers independently.
+          if [ "$analysis_exit" -ne 0 ] && [ "$analysis_exit" -ne 1 ]; then
+            echo "::error::Codacy analysis failed (exit $analysis_exit)"
+            exit "$analysis_exit"
+          fi
+          node - "$RUNNER_TEMP/codacy-eslint.json" <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const tool = report.toolResults?.find((item) => item.toolId === 'ESLint9');
+          if (!tool || tool.status !== 'success' || tool.filesAnalyzed < 1 ||
+              (tool.errorCount ?? 0) !== 0 || (report.errors?.length ?? 0) > 0) {
+            console.error('::error::ESLint9 did not complete a valid analysis');
+            process.exit(1);
+          }
+          console.log(`ESLint9 analyzed ${tool.filesAnalyzed} files; ${tool.issueCount} findings (including baseline).`);
+          NODE
+
+      # Codacy's documented diff mode provides the PR-only failure gate.
+      # Existing full-repository findings remain visible in Codacy, but do not
+      # turn every unrelated PR red until the baseline is addressed.
+      - name: Reject newly introduced ESLint9 findings
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: codacy-analysis analyze . --config-file .codacy/eslint9-ci.json --tool ESLint9 --diff "$BASE_SHA" --no-log --output-format json --output "$RUNNER_TEMP/codacy-eslint-diff.json"
+
+      - name: Preserve complete Codacy report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: codacy-eslint-report
+          path: ${{ runner.temp }}/codacy-eslint.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # Runs in a separate clean runner: PR code and npm scripts cannot access the token.
+  codacy-eslint-upload:
+    name: codacy-eslint-upload
+    needs: codacy-eslint
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install pinned Codacy uploader
+        run: npm install --global --ignore-scripts @codacy/analysis-cli@0.24.0
+
+      - name: Download validated ESLint9 report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: codacy-eslint-report
+          path: ${{ runner.temp }}/codacy-upload
+
+      - name: Send exact-commit ESLint9 results to Codacy
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          ANALYZED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$CODACY_PROJECT_TOKEN" ]; then
+            echo "::error::CODACY_PROJECT_TOKEN is required"
+            exit 1
+          fi
+          codacy-analysis upload "$RUNNER_TEMP/codacy-upload/codacy-eslint.json" --commit "$ANALYZED_SHA"
