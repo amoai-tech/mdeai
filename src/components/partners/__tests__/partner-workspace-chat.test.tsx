@@ -41,7 +41,11 @@ async function show(userId: string, partnerId: string) {
   if (!element) {
     throw new Error("Partner chat thread element was not rendered");
   }
-  return element.getAttribute("data-thread-id");
+  const threadId = element.getAttribute("data-thread-id");
+  if (!threadId) {
+    throw new Error("Partner chat thread ID was not assigned");
+  }
+  return threadId;
 }
 
 beforeEach(() => {
