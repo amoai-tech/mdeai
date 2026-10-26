@@ -6,6 +6,7 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 type CapturedTool = {
   name: string;
   description: string;
+  followUp: boolean;
   handler: (args: { listingId?: string; index?: number }) => Promise<unknown>;
 };
 
@@ -31,6 +32,8 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     render(<RentalDetailsFrontendTool results={rows} onOpen={vi.fn()} />);
     expect(captured.tool?.name).toBe("openRentalDetails");
     expect(captured.tool?.description).toContain("Details panel");
+    // A UI-only action must not start a follow-up model run; production hit the 100-run limit.
+    expect(captured.tool?.followUp).toBe(false);
   });
 
   it("opens the first apartment by default, or the position/id the agent names", async () => {
@@ -48,7 +51,7 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     expect(onOpen).toHaveBeenLastCalledWith(rows[0]);
   });
 
-  it("refuses an apartment that is not on the page instead of opening another one", async () => {
+  it("refuses an apartment or position that is not on the page instead of opening another one", async () => {
     const onOpen = vi.fn();
     render(<RentalDetailsFrontendTool results={rows} onOpen={onOpen} />);
     await waitFor(() => expect(captured.tool).not.toBeNull());
@@ -56,6 +59,7 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     expect(await captured.tool!.handler({ listingId: "not-shown" })).toContain(
       "No apartment with id not-shown",
     );
+    expect(await captured.tool!.handler({ index: 99 })).toContain("No apartment 99");
     expect(onOpen).not.toHaveBeenCalled();
   });
 

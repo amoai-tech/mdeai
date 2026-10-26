@@ -45,6 +45,10 @@ export function RentalDetailsFrontendTool({
   useFrontendTool(
     {
       name: "openRentalDetails",
+      // A pure UI action: opening the panel is the answer. Without this, CopilotKit starts a
+      // follow-up run after the tool result, the model calls the tool again, and the loop hits the
+      // 100-run depth limit while the composer stays busy.
+      followUp: false,
       description:
         "Open the in-page Details panel for an apartment already in the current rental results. Use when the renter asks to see or open the details of an apartment, the first/selected one, or a result by id. Do not use for a new search.",
       parameters: openRentalDetailsParams,
@@ -55,9 +59,9 @@ export function RentalDetailsFrontendTool({
         }
         const rental = resolveRentalForDetails(current, { listingId, index });
         if (!rental) {
-          return listingId
-            ? `No apartment with id ${listingId} is in the current results.`
-            : "No apartment is available to open.";
+          if (listingId) return `No apartment with id ${listingId} is in the current results.`;
+          if (index !== undefined) return `No apartment ${index} is in the current results.`;
+          return "No apartment is available to open.";
         }
         onOpenRef.current(rental);
         return `Opened details for ${rental.title}.`;
