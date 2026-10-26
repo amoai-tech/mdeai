@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -22,6 +23,8 @@ import {
  */
 const base = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const evidenceDir = process.env.MDE_QA_EVIDENCE_DIR?.trim();
+const candidatePreview = base ? new URL(base).hostname.endsWith(".vercel.app") : false;
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
 const firstQuery = "Show furnished 2-bedroom apartments in Laureles.";
 const budgetQuery = "Only under COP 3 million per month.";
 
@@ -42,6 +45,9 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
   test("matches listing IDs, prices, mapped pins, banner and saved transcript after reload", async ({ page }) => {
     test.setTimeout(300_000);
     await signInAsOnOrigin(page, base, identity!.email);
+    // Session injection clears cookies; reinstall protected Vercel preview access
+    // in this same real browser context (never treat a login page as MDE).
+    if (candidatePreview) await establishVercelAutomationBypass(page, base, bypassSecret);
     await page.goto(new URL("/rentals", base).toString(), { waitUntil: "domcontentloaded" });
 
     // DiscoveryWorkspace has separate responsive composer shells. Target only the
