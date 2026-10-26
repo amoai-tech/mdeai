@@ -109,11 +109,6 @@
     "anon": true,
     "authenticated": true
   },
-  "check_rate_limit(p_key text, p_max integer, p_window_seconds integer)": {
-    "public": false,
-    "anon": true,
-    "authenticated": true
-  },
   "create_broker_onboarding_draft(p_display_name text, p_listing_title text, p_neighborhood text)": {
     "public": false,
     "anon": true,
@@ -165,8 +160,8 @@
     "authenticated": true
   },
   "has_role(_user_id uuid, _role user_role)": {
-    "public": true,
-    "anon": true,
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "hybrid_search_events(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
@@ -279,11 +274,6 @@
     "anon": false,
     "authenticated": true
   },
-  "redeem_promo_code(p_event_id uuid, p_code text, p_ticket_id uuid)": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "register_new_project_buyer(p_project_id uuid, p_idempotency_key text, p_qualification jsonb, p_email text, p_phone text, p_name text)": {
     "public": false,
     "anon": false,
@@ -341,8 +331,8 @@
   },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
-    "anon": true,
-    "authenticated": true
+    "anon": false,
+    "authenticated": false
   },
   "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
     "public": false,

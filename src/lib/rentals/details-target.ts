@@ -20,9 +20,9 @@ export function resolveRentalForDetails(
   }
 
   const requested = target.index;
-  const position =
-    typeof requested === "number" && Number.isInteger(requested)
-      ? Math.min(Math.max(requested, 1), results.length)
-      : 1;
+  const position = requested === undefined ? 1 : requested;
+  // A position the page does not have is a model mistake, not permission to open a different
+  // apartment. Refuse it; the tool tells the renter there is no such result.
+  if (!Number.isInteger(position) || position < 1 || position > results.length) return null;
   return results[position - 1] ?? null;
 }

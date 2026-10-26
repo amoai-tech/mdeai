@@ -48,6 +48,7 @@ function formatStartsAt(iso: string) {
  *  published event with a slug links to its public page; all others show the
  *  chip with no action (no edit/publish routes exist yet). */
 export function HostEventCard({
+  id,
   title,
   venue,
   neighborhood,
@@ -64,6 +65,7 @@ export function HostEventCard({
     <article
       className="overflow-hidden rounded-lg border border-border bg-card text-sm shadow-sm"
       data-testid="host-event-card"
+      data-event-id={id}
       data-status={status}
       aria-label={`Event: ${title}${neighborhood ? `, ${neighborhood}` : ""}`}
     >

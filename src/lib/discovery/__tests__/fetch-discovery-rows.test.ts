@@ -81,10 +81,12 @@ describe("homepage events (SAN-1556): only real, upcoming, honestly described", 
 });
 
 describe("homepage restaurants (SAN-1556)", () => {
-  it("filters is_active itself, because the development read policy also returns inactive rows", async () => {
+  it("leaves phase-aware visibility to the catalog RLS policy (SAN-1468)", async () => {
     const { client, calls } = fakeClient([]);
     await fetchLiveRestaurants(client);
-    expect(calls).toContain("eq(is_active,true)");
+    // The read policy is `is_active = true OR phase = 'development'`. A second
+    // local predicate only hid development restaurants from legitimate readers.
+    expect(calls).not.toContain("eq(is_active,true)");
   });
 
   it("leaves an unrated restaurant unrated and adds no 'Highly rated' filler", async () => {

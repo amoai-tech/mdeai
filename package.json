@@ -76,6 +76,8 @@
     "test:veb-mvp-010-integration": "node scripts/verify-veb-mvp-010-integration.mjs",
     "smoke:prod": "node scripts/prod-behaviour-smoke.mjs",
     "test:e2e": "SMOKE_BASE_URL=${SMOKE_BASE_URL:-http://localhost:3002} PLAYWRIGHT_WEB_SERVER_COMMAND=\"${PLAYWRIGHT_WEB_SERVER_COMMAND:-npm run dev:ui:worktree}\" playwright test --project=chromium",
+    "verify:production": "node scripts/verify-production-release.mjs",
+    "qa:cleanup": "node scripts/cleanup-qa-fixtures.mjs",
     "test:e2e:desktop": "playwright test e2e/maps-layout-desktop.spec.ts",
     "test:e2e:mobile": "playwright test e2e/maps-layout-mobile.spec.ts",
     "test:e2e:grounding": "playwright test e2e/maps-grounding.spec.ts",

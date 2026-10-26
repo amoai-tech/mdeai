@@ -1,4 +1,5 @@
 import { SignInRequired } from "@/components/auth/sign-in-required";
+import { AccountLoadError } from "@/components/app/load-error";
 import { ContestAdminDetailView } from "@/components/contests/contest-admin-detail";
 import { getAdminGate } from "@/lib/auth/admin-gate";
 
@@ -34,6 +35,21 @@ export default async function AppContestDetailPage({
             returnTo={"/app/contests/" + id}
             testId="app-contest-sign-in-required"
             title="Admin sign-in required"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (gate.status === "error") {
+    return (
+      <div className="max-w-3xl" data-testid="app-contest-detail">
+        <h1 className="font-serif text-2xl font-semibold">Contest</h1>
+        <div className="mt-4">
+          <AccountLoadError
+            message={gate.message}
+            retryHref={`/app/contests/${id}`}
+            title="We could not check admin access"
           />
         </div>
       </div>

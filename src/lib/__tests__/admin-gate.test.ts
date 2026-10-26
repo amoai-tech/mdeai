@@ -40,6 +40,18 @@ describe("contest admin server gate", () => {
     await expect(requireAdminId()).rejects.toThrow("Admin access required.");
   });
 
+  it("distinguishes a role-lookup failure from an ordinary denial", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    rpc.mockResolvedValue({ data: null, error: { message: "database unavailable" } });
+    await expect(getAdminGate()).resolves.toEqual({
+      status: "error",
+      message: "We could not verify admin access. Try again.",
+    });
+    await expect(requireAdminId()).rejects.toThrow(
+      "We could not verify admin access. Try again.",
+    );
+  });
+
   it("fails closed when the role lookup returns anything but true", async () => {
     getUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
     rpc.mockResolvedValue({ data: null });

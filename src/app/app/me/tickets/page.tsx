@@ -16,7 +16,7 @@ export default async function PersonalTicketsPage() {
   const { user } = await getServerUser();
   if (!user) redirect("/login?next=/app/me/tickets");
 
-  const result = await listBuyerOrders();
+  const result = await listBuyerOrders(user.id);
   const orders = result.status === "ok" ? result.value : [];
   const { upcoming, past } = partitionOrdersByTime(orders);
 

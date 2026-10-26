@@ -1,4 +1,5 @@
 import { SignInRequired } from "@/components/auth/sign-in-required";
+import { AccountLoadError } from "@/components/app/load-error";
 import {
   ContestAdminHeading,
   ContestAdminList,
@@ -31,6 +32,12 @@ export default async function AdminContestsPage() {
           returnTo="/admin/contests"
           testId="admin-sign-in-required"
           title="Admin sign-in required"
+        />
+      ) : gate.status === "error" ? (
+        <AccountLoadError
+          message={gate.message}
+          retryHref="/admin/contests"
+          title="We could not check admin access"
         />
       ) : gate.status === "denied" ? (
         <p data-testid="admin-not-authorized" className="text-sm text-muted-foreground">
