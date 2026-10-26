@@ -11,6 +11,7 @@ import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_MODEL } from "../lib/models";
+import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
@@ -431,6 +432,10 @@ Conversion boundary (do NOT cross):
 
 ${formatEventSourcePromptHint()}`,
   model: CONCIERGE_MODEL,
+  // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
+  // generated function call. Never retry after a completed step/tool action.
+  // Mastra's built-in transient error processors stay enabled by default.
+  errorProcessors: [geminiMalformedFirstStepRetry],
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing
