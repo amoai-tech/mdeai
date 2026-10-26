@@ -115,7 +115,7 @@ test("SAN-1209: Host conversation restores after reload and rejects foreign user
     // The transcript must be readable on a real 390px phone, not merely in
     // the DOM underneath the persistent composer or placeholder inbox.
     const restoredRail = page.getByTestId("host-os-chat-region");
-    const restoredMessage = restoredRail.getByText(new RegExp(marker)).first();
+    const restoredMessage = restoredRail.getByText(marker, { exact: false }).first();
     await restoredMessage.scrollIntoViewIfNeeded();
     await expect(restoredMessage).toBeVisible();
     const messageRect = await restoredMessage.boundingBox();
