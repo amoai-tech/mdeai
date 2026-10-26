@@ -36,6 +36,21 @@ test("real mobile composer is a separate browser job, not deterministic chat", (
   assert.match(yaml, /  auth-guard-chromium:/);
 });
 
+test("failed-only reruns collect all four browser reports across run attempts", () => {
+  const shard = part("  deterministic-chromium:", "  # Real CopilotKit v2 composer:");
+  const mobile = part("  mobile-composer:", "  # Stable overall check:");
+  const report = part("  browser-results:", "  # Run the existing real auth-route");
+  assert.match(shard, /timeout-minutes: 30/);
+  assert.match(shard, /name: playwright-blob-shard-\$\{\{ matrix\.shard \}\}/);
+  assert.match(mobile, /name: playwright-blob-mobile/);
+  for (const lane of [shard, mobile]) {
+    assert.match(lane, /overwrite: true/);
+    assert.doesNotMatch(lane, /name: playwright-blob-[^\n]*run_attempt/);
+  }
+  assert.match(report, /pattern: playwright-blob-\*/);
+  assert.doesNotMatch(report, /pattern: playwright-blob-[^\n]*run_attempt/);
+});
+
 test("missing reports and failed shards cannot produce a green combined result", () => {
   const reportJob = part("  browser-results:", "  # Run the existing real auth-route");
   for (const name of ["shard-1.zip", "shard-2.zip", "shard-3.zip", "mobile-composer.zip"]) {
