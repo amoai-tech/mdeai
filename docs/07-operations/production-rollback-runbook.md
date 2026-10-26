@@ -78,6 +78,28 @@ If it prints `true`, switch off "Auto-assign Custom Production Domains" (Vercel 
 
 **A rollback only changes the app version.** It does not undo database changes, third-party API changes or environment variable changes (Vercel restores the earlier build with its earlier environment). If the bad release also changed the database, the old app may still fail: check that before declaring recovery.
 
+### Ordinary releases: avoid early promotion by connected tools
+
+On 2026-10-26, Vercel audit events `manual-deployment-promotion-created` attributed
+two pre-certification promotions to the connected **ChatGPT** app (not the GitHub
+certification job). The resulting workflow failed its last `assert-staged`, but
+the commit status was misleadingly green because it had been published after
+the browser test rather than after verified domain promotion.
+
+**For normal merges:** do not call Vercel's dashboard Promote, MCP `promote_deployment`,
+CLI `vercel promote`, or alias APIs from a separate agent while certification runs.
+The existing `Candidate Runtime Certification` GitHub workflow owns the single
+promotion step. Never treat READY, a successful browser test, or a green
+`production-certification` commit status alone as sufficient release proof:
+check the **whole workflow**, including the final Vercel domain readback.
+
+The audit identifies the integration as ChatGPT but not the specific conversation
+or agent that initiated those requests. GitHub code cannot prevent a Vercel team
+owner or separately connected app from issuing an out-of-band promotion. For
+strict prevention, restrict/revoke external promotion-capable credentials at the
+provider boundary and use a dedicated CI release identity, while keeping an
+operator-controlled recovery credential. Coordinate access changes before rotation.
+
 ## 5. After recovery
 
 - Do not re-run certification for an already-promoted deployment; the staged check refuses it on purpose.

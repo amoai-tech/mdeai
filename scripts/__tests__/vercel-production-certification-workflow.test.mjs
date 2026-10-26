@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -109,7 +111,7 @@ test("promotion cannot run after any failed step", () => {
   assert.doesNotMatch(before, /continue-on-error:\s*true/, "a step that may fail must not precede promotion");
 });
 
-test("order: validate, credential, names, staged, certify, publish, re-confirm staged, promote, verify", () => {
+test("order: validate, credential, names, staged, certify, re-confirm staged, promote, verify, publish", () => {
   const job = certifyJob(workflow());
   const order = [
     "Checkout exact deployed commit",
@@ -119,10 +121,10 @@ test("order: validate, credential, names, staged, certify, publish, re-confirm s
     "Verify Production defines the required variable names",
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
-    "Publish certification result",
     "Re-confirm the candidate is still staged right before promotion",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
+    "Publish certification result",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
 });
@@ -153,14 +155,60 @@ test("certification runs on the exact candidate URL, before and never after prom
   );
 });
 
-test("publishes success only from the certification step's own outcome", () => {
+test("production-certification status cannot be green before release promotion and both domains are verified", () => {
   const job = certifyJob(workflow());
   const result = stepBody(job, "Publish certification result");
-  assert.match(result, /if: always\(\)/);
+  assert.ok(
+    stepIndex(job, "Verify www.mdeai.co serves the exact certified deployment") <
+      stepIndex(job, "Publish certification result"),
+    "the success status must come LAST, not immediately after the browser test",
+  );
+  assert.match(result, /if:\s*\$\{\{\s*always\(\)\s*&&\s*steps\.validate\.outcome == 'success'\s*\}\}/);
   assert.match(result, /CERTIFY_OUTCOME: \$\{\{ steps\.certify\.outcome \}\}/);
-  assert.match(result, /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \]; then[\s\S]*?state=success/);
-  assert.match(result, /state=failure/, "any other outcome must publish failure");
-  assert.match(result, /-f target_url="\$\{RUN_URL\}"/, "the status must stay diagnosable");
+  assert.match(result, /PROMOTE_OUTCOME: \$\{\{ steps\.promote\.outcome \}\}/);
+  assert.match(result, /VERIFY_OUTCOME: \$\{\{ steps\.verify\.outcome \}\}/);
+  assert.match(result, /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \] &&[\s\S]*?"\$\{PROMOTE_OUTCOME\}" = "success"[\s\S]*?"\$\{VERIFY_OUTCOME\}" = "success"[\s\S]*?state=success/);
+  assert.match(result, /state=failure/, "failed or skipped promotion/verification must publish failure");
+  assert.match(result, /-f target_url="\$\{RUN_URL\}"/, "status should link to the definitive run");
+  assert.match(stepBody(job, "Validate Vercel candidate trust boundary"), /id: validate/);
+  assert.match(stepBody(job, "Promote the exact certified deployment"), /id: promote/);
+  assert.match(stepBody(job, "Verify www.mdeai.co serves the exact certified deployment"), /id: verify/);
+});
+
+test("final GitHub status truth table: runtime pass alone never means release success", () => {
+  const publish = stepBody(certifyJob(workflow()), "Publish certification result");
+  const runBlock = publish.split("        run: |\n")[1];
+  assert.ok(runBlock, "the final publishing step must contain a shell command");
+  const command = runBlock.split("\n").map((line) => line.replace(/^          /, "")).join("\n");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mde-release-status-"));
+  try {
+    for (const [certify, promote, verify, expectedState] of [
+      ["success", "success", "success", "success"],
+      ["success", "skipped", "skipped", "failure"],
+      ["success", "failure", "skipped", "failure"],
+      ["success", "success", "failure", "failure"],
+      ["failure", "skipped", "skipped", "failure"],
+    ]) {
+      const file = path.join(dir, "status.txt");
+      fs.rmSync(file, { force: true });
+      execFileSync("bash", ["-c", `gh() { printf '%s\\n' "$*" > "$STATUS_FILE"; }; ${command}`], {
+        env: {
+          ...process.env,
+          STATUS_FILE: file,
+          GITHUB_REPOSITORY: "amoai-tech/mdeai",
+          SHA: "0".repeat(40),
+          RUN_URL: "https://github.com/amoai-tech/mdeai/actions/runs/1234",
+          CERTIFY_OUTCOME: certify,
+          PROMOTE_OUTCOME: promote,
+          VERIFY_OUTCOME: verify,
+        },
+        encoding: "utf8",
+      });
+      assert.match(fs.readFileSync(file, "utf8"), new RegExp(`-f state=${expectedState}\\b`));
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("production is verified after promotion, and only if promotion succeeded", () => {
