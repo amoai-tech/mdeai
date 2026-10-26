@@ -114,7 +114,9 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     // A mapped card has the canonical pin identity; if Google Maps loaded,
     // compare actual marker IDs, not screenshot positions or guessed addresses.
     const mappedCardIds = before.map((row) => row.pinId).filter(Boolean).sort();
-    if (pinsBefore.length > 0) expect(pinsBefore).toEqual(mappedCardIds);
+    // Zero source coordinates means zero pins: this is a correct empty set,
+    // not a reason to fabricate the neighborhood centre.
+    expect(pinsBefore).toEqual(mappedCardIds);
 
     const transcriptToggle = page.locator('[data-testid="rental-ask-toggle-transcript"]:visible').first();
     await expect(transcriptToggle).toBeVisible({ timeout: 40_000 });
