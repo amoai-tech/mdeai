@@ -24,6 +24,8 @@ export function isAgentlessRoute(pathname: string): boolean {
     pathname === "/signup" ||
     pathname.startsWith("/auth/") ||
     pathname === "/chat" ||
+    pathname === "/me/tickets" ||
+    pathname.startsWith("/me/tickets/") ||
     pathname === "/partners/profile" ||
     pathname === "/host/event" ||
     pathname.startsWith("/host/event/") ||

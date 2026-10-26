@@ -43,6 +43,16 @@ describe("isAgentlessRoute", () => {
     }
   });
 
+  it("keeps legacy wallet list and QR detail off the discovery provider", () => {
+    for (const pathname of [
+      "/me/tickets",
+      "/me/tickets/",
+      "/me/tickets/order-123",
+    ]) {
+      expect(isAgentlessRoute(pathname), pathname).toBe(true);
+    }
+  });
+
   it("leaves discovery routes on the root concierge provider", () => {
     for (const pathname of [
       "/",
@@ -51,7 +61,8 @@ describe("isAgentlessRoute", () => {
       "/nightlife",
       "/trips",
       "/saved",
-      "/me/tickets",
+      "/me",
+      "/me/tickets-help",
       "/host",
       "/host/rentals-report",
     ]) {
