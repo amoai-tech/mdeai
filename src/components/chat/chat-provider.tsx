@@ -173,6 +173,25 @@ function SavedThreadHistory({
 }
 
 /**
+ * Replay a saved thread's messages inside an already-configured CopilotKit provider.
+ *
+ * `/chat` owns its provider; discovery routes (Rentals, Events, Restaurants…) already get
+ * `CopilotChatConfigurationProvider` from `copilot-kit-provider`, so they only need the history
+ * replay. Without this, the thread id survives a refresh but the inline Ask MDE transcript comes
+ * back empty and the page shows the plain catalogue.
+ */
+export function SavedThreadReplay({
+  threadId,
+  children,
+}: {
+  threadId: string;
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+}
+
+/**
  * The /chat concierge surface, and the one place its thread is decided.
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
