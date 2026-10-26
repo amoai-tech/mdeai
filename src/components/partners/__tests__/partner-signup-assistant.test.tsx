@@ -134,11 +134,11 @@ describe("SAN-709 assistant proposal revision guard", () => {
     const container = mount();
     click(container, "suggest-current");
     click(container, "url-apply");
-    expect(category(container)).toBe("Imported venue");
+    expectCategory(container, "Imported venue");
     expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
     expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
     click(container, "suggest-old");
-    expect(category(container)).toBe("Imported venue");
+    expectCategory(container, "Imported venue");
   });
 
   it("Ignore never changes the form", () => {
