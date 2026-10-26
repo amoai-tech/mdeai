@@ -3,7 +3,9 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Trophy, UtensilsCrossed } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
@@ -61,7 +63,15 @@ function RestaurantBrowseViewInner({
 
   return (
     <>
-      <BrowseLayout
+      <DiscoveryPageContext
+        page="restaurants"
+        filters={{ neighborhood, cuisine }}
+        selectedId={results.find((r) => `restaurant-${r.id}` === selectedPinId)?.id ?? null}
+      />
+      <DiscoveryWorkspace
+        activeSlug="restaurants"
+        askComposer={<DiscoveryAskComposer page="restaurants" />}
+        rightPanel={<BrowseMapPanel fill />}
         testId="restaurants-browse"
         title="Restaurants"
         subtitle={
@@ -75,7 +85,6 @@ function RestaurantBrowseViewInner({
             cuisine={cuisine}
           />
         }
-        mapSlot={<BrowseMapPanel />}
       >
         <aside className="mt-5 flex flex-col gap-4 rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6" data-testid="restaurant-contests-entry">
           <div className="flex items-start gap-3">
@@ -159,7 +168,7 @@ function RestaurantBrowseViewInner({
             </div>
           ) : null}
         </section>
-      </BrowseLayout>
+      </DiscoveryWorkspace>
 
       <BrowseMapSheet />
     </>

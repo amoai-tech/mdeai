@@ -79,6 +79,11 @@
       "note": "v2 hooks only."
     },
     {
+      "file": "src/components/chat/discovery-page-context.tsx",
+      "classification": "keep",
+      "note": "SAN-737 shared five-route page context via installed v2 useAgentContext; no second provider or thread. Clear on route unmount and never treat client IDs as authority."
+    },
+    {
       "file": "src/components/chat/chat-filter-copilot-instructions.tsx",
       "classification": "keep",
       "note": "v2 hooks only."

@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { CalendarDays } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -44,6 +49,10 @@ export function EventBrowseView({
   dateWindow,
   price,
 }: EventBrowseViewProps) {
+  const [guestSelection, setGuestSelection] = useState<{ scope: string; ids: string[] } | null>(null);
+  const scope = buildFilterUrl({ category, neighborhood, dateWindow, price });
+  const guestIds = guestSelection?.scope === scope ? new Set(guestSelection.ids) : null;
+  const shownEvents = guestIds ? results.filter((event) => guestIds.has(event.id)) : results;
   const retryHref = buildFilterUrl({
     category,
     neighborhood,
@@ -54,7 +63,14 @@ export function EventBrowseView({
     total === 1 ? "1 upcoming event" : `${total} upcoming events`;
 
   return (
-    <BrowseLayout
+    <>
+    <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} />
+    <DiscoveryWorkspace
+      activeSlug="events"
+      askComposer={<DiscoveryAskComposer page="events" guestEvents={{
+        category, neighborhood, dateWindow,
+        onEventIds: (ids) => setGuestSelection({ scope, ids }),
+      }} />}
       testId="events-browse"
       title="Events in Medellín"
       subtitle={`Real published events — ${countLabel}`}
@@ -68,6 +84,7 @@ export function EventBrowseView({
       }
     >
       <section className="mt-6" aria-label="Event listings">
+        {guestIds ? <p data-testid="guest-event-results-count" className="mb-3 text-sm text-muted-foreground">{shownEvents.length} matching events in the currently displayed public catalog. Prices and ticket actions come from published ticket data, not AI guesses.</p> : null}
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -86,7 +103,7 @@ export function EventBrowseView({
           </div>
         ) : null}
 
-        {!error && results.length === 0 ? (
+        {!error && shownEvents.length === 0 ? (
           <div className="space-y-4">
             <EmptyState
               testId="events-empty"
@@ -107,18 +124,19 @@ export function EventBrowseView({
           </div>
         ) : null}
 
-        {!error && results.length > 0 ? (
+        {!error && shownEvents.length > 0 ? (
           <div
             className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            aria-label={`${results.length} events`}
+            aria-label={`${shownEvents.length} events`}
             data-testid="events-grid"
           >
-            {results.map((event) => (
+            {shownEvents.map((event) => (
               <EventBrowseCard key={event.id} event={event} />
             ))}
           </div>
         ) : null}
       </section>
-    </BrowseLayout>
+    </DiscoveryWorkspace>
+    </>
   );
 }

@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Coffee } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { VenueBrowseCard } from "@/components/browse/venue-browse-card";
@@ -34,7 +38,11 @@ export function CafeBrowseView({
   const retryHref = buildFilterUrl({ neighborhood, feature });
 
   return (
-    <BrowseLayout
+    <>
+    <DiscoveryPageContext page="cafes" filters={{ neighborhood, feature }} />
+    <DiscoveryWorkspace
+      activeSlug="cafes"
+      askComposer={<DiscoveryAskComposer page="cafes" />}
       testId="cafes-browse"
       title="Cafés"
       subtitle="Specialty coffee & workspace spots in Medellín — browse without chat"
@@ -88,6 +96,7 @@ export function CafeBrowseView({
           </div>
         ) : null}
       </section>
-    </BrowseLayout>
+    </DiscoveryWorkspace>
+    </>
   );
 }

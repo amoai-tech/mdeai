@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { MoonStar } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { VenueBrowseCard } from "@/components/browse/venue-browse-card";
@@ -43,7 +47,11 @@ export function NightlifeBrowseView({
   );
 
   return (
-    <BrowseLayout
+    <>
+    <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} />
+    <DiscoveryWorkspace
+      activeSlug="nightlife"
+      askComposer={<DiscoveryAskComposer page="nightlife" />}
       testId="nightlife-page"
       title="Nightlife"
       subtitle="Clubs & bars in Medellín — browse without chat"
@@ -98,6 +106,7 @@ export function NightlifeBrowseView({
           </div>
         ) : null}
       </section>
-    </BrowseLayout>
+    </DiscoveryWorkspace>
+    </>
   );
 }
