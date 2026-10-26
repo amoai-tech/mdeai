@@ -54,8 +54,9 @@ export async function readBrokerWorkspace(
     focus,
     listings,
     listingsReturned: listings.length,
-    listingsMayBeTruncated: inventory.listings.length > listings.length ||
-      inventory.listings.length === 200,
+    // This focus deliberately omits listings; that is not pagination/truncation.
+    listingsMayBeTruncated: focus === "viewings" ? false :
+      inventory.listings.length > listings.length || inventory.listings.length === 200,
     kpis: view.kpis.map(({ label, value }) => ({ label, value })),
     attention: view.attention.map(({ title, detail }) => ({ title, detail })),
     viewingRequests: requests.map((request) => ({

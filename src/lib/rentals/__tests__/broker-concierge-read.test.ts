@@ -54,6 +54,8 @@ describe("readBrokerWorkspace", () => {
       scheduledAt:"2026-11-01T15:00:00Z",status:"requested",
     }]);
     expect(result.viewingRequestsTotal).toBe(1);
+    expect(result.listings).toEqual([]);
+    expect(result.listingsMayBeTruncated).toBe(false);
   });
 
   it("refuses an authenticated person with no broker profile", async () => {
