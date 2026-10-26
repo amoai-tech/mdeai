@@ -9,14 +9,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Tickets · mdeai" };
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL = new Map<string, string>(Object.entries({
   paid: "Paid",
   pending: "Pending",
   refunded: "Refunded",
   partial_refund: "Partially refunded",
   cancelled: "Cancelled",
   other: "Unknown",
-};
+}));
 
 type PageProps = {
   searchParams: Promise<{ event?: string }>;
@@ -165,9 +165,9 @@ export default async function AppEventTicketsPage({ searchParams }: PageProps) {
       <section className="space-y-2" data-testid="host-tickets-orders">
         <h2 className="font-serif text-lg font-semibold">Recent orders</h2>
         <p className="text-sm text-muted-foreground">
-          {(["paid", "pending", "refunded", "partial_refund", "cancelled", "other"] as const)
-            .filter((key) => summary.buckets[key].count > 0)
-            .map((key) => `${STATUS_LABEL[key]}: ${summary.buckets[key].count}`)
+          {Object.entries(summary.buckets)
+            .filter(([, bucket]) => bucket.count > 0)
+            .map(([key, bucket]) => `${STATUS_LABEL.get(key) ?? "Unknown"}: ${bucket.count}`)
             .join(" · ") || "No orders yet."}
         </p>
         {orders.length === 0 ? (
@@ -193,7 +193,7 @@ export default async function AppEventTicketsPage({ searchParams }: PageProps) {
                     <td className="py-2 pr-3 font-mono text-xs">{order.short_id}</td>
                     <td className="py-2 pr-3">{order.buyer_name ?? "—"}</td>
                     <td className="py-2 pr-3" data-order-status={order.status}>
-                      {STATUS_LABEL[(order.status ?? "").toLowerCase()] ?? order.status}
+                      {STATUS_LABEL.get((order.status ?? "").toLowerCase()) ?? (order.status || "Unknown")}
                     </td>
                     <td className="py-2 pr-3">{order.quantity}</td>
                     <td className="py-2 pr-3">{order.total_cents == null ? "—" : formatMoney(order.total_cents, order.currency)}</td>

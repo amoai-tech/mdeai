@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getAdminGate } from "@/lib/auth/admin-gate";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,7 +33,7 @@ export async function setAdminEventState(
   eventId: string,
   action: AdminEventAction,
 ): Promise<AdminEventActionResult> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId)) {
+  if (!z.string().uuid().safeParse(eventId).success) {
     return { ok: false, code: "INVALID", message: "Unknown event id." };
   }
   const next = NEXT_STATE[action];

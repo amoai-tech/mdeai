@@ -8,13 +8,13 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Attendees · mdeai" };
 
-const ATTENDEE_STATUS_LABEL: Record<string, string> = {
+const ATTENDEE_STATUS_LABEL = new Map<string, string>(Object.entries({
   active: "Paid",
   pending: "Pending payment",
   refunded: "Refunded",
   cancelled: "Cancelled",
   used: "Checked in",
-};
+}));
 
 type PageProps = {
   searchParams: Promise<{ event?: string; q?: string }>;
@@ -145,7 +145,7 @@ export default async function AppEventAttendeesPage({ searchParams }: PageProps)
                     <td className="py-2 pr-3">{row.email ?? "—"}</td>
                     <td className="py-2 pr-3">{row.tier_name ?? "—"}</td>
                     <td className="py-2 pr-3" data-attendee-status={status}>
-                      {ATTENDEE_STATUS_LABEL[status] ?? row.status ?? "Unknown"}
+                      {ATTENDEE_STATUS_LABEL.get(status) ?? (row.status || "Unknown")}
                     </td>
                     <td className="py-2 pr-3 font-mono text-xs">{row.order_short_id ?? "—"}</td>
                     <td className="py-2">

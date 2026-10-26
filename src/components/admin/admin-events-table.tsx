@@ -106,7 +106,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                         size="sm"
                         variant="outline"
                         disabled={pendingId !== null}
-                        onClick={() => run(row.id, "unpublish")}
+                        onClick={() => { run(row.id, "unpublish"); }}
                         data-testid="admin-event-unpublish"
                       >
                         Unpublish
@@ -116,7 +116,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                         type="button"
                         size="sm"
                         disabled={pendingId !== null}
-                        onClick={() => run(row.id, "publish")}
+                        onClick={() => { run(row.id, "publish"); }}
                         data-testid="admin-event-publish"
                       >
                         Publish
@@ -128,7 +128,7 @@ export function AdminEventsTable({ rows }: { rows: AdminEventRow[] }) {
                         size="sm"
                         variant="outline"
                         disabled={pendingId !== null}
-                        onClick={() => run(row.id, "restore")}
+                        onClick={() => { run(row.id, "restore"); }}
                         data-testid="admin-event-restore"
                       >
                         Restore

@@ -6,16 +6,16 @@ const state = vi.hoisted(() => ({
 }));
 const EVENT_ID = "11111111-1111-4111-8111-111111111111";
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: state.user } }) },
+  createClient: () => Promise.resolve({
+    auth: { getUser: () => Promise.resolve({ data: { user: state.user } }) },
     from: () => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({ data: { id: EVENT_ID, organizer_id: "host-a" }, error: null }),
+          maybeSingle: () => Promise.resolve({ data: { id: EVENT_ID, organizer_id: "host-a" }, error: null }),
         }),
       }),
     }),
-    rpc: async () => ({ data: false, error: null }),
+    rpc: () => Promise.resolve({ data: false, error: null }),
   }),
 }));
 vi.mock("@/lib/supabase/service", () => ({
@@ -23,13 +23,13 @@ vi.mock("@/lib/supabase/service", () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({ data: state.attendee, error: null }),
+          maybeSingle: () => Promise.resolve({ data: state.attendee, error: null }),
         }),
       }),
     }),
-    rpc: async (name: string, args: Record<string, unknown>) => {
+    rpc: (name: string, args: Record<string, unknown>) => {
       state.records.push({ name, args });
-      return { data: name === "ticket_validate_consume" ? { result: "consumed" } : "log-id", error: null };
+      return Promise.resolve({ data: name === "ticket_validate_consume" ? { result: "consumed" } : "log-id", error: null });
     },
   }),
 }));

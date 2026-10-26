@@ -68,8 +68,10 @@ type Props = {
 export function TicketScanner({ eventId, eventName }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<{ detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>> } | null>(null);
+  const detectorRef = useRef<{ detect: (_source: CanvasImageSource) => Promise<Array<{ rawValue: string }>> } | null>(null);
   const busyRef = useRef(false);
+  const lastDetectedTokenRef = useRef<string | null>(null);
+  const scanTimerRef = useRef<number | null>(null);
 
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -79,7 +81,11 @@ export function TicketScanner({ eventId, eventName }: Props) {
   const [networkError, setNetworkError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (scanTimerRef.current !== null) clearTimeout(scanTimerRef.current);
+    scanTimerRef.current = null;
+    lastDetectedTokenRef.current = null;
+    detectorRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => { track.stop(); });
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
@@ -122,7 +128,7 @@ export function TicketScanner({ eventId, eventName }: Props) {
 
   async function startCamera() {
     setCameraError(null);
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("This browser cannot open a camera. Use manual entry.");
       return;
     }
@@ -141,8 +147,8 @@ export function TicketScanner({ eventId, eventName }: Props) {
 
       const Detector = (
         window as unknown as {
-          BarcodeDetector?: new (options: { formats: string[] }) => {
-            detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
+          BarcodeDetector?: new (_options: { formats: string[] }) => {
+            detect: (_source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
           };
         }
       ).BarcodeDetector;
@@ -160,13 +166,22 @@ export function TicketScanner({ eventId, eventName }: Props) {
         if (!busyRef.current) {
           try {
             const codes = await detectorRef.current.detect(videoRef.current);
-            const value = codes[0]?.rawValue;
-            if (value) await scan(value);
+            const value = codes[0]?.rawValue ?? null;
+            // Scan a continuous view of the same QR only once. Arm again when
+            // the QR leaves the frame, or immediately when a different QR appears.
+            if (value && value !== lastDetectedTokenRef.current) {
+              lastDetectedTokenRef.current = value;
+              await scan(value);
+            } else if (!value) {
+              lastDetectedTokenRef.current = null;
+            }
           } catch {
             // Transient decode failure while the camera focuses: ignore.
           }
         }
-        if (streamRef.current) window.setTimeout(tick, 700);
+        if (streamRef.current) {
+          scanTimerRef.current = window.setTimeout(() => { void tick(); }, 700);
+        }
       };
       void tick();
     } catch {
@@ -231,7 +246,7 @@ export function TicketScanner({ eventId, eventName }: Props) {
             id="scanner-token"
             data-testid="scanner-manual-input"
             value={manualToken}
-            onChange={(change) => setManualToken(change.target.value)}
+            onChange={(change) => { setManualToken(change.target.value); }}
             placeholder="Paste or type the ticket code"
             autoComplete="off"
           />
