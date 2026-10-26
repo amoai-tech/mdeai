@@ -122,9 +122,10 @@ select is((select (public.admin_event_set_state(event_id,'restore')->>'is_active
 reset role;
 select is((select status='draft' and is_active from public.events where id=(select a.event_id from san515_test_actor a)),
   true,'restore persists active draft without business approval gate');
-select is((select count(*)::int from public.admin_event_state_audit
-  where action in ('unpublish','restore') and actor_id=(select admin_id from san515_test_actor)
-    and event_id=(select event_id from san515_test_actor)),
+select is((select count(*)::int from public.admin_event_state_audit audit
+  where audit.action in ('unpublish','restore')
+    and audit.actor_id=(select actor.admin_id from san515_test_actor actor)
+    and audit.event_id=(select actor.event_id from san515_test_actor actor)),
   2,'unpublish and restore each record the authenticated actor');
 select * from finish();
 rollback;
