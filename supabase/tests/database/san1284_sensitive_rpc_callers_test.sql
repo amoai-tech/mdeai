@@ -1,7 +1,7 @@
 -- Direct RPC authorization regression for three diagnosed SECURITY DEFINER functions.
 -- All tests are read-only; transaction rolls back. Preserve intended guest APIs.
 begin;
-select plan(13);
+select plan(16);
 
 select is(has_function_privilege('anon',
   'public.fn_record_conversion(uuid,text,text,integer,uuid,jsonb)','EXECUTE'),
@@ -36,6 +36,23 @@ select ok(has_function_privilege('anon','public.log_outbound_click(uuid,text,tex
 select ok((select p.prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace
  where n.nspname='public' and p.proname='fn_outbox_suppression_check'),
  'suppression trigger retains its SECURITY DEFINER context');
+
+-- Verify the effective direct-RPC boundary, not only pg_proc ACL metadata.
+-- Each attempted call must fail with insufficient_privilege before entering
+-- the SECURITY DEFINER body, so it cannot write data.
+set local role anon;
+select throws_ok(
+  $$select public.fn_record_conversion(null::uuid,'event','purchase',null::integer,null::uuid,'{}'::jsonb)$$,
+  '42501', null, 'anon invocation cannot forge a conversion');
+select throws_ok(
+  $$select public.decide_approval(null::uuid,'approved',null::text)$$,
+  '42501', null, 'anon invocation cannot enter approval RPC');
+reset role;
+set local role authenticated;
+select throws_ok(
+  $$select public.is_suppressed('email','qa@example.invalid')$$,
+  '42501', null, 'authenticated caller cannot query private suppression list');
+reset role;
 
 select * from finish();
 rollback;
