@@ -19,7 +19,7 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { classifyConciergeStartupError, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -90,14 +90,16 @@ function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<C
  *    the `agent.threadId` check). If the reconnect never finishes, history is
  *    NOT installed: the chat shows the retryable error instead.
  */
-function SavedThreadHistory({
+export function SavedThreadHistory({
   threadId,
   children,
+  agentId = "conciergeAgent",
 }: {
   threadId: string;
   children: ReactNode;
+  agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -220,12 +222,27 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
+  // The runtime-info 401 may arrive before the guest session finishes loading.
+  // Don't show a false failed-turn notice or hide a signed-in auth failure.
+  const pendingStartup401 = useRef<string | undefined | null>(null);
+  useEffect(() => {
+    if (sessionLoading || pendingStartup401.current === null) return;
+    const failedThreadId = pendingStartup401.current;
+    pendingStartup401.current = null;
+    if (user && failedThreadId === threadId) reportConciergeError(failedThreadId);
+  }, [sessionLoading, user, threadId]);
+
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
       onError={(event) => {
-        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        const decision = classifyConciergeStartupError(event, Boolean(user), sessionLoading);
+        if (decision === "ignore") return;
+        if (decision === "defer") {
+          pendingStartup401.current = threadId;
+          return;
+        }
         reportConciergeError(threadId);
       }}
     >
