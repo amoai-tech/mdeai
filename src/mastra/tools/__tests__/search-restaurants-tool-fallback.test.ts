@@ -113,6 +113,29 @@ describe("searchRestaurants honest data contract", () => {
     }
   });
 
+  it("deterministic CI returns the same fixture for a natural-language query", async () => {
+    // Regression: deterministic mode must short-circuit *every* search shape, not
+    // only the filter-only path, or a natural-language query silently attempts a
+    // live catalog read that CI has blocked.
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.invalid");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+    vi.resetModules();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      const { searchRestaurants: search } = await import("../search-restaurants.js");
+      const out = await search({ queryText: "rooftop dinner in Provenza", limit: 3 });
+
+      expect(out.source).toBe("fallback");
+      expect(out.total).toBe(5);
+      expect(out.results.length).toBe(3);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("MA-P0-07 envelope includes results, total, and source", async () => {
     withNoSupabaseCredentials();
     const { searchRestaurants: search } = await import("../search-restaurants.js");

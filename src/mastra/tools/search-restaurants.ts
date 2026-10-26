@@ -399,6 +399,19 @@ export async function searchRestaurants(
 ): Promise<RestaurantSearchResult> {
   const limit = query.limit ?? 5;
 
+  // Deterministic browser-CI mode is checked FIRST and applies to every search
+  // shape, including natural-language queries. It returns one stable fixture and
+  // never reads the catalog, so no CI path depends on network timing or data.
+  // isDeterministicE2E() is false in production, so a real visitor never sees it.
+  if (isDeterministicE2E()) {
+    const filtered = applyRestaurantFilters(DETERMINISTIC_E2E_RESTAURANTS, query);
+    return {
+      results: withRestaurantDisplayNames(filtered.slice(0, limit)),
+      total: filtered.length,
+      source: 'fallback',
+    };
+  }
+
   if (query.queryText?.trim()) {
     const started = Date.now();
     let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
@@ -450,17 +463,6 @@ export async function searchRestaurants(
       source: intel?.source ?? 'supabase',
       hybridUsed: intel?.hybridUsed,
       rankExplanation: intel?.rankExplanation,
-    };
-  }
-
-  // Browser CI expects a stable fixture; this branch is prohibited in production
-  // by isDeterministicE2E() and never runs for a real visitor.
-  if (isDeterministicE2E()) {
-    const filtered = applyRestaurantFilters(DETERMINISTIC_E2E_RESTAURANTS, query);
-    return {
-      results: withRestaurantDisplayNames(filtered.slice(0, limit)),
-      total: filtered.length,
-      source: 'fallback',
     };
   }
 
