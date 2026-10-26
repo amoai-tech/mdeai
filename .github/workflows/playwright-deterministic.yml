@@ -242,7 +242,9 @@ jobs:
   auth-guard-chromium:
     name: auth redirect + guard chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # PR #403 spent >12m downloading Playwright Linux deps on a slow apt mirror.
+    # Preserve the actual guard assertions; allow cold install + Next startup.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
