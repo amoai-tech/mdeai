@@ -13,7 +13,7 @@ function clientWithResult(data: unknown, error: {message: string} | null = null)
     select: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    then: (resolve: (value: unknown) => unknown) => Promise.resolve({data,error}).then(resolve),
+    then: (resolve: (...args: [unknown]) => unknown) => Promise.resolve({data,error}).then(resolve),
   };
   return {
     client: {from: vi.fn().mockReturnValue(chain)} as unknown as NonNullable<Parameters<typeof hydrateEventTicketOffers>[1]>,
