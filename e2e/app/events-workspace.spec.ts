@@ -272,6 +272,58 @@ async function runOrganizerJourney(
       "Switch workspace. Current: Events",
     );
 
+    // ── SAN-885: open one saved event, edit it, prove the save persists ─────
+    await page
+      .locator(`[data-testid="host-event-card"][data-event-id="${robertoDraft!.id}"]`)
+      .getByTestId("host-event-manage-link")
+      .click();
+    // Predicate over the parsed URL: no RegExp built from a runtime value.
+    await page.waitForURL(
+      (url) => url.pathname === `/app/events/${robertoDraft!.id}`,
+      { timeout: 60_000 },
+    );
+    await expect(page.getByTestId("host-event-detail")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("host-event-detail-name")).toHaveText(robertoDraft!.name);
+
+    const editedName = `${robertoDraft!.name} edited`;
+    await page.getByLabel("Event name").fill(editedName);
+    await page.getByTestId("host-event-save").click();
+    await expect(page.getByTestId("host-event-save-status")).toContainText("Saved", {
+      timeout: 30_000,
+    });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("host-event-detail-name")).toHaveText(editedName, {
+      timeout: 60_000,
+    });
+
+    // Persisted state, not just the rendered DOM: one row, edited, no duplicate.
+    const { data: persistedEvent, error: persistedError } = await admin
+      .from("events")
+      .select("id, name, organizer_id")
+      .eq("id", robertoDraft!.id)
+      .single();
+    expect(persistedError).toBeNull();
+    expect(persistedEvent?.name).toBe(editedName);
+    expect(persistedEvent?.organizer_id).toBe(roberto.userId);
+    const { count: robertoEventCount } = await admin
+      .from("events")
+      .select("id", { count: "exact", head: true })
+      .eq("organizer_id", roberto.userId);
+    expect(robertoEventCount, "editing must not insert a second event").toBe(2);
+
+    // Later list/parity assertions must expect the saved name, not the seed.
+    robertoDraft!.name = editedName;
+
+    // A foreign event id must not resolve to the editor.
+    await page.goto(`/app/events/${sofiaDraft!.id}`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("host-event-detail")).toHaveCount(0);
+    await expect(page.getByText(sofiaDraft!.name)).toHaveCount(0);
+
+    // Back to the workspace so the rest of the journey continues from Events.
+    await page.goto("/app/events", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("host-events")).toBeVisible({ timeout: 60_000 });
+
     // The layout did not remount: the exact chat node survives navigation.
     const chat = page.getByTestId("host-os-chat-region");
     await chat.evaluate((element) => {

@@ -44,9 +44,9 @@ function formatStartsAt(iso: string) {
   }
 }
 
-/** EVP-014 — host's own event in the /host/events list. Status-aware: only a
- *  published event with a slug links to its public page; all others show the
- *  chip with no action (no edit/publish routes exist yet). */
+/** EVP-014 / SAN-885 — host's own event in the /host/events and /app/events
+ *  list. The title always opens the canonical manager (`/app/events/[id]`);
+ *  a published event with a slug additionally links to its public page. */
 export function HostEventCard({
   id,
   title,
@@ -82,7 +82,15 @@ export function HostEventCard({
       )}
       <div className="p-3">
         <div className="mb-1 flex items-start justify-between gap-2">
-          <h3 className="font-medium">{title}</h3>
+          <h3 className="font-medium">
+            <Link
+              href={`/app/events/${id}`}
+              data-testid="host-event-manage-link"
+              className="hover:underline"
+            >
+              {title}
+            </Link>
+          </h3>
           <Badge variant={badge.variant} data-testid="host-event-status">
             {badge.label}
           </Badge>
@@ -97,17 +105,24 @@ export function HostEventCard({
         >
           {priceMin == null ? "Price TBD" : `From $${priceMin.toLocaleString("en-US")}`}
         </p>
-        {canView ? (
-          <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            href={`/app/events/${id}`}
+            data-testid="host-event-manage-link-button"
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+          >
+            Manage
+          </Link>
+          {canView ? (
             <Link
               href={`/events/${slug}`}
               data-testid="host-event-view-link"
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
             >
               View public event
             </Link>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </article>
   );

@@ -384,6 +384,21 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("clears a stale selected apartment when Details was closed before the next question", async () => {
+    render(
+      <RentalAskComposer context={{ neighborhood: "Laureles", selectedListingId: null }} />,
+    );
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(coagent.setState).toHaveBeenCalled());
+    const patch = coagent.setState.mock.calls[0][0];
+    const previous = { selectedListingId: "apartment-A", lastRentalQuery: { neighborhood: "Laureles" } };
+    const next = typeof patch === "function" ? patch(previous) : { ...previous, ...patch };
+    expect(next).not.toHaveProperty("selectedListingId");
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+  });
+
   it("takes the cards from the agent's own rental tool result, with no second search", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -418,7 +433,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
       agent.listeners.forEach((listener) => listener());
     });
 
-    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(onResults).not.toHaveBeenCalled();
+    await act(async () => {
+      pending.resolve(true);
+      await pending.promise;
+    });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
     expect(onResults).toHaveBeenCalledWith(
       expect.objectContaining({
         query: "2 bedroom in Laureles",
@@ -436,10 +456,6 @@ describe("RentalAskComposer (SAN-1421)", () => {
       .find((next) => Array.isArray(next.lastRentalResults));
     expect(patch?.lastRentalResults?.[0]?.amenities).toEqual(["Balcony", "Wi-Fi"]);
     expect(patch?.lastRentalResults?.[1]?.amenities).toEqual([]);
-    await act(async () => {
-      pending.resolve(true);
-      await pending.promise;
-    });
     vi.unstubAllGlobals();
   });
 
@@ -492,11 +508,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
       ];
       agent.listeners.forEach((listener) => listener());
     });
-    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(onResults).not.toHaveBeenCalled();
     await act(async () => {
       pending.resolve(true);
       await pending.promise;
     });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
 
     // Follow-up: a conversational answer with no tool call. The list must not be replaced by a
     // fresh search of the question itself (live, this turned 8 apartments into 32).
@@ -799,13 +816,14 @@ describe("RentalAskComposer (SAN-1421)", () => {
       agent.listeners.forEach((listener) => listener());
     });
 
-    expect(onResults).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by pet-friendly") }),
-    );
+    expect(onResults).not.toHaveBeenCalled();
     await act(async () => {
       pending.resolve(true);
       await pending.promise;
     });
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by pet-friendly") }),
+    );
   });
 
   it("names an unapplied request from the question even when the tool omitted it", async () => {
@@ -834,13 +852,14 @@ describe("RentalAskComposer (SAN-1421)", () => {
       agent.listeners.forEach((listener) => listener());
     });
 
-    expect(onResults).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
-    );
+    expect(onResults).not.toHaveBeenCalled();
     await act(async () => {
       pending.resolve(true);
       await pending.promise;
     });
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+    );
   });
 
   it("keeps a prior unsupported request visible after a refinement", async () => {
@@ -868,13 +887,14 @@ describe("RentalAskComposer (SAN-1421)", () => {
       ];
       agent.listeners.forEach((listener) => listener());
     });
-    expect(onResults).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
-    );
+    expect(onResults).not.toHaveBeenCalled();
     await act(async () => {
       first.resolve(true);
       await first.promise;
     });
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+    );
 
     // Refinement names only the budget. The furnishing request is still not filtered.
     const second = deferred<boolean>();
@@ -900,12 +920,13 @@ describe("RentalAskComposer (SAN-1421)", () => {
       agent.listeners.forEach((listener) => listener());
     });
 
-    const latest = onResults.mock.calls.at(-1)?.[0];
-    expect(latest?.budgetNotice).toContain("can't filter by furnished");
+    expect(onResults).toHaveBeenCalledTimes(1);
     await act(async () => {
       second.resolve(true);
       await second.promise;
     });
+    const latest = onResults.mock.calls.at(-1)?.[0];
+    expect(latest?.budgetNotice).toContain("can't filter by furnished");
   });
 
   it("merges carried labels with an unsupported request named by the refinement", async () => {
@@ -963,15 +984,16 @@ describe("RentalAskComposer (SAN-1421)", () => {
       agent.listeners.forEach((listener) => listener());
     });
 
+    expect(onResults).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      second.resolve(true);
+      await second.promise;
+    });
     const latest = onResults.mock.calls.at(-1)?.[0];
     // The refinement's own notice must not erase the earlier furnishing request.
     expect(latest?.budgetNotice).toContain("furnished");
     expect(latest?.budgetNotice).toContain("pet-friendly");
     expect(latest?.unappliedRequests).toEqual(expect.arrayContaining(["furnished", "pet-friendly"]));
-    await act(async () => {
-      second.resolve(true);
-      await second.promise;
-    });
   });
 
   it("ignores a tool result with a row that is not a real rental", async () => {
