@@ -187,9 +187,9 @@ export async function fetchLiveRestaurants(
   const { data, error } = await supabase
     .from("restaurants")
     .select(RESTAURANT_SELECT)
-    // Explicit on purpose: in the development phase the table's read policy also lets
-    // inactive rows through, so `is_active=false` only hides a record if we ask for it.
-    .eq("is_active", true)
+    // No is_active predicate here: the catalog RLS policy already owns phase-aware
+    // visibility (`is_active = true OR phase = 'development'`). Repeating it only
+    // hid development restaurants from legitimate readers (SAN-1468 1.5).
     .order("rating", { ascending: false, nullsFirst: false })
     .limit(4);
 

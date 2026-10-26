@@ -183,7 +183,7 @@ function restaurantToGroundedRow(r: Restaurant): GroundedPlaceResult {
     longitude: r.longitude ?? MDE_LNG,
     placeId: r.placeId ?? undefined,
     mapsUrl: (r.mapsUrl ?? undefined) as string | undefined,
-    rating: r.rating > 0 ? r.rating : undefined,
+    rating: r.rating != null && r.rating > 0 ? r.rating : undefined,
     summary: (r.aiSummary ?? r.vibe.slice(0, 3).join(" · ")) || undefined,
     formattedAddress: r.neighborhood,
     primaryType: r.cuisine === "cafe" ? "coffee_shop" : "restaurant",

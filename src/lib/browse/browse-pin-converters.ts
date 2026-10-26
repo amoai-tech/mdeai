@@ -29,7 +29,9 @@ type RestaurantPinSource = {
 
 export function restaurantToMapPin(r: RestaurantPinSource): MapPin | null {
   if (r.latitude == null || r.longitude == null) return null;
-  return {
+  // Validate exactly like rentalToMapPin: a non-null pair can still be invalid
+  // (lat 99, Infinity, NaN) and must not reach the shared map (SAN-1468 1.7).
+  const validated = mapPinSchema.safeParse({
     id: `restaurant-${r.id}`,
     category: "restaurant",
     lat: r.latitude,
@@ -39,7 +41,8 @@ export function restaurantToMapPin(r: RestaurantPinSource): MapPin | null {
     placeId: r.placeId ?? undefined,
     placeUri: safeUrl(r.mapsUrl),
     source: "sql",
-  };
+  });
+  return validated.success ? validated.data : null;
 }
 
 /** Return a canonical rental pin only when its coordinates satisfy mapPinSchema. */
