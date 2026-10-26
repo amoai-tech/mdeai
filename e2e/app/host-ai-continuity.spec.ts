@@ -69,10 +69,17 @@ test("SAN-1209: Host conversation restores after reload and rejects foreign user
       });
       return res.status();
     }, { timeout: 30_000 }).toBe(200);
-    await page.waitForTimeout(750); // Client hydration can replace the initial composer.
     const prompt = `SAN-1209 test: reply OK, without creating an event. Ref ${marker}`;
-    await editor.pressSequentially(prompt, { delay: 8 });
-    await expect(editor).toHaveValue(prompt);
+    // SSR can display the textarea before CopilotKit hydrates. Retry typing
+    // until the real React composer enables Send; a visible textarea alone
+    // does not prove the client input handler is mounted.
+    const sendButton = rail.locator('button[data-slot="button"]').last();
+    await expect(async () => {
+      await editor.fill("");
+      await editor.pressSequentially(prompt, { delay: 8 });
+      await expect(editor).toHaveValue(prompt);
+      await expect(sendButton).toBeEnabled({ timeout: 1_500 });
+    }).toPass({ timeout: 20_000 });
     const response = page.waitForResponse((res) =>
       res.url().includes("/api/copilotkit") &&
       res.request().method() === "POST" &&
