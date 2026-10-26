@@ -16,22 +16,13 @@ import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
+import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
 
 export const conciergeWorkingMemorySchema = z.object({
-  lastIntent: z
-    .enum([
-      'rental_search',
-      'event_discovery',
-      'venue_booking',
-      'restaurant_discovery',
-      'day_trip_planning',
-      'general_concierge',
-      'chitchat',
-      'unknown',
-    ])
-    .optional()
-    .describe('Most recent classified user intent in this thread'),
+  // One canonical enum for both deterministic routing and AI thread memory.
+  lastIntent: routerIntentSchema.optional()
+    .describe('Most recent canonical router intent. Use restaurant_discovery for cafés, bars, and nightlife places.'),
   lastRentalQuery: z
     .object({
       neighborhood: z.string().optional(),
@@ -192,7 +183,33 @@ export function omitPaddedMemoryFields(raw: unknown): unknown {
  * What the `updateWorkingMemory` tool accepts from the model: the strict schema,
  * after the padded fields are dropped. The model-facing JSON schema is unchanged.
  */
-export const conciergeMemoryInput = z.preprocess(omitPaddedMemoryFields, conciergeWorkingMemorySchema);
+// Real Gemini nightlife replies have sent these tool-specific labels as
+// lastIntent, causing updateWorkingMemory to reject the entire memory update.
+// Normalize only the known synonyms to the canonical router intent; all other
+// unknown values still fail schema validation (we do not weaken the enum).
+const GROUNDED_INTENT_ALIASES = new Set([
+  'nightlife_grounded', 'grounded_places', 'grounded_place_search', 'cafe_grounded',
+]);
+function normalizeModelMemory(raw: unknown): unknown {
+  const clean = omitPaddedMemoryFields(raw);
+  if (!isPlainObject(clean)) return clean;
+  const normalized = { ...clean };
+  if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
+    normalized.lastIntent = 'restaurant_discovery';
+  }
+  // Gemini sometimes omits `title` for one venue in lastGroundedResults. Do not
+  // fabricate a title or reject the entire working-memory update: retain only
+  // identifiable places, and preserve an explicit [] to clear stale results.
+  if (Array.isArray(clean.lastGroundedResults)) {
+    normalized.lastGroundedResults = clean.lastGroundedResults.filter((row) =>
+      isPlainObject(row) &&
+      typeof row.id === 'string' && row.id.trim().length > 0 &&
+      typeof row.title === 'string' && row.title.trim().length > 0
+    );
+  }
+  return normalized;
+}
+export const conciergeMemoryInput = z.preprocess(normalizeModelMemory, conciergeWorkingMemorySchema);
 
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
@@ -212,7 +229,7 @@ export const conciergeAgent = new Agent({
 
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
-- Update lastIntent every turn.
+- Update lastIntent every turn using EXACTLY one of the canonical router values: ${routerIntentSchema.options.join(', ')}. For cafés, bars, clubs, nightlife, and grounded place searches use restaurant_discovery. Tool intent "nightlife" / "cafe" is NOT a valid lastIntent value; never save labels such as nightlife_grounded, grounded_place_search, or grounded_places.
 - After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one.
 - Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
