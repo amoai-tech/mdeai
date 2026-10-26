@@ -8,7 +8,8 @@ import {
 } from "@copilotkit/react-core/v2";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 import { isAgentlessRoute } from "@/lib/copilot/agentless-routes";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
@@ -17,6 +18,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 // Capture replay eligibility at this provider's mount, not at the root layout's mount:
 // a newly persisted turn must not reconnect into itself while its answer is visible.
 function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { activeThreadId, sessionThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
@@ -25,7 +27,19 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
-      onError={() => reportConciergeError(activeThreadId ?? sessionThreadId)}
+      // SAN-1592 — the same classification rule as /chat (chat-provider.tsx).
+      // A guest's refused `/info` probe is the expected consequence of
+      // fail-closed auth, not a concierge failure. Reporting it wrote a shared
+      // snapshot that unnamed chats and the rentals composer could read as their
+      // own failure, and put a 401 in every anonymous visitor's console.
+      //
+      // ponytail: only the *reporting* is suppressed here; the probe request
+      // still fires. Removing it needs the provider to wait for a session
+      // (SAN-1592 Option B), which changes guest chat continuity — not bundled.
+      onError={(event) => {
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        reportConciergeError(activeThreadId ?? sessionThreadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
