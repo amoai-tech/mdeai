@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearConciergeError,
   getConciergeErrorForThread,
+  classifyConciergeProviderError,
   isExpectedGuestStartup401,
   getConciergeErrorSnapshot,
   reportConciergeError,
@@ -65,6 +66,15 @@ describe("guest startup authorization classification", () => {
       error: { runtimeInfoStatus: 401, message: "Runtime info request failed with status 401" },
     }, false)).toBe(true);
     expect(isExpectedGuestStartup401(probe401, true)).toBe(false);
+  });
+
+  it("defers only the known runtime-info 401 until auth settles", () => {
+    expect(classifyConciergeProviderError(probe401, false, true)).toBe("defer");
+    expect(classifyConciergeProviderError(probe401, false, false)).toBe("ignore");
+    expect(classifyConciergeProviderError(probe401, true, false)).toBe("report");
+    expect(classifyConciergeProviderError({ code: "agent_run_failed" }, false, true)).toBe("report");
+    expect(classifyConciergeProviderError({ code: "runtime_info_fetch_failed", context: { runtimeStatus: 500 } }, false, true)).toBe("report");
+    expect(classifyConciergeProviderError({ code: "runtime_info_fetch_failed" }, false, true)).toBe("report");
   });
 
   it("never suppresses while the session is still resolving", () => {

@@ -41,6 +41,21 @@ export function isExpectedGuestStartup401(
   return statusFromContext === 401 || statusFromError === 401;
 }
 
+/** Decide what to do with a runtime-info 401 while Supabase auth resolves.
+ * Never discard a possibly signed-in user's failed runtime lookup before
+ * their identity is known; the caller defers and replays it after settlement.
+ * An actual failed AI turn is never deferred or ignored.
+ */
+export function classifyConciergeProviderError(
+  event: unknown,
+  isAuthenticated: boolean,
+  sessionLoading: boolean,
+): "defer" | "ignore" | "report" {
+  if (!isExpectedGuestStartup401(event, false)) return "report";
+  if (sessionLoading) return "defer";
+  return isAuthenticated ? "report" : "ignore";
+}
+
 export type ConciergeErrorSnapshot = {
   version: number;
   threadId: string | null;

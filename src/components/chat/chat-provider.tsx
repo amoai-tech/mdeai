@@ -19,7 +19,7 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { classifyConciergeProviderError, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -212,6 +212,16 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
+  // The runtime info 401 can arrive before Supabase resolves the session.
+  // Hold only that known startup probe; a signed-in user still sees it as an
+  // error once their identity is confirmed, while a guest does not.
+  const pendingRuntimeInfo401 = useRef<{ threadId: string | undefined } | null>(null);
+  useEffect(() => {
+    if (sessionLoading || pendingRuntimeInfo401.current === null) return;
+    const { threadId: failedThread } = pendingRuntimeInfo401.current;
+    pendingRuntimeInfo401.current = null;
+    if (user) reportConciergeError(failedThread);
+  }, [sessionLoading, user]);
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
   // Remember whether this tab's thread was already saved when /chat mounted;
   // when the user returns after visiting Rentals, it is now safe to replay.
@@ -227,7 +237,12 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
       onError={(event) => {
-        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        const decision = classifyConciergeProviderError(event, Boolean(user), sessionLoading);
+        if (decision === "defer") {
+          pendingRuntimeInfo401.current = { threadId };
+          return;
+        }
+        if (decision === "ignore") return;
         reportConciergeError(threadId);
       }}
     >
