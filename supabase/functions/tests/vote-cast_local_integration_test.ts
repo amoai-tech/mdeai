@@ -111,8 +111,8 @@ async function nonce(jwt: string): Promise<string> {
 function body(entity: string, key: string, n: string): string {
   return JSON.stringify({ contest_id: CONTEST, entity_id: entity, idempotency_key: key, nonce: n, turnstile_token: "t" });
 }
-function request(entity: string, key: string, n: string, jwt: string | null): Request {
-  const headers: Record<string, string> = { "content-type": "application/json", "x-forwarded-for": IP };
+function request(entity: string, key: string, n: string, jwt: string | null, ip = IP): Request {
+  const headers: Record<string, string> = { "content-type": "application/json", "x-forwarded-for": ip };
   if (jwt) headers.authorization = "Bearer " + jwt;
   return new Request("http://local.test/vote-cast", { method: "POST", headers, body: body(entity, key, n) });
 }
@@ -146,11 +146,13 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
   Deno.env.set("ENVIRONMENT", "test");
   Deno.env.set("VOTE_NONCE_SECRET", "vote-it-secret");
   assertLocalDb(DB);
+  const createdUsers: string[] = [];
   try {
     await setup();
     const userA = await makeUser("a");
+    createdUsers.push(userA.id);
     const userB = await makeUser("b");
-    try {
+    createdUsers.push(userB.id);
       // 1. valid authenticated user casts exactly one ballot
       const res1 = await getHandler()(request(ENTITY, "11111111-0000-0000-0000-000000000001", await nonce(userA.jwt), userA.jwt));
       assertEqual(await statusOf(res1), 200, "first vote status");
@@ -191,13 +193,113 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
       assertEqual(await statusOf(res7), 409, "replayed nonce without a committed vote");
       assertEqual(((await jsonOf(res7)).error as Record<string, unknown>).code, "NONCE_REPLAYED", "recoverable nonce error");
       assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "'"), "2", "no extra ballots from nonce replay");
-    } finally {
-      await svc().auth.admin.deleteUser(userA.id);
-      await svc().auth.admin.deleteUser(userB.id);
+
+      // 8. Ten simultaneous, independently keyed, real RPC casts for ONE account.
+      // Use distinct network IPs so the genuine 10/IP/min protection does not
+      // accidentally test rate limiting instead of the database race invariant.
+      const parallelUser = await makeUser("parallel");
+      createdUsers.push(parallelUser.id);
+      const parallel = await Promise.all(Array.from({ length: 10 }, async (_, i) => {
+        const key = crypto.randomUUID();
+        const ticket = await nonce(parallelUser.jwt);
+        const chosen = i % 2 === 0 ? ENTITY : ENTITY2;
+        const res = await getHandler()(request(chosen, key, ticket, parallelUser.jwt, "10.240.35." + (i + 10)));
+        const response = await jsonOf(res);
+        return { key, chosen, httpStatus: res.status, receipt: response.data as Record<string, unknown> | undefined, error: response.error };
+      }));
+      for (const outcome of parallel) {
+        assertEqual(outcome.httpStatus, 200, "parallel cast HTTP status: " + JSON.stringify(outcome.error));
+      }
+      assertEqual(parallel.filter((o) => o.receipt?.status === "cast").length, 1, "only one first cast wins");
+      assertEqual(parallel.filter((o) => o.receipt?.status === "already_voted").length, 9, "nine attempts recover existing ballot");
+      const saved = await sql("select id::text || '|' || entity_id::text || '|' || development_test::text from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + parallelUser.id + "'");
+      assertEqual(saved.split("\n").length, 1, "one actual SQL ballot for ten requests");
+      const [savedVoteId, savedEntityId, isDevelopment] = saved.split("|");
+      assertEqual(isDevelopment, "true", "Phase-A ballot is development-labeled");
+      for (const outcome of parallel) {
+        assertEqual(outcome.receipt?.vote_id, savedVoteId, "every parallel attempt returns original vote ID");
+        assertEqual(outcome.receipt?.entity_id, savedEntityId, "concurrent alternate nominee cannot switch choice");
+      }
+      const winner = parallel.find((o) => o.receipt?.status === "cast");
+      if (!winner) throw new Error("no successful first cast");
+      const sameKeyReplay = await getHandler()(request(winner.chosen, winner.key, await nonce(parallelUser.jwt), parallelUser.jwt, "10.240.36.1"));
+      assertEqual(sameKeyReplay.status, 200, "same-key retry returns HTTP 200");
+      assertEqual((await jsonOf(sameKeyReplay).then((j) => j.data as Record<string, unknown>)).vote_id, savedVoteId, "lost-response retry recovers original vote");
+      const devTally = await svc().rpc("vote_tally", { p_entity_id: savedEntityId });
+      if (devTally.error) throw new Error("vote_tally: " + JSON.stringify(devTally.error));
+      const countedDevRows = Number(await sql("select count(*) from vote.votes where entity_id = '" + savedEntityId + "' and development_test and fraud_status <> 'blocked'"));
+      assertEqual(devTally.data.development_test_total, countedDevRows, "development tally agrees with ALL fixture voters for this nominee");
+      assertEqual(devTally.data.audience_accepted, 0, "development ballot never becomes public accepted vote");
+
+      // 9. Reject a valid-shaped tampered bearer before consuming a nonce.
+      const recoveryUser = await makeUser("recovery");
+      createdUsers.push(recoveryUser.id);
+      const n9 = await nonce(recoveryUser.jwt);
+      const pieces = recoveryUser.jwt.split(".");
+      const forged = pieces.slice(0, 2).join(".") + "." + "invalid-signature";
+      const denied = await getHandler()(request(ENTITY, crypto.randomUUID(), n9, forged, "10.240.40.1"));
+      assertEqual(denied.status, 401, "tampered bearer rejected");
+      assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + recoveryUser.id + "'"), "0", "forged bearer adds zero rows");
+
+      // 10. Consume a genuine nonce, inject a downstream cast failure, then
+      // recover using a NEW nonce and the SAME user-action idempotency key.
+      // These are distinct RPC transactions; a spent nonce does not imply a vote.
+      const stableKey = crypto.randomUUID();
+      const failOnce = createVoteCastHandler({
+        service: {
+          rpc: (name: string, args?: Record<string, unknown>) =>
+            name === "cast_restaurant_vote"
+              ? Promise.resolve({ data: null, error: { code: "XX000", message: "injected cast failure" } })
+              : svc().rpc(name, args),
+          from: (table: string) => svc().from(table),
+        },
+        verifyTurnstile,
+        verifyNonce,
+        getUserId,
+        allowRate: (key: string, max: number, win: number) => allowRateDurable(svc(), key, max, win),
+      });
+      const failed = await failOnce(request(ENTITY, stableKey, n9, recoveryUser.jwt, "10.240.40.2"));
+      assertEqual(failed.status, 500, "injected SQL write failure does not report success");
+      assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + recoveryUser.id + "'"), "0", "spent nonce is not a committed vote");
+      const reused = await getHandler()(request(ENTITY, stableKey, n9, recoveryUser.jwt, "10.240.40.3"));
+      assertEqual(reused.status, 409, "spent nonce without receipt is rejected");
+      const recoveredTicket = await nonce(recoveryUser.jwt);
+      // A malicious client-supplied identity must never override the JWT actor.
+      const forgedBody = { ...JSON.parse(body(ENTITY, stableKey, recoveredTicket)), user_id: userA.id, voter_user_id: userA.id };
+      const recovered = await getHandler()(new Request("http://local.test/vote-cast", {
+        method: "POST",
+        headers: { authorization: "Bearer " + recoveryUser.jwt, "content-type": "application/json", "x-forwarded-for": "10.240.40.4" },
+        body: JSON.stringify(forgedBody),
+      }));
+      assertEqual(recovered.status, 200, "fresh nonce after write failure succeeds");
+      const recoveredData = (await jsonOf(recovered)).data as Record<string, unknown>;
+      assertEqual(recoveredData.status, "cast", "fresh nonce creates exactly one ballot");
+      const finalReceipt = await getHandler()(request(ENTITY, stableKey, await nonce(recoveryUser.jwt), recoveryUser.jwt, "10.240.40.5"));
+      assertEqual(((await jsonOf(finalReceipt)).data as Record<string, unknown>).vote_id, recoveredData.vote_id, "committed action can be recovered after lost response");
+      assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "' and voter_user_id = '" + recoveryUser.id + "'"), "1", "retry after failure persists exactly one row");
+  } finally {
+    try {
+      // Child vote rows reference auth.users. Delete the owned contest/ballots
+      // before user deletion so Auth Admin does not fail with a foreign key.
       await cleanup();
+      if (createdUsers.length) {
+        const ownedIds = createdUsers.map((id) => "'" + id + "'").join(",");
+        // ai_runs has no automatically guaranteed auth.users cascade. Delete only
+        // analytics created by THIS run, never historical or other users' rows.
+        await sql("delete from public.ai_runs where agent_name = 'vote-cast' and user_id in (" + ownedIds + ")");
+        assertEqual(await sql("select count(*) from public.ai_runs where agent_name = 'vote-cast' and user_id in (" + ownedIds + ")"), "0", "own analytics removed");
+        for (const userId of createdUsers) {
+          const removed = await svc().auth.admin.deleteUser(userId);
+          if (removed.error) throw new Error("test auth-user cleanup failed: " + JSON.stringify(removed.error));
+        }
+        assertEqual(await sql("select count(*) from auth.users where id in (" + ownedIds + ")"), "0", "all users from this run removed");
+      }
+    } finally {
+      await cleanup();
+      assertEqual(await sql("select count(*) from vote.votes where contest_id = '" + CONTEST + "'"), "0", "fixture ballots removed");
+      assertEqual(await sql("select count(*) from vote.contests where id = '" + CONTEST + "'"), "0", "fixture contest removed");
+      const nonceIds = Array.from(issuedJtis).map((j) => "'" + j + "'").join(",");
+      if (nonceIds) assertEqual(await sql("select count(*) from public.vote_consumed_nonces where jti in (" + nonceIds + ")"), "0", "owned nonce tickets removed");
     }
-  } catch (e) {
-    await cleanup();
-    throw e;
   }
 } });
