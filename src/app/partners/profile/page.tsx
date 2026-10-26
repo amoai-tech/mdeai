@@ -34,6 +34,7 @@ export default async function PartnerProfilePage({
     <MarketingPageShell accent="gold" mainTestId="partner-profile">
       <section className="border-b border-border px-4 py-12 sm:px-6 sm:py-16">
         <PartnerProfileContent
+          userId={user.id}
           profile={profile}
           basePath="/partners/profile"
         />

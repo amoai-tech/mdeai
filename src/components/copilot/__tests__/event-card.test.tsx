@@ -51,6 +51,9 @@ describe("EventCard", () => {
       'aria-label="Event: Salsa Night at Lleras, El Poblado"',
     );
     expect(html).toContain(toolPayload.title);
+    // 22:00Z is 17:00 in Medellín, independent of server/browser timezone.
+    expect(html).toContain("5:00 PM");
+
     expect(html).toContain(toolPayload.venue);
     expect(html).toContain(toolPayload.neighborhood);
     expect(html).toContain("From $25");

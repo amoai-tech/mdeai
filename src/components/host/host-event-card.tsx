@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EVENT_TIME_ZONE } from "@/lib/events/format-event";
 
 export type HostEventCardProps = {
   id: string;
@@ -36,6 +37,7 @@ function formatStartsAt(iso: string) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(new Date(iso));
   } catch {
     return iso;

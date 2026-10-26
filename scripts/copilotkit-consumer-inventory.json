@@ -54,6 +54,16 @@
       "note": "SAN-1378 Stage D commit 2 / SAN-1577: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, extracted so the legacy /host shell and the /app/events workspace share one provider boundary. One shared, non-explicit host thread survives Overview, Events and Analytics; the v2 provider's own onError type replaces the old @copilotkit/shared import."
     },
     {
+      "file": "src/components/partners/partner-workspace-chat.tsx",
+      "classification": "keep",
+      "note": "SAN-705: uses the root v2 CopilotKitProvider and the same partnerAgent, with an explicit per-user/per-business conversation thread to prevent unrelated chat replay."
+    },
+    {
+      "file": "src/components/partners/__tests__/partner-workspace-chat.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-705 verifies the existing v2 CopilotChat receives a distinct, stable user+partner threadId; mocks @copilotkit/react-core/v2 instead of creating another provider."
+    },
+    {
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."

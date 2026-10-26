@@ -384,6 +384,21 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("clears a stale selected apartment when Details was closed before the next question", async () => {
+    render(
+      <RentalAskComposer context={{ neighborhood: "Laureles", selectedListingId: null }} />,
+    );
+    type("which of these has a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(coagent.setState).toHaveBeenCalled());
+    const patch = coagent.setState.mock.calls[0][0];
+    const previous = { selectedListingId: "apartment-A", lastRentalQuery: { neighborhood: "Laureles" } };
+    const next = typeof patch === "function" ? patch(previous) : { ...previous, ...patch };
+    expect(next).not.toHaveProperty("selectedListingId");
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+  });
+
   it("takes the cards from the agent's own rental tool result, with no second search", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
