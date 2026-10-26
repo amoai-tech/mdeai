@@ -68,7 +68,7 @@ test("production host agent replies and persists a thread", async ({ page, baseU
       .select("id", { count: "exact", head: true })
       .eq("resourceId", identity.userId);
     expect(threads.error, threads.error?.message).toBeNull();
-    expect(threads.count ?? 0).toBeGreaterThan(0);
+    expect(threads.count).toBeGreaterThan(0);
   } finally {
     await deleteThrowawayIdentity(identity);
   }

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const BASE = process.env.PROD_URL ?? "https://www.mdeai.co";
