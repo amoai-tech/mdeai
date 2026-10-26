@@ -28,9 +28,9 @@ insert into public.landlord_profiles (id, user_id, display_name, verification_st
   ('f1507000-0000-4000-8000-000000000012', 'f1507000-0000-4000-8000-000000000007', 'SAN1502 other broker', 'approved');
 
 -- The grant is real: the production admin RPC, not a hand-inserted row.
-set local role authenticated;
+set local role service_role;
 select set_config('request.jwt.claims',
-  '{"sub":"f1507000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  '{"sub":"f1507000-0000-4000-8000-000000000001","role":"service_role"}', true);
 select lives_ok(
   $q$select public.admin_grant_rental_test_access('f1507000-0000-4000-8000-000000000002', 'renter')$q$,
   'setup: administrator grants the authorized renter a development test grant');
@@ -306,6 +306,11 @@ select is(
   'f1507000-0000-4000-8000-000000000002'::uuid,
   'the authorized fixture lead is bound to the granted renter');
 
+-- The admin path is server-authenticated: set the same JWT claims the
+-- server action would carry before exercising the fixture flow.
+set local role service_role;
+select set_config('request.jwt.claims',
+  '{"sub":"f1507000-0000-4000-8000-000000000001","role":"service_role"}', true);
 select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000103',
@@ -315,6 +320,8 @@ select lives_ok(
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
   'an administrator acting through the server keeps the fixture test flow');
+reset role;
+select set_config('request.jwt.claims', '{}', true);
 
 select is(
   (select count(*)::int from public.leads
