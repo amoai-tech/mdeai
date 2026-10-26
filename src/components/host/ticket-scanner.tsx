@@ -55,6 +55,13 @@ const RESULT_COPY: Record<string, { title: string; tone: string; hint: string }>
   },
 };
 
+/** Browser BarcodeDetector is not present in every runtime (including Safari). */
+type QrDecoder = {
+  detect(source: CanvasImageSource): Promise<Array<{ rawValue: string }>>;
+};
+
+type QrDecoderConstructor = new (options: { formats: string[] }) => QrDecoder;
+
 type Props = {
   eventId: string;
   eventName: string;
@@ -68,9 +75,7 @@ type Props = {
 export function TicketScanner({ eventId, eventName }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<{
-    detect: (...args: [CanvasImageSource]) => Promise<Array<{ rawValue: string }>>;
-  } | null>(null);
+  const detectorRef = useRef<QrDecoder | null>(null);
   const busyRef = useRef(false);
   const lastDetectedTokenRef = useRef<string | null>(null);
   const scanTimerRef = useRef<number | null>(null);
@@ -130,12 +135,14 @@ export function TicketScanner({ eventId, eventName }: Props) {
 
   async function startCamera() {
     setCameraError(null);
-    if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
+    // In insecure contexts mediaDevices may be undefined, per the browser API.
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
       setCameraError("This browser cannot open a camera. Use manual entry.");
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false,
       });
@@ -148,11 +155,7 @@ export function TicketScanner({ eventId, eventName }: Props) {
       }
 
       const Detector = (
-        window as unknown as {
-          BarcodeDetector?: new (...args: [{ formats: string[] }]) => {
-            detect: (...args: [CanvasImageSource]) => Promise<Array<{ rawValue: string }>>;
-          };
-        }
+        window as unknown as { BarcodeDetector?: QrDecoderConstructor }
       ).BarcodeDetector;
 
       if (!Detector) {
