@@ -21,6 +21,7 @@ import {
   signInAsOnOrigin,
 } from "./helpers/auth";
 import { expectProtectedRouteLoginRedirect } from "./helpers/screen-evidence";
+import { waitForVerticalTerminalState } from "./helpers/vertical-terminal-state";
 
 const isProd = Boolean(process.env.PROD_SMOKE_BASE_URL?.trim());
 const outDir =
@@ -100,29 +101,22 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     await sendConciergeMessage(page, "events in Medellín");
     await waitForCopilotIdle(page, 150_000);
 
-    // Two truthful terminals, and only two. The events tool renders a card when
-    // the live marketplace has matching inventory and `events-empty` when it
-    // does not. Demanding a card made this journey fail on a correct answer
-    // whenever the market was empty, which is most of the time pre-launch.
-    const card = page.locator('[data-testid="event-card"]').first();
-    const empty = page.getByTestId("events-empty").first();
-    await expect(card.or(empty)).toBeVisible({ timeout: 120_000 });
-
-    if (await card.isVisible().catch(() => false)) {
-      // Real inventory: prove the buy path is reachable. Checkout itself is
-      // exercised by the ticketing specs; here we only need the next hop.
+    // Reuse SAN-1366's canonical terminal-state contract rather than a
+    // locator.or() assertion: simultaneous cards and empty UI must not be
+    // silently accepted, nor may an error masquerade as an empty marketplace.
+    const terminal = await waitForVerticalTerminalState(page, "events", 120_000);
+    if (terminal.state === "results") {
+      const card = page.locator('[data-testid="event-card"]:visible').first();
       const buy = card.getByRole("link", { name: /buy|tickets/i }).first();
-      if (await buy.isVisible().catch(() => false)) {
+      if (await buy.isVisible()) {
         await buy.click();
         await page.waitForURL(/\/(login|events\/)/, { timeout: 30_000 });
       }
     } else {
-      // No inventory: the empty state must be explicit and still actionable,
-      // not a dead end that leaves the renter with nothing to do.
-      await expect(empty).toContainText(/no events/i);
-      await expect(page.getByTestId("events-empty-suggest-weekend")).toBeVisible();
+      await expect(page.getByTestId("events-empty").first()).toContainText(/no events/i);
+      // These suggestions are actionable buttons, not decorative chips.
+      await expect(page.getByTestId("events-empty-suggest-weekend").first()).toBeEnabled();
     }
-
     await page.screenshot({ path: path.join(outDir, "j09-event-cta.png") });
   });
 

@@ -7,6 +7,7 @@ export type EmptyStateSuggestion = {
   label: string;
   testId?: string;
   onClick?: () => void;
+  disabled?: boolean;
 };
 
 type EmptyStateProps = {
@@ -52,7 +53,8 @@ export function EmptyState({
               type="button"
               data-testid={s.testId ?? "empty-state-suggestion"}
               onClick={s.onClick}
-              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
+              disabled={s.disabled}
+              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               {s.label}
             </button>
