@@ -28,6 +28,15 @@ describe("Host Ops thread selection", () => {
     store.setItem("mde:host-ops:thread:v1:ana","victim-thread");
     expect(selectHostThread("ana",store,() => B)).toEqual({userId:"ana",threadId:B,restored:false});
   });
+  it("falls back when the browser sessionStorage getter itself throws", () => {
+    const getStorage = vi.fn((): Pick<Storage, "getItem" | "setItem"> => {
+      throw new DOMException("Storage blocked by browser policy", "SecurityError");
+    });
+    expect(selectHostThread("ana",getStorage,() => A)).toEqual({
+      userId:"ana",threadId:A,restored:false,
+    });
+    expect(getStorage).toHaveBeenCalledOnce();
+  });
   it("continues without persistence if browser storage is denied", () => {
     const store={getItem:()=>{throw new Error("disabled")},setItem:()=>{throw new Error("disabled")}};
     expect(selectHostThread("ana",store,() => A)).toEqual({userId:"ana",threadId:A,restored:false});

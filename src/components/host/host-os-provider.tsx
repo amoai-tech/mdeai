@@ -71,7 +71,7 @@ function SignedInHostOsProviders({
   userId: string;
 }) {
   const [selection] = useState(() =>
-    selectHostThread(userId, window.sessionStorage, () => crypto.randomUUID()),
+    selectHostThread(userId, () => window.sessionStorage, () => crypto.randomUUID()),
   );
   return <HostOsRuntimeProvider selection={selection}>{children}</HostOsRuntimeProvider>;
 }

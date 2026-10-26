@@ -14,17 +14,20 @@ const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
 export function selectHostThread(
   userId: string,
-  storage: Pick<Storage, "getItem" | "setItem">,
+  storage: Pick<Storage, "getItem" | "setItem"> | (() => Pick<Storage, "getItem" | "setItem">),
   mint: () => string,
 ): HostThreadSelection {
   const key = `${KEY_PREFIX}${userId}`;
   try {
-    const saved = storage.getItem(key);
+    // Browser policy can throw while obtaining window.sessionStorage itself,
+    // before getItem()/setItem() are reached.
+    const store = typeof storage === "function" ? storage() : storage;
+    const saved = store.getItem(key);
     if (saved && UUID.test(saved)) {
       return { userId, threadId: saved, restored: true };
     }
     const threadId = mint();
-    storage.setItem(key, threadId);
+    store.setItem(key, threadId);
     return { userId, threadId, restored: false };
   } catch {
     // Disabled/blocked browser storage must not prevent access to the host UI.
