@@ -15,9 +15,9 @@ describe("resolveRentalForDetails", () => {
     expect(resolveRentalForDetails(rows, { index: 3 })?.id).toBe("c");
   });
 
-  it("clamps an out-of-range position instead of opening nothing", () => {
-    expect(resolveRentalForDetails(rows, { index: 99 })?.id).toBe("c");
-    expect(resolveRentalForDetails(rows, { index: 0 })?.id).toBe("a");
+  it("refuses an out-of-range position instead of opening a different apartment", () => {
+    expect(resolveRentalForDetails(rows, { index: 99 })).toBeNull();
+    expect(resolveRentalForDetails(rows, { index: 0 })).toBeNull();
   });
 
   it("opens an explicit listing id, including the pin-prefixed form", () => {

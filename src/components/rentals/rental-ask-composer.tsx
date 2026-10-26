@@ -44,6 +44,7 @@ import {
   unappliedRentalRequests,
 } from "@/lib/rental-display";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
+import { parseDetailsCommand, type DetailsCommand } from "@/lib/rentals/details-command";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
@@ -80,6 +81,9 @@ export type RentalAskContext = {
   /** The apartment whose Details panel is open, if any. */
   selectedListingId?: string | null;
 };
+
+/** The browse column's answer to a deterministic details command. */
+export type RentalAskDetailsOutcome = { ok: true } | { ok: false; message: string };
 
 /** What the browse column needs to replace its cards and pins with the answer. */
 export type RentalAskResults = {
@@ -250,7 +254,15 @@ function usePublishHeight(element: HTMLDivElement | null): void {
   }, [element]);
 }
 
-function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskResults) => void; context?: RentalAskContext }) {
+function LiveComposer({
+  onResults,
+  context,
+  onOpenDetails,
+}: {
+  onResults?: (results: RentalAskResults) => void;
+  context?: RentalAskContext;
+  onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+}) {
   const { agent, isReady, setState } = useConciergeCoAgent();
   const { appendMessage, isLoading, stopActiveRun } = useConciergeChat();
   const { user, loading: sessionLoading } = useSession();
@@ -354,6 +366,25 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
     const raw = draft;
     const text = raw.trim();
     if (!text || busy || signedOut || !isReady || sendInFlight.current) return;
+
+    // A clear "show me the details" command is a frontend action, not a model turn. The model
+    // proved non-deterministic here on production (it sometimes ran a new search and replaced the
+    // refined list with over-budget apartments). Open the same Details panel directly; leave other
+    // phrasings to the agent's openRentalDetails tool.
+    const detailsCommand = onOpenDetails ? parseDetailsCommand(text) : null;
+    if (detailsCommand && onOpenDetails) {
+      const outcome = onOpenDetails(detailsCommand);
+      if (outcome.ok) {
+        setDraft("");
+        setError(null);
+        setRetryable(false);
+      } else {
+        setError(outcome.message);
+        setRetryable(false);
+      }
+      return;
+    }
+
     sendInFlight.current = true;
     acceptToolResults.current = true;
     cancelled.current = false;
@@ -472,7 +503,7 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut, isReady, onResults, context, setState]);
+  }, [appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
@@ -546,10 +577,15 @@ function LiveComposer({ onResults, context }: { onResults?: (results: RentalAskR
 export function RentalAskComposer({
   onResults,
   context,
-}: { onResults?: (results: RentalAskResults) => void; context?: RentalAskContext } = {}) {
+  onOpenDetails,
+}: {
+  onResults?: (results: RentalAskResults) => void;
+  context?: RentalAskContext;
+  onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+} = {}) {
   // Read the context without throwing: previews, isolated tests and deterministic E2E render this
   // page with no chat stack, and must get an inert box instead of an error.
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) return <InertComposer />;
-  return <LiveComposer onResults={onResults} context={context} />;
+  return <LiveComposer onResults={onResults} context={context} onOpenDetails={onOpenDetails} />;
 }
