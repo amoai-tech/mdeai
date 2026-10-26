@@ -109,6 +109,11 @@ create trigger audit_admin_event_content_update
   for each row execute function public.audit_admin_event_content_edit();
 revoke all on function public.audit_admin_event_content_edit()
   from public, anon, authenticated;
+-- Preserve trusted server execution required by the canonical trigger ACL gate.
+grant execute on function public.audit_admin_event_content_edit() to service_role;
+-- Preserve trusted internal execution after PUBLIC is revoked. The existing
+-- SAN-1284C ACL suite requires service_role access to every trigger function.
+grant execute on function public.audit_admin_event_content_edit() to service_role;
 
 revoke all on function public.admin_event_set_state(uuid, text) from public, anon, authenticated;
 grant execute on function public.admin_event_set_state(uuid, text) to authenticated;
