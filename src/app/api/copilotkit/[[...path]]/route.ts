@@ -231,10 +231,27 @@ async function handleCopilotKit(req: NextRequest) {
           selectedPartnerId ?? undefined,
         );
         if (!partnerContext) {
-          return Response.json(
-            { error: "Select a business you can access" },
-            { status: 403 },
-          );
+          // A newly signed-up user has no partner_members row yet. They must
+          // still be able to ask partnerAgent to suggest signup form fields.
+          // Keep all existing-business access fail-closed: a requested foreign
+          // business or an ambiguous membership must never enter the agent.
+          const { data: memberships, error: membershipsError } = await supabase
+            .from("partner_members")
+            .select("partner_id")
+            .eq("profile_id", userId)
+            .limit(1);
+          if (membershipsError || !memberships) {
+            throw new Error("partner_membership_lookup_failed");
+          }
+          if (selectedPartnerId || memberships.length > 0) {
+            return Response.json(
+              { error: "Select a business you can access" },
+              { status: 403 },
+            );
+          }
+          // No membership and no selector: a general, user-owned signup chat.
+          // Do not populate partner RequestContext or bind a business. The
+          // getPartnerProfile tool already returns found=false in this case.
         }
       }
 
