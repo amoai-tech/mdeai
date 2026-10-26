@@ -91,17 +91,10 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     expect(before.length).toBeGreaterThan(0);
     expect(new Set(before.map((r) => r.id)).size).toBe(before.length);
 
-    // UI result callbacks can precede Mastra's durable transcript write.
-    // Do not refresh immediately and misclassify a persistence race as success.
-    await expect.poll(async () => {
-      const response = await page.request.get(new URL(
-        "/api/threads/" + threadBefore + "/messages", base,
-      ).toString());
-      return response.ok() && JSON.stringify(await response.json()).includes(budgetQuery);
-    }, {
-      timeout: 60_000, intervals: [1000, 2000, 3000],
-      message: "The budget refinement must be durably saved before reloading",
-    }).toBe(true);
+    // Production regression for the real user action: refresh as soon as the
+    // completed-results banner is visible. The page must not publish that
+    // banner while the agent's user turn is still being persisted. Never
+    // poll the backend BEFORE refresh: it masked the lost-message bug.
     await capture("01-refined");
 
     await page.reload({ waitUntil: "domcontentloaded" });

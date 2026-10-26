@@ -293,6 +293,10 @@ function LiveComposer({
   const lastQuery = useRef<ConciergeWorkingMemory>({});
   // The agent's tool result owns the cards for this turn; the page search is only a fallback.
   const toolResultSeen = useRef(false);
+  // Tool rows arrive DURING streaming, before Mastra has committed the user's turn.
+  // Only reveal/cache them after the agent run completes so an immediate refresh
+  // cannot show a saved answer whose question never reached durable history.
+  const pendingToolResult = useRef<RentalAskResults | null>(null);
   // True once this page has shown an answer. A follow-up that produces no rental tool result
   // ("which of these has a balcony?") must keep that answer, not rerun the question as a search.
   const hasAnswer = useRef(false);
@@ -342,7 +346,7 @@ function LiveComposer({
       toolResultSeen.current = true;
       hasAnswer.current = true;
       const enriched = withCarriedNotice(payload, unappliedRef.current);
-      onResults(enriched);
+      pendingToolResult.current = enriched;
       setState((prev) => ({
         ...prev,
         lastRentalResults: payloadRows(enriched),
@@ -434,6 +438,7 @@ function LiveComposer({
     abortRef.current = abort;
     const turn = ++turnId.current;
     toolResultSeen.current = false;
+    pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
     let agentSendAttempted = false;
     try {
@@ -453,6 +458,14 @@ function LiveComposer({
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);
         return;
+      }
+      // The streaming tool result is not a completed/saved answer. Publish it only
+      // after runAgent resolves; until then the composer remains busy and refresh
+      // must not silently discard a question behind a seemingly final result.
+      if (pendingToolResult.current && onResults && mounted.current &&
+          !cancelled.current && turn === turnId.current) {
+        onResults(pendingToolResult.current);
+        pendingToolResult.current = null;
       }
       // The cards normally come from the agent's own rental tool result. Only when the turn
       // produced none (an off-topic answer, a tool failure) does the page run a structured search,
