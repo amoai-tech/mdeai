@@ -37,6 +37,15 @@ vi.mock("@/components/onboarding/onboarding-copilot-bridge", () => ({
   ),
 }));
 
+vi.mock("@/components/onboarding/business-url-import-card", () => ({
+  BusinessUrlImportCard: ({ onApply }: { onApply: (suggestion: PartnerProfileSuggestion) => void }) => (
+    <button type="button" data-testid="url-apply"
+      onClick={() => onApply({ category: "Imported venue" })}>
+      Accept website fields
+    </button>
+  ),
+}));
+
 vi.mock("@/components/partners/partner-signup-wizard", () => ({
   PartnerSignupWizard: ({
     form,
@@ -119,6 +128,17 @@ describe("SAN-709 assistant proposal revision guard", () => {
     expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
     expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
     expectCategory(container, "Restaurant");
+  });
+
+  it("invalidates an earlier AI proposal after website autofill is accepted", () => {
+    const container = mount();
+    click(container, '[data-testid="suggest-current"]');
+    click(container, '[data-testid="url-apply"]');
+    expect(category(container)).toBe("Imported venue");
+    expect(container.querySelector('[data-testid="onboarding-suggestion-stale"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="onboarding-suggestion-accept"]')).toBeNull();
+    click(container, '[data-testid="suggest-old"]');
+    expect(category(container)).toBe("Imported venue");
   });
 
   it("Ignore never changes the form", () => {

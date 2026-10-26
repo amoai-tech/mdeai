@@ -110,7 +110,7 @@ export function PartnerSignupAssistant({
           <div className="flex min-w-0 flex-col gap-4">
             <BusinessUrlImportCard
               onApply={(accepted) =>
-                setForm((current) => applySuggestionToForm(current, accepted))
+                updateForm((current) => applySuggestionToForm(current, accepted))
               }
             />
             {suggestion ? (
