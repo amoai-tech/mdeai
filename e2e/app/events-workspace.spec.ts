@@ -277,9 +277,11 @@ async function runOrganizerJourney(
       .locator(`[data-testid="host-event-card"][data-event-id="${robertoDraft!.id}"]`)
       .getByTestId("host-event-manage-link")
       .click();
-    await expect(page).toHaveURL(new RegExp(`/app/events/${robertoDraft!.id}$`), {
-      timeout: 60_000,
-    });
+    // Predicate over the parsed URL: no RegExp built from a runtime value.
+    await page.waitForURL(
+      (url) => url.pathname === `/app/events/${robertoDraft!.id}`,
+      { timeout: 60_000 },
+    );
     await expect(page.getByTestId("host-event-detail")).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("host-event-detail-name")).toHaveText(robertoDraft!.name);
 
