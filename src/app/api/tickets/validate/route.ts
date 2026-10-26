@@ -18,15 +18,14 @@ const BodySchema = z.object({
  * Authority order:
  *  1. the caller must be signed in;
  *  2. the caller must own the event (organizer) or be a site admin;
- *  3. the token must belong to *that* event (wrong-event is rejected before any
- *     consume attempt, so a valid ticket for another show is never "used");
- *  4. consumption is the existing atomic `ticket_validate_consume` RPC, which
- *     can only flip an unused ticket once;
- *  5. the result is recorded with the real staff actor and scanner metadata.
+ *  3. the server-only atomic RPC checks token/event binding before consumption;
+ *  4. the existing race-safe consumer can accept a paid ticket only once;
+ *  5. acceptance and audit (actor, device and outcome) share one DB transaction.
  *
  * The route never reports success unless the RPC returned `consumed`.
  */
 export async function POST(request: Request) {
+  try {
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,4 +129,10 @@ export async function POST(request: Request) {
     },
     { status: result === "consumed" ? 200 : 409 },
   );
+  } catch (error) {
+    // A rejected auth/network call should always return a structured API
+    // failure, never an uncaught Next.js error page to the scanner.
+    console.error("[tickets/validate] unhandled scan error:", error);
+    return NextResponse.json({ ok: false, code: "INTERNAL_ERROR" }, { status: 500 });
+  }
 }

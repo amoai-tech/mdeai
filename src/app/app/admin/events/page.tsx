@@ -114,8 +114,8 @@ export default async function AdminEventsPage({ searchParams }: PageProps) {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Actions are logged server-side with actor, event and before/after state. A durable
-        admin-event audit table is not implemented yet.
+        Every state change saves the verified admin actor and before/after values
+        to an append-only database audit in the same transaction.
       </p>
     </section>
   );

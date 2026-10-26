@@ -4,11 +4,14 @@ const state = vi.hoisted(() => ({
   user: { id: "host-a" } as { id: string } | null,
   attendee: null as null | { id: string; event_id: string },
   failAudit: false,
+  authThrows: false,
   records: [] as Array<{ name: string; args: Record<string, unknown> }>,
 }));
 const EVENT_ID = "11111111-1111-4111-8111-111111111111";
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () => Promise.resolve({
+  createClient: () => state.authThrows
+    ? Promise.reject(new Error("auth upstream unavailable"))
+    : Promise.resolve({
     auth: { getUser: () => Promise.resolve({ data: { user: state.user } }) },
     from: () => ({
       select: () => ({
@@ -45,6 +48,7 @@ beforeEach(() => {
   state.user = { id: "host-a" };
   state.attendee = null;
   state.failAudit = false;
+  state.authThrows = false;
   state.records.length = 0;
 });
 describe("atomic ticket validation and audit", () => {
@@ -73,6 +77,13 @@ describe("atomic ticket validation and audit", () => {
     expect(response.status).toBe(500);
     expect((await response.json()).ok).toBe(false);
     expect(state.records).toHaveLength(1);
+  });
+  it("returns structured 500 if the auth provider throws", async () => {
+    state.authThrows = true;
+    const response = await scan();
+    expect(response.status).toBe(500);
+    expect((await response.json()).code).toBe("INTERNAL_ERROR");
+    expect(state.records).toHaveLength(0);
   });
   it("rejects guests before creating the privileged client", async () => {
     state.user = null;

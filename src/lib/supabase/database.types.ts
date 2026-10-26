@@ -10056,6 +10056,10 @@ export type Database = {
         }
         Returns: string
       }
+      admin_event_set_state: {
+        Args: { p_event_id: string; p_action: string }
+        Returns: Json
+      }
       ticket_validate_consume: { Args: { p_qr_token: string }; Returns: Json }
       ticket_validate_consume_audited: {
         Args: {

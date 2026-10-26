@@ -11,23 +11,15 @@ export type AdminEventActionResult =
   | { ok: true; status: string }
   | { ok: false; code: "FORBIDDEN" | "NOT_FOUND" | "INVALID" | "FAILED"; message: string };
 
-const NEXT_STATE = new Map<AdminEventAction, { status: string; is_active: boolean }>([
-  ["publish", { status: "published", is_active: true }],
-  ["unpublish", { status: "draft", is_active: false }],
-  ["restore", { status: "draft", is_active: true }],
-]);
+const VALID_ACTIONS = new Set<AdminEventAction>(["publish", "unpublish", "restore"]);
 
 /**
  * SAN-515 — Super Admin event state change.
  *
  * The actor comes from the verified session through the shared admin gate; the
- * browser can never name it. Writes go through the user-scoped client so
- * `events_admin_update` RLS applies as a second check. Phase A has no business
- * approval prerequisite: publishing here is a technical state change only.
- *
- * There is no durable admin-event audit table yet, so every action emits a
- * structured server log line with actor, event and before/after state. That gap
- * is reported in the PR rather than papered over.
+ * browser can never name it. The authenticated RPC rechecks public.is_admin()
+ * and commits the event update and append-only audit in one DB transaction.
+ * Phase A has no business approval prerequisite.
  */
 export async function setAdminEventState(
   eventId: string,
@@ -36,8 +28,7 @@ export async function setAdminEventState(
   if (!z.string().uuid().safeParse(eventId).success) {
     return { ok: false, code: "INVALID", message: "Unknown event id." };
   }
-  const next = NEXT_STATE.get(action);
-  if (!next) return { ok: false, code: "INVALID", message: "Unknown action." };
+  if (!VALID_ACTIONS.has(action)) return { ok: false, code: "INVALID", message: "Unknown action." };
 
   const gate = await getAdminGate();
   if (gate.status !== "ok") {
@@ -52,43 +43,28 @@ export async function setAdminEventState(
   }
 
   const supabase = await createClient();
-  const { data: before } = await supabase
-    .from("events")
-    .select("id, status, is_active")
-    .eq("id", eventId)
-    .maybeSingle();
-
-  if (!before) {
-    return { ok: false, code: "NOT_FOUND", message: "That event does not exist." };
+  const { data, error } = await supabase.rpc("admin_event_set_state", {
+    p_event_id: eventId,
+    p_action: action,
+  });
+  if (error) {
+    console.error("[admin-events] atomic state/audit failed:", error.message);
+    if (error.code === "P0002") {
+      return { ok: false, code: "NOT_FOUND", message: "That event does not exist." };
+    }
+    if (error.code === "42501") {
+      return { ok: false, code: "FORBIDDEN", message: "Admin access required." };
+    }
+    return { ok: false, code: "FAILED", message: "Could not save this event. Try again." };
   }
-
-  const { data: after, error } = await supabase
-    .from("events")
-    .update({ ...next, updated_at: new Date().toISOString() })
-    .eq("id", eventId)
-    .select("id, status, is_active")
-    .maybeSingle();
-
-  if (error || !after) {
-    console.error("[admin-events] state change failed:", error?.message);
-    return { ok: false, code: "FAILED", message: "Could not change this event. Try again." };
+  const saved = data as { status?: string; audit_id?: string } | null;
+  if (!saved?.status || !saved.audit_id) {
+    return { ok: false, code: "FAILED", message: "Could not confirm the audited event update." };
   }
-
-  console.info(
-    JSON.stringify({
-      audit: "admin.event.state",
-      actor: gate.userId,
-      event_id: eventId,
-      action,
-      before: { status: (before as { status: string }).status, is_active: (before as { is_active: boolean }).is_active },
-      after: { status: (after as { status: string }).status, is_active: (after as { is_active: boolean }).is_active },
-      at: new Date().toISOString(),
-    }),
-  );
 
   revalidatePath("/app/admin/events");
   revalidatePath("/app/events");
   revalidatePath("/host/events");
   revalidatePath("/events");
-  return { ok: true, status: (after as { status: string }).status };
+  return { ok: true, status: saved.status };
 }
