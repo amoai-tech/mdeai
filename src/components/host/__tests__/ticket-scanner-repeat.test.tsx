@@ -10,6 +10,24 @@ afterEach(() => {
 });
 
 describe("camera ticket check-in", () => {
+  it("sends manually entered codes to the same server validation API and shows rejection", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ ok: false, result: "refunded" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<TicketScanner eventId="event-a" eventName="Concert" />);
+    fireEvent.change(screen.getByTestId("scanner-manual-input"), {
+      target: { value: "  example-qr  " },
+    });
+    fireEvent.click(screen.getByTestId("scanner-submit"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith("/api/tickets/validate", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ eventId: "event-a", token: "example-qr" }),
+    }));
+    await waitFor(() => expect(screen.getByTestId("scanner-result-title").textContent).toBe("REFUNDED"));
+  });
   it("keeps manual entry available when browser mediaDevices is missing", async () => {
     // navigator.mediaDevices is undefined on insecure HTTP origins.
     const previous = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");

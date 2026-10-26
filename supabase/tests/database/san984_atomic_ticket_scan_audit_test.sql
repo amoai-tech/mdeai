@@ -2,7 +2,7 @@
 -- All records are fictional and rolled back before this test returns.
 begin;
 set local search_path = public, extensions;
-select plan(12);
+select plan(21);
 
 select is(has_function_privilege('anon', 'public.ticket_validate_consume_audited(uuid,text,uuid,text,inet)','EXECUTE'), false,
   'anonymous callers cannot consume or audit a QR');
@@ -65,6 +65,35 @@ select throws_ok(
   '23503',null,'audit failure aborts the atomic scan');
 select is((select qr_used_at is null from public.event_attendees where qr_token='san984-qr-two'),
   true,'audit failure rolls back QR consumption');
+
+-- The saved order is authoritative even if an attendee remains incorrectly active
+-- after a pending/refunded/cancelled transition (webhook/recovery races).
+update public.event_orders set status='refunded' where id=(select order_id from san984_fixture);
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'refunded','fully refunded order rejects a stale active attendee');
+update public.event_orders set status='cancelled' where id=(select order_id from san984_fixture);
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'cancelled','cancelled order rejects a stale active attendee');
+update public.event_orders set status='pending' where id=(select order_id from san984_fixture);
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'pending_payment','unpaid order rejects a stale active attendee');
+select is((select qr_used_at is null from public.event_attendees where qr_token='san984-qr-two'),
+  true,'no invalid payment state ever consumes the second ticket');
+update public.event_orders set status='paid' where id=(select order_id from san984_fixture);
+update public.event_attendees set status='refunded' where qr_token='san984-qr-two';
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'refunded','refunded attendee is not admitted even if order remains paid');
+update public.event_attendees set status='cancelled' where qr_token='san984-qr-two';
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'cancelled','cancelled attendee is not admitted even if order remains paid');
+update public.event_attendees set status='pending' where qr_token='san984-qr-two';
+select is((select public.ticket_validate_consume_audited(event_id,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'pending_payment','unpaid attendee is not admitted even if order remains paid');
+update public.event_attendees set status='active' where qr_token='san984-qr-two';
+select is((select public.ticket_validate_consume_audited(alternate_event,'san984-qr-two',actor,'QA scanner',null)->>'result' from san984_fixture),
+  'wrong_event','cross-event QR is rejected without admitting attendee');
+select is((select qr_used_at is null from public.event_attendees where qr_token='san984-qr-two'),
+  true,'wrong-event scan still does not consume the ticket');
 
 select * from finish();
 rollback;

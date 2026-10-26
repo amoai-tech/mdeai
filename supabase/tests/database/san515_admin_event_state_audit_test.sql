@@ -2,7 +2,7 @@
 -- an ordinary signed-in account cannot. All fixtures are rolled back.
 begin;
 set local search_path = public, extensions;
-select plan(19);
+select plan(25);
 
 create temp table san515_test_actor (admin_id uuid, outsider_id uuid, event_id uuid);
 do $fixture$
@@ -102,5 +102,29 @@ select throws_ok($$select public.admin_event_set_state((select a.event_id from s
   'P0001', 'test audit failure','failed audit rejects entire transition');
 reset role;
 select is((select status from public.events where id=(select a.event_id from san515_test_actor a)), 'published','failed audit rolls back status change');
+
+-- The normal unpublish and restore journeys must also persist and audit.
+drop trigger san515_fail_audit on public.admin_event_state_audit;
+select set_config('request.jwt.claim.sub',(select admin_id::text from san515_test_actor),true);
+set local role authenticated;
+select is((select public.admin_event_set_state(event_id,'unpublish')->>'status' from san515_test_actor),
+  'draft','admin unpublishes an organizer event');
+reset role;
+select is((select is_active from public.events where id=(select a.event_id from san515_test_actor a)),
+  false,'unpublish deactivates the event');
+select is((select before_status||'>'||after_status from public.admin_event_state_audit
+  where action='unpublish' and event_id=(select a.event_id from san515_test_actor a)),
+  'published>draft','unpublish writes truthful transition audit');
+select set_config('request.jwt.claim.sub',(select admin_id::text from san515_test_actor),true);
+set local role authenticated;
+select is((select (public.admin_event_set_state(event_id,'restore')->>'is_active')::boolean from san515_test_actor),
+  true,'admin restores event activity');
+reset role;
+select is((select status='draft' and is_active from public.events where id=(select a.event_id from san515_test_actor a)),
+  true,'restore persists active draft without business approval gate');
+select is((select count(*)::int from public.admin_event_state_audit
+  where action in ('unpublish','restore') and actor_id=(select admin_id from san515_test_actor)
+    and event_id=(select event_id from san515_test_actor)),
+  2,'unpublish and restore each record the authenticated actor');
 select * from finish();
 rollback;

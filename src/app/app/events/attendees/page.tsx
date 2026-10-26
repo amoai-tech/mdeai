@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Attendees · mdeai" };
 
+const ATTENDEES_PER_PAGE = 50;
+
 const ATTENDEE_STATUS_LABEL = new Map<string, string>(Object.entries({
   active: "Paid",
   pending: "Pending payment",
@@ -17,7 +19,7 @@ const ATTENDEE_STATUS_LABEL = new Map<string, string>(Object.entries({
 }));
 
 type PageProps = {
-  searchParams: Promise<{ event?: string; q?: string }>;
+  searchParams: Promise<{ event?: string; q?: string; page?: string }>;
 };
 
 /**
@@ -29,8 +31,9 @@ type PageProps = {
  */
 // skipcq: JS-0067 - Next.js App Router page export
 export default async function AppEventAttendeesPage({ searchParams }: PageProps) {
-  const { event: requestedEvent, q } = await searchParams;
+  const { event: requestedEvent, q, page } = await searchParams;
   const search = (q ?? "").trim();
+  const currentPage = /^(?:[1-9]\d{0,5})$/.test(page ?? "1") ? Number(page ?? "1") : 1;
   const { user } = await getServerUser();
   if (!user) redirect("/login?next=/app/events/attendees");
 
@@ -56,7 +59,9 @@ export default async function AppEventAttendeesPage({ searchParams }: PageProps)
   }
 
   const selectedId = requestedEvent ?? options[0].id;
-  const result = await loadEventAttendees(supabase, user.id, selectedId, { search });
+  const result = await loadEventAttendees(supabase, user.id, selectedId, {
+    search, limit: ATTENDEES_PER_PAGE, offset: (currentPage - 1) * ATTENDEES_PER_PAGE,
+  });
 
   if (result.status === "not_found") notFound();
 
@@ -77,6 +82,15 @@ export default async function AppEventAttendeesPage({ searchParams }: PageProps)
 
   const { attendees } = result;
   const checkedIn = attendees.rows.filter((row) => row.qr_used_at).length;
+  const totalPages = Math.max(1, Math.ceil(attendees.total / attendees.limit));
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams({ event: attendees.event.id });
+    if (search) params.set("q", search);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    return `/app/events/attendees?${params.toString()}`;
+  };
+  // A search narrowing or a deleted attendee can invalidate a saved page URL.
+  if (currentPage > totalPages) redirect(pageHref(totalPages));
 
   return (
     <section className="space-y-6" data-testid="host-attendees">
@@ -167,10 +181,28 @@ export default async function AppEventAttendeesPage({ searchParams }: PageProps)
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Showing {attendees.rows.length} of {attendees.total}. Refunded and cancelled
-        attendees stay listed with their real status.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <p className="text-xs text-muted-foreground">
+          Showing {attendees.rows.length} of {attendees.total} on page {currentPage}.
+          Refunded and cancelled attendees stay listed with their real status.
+        </p>
+        <nav aria-label="Attendee pages" data-testid="host-attendees-pagination"
+          className="flex items-center gap-3">
+          {currentPage > 1 ? (
+            <Link data-testid="host-attendees-prev" href={pageHref(currentPage - 1)}
+              className="min-h-11 rounded-md border border-border px-3 py-2 hover:bg-muted">
+              Previous
+            </Link>
+          ) : null}
+          <span>Page {currentPage} of {totalPages}</span>
+          {currentPage < totalPages ? (
+            <Link data-testid="host-attendees-next" href={pageHref(currentPage + 1)}
+              className="min-h-11 rounded-md border border-border px-3 py-2 hover:bg-muted">
+              Next
+            </Link>
+          ) : null}
+        </nav>
+      </div>
     </section>
   );
 }
