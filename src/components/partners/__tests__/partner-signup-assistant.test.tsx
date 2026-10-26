@@ -132,12 +132,12 @@ describe("SAN-709 assistant proposal revision guard", () => {
 
   it("invalidates an earlier AI proposal after website autofill is accepted", () => {
     const container = mount();
-    click(container, '[data-testid="suggest-current"]');
-    click(container, '[data-testid="url-apply"]');
+    click(container, "suggest-current");
+    click(container, "url-apply");
     expect(category(container)).toBe("Imported venue");
-    expect(container.querySelector('[data-testid="onboarding-suggestion-stale"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="onboarding-suggestion-accept"]')).toBeNull();
-    click(container, '[data-testid="suggest-old"]');
+    expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
+    expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
+    click(container, "suggest-old");
     expect(category(container)).toBe("Imported venue");
   });
 
