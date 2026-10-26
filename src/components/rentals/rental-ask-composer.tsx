@@ -88,6 +88,12 @@ export type RentalAskResults = {
   query: string;
   /** The question named a budget the search could not apply; say so instead of implying it did. */
   budgetNotice?: string;
+  /**
+   * Requests this search cannot filter, as labels. Carried across refinements so a later budget
+   * question cannot make "furnished" look applied just because the current question named no
+   * unsupported criterion of its own.
+   */
+  unappliedRequests?: string[];
 };
 
 /** The page's allowlisted filters, in the shape the shared parser refines. */
@@ -123,11 +129,16 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
  * Keep the unsupported request visible for the rest of this page's conversation.
  */
 function withCarriedNotice(payload: RentalAskResults, labels: readonly string[]): RentalAskResults {
-  const carried = unappliedRentalNotice([...labels]);
-  if (!carried || payload.budgetNotice?.includes("I can't filter by")) return payload;
+  // Merge labels, never the rendered sentence: a refinement can name its own unsupported request
+  // ("and pet-friendly too"), and matching text would treat that notice as already complete.
+  const merged = [...new Set([...(payload.unappliedRequests ?? []), ...labels])];
+  if (merged.length === 0) return payload;
   return {
     ...payload,
-    budgetNotice: [payload.budgetNotice, carried].filter(Boolean).join(" "),
+    unappliedRequests: merged,
+    budgetNotice: [payload.budgetNotice, unappliedRentalNotice(merged)]
+      .filter(Boolean)
+      .join(" ") || undefined,
   };
 }
 
@@ -199,10 +210,9 @@ async function searchRentalsForQuestion(
   }
 
   // Say what the search could not do. A monthly budget that reached the server is applied there;
-  // a request this search cannot filter (furnished, pets, parking…) is named, never implied.
+  // unsupported requests travel as labels so the composer can carry them into a refinement.
   const notices = [
     typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
-    unappliedRentalNotice(unappliedRentalRequests(query)),
     budgetNotApplied(query, params ?? {}) ? BUDGET_NOT_APPLIED : undefined,
   ].filter((notice): notice is string => Boolean(notice));
 
@@ -212,6 +222,7 @@ async function searchRentalsForQuestion(
       total,
       query,
       budgetNotice: notices.length ? notices.join(" ") : undefined,
+      unappliedRequests: unappliedRentalRequests(query),
     },
     // A follow-up ("only in Laureles", "under 3M") refines what the renter already asked for.
     nextMemory: params ? memoryFromParams(params) : memory,
