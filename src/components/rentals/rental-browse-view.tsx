@@ -13,6 +13,9 @@ import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/ren
 import { RentalAskComposer, type RentalAskResults } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -62,6 +65,9 @@ function RentalBrowseViewInner({
   previewMode = false,
 }: RentalBrowseViewProps) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
+  // The inline composer and this Details tool share the one concierge provider. Without it
+  // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
+  const coAgent = useOptionalConciergeCoAgent();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
@@ -105,6 +111,16 @@ function RentalBrowseViewInner({
     [detailsId, shownResults],
   );
   const closeDetails = useCallback(() => setDetailsId(null), []);
+  // One path for a card click and for the agent's "show me the details": the same panel, the same
+  // selected pin, and the same `selectedListingId` the next question carries.
+  const openDetailsFor = useCallback(
+    (rental: Rental) => {
+      setDetailsId(rental.id);
+      const pinId = `rental-${rental.id}`;
+      if (mappedIds.has(pinId)) panToPin(pinId);
+    },
+    [mappedIds, panToPin],
+  );
   const scheduleFor = (r: Rental) => () =>
     openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
 
@@ -122,6 +138,9 @@ function RentalBrowseViewInner({
 
   return (
     <>
+      {coAgent && !isDeterministicE2E() ? (
+        <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
+      ) : null}
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
@@ -239,11 +258,7 @@ function RentalBrowseViewInner({
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={scheduleFor(r)}
-                    onDetails={() => {
-                      setDetailsId(r.id);
-                      // A mapped rental also becomes the selected pin; an unmapped one gets none.
-                      if (mappedIds.has(pinId)) panToPin(pinId);
-                    }}
+                    onDetails={() => openDetailsFor(r)}
                   />
                 );
               })}

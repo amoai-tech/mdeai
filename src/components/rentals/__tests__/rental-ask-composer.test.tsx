@@ -808,6 +808,137 @@ describe("RentalAskComposer (SAN-1421)", () => {
     });
   });
 
+  it("keeps a prior unsupported request visible after a refinement", async () => {
+    const onResults = vi.fn();
+    const first = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(first.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("furnished 2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+    );
+    await act(async () => {
+      first.resolve(true);
+      await first.promise;
+    });
+
+    // Refinement names only the budget. The furnishing request is still not filtered.
+    const second = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(second.promise);
+    type("only under COP 3 million");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await act(async () => {
+      agent.messages = [
+        ...agent.messages,
+        { id: "u2", role: "user", content: "only under COP 3 million" },
+        {
+          id: "a2",
+          role: "assistant",
+          toolCalls: [{ id: "call-2", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t2",
+          role: "tool",
+          toolCallId: "call-2",
+          content: JSON.stringify({ results: [rental("rnt_2")] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    const latest = onResults.mock.calls.at(-1)?.[0];
+    expect(latest?.budgetNotice).toContain("can't filter by furnished");
+    await act(async () => {
+      second.resolve(true);
+      await second.promise;
+    });
+  });
+
+  it("merges carried labels with an unsupported request named by the refinement", async () => {
+    const onResults = vi.fn();
+    const first = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(first.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("furnished 2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        {
+          id: "a1",
+          role: "assistant",
+          toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t1",
+          role: "tool",
+          toolCallId: "call-1",
+          content: JSON.stringify({ results: [rental("rnt_1")] }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+    await act(async () => {
+      first.resolve(true);
+      await first.promise;
+    });
+
+    const second = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(second.promise);
+    type("only under COP 3 million, and pet friendly");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await act(async () => {
+      agent.messages = [
+        ...agent.messages,
+        { id: "u2", role: "user", content: "only under COP 3 million, and pet friendly" },
+        {
+          id: "a2",
+          role: "assistant",
+          toolCalls: [{ id: "call-2", type: "function", function: { name: "searchRentalsTool" } }],
+        },
+        {
+          id: "t2",
+          role: "tool",
+          toolCallId: "call-2",
+          content: JSON.stringify({
+            results: [rental("rnt_2")],
+            unappliedRequests: ["pet-friendly"],
+          }),
+        },
+      ];
+      agent.listeners.forEach((listener) => listener());
+    });
+
+    const latest = onResults.mock.calls.at(-1)?.[0];
+    // The refinement's own notice must not erase the earlier furnishing request.
+    expect(latest?.budgetNotice).toContain("furnished");
+    expect(latest?.budgetNotice).toContain("pet-friendly");
+    expect(latest?.unappliedRequests).toEqual(expect.arrayContaining(["furnished", "pet-friendly"]));
+    await act(async () => {
+      second.resolve(true);
+      await second.promise;
+    });
+  });
+
   it("ignores a tool result with a row that is not a real rental", async () => {
     const onResults = vi.fn();
     const pending = deferred<boolean>();
