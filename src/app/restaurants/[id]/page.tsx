@@ -40,8 +40,9 @@ export default async function RestaurantDetailPage({
 
   const { restaurant } = lookup;
   const meta = [restaurant.neighborhood, restaurant.cuisine].filter(Boolean).join(" · ");
-  // priceTier/rating are derived estimates from the catalog; never present them as confirmed facts.
-  const hasRating = typeof restaurant.rating === "number" && restaurant.rating > 0;
+  // priceTier/rating come from the catalog; unknown values stay unstated, never zero.
+  const catalogRating =
+    typeof restaurant.rating === "number" && restaurant.rating > 0 ? restaurant.rating : null;
   const hasCoords = restaurant.latitude != null && restaurant.longitude != null;
   // SAN-1483 supplies the canonical contest entry; null keeps the honest not-open state.
   // A failing vote lookup must never take down the whole restaurant page.
@@ -106,7 +107,7 @@ export default async function RestaurantDetailPage({
         <h2 className="text-lg font-semibold" id="restaurant-details">Restaurant details</h2>
         <p className="mt-1 text-xs text-muted-foreground" data-testid="detail-estimates">
           {restaurant.priceTier ? "Price " + restaurant.priceTier + " (estimated)" : "Price not available"}
-          {hasRating ? " · Rated " + restaurant.rating.toFixed(1) + " in catalog" : " · Rating not available"}
+          {catalogRating != null ? " · Rated " + catalogRating.toFixed(1) + " in catalog" : " · Rating not available"}
         </p>
         {restaurant.aiSummary ? <p className="mt-3 text-sm text-foreground">{restaurant.aiSummary}</p> : null}
       </section>

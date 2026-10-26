@@ -52,12 +52,12 @@ export default async function AppRentalsHomePage({ searchParams }: PageProps) {
     mode === "overview" ? "overview" : "concierge";
 
   return (
-    <main data-testid="rentals-broker-workspace">
+    <div data-testid="rentals-broker-workspace">
       <Suspense
         fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}
       >
         <WorkspaceContent workspaceMode={workspaceMode} />
       </Suspense>
-    </main>
+    </div>
   );
 }

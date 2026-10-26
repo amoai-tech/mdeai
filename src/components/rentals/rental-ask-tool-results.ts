@@ -5,7 +5,7 @@ import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { RentalAskResults } from "@/components/rentals/rental-ask-composer";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
-import { unappliedRentalNotice, unappliedRentalRequests } from "@/lib/rental-display";
+import { unappliedRentalRequests } from "@/lib/rental-display";
 
 /**
  * Reading the agent's rental search out of the thread.
@@ -111,17 +111,14 @@ function latestRentalToolResult(
         ...unappliedRentalRequests(questionText),
       ]),
     ];
-    const notices = [
-      typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
-      unappliedRentalNotice(unapplied),
-    ].filter((notice): notice is string => Boolean(notice));
     return {
       signature: `${message.toolCallId ?? index}:${resultRows.length}:${resultRows[0]?.id ?? ""}`,
       payload: {
         results: resultRows,
         total: resultRows.length,
         query: questionText,
-        budgetNotice: notices.length ? notices.join(" ") : undefined,
+        budgetNotice: typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
+        unappliedRequests: unapplied,
       },
     };
   }
