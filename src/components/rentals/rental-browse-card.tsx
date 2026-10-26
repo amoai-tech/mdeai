@@ -97,6 +97,8 @@ type RentalBrowseCardProps = {
    * external ad, to the advertiser's listing.
    */
   onDetails?: () => void;
+  /** A later row with the same title/area/size/price as an earlier one; labels it instead of hiding it. */
+  duplicateNote?: string;
 };
 
 function RentalBrowseCardMedia({
@@ -164,6 +166,7 @@ export function RentalBrowseCard({
   onPreview,
   onSchedule,
   onDetails,
+  duplicateNote,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
@@ -297,7 +300,19 @@ export function RentalBrowseCard({
         </div>
       }
     >
-      <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+        {duplicateNote ? (
+          <Badge
+            variant="outline"
+            className="font-normal text-[10px]"
+            data-testid={`rental-card-duplicate-${rental.id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        ) : null}
+      </div>
       <h3 className="mt-0.5 font-medium leading-snug">
         {onDetails ? (
           <button

@@ -159,6 +159,11 @@
       "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
     },
     {
+      "file": "src/components/copilot/__tests__/discovery-provider-guest-401.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks the v2 provider to capture onError, proving the discovery provider applies the same guest-startup-401 classification as /chat (SAN-1592)."
+    },
+    {
       "file": "src/__tests__/pr-agent-evidence.test.ts",
       "classification": "test-only",
       "note": "Reads package.json dependency names as data."

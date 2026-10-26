@@ -1,7 +1,9 @@
--- SAN-1502: real normal booking works before external approval paperwork.
+-- SAN-1502: an authorized fixture tester can run the real atomic booking flow,
+-- while an ordinary renter cannot book the same active fixture. The fixture
+-- authorization is independent of Phase A status/approval paperwork.
 -- This test is rollback-only; no rows remain after pgTAP completes.
 begin;
-select plan(12);
+select plan(14);
 
 insert into auth.users (id,instance_id,aud,role,email)
 values
@@ -85,14 +87,19 @@ select throws_ok(
  '42501', 'viewing identity changes require administrator',
  'showing lead reassignment without authorized matching lead is denied');
 
-select lives_ok(
+select throws_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000003',
      'san1502-ungranted-renter-booking', 'form',
      'ordinary-san1502-booking@example.com','Ordinary user',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- 'ordinary authenticated user books without a business approval grant');
+ '42501', 'development rental viewing requires an authorized renter',
+ 'ordinary authenticated user cannot book an active fixture without a grant');
+select is((select count(*)::int from public.leads
+  where apartment_id=current_setting('mde.san1502_booking_fixture')::uuid
+    and user_id='f1505000-0000-4000-8000-000000000003'),0,
+  'the denied ordinary fixture request wrote no lead');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
@@ -101,14 +108,19 @@ select public.admin_revoke_rental_test_access('f1505000-0000-4000-8000-000000000
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
-select lives_ok(
+select throws_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000002',
      'san1502-normal-renter-booking-1', 'form',
      'renter-san1502-booking@example.com','Renter 1502',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- 'revoke grant does not block prelaunch idempotent viewing replay');
+ '42501', 'development rental viewing requires an authorized renter',
+ 'a revoked fixture grant blocks replay of the old fixture request');
+select is((select count(*)::int from public.leads
+  where apartment_id=current_setting('mde.san1502_booking_fixture')::uuid
+    and user_id='f1505000-0000-4000-8000-000000000002'),1,
+  'the revoked replay left the one original authorized lead intact');
 
 select * from finish();
 rollback;

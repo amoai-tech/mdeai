@@ -10,12 +10,19 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
-import { RentalAskComposer, type RentalAskResults } from "@/components/rentals/rental-ask-composer";
+import {
+  RentalAskComposer,
+  type RentalAskDetailsOutcome,
+  type RentalAskResults,
+} from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
+import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -97,6 +104,7 @@ function RentalBrowseViewInner({
     [shownResults],
   );
 
+  const duplicateNotes = useMemo(() => duplicateListingNotes(shownResults), [shownResults]);
   useBrowseMapSync(pins, "rental");
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
@@ -120,6 +128,21 @@ function RentalBrowseViewInner({
       if (mappedIds.has(pinId)) panToPin(pinId);
     },
     [mappedIds, panToPin],
+  );
+  // The composer's deterministic "show me the details" path uses the same panel and resolver.
+  const openDetailsFromCommand = useCallback(
+    (target: DetailsCommand): RentalAskDetailsOutcome => {
+      if (shownResults.length === 0) {
+        return { ok: false, message: "No apartments are shown yet. Ask MDE to search first." };
+      }
+      const rental = resolveRentalForDetails(shownResults, target);
+      if (!rental) {
+        return { ok: false, message: `There is no apartment ${target.index} in the current results.` };
+      }
+      openDetailsFor(rental);
+      return { ok: true };
+    },
+    [shownResults, openDetailsFor],
   );
   const scheduleFor = (r: Rental) => () =>
     openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
@@ -176,6 +199,7 @@ function RentalBrowseViewInner({
         askComposer={
           <RentalAskComposer
             onResults={setAsk}
+            onOpenDetails={openDetailsFromCommand}
             context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
           />
         }
@@ -258,6 +282,7 @@ function RentalBrowseViewInner({
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={scheduleFor(r)}
+                    duplicateNote={duplicateNotes.get(r.id)}
                     onDetails={() => openDetailsFor(r)}
                   />
                 );
