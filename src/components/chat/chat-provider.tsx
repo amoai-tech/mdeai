@@ -90,14 +90,16 @@ function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<C
  *    the `agent.threadId` check). If the reconnect never finishes, history is
  *    NOT installed: the chat shows the retryable error instead.
  */
-function SavedThreadHistory({
+export function SavedThreadHistory({
   threadId,
   children,
+  agentId = "conciergeAgent",
 }: {
   threadId: string;
   children: ReactNode;
+  agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
