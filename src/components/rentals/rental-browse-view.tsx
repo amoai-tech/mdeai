@@ -13,7 +13,6 @@ import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/ren
 import {
   RentalAskComposer,
   type RentalAskDetailsOutcome,
-  type RentalAskResults,
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
@@ -22,6 +21,9 @@ import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-t
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
+import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
+import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -80,9 +82,17 @@ function RentalBrowseViewInner({
   const { openScheduleViewing } = useRentalUi();
   // SAN-1421 — an answer asked for on this page replaces the list and its pins until the renter
   // clears it, so the cards always describe the question they can still see.
-  const [ask, setAsk] = useState<RentalAskResults | null>(null);
-  const shownResults = ask?.results ?? results;
-  const shownTotal = ask?.total ?? total;
+  const nav = useOptionalThreadNav();
+  // The provider uses the active saved thread when selected, not always the tab's
+  // original session ID. Keep the result cache attached to that same conversation.
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
+  const askSignature = useMemo(
+    () => askFilterSignature({ neighborhood, beds, from, through }),
+    [neighborhood, beds, from, through],
+  );
+  const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
+  const shownResults = activeAsk?.results ?? results;
+  const shownTotal = activeAsk?.total ?? total;
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -149,7 +159,7 @@ function RentalBrowseViewInner({
 
   // Public browse includes source-linked external ads alongside verified inventory.
   // Do not claim every result is verified or available for MDE viewing requests.
-  const subtitle = ask
+  const subtitle = activeAsk
     ? `Ask MDE — ${formatCountSubtitle(shownTotal, shownResults.length)}`
     : previewMode
     ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
@@ -198,7 +208,7 @@ function RentalBrowseViewInner({
         }
         askComposer={
           <RentalAskComposer
-            onResults={setAsk}
+            onResults={acceptResults}
             onOpenDetails={openDetailsFromCommand}
             context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
           />
@@ -233,19 +243,24 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {ask ? (
+          {activeAsk ? (
             <div
               data-testid="rental-ask-answer"
               className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
             >
               <span className="min-w-0 flex-1">
                 <span className="text-muted-foreground">Answer to: </span>
-                <span className="font-medium">{ask.query}</span>
+                <span className="font-medium">{activeAsk.query}</span>
               </span>
-              {ask.budgetNotice ? (
-                <span className="w-full text-xs text-muted-foreground">{ask.budgetNotice}</span>
+              {activeAsk.budgetNotice ? (
+                <span className="w-full text-xs text-muted-foreground">{activeAsk.budgetNotice}</span>
               ) : null}
-              <Button variant="ghost" size="sm" onClick={() => setAsk(null)} data-testid="rental-ask-answer-clear">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearResults}
+                data-testid="rental-ask-answer-clear"
+              >
                 Clear
               </Button>
             </div>
@@ -306,11 +321,13 @@ function RentalBrowseViewInner({
 
 /** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
+  const nav = useOptionalThreadNav();
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
         <RentalBrowseViewInner
-          key={JSON.stringify([props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+          key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
           {...props}
         />
       </BrowseMapContextShell>

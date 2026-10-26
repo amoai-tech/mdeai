@@ -219,6 +219,52 @@ test.describe("SAN-1575 signed-in launcher", { tag: ["@app"] }, () => {
 test.describe("legacy destinations without chat", { tag: ["@app"] }, () => {
   test.skip(!hasE2eEnv(), "Supabase e2e env is not configured");
 
+  test("legacy ticket wallet and detail never start the root concierge runtime", async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = baseURL ?? "http://localhost:3001";
+    const identity = await createThrowawayIdentity("san1585-wallet-agentless");
+    const copilotRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/copilotkit")) {
+        copilotRequests.push(request.url());
+      }
+    });
+
+    try {
+      await signInAsOnOrigin(page, origin, identity.email);
+      await page.goto("/me/tickets");
+      await expect(page.getByRole("heading", { name: "My tickets" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Back to chat" }).first()).toHaveAttribute(
+        "href", "/chat",
+      );
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests, "legacy wallet must not mount a discovery agent").toEqual([]);
+
+      // This signed-in buyer has no such order. The existing server-side
+      // ownership check must keep its normal recovery UI, not start AI.
+      await page.goto("/me/tickets/00000000-0000-0000-0000-000000000000");
+      await expect(
+        page.getByText("Open this page from your ticket email link", { exact: false }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests, "ticket detail must not mount a discovery agent").toEqual([]);
+
+      // Email-linked ticket detail remains reachable by guests (the token is
+      // still validated by the unchanged ticket loader).
+      await page.context().clearCookies();
+      await page.reload();
+      await expect(
+        page.getByText("Open this page from your ticket email link", { exact: false }),
+      ).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      expect(copilotRequests).toEqual([]);
+    } finally {
+      await deleteThrowawayIdentity(identity);
+    }
+  });
+
   test("rentals and admin pages start no agent runtime", async ({
     page,
     baseURL,
