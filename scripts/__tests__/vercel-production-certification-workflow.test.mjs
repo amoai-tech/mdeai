@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -180,34 +179,32 @@ test("final GitHub status truth table: runtime pass alone never means release su
   const runBlock = publish.split("        run: |\n")[1];
   assert.ok(runBlock, "the final publishing step must contain a shell command");
   const command = runBlock.split("\n").map((line) => line.replace(/^          /, "")).join("\n");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mde-release-status-"));
-  try {
-    for (const [certify, promote, verify, expectedState] of [
-      ["success", "success", "success", "success"],
-      ["success", "skipped", "skipped", "failure"],
-      ["success", "failure", "skipped", "failure"],
-      ["success", "success", "failure", "failure"],
-      ["failure", "skipped", "skipped", "failure"],
-    ]) {
-      const file = path.join(dir, "status.txt");
-      fs.rmSync(file, { force: true });
-      execFileSync("bash", ["-c", `gh() { printf '%s\\n' "$*" > "$STATUS_FILE"; }; ${command}`], {
-        env: {
-          ...process.env,
-          STATUS_FILE: file,
-          GITHUB_REPOSITORY: "amoai-tech/mdeai",
-          SHA: "0".repeat(40),
-          RUN_URL: "https://github.com/amoai-tech/mdeai/actions/runs/1234",
-          CERTIFY_OUTCOME: certify,
-          PROMOTE_OUTCOME: promote,
-          VERIFY_OUTCOME: verify,
-        },
-        encoding: "utf8",
-      });
-      assert.match(fs.readFileSync(file, "utf8"), new RegExp(`-f state=${expectedState}\\b`));
-    }
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+  for (const [certify, promote, verify, expectedState] of [
+    ["success", "success", "success", "success"],
+    ["success", "skipped", "skipped", "failure"],
+    ["success", "failure", "skipped", "failure"],
+    ["success", "success", "failure", "failure"],
+    ["failure", "skipped", "skipped", "failure"],
+  ]) {
+    // Fake gh captures to stderr; the script's >/dev/null only discards stdout.
+    // Avoid creating files or using a dynamic regex for deterministic status evidence.
+    const result = spawnSync("bash", ["-c", `gh() { printf '%s\\n' "$*" >&2; }; ${command}`], {
+      env: {
+        ...process.env,
+        GITHUB_REPOSITORY: "amoai-tech/mdeai",
+        SHA: "0".repeat(40),
+        RUN_URL: "https://github.com/amoai-tech/mdeai/actions/runs/1234",
+        CERTIFY_OUTCOME: certify,
+        PROMOTE_OUTCOME: promote,
+        VERIFY_OUTCOME: verify,
+      },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+      result.stderr.includes(`-f state=${expectedState} -f context=production-certification`),
+      `expected exact status ${expectedState}; got: ${result.stderr}`,
+    );
   }
 });
 

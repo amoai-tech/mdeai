@@ -257,7 +257,7 @@ test("post-promotion: a promote operation must not silently turn automatic produ
   assert.throws(() => checkAutoAssignDisabled(projectSetting({ autoAssignCustomDomains: true })), /not OFF/);
   assert.throws(() => checkAutoAssignDisabled(null), /project could not be read/);
   // The live post-promotion operation must invoke this check, not just the pre-release check.
-  const source = fs.readFileSync(path.resolve("scripts/vercel-release-control.mjs"), "utf8");
+  const source = fs.readFileSync("scripts/vercel-release-control.mjs", "utf8");
   const after = source.slice(source.indexOf('} else if (command === "assert-promoted")'));
   assert.match(after, /checkPromoted\([\s\S]*?checkAutoAssignDisabled\(await vercelGet/);
 });
