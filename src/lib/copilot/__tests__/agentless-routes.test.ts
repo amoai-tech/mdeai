@@ -34,6 +34,8 @@ describe("isAgentlessRoute", () => {
       "/host/rentals/listings",
       "/host/rentals/onboarding",
       "/partners/profile",
+      "/me/tickets",
+      "/me/tickets/abc",
       "/admin",
       "/admin/contests",
       "/admin/rentals",
@@ -51,7 +53,6 @@ describe("isAgentlessRoute", () => {
       "/nightlife",
       "/trips",
       "/saved",
-      "/me/tickets",
       "/host",
       "/host/rentals-report",
     ]) {

@@ -1,0 +1,50 @@
+# Remove only allowlisted QA fixture prefixes from the single production project.
+#
+# Scheduled runs apply the cleanup. Manual runs default to a dry run; set
+# `apply=true` to delete. Never run on pull_request: this writes production data.
+name: QA fixture cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete matching rows (otherwise dry run)"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-fixture-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Clean allowlisted QA fixtures
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL is not configured"
+            exit 1
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.apply }}" = "true" ]; then
+            npm run qa:cleanup -- --apply
+          else
+            npm run qa:cleanup
+          fi

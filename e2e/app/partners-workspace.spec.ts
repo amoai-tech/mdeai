@@ -437,7 +437,7 @@ test.describe("SAN-1579 partner workspace", { tag: ["@app", "@partners"] }, () =
       await page.goto(`/app/partners/profile?partner=${anaPartnerId}`);
       await expect(page.getByTestId("partner-profile-load-error")).toBeVisible();
       await expect(page.getByTestId("partner-profile-load-error")).toContainText(
-        "You do not have access to the selected business.",
+        "This business is not available for this account.",
       );
       await expect(page.getByText("Ana Private Café")).toHaveCount(0);
       await expect(page.getByText("Ana secret")).toHaveCount(0);

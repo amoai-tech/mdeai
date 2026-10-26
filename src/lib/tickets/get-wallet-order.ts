@@ -26,20 +26,23 @@ export async function getWalletOrderByToken(
 }
 
 // skipcq: JS-0067, JS-R1005
-export async function listBuyerOrders(): Promise<Result<BuyerOrderListItem[]>> {
+export async function listBuyerOrders(userId?: string): Promise<Result<BuyerOrderListItem[]>> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { status: "ok", value: [] };
+  let buyerId = userId;
+  if (!buyerId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { status: "ok", value: [] };
+    buyerId = user.id;
+  }
 
   const { data, error } = await supabase
     .from("event_orders")
     .select(
       "id, short_id, status, total_cents, currency, quantity, events(name, event_start_time, primary_image_url, address, city)",
     )
-    .eq("buyer_user_id", user.id)
+    .eq("buyer_user_id", buyerId)
     .in("status", ["paid", "refunded", "partial_refund"])
     .order("created_at", { ascending: false });
 
