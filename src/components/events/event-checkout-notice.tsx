@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle, X } from "lucide-react";
+import { CheckCircle, Clock3, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   CheckoutWalletLink,
@@ -81,18 +81,20 @@ export function EventCheckoutNotice() {
       <div
         className={cn(
           "flex gap-3 rounded-lg border px-4 py-3 text-sm",
-          isSuccess
+          confirmed
             ? "border-primary/30 bg-primary/5"
             : "border-border bg-muted",
         )}
         data-testid={isSuccess ? "checkout-success-notice" : "checkout-cancel-notice"}
         role="status"
       >
-        {isSuccess ? (
+        {confirmed ? (
           <CheckCircle
             className="mt-0.5 size-4 shrink-0 text-primary"
             aria-hidden
           />
+        ) : isSuccess ? (
+          <Clock3 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         ) : (
           <X className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         )}
@@ -100,15 +102,17 @@ export function EventCheckoutNotice() {
         <div className="min-w-0 flex-1">
           <p className="font-medium">
             {isSuccess
-              ? "Payment received — check your email for tickets."
+              ? confirmed
+                ? "Payment confirmed — tickets are ready."
+                : "Checking payment status — not yet confirmed."
               : "Checkout not completed"}
           </p>
           {isSuccess ? (
             <>
               <p className="mt-1 text-muted-foreground">
                 {confirmed
-                  ? "Your tickets are confirmed and ready in your wallet."
-                  : "Your order is processing. Your QR code will be ready shortly."}
+                  ? "Your QR codes are available in your wallet."
+                  : "A return from Stripe does not confirm payment. Check your wallet for updates."}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <CheckoutWalletLink />
