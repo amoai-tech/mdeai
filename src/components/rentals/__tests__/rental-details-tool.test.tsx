@@ -27,6 +27,12 @@ const rows = [
 
 afterEach(cleanup);
 
+/** The registered tool, or a test failure that does not use a non-null assertion. */
+function registeredTool(): CapturedTool {
+  if (!captured.tool) throw new Error("openRentalDetails was not registered");
+  return captured.tool;
+}
+
 describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
   it("registers the tool the agent is told to call", () => {
     render(<RentalDetailsFrontendTool results={rows} onOpen={vi.fn()} />);
@@ -41,13 +47,13 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     render(<RentalDetailsFrontendTool results={rows} onOpen={onOpen} />);
     await waitFor(() => expect(captured.tool).not.toBeNull());
 
-    expect(await captured.tool!.handler({})).toContain("First apartment");
+    expect(await registeredTool().handler({})).toContain("First apartment");
     expect(onOpen).toHaveBeenLastCalledWith(rows[0]);
 
-    expect(await captured.tool!.handler({ index: 2 })).toContain("Second apartment");
+    expect(await registeredTool().handler({ index: 2 })).toContain("Second apartment");
     expect(onOpen).toHaveBeenLastCalledWith(rows[1]);
 
-    expect(await captured.tool!.handler({ listingId: "rental-a" })).toContain("First apartment");
+    expect(await registeredTool().handler({ listingId: "rental-a" })).toContain("First apartment");
     expect(onOpen).toHaveBeenLastCalledWith(rows[0]);
   });
 
@@ -56,10 +62,10 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     render(<RentalDetailsFrontendTool results={rows} onOpen={onOpen} />);
     await waitFor(() => expect(captured.tool).not.toBeNull());
 
-    expect(await captured.tool!.handler({ listingId: "not-shown" })).toContain(
+    expect(await registeredTool().handler({ listingId: "not-shown" })).toContain(
       "No apartment with id not-shown",
     );
-    expect(await captured.tool!.handler({ index: 99 })).toContain("No apartment 99");
+    expect(await registeredTool().handler({ index: 99 })).toContain("No apartment 99");
     expect(onOpen).not.toHaveBeenCalled();
   });
 
@@ -68,7 +74,7 @@ describe("RentalDetailsFrontendTool (SAN-1421 post-merge)", () => {
     render(<RentalDetailsFrontendTool results={[]} onOpen={onOpen} />);
     await waitFor(() => expect(captured.tool).not.toBeNull());
 
-    expect(await captured.tool!.handler({ index: 1 })).toContain("No apartments are shown yet");
+    expect(await registeredTool().handler({ index: 1 })).toContain("No apartments are shown yet");
     expect(onOpen).not.toHaveBeenCalled();
   });
 });
