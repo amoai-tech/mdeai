@@ -28,7 +28,7 @@ test.skip(
 );
 
 test("production host agent replies and persists a thread", async ({ page, baseURL }) => {
-  const origin = baseURL ?? "https://www.mdeai.co";
+  const origin = baseURL || "https://www.mdeai.co";
   const identity = await createThrowawayIdentity("prod-release-health");
   const admin = await getSupabaseAdmin();
   const consoleErrors: string[] = [];
