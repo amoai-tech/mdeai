@@ -240,10 +240,10 @@ async function handleCopilotKit(req: NextRequest) {
             .select("partner_id")
             .eq("profile_id", userId)
             .limit(1);
-          if (membershipsError || !memberships) {
+          if (membershipsError || !Array.isArray(memberships)) {
             throw new Error("partner_membership_lookup_failed");
           }
-          if (selectedPartnerId || memberships.length > 0) {
+          if (selectedPartnerId !== null || memberships.length !== 0) {
             return Response.json(
               { error: "Select a business you can access" },
               { status: 403 },
