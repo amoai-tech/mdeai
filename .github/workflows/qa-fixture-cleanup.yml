@@ -43,3 +43,10 @@ jobs:
           else
             npm run qa:cleanup
           fi
+      - name: Retain the cleanup backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-cleanup-backup-${{ github.run_id }}
+          path: tmp/qa/qa-cleanup-backup.json
+          if-no-files-found: ignore

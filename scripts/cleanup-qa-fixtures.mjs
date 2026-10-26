@@ -46,6 +46,11 @@ try {
               (select count(*)::int from public.event_orders o where o.event_id=e.id) as orders
          from public.events e
         where e.name like any($1::text[])
+          and exists (
+            select 1 from auth.users u
+             where u.id = e.organizer_id
+               and u.email like 'qa-%@mdeai.co'
+          )
         order by e.created_at`,
       [PREFIXES],
     );
@@ -63,6 +68,11 @@ try {
        from public.events e
        left join auth.users u on u.id=e.organizer_id
       where e.name like any($1::text[])
+        and exists (
+          select 1 from auth.users u
+           where u.id = e.organizer_id
+             and u.email like 'qa-%@mdeai.co'
+        )
       order by e.created_at
       for update of e`,
     [PREFIXES],
@@ -85,6 +95,11 @@ try {
 
   fs.mkdirSync("tmp/qa", { recursive: true });
   const backup = "tmp/qa/qa-cleanup-backup.json";
+  if (fs.existsSync(backup)) {
+    throw new Error(
+      `refusing to overwrite ${backup}; move the previous backup before applying`,
+    );
+  }
   fs.writeFileSync(
     backup,
     JSON.stringify({ createdAt: new Date().toISOString(), events: selected.rows, children }, null, 2),
@@ -105,7 +120,14 @@ try {
   deleted.events = events.rowCount;
 
   const left = await client.query(
-    "select count(*)::int n from public.events where name like any($1::text[])",
+    `select count(*)::int n
+       from public.events e
+      where e.name like any($1::text[])
+        and exists (
+          select 1 from auth.users u
+           where u.id = e.organizer_id
+             and u.email like 'qa-%@mdeai.co'
+        )`,
     [PREFIXES],
   );
   if (left.rows[0].n !== 0) throw new Error("QA cleanup verification failed");
