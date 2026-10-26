@@ -81,8 +81,9 @@ function editCategory(container: HTMLElement, value: string) {
     target: { value },
   });
 }
-function category(container: HTMLElement) {
-  return (within(container).getByRole("textbox", { name: "Category" }) as HTMLInputElement).value;
+function expectCategory(container: HTMLElement, expected: string) {
+  expect(within(container).getByRole("textbox", { name: "Category" }))
+    .toHaveProperty("value", expected);
 }
 
 afterEach(() => {
@@ -97,9 +98,9 @@ describe("SAN-709 assistant proposal revision guard", () => {
   it("applies a reviewed current proposal but never writes on its own", () => {
     const container = mount();
     click(container, "suggest-current");
-    expect(category(container)).toBe("");
+    expectCategory(container, "");
     click(container, "onboarding-suggestion-accept");
-    expect(category(container)).toBe("Café");
+    expectCategory(container, "Café");
     expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
@@ -107,7 +108,7 @@ describe("SAN-709 assistant proposal revision guard", () => {
     const container = mount();
     editCategory(container, "Restaurant");
     click(container, "suggest-old");
-    expect(category(container)).toBe("Restaurant");
+    expectCategory(container, "Restaurant");
     expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
@@ -117,13 +118,13 @@ describe("SAN-709 assistant proposal revision guard", () => {
     editCategory(container, "Restaurant");
     expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
     expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
-    expect(category(container)).toBe("Restaurant");
+    expectCategory(container, "Restaurant");
   });
 
   it("Ignore never changes the form", () => {
     const container = mount();
     click(container, "suggest-current");
     click(container, "onboarding-suggestion-ignore");
-    expect(category(container)).toBe("");
+    expectCategory(container, "");
   });
 });
