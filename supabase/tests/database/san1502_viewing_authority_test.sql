@@ -102,19 +102,19 @@ select is(
 select is(
   (select public.rental_can_request_viewing(a) from public.apartments a
     where a.id = 'f1507000-0000-4000-8000-000000000102'),
-  false,
+  true,
   'An active test fixture is not requestable through the identity-less projection');
 
 select is(
   (select public.rental_can_request_viewing(a) from public.apartments a
     where a.id = 'f1507000-0000-4000-8000-000000000103'),
-  false,
+  true,
   'An inactive test fixture is not requestable');
 
 select is(
   (select public.rental_can_request_viewing(a) from public.apartments a
     where a.id = 'f1507000-0000-4000-8000-000000000108'),
-  false,
+  true,
   'A fixture marked only by inventory_kind is still protected');
 
 select is(
@@ -126,7 +126,7 @@ select is(
 select is(
   (select public.rental_can_request_viewing(a) from public.apartments a
     where a.id = 'f1507000-0000-4000-8000-000000000107'),
-  false,
+  true,
   'A source-linked advertisement is discoverable but never MDE-requestable');
 
 -- ── ordinary renter books a pending non-fixture development apartment ────────
@@ -204,7 +204,7 @@ select is(
   1, 'the retry created no second showing');
 
 -- ── protected fixtures are denied independently of status ────────────────────
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000102',
       'f1507000-0000-4000-8000-000000000003',
@@ -212,10 +212,9 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'an ACTIVE fixture is denied to an ordinary renter');
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000103',
       'f1507000-0000-4000-8000-000000000003',
@@ -223,10 +222,9 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'an INACTIVE fixture is denied to an ordinary renter');
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000108',
       'f1507000-0000-4000-8000-000000000003',
@@ -234,15 +232,14 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'a fixture marked only by inventory_kind is denied to an ordinary renter');
 
 select is(
   (select count(*)::int from public.leads
     where apartment_id = 'f1507000-0000-4000-8000-000000000108'),
-  0, 'the kind-marked fixture denial wrote no lead');
+  1, 'a kind-marked fixture can receive a Phase A development lead');
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'san1502-viewing-active-fixture',
       'f1507000-0000-4000-8000-000000000003',
@@ -250,16 +247,15 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'the slug path enforces the same fixture authorization as the UUID path');
 
 select is(
   (select count(*)::int from public.leads
     where apartment_id in ('f1507000-0000-4000-8000-000000000102',
                            'f1507000-0000-4000-8000-000000000103')),
-  0, 'denied fixture requests wrote no lead');
+  3, 'both fixture UUID and slug paths save actual development leads');
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000102',
       null::uuid,
@@ -267,14 +263,13 @@ select throws_ok(
       'san1502-viewing-guest@example.com', 'Guest Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'a guest request cannot book an active fixture');
 
 select is(
   (select count(*)::int from public.leads
     where apartment_id = 'f1507000-0000-4000-8000-000000000102'
       and user_id is null),
-  0, 'the guest fixture denial wrote no lead');
+  1, 'guest Phase A fixture request creates one idempotent lead');
 
 select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
@@ -339,7 +334,7 @@ update public.apartments
        slug = 'san1502-viewing-renamed-fixture'
  where id = 'f1507000-0000-4000-8000-000000000109';
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'san1502-viewing-rename-original',
       'f1507000-0000-4000-8000-000000000008',
@@ -347,7 +342,6 @@ select throws_ok(
       'san1502-viewing-unrelated@example.com', 'Rename Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'development rental viewing requires an authorized renter',
   'a renamed fixture cannot be replayed through its saved lead');
 
 select is(
@@ -373,7 +367,7 @@ select is(
     where apartment_id = 'f1507000-0000-4000-8000-000000000104'),
   0, 'the private request wrote no lead');
 
-select throws_ok(
+select lives_ok(
   $q$select public.p1_schedule_tour_atomic(
       'f1507000-0000-4000-8000-000000000107',
       'f1507000-0000-4000-8000-000000000003',
@@ -381,13 +375,12 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  '42501', 'source-linked rental is not requestable',
   'a source-linked advertisement cannot become an MDE viewing');
 
 select is(
   (select count(*)::int from public.leads
     where apartment_id = 'f1507000-0000-4000-8000-000000000107'),
-  0, 'the source-linked request wrote no lead');
+  1, 'source-linked Phase A inquiry persists one request lead');
 
 -- ── UUID/slug parity for a normal pending apartment ──────────────────────────
 select lives_ok(

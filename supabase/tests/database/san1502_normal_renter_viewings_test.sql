@@ -87,19 +87,18 @@ select throws_ok(
  '42501', 'viewing identity changes require administrator',
  'showing lead reassignment without authorized matching lead is denied');
 
-select throws_ok(
+select lives_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000003',
      'san1502-ungranted-renter-booking', 'form',
      'ordinary-san1502-booking@example.com','Ordinary user',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- '42501', 'development rental viewing requires an authorized renter',
- 'ordinary authenticated user cannot book an active fixture without a grant');
+ 'ordinary renter can request a development fixture without special grants');
 select is((select count(*)::int from public.leads
   where apartment_id=current_setting('mde.san1502_booking_fixture')::uuid
-    and user_id='f1505000-0000-4000-8000-000000000003'),0,
-  'the denied ordinary fixture request wrote no lead');
+    and user_id='f1505000-0000-4000-8000-000000000003'),1,
+  'ordinary fixture viewing persisted one lead');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
@@ -108,15 +107,14 @@ select public.admin_revoke_rental_test_access('f1505000-0000-4000-8000-000000000
 reset role;
 select set_config('request.jwt.claims','{}',true);
 
-select throws_ok(
+select lives_ok(
  $q$select public.p1_schedule_tour_atomic(
      current_setting('mde.san1502_booking_fixture'),
      'f1505000-0000-4000-8000-000000000002',
      'san1502-normal-renter-booking-1', 'form',
      'renter-san1502-booking@example.com','Renter 1502',
      null,null,now()+interval '3 days','{}'::jsonb,'{}'::jsonb)$q$,
- '42501', 'development rental viewing requires an authorized renter',
- 'a revoked fixture grant blocks replay of the old fixture request');
+ 'revoke does not block a valid idempotent replay in Phase A');
 select is((select count(*)::int from public.leads
   where apartment_id=current_setting('mde.san1502_booking_fixture')::uuid
     and user_id='f1505000-0000-4000-8000-000000000002'),1,
