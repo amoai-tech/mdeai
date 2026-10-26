@@ -12,8 +12,8 @@ vi.mock("@copilotkit/react-core/v2", () => ({
 }));
 
 type Tool = {
-  parameters: { safeParse: (v: unknown) => { success: boolean } };
-  handler: (args: {
+  parameters: { safeParse: (_value: unknown) => { success: boolean } };
+  handler: (_args: {
     formRevision: number;
     category?: string;
     status?: string;
@@ -44,9 +44,9 @@ describe("SAN-709 real CopilotKit frontend bridge", () => {
       formRevision,
     });
 
-    act(() => root.render(
-      <OnboardingCopilotBridge context={context(3)} onSuggestion={onSuggestion} />,
-    ));
+    act(() => {
+      root.render(<OnboardingCopilotBridge context={context(3)} onSuggestion={onSuggestion} />);
+    });
     expect(mocks.context).toHaveBeenCalledWith(expect.objectContaining({
       value: expect.objectContaining({ formRevision: 3 }),
     }));
@@ -61,9 +61,9 @@ describe("SAN-709 real CopilotKit frontend bridge", () => {
     expect(result).toMatchObject({ ok: true, state: "awaiting_user_review", saved: false });
     expect(onSuggestion).toHaveBeenCalledWith({ category: "Café" }, 3);
 
-    act(() => root.render(
-      <OnboardingCopilotBridge context={context(4)} onSuggestion={onSuggestion} />,
-    ));
+    act(() => {
+      root.render(<OnboardingCopilotBridge context={context(4)} onSuggestion={onSuggestion} />);
+    });
     tool = mocks.tool.mock.lastCall?.[0] as Tool;
     onSuggestion.mockClear();
     await act(async () => { result = await tool.handler({ formRevision: 3, category: "Café" }); });

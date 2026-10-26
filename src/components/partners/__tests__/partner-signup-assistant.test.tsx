@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { fireEvent, within } from "@testing-library/react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
@@ -21,15 +22,15 @@ vi.mock("@/components/onboarding/onboarding-copilot-bridge", () => ({
     onSuggestion,
   }: {
     context: { formRevision: number };
-    onSuggestion: (suggestion: PartnerProfileSuggestion, revision: number) => void;
+    onSuggestion: (_suggestion: PartnerProfileSuggestion, revision: number) => void;
   }) => (
     <div>
       <button type="button" data-testid="suggest-current"
-        onClick={() => onSuggestion({ category: "Café" }, context.formRevision)}>
+        onClick={() => { onSuggestion({ category: "Café" }, context.formRevision); }}>
         Suggest
       </button>
       <button type="button" data-testid="suggest-old"
-        onClick={() => onSuggestion({ category: "Café" }, 0)}>
+        onClick={() => { onSuggestion({ category: "Café" }, 0); }}>
         Late response
       </button>
     </div>
@@ -72,22 +73,16 @@ function mount() {
   mounted = { root, container };
   return container;
 }
-function click(container: HTMLElement, selector: string) {
-  const control = container.querySelector(selector) as HTMLButtonElement | null;
-  expect(control).not.toBeNull();
-  act(() => control?.click());
+function click(container: HTMLElement, testId: string) {
+  fireEvent.click(within(container).getByTestId(testId));
 }
 function editCategory(container: HTMLElement, value: string) {
-  const input = container.querySelector('input[aria-label="Category"]') as HTMLInputElement;
-  act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    setter?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+  fireEvent.change(within(container).getByRole("textbox", { name: "Category" }), {
+    target: { value },
   });
 }
 function category(container: HTMLElement) {
-  return (container.querySelector('input[aria-label="Category"]') as HTMLInputElement).value;
+  return (within(container).getByRole("textbox", { name: "Category" }) as HTMLInputElement).value;
 }
 
 afterEach(() => {
@@ -101,34 +96,34 @@ afterEach(() => {
 describe("SAN-709 assistant proposal revision guard", () => {
   it("applies a reviewed current proposal but never writes on its own", () => {
     const container = mount();
-    click(container, '[data-testid="suggest-current"]');
+    click(container, "suggest-current");
     expect(category(container)).toBe("");
-    click(container, '[data-testid="onboarding-suggestion-accept"]');
+    click(container, "onboarding-suggestion-accept");
     expect(category(container)).toBe("Café");
-    expect(container.querySelector('[data-testid="onboarding-suggestion-card"]')).toBeNull();
+    expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
   it("keeps a newer manual edit when an old response arrives", () => {
     const container = mount();
     editCategory(container, "Restaurant");
-    click(container, '[data-testid="suggest-old"]');
+    click(container, "suggest-old");
     expect(category(container)).toBe("Restaurant");
-    expect(container.querySelector('[data-testid="onboarding-suggestion-card"]')).toBeNull();
+    expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
   it("invalidates a displayed proposal after the user edits the form", () => {
     const container = mount();
-    click(container, '[data-testid="suggest-current"]');
+    click(container, "suggest-current");
     editCategory(container, "Restaurant");
-    expect(container.querySelector('[data-testid="onboarding-suggestion-stale"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="onboarding-suggestion-accept"]')).toBeNull();
+    expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
+    expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
     expect(category(container)).toBe("Restaurant");
   });
 
   it("Ignore never changes the form", () => {
     const container = mount();
-    click(container, '[data-testid="suggest-current"]');
-    click(container, '[data-testid="onboarding-suggestion-ignore"]');
+    click(container, "suggest-current");
+    click(container, "onboarding-suggestion-ignore");
     expect(category(container)).toBe("");
   });
 });
