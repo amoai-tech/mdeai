@@ -4,10 +4,15 @@ import type { RequestedThread } from "@/lib/copilotkit-thread-ownership";
 import { enforcePartnerThreadBinding, PARTNER_THREAD_METADATA_KEY } from "../partner-thread-binding";
 
 const USER = "6b51e65f-f7b1-4ad7-9185-f2ecae22eb00";
+const OTHER_USER = "92361f88-f24f-4cb8-8025-05ec6c17bb44";
 const CAFE_A = "6a9167cc-7cb6-4837-a7e0-2039654f138c";
 const CAFE_B = "17243544-7b84-4f74-b631-f3a44c193e40";
 
-function service(metadata: Record<string, unknown> | null, insertError: { code: string } | null = null) {
+function service(
+  metadata: Record<string, unknown> | null,
+  insertError: { code: string } | null = null,
+  resourceId = USER,
+) {
   const insert = vi.fn(async () => ({ error: insertError }));
   return {
     insert,
@@ -15,7 +20,7 @@ function service(metadata: Record<string, unknown> | null, insertError: { code: 
       from: () => ({
         select: () => ({
           eq: () => ({
-            maybeSingle: async () => ({ data: metadata ? { metadata } : null, error: null }),
+            maybeSingle: async () => ({ data: metadata ? { metadata, resourceId } : null, error: null }),
           }),
         }),
         insert,
@@ -63,6 +68,28 @@ describe("SAN-705 partner thread binding", () => {
         metadata: { [PARTNER_THREAD_METADATA_KEY]: CAFE_A },
       }),
     );
+  });
+
+  it("rejects a duplicate-insert race won by another user in the same business", async () => {
+    const raced = service({ [PARTNER_THREAD_METADATA_KEY]: CAFE_A }, { code: "23505" }, OTHER_USER);
+    const result = await enforcePartnerThreadBinding(
+      { kind: "new", threadId: "shared-thread" },
+      USER,
+      CAFE_A,
+      raced.client,
+    );
+    expect(result?.status).toBe(403);
+  });
+
+  it("accepts a duplicate-insert race only for the same owner and business", async () => {
+    const raced = service({ [PARTNER_THREAD_METADATA_KEY]: CAFE_A }, { code: "23505" }, USER);
+    const result = await enforcePartnerThreadBinding(
+      { kind: "new", threadId: "same-user-thread" },
+      USER,
+      CAFE_A,
+      raced.client,
+    );
+    expect(result).toBeNull();
   });
 
   it("rejects a partner thread from a general Concierge request", async () => {

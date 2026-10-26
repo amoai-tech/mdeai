@@ -19,7 +19,7 @@ import {
   loadPartnerRuntimeContext,
   setPartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
-import { isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
+import { isPartnerAgentRunOrConnect, isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
 import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
@@ -191,6 +191,12 @@ async function handleCopilotKit(req: NextRequest) {
     const auth = authorizeCopilotKitRequest(req, { userId, thread });
     if (!auth.allowed) return auth.response;
     const { resourceId } = auth;
+    const isPartnerRun = await isPartnerAgentRunOrConnect(req);
+    // Anonymous Concierge is allowed, but partnerAgent may never run without
+    // a server-authenticated owner even if no business selector was supplied.
+    if (isPartnerRun && !userId) {
+      return Response.json({ error: "Sign in to use the partner assistant" }, { status: 401 });
+    }
 
     const rateLimited = await checkCopilotKitDistributedRateLimit(req, userId);
     if (rateLimited) return rateLimited;
@@ -216,15 +222,17 @@ async function handleCopilotKit(req: NextRequest) {
       // SAN-705: selection travels with this agent run (not a shared cookie).
       // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
       let partnerContext = null;
-      if (selectedPartnerId) {
+      if (isPartnerRun) {
+        // A missing selector is allowed only when membership resolves exactly
+        // one business. Multi-business users must select explicitly.
         partnerContext = await loadPartnerRuntimeContext(
           supabase,
           userId,
-          selectedPartnerId,
+          selectedPartnerId ?? undefined,
         );
         if (!partnerContext) {
           return Response.json(
-            { error: "You do not have access to the selected business" },
+            { error: "Select a business you can access" },
             { status: 403 },
           );
         }
@@ -238,7 +246,7 @@ async function handleCopilotKit(req: NextRequest) {
         const bindingError = await enforcePartnerThreadBinding(
           thread,
           userId,
-          selectedPartnerId,
+          partnerContext?.partnerId ?? null,
         );
         if (bindingError) return bindingError;
       }

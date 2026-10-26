@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PARTNER_SELECTION_CONTEXT_DESCRIPTION,
   readPartnerSelectionFromRun,
+  isPartnerAgentRunOrConnect,
   isPartnerStopRequest,
 } from "../partner-selection";
 
@@ -36,6 +37,18 @@ describe("partner selection travels with each run (SAN-705)", () => {
 
   it("preserves selected business on AG-UI connect so saved partner chats can resume", async () => {
     expect(await readPartnerSelectionFromRun(run(partnerA, { method: "agent/connect" }))).toBe(partnerA);
+  });
+
+  it("detects partner run/connect even without business selection", async () => {
+    const unselected = run(partnerA, { contexts: [] });
+    expect(await isPartnerAgentRunOrConnect(unselected)).toBe(true);
+    expect(await readPartnerSelectionFromRun(unselected)).toBeNull();
+    expect(await isPartnerAgentRunOrConnect(run(partnerA, { method: "agent/connect", contexts: [] }))).toBe(true);
+    expect(await isPartnerAgentRunOrConnect(run(partnerA, { method: "agent/stop" }))).toBe(false);
+    expect(await isPartnerAgentRunOrConnect(run(partnerA, { agent: "conciergeAgent" }))).toBe(false);
+    expect(await isPartnerAgentRunOrConnect(new Request("http://localhost/api/copilotkit", { method: "POST", body: "invalid-json" }))).toBe(false);
+    // Parsing a clone must never consume the AG-UI request body.
+    expect((await unselected.json()).body.threadId).toBe("t");
   });
 
   it("does not take selection from concierge or runtime info operations", async () => {

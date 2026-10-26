@@ -7,6 +7,26 @@ export const PARTNER_SELECTION_CONTEXT_DESCRIPTION = "mde.partnerSelection.v1";
 
 const PARTNER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Agent identity is independent of the optional (untrusted) business selector.
+ * Parse a clone so the downstream CopilotKit handler still receives the body.
+ */
+export async function isPartnerAgentRunOrConnect(request: Request): Promise<boolean> {
+  if (request.method !== "POST") return false;
+  try {
+    const envelope = (await request.clone().json()) as {
+      method?: unknown;
+      params?: { agentId?: unknown };
+    } | null;
+    return (
+      (envelope?.method === "agent/run" || envelope?.method === "agent/connect") &&
+      envelope.params?.agentId === "partnerAgent"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Extract an untrusted partner ID from this partnerAgent run or reconnect. */
 export async function readPartnerSelectionFromRun(request: Request): Promise<string | null> {
   if (request.method !== "POST") return null;

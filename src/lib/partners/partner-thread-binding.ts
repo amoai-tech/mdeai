@@ -7,7 +7,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 /** Internal metadata key written only by this server-side guard. */
 export const PARTNER_THREAD_METADATA_KEY = "mdePartnerId";
 
-type ThreadRow = { metadata: unknown };
+type ThreadRow = { metadata: unknown; resourceId: unknown };
 
 function boundPartner(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
@@ -22,14 +22,21 @@ function forbidden(message: string): Response {
 async function readBoundPartner(
   service: SupabaseClient<Database>,
   threadId: string,
-): Promise<{ partnerId: string | null; error: boolean }> {
+): Promise<{ partnerId: string | null; resourceId: string | null; error: boolean }> {
   const { data, error } = await service
     .from("mastra_threads")
-    .select("metadata")
+    .select('metadata, "resourceId"')
     .eq("id", threadId)
     .maybeSingle();
-  if (error) return { partnerId: null, error: true };
-  return { partnerId: boundPartner((data as ThreadRow | null)?.metadata), error: false };
+  if (error) return { partnerId: null, resourceId: null, error: true };
+  const row = data as ThreadRow | null;
+  return {
+    partnerId: boundPartner(row?.metadata),
+    resourceId: typeof row?.resourceId === "string" && row.resourceId.length > 0
+      ? row.resourceId
+      : null,
+    error: false,
+  };
 }
 
 /**
@@ -105,7 +112,7 @@ export async function enforcePartnerThreadBinding(
   if (raced.error) {
     return Response.json({ error: "Thread storage unavailable" }, { status: 503 });
   }
-  return raced.partnerId === partnerId
+  return raced.partnerId === partnerId && raced.resourceId === userId
     ? null
-    : forbidden("This conversation belongs to a different business");
+    : forbidden("This conversation belongs to another user or business");
 }
