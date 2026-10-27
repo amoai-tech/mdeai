@@ -335,6 +335,21 @@
       "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
       "classification": "test-only",
       "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
+    },
+    {
+      "file": "src/components/host/rentals/rentals-concierge-center.tsx",
+      "classification": "keep",
+      "note": "SAN-1124: existing CopilotKit v2 CopilotChat under the single ChatProvider on broker routes; no second broker runtime."
+    },
+    {
+      "file": "src/components/host/rentals/broker-workspace-tool-renderer.tsx",
+      "classification": "keep",
+      "note": "SAN-1124: v2 useRenderTool binds to the existing readBrokerWorkspaceTool for grounded read-only broker activity."
+    },
+    {
+      "file": "src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
     }
   ]
 }
