@@ -33,11 +33,12 @@ export function PartnerSignupNav({
           <Button
             variant="ghost"
             size="sm"
+            className="px-2 sm:px-3"
             nativeButton={false}
-            render={<Link href={pickerHref} />}
+            render={<Link href={pickerHref} aria-label="All partner types" />}
           >
             <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
-            All partner types
+            <span className="hidden sm:inline">All partner types</span>
           </Button>
         ) : (
           <nav
@@ -80,7 +81,7 @@ export function PartnerSignupNav({
             Sign in
           </Button>
           <Button
-            className="min-h-11 px-4"
+            className="hidden min-h-11 px-4 sm:inline-flex"
             nativeButton={false}
             render={<Link href="/chat" />}
           >

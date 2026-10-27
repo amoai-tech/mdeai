@@ -32,6 +32,12 @@ describe("PartnerSignupNav", () => {
     );
   });
 
+  it("collapses the secondary Explore action on mobile to prevent header overflow", () => {
+    const html = renderToStaticMarkup(<PartnerSignupNav showBackToPicker />);
+    expect(html).toContain('href="/chat"');
+    expect(html).toContain("sm:inline-flex");
+  });
+
   it("sign-in uses next redirect when provided", () => {
     const html = renderToStaticMarkup(
       <PartnerSignupNav
