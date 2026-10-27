@@ -33,13 +33,16 @@ export const HOST_OS_NAV_ITEMS: HostOsNavItem[] = [
 export const HOST_OS_APP_NAV_ITEMS: HostOsNavItem[] = [
   { href: "/app/events/overview", label: "Overview", testId: "host-os-nav-overview" },
   { href: "/app/events", label: "Events", testId: "host-os-nav-events" },
+  // SAN-983 / 982 / 984 — real order, attendee and door surfaces.
+  { href: "/app/events/tickets", label: "Tickets", testId: "host-os-nav-tickets" },
+  { href: "/app/events/attendees", label: "Attendees", testId: "host-os-nav-attendees" },
+  { href: "/app/events/check-in", label: "Check in", testId: "host-os-nav-check-in" },
   { href: "/app/events/analytics", label: "Analytics", testId: "host-os-nav-analytics" },
 ];
 
 /** Reserved future destinations — shown disabled, never linked this phase. */
 export const HOST_OS_NAV_PLACEHOLDERS: HostOsNavItem[] = [
   { href: "/host/venues", label: "Venues", testId: "host-os-nav-venues", disabled: true },
-  { href: "/host/tickets", label: "Tickets", testId: "host-os-nav-tickets", disabled: true },
   { href: "/host/inbox", label: "Inbox", testId: "host-os-nav-inbox", disabled: true },
   { href: "/host/settings", label: "Settings", testId: "host-os-nav-settings", disabled: true },
 ];

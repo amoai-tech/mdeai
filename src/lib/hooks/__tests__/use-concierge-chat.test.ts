@@ -22,6 +22,7 @@ const agent = {
   }),
 };
 const copilotkit = {
+  runtimeConnectionStatus: "connected",
   stopAgent: vi.fn(() => calls.push("stopAgent")),
   runAgent: vi.fn(),
 };
@@ -29,6 +30,8 @@ const copilotkit = {
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useCallback: <T>(fn: T) => fn,
+  useRef: <T>(value: T) => ({ current: value }),
+  useEffect: (fn: () => void) => fn(),
 }));
 vi.mock("@copilotkit/react-core/v2", () => ({ useCopilotKit: () => ({ copilotkit }) }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
@@ -51,10 +54,48 @@ beforeEach(() => {
   calls.length = 0;
   vi.clearAllMocks();
   agent.isRunning = false;
+  copilotkit.runtimeConnectionStatus = "connected";
   agent.threadId = "";
   agent.messages = [{ id: "user-1", role: "user", content: "Find rentals" }];
   ensureMock.mockReset();
   ensureMock.mockResolvedValue(true);
+});
+
+describe("SAN-1396 — wait for a signed-in cold runtime without duplicate sends", () => {
+  it("returns immediately once an agent and runtime are connected", async () => {
+    await expect(useConciergeChat().waitForRuntimeReady()).resolves.toBe(true);
+  });
+
+  it("waits for a connecting runtime to become ready", async () => {
+    vi.useFakeTimers();
+    try {
+      copilotkit.runtimeConnectionStatus = "connecting";
+      const ready = useConciergeChat().waitForRuntimeReady(800);
+      copilotkit.runtimeConnectionStatus = "connected";
+      await vi.advanceTimersByTimeAsync(125);
+      await expect(ready).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails without an agent run when the runtime reports an error", async () => {
+    copilotkit.runtimeConnectionStatus = "error";
+    await expect(useConciergeChat().waitForRuntimeReady()).resolves.toBe(false);
+    expect(copilotkit.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("fails within a bounded timeout if connection never succeeds", async () => {
+    vi.useFakeTimers();
+    try {
+      copilotkit.runtimeConnectionStatus = "connecting";
+      const ready = useConciergeChat().waitForRuntimeReady(500);
+      await vi.advanceTimersByTimeAsync(625);
+      await expect(ready).resolves.toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("useConciergeChat — switching conversation mid-reply", () => {
