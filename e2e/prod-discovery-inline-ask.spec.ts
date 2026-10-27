@@ -47,17 +47,20 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
         }
       });
       await page.goto(new URL("/" + scenario.route, base).toString(), { waitUntil: "domcontentloaded" });
-      const input = page.getByTestId("discovery-ask-input");
-      const send = page.getByTestId("discovery-ask-send");
+      // Responsive desktop/mobile composer instances may coexist in the DOM.
+      // Interact only with the visible composer, not its hidden sibling.
+      const input = page.locator('[data-testid="discovery-ask-input"]:visible');
+      const send = page.locator('[data-testid="discovery-ask-send"]:visible');
+      const history = page.locator('[data-testid="discovery-ask-history"]:visible');
       let index = 0;
       for (const question of scenario.queries) {
         await expect(input).toBeVisible({ timeout: 45_000 });
         await input.fill(question);
         await expect(send).toBeEnabled({ timeout: 45_000 });
         await send.click();
-        await expect(page.getByTestId("discovery-ask-history")).toContainText(question, { timeout: 110_000 });
+        await expect(history).toContainText(question, { timeout: 110_000 });
         // Every user turn must finish with an actual assistant text response.
-        await expect.poll(async () => page.getByTestId("discovery-ask-history").locator("li")
+        await expect.poll(async () => history.locator("li")
           .evaluateAll((els) => els.filter((el) => {
             const text = el.textContent?.trim() ?? "";
             return text.startsWith("MDE:") && text.length > 4;
@@ -65,7 +68,7 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
         index++;
       }
       for (const query of scenario.queries) {
-        await expect(page.getByTestId("discovery-ask-history")).toContainText(query);
+        await expect(history).toContainText(query);
       }
       expect(failures).toEqual([]);
       expect(responses.some((code) => code === 200)).toBe(true);
@@ -76,9 +79,9 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
         await expect(page.getByTestId("discovery-grounded-results")).toBeVisible({ timeout: 15_000 });
       }
       if (scenario.route === "events") {
-        // A truthful empty state is valid; assistant text without a resolved
-        // catalog state is not a verified event discovery journey.
-        await expect(page.getByTestId("guest-event-results-count").or(page.getByTestId("events-empty")).first())
+        // A zero count is valid, but only a completed search-to-catalog
+        // resolution renders this marker. The initial empty state is insufficient.
+        await expect(page.getByTestId("guest-event-results-count"))
           .toBeVisible({ timeout: 15_000 });
       }
       if (scenario.route === "restaurants") {

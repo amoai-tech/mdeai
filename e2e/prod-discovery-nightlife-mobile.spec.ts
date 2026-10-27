@@ -5,6 +5,8 @@ import { createThrowawayIdentity, deleteThrowawayIdentity, hasE2eEnv, signInAsOn
 
 const base = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 test.use({ channel: "chrome", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, screenshot: "only-on-failure", trace: "retain-on-failure" });
+// This file contains only the no-retry Nightlife journey. Override prod-smoke's retry without changing other tests.
+test.describe.configure({ retries: 0 });
 
 test("SAN-1390 Nightlife answers two live mobile questions without a browser retry", async ({ page }) => {
   test.skip(!base || new URL(base).hostname.endsWith("vercel.app"), "Local signed-in target required; protected previews need authenticated browser access");

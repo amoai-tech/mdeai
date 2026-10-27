@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 
 const publicPageSchema = z.enum(["rentals", "restaurants", "events", "cafes", "nightlife"]);
 const inputSchema = z.object({ page: publicPageSchema, id: z.string().min(1).max(128) });
@@ -15,6 +16,15 @@ const SOURCE = {
 } as const;
 
 export type PublicSelection = z.infer<typeof inputSchema>;
+
+/** Return only the fixed public projection, even when a mocked/client row has extra fields. */
+function projectPublicRow(row: Record<string, unknown>, fields: string[]) {
+  return {
+    found: true,
+    data: Object.fromEntries(Object.entries(row).filter(([column]) =>
+      fields.includes(column))),
+  };
+}
 
 /**
  * A displayed item ID is only a hint. This lookup uses the anonymous Supabase role,
@@ -36,18 +46,31 @@ export async function lookupPublicDiscoveryItem(
   const isUuid = z.string().uuid().safeParse(input.id).success;
   const lookupColumn = venuePage && !isUuid ? "google_place_id" : "id";
   let query = client.from(cfg.table).select(cfg.fields).eq(lookupColumn, input.id);
-  if (input.page === "cafes" || input.page === "nightlife") {
+  if (venuePage) {
     query = query.eq("kind", input.page === "cafes" ? "cafe" : "nightclub");
+  } else if (input.page === "events") {
+    // Match the existing public Events catalog presentation policy, not
+    // organizer/admin management rules. Never use a selected ID as authority.
+    query = query.eq("is_active", true)
+      .in("status", ["published", "live"])
+      .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+      .or(NON_QA_EVENT_SLUG_FILTER);
   }
   const { data, error } = await query.maybeSingle();
-  if (error || !data) return { found: false, data: null };
-  const row = data as unknown as Record<string, unknown>;
-  return {
-    found: true,
-    // Project by iterating returned entries, not indexing a record with dynamic keys.
-    data: Object.fromEntries(Object.entries(row).filter(([column]) =>
-      cfg.fields.split(", ").includes(column))),
-  };
+  if (error) return { found: false, data: null };
+  if (data) return projectPublicRow(data as unknown as Record<string, unknown>, cfg.fields.split(", "));
+
+  // Curated café grounding can fall back to `searchRestaurants` after the
+  // venue-anchor search finds no rows. Verify an actual public restaurant UUID
+  // under anonymous RLS; do not trust a browser-supplied provenance flag.
+  if (input.page === "cafes" && isUuid) {
+    const fallback = await client.from("restaurants")
+      .select(SOURCE.restaurants.fields).eq("id", input.id).maybeSingle();
+    if (!fallback.error && fallback.data) {
+      return projectPublicRow(fallback.data as unknown as Record<string, unknown>, SOURCE.restaurants.fields.split(", "));
+    }
+  }
+  return { found: false, data: null };
 }
 
 export const lookupPublicDiscoveryItemTool = createTool({
