@@ -2,7 +2,7 @@
 -- sharing ONE order timestamp. All test rows roll back.
 begin;
 set local search_path = public, extensions;
-select plan(12);
+select plan(13);
 
 create temp table san982_actor (host_id uuid, outsider_id uuid, event_id uuid, order_id uuid);
 do $fixture$
@@ -59,6 +59,12 @@ select set_config('request.jwt.claim.role','service_role',true);
 set local role service_role;
 select is((public.event_attendees_paginated((select event_id from san982_actor),'',50,0)->>'total')::integer,
   52,'service role can read without user identity');
+reset role;
+-- Direct database service_role calls may not carry a JWT role claim.
+select set_config('request.jwt.claim.role','',true);
+set local role service_role;
+select is((public.event_attendees_paginated((select event_id from san982_actor),'',50,0)->>'total')::integer,
+  52,'direct service role can read without JWT claims');
 reset role;
 select set_config('request.jwt.claim.role','authenticated',true);
 
