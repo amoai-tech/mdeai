@@ -88,7 +88,12 @@ export function classifyAgentError(err: unknown): AgentErrorType {
     return "auth";
   // SAN-1396: provider-side generation faults (unparsable function call, broken
   // turn order, missing or depleted key) were landing in `unknown`.
-  if (msg.includes("malformed_function_call") || msg.includes("ai_apicallerror") || msg.includes("ai_loadapikeyerror"))
+  // Real AI SDK errors carry their identity in `name` (AI_APICallError,
+  // AI_LoadAPIKeyError); the message prefix only appears once logged as text.
+  if (
+    msg.includes("malformed_function_call") ||
+    ["ai_apicallerror", "ai_loadapikeyerror"].some((id) => name === id || msg.includes(id))
+  )
     return "model_failure";
   if (msg.includes("tool") && (msg.includes("fail") || msg.includes("error")))
     return "tool_failure";

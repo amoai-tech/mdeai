@@ -121,13 +121,21 @@ for (const width of [390, 1440]) {
       }
 
       await ask("How are my event ticket sales?");
-      // 180000 cents may be shown as 180,000 / 180.000 or as 1,800 / 1.800 once divided by 100.
+      // The seeded order is 180000 cents; Host Ops may show it as 180,000 or as 1,800 (cents / 100).
+      // Every "COP <amount>" in the reply must be that seeded total, and at least one must appear.
+      const copAmounts = async () => {
+        const text = await rail.innerText();
+        return [...text.matchAll(/COP\s*([\d.,]+)/gi)].map((m) => Number(m[1].replace(/[.,]/g, "")));
+      };
+      // Poll until the streamed reply is complete: amounts present and ALL equal to the seeded total.
+      // A wrong total never converges, so a wrong answer still fails at the timeout.
       await expect.poll(async () => {
-        const text = (await rail.innerText()).replace(/[\s,._]/g, "");
-        return /1800|180000/.test(text);
+        const amounts = await copAmounts();
+        return amounts.length > 0 && amounts.every((n) => n === GROSS_CENTS || n === GROSS_CENTS / 100);
       }, { timeout: 90_000, intervals: [2000, 3000, 5000] }).toBe(true);
+      const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
+      await expect.poll(async () => ticketsRe.test(await rail.innerText()), { timeout: 30_000 }).toBe(true);
       const afterFirst = await rail.innerText();
-      expect(afterFirst).toMatch(/\b2\b|two/i);
       console.log("SAN1396_SALES_REPLY", JSON.stringify(afterFirst.slice(-400)));
 
       await ask("Which event is that for?");

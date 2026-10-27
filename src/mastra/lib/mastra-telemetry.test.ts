@@ -1,4 +1,5 @@
 import { google } from "@ai-sdk/google";
+import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it, vi } from "vitest";
 import { GEMINI_FLASH_MODEL_ID, NVIDIA_MODEL_ID } from "@/lib/ai-model-ids";
@@ -44,6 +45,18 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
       classifyAgentError({ message: 'provider reported "MALFORMED_FUNCTION_CALL"' }),
     ).toBe("model_failure");
     expect(classifyAgentError(new Error("AI_APICallError: function call turn comes immediately after a user turn"))).toBe("model_failure");
+    // Genuine SDK error objects: identity lives in `name`, not in the message.
+    expect(
+      classifyAgentError(new APICallError({
+        message: "Please ensure that function call turn comes immediately after a user turn",
+        url: "https://generativelanguage.googleapis.com",
+        requestBodyValues: {},
+        statusCode: 400,
+      })),
+    ).toBe("model_failure");
+    expect(
+      classifyAgentError(new LoadAPIKeyError({ message: "Google Generative AI API key is missing." })),
+    ).toBe("model_failure");
     expect(classifyAgentError(new Error("something weird"))).toBe("unknown");
   });
 
