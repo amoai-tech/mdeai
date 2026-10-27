@@ -65,8 +65,8 @@ jobs:
     # skipping it. A green run_e2e is the only path that skips Chromium.
     if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
-    # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
-    timeout-minutes: 20
+    # Allow transient slow Ubuntu package mirrors without cancelling passing tests.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -83,8 +83,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
 
       # The npm script includes long-chat virtualization with the same deterministic
       # adapter. One Playwright invocation = one Next dev-server start for both suites.
@@ -115,7 +119,10 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-blob-shard-${{ matrix.shard }}-${{ github.run_attempt }}
+          # Stable across reruns: only failed shards need rerunning; overwrite
+          # replaces an earlier blob instead of confusing the aggregator.
+          name: playwright-blob-shard-${{ matrix.shard }}
+          overwrite: true
           path: blob-report/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -147,8 +154,12 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
       - name: Prove the mobile composer regression
         env:
           NODE_ENV: development
@@ -172,7 +183,8 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-blob-mobile-${{ github.run_attempt }}
+          name: playwright-blob-mobile
+          overwrite: true
           path: blob-report/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -203,7 +215,8 @@ jobs:
       - name: Download all Playwright blob reports
         uses: actions/download-artifact@v4
         with:
-          pattern: playwright-blob-*-${{ github.run_attempt }}
+          # Successful earlier attempts and retried shards share stable names.
+          pattern: playwright-blob-*
           path: all-blob-reports
           merge-multiple: true
       - name: Require every original suite's report
@@ -242,7 +255,9 @@ jobs:
   auth-guard-chromium:
     name: auth redirect + guard chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # PR #403 spent >12m downloading Playwright Linux deps on a slow apt mirror.
+    # Preserve the actual guard assertions; allow cold install + Next startup.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -255,8 +270,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
 
       - name: Prove safe login redirects and auth guards
         env:

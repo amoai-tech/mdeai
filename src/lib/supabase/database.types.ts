@@ -10056,7 +10056,21 @@ export type Database = {
         }
         Returns: string
       }
+      admin_event_set_state: {
+        Args: { p_event_id: string; p_action: string }
+        Returns: Json
+      }
       ticket_validate_consume: { Args: { p_qr_token: string }; Returns: Json }
+      ticket_validate_consume_audited: {
+        Args: {
+          p_event_id: string
+          p_qr_token: string
+          p_scanned_by: string
+          p_scanner_device: string | null
+          p_ip_address: unknown | null
+        }
+        Returns: Json
+      }
       transition_listing_workflow: {
         Args: {
           p_apartment_id: string

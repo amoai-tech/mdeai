@@ -64,6 +64,28 @@
       "note": "SAN-705 verifies the existing v2 CopilotChat receives a distinct, stable user+partner threadId; mocks @copilotkit/react-core/v2 instead of creating another provider."
     },
     {
+      "file": "src/components/partners/partner-signup-assistant.tsx",
+      "classification": "keep",
+      "note": "SAN-709: v2 CopilotKitProvider + one CopilotChatConfigurationProvider around the existing signup wizard; the frontend tool only proposes fields for review and never writes partner data."
+    },
+
+    {
+      "file": "src/components/onboarding/onboarding-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "SAN-709: publishes the current signup form via useAgentContext and exposes one review-only useFrontendTool (suggest_partner_profile). No persistence path."
+    },
+
+    {
+      "file": "src/components/onboarding/__tests__/onboarding-copilot-bridge.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: checks the v2 frontend tool schema, revision rejection and no-save result."
+    },
+    {
+      "file": "src/components/partners/__tests__/partner-signup-assistant.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: tests proposal Accept/Ignore, stale-form protection and delayed model replies with mocked CopilotKit transport."
+    },
+    {
       "file": "src/app/layout.tsx",
       "classification": "keep",
       "note": "Imports the v2 stylesheet only."

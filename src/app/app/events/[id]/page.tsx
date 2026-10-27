@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getServerUser } from "@/lib/auth/session";
+import { getAdminGate } from "@/lib/auth/admin-gate";
 import { createClient } from "@/lib/supabase/server";
 import { loadHostEvent } from "@/lib/events/load-host-event";
 import { HostEventDetailEditor } from "@/components/host/host-event-detail-editor";
@@ -28,7 +29,8 @@ export default async function AppEventDetailPage({ params }: PageProps) {
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
-  const result = await loadHostEvent(supabase, user.id, id);
+  const gate = await getAdminGate();
+  const result = await loadHostEvent(supabase, user.id, id, gate.status === "ok");
 
   if (result.status === "not_found") notFound();
 

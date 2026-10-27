@@ -39,6 +39,11 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_event_set_state(p_event_id uuid, p_action text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_grant_rental_test_access(p_user_id uuid, p_access_role text, p_expires_at timestamp with time zone, p_note text)": {
     "public": false,
     "anon": false,
