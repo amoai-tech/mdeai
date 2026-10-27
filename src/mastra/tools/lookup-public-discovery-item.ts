@@ -31,7 +31,9 @@ export async function lookupPublicDiscoveryItem(
   // public google_place_id only for café/nightlife hints; a matching active
   // public anchor is still required by RLS and by the venue kind predicate.
   const venuePage = input.page === "cafes" || input.page === "nightlife";
-  const isUuid = /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(input.id);
+  // Reuse Zod's UUID validator instead of matching a user-controlled string
+  // with a custom regex (Codacy ReDoS finding). Input is capped at 128 chars.
+  const isUuid = z.string().uuid().safeParse(input.id).success;
   const lookupColumn = venuePage && !isUuid ? "google_place_id" : "id";
   let query = client.from(cfg.table).select(cfg.fields).eq(lookupColumn, input.id);
   if (input.page === "cafes" || input.page === "nightlife") {
