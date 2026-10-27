@@ -2,7 +2,7 @@
 -- sharing ONE order timestamp. All test rows roll back.
 begin;
 set local search_path = public, extensions;
-select plan(10);
+select plan(12);
 
 create temp table san982_actor (host_id uuid, outsider_id uuid, event_id uuid, order_id uuid);
 do $fixture$
@@ -42,9 +42,25 @@ begin
 end;
 $fixture$;
 
-grant select on san982_actor to authenticated;
+grant select on san982_actor to authenticated, service_role;
 select is(has_function_privilege('anon','public.event_attendees_paginated(uuid,text,integer,integer)','EXECUTE'),false,'anonymous cannot invoke attendee RPC');
 select is(has_function_privilege('authenticated','public.event_attendees_paginated(uuid,text,integer,integer)','EXECUTE'),true,'host retains attendee RPC grant');
+
+-- Missing/expired JWT subject must never turn an authenticated-role RPC into
+-- unrestricted access to names, emails or Stripe payment IDs.
+select set_config('request.jwt.claim.sub','',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+set local role authenticated;
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',50,0)$$,
+  '42501','UNAUTHENTICATED','authenticated role with no user identity sees no attendees');
+reset role;
+-- Trusted service role retains its documented server-side read path.
+select set_config('request.jwt.claim.role','service_role',true);
+set local role service_role;
+select is((public.event_attendees_paginated((select event_id from san982_actor),'',50,0)->>'total')::integer,
+  52,'service role can read without user identity');
+reset role;
+select set_config('request.jwt.claim.role','authenticated',true);
 
 select set_config('request.jwt.claim.sub',(select host_id::text from san982_actor),true);
 set local role authenticated;
