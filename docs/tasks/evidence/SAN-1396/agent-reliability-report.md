@@ -1,6 +1,6 @@
 # SAN-1396 — Test and Monitor MDE Host, Events and Concierge AI Reliability
 
-Run date: 2026-10-27 · Branch: `feat/san-983-982-984-515-event-ops` (changes **uncommitted**) · Production at test time: `da3fe972283483bfb925002464710728596d4ec0` (`/api/version`)
+Run date: 2026-10-27 · Original QA worktree: `feat/san-983-982-984-515-event-ops` · PR implementation now on `fix/san-1396-agent-error-recovery` · Production at test time: `da3fe972283483bfb925002464710728596d4ec0` (`/api/version`)
 
 ## 1. Bottom line
 
@@ -13,7 +13,7 @@ The code fix and tests are done and green locally. The fix is **not deployed** u
 | Only the Concierge could recover from Gemini's "bad function call" glitch. Host Ops, the Host Event Wizard and the Events agent could not. Now all four share the same safe, one-time retry. | Hosts (Roberto-type organizers) saw a hard error where the Concierge would have quietly retried. |
 | The retry never repeats a saved action. Proven by tests where the glitch hits after a tool already ran. | Protects against duplicate events / duplicate saves. |
 | Host Ops chat works live on production at phone size, restores after reload, and refuses other users (HTTP 403 / 401). | Hosts' private sales data stays private. |
-| Real production failure rate over 14 days: Concierge 97.2% (213 runs), Host Event Wizard 97.1% (171 runs), Host Ops 100% but only 2 runs, Events agent 0 runs. | The Events agent has no screen that uses it; event search runs through the Concierge. |
+| Historical **mixed-environment** ai_runs outcomes (not a production-only failure rate): Concierge 97.2% (213 runs), Host Event Wizard 97.1% (171 runs), Host Ops 100% but only 2 runs, Events agent 0 runs. | The Events agent has no screen that uses it; event search runs through the Concierge. |
 
 ## 2. Scorecard
 
@@ -31,7 +31,7 @@ The code fix and tests are done and green locally. The fix is **not deployed** u
 | [src/mastra/agents/host-ops.ts](../../../../src/mastra/agents/host-ops.ts) | Adds `errorProcessors: [geminiMalformedFirstStepRetry]` |
 | [src/mastra/agents/host-event.ts](../../../../src/mastra/agents/host-event.ts) | Same |
 | [src/mastra/agents/event-agent.ts](../../../../src/mastra/agents/event-agent.ts) | Same |
-| [src/mastra/lib/gemini-malformed-retry.ts](../../../../src/mastra/lib/gemini-malformed-retry.ts) | One structured log line per decision (`retry`, `refused_tool_ran`, `refused_unidentified_message`) with agent, model, deploy SHA, timestamp. No message text. A recovered turn is stored as "success", so this log is the only way to count recoveries. |
+| [src/mastra/lib/gemini-malformed-retry.ts](../../../../src/mastra/lib/gemini-malformed-retry.ts) | One structured log line per decision (`retry`, `refused_tool_ran`, `refused_unidentified_message`) with agent, model, deploy SHA, timestamp. No message text. The retry decision is also joined to the same ai_runs.metadata row as the final transport outcome through RequestContext; Vercel logging remains diagnostic, not the measurement source. |
 | [src/mastra/lib/mastra-telemetry.ts](../../../../src/mastra/lib/mastra-telemetry.ts) | Gemini generation faults (`MALFORMED_FUNCTION_CALL`, `AI_APICallError`, `AI_LoadAPIKeyError`) now classify as `model_failure` instead of `unknown` |
 | [src/mastra/agents/__tests__/agent-failure-matrix.test.ts](../../../../src/mastra/agents/__tests__/agent-failure-matrix.test.ts) | New shared matrix: 4 wiring checks + 8 injected failures |
 | [gemini-malformed-retry.test.ts](../../../../src/mastra/lib/__tests__/gemini-malformed-retry.test.ts), [mastra-telemetry.test.ts](../../../../src/mastra/lib/mastra-telemetry.test.ts) | Log-shape and classifier assertions |
@@ -85,7 +85,7 @@ The existing logger already records status, error type, duration and model for e
 Failure causes in those 12 failed turns: missing Google key ×3, database connection/auth ×5 (`password authentication failed` ×2, `ENOTFOUND` ×1, `ENETUNREACH` ×2), write blocked by a read-only database transaction ×1, timeout ×1, out-of-credits ×1, Gemini turn-order error ×1 (`function call turn comes immediately after a user turn`).
 
 **Caveats (do not over-read these numbers):**
-- **Zero `MALFORMED_FUNCTION_CALL` rows appear.** That does not prove it never happens: a recovered turn is logged as success, and until this change nothing counted recoveries. The new log line fixes that after deploy.
+- **Zero `MALFORMED_FUNCTION_CALL` rows appear.** That does not prove it never happens: a recovered turn is logged as success, and until this change nothing counted recoveries. The new ai_runs.metadata decision joined to final turn status enables counting requested retries after deployment; it does not prove factual answer accuracy.
 - Several failures look like **local development runs writing to the production table** (missing key, `ENETUNREACH`, `read-only transaction`). `ai_runs` has no environment column, so these cannot be separated from real user failures. Treat 97% as a floor, not a measurement of real users.
 - 2 and 0 runs are too few to rate Host Ops or the Events agent.
 
@@ -93,7 +93,7 @@ Failure causes in those 12 failed turns: missing Google key ×3, database connec
 
 | # | Problem | Evidence | Severity |
 | --- | --- | --- | --- |
-| 1 | Fix is not deployed or committed | `git status`; prod SHA `da3fe972…` | Blocks "production ready" |
+| 1 | Fix committed to open PR but not deployed | PR #576 head and deployment SHA must be compared | Blocks "production ready" |
 | 2 | Concierge "New Chat while a reply is still streaming": the user message was not saved within 60 s on one of 5 first attempts | 1 flaky, then 3/3 pass. Screenshot at `test-results/prod-concierge-thread-life-51b14-g-leaves-the-new-chat-clean-prod-smoke/` (treat as sensitive). Cause not found. | Medium (≈20% in 5 first attempts, small sample) |
 | 3 | No live proof for wizard **publish**, or for Events discovery | Not run: publish creates a public event; the Events agent has no screen | Medium |
 | 4 | Gemini turn-order error seen once in production | `ai_runs`, 2026-10-20 13:04 | Low; not reproduced |
@@ -125,7 +125,7 @@ This is my judgment, not a measurement. Weights are mine; adjust them if you dis
 | Recovery coverage in code (4 of 4 agents) | 20 | 20 | Wired and tested |
 | Failure-injection proof | 20 | 15 | 8 failure kinds on one shared setup, not the 10 per agent proposed |
 | Live browser journeys | 25 | 19 | Host Ops (incl. sales accuracy), Wizard form-fill, isolation and Concierge threads proven at 390 and 1440 px; wizard publish and Events not |
-| Monitoring with real denominators | 15 | 9 | Counts exist; recoveries not countable until deploy; dev noise in the table |
+| Monitoring with real denominators | 15 | 9 | Existing mixed-environment counts; retry metadata available on new head, production-only outcomes pending deploy |
 | Deployed and verified in production | 20 | 9 | Baseline verified on current prod; fix itself not deployed |
 | **Total** | **100** | **72** | |
 
@@ -133,4 +133,4 @@ This is my judgment, not a measurement. Weights are mine; adjust them if you dis
 
 ## 10. Next step
 
-Merge the PR, then re-run the three live specs against the deployed SHA and read the `gemini_malformed_recovery` log lines in Vercel.
+Merge the PR, then re-run the three live specs against the deployed SHA and query `ai_runs.metadata.gemini_malformed_retry` for retry decisions and final turn outcomes; use Vercel logs only for diagnostic correlation.
