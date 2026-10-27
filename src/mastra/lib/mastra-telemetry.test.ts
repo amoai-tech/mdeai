@@ -39,6 +39,11 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
       classifyAgentError(new Error("NVIDIA integrate.api.nvidia.com 500")),
     ).toBe("model_failure");
     expect(classifyAgentError(new Error("nvcf upstream unavailable"))).toBe("model_failure");
+    // SAN-1396: provider generation faults are model failures, not "unknown".
+    expect(
+      classifyAgentError({ message: 'provider reported "MALFORMED_FUNCTION_CALL"' }),
+    ).toBe("model_failure");
+    expect(classifyAgentError(new Error("AI_APICallError: function call turn comes immediately after a user turn"))).toBe("model_failure");
     expect(classifyAgentError(new Error("something weird"))).toBe("unknown");
   });
 

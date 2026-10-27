@@ -1,5 +1,5 @@
 import type { ProcessAPIErrorArgs } from "@mastra/core/processors";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { geminiMalformedFirstStepRetry } from "../gemini-malformed-retry";
 
 function messageList(activeParts: string[] = [], previousParts: string[] = []) {
@@ -83,5 +83,20 @@ describe("SAN-1396 Gemini malformed function-call recovery", () => {
       ...firstStep,
       error: { code: "STREAM_WRAPPER", cause: malformed },
     })).toEqual({ retry: true });
+  });
+
+  it("logs one structured line per decision with no message content", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    geminiMalformedFirstStepRetry.processAPIError({ ...firstStep, agent: { id: "host-ops-agent" } as never });
+    geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: messageList(["tool-invocation"]), agent: { id: "host-ops-agent" } as never,
+    });
+    const lines = warn.mock.calls.map((c) => JSON.parse(String(c[0])));
+    warn.mockRestore();
+    expect(lines.map((l) => [l.event, l.outcome, l.agent])).toEqual([
+      ["gemini_malformed_recovery", "retry", "host-ops-agent"],
+      ["gemini_malformed_recovery", "refused_tool_ran", "host-ops-agent"],
+    ]);
+    expect(Object.keys(lines[0]).sort()).toEqual(["agent", "event", "model", "outcome", "sha", "ts"]);
   });
 });

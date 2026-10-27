@@ -1,4 +1,5 @@
 import type { ProcessAPIErrorArgs } from "@mastra/core/processors";
+import { resolveAgentModelName } from "./mastra-telemetry";
 
 /**
  * SAN-1396 — One tightly scoped recovery from Gemini generating an unparsable
@@ -30,6 +31,27 @@ function isGeminiMalformedCall(error: unknown): boolean {
   return false;
 }
 
+/**
+ * SAN-1396 monitoring — a recovered turn is stored as `success` in `ai_runs`, so
+ * the recovery itself is only visible here. One structured line per decision:
+ * agent, model, deployment SHA and outcome. Never message text or tool input.
+ */
+function logRecovery(
+  outcome: "retry" | "refused_tool_ran" | "refused_unidentified_message",
+  agent: ProcessAPIErrorArgs["agent"],
+) {
+  console.warn(
+    JSON.stringify({
+      event: "gemini_malformed_recovery",
+      outcome,
+      agent: agent?.id ?? "unknown",
+      model: resolveAgentModelName(agent),
+      sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 10) ?? "local",
+      ts: new Date().toISOString(),
+    }),
+  );
+}
+
 export const geminiMalformedFirstStepRetry = {
   id: "gemini-malformed-first-step-retry",
   name: "Retry Gemini malformed first-step function call once",
@@ -40,15 +62,18 @@ export const geminiMalformedFirstStepRetry = {
     steps,
     messageId,
     messageList,
-  }: Pick<ProcessAPIErrorArgs, "error" | "retryCount" | "stepNumber" | "steps" | "messageId" | "messageList">) {
+    agent,
+  }: Pick<ProcessAPIErrorArgs, "error" | "retryCount" | "stepNumber" | "steps" | "messageId" | "messageList" | "agent">) {
     if (
       retryCount !== 0 ||
       stepNumber !== 0 ||
       steps.length !== 0 ||
-      !isGeminiMalformedCall(error) ||
-      !messageId ||
-      !messageList
+      !isGeminiMalformedCall(error)
     ) {
+      return;
+    }
+    if (!messageId || !messageList) {
+      logRecovery("refused_unidentified_message", agent);
       return;
     }
 
@@ -63,9 +88,11 @@ export const geminiMalformedFirstStepRetry = {
         (part) => part.type === "tool-invocation",
       )
     ) {
+      logRecovery("refused_tool_ran", agent);
       return;
     }
 
+    logRecovery("retry", agent);
     return { retry: true };
   },
 };

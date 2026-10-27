@@ -86,6 +86,10 @@ export function classifyAgentError(err: unknown): AgentErrorType {
     return "rate_limit";
   if (status === 401 || status === 403 || msg.includes("unauthorized") || msg.includes("permission") || msg.includes("forbidden"))
     return "auth";
+  // SAN-1396: provider-side generation faults (unparsable function call, broken
+  // turn order, missing or depleted key) were landing in `unknown`.
+  if (msg.includes("malformed_function_call") || msg.includes("ai_apicallerror") || msg.includes("ai_loadapikeyerror"))
+    return "model_failure";
   if (msg.includes("tool") && (msg.includes("fail") || msg.includes("error")))
     return "tool_failure";
   if (msg.includes("zod") || msg.includes("invalid") || msg.includes("validation") || msg.includes("schema"))
