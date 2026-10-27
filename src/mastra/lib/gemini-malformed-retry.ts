@@ -1,5 +1,6 @@
 import type { ProcessAPIErrorArgs } from "@mastra/core/processors";
 import { resolveAgentModelName } from "./mastra-telemetry";
+import { recordMalformedRetryDecision } from "./tool-audit-context";
 
 /**
  * SAN-1396 — One tightly scoped recovery from Gemini generating an unparsable
@@ -33,13 +34,19 @@ function isGeminiMalformedCall(error: unknown): boolean {
 
 /**
  * SAN-1396 monitoring — a recovered turn is stored as `success` in `ai_runs`, so
- * the recovery itself is only visible here. One structured line per decision:
- * agent, model, deployment SHA and outcome. Never message text or tool input.
+ * Decision is persisted in the canonical per-turn ai_runs metadata through
+ * RequestContext; the Vercel log remains diagnostic only. Never log message
+ * content or tool input.
  */
 function logRecovery(
   outcome: "retry" | "refused_tool_ran" | "refused_unidentified_message",
   agent: ProcessAPIErrorArgs["agent"],
+  requestContext: ProcessAPIErrorArgs["requestContext"],
 ) {
+  recordMalformedRetryDecision(
+    requestContext,
+    outcome === "retry" ? "retry_requested" : outcome,
+  );
   console.warn(
     JSON.stringify({
       event: "gemini_malformed_recovery",
@@ -63,7 +70,8 @@ export const geminiMalformedFirstStepRetry = {
     messageId,
     messageList,
     agent,
-  }: Pick<ProcessAPIErrorArgs, "error" | "retryCount" | "stepNumber" | "steps" | "messageId" | "messageList" | "agent">) {
+    requestContext,
+  }: Pick<ProcessAPIErrorArgs, "error" | "retryCount" | "stepNumber" | "steps" | "messageId" | "messageList" | "agent" | "requestContext">) {
     if (
       retryCount !== 0 ||
       stepNumber !== 0 ||
@@ -73,7 +81,7 @@ export const geminiMalformedFirstStepRetry = {
       return;
     }
     if (!messageId || !messageList) {
-      logRecovery("refused_unidentified_message", agent);
+      logRecovery("refused_unidentified_message", agent, requestContext);
       return;
     }
 
@@ -83,16 +91,17 @@ export const geminiMalformedFirstStepRetry = {
     const activeMessage = messageList.get.all.db().find(
       (message) => message.id === messageId && message.role === "assistant",
     );
-    if (
-      activeMessage?.content.parts.some(
-        (part) => part.type === "tool-invocation",
-      )
-    ) {
-      logRecovery("refused_tool_ran", agent);
+    // Mastra may raise before constructing an assistant message at all.
+    // Keep this first-step case retryable; if it streamed a tool invocation,
+    // the active assistant message's parts must be examined.
+    if (activeMessage?.content.parts?.some(
+      (part) => part.type === "tool-invocation",
+    )) {
+      logRecovery("refused_tool_ran", agent, requestContext);
       return;
     }
 
-    logRecovery("retry", agent);
+    logRecovery("retry", agent, requestContext);
     return { retry: true };
   },
 };

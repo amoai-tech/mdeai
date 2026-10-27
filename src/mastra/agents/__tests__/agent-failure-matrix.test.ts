@@ -1,4 +1,5 @@
 import { Agent } from "@mastra/core/agent";
+import { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { APICallError } from "@ai-sdk/provider";
 import { MockLanguageModelV3 } from "ai/test";
@@ -9,6 +10,7 @@ import { eventAgent } from "../event-agent";
 import { hostEventAgent } from "../host-event";
 import { hostOpsAgent } from "../host-ops";
 import { geminiMalformedFirstStepRetry } from "../../lib/gemini-malformed-retry";
+import { getMalformedRetryDecisions } from "../../lib/tool-audit-context";
 
 /**
  * SAN-1396 · Test and Monitor MDE Host, Events and Concierge AI Reliability —
@@ -93,11 +95,15 @@ async function runTurn(script: Attempt[], opts: { withTool?: boolean } = {}) {
     tools,
     errorProcessors: [geminiMalformedFirstStepRetry],
   });
+  const requestContext = new RequestContext();
   const settled = await agent
-    .stream("hello")
+    .stream("hello", { requestContext })
     .then(async (r) => ({ ok: true as const, text: await r.text }))
     .catch((error: unknown) => ({ ok: false as const, error }));
-  return { settled, modelCalls, toolRuns };
+  return {
+    settled, modelCalls, toolRuns,
+    retryDecisions: getMalformedRetryDecisions({ requestContext }),
+  };
 }
 
 const ok = (text: string): Attempt => async () => ({ stream: textStream(text) });
@@ -118,6 +124,7 @@ describe("SAN-1396 Gemini failure injection (processor behaviour, mock model)", 
     const r = await runTurn([throws(malformed()), ok("Recovered.")]);
     expect(r.settled).toEqual({ ok: true, text: "Recovered." });
     expect(r.modelCalls).toBe(2);
+    expect(r.retryDecisions).toContain("retry_requested");
   });
 
   it("F2 malformed twice → bounded to one retry, then a real error (no loop)", async () => {

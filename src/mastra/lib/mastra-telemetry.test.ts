@@ -56,7 +56,7 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
     ).toBe("model_failure");
     expect(
       classifyAgentError(new LoadAPIKeyError({ message: "Google Generative AI API key is missing." })),
-    ).toBe("model_failure");
+    ).toBe("auth");
     expect(classifyAgentError(new Error("something weird"))).toBe("unknown");
   });
 
@@ -186,6 +186,8 @@ describe("buildTurnTelemetryMetadata (AGT-00C)", () => {
 describe("logTurnTelemetryDebug", () => {
   const samplePayload: TurnTelemetryPayload = {
     telemetry_version: TELEMETRY_SCHEMA_VERSION,
+    server_environment: "local",
+    deployment_sha: "local",
     agent_map_key: "conciergeAgent",
     model_name: "gemini-3.5-flash",
     turn_status: "success",
