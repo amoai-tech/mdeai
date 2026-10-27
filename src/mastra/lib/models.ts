@@ -45,5 +45,21 @@ export const PRO_MODEL = withTokenUsageTracking(google("gemini-3.1-pro-preview")
 
 /** Legacy aliases (my-mastra-app used string IDs; mdeapp uses AI SDK) */
 export const CONCIERGE_MODEL = ACTIVE_TEXT_MODEL;
+/**
+ * Nvidia occasionally stalls its first stream. Mastra's native model list moves
+ * to the already-configured Gemini model when the primary exceeds its step
+ * deadline. A user Stop/abort still cancels the entire run; do not add manual
+ * retries that could replay tool side effects or duplicate chat messages.
+ *
+ * The 19s Mastra step deadline is below the adapter's 22s abort deadline.
+ * Mastra needs to observe its OWN step timeout to invoke fallback; the model
+ * adapter's AbortSignal.timeout alone ends the stream without fallback.
+ */
+export const CONCIERGE_AGENT_MODEL = ACTIVE_AI_PROVIDER === "nvidia"
+  ? [
+      { model: CONCIERGE_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: 19_000 } } },
+      { model: FLASH_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: 45_000 } } },
+    ]
+  : CONCIERGE_MODEL;
 export const REASONING_MODEL = FLASH_MODEL;
 export const PLANNING_MODEL = FLASH_MODEL;

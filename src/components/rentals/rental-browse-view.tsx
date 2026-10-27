@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
@@ -174,6 +175,7 @@ function RentalBrowseViewInner({
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
+      <DiscoveryPageContext page="rentals" filters={filterState} selectedId={detailsRental?.id ?? null} />
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"

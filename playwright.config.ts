@@ -25,6 +25,8 @@ const PROD_SPECS = [
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-discovery-inline-ask.spec.ts",
+  "**/prod-discovery-nightlife-mobile.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
   "**/prod-release-health.spec.ts",
