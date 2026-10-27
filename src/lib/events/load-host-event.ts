@@ -64,13 +64,11 @@ export async function loadHostEvent(
   supabase: SupabaseClient,
   userId: string,
   eventId: string,
+  allowAdmin = false,
 ): Promise<LoadHostEventResult> {
-  const { data: event, error } = await supabase
-    .from("events")
-    .select(EVENT_DETAIL_SELECT)
-    .eq("id", eventId)
-    .eq("organizer_id", userId)
-    .maybeSingle();
+  let eventQuery = supabase.from("events").select(EVENT_DETAIL_SELECT).eq("id", eventId);
+  if (!allowAdmin) eventQuery = eventQuery.eq("organizer_id", userId);
+  const { data: event, error } = await eventQuery.maybeSingle();
 
   if (error) {
     console.error("[load-host-event] events query failed:", error.message);
@@ -89,10 +87,12 @@ export async function loadHostEvent(
     return { status: "error", message: "Could not load ticket tiers. Try again." };
   }
 
-  const { data: summary, error: summaryError } = await supabase.rpc(
-    "event_dashboard_summary",
-    { p_event_id: eventId },
-  );
+  // The existing dashboard RPC is organizer-only even for admins. Do not
+  // invoke it for a foreign event, or show invented zero revenue in its place.
+  const foreignAdminView = allowAdmin && event.organizer_id !== userId;
+  const { data: summary, error: summaryError } = foreignAdminView
+    ? { data: null, error: null }
+    : await supabase.rpc("event_dashboard_summary", { p_event_id: eventId });
 
   if (summaryError) {
     // KPIs are supporting information: keep the editor usable, report honestly.

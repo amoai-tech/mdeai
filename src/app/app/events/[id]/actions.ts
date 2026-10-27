@@ -55,14 +55,32 @@ async function applyEventUpdate(input: EventUpdateInput): Promise<EventUpdateRes
     return { ok: false, code: "UNAUTHENTICATED", message: "Sign in again to save." };
   }
 
-  const { data, error } = await supabase
+  const { data: ownedOrAdminVisible, error: readError } = await supabase
+    .from("events")
+    .select("id, organizer_id")
+    .eq("id", input.eventId)
+    .maybeSingle();
+  if (readError) {
+    return { ok: false, code: "FAILED", message: "Could not check event access." };
+  }
+  if (!ownedOrAdminVisible) {
+    return { ok: false, code: "NOT_FOUND", message: "This event is not yours to edit." };
+  }
+  const owner = ownedOrAdminVisible.organizer_id === user.id;
+  // Admin privileges must be re-checked server-side, never from form values.
+  if (!owner) {
+    const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+    if (adminError || isAdmin !== true) {
+      return { ok: false, code: "NOT_FOUND", message: "This event is not yours to edit." };
+    }
+  }
+  let update = supabase
     .from("events")
     .update(toEventUpdatePatch(input, new Date().toISOString()))
     .eq("id", input.eventId)
-    .eq("organizer_id", user.id)
-    .eq("updated_at", input.expectedUpdatedAt)
-    .select("id, updated_at")
-    .maybeSingle();
+    .eq("updated_at", input.expectedUpdatedAt);
+  if (owner) update = update.eq("organizer_id", user.id);
+  const { data, error } = await update.select("id, updated_at").maybeSingle();
 
   if (error) {
     console.error("[update-host-event] update failed:", error.message);
@@ -70,16 +88,6 @@ async function applyEventUpdate(input: EventUpdateInput): Promise<EventUpdateRes
   }
 
   if (!data) {
-    const { data: owned } = await supabase
-      .from("events")
-      .select("id")
-      .eq("id", input.eventId)
-      .eq("organizer_id", user.id)
-      .maybeSingle();
-
-    if (!owned) {
-      return { ok: false, code: "NOT_FOUND", message: "This event is not yours to edit." };
-    }
     return {
       ok: false,
       code: "CONFLICT",

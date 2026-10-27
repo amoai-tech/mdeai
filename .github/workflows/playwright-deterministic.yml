@@ -65,8 +65,8 @@ jobs:
     # skipping it. A green run_e2e is the only path that skips Chromium.
     if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
-    # Previous passing run reached the 15-minute limit; keep room for cold CI startup.
-    timeout-minutes: 20
+    # Allow transient slow Ubuntu package mirrors without cancelling passing tests.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +115,10 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-blob-shard-${{ matrix.shard }}-${{ github.run_attempt }}
+          # Stable across reruns: only failed shards need rerunning; overwrite
+          # replaces an earlier blob instead of confusing the aggregator.
+          name: playwright-blob-shard-${{ matrix.shard }}
+          overwrite: true
           path: blob-report/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -172,7 +175,8 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-blob-mobile-${{ github.run_attempt }}
+          name: playwright-blob-mobile
+          overwrite: true
           path: blob-report/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -203,7 +207,8 @@ jobs:
       - name: Download all Playwright blob reports
         uses: actions/download-artifact@v4
         with:
-          pattern: playwright-blob-*-${{ github.run_attempt }}
+          # Successful earlier attempts and retried shards share stable names.
+          pattern: playwright-blob-*
           path: all-blob-reports
           merge-multiple: true
       - name: Require every original suite's report
