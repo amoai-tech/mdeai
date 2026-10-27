@@ -17,6 +17,7 @@ const resolveRequestedThreadMock = vi.hoisted(() =>
 const partnerBindingMock = vi.hoisted(() => vi.fn());
 const loadPartnerRuntimeContextMock = vi.hoisted(() => vi.fn());
 const setPartnerRuntimeContextMock = vi.hoisted(() => vi.fn());
+const membershipLookupMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@copilotkit/runtime/v2", () => ({
   CopilotRuntime: vi.fn(function CopilotRuntime() {
@@ -53,6 +54,16 @@ vi.mock("@/lib/copilotkit-distributed-rate-limit", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: getUserMock },
+    from: (table: string) => {
+      if (table !== "partner_members") throw new Error("Unexpected table");
+      return {
+        select: () => ({
+          eq: () => ({
+            limit: (size: number) => membershipLookupMock(size),
+          }),
+        }),
+      };
+    },
   })),
 }));
 
@@ -90,6 +101,12 @@ function setupStandardMocks() {
   loadPartnerRuntimeContextMock.mockReset();
   loadPartnerRuntimeContextMock.mockResolvedValue(null);
   setPartnerRuntimeContextMock.mockReset();
+  membershipLookupMock.mockReset();
+  // Existing membership remains the fail-closed default for negative tests.
+  membershipLookupMock.mockResolvedValue({
+    data: [{ partner_id: "existing-partner" }],
+    error: null,
+  });
 
   // Authorized by default: this suite tests the rate-limit/try-catch ordering,
   // not the authorization decision, which has its own suite.
@@ -265,6 +282,54 @@ describe("POST /api/copilotkit — authorization runs before agent execution (SA
     })) as never);
     expect(res.status).toBe(403);
     expect(partnerBindingMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("allows authenticated prospective partners to use signup AI without a membership", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "new-user" } } });
+    membershipLookupMock.mockResolvedValue({ data: [], error: null });
+    resolveRequestedThreadMock.mockResolvedValue({ kind: "new", threadId: "signup-thread" });
+
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/run",
+      params: { agentId: "partnerAgent" },
+      body: { threadId: "signup-thread", context: [] },
+    })) as never);
+
+    expect(res.status).toBe(200);
+    expect(partnerBindingMock).toHaveBeenCalledWith(
+      { kind: "new", threadId: "signup-thread" }, "new-user", null,
+    );
+    expect(setPartnerRuntimeContextMock).not.toHaveBeenCalled();
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies explicit foreign business selection even to an unregistered signer", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "new-user" } } });
+    membershipLookupMock.mockResolvedValue({ data: [], error: null });
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/connect",
+      params: { agentId: "partnerAgent" },
+      body: {
+        threadId: "signup-thread",
+        context: [{ description: "mde.partnerSelection.v1",
+          value: JSON.stringify({ partnerId: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa" }) }],
+      },
+    })) as never);
+
+    expect(res.status).toBe(403);
+    expect(handleRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed if membership resolution fails", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: "new-user" } } });
+    membershipLookupMock.mockResolvedValue({ data: null, error: { message: "DB unavailable" } });
+    const res = await POST(postRequest("203.0.113.61", JSON.stringify({
+      method: "agent/run", params: { agentId: "partnerAgent" },
+      body: { threadId: "signup-thread", context: [] },
+    })) as never);
+
+    expect(res.status).toBe(500);
     expect(handleRequestMock).not.toHaveBeenCalled();
   });
 

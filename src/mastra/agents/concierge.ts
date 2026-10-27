@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { createThreadMemory } from '../lib/agent-memory';
 import { searchRentalsTool } from '../tools/search-rentals';
+import { readBrokerWorkspaceTool } from '../tools/read-broker-workspace';
 import { searchNewProjectsTool } from '../tools/search-new-projects';
 import { compareNewProjectsTool } from '../tools/compare-new-projects';
 import { searchEventsTool } from '../tools/search-events';
@@ -218,6 +219,7 @@ export const conciergeAgent = new Agent({
   instructions: `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
 # Tools
+- read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
 - lookup-public-discovery-item: when a user asks about the currently open item ("this apartment", "this restaurant", "this event", "this cafe", "this club"), call this server-side RLS lookup with the current page and selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts. A client-selected ID is not authorization. If the row is missing, say you cannot verify. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
 - search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
@@ -440,7 +442,7 @@ Conversion boundary (do NOT cross):
 
 # Hard rules
 - When the user asks to show a listing on the map ("focus the second one", "pan to that apartment"), call the frontend tool focusMapPin with the pin/listing id from lastRentalResults or mapUi.selectedPinId.
-- When the user asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first — never describe specific listings from memory without a tool result in the same turn.
+- When a RENTER/consumer asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first; for the signed-in broker asking about OWN listings, use read-broker-workspace instead — never describe specific listings from memory without a tool result in the same turn.
 - Tool results are the only truth — never invent event names, venues, rental listings, prices, hosts, or URLs. If the tool returns nothing, say so and offer alternatives.
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
@@ -463,6 +465,7 @@ ${formatEventSourcePromptHint()}`,
   // already happens client-side (regex + Flash classifier) and via the per-search
   // clarification gates in the instructions above, so this changes no behavior.
   tools: {
+    readBrokerWorkspaceTool,
     searchRentalsTool,
     searchNewProjectsTool,
     compareNewProjectsTool,

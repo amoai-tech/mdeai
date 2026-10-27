@@ -51,6 +51,20 @@ test("failed-only reruns collect all four browser reports across run attempts", 
   assert.doesNotMatch(report, /pattern: playwright-blob-[^\n]*run_attempt/);
 });
 
+test("all Chromium PR lanes use the pinned headless shell without cold apt installs", () => {
+  const lanes = [
+    part("  deterministic-chromium:", "  # Real CopilotKit v2 composer:"),
+    part("  mobile-composer:", "  # Stable overall check:"),
+    yaml.split("  auth-guard-chromium:")[1],
+  ];
+  for (const lane of lanes) {
+    assert.match(lane, /- name: Install Chromium\n\s+run: npx playwright install chromium --only-shell/);
+    assert.doesNotMatch(lane, /playwright install chromium --with-deps/);
+    // Never skip real browser tests or treat a missing browser as success.
+    assert.doesNotMatch(lane, /continue-on-error: true/);
+  }
+});
+
 test("missing reports and failed shards cannot produce a green combined result", () => {
   const reportJob = part("  browser-results:", "  # Run the existing real auth-route");
   for (const name of ["shard-1.zip", "shard-2.zip", "shard-3.zip", "mobile-composer.zip"]) {

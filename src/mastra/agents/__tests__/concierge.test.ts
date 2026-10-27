@@ -18,6 +18,7 @@ describe("conciergeAgent", () => {
     const toolIds = Object.values(tools).map((tool) => tool.id);
     expect(toolIds).toEqual(
       expect.arrayContaining([
+        "read-broker-workspace",
         "search-rentals",
         "search-new-projects",
         "search-events",
