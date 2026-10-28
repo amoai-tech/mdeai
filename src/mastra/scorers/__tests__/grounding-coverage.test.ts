@@ -31,6 +31,19 @@ describe("grounding coverage core — evaluateGroundingCoverage", () => {
     expect(verdict.unsupportedClaims.map((c) => c.claim)).toEqual(
       expect.arrayContaining(["Skyline Rooftop Medellín", "Luna Social Club"]),
     );
+    expect(verdict.unsupportedClaims.map((c) => c.claim)).not.toContain("Skyline Rooftop Medell");
+  });
+
+  it.each([
+    ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club"],
+    ["Skyline Rooftop Medellín Club", "Skyline Rooftop Medellín"],
+  ])("rejects a fabricated venue when the source differs by an extra qualifier (%s vs %s)", (claim, sourceName) => {
+    const verdict = evaluateGroundingCoverage(
+      { toolOutputs: [{ results: [{ name: sourceName }] }] },
+      { reply: `The venue is ${claim}.` },
+    );
+    expect(verdict.score).toBeLessThan(1);
+    expect(verdict.unsupportedClaims.map((c) => c.claim)).toContain(claim);
   });
 
   it("preserves accented identity qualifiers in a grounded venue name", () => {

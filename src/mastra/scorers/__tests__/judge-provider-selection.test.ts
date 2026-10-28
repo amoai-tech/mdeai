@@ -151,3 +151,44 @@ it("never grades the invented Skyline Rooftop Medellín as fully grounded from a
   expect(result.reason).toContain("Skyline Rooftop");
   expect(modelJudge).toHaveBeenCalledOnce();
 });
+
+
+it.each([
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club"],
+  ["Skyline Rooftop Medellín Club", "Skyline Rooftop Medellín"],
+])("rejects source-name qualifier mismatches in both directions: %s vs %s", async (claim, realSource) => {
+  const { reconcileGroundingJudgeVerdict } = await import("../grounding-coverage");
+  const candidate = { claim, type: "entity" as const };
+  expect(reconcileGroundingJudgeVerdict(
+    [candidate], [],
+    [{ claim, sourceName: realSource }],
+    [{ results: [{ name: realSource }] }],
+  )).toEqual([candidate]);
+});
+
+it.each([
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club", true],
+  ["Skyline Rooftop Medellín Club", "Skyline Rooftop Medellín", true],
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club", false],
+])("does not give an invented name score 1 for claim=%s vs source=%s; aliases=%s", async (claim, realSource, hasAlias) => {
+  vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+  vi.stubEnv("NVIDIA_API_KEY", "test-nvidia-key");
+  modelJudge.mockResolvedValue({ object: {
+    uncovered: [],
+    groundedAliases: hasAlias ? [{ claim, sourceName: realSource }] : [],
+  } });
+  const { groundingCoverageScorer } = await import("../grounding-coverage");
+  const result = await groundingCoverageScorer.run({
+    input: { toolOutputs: [{ results: [{ name: realSource }] }] },
+    output: { reply: `The venue is ${claim}.` },
+  });
+  expect(result.score).toBeLessThan(1);
+  expect(result.reason).toContain(claim);
+  // For unsupported names NVIDIA must receive the actual claim and tool row:
+  // a heuristic-only return is insufficient, even if the score looks correct.
+  expect(modelJudge).toHaveBeenCalledOnce();
+  const judgeArgs = modelJudge.mock.calls[0][0];
+  expect(judgeArgs.model.modelId).toBe(NVIDIA_MODEL_ID);
+  expect(judgeArgs.prompt).toContain(claim);
+  expect(judgeArgs.prompt).toContain(realSource);
+});
