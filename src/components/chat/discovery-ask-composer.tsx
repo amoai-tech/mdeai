@@ -75,7 +75,10 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  // A restored agent/thread may already have streamed a reply before this
+  // composer remounts. Keep that answer visible by default; users can still
+  // explicitly collapse the conversation with the existing toggle.
+  const [showHistory, setShowHistory] = useState(true);
   const inFlight = useRef(false);
   const cancelled = useRef(false);
   // A run's tool result may arrive in a separate agent update from its final text.
