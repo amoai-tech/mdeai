@@ -15,6 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
+import { discoveryAgentSelectionHint } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -216,7 +217,7 @@ export const conciergeMemoryInput = z.preprocess(normalizeModelMemory, concierge
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
-  instructions: `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
+  instructions: ({ requestContext }) => `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
 # Tools
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
@@ -451,7 +452,8 @@ Conversion boundary (do NOT cross):
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
-${formatEventSourcePromptHint()}`,
+${formatEventSourcePromptHint()}
+${discoveryAgentSelectionHint(requestContext.get("ag-ui"))}`,
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
   // generated function call. Never retry after a completed step/tool action.

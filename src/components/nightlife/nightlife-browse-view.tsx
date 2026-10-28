@@ -45,12 +45,25 @@ function NightlifeBrowseViewInner({
 }: NightlifeBrowseViewProps) {
   const retryHref = buildFilterUrl({ neighborhood, vibe });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
-    if (result.page === "nightlife") setSearched({ scope: retryHref, rows: result.rows });
+    if (result.page === "nightlife") {
+      setSelectedCardId(null);
+      setSearched({ scope: retryHref, rows: result.rows });
+    }
   }, [retryHref]);
-  const { selectedPinId } = useMapContext();
-  const selectedId = activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
+  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const visibleIds = activeRows?.map((r) => r.id) ?? results.map((r) => r.id);
+  const selectedId = selectedCardId && visibleIds.includes(selectedCardId) ? selectedCardId :
+    activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
+  const selectForAsk = (id: string | null) => {
+    setSelectedCardId(id);
+    // Clearing selection must not resurrect a previously selected map pin.
+    if (id === null || !activeRows?.some((r) => r.id === id && r.latitude != null && r.longitude != null)) {
+      setSelectedPinId(null);
+    }
+  };
 
   const notice = (
     <p
@@ -77,7 +90,7 @@ function NightlifeBrowseViewInner({
       notice={notice}
     >
       <section className="mt-6" aria-label="Nightlife listings">
-        <DiscoveryGroundedResults rows={activeRows} />
+        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -116,6 +129,8 @@ function NightlifeBrowseViewInner({
                 key={listing.id}
                 kind="nightlife"
                 listing={listing}
+                selectedForAsk={selectedId === listing.id}
+                onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
                 mediaLayout="cover"
               />

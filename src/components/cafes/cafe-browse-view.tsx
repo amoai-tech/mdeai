@@ -45,12 +45,25 @@ function CafeBrowseViewInner({
 }: CafeBrowseViewProps) {
   const retryHref = buildFilterUrl({ neighborhood, feature });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
-    if (result.page === "cafes") setSearched({ scope: retryHref, rows: result.rows });
+    if (result.page === "cafes") {
+      setSelectedCardId(null);
+      setSearched({ scope: retryHref, rows: result.rows });
+    }
   }, [retryHref]);
-  const { selectedPinId } = useMapContext();
-  const selectedId = activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
+  const { selectedPinId, setSelectedPinId } = useMapContext();
+  const visibleIds = activeRows?.map((r) => r.id) ?? results.map((r) => r.id);
+  const selectedId = selectedCardId && visibleIds.includes(selectedCardId) ? selectedCardId :
+    activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
+  const selectForAsk = (id: string | null) => {
+    setSelectedCardId(id);
+    // Clearing selection must not resurrect a previously selected map pin.
+    if (id === null || !activeRows?.some((r) => r.id === id && r.latitude != null && r.longitude != null)) {
+      setSelectedPinId(null);
+    }
+  };
 
   return (
     <>
@@ -67,7 +80,7 @@ function CafeBrowseViewInner({
       }
     >
       <section className="mt-6" aria-label="Café listings">
-        <DiscoveryGroundedResults rows={activeRows} />
+        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -106,6 +119,8 @@ function CafeBrowseViewInner({
                 key={listing.id}
                 kind="cafe"
                 listing={listing}
+                selectedForAsk={selectedId === listing.id}
+                onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
                 mediaLayout="cover"
               />

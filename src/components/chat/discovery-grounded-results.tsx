@@ -26,7 +26,11 @@ export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
   });
 }
 
-export function DiscoveryGroundedResults({ rows }: { rows: GroundedToolRow[] | null }) {
+export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow }: {
+  rows: GroundedToolRow[] | null;
+  selectedId?: string | null;
+  onSelectRow?: (id: string | null) => void;
+}) {
   const pins = useMemo(() => groundedDiscoveryPins(rows ?? []), [rows]);
   const { selectedPinId, panToPin } = useMapContext();
   useBrowseMapSync(pins, "grounded");
@@ -42,8 +46,8 @@ export function DiscoveryGroundedResults({ rows }: { rows: GroundedToolRow[] | n
             const pinId = `grounded-${r.id}`;
             const mapped = pins.some((p) => p.id === pinId);
             return (
+              <div key={r.id}>
               <GroundedPlaceCard
-                key={r.id}
                 testId="discovery-grounded-card"
                 title={r.title}
                 mapsUrl={r.mapsUrl}
@@ -59,9 +63,15 @@ export function DiscoveryGroundedResults({ rows }: { rows: GroundedToolRow[] | n
                 photoName={r.photoName}
                 photoAuthorAttributions={r.photoAuthorAttributions}
                 pinId={mapped ? pinId : undefined}
-                selected={mapped && selectedPinId === pinId}
-                onSelect={mapped ? () => panToPin(pinId) : undefined}
+                selected={selectedId === r.id || (mapped && selectedPinId === pinId)}
+                onSelect={mapped ? () => { panToPin(pinId); onSelectRow?.(r.id); } : undefined}
               />
+              {onSelectRow ? <button type="button" data-testid="grounded-ask-select"
+                aria-pressed={selectedId === r.id} className="mt-1 rounded border px-3 py-2 text-xs"
+                onClick={() => onSelectRow(selectedId === r.id ? null : r.id)}>
+                {selectedId === r.id ? "Clear selection" : "Ask about this"}
+              </button> : null}
+              </div>
             );
           })}
         </div>
