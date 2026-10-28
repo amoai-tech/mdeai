@@ -54,11 +54,6 @@ async function ask(page: Page, route: Route, question: string, count: number) {
     } catch { return false; }
   }, { timeout: 125_000 });
   await send.click();
-  if (rental && count === 1) {
-    const toggle = page.locator('[data-testid="rental-ask-toggle-transcript"]:visible');
-    await expect(toggle).toBeVisible({ timeout: 30_000 });
-    await toggle.click();
-  }
   const response = await completedRun;
   expect(response.status(), "real signed-in agent/run must succeed").toBe(200);
   const streamError = await response.finished();
@@ -67,6 +62,11 @@ async function ask(page: Page, route: Route, question: string, count: number) {
   expect(stream, "an HTTP 200 with only partial tokens is not an AI answer")
     .toContain('"type":"RUN_FINISHED"');
   const history = page.locator(rental ? '[data-testid="rental-ask-transcript"]:visible' : '[data-testid="discovery-ask-history"]:visible');
+  if (rental && !(await history.isVisible())) {
+    // Rentals can collapse its transcript after a co-agent remount. Only open
+    // when hidden; a blind toggle can accidentally hide the completed reply.
+    await page.locator('[data-testid="rental-ask-toggle-transcript"]:visible').click();
+  }
   await expect.poll(async () => (await assistantTexts(history)).length, { timeout: 60_000 })
     .toBeGreaterThanOrEqual(count);
   const replies = await assistantTexts(history);

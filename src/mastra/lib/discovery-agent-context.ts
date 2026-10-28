@@ -79,3 +79,19 @@ Public server lookup failed for this selection. State that you cannot verify it 
 `;
   }
 }
+
+/** For a factual current-selection name question, prior chat messages are
+ * competing stale evidence. Mastra still supplies current-turn verified
+ * public fields through dynamic instructions; we only trim *history* for this
+ * narrow request, leaving normal discovery/refinement memory unchanged.
+ */
+export function currentSelectedNameOnly<T extends { role: string; content: unknown }>(
+  messages: T[], agui: unknown,
+): T[] {
+  const lastUser = messages.findLastIndex((m) => m.role === "user");
+  if (lastUser < 0 || !discoveryAgentSelectionHint(agui).includes("Selected public item ID:")) return messages;
+  const latestText = JSON.stringify(messages[lastUser].content);
+  if (!/\b(?:selected|current)\b/i.test(latestText) ||
+      !/\b(?:exact|name|called|title)\b/i.test(latestText)) return messages;
+  return messages.slice(lastUser);
+}

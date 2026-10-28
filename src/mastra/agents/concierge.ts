@@ -15,7 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
-import { verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
+import { currentSelectedNameOnly, verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -485,7 +485,11 @@ export const conciergeAgent = new Agent({
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
   },
-  inputProcessors: getDefaultInputProcessors(),
+  inputProcessors: [
+    ...getDefaultInputProcessors(),
+    { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
+      currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
+  ],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input

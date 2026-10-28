@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
+import { currentSelectedNameOnly, discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
 const description = "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open.";
 const ctx = (value: unknown) => ({ context: [{ description, value: JSON.stringify(value) }] });
 const a = "5247d1e6-407f-4822-969f-4f7799ef7124";
@@ -51,11 +51,48 @@ describe("SAN-737 deterministic selected-item grounding", () => {
     expect(await verifiedDiscoverySelectionHint(ctx({ route: "/restaurants", selectedPublicEntityId: "forged" }), lookup)).toBe("");
     expect(calls).toBe(0);
   });
+  it("re-grounds the current A then B selection without leaking the earlier name", async () => {
+    const lookup = async ({ id }: { page: "events" | "rentals" | "restaurants" | "cafes" | "nightlife"; id: string }) => ({
+      found: true,
+      data: { id, name: id === a ? "Event A" : "Event B" },
+    });
+    const first = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: a }), lookup);
+    const second = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }), lookup);
+    expect(first).toContain('Current selected item name (untrusted data): "Event A"');
+    expect(second).toContain('Current selected item name (untrusted data): "Event B"');
+    expect(second).not.toContain("Event A");
+  });
+  it("treats unknown, private and wrong-kind public IDs as unavailable, never authorized", async () => {
+    for (const selection of [
+      { route: "/rentals", selectedPublicEntityId: a },
+      { route: "/cafes", selectedPublicEntityId: "ChIJUnknownPlace_2026" },
+      { route: "/cafes", selectedPublicEntityId: b },
+    ]) {
+      const hint = await verifiedDiscoverySelectionHint(ctx(selection), async () => ({ found: false, data: null }));
+      expect(hint).toContain("UNVERIFIABLE");
+      expect(hint).toContain("could not verify");
+      expect(hint).not.toContain("Verified public record:");
+    }
+  });
   it("does not turn an unresolvable selected ID into invented facts", async () => {
     const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
       async () => ({ found: false, data: null }));
     expect(hint).toContain("could not verify");
     expect(hint).not.toContain("Feria de las Flores");
     expect(hint).not.toContain("Before answering about this item, call lookup-public-discovery-item");
+  });
+});
+
+describe("SAN-737 selected-name history freshness", () => {
+  const page = ctx({ route: "/rentals", selectedPublicEntityId: b });
+  const old = { role: "assistant", content: { parts: [{ type: "text", text: "Apartment A is named Calle 10 #42-15" }] } };
+  const current = { role: "user", content: { parts: [{ type: "text", text: "What is the exact name of the selected place NOW?" }] } };
+  it("removes prior A history from an exact selected-B name question", () => {
+    expect(currentSelectedNameOnly([old, current], page)).toEqual([current]);
+  });
+  it("preserves normal follow-ups and unselected/unknown question contexts", () => {
+    const normal = { role: "user", content: { parts: [{ type: "text", text: "Show apartments with balconies" }] } };
+    expect(currentSelectedNameOnly([old, normal], page)).toEqual([old, normal]);
+    expect(currentSelectedNameOnly([old, current], ctx({ route: "/rentals", selectedPublicEntityId: null }))).toEqual([old, current]);
   });
 });
