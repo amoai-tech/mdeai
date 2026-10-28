@@ -73,6 +73,17 @@ export async function lookupPublicDiscoveryItem(
   return { found: false, data: null };
 }
 
+/** The tool and the Concierge's selected-item prompt use the same public,
+ * anonymous RLS lookup; no browser data becomes authority. */
+export async function lookupPublicDiscoveryItemFromServer(input: PublicSelection) {
+  const env = getSupabaseServerAnonEnv();
+  if (!env) return { found: false, data: null };
+  const client = createClient(env.url, env.anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return lookupPublicDiscoveryItem(input, client);
+}
+
 export const lookupPublicDiscoveryItemTool = createTool({
   id: "lookup-public-discovery-item",
   description: "Verify a currently selected public apartment, restaurant, event, café or nightlife record by ID through server-side Supabase RLS. Only use returned fields; an ID supplied by the browser proves nothing.",
@@ -81,12 +92,5 @@ export const lookupPublicDiscoveryItemTool = createTool({
     found: z.boolean(),
     data: z.record(z.string(), z.unknown()).nullable(),
   }),
-  execute: async (input) => {
-    const env = getSupabaseServerAnonEnv();
-    if (!env) return { found: false, data: null };
-    const client = createClient(env.url, env.anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    return lookupPublicDiscoveryItem(input, client);
-  },
+  execute: lookupPublicDiscoveryItemFromServer,
 });

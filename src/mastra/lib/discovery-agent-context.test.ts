@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoveryAgentSelectionHint } from "./discovery-agent-context";
+import { discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
 const description = "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open.";
 const ctx = (value: unknown) => ({ context: [{ description, value: JSON.stringify(value) }] });
 const a = "5247d1e6-407f-4822-969f-4f7799ef7124";
@@ -28,5 +28,31 @@ describe("SAN-737 Mastra AG-UI request context", () => {
     expect(prompt).not.toContain("secret@example.com");
     expect(prompt).not.toContain("Ignore safeguards");
     expect(discoveryAgentSelectionHint({ context: [{ description, value: "{bad-json" }] })).toBe("");
+  });
+});
+
+describe("SAN-737 deterministic selected-item grounding", () => {
+  it("provides a server-verified event name without relying on model tool selection", async () => {
+    const received: string[] = [];
+    const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: a }), async ({ page, id }) => {
+      received.push(`${page}:${id}`);
+      return { found: true, data: { id, name: "Feria de las Flores Preview Parade" } };
+    });
+    expect(received).toEqual([`events:${a}`]);
+    expect(hint).toContain("Feria de las Flores Preview Parade");
+    expect(hint).toContain("Server-verified");
+  });
+  it("never trusts a missing/forged or cleared item and never calls the lookup for it", async () => {
+    let calls = 0;
+    const lookup = async () => { calls++; return { found: true, data: { name: "Secret" } }; };
+    expect(await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: null }), lookup)).toContain("NONE");
+    expect(await verifiedDiscoverySelectionHint(ctx({ route: "/restaurants", selectedPublicEntityId: "forged" }), lookup)).toBe("");
+    expect(calls).toBe(0);
+  });
+  it("does not turn an unresolvable selected ID into invented facts", async () => {
+    const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
+      async () => ({ found: false, data: null }));
+    expect(hint).toContain("could not verify");
+    expect(hint).not.toContain("Feria de las Flores");
   });
 });

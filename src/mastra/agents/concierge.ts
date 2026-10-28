@@ -9,13 +9,13 @@ import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
-import { lookupPublicDiscoveryItemTool } from '../tools/lookup-public-discovery-item';
+import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
-import { discoveryAgentSelectionHint } from "../lib/discovery-agent-context";
+import { verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -454,8 +454,10 @@ ${formatEventSourcePromptHint()}`;
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
-  instructions: ({ requestContext }) =>
-    `${conciergeBaseInstructions}\n${discoveryAgentSelectionHint(requestContext.get("ag-ui"))}`,
+  instructions: async ({ requestContext }) =>
+    `${conciergeBaseInstructions}\n${await verifiedDiscoverySelectionHint(
+      requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
+    )}`,
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
   // generated function call. Never retry after a completed step/tool action.
