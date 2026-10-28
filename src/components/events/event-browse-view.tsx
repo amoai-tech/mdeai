@@ -103,7 +103,7 @@ export function EventBrowseView({
     price,
   });
   const countLabel =
-    total === 1 ? "1 upcoming event" : `${total} upcoming events`;
+    total === 1 ? "1 upcoming event listing" : `${total} upcoming event listings`;
 
   return (
     <>
@@ -116,7 +116,7 @@ export function EventBrowseView({
       }} />}
       testId="events-browse"
       title="Events in Medellín"
-      subtitle={`Real published events — ${countLabel}`}
+      subtitle={`Published events — ${countLabel}`}
       filterBar={
         <EventBrowseFilters
           category={category}
@@ -126,7 +126,7 @@ export function EventBrowseView({
         />
       }
     >
-      <section className="mt-6" aria-label="Event listings">
+      <section className="@container mt-6" aria-label="Event listings">
         {loadingIds ? <p role="status" className="mb-3 text-sm">Confirming event details…</p> : null}
         {lookupError ? <p role="alert" className="mb-3 text-sm text-destructive">{lookupError}</p> : null}
         {resolved?.scope === scope ? <p data-testid="guest-event-results-count" className="mb-3 text-sm text-muted-foreground">{shownEvents.length} matching events from the public catalog. Ticket prices and booking actions come from actual ticket tiers.</p> : null}
@@ -171,7 +171,7 @@ export function EventBrowseView({
 
         {!error && shownEvents.length > 0 ? (
           <div
-            className="mx-auto flex w-full max-w-3xl flex-col gap-3"
+            className="grid w-full grid-cols-1 gap-3 @3xl:grid-cols-2"
             aria-label={`${shownEvents.length} events`}
             data-testid="events-grid"
           >

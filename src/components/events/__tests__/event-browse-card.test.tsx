@@ -95,4 +95,14 @@ describe("EventBrowseCard", () => {
     expect(html).toContain("https://cdn.example.com/event.jpg");
     expect(html).toContain('alt="Salsa Night"');
   });
+
+  it("leads with the Medellín-local date, then title, venue and the real price", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={{ ...event, startsAt: "2026-10-19T21:00:00.000Z" }} />);
+    const at = (needle: string) => html.indexOf(needle);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeGreaterThan(-1);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeLessThan(at("<h3"));
+    expect(at("<h3")).toBeLessThan(at("Club Social"));
+    expect(at("Club Social")).toBeLessThan(at('data-testid="event-price-label"'));
+    expect(html).toContain("Laureles");
+  });
 });

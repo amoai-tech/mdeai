@@ -57,7 +57,52 @@ test.describe("SCREEN-027 /events browse", () => {
     await expect(page).toHaveURL(/category=music/, { timeout: 15_000 });
     await expect(
       categoryFilters.getByRole("link", { name: "Music" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
+    assertConsoleHygiene(errors);
+  });
+
+  test("phone: secondary filters collapse behind More filters, results stay in one column", async ({
+    page,
+  }) => {
+    const errors = attachConsoleWatcher(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoBrowseRoute(page, "/events");
+    const more = page.getByTestId("events-filter-more");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeHidden();
+    // Retry the click until React has hydrated the button; only click while still collapsed.
+    await expect(async () => {
+      if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+      await expect(more).toHaveAttribute("aria-expanded", "true", { timeout: 1_000 });
+    }).toPass();
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeVisible();
+    await page.getByTestId("events-filter-price-paid").click();
+    await expect(page).toHaveURL(/price=paid/, { timeout: 15_000 });
+    // An applied secondary filter stays visible after navigation.
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeVisible();
+    await expect(page.getByTestId("events-filter-price-paid")).toHaveAttribute("aria-current", "true");
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+    assertConsoleHygiene(errors);
+  });
+
+  test("desktop: results fill the pane in two columns when there are two or more events", async ({
+    page,
+  }) => {
+    const errors = attachConsoleWatcher(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoBrowseRoute(page, "/events");
+    const cards = page.getByTestId("event-card");
+    await expect(page.getByTestId("events-browse").first()).toBeVisible();
+    if ((await cards.count()) < 2) test.skip(true, "Needs two published events");
+    await expect(cards.nth(1)).toBeVisible();
+    const [a, b] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(4);
+    expect(b!.x).toBeGreaterThan(a!.x);
     assertConsoleHygiene(errors);
   });
 

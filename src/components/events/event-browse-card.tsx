@@ -151,21 +151,16 @@ export function EventBrowseCard({
         </div>
       }
     >
-      {event.neighborhood ? (
-        <p className="text-[11px] font-medium text-muted-foreground">
-          {event.neighborhood}
-        </p>
-      ) : null}
-      <h3 className="font-medium leading-snug">{event.title}</h3>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <Badge variant="secondary">
-          {CATEGORY_LABELS[event.category]}
-        </Badge>
-        <Badge variant="outline">{priceLabel}</Badge>
-      </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
-        {event.venue} · {formatStartsAt(event.startsAt)}
+      <p className="text-xs font-semibold text-primary">{formatStartsAt(event.startsAt)}</p>
+      <h3 className="mt-0.5 font-medium leading-snug">{event.title}</h3>
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+        {event.venue}
+        {event.neighborhood && !event.venue.includes(event.neighborhood) ? ` · ${event.neighborhood}` : ""}
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-sm font-semibold" data-testid="event-price-label">{priceLabel}</span>
+        <Badge variant="secondary">{CATEGORY_LABELS[event.category]}</Badge>
+      </div>
     </VenueCardShell>
   );
 }
