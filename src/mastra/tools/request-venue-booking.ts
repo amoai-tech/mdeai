@@ -71,7 +71,7 @@ const executeRequestVenueBooking = withAudit(
 export const requestVenueBookingTool = createTool({
   id: "request-venue-booking",
   description:
-    "Submit a table, café, or nightlife booking request after the user confirms details in the HITL card. Requires venueKind, placeId, requestedAt (ISO datetime), partySize, and contact fields. Never call before human confirmation — status stays pending until Patricia confirms by WhatsApp.",
+    "Submit a table, café, or nightlife booking request after the user confirms details in the HITL card. Requires venueKind, requestedAt (ISO datetime), partySize and contact fields; restaurant requests accept a canonical restaurantId without placeId, while external places need a placeId. Never call before human confirmation — status stays pending until Patricia confirms by WhatsApp.",
   inputSchema: requestVenueBookingInputSchema,
   outputSchema: requestVenueBookingOutputSchema,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

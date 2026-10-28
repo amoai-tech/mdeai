@@ -127,16 +127,16 @@ describe('El Cielo labels in the intelligent chat search path', () => {
     };
     vi.mocked(searchRestaurantsIntelligent).mockResolvedValueOnce({
       results: [
-        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'El Cielo' },
-        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'El Cielo' },
+        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'Elcielo Hotel Medellín' },
+        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'Elcielo Restaurant Medellín' },
       ],
       source: 'supabase', hybridUsed: false,
     } as never);
 
     const result = await searchRestaurants({ queryText: 'restaurants in El Poblado', limit: 5 });
     expect(result.results.map(({ id, name }) => [id, name])).toEqual([
-      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'El Cielo · Elcielo Hotel'],
-      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'El Cielo · Carrera 40'],
+      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'Elcielo Hotel Medellín'],
+      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'Elcielo Restaurant Medellín'],
     ]);
   });
 });
@@ -214,12 +214,12 @@ describe('restaurantSchema — MASTRA-048 enrichment fields', () => {
 });
 
 
-describe('restaurant search display names — real El Cielo locations', () => {
-  it('distinguishes both venues without changing their stored names or IDs', () => {
-    expect(restaurantSearchDisplayName('El Cielo', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
-      .toBe('El Cielo · Elcielo Hotel');
-    expect(restaurantSearchDisplayName('El Cielo', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
-      .toBe('El Cielo · Carrera 40');
+describe('restaurant search display names — use reconciled DB truth', () => {
+  it('does not impose stale locations onto the canonical Google-matched name', () => {
+    expect(restaurantSearchDisplayName('Elcielo Hotel Medellín', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('Elcielo Hotel Medellín');
+    expect(restaurantSearchDisplayName('Elcielo Restaurant Medellín', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
+      .toBe('Elcielo Restaurant Medellín');
   });
 
   it('does not rename any other restaurants or unknown El Cielo records', () => {

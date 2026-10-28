@@ -34,7 +34,7 @@ test('bad or contradictory report cannot pass', () => {
 });
 
 test('partial source coverage cannot pass', () => {
-  assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /successful/);
+  assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /independent lint coverage missing/);
 });
 
 test('Codacy may explicitly skip only the oversized generated Supabase types', () => {
@@ -71,6 +71,41 @@ test('a skipped generated file cannot hide missing ordinary ESLint coverage', ()
     () => validateDiffReport({
       ...complete(), skippedFiles: [{ filePath: generated, sizeBytes: 324245 }],
     }, 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts', generated]),
+    /independent lint coverage missing/,
+  );
+});
+
+test('Codacy under-count is accepted only with independent ESLint coverage of every changed file', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
+  assert.throws(
+    () => validateDiffReport(complete(), 0, files, ['a.ts', 'b.ts', 'c.ts']),
+    /independent lint coverage missing/,
+  );
+  assert.match(
+    validateDiffReport(complete(), 0, files, files),
+    /passed/,
+  );
+});
+
+test('independent ESLint cannot rescue a crashed Codacy analyzer or lint finding', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
+  assert.throws(
+    () => validateDiffReport({ ...complete(), toolResults: [{ ...complete().toolResults[0], status: 'failed' }] }, 0, files, files),
     /consistent, successful/,
   );
+  assert.throws(
+    () => validateDiffReport(complete([{ filePath: 'a.ts' }]), 1, files, files),
+    /finding/,
+  );
+});
+
+test('documented generated skip still requires independent coverage of every ordinary file', () => {
+  const generated = 'src/lib/supabase/database.types.ts';
+  const all = ['a.ts', 'b.ts', 'c.ts', 'd.ts', generated];
+  const report = { ...complete(), skippedFiles: [{ filePath: generated, sizeBytes: 324245 }] };
+  assert.throws(
+    () => validateDiffReport(report, 0, all, ['a.ts', 'b.ts', 'c.ts']),
+    /independent lint coverage missing/,
+  );
+  assert.match(validateDiffReport(report, 0, all, ['a.ts','b.ts','c.ts','d.ts']), /passed/);
 });

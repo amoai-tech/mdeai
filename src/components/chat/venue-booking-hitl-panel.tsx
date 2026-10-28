@@ -16,7 +16,8 @@ import type { VenueBookingKind } from "@/lib/venues/venue-booking-form-schema";
 
 export type VenueBookingHitlArgs = {
   venueKind: VenueBookingKind;
-  placeId: string;
+  placeId?: string | null;
+  restaurantId?: string | null;
   requestedAt: string;
   partySize: number;
   contactName: string;
@@ -53,7 +54,7 @@ export function VenueBookingHitlPanel({
   const { user, loading } = useSession();
   const [decided, setDecided] = useState(false);
 
-  const venueLabel = args.venueTitle?.trim() || args.placeId;
+  const venueLabel = args.venueTitle?.trim() || args.placeId || args.restaurantId || "Restaurant";
 
   return (
     <Card

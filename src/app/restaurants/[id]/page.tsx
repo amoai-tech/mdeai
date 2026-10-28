@@ -124,13 +124,11 @@ export default async function RestaurantDetailPage({
         {restaurant.aiSummary ? <p className="mt-3 text-sm text-foreground">{restaurant.aiSummary}</p> : null}
       </section>
 
-      {restaurant.placeId ? (
-        <RestaurantReservationRequest
-          placeId={restaurant.placeId}
-          restaurantId={restaurant.id}
-          venueTitle={restaurant.name}
-        />
-      ) : null}
+      <RestaurantReservationRequest
+        placeId={restaurant.placeId ?? undefined}
+        restaurantId={restaurant.id}
+        venueTitle={restaurant.name}
+      />
 
       {listing.description ? (
         <section className="mt-6" aria-labelledby="restaurant-about">
