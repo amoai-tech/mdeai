@@ -205,7 +205,7 @@ async function recordAgentFailure(
   await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
   return {
     formState,
-    chatTail: reply.slice(-1500).replace(/[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}/gi, "[redacted email]"),
+    chatTail: reply.slice(-1500).replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, "[redacted email]"),
     network: network(),
     screenshotPath,
   };
