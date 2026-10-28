@@ -6148,6 +6148,56 @@ export type Database = {
           },
         ]
       }
+      restaurant_menu_items: {
+        Row: {
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          name: string
+          position: number
+          price_amount: number | null
+          restaurant_id: string
+          section: string | null
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name: string
+          position?: number
+          price_amount?: number | null
+          restaurant_id: string
+          section?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name?: string
+          position?: number
+          price_amount?: number | null
+          restaurant_id?: string
+          section?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_menu_items_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           address: string | null
@@ -6178,6 +6228,7 @@ export type Database = {
           maps_url: string | null
           name: string
           neighborhood: string | null
+          partner_id: string | null
           phone: string | null
           postal_code: string | null
           price_level: number | null
@@ -6221,6 +6272,7 @@ export type Database = {
           maps_url?: string | null
           name: string
           neighborhood?: string | null
+          partner_id?: string | null
           phone?: string | null
           postal_code?: string | null
           price_level?: number | null
@@ -6264,6 +6316,7 @@ export type Database = {
           maps_url?: string | null
           name?: string
           neighborhood?: string | null
+          partner_id?: string | null
           phone?: string | null
           postal_code?: string | null
           price_level?: number | null
@@ -7859,6 +7912,26 @@ export type Database = {
     Functions: {
       partner_profile_patch: {
         Args: { p_patch: Json; p_partner_id?: string | null }
+        Returns: Json
+      }
+      restaurant_assign_partner: {
+        Args: { p_restaurant_id: string; p_partner_id: string | null }
+        Returns: Json
+      }
+      restaurant_create_for_partner: {
+        Args: {
+          p_partner_id: string
+          p_name: string
+          p_google_place_id?: string | null
+        }
+        Returns: Json
+      }
+      restaurant_owner_patch: {
+        Args: {
+          p_restaurant_id: string
+          p_patch: Json
+          p_partner_id?: string | null
+        }
         Returns: Json
       }
       admin_contest_create: {
