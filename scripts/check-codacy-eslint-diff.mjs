@@ -1,11 +1,11 @@
 /** Fail-closed validation of Codacy's ESLint9 changed-file analysis. */
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ESLint } from 'eslint';
 
-export function validateDiffReport(report, cliExit, expectedFiles) {
+export function validateDiffReport(report, cliExit, expectedFiles, independentlyLintedFiles = []) {
   if (![0, 1].includes(cliExit)) throw new Error(`Codacy analyzer failed (exit ${cliExit})`);
   if (!report || !Array.isArray(report.issues) || !Array.isArray(report.errors) || !Array.isArray(report.toolResults)) {
     throw new Error('Codacy diff report is missing required arrays');
@@ -20,9 +20,16 @@ export function validateDiffReport(report, cliExit, expectedFiles) {
     return 'No changed ESLint-analyzable files; verified clean skip';
   }
   if (tool.status !== 'success' || !Number.isInteger(tool.filesAnalyzed) ||
-      tool.filesAnalyzed < Math.max(1, expectedFiles.length) || tool.errorCount !== 0 ||
+      tool.filesAnalyzed < 1 || tool.errorCount !== 0 ||
       !Number.isInteger(tool.issueCount) || tool.issueCount !== report.issues.length) {
     throw new Error('ESLint9 did not complete a consistent, successful analysis');
+  }
+  // Codacy --diff can count fewer changed files than ESLint's explicit file list
+  // (21 eligible files versus 20 analyzed in PR #582). Never waive coverage:
+  // require an independent project-configured ESLint run over EVERY expected file.
+  if (tool.filesAnalyzed < expectedFiles.length &&
+      !expectedFiles.every((file) => independentlyLintedFiles.includes(file))) {
+    throw new Error(`ESLint9 analyzed ${tool.filesAnalyzed}/${expectedFiles.length} expected files; independent lint coverage missing`);
   }
   if (report.issues.length || cliExit !== 0) {
     throw new Error(`${report.issues.length} ESLint9 finding(s) in changed files (CLI exit ${cliExit})`);
@@ -45,7 +52,24 @@ async function main() {
   if (!file || !base || !/^(0|1|[2-9]\d*)$/.test(exitText ?? '')) throw new Error('Usage: check-codacy-eslint-diff.mjs <report> <base SHA> <exit code>');
   const report = JSON.parse(readFileSync(file, 'utf8'));
   const expected = await changedLintableFiles(base);
-  console.log(validateDiffReport(report, Number(exitText), expected));
+  const tool = report.toolResults?.find((entry) => entry.toolId === 'ESLint9');
+  let independentlyLintedFiles = [];
+  if (tool && Number.isInteger(tool.filesAnalyzed) && tool.filesAnalyzed < expected.length) {
+    // A clean Codacy report with under-counted source files is not sufficient.
+    // Verify precisely the changed lintable paths using the same repo ESLint
+    // configuration. Report failures, warnings, omissions, or fatal errors.
+    const eslint = new ESLint();
+    const results = await eslint.lintFiles(expected);
+    independentlyLintedFiles = results.map((result) =>
+      relative(process.cwd(), result.filePath).replaceAll('\\', '/'));
+    const missed = expected.filter((file) => !independentlyLintedFiles.includes(file));
+    const findings = results.filter((result) => result.errorCount || result.warningCount || result.fatalErrorCount);
+    if (missed.length || findings.length) {
+      throw new Error(`Independent ESLint failed: missing=${JSON.stringify(missed)}, findings=${findings.map((r) => r.filePath).join(',')}`);
+    }
+    console.log(`Independent ESLint verified all ${expected.length} changed files (Codacy counted ${tool.filesAnalyzed}).`);
+  }
+  console.log(validateDiffReport(report, Number(exitText), expected, independentlyLintedFiles));
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
