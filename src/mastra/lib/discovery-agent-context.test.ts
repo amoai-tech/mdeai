@@ -12,6 +12,11 @@ describe("SAN-737 Mastra AG-UI request context", () => {
     expect(cleared).toContain("NONE");
     expect(cleared).not.toContain(a);
   });
+  it("preserves real imported event IDs with a non-RFC UUID version nibble", () => {
+    const importedEventId = "00000000-0000-0000-0000-000000000042";
+    expect(discoveryAgentSelectionHint(ctx({ route: "/events", selectedPublicEntityId: importedEventId })))
+      .toContain(importedEventId);
+  });
   it("accepts public venue Place IDs, but not forged arbitrary text for other routes", () => {
     expect(discoveryAgentSelectionHint(ctx({ route: "/cafes", selectedPublicEntityId: "ChIJabc123" }))).toContain("ChIJabc123");
     expect(discoveryAgentSelectionHint(ctx({ route: "/restaurants", selectedPublicEntityId: "forged" }))).toBe("");

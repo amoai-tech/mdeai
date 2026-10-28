@@ -86,6 +86,10 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
           }
         });
         await page.goto(new URL("/" + scenario.route, base).toString(), { waitUntil: "domcontentloaded" });
+        // Supabase session restoration can remount the entire discovery view.
+        // Do not interact with a card before the authenticated agent is ready.
+        await expect(page.getByText("Checking session...", { exact: true })).toHaveCount(0, { timeout: 50_000 });
+        await expect(page.getByText("Connecting to MDE...", { exact: true })).toHaveCount(0, { timeout: 60_000 });
         const cards = page.locator(scenario.card);
         await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThanOrEqual(2);
         // Titles and IDs come from the actual rendered public data.
