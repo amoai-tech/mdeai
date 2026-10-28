@@ -18,7 +18,7 @@
 | 1 | Inline rental card showed the derived monthly estimate, never the stored nightly price (`formatRentalPrices` always returns `~$/mo`, so the inline-nightly branch was unreachable). | A $78/night listing read "~$2,340/mo". | #599 @ `87db775c76` |
 | 2 | `venueAnchorToCoordinates` replaced a missing location with a hardcoded city-center point (6.2442, −75.5812); the café/nightlife models carried no coordinates. | A venue with no saved location was pinned in the wrong place by the AI path and could never be pinned truthfully on browse pages. | #604 @ `6f527ee48b` (data layer) |
 | 3 | Chat event sheet's single payment button always targeted the cheapest tier. | A visitor choosing VIP × 3 was sent to General × 1. | #597 @ `f4be1c3f20` |
-| 4 | Event detail page: empty placeholder, the "not verified" warning buried in About text, duplicate ticket headings, mixed date formats on multi-day events. | Visitors miss that a December event is unconfirmed. | #601 @ `758cd9a504` |
+| 4 | Event detail page: empty placeholder, the "not verified" warning buried in About text, duplicate ticket headings, mixed date formats on multi-day events. | Visitors miss that a December event is unconfirmed. | #601 (merged into #597's branch; ships with #597) |
 | 5 | Café/nightlife pages render a map column (`BrowseMapPanel`) but nothing feeds it pins, and there is no café/nightlife pin converter (only restaurant and rental). | The map beside the cards is empty. | Step 2.2 below (not started) |
 
 Reported by Linear but **not independently reproduced here**: signed-in Events A→B→Clear answers the wrong item (SAN-737, step 4.1).
@@ -44,7 +44,7 @@ Facts as read from Linear and GitHub on 2026-10-28.
 | [SAN-1250 · Events — Find Real Events With Ask MDE on the Events Page](https://linear.app/amo100/issue/SAN-1250) | Done | Public catalog, tier-derived price, inline Ask | Date + budget follow-up, saved thread, authenticated ticket path | — | `event-browse-view.tsx` | P2 (proof only) |
 | [SAN-972 · Events — Polish the Responsive Cards, Filters and Map Layout](https://linear.app/amo100/issue/SAN-972) | Backlog | Events workspace and filters | Audit after the compact feed lands | — | `event-browse-view.tsx` | P3 |
 | [SAN-1534 · MDE UI/UX — Verified Progress and Launch Evidence Tracker](https://linear.app/amo100/issue/SAN-1534) | In Progress | Evidence conventions | Exact-SHA matrices and screenshots | — | docs only | Final |
-| [SAN-1600 · MDE Events — Make Event Details Trustworthy, Premium, and Easy to Act On](https://linear.app/amo100/issue/SAN-1600) | In Progress | Event detail page, guest Ask | Merge #597, then #601; signed-in Ask | #597 → #601 | `event-ticket-tiers.tsx`, `event-detail-*.tsx` | Separate workstream |
+| [SAN-1600 · MDE Events — Make Event Details Trustworthy, Premium, and Easy to Act On](https://linear.app/amo100/issue/SAN-1600) | In Progress | Event detail page, guest Ask | Merge #597 (now carries the #601 UI pass); signed-in Ask | #597 (includes #601) | `event-ticket-tiers.tsx`, `event-detail-*.tsx` | Separate workstream |
 | [SAN-1599 · EPIC · MDE Events — Reliable Stripe Checkout and Paid Ticket Orders](https://linear.app/amo100/issue/SAN-1599) | In Progress | Server-priced checkout | Stripe TEST order proof | own PRs | `supabase/functions/ticket-*` | Separate; never mixed into UI PRs |
 
 **Ownership boundaries (do not blur).** SAN-293 owns restaurant Details **inside `/chat`**. SAN-1531 owns the `/restaurants` page. SAN-1140 owns shared compact cards. SAN-1146 owns real café/nightlife coordinates and selection. SAN-737 owns selected-item AI correctness. SAN-1122 owns only what is left after those. No task is closed or removed here without evidence.
@@ -57,11 +57,11 @@ Levels: **implemented** (code exists) · **tested** (focused tests) · **reviewe
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [#599](https://github.com/amoai-tech/mdeai/pull/599) compact cards (SAN-1140) | `87db775c76` | main | yes, incl. nightly-price fix | yes (36 card tests; `$78/night` regression) | 14 pass, 2 pending | approval required; CodeRabbit finding resolved with evidence | no / no |
 | [#604](https://github.com/amoai-tech/mdeai/pull/604) real coordinates (SAN-1146) | `6f527ee48b` | main | data layer only | yes (`floor` green locally: 523 files, 4020 tests) | 10 pass, 6 pending | approval required; MDE review "safe to merge" | no / no |
-| [#597](https://github.com/amoai-tech/mdeai/pull/597) ticket-tier fix (SAN-1600) | `f4be1c3f20` | main | yes | yes (VIP × 3 payload verified in real browser) | 17 pass | approval required; 0 findings from MDE review, Codacy, Kilo | no / no |
-| [#601](https://github.com/amoai-tech/mdeai/pull/601) event visual pass (SAN-1600) | `758cd9a504` | `fix/san-1600-ticket-selection-detail` | yes (plus two commits from another session) | yes | 7 pass, 1 pending | not yet | no / no |
+| [#597](https://github.com/amoai-tech/mdeai/pull/597) ticket-tier fix (SAN-1600) | `b2971f0069` | main | yes; now also carries the #601 UI pass (19 files) | yes (VIP × 3 payload verified in real browser) | 10 pass, `floor` pending | approval required; MDE incremental review "safe to merge" | no / no |
+| [#601](https://github.com/amoai-tech/mdeai/pull/601) event visual pass (SAN-1600) | `758cd9a504` | `fix/san-1600-ticket-selection-detail` | yes (plus two commits from another session) | yes | passed before merge | Kilo clean | **merged into #597's branch, not `main`**; reaches `main` only when #597 merges |
 | [#598](https://github.com/amoai-tech/mdeai/pull/598) selected-item AI (SAN-737) | `b462d859ed` | main | partial, draft | e2e spec added | 15 pass, 1 pending | n/a (draft) | no / no |
 
-**Dependency rules.** #601 is stacked on #597: merge #597 first, then retarget #601 to `main` and rebase. #604 touches no view files; the view wiring (step 2.2) must wait for #599 because #599 rewrites the same views. #598 is the independent AI-risk PR and must not absorb UI changes. Event UI work (#597, #601) never carries Stripe changes.
+**Dependency rules.** #601 was merged into #597's branch, so the stack is collapsed: #597 is now the single PR that carries the ticket fix and the event UI pass to `main`. #604 touches no view files; the view wiring (step 2.2) must wait for #599 because #599 rewrites the same views. #598 is the independent AI-risk PR and must not absorb UI changes. Event UI work (#597, #601) never carries Stripe changes.
 
 ## 4. Ordered implementation steps
 
@@ -111,14 +111,14 @@ Each step lists its owner task, skills and tools, and a real-world example. Subt
 | 4.3 | Safety matrix | Client ids are never authorization | tests; server re-fetch stays the source | 4.1 | wrong-category, forged and private ids refused; two accounts never see each other's thread |
 | 4.4 | Composer reliability (SAN-1145) | Stop/Retry and error states unproven | shared composer only | — | Stop, Retry, 401/403/429/5xx, interrupted stream, IME verified |
 
-### Step 5 — Event experience, separate from Stripe (SAN-1600 · PRs #597 → #601)
+### Step 5 — Event experience, separate from Stripe (SAN-1600 · PR #597, which now includes #601)
 
 *Skills:* `events`, `frontend-design`, `uiux`, `testing`. *Example:* A visitor picks VIP × 3 in chat and checkout receives the VIP tier id with quantity 3.
 
 | # | Subtask | Problem and evidence | Files and smallest change | Depends on | Acceptance (Done) |
 | --- | --- | --- | --- | --- | --- |
-| 5.1 | Merge #597 | Checks green, 0 review findings; waits on approval | none | approval | merged; checkout payload test stays green |
-| 5.2 | Retarget and rebase #601 | Stacked on #597; another session added commits (explicit year, mobile action clearance) | none | 5.1 | #601 targets `main`, CI green on its exact head, review done |
+| 5.1 | Merge #597 | Carries the ticket fix and the #601 UI pass; waits on exact-head `floor` and approval | none | approval | merged to `main`; checkout payload test stays green |
+| 5.2 | Verify the UI pass reached production | #601 merged into #597's branch, not `main` | none | 5.1, staged release | production serves the date tile, notice, one ticket heading and the new schedule format at the merge SHA |
 | 5.3 | SAN-972 responsive polish | Needs the compact feed first | `event-browse-view.tsx` | #599 merged | 320/390/768/1440, keyboard, focus; fix only observed defects |
 | 5.4 | SAN-1250 follow-ups | Date and budget refinement, saved thread unproven | tests; fix only a demonstrated failure | 4.x | stable event ids, tier-derived price or honest unknown, no invented Free/Buy |
 
