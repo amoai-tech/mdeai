@@ -42,6 +42,41 @@ function Unavailable({ message }: { message: string }) {
   );
 }
 
+function RestaurantLoadFailure({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="mx-auto max-w-3xl" data-testid="restaurant-owner-error">
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
+        <p className="text-base font-semibold">{title}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function RestaurantEditorHeader({ restaurant, partnerName }: {
+  restaurant: { name: string; partner_id: string | null };
+  partnerName: string | null;
+}) {
+  return (
+    <>
+      <Link
+        href={`/app/partners/restaurants${restaurant.partner_id ? `?partner=${encodeURIComponent(restaurant.partner_id)}` : ""}`}
+        className="text-sm text-muted-foreground underline"
+      >
+        Your restaurants
+      </Link>
+      <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+        {restaurant.name}
+      </h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {partnerName
+          ? `Assigned to ${partnerName}. Only that business and the MDE team can change this listing.`
+          : "Not assigned to a partner yet. The MDE team can assign it below."}
+      </p>
+    </>
+  );
+}
+
 /**
  * SAN-1540 — the restaurant editor inside the Partners workspace.
  *
@@ -80,14 +115,7 @@ export default async function PartnerRestaurantEditorPage({
   ]);
 
   if (profile.status === "error") {
-    return (
-      <div className="mx-auto max-w-3xl" data-testid="restaurant-owner-error">
-        <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
-          <p className="text-base font-semibold">We could not load your business</p>
-          <p className="mt-2 text-sm text-muted-foreground">Refresh to try again.</p>
-        </div>
-      </div>
-    );
+    return <RestaurantLoadFailure title="We could not load your business" detail="Refresh to try again." />;
   }
 
   if (profile.status === "forbidden") {
@@ -97,14 +125,7 @@ export default async function PartnerRestaurantEditorPage({
   const restaurantLookup = await loadOwnerRestaurant(supabase, id);
   if (restaurantLookup.status === "not_found") notFound();
   if (restaurantLookup.status === "error") {
-    return (
-      <div className="mx-auto max-w-3xl" data-testid="restaurant-owner-error">
-        <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
-          <p className="text-base font-semibold">We could not load this restaurant</p>
-          <p className="mt-2 text-sm text-muted-foreground">This is a temporary problem. Refresh to try again.</p>
-        </div>
-      </div>
-    );
+    return <RestaurantLoadFailure title="We could not load this restaurant" detail="This is a temporary problem. Refresh to try again." />;
   }
 
   const restaurant = restaurantLookup.data;
@@ -157,20 +178,7 @@ export default async function PartnerRestaurantEditorPage({
 
   return (
     <div className="mx-auto max-w-3xl" data-testid="restaurant-owner-editor">
-      <Link
-        href={`/app/partners/restaurants${restaurant.partner_id ? `?partner=${encodeURIComponent(restaurant.partner_id)}` : ""}`}
-        className="text-sm text-muted-foreground underline"
-      >
-        Your restaurants
-      </Link>
-      <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-        {restaurant.name}
-      </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {partnerName
-          ? `Assigned to ${partnerName}. Only that business and the MDE team can change this listing.`
-          : "Not assigned to a partner yet. The MDE team can assign it below."}
-      </p>
+      <RestaurantEditorHeader restaurant={restaurant} partnerName={partnerName} />
 
       <div className="mt-8">
         <RestaurantOwnerEditor

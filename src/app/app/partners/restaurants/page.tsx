@@ -78,6 +78,68 @@ function RestaurantRows({
   );
 }
 
+function RestaurantsLoadFailure({ forbidden }: { forbidden: boolean }) {
+  return (
+    <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
+      <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
+        <p className="text-base font-semibold">Your restaurants are temporarily unavailable</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {forbidden
+            ? "This business is not available for this account."
+            : "We could not load your business. Try again."}
+        </p>
+        <Link
+          href="/app/partners/restaurants"
+          className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline-offset-4 hover:underline"
+        >
+          Try again
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function RestaurantsSignupInvitation() {
+  return (
+    <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">My restaurants</p>
+      <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight">Manage restaurants</h1>
+      <div className="mt-8 rounded-2xl border border-border bg-background-elevated p-6">
+        <p className="text-base font-semibold">No partner profile for this account yet</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Create your partner profile first, then link or add your restaurant listings here.
+        </p>
+        <Link
+          href="/partners/signup"
+          className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline-offset-4 hover:underline"
+        >
+          Create your partner profile
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function RestaurantsBusinessSelection({ options }: {
+  options: React.ComponentProps<typeof PartnerBusinessSwitcher>["options"];
+}) {
+  return (
+    <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">My restaurants</p>
+      <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight">Manage restaurants</h1>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Choose a business above to edit its restaurant listings.
+      </p>
+      <div className="mt-6">
+        <PartnerBusinessSwitcher
+          basePath="/app/partners/restaurants"
+          options={options}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
  * SAN-1540 — the authorized restaurant list inside the Partners workspace.
  *
@@ -102,63 +164,11 @@ export default async function PartnerRestaurantsPage({
   const profile = await loadPartnerProfile(supabase, user.id, selected);
 
   if (profile.status === "error" || profile.status === "forbidden") {
-    return (
-      <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
-        <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
-          <p className="text-base font-semibold">Your restaurants are temporarily unavailable</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {profile.status === "forbidden"
-              ? "This business is not available for this account."
-              : "We could not load your business. Try again."}
-          </p>
-          <Link
-            href="/app/partners/restaurants"
-            className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline-offset-4 hover:underline"
-          >
-            Try again
-          </Link>
-        </div>
-      </div>
-    );
+    return <RestaurantsLoadFailure forbidden={profile.status === "forbidden"} />;
   }
-
-  if (profile.status === "missing") {
-    return (
-      <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">My restaurants</p>
-        <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight">Manage restaurants</h1>
-        <div className="mt-8 rounded-2xl border border-border bg-background-elevated p-6">
-          <p className="text-base font-semibold">No partner profile for this account yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Create your partner profile first, then link or add your restaurant listings here.
-          </p>
-          <Link
-            href="/partners/signup"
-            className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline-offset-4 hover:underline"
-          >
-            Create your partner profile
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+  if (profile.status === "missing") return <RestaurantsSignupInvitation />;
   if (profile.status === "selection_required") {
-    return (
-      <div className="mx-auto max-w-3xl" data-testid="partner-restaurants">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">My restaurants</p>
-        <h1 className="mt-3 text-balance text-3xl font-bold tracking-tight">Manage restaurants</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Choose a business above to edit its restaurant listings.
-        </p>
-        <div className="mt-6">
-          <PartnerBusinessSwitcher
-            basePath="/app/partners/restaurants"
-            options={profile.options}
-          />
-        </div>
-      </div>
-    );
+    return <RestaurantsBusinessSelection options={profile.options} />;
   }
 
   const partner = profile.partner;

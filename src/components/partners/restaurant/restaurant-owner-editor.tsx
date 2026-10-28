@@ -42,20 +42,7 @@ type ListField = (typeof LIST_FIELDS)[number][0];
  * hours are part of the same patch; menu rows and the sourced website import use
  * their own narrow routes and never auto-save.
  */
-export function RestaurantOwnerEditor({
-  restaurantId,
-  partnerId,
-  partnerName,
-  initial,
-  updatedAt,
-  isActive,
-  isAdmin,
-  partners,
-  assignedPartnerId,
-  menuItems,
-  requests,
-  requestsStatus,
-}: {
+type RestaurantOwnerEditorProps = {
   restaurantId: string;
   partnerId: string | null;
   partnerName: string | null;
@@ -68,7 +55,23 @@ export function RestaurantOwnerEditor({
   menuItems: MenuItemRow[];
   requests: ReservationRequestRow[];
   requestsStatus: "loaded" | "error";
-}) {
+};
+
+export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
+  const {
+    restaurantId,
+    partnerId,
+    partnerName,
+    initial,
+    updatedAt,
+    isActive,
+    isAdmin,
+    partners,
+    assignedPartnerId,
+    menuItems,
+    requests,
+    requestsStatus,
+  } = props;
   const router = useRouter();
   const [values, setValues] = useState<RestaurantListingValues>(initial);
   const [persisted, setPersisted] = useState<RestaurantListingValues>(initial);
