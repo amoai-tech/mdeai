@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { submitDirectVenueBooking } from "@/components/chat/venue-booking-direct-hitl-core";
+import { clearVenueBookingReview } from "@/components/chat/venue-booking-draft-store";
 import { useHumanInTheLoop } from "@copilotkit/react-core/v2";
 import {
   VenueBookingHitlPanel,
@@ -78,7 +80,26 @@ function createVenueBookingHitlRender() {
         <VenueBookingHitlPanel
           args={hitlArgs}
           status={status}
-          respond={(decision) => respond?.(decision)}
+          respond={async (decision, draft) => {
+            if (!respond) throw new Error("Booking confirmation is unavailable. Try again.");
+            if (decision === "rejected") {
+              clearVenueBookingReview();
+              await respond({ success: false, message: "Customer cancelled the request; nothing saved." });
+              return;
+            }
+            // Only the explicit customer action invokes the authenticated writer.
+            // The Mastra tool by itself is proposal-only and cannot insert.
+            const saved = await submitDirectVenueBooking(draft);
+            if (!saved.ok) {
+              throw saved.error instanceof Error ? saved.error : new Error("Could not save the booking request.");
+            }
+            await respond({
+              success: true,
+              requestId: saved.confirmation.requestId,
+              message: saved.confirmation.message,
+            });
+            clearVenueBookingReview();
+          }}
         />
       </>
     );
