@@ -205,7 +205,7 @@ export function GroundedPlaceCard({
             data-testid="grounded-card-photo-placeholder"
             aria-hidden
           >
-            Café
+            {typeLabel ?? "Place"}
           </div>
         )}
         <div className="min-w-0 flex-1">

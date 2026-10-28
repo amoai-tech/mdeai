@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountLoadError } from "@/components/app/load-error";
 import { MyTicketsList } from "@/components/tickets/my-tickets-list";
 import {
   listBuyerOrders,
@@ -10,7 +11,8 @@ export const metadata = {
 };
 
 export default async function MyTicketsPage() {
-  const orders = await listBuyerOrders();
+  const result = await listBuyerOrders();
+  const orders = result.status === "ok" ? result.value : [];
   const { upcoming, past } = partitionOrdersByTime(orders);
 
   return (
@@ -21,7 +23,15 @@ export default async function MyTicketsPage() {
           Back to chat
         </Link>
       </div>
-      <MyTicketsList orders={orders} upcoming={upcoming} past={past} />
+      {result.status === "error" ? (
+        <AccountLoadError
+          message={result.message}
+          retryHref="/me/tickets"
+          title="Your tickets are temporarily unavailable"
+        />
+      ) : (
+        <MyTicketsList orders={orders} upcoming={upcoming} past={past} />
+      )}
     </main>
   );
 }

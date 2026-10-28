@@ -9,7 +9,6 @@ import {
   type RestaurantSource,
   mapCuisineFromTypes,
   priceLevelToTier,
-  estimateAvgPriceFromLevel,
 } from "../tools/search-restaurants";
 import { extractNeighborhood } from "../tools/search-events";
 import {
@@ -139,8 +138,7 @@ function hybridToRestaurant(
   signalSource?: string,
   evidence?: RestaurantEvidence[],
 ): IntelligenceRestaurantResult {
-  const pl = row.price_level ?? 2;
-  const rating = num(row.rating) ?? 0;
+  const rating = num(row.rating);
   const lat = num(row.latitude);
   const lng = num(row.longitude);
   return {
@@ -150,9 +148,8 @@ function hybridToRestaurant(
     neighborhood:
       neighborhoodCol ??
       extractNeighborhood(row.address, row.city),
-    priceTier: priceLevelToTier(pl),
-    avgPricePerPerson: estimateAvgPriceFromLevel(pl),
-    currency: "USD",
+    priceTier: priceLevelToTier(num(row.price_level)),
+    // No per-person amount exists in the catalog, so none is invented (SAN-1468).
     rating,
     vibe: row.ambiance?.length ? row.ambiance : row.cuisine_types ?? [],
     imageUrl: row.primary_image_url ?? "",

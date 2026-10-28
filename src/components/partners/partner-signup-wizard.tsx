@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type Dispatch, type SetStateAction } from "react";
 import { CheckCircle2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   activateErrorMessage,
   activatePartnerRequest,
@@ -33,6 +34,9 @@ type PartnerSignupWizardProps = {
   initialCategory?: string;
   isAuthenticated: boolean;
   loginNextPath: string;
+  /** Optional controlled form state so the AI suggestion card can apply values. */
+  form?: PartnerSignupFormState;
+  onFormChange?: Dispatch<SetStateAction<PartnerSignupFormState>>;
 };
 
 type ViewState =
@@ -60,15 +64,22 @@ export function PartnerSignupWizard({
   initialCategory,
   isAuthenticated,
   loginNextPath,
+  form: controlledForm,
+  onFormChange,
 }: PartnerSignupWizardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [view, setView] = useState<ViewState>({ kind: "form" });
-  const [form, setForm] = useState<PartnerSignupFormState>({
+  const [internalForm, setInternalForm] = useState<PartnerSignupFormState>({
     businessName: "",
     category: initialCategory ?? "",
     neighborhood: "",
   });
+  const form = controlledForm ?? internalForm;
+  const setForm: Dispatch<SetStateAction<PartnerSignupFormState>> = (next) => {
+    if (onFormChange) onFormChange(next);
+    else setInternalForm(next);
+  };
 
   const typeLabel = PARTNER_TYPE_LABELS[partnerType];
   const loginHref = `/login?next=${encodeURIComponent(loginNextPath)}`;
@@ -77,7 +88,7 @@ export function PartnerSignupWizard({
     key: K,
     value: PartnerSignupFormState[K],
   ) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((current) => ({ ...current, [key]: value }));
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -261,6 +272,30 @@ export function PartnerSignupWizard({
                 placeholder="Provenza"
               />
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="website">Website</Label>
+            <Input
+              id="website"
+              name="website"
+              type="url"
+              data-testid="partner-signup-website"
+              value={form.website ?? ""}
+              onChange={(e) => updateField("website", e.target.value)}
+              placeholder="https://yourbusiness.com"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              data-testid="partner-signup-description"
+              value={form.description ?? ""}
+              onChange={(e) => updateField("description", e.target.value)}
+              placeholder="What makes your business worth visiting?"
+              rows={4}
+            />
           </div>
           <input type="hidden" name="type" value={partnerType} readOnly />
           {draftId ? (

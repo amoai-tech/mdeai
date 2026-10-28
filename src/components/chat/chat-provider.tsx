@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { classifyConciergeStartupError, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -89,14 +90,16 @@ function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<C
  *    the `agent.threadId` check). If the reconnect never finishes, history is
  *    NOT installed: the chat shows the retryable error instead.
  */
-function SavedThreadHistory({
+export function SavedThreadHistory({
   threadId,
   children,
+  agentId = "conciergeAgent",
 }: {
   threadId: string;
   children: ReactNode;
+  agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -172,6 +175,25 @@ function SavedThreadHistory({
 }
 
 /**
+ * Replay a saved thread's messages inside an already-configured CopilotKit provider.
+ *
+ * `/chat` owns its provider; discovery routes (Rentals, Events, Restaurants…) already get
+ * `CopilotChatConfigurationProvider` from `copilot-kit-provider`, so they only need the history
+ * replay. Without this, the thread id survives a refresh but the inline Ask MDE transcript comes
+ * back empty and the page shows the plain catalogue.
+ */
+export function SavedThreadReplay({
+  threadId,
+  children,
+}: {
+  threadId: string;
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+}
+
+/**
  * The /chat concierge surface, and the one place its thread is decided.
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
@@ -187,6 +209,7 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
+  const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
   // A successfully saved live turn must NOT immediately reconnect/replay itself.
@@ -199,11 +222,29 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
+  // The runtime-info 401 may arrive before the guest session finishes loading.
+  // Don't show a false failed-turn notice or hide a signed-in auth failure.
+  const pendingStartup401 = useRef<string | undefined | null>(null);
+  useEffect(() => {
+    if (sessionLoading || pendingStartup401.current === null) return;
+    const failedThreadId = pendingStartup401.current;
+    pendingStartup401.current = null;
+    if (user && failedThreadId === threadId) reportConciergeError(failedThreadId);
+  }, [sessionLoading, user, threadId]);
+
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={() => reportConciergeError(threadId)}
+      onError={(event) => {
+        const decision = classifyConciergeStartupError(event, Boolean(user), sessionLoading);
+        if (decision === "ignore") return;
+        if (decision === "defer") {
+          pendingStartup401.current = threadId;
+          return;
+        }
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"

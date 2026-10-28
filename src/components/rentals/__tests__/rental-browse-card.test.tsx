@@ -56,7 +56,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
 
 function renderCard(
   overrides: Partial<ApartmentRow> = {},
-  props: { selected?: boolean; onSchedule?: (() => void) | undefined } = {},
+  props: { selected?: boolean; onSchedule?: (() => void) | undefined; duplicateNote?: string } = {},
 ) {
   // `?? vi.fn()` would mask a deliberate `onSchedule: undefined`, which is exactly the case
   // the "no handler → no CTA" test needs to exercise.
@@ -66,6 +66,7 @@ function renderCard(
       rental={rowToRental(apartmentRow(overrides))}
       onSelect={vi.fn()}
       onSchedule={hasHandler ? props.onSchedule : vi.fn()}
+      duplicateNote={props.duplicateNote}
       selected={props.selected}
     />,
   );
@@ -75,6 +76,54 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("treats inherited object keys as ordinary amenity text, not object properties", () => {
     const html = renderCard({ amenities: ["constructor"] });
     expect(html).toContain("Constructor");
+  });
+
+  it("renders inline 96px photo, honest price and existing viewing action", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).toContain("w-24");
+    expect(html).toContain("USD");
+    expect(html).toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
+  });
+
+  it("inline card shows the stored $78/night price, never a derived monthly estimate", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$78/night");
+    expect(html).not.toContain("~$2,340/mo");
+  });
+
+  it("inline card with a stored monthly price shows only that price, never a derived nightly", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~$");
+  });
+
+  it("inline card with only a stored monthly price shows that price", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_daily: null, price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
   });
 
   it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
@@ -98,6 +147,10 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("fails closed when the row projection omits the computed column", () => {
     const html = renderCard({ rental_can_request_viewing: null });
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("labels a duplicate row instead of hiding it", () => {
+    expect(renderCard({}, { duplicateNote: "Also listed as #1" })).toContain("Also listed as #1");
   });
 
   it("still renders the listing itself when the CTA is withheld", () => {
@@ -444,6 +497,25 @@ describe("SAN-1416: Details action on the card", () => {
  * USD 1,550 rent as "$52/night". A listing that has only a nightly price still shows it.
  */
 describe("RentalBrowseCard — price label", () => {
+  it("identifies USD beside the monthly price so mixed-currency cards are unmistakable", () => {
+    const usd = renderCard({ price_daily: null, price_monthly: 1900, currency: "USD" });
+    const cop = renderCard({ price_daily: null, price_monthly: 2_400_000, currency: "COP" });
+    expect(usd).toContain("$1,900/mo");
+    expect(usd).toContain('data-testid="rental-card-currency"');
+    expect(usd).toContain(">USD</span>");
+    expect(cop).toContain("COP 2,400,000/mo");
+    expect(cop).not.toContain('data-testid="rental-card-currency"');
+  });
+
+  it("labels the primary nightly price for a USD-only listing, and leaves COP nightly alone", () => {
+    const usd = renderCard({ price_daily: 78, price_monthly: null, currency: "USD" });
+    const cop = renderCard({ price_daily: 80_000, price_monthly: null, currency: "COP" });
+    expect(usd).toContain("$78/night");
+    expect(usd).toContain('data-testid="rental-card-nightly-currency"');
+    expect(cop).toContain("COP 80,000/night");
+    expect(cop).not.toContain('data-testid="rental-card-nightly-currency"');
+  });
+
   it("shows the monthly rent and no derived nightly price for a COP monthly listing", () => {
     const html = renderCard({ price_daily: null, price_monthly: 14_500_000, currency: "COP" });
 

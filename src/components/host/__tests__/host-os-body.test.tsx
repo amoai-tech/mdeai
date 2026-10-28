@@ -115,6 +115,12 @@ describe("HostOsBody", () => {
     expect(container.querySelector('[data-testid="routed-page"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="host-os-chat-region"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="copilot-chat-mock"]')).not.toBeNull();
+    // The placeholder is visible only at md+ and must not steal the
+    // limited 60vh chat height on a 390px phone.
+    const placeholder = container.querySelector('[data-testid="host-inbox-placeholder"]');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.parentElement?.classList.contains("hidden")).toBe(true);
+    expect(placeholder?.parentElement?.classList.contains("md:block")).toBe(true);
   });
 
   it("keeps the page body rendered even when the Copilot rail crashes", () => {

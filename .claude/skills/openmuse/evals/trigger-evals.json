@@ -34,5 +34,23 @@
     "prompt": "Redesign the event ticket checkout screen without changing the AI chat experience.",
     "should_trigger": false,
     "expected_owner": "frontend-design"
+  },
+  {
+    "id": "openmuse-7",
+    "prompt": "Show true real-time tool progress in MDE Concierge, never fake ranking completion from a clock.",
+    "should_trigger": true,
+    "expected_owner": "openmuse"
+  },
+  {
+    "id": "openmuse-8",
+    "prompt": "A second event search disappears during a restaurant search; adapt OpenMuse queue behavior.",
+    "should_trigger": true,
+    "expected_owner": "openmuse"
+  },
+  {
+    "id": "openmuse-9",
+    "prompt": "The Supabase partner_profile_patch RPC allows cross-tenant writes; fix RLS.",
+    "should_trigger": false,
+    "expected_owner": "supabase"
   }
 ]

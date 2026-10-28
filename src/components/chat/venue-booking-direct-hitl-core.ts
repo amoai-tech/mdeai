@@ -25,6 +25,7 @@ export async function submitDirectVenueBooking(
     const result = await submit({
       venueKind: args.venueKind,
       placeId: args.placeId,
+      restaurantId: args.restaurantId,
       requestedAt: args.requestedAt,
       partySize: args.partySize,
       contactName: args.contactName,
@@ -38,7 +39,7 @@ export async function submitDirectVenueBooking(
       confirmation: {
         requestId: result.requestId,
         message: result.message,
-        venueTitle: args.venueTitle?.trim() || args.placeId,
+        venueTitle: args.venueTitle?.trim() || args.placeId || args.restaurantId || "Restaurant",
       },
     };
   } catch (error) {

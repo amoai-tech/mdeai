@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import Link from "next/link";
 import { ArrowUpRight, Trophy, UtensilsCrossed } from "lucide-react";
-import { BrowseLayout } from "@/components/browse/BrowseLayout";
+import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RestaurantCard } from "@/components/copilot/restaurant-card";
 import { RestaurantBrowseFilters } from "@/components/restaurants/restaurant-browse-filters";
+import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/restaurants/restaurant-details-panel";
+import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { useMapContext } from "@/platform/maps/map-context";
@@ -45,15 +50,28 @@ function RestaurantBrowseViewInner({
   isSample = false,
 }: RestaurantBrowseViewProps) {
   const { selectedPinId, setSelectedPinId } = useMapContext();
+  const desktop = useIsLgUp();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
+  const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
+  const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
+  const shownResults = searched?.scope === retryHref ? searched.rows : results;
+  const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
+  const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
+  const closeDetails = useCallback(() => setSelectedPinId(null), [setSelectedPinId]);
+  const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
+    if (result.page === "restaurants") {
+      setSelectedForAskId(null);
+      setSearched({ scope: retryHref, rows: result.rows });
+    }
+  }, [retryHref]);
 
   const pins = useMemo(
     () =>
-      results.flatMap((r) => {
+      shownResults.flatMap((r) => {
         const pin = restaurantToMapPin(r);
         return pin ? [pin] : [];
       }),
-    [results],
+    [shownResults],
   );
 
   useBrowseMapSync(pins, "restaurant");
@@ -61,34 +79,33 @@ function RestaurantBrowseViewInner({
 
   return (
     <>
-      <BrowseLayout
+      <DiscoveryPageContext
+        page="restaurants"
+        filters={{ neighborhood, cuisine }}
+        selectedId={selectedForAsk ?? selectedRestaurant?.id ?? null}
+      />
+      <DiscoveryWorkspace
+        activeSlug="restaurants"
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />}
+        rightPanel={<BrowseMapPanel fill overlay={selectedRestaurant && desktop ? <RestaurantDetailsPanel restaurant={selectedRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"
         subtitle={
           isSample
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
-            : "Food & dining in Medellín — browse without chat"
+            : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
         }
-        filterBar={
-          <RestaurantBrowseFilters
-            neighborhood={neighborhood}
-            cuisine={cuisine}
-          />
-        }
-        mapSlot={<BrowseMapPanel />}
+        mobileMapTrigger={<BrowseMapSheet inline />}
+        filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
       >
-        <aside className="mt-5 flex flex-col gap-4 rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6" data-testid="restaurant-contests-entry">
-          <div className="flex items-start gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-background/80" aria-hidden="true">
-              <Trophy className="size-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="font-serif text-xl font-semibold tracking-tight">Medellín restaurant contests</h2>
-              <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">Explore the restaurants taking part and discover their voting options.</p>
-            </div>
+        <aside className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3" data-testid="restaurant-contests-entry">
+          <Trophy className="size-5 shrink-0 text-primary" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">Medellín restaurant contests</h2>
+            <p className="hidden text-xs text-muted-foreground sm:block">Explore participating restaurants and their voting options.</p>
           </div>
-          <Link className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
-            Explore restaurant contests <ArrowUpRight className="size-4" aria-hidden="true" />
+          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
+            Explore restaurant contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Link>
         </aside>
         <section className="mt-6" aria-label="Restaurant listings">
@@ -110,7 +127,7 @@ function RestaurantBrowseViewInner({
             </div>
           ) : null}
 
-          {!error && results.length === 0 ? (
+          {!error && shownResults.length === 0 ? (
             <EmptyState
               testId="restaurants-empty"
               title="No restaurants matched"
@@ -119,13 +136,13 @@ function RestaurantBrowseViewInner({
             />
           ) : null}
 
-          {!error && results.length > 0 ? (
+          {!error && shownResults.length > 0 ? (
             <div
-              className="grid auto-rows-fr gap-4 sm:grid-cols-2"
-              aria-label={`${results.length} restaurants`}
+              className="flex flex-col gap-3"
+              aria-label={`${shownResults.length} restaurants`}
               data-testid="restaurants-grid"
             >
-              {results.map((r) => {
+              {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
                 return (
                   <div key={r.id} className="flex flex-col gap-2">
@@ -144,8 +161,13 @@ function RestaurantBrowseViewInner({
                     onSelect={() => setSelectedPinId(pinId)}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
-                    mediaLayout="cover"
+                    mediaLayout="inline"
                   />
+                  <button type="button" data-testid="restaurant-ask-select" aria-pressed={selectedForAsk === r.id}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium"
+                    onClick={() => { setSelectedPinId(null); setSelectedForAskId((current) => current === r.id ? null : r.id); }}>
+                    {selectedForAsk === r.id ? "Clear selection" : "Ask about this"}
+                  </button>
                   <Link
                     className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     data-testid={`restaurant-detail-link-${r.id}`}
@@ -159,9 +181,9 @@ function RestaurantBrowseViewInner({
             </div>
           ) : null}
         </section>
-      </BrowseLayout>
+      </DiscoveryWorkspace>
 
-      <BrowseMapSheet />
+      {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
     </>
   );
 }

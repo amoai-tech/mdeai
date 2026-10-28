@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeToolJson, normalizeToolEnvelope } from "./normalize-tool-envelope";
+import { decodeToolJson, isFinishedToolPayload, normalizeToolEnvelope } from "./normalize-tool-envelope";
 
 describe("normalizeToolEnvelope", () => {
   it("passes through object results", () => {
@@ -63,5 +63,19 @@ describe("normalizeToolEnvelope", () => {
     };
     const out = normalizeToolEnvelope({ result: JSON.stringify(envelope) });
     expect(out.results).toHaveLength(1);
+  });
+});
+
+describe("isFinishedToolPayload (map safety)", () => {
+  it.each([
+    { anything: "here" }, { total: 0 }, { results: null },
+    { citations: [] }, { metadata: { processing: true } },
+  ])("ignores a payload with no actual results array: %j", (payload) => {
+    expect(isFinishedToolPayload(payload)).toBe(false);
+  });
+
+  it("accepts a real empty result to clear stale pins", () => {
+    expect(isFinishedToolPayload({ results: [] })).toBe(true);
+    expect(isFinishedToolPayload([{ type: "tool-result", result: '{"results":[]}' }])).toBe(true);
   });
 });

@@ -1,10 +1,10 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
+import { isDeterministicE2E } from '@/lib/deterministic-e2e';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRestaurantsIntelligent } from '../lib/intelligence-restaurant-search';
 import { writeSearchLog, type RankExplanationEntry } from '../lib/search-logs';
 
 const cuisineEnum = z.enum([
@@ -20,15 +20,27 @@ const cuisineEnum = z.enum([
   'street-food',
 ]);
 
+export type PriceTier = '$' | '$$' | '$$$' | '$$$$';
+
 export const restaurantSchema = z.object({
   id: z.string(),
   name: z.string(),
   cuisine: cuisineEnum,
   neighborhood: z.string(),
-  priceTier: z.enum(['$', '$$', '$$$', '$$$$']),
-  avgPricePerPerson: z.number().describe('USD'),
-  currency: z.literal('USD'),
-  rating: z.number().min(0).max(5),
+  /**
+   * Qualitative tier derived from the real `price_level` column. Absent (never
+   * defaulted) when the catalog row has no price_level.
+   */
+  priceTier: z.enum(['$', '$$', '$$$', '$$$$']).optional(),
+  /**
+   * Only set when a provider actually supplies a per-person amount.
+   * `public.restaurants` has no such column, so it stays absent for catalog
+   * rows instead of being estimated from the price tier (SAN-1468).
+   */
+  avgPricePerPerson: z.number().optional().describe('USD — only when a real amount exists'),
+  currency: z.literal('USD').optional(),
+  /** Real provider rating. Absent when unknown — never coerced to 0 (SAN-1468). */
+  rating: z.number().min(0).max(5).optional(),
   vibe: z.array(z.string()),
   imageUrl: z.string(),
   sourceUrl: z.string(),
@@ -43,8 +55,12 @@ export const restaurantSchema = z.object({
 export type Restaurant = z.infer<typeof restaurantSchema>;
 export type Cuisine = z.infer<typeof cuisineEnum>;
 
-/** Curated fallback when Supabase returns no rows or is unavailable (offline / empty DB). */
-const FALLBACK_RESTAURANTS: Restaurant[] = [
+/**
+ * Browser-CI fixture. `isDeterministicE2E()` gates this to non-production runs so
+ * Playwright never needs a live Supabase project — it is NEVER returned to a real
+ * user (SAN-1468: a database outage must not become believable fake businesses).
+ */
+const DETERMINISTIC_E2E_RESTAURANTS: Restaurant[] = [
   {
     id: 'rst_lau_001',
     name: 'Hatoviejo Laureles',
@@ -126,17 +142,22 @@ const FALLBACK_RESTAURANTS: Restaurant[] = [
 export type RestaurantQuery = {
   cuisine?: Cuisine;
   neighborhood?: string;
-  maxPricePerPerson?: number;
   minRating?: number;
   limit?: number;
-  priceTier?: '$' | '$$' | '$$$' | '$$$$';
+  priceTier?: PriceTier;
   userLatitude?: number;
   userLongitude?: number;
   /** Natural-language query — enables hybrid + venue_signals (SEARCH-003). */
   queryText?: string;
 };
 
-export type RestaurantSource = 'supabase' | 'fallback';
+/**
+ * `unavailable` means the catalog could not be read (no client, connection or
+ * query error). It is deliberately distinct from an honest empty result, which
+ * still reports `supabase` with zero rows. `fallback` is the deterministic
+ * browser-CI fixture only.
+ */
+export type RestaurantSource = 'supabase' | 'fallback' | 'unavailable';
 
 export interface RestaurantRow {
   id: string;
@@ -187,15 +208,17 @@ export function mapCuisineFromTypes(types: string[] | null): Cuisine {
   return 'international';
 }
 
-export function priceLevelToTier(priceLevel: number): '$' | '$$' | '$$$' | '$$$$' {
-  const n = Math.min(4, Math.max(1, priceLevel));
+/**
+ * Map a real `price_level` (1–4) to a qualitative tier.
+ * Returns undefined for null/non-finite input — the catalog value is unknown, so
+ * no tier is invented (SAN-1468).
+ */
+export function priceLevelToTier(priceLevel: number | null | undefined): PriceTier | undefined {
+  if (priceLevel == null) return undefined;
+  const numeric = typeof priceLevel === 'number' ? priceLevel : Number(priceLevel);
+  if (!Number.isFinite(numeric)) return undefined;
+  const n = Math.min(4, Math.max(1, Math.round(numeric)));
   return (['$', '$$', '$$$', '$$$$'] as const)[n - 1];
-}
-
-/** Rough USD anchor from price_level when DB has no per-person price. */
-export function estimateAvgPriceFromLevel(priceLevel: number): number {
-  const table: Record<number, number> = { 1: 12, 2: 22, 3: 42, 4: 68 };
-  return table[Math.min(4, Math.max(1, priceLevel))] ?? 25;
 }
 
 function num(v: number | string | null | undefined): number | undefined {
@@ -204,9 +227,23 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** Use canonical DB names; SAN-1539 reconciles the two former El Cielo identities.
+ * The historical hardcoded location labels no longer match source-backed data.
+ */
+export function restaurantSearchDisplayName(name: string, id: string): string {
+  void id; // Keep the existing search contract without stale hardcoded labels.
+  return name;
+}
+
+function withRestaurantDisplayNames(rows: Restaurant[]): Restaurant[] {
+  return rows.map((row) => ({
+    ...row,
+    name: restaurantSearchDisplayName(row.name, row.id),
+  }));
+}
+
 export function rowToRestaurant(row: RestaurantRow): Restaurant {
-  const pl = typeof row.price_level === 'number' ? row.price_level : Number(row.price_level) || 2;
-  const rating = num(row.rating) ?? 0;
+  const rating = num(row.rating);
   const lat = num(row.latitude);
   const lng = num(row.longitude);
   return {
@@ -214,9 +251,9 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     name: row.name,
     cuisine: mapCuisineFromTypes(row.cuisine_types),
     neighborhood: row.neighborhood ?? extractNeighborhood(row.address, row.city),
-    priceTier: priceLevelToTier(pl),
-    avgPricePerPerson: estimateAvgPriceFromLevel(pl),
-    currency: 'USD',
+    priceTier: priceLevelToTier(num(row.price_level)),
+    // avgPricePerPerson / currency are intentionally absent: public.restaurants
+    // stores no per-person amount, so any number here would be invented.
     rating,
     vibe: row.tags?.length ? row.tags : row.cuisine_types ?? [],
     imageUrl: row.primary_image_url ?? '',
@@ -258,13 +295,11 @@ function applyRestaurantFilters(rows: Restaurant[], query: RestaurantQuery): Res
   if (query.priceTier) {
     results = results.filter((r) => r.priceTier === query.priceTier);
   }
-  if (typeof query.maxPricePerPerson === 'number') {
-    const maxPrice = query.maxPricePerPerson;
-    results = results.filter((r) => r.avgPricePerPerson <= maxPrice);
-  }
   if (typeof query.minRating === 'number') {
     const minRating = query.minRating;
-    results = results.filter((r) => r.rating >= minRating);
+    // An unknown rating cannot prove it meets the bar, so it is excluded rather
+    // than treated as 0 or as a match.
+    results = results.filter((r) => r.rating != null && r.rating >= minRating);
   }
   if (
     typeof query.userLatitude === 'number' &&
@@ -299,77 +334,24 @@ export type RestaurantSearchResult = {
   rankExplanation?: RankExplanationEntry[];
 };
 
-export async function searchRestaurants(
+/**
+ * Read the real catalog with structured filters. This is the only path that
+ * produces user-visible restaurants; it never substitutes invented rows.
+ *
+ * The `is_active` predicate is deliberately absent: the catalog RLS policy
+ * (`20261016110000_restaurant_development_business_gates.sql`) owns phase-aware
+ * visibility as `is_active = true OR phase = 'development'`, so a second filter
+ * here only hid development records from legitimate readers (SAN-1468 1.5).
+ */
+async function searchRestaurantsStructured(
   query: RestaurantQuery,
 ): Promise<RestaurantSearchResult> {
   const limit = query.limit ?? 5;
-
-  if (query.queryText?.trim()) {
-    const started = Date.now();
-    let intel: Awaited<ReturnType<typeof searchRestaurantsIntelligent>> | null = null;
-    try {
-      intel = await searchRestaurantsIntelligent(query);
-    } catch (err) {
-      console.warn('[search-restaurants] intelligent search failed:', err instanceof Error ? err.message : err);
-    }
-    const latencyMs = Date.now() - started;
-
-    // Apply filters after intelligent search; fall back to curated list on empty/error.
-    const intelFiltered = intel?.results?.length
-      ? applyRestaurantFilters(intel.results, query)
-      : [];
-
-    if (intelFiltered.length === 0) {
-      console.warn('[search-restaurants] intelligent path empty — using curated fallback');
-      const fallback = applyRestaurantFilters(FALLBACK_RESTAURANTS, query);
-      await writeSearchLog({
-        queryText: query.queryText,
-        slots: intel?.slots,
-        toolName: 'search-restaurants',
-        resultsCount: fallback.length,
-        latencyMs,
-        hybridUsed: false,
-        groundingUsed: false,
-      });
-      return { results: fallback.slice(0, limit), total: fallback.length, source: 'fallback' };
-    }
-
-    // Log final count (after filters) — not pre-filter count.
-    await writeSearchLog({
-      queryText: query.queryText,
-      slots: intel?.slots,
-      toolName: 'search-restaurants',
-      resultsCount: intelFiltered.length,
-      latencyMs,
-      hybridUsed: intel?.hybridUsed,
-      groundingUsed: false,
-      rankExplanation: intel?.rankExplanation,
-    });
-    return {
-      results: intelFiltered.slice(0, limit),
-      total: intelFiltered.length,
-      source: intel?.source ?? 'fallback',
-      hybridUsed: intel?.hybridUsed,
-      rankExplanation: intel?.rankExplanation,
-    };
-  }
-
   const client = getSupabaseClient();
 
-  const returnFallback = (
-    reason: 'no_client' | 'error' | 'empty_db',
-  ): RestaurantSearchResult => {
-    if (reason !== 'no_client') {
-      console.warn(`[search-restaurants] ${reason} — using fallback list`);
-    } else {
-      console.warn('[search-restaurants] Supabase client unavailable — using fallback list');
-    }
-    const filtered = applyRestaurantFilters(FALLBACK_RESTAURANTS, query);
-    return { results: filtered.slice(0, limit), total: filtered.length, source: 'fallback' as const };
-  };
-
   if (!client) {
-    return returnFallback('no_client');
+    console.warn('[search-restaurants] Supabase client unavailable');
+    return { results: [], total: 0, source: 'unavailable' };
   }
 
   let q = client
@@ -377,11 +359,8 @@ export async function searchRestaurants(
     .select(
       'id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary',
     )
-    // Explicit: in the development phase the read policy also returns inactive rows,
-    // so `is_active=false` (SAN-1556: Test Lab Kitchen) only hides a record if we ask for it.
-    .eq('is_active', true)
     .order('rating', { ascending: false, nullsFirst: false })
-    .limit(48);
+    .limit(100);
 
   if (query.neighborhood) {
     // Strip PostgREST-special chars (commas, parens, dots) before filter string interpolation.
@@ -399,31 +378,101 @@ export async function searchRestaurants(
 
   if (error) {
     console.error('[search-restaurants] Supabase error:', error.message);
-    return returnFallback('error');
+    return { results: [], total: 0, source: 'unavailable' };
   }
 
   const raw = (data ?? []) as RestaurantRow[];
-  if (raw.length === 0) {
-    return returnFallback('empty_db');
+  // Zero rows is an honest empty result from a reachable catalog, not an outage.
+  const mapped = applyRestaurantFilters(raw.map(rowToRestaurant), query);
+  return {
+    results: withRestaurantDisplayNames(mapped.slice(0, limit)),
+    total: mapped.length,
+    source: 'supabase',
+  };
+}
+
+export async function searchRestaurants(
+  query: RestaurantQuery,
+): Promise<RestaurantSearchResult> {
+  const limit = query.limit ?? 5;
+
+  // Deterministic browser-CI mode is checked FIRST and applies to every search
+  // shape, including natural-language queries. It returns one stable fixture and
+  // never reads the catalog, so no CI path depends on network timing or data.
+  // isDeterministicE2E() is false in production, so a real visitor never sees it.
+  if (isDeterministicE2E()) {
+    const filtered = applyRestaurantFilters(DETERMINISTIC_E2E_RESTAURANTS, query);
+    return {
+      results: withRestaurantDisplayNames(filtered.slice(0, limit)),
+      total: filtered.length,
+      source: 'fallback',
+    };
   }
 
-  let mapped = raw.map(rowToRestaurant);
-  mapped = applyRestaurantFilters(mapped, query);
-  return {
-    results: mapped.slice(0, limit),
-    total: mapped.length,
-    source: 'supabase' as const,
-  };
+  if (query.queryText?.trim()) {
+    const started = Date.now();
+    let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
+    try {
+      // Load after this tool initializes: intelligence search reuses its mapping helpers.
+      const { searchRestaurantsIntelligent } = await import('../lib/intelligence-restaurant-search');
+      intel = await searchRestaurantsIntelligent(query);
+    } catch (err) {
+      console.warn('[search-restaurants] intelligent search failed:', err instanceof Error ? err.message : err);
+    }
+    const latencyMs = Date.now() - started;
+
+    // Apply filters after intelligent search.
+    const intelFiltered = intel?.results?.length
+      ? applyRestaurantFilters(intel.results, query)
+      : [];
+
+    if (intelFiltered.length === 0) {
+      // When intelligent search cannot answer, ask the same real, structured
+      // catalog instead. Curated inventions are never a substitute (SAN-1468 1.3).
+      console.warn('[search-restaurants] intelligent path empty — using structured catalog search');
+      const structured = await searchRestaurantsStructured(query);
+      await writeSearchLog({
+        queryText: query.queryText,
+        slots: intel?.slots,
+        toolName: 'search-restaurants',
+        resultsCount: structured.total,
+        latencyMs,
+        hybridUsed: false,
+        groundingUsed: false,
+      });
+      return structured;
+    }
+
+    // Log final count (after filters) — not pre-filter count.
+    await writeSearchLog({
+      queryText: query.queryText,
+      slots: intel?.slots,
+      toolName: 'search-restaurants',
+      resultsCount: intelFiltered.length,
+      latencyMs,
+      hybridUsed: intel?.hybridUsed,
+      groundingUsed: false,
+      rankExplanation: intel?.rankExplanation,
+    });
+    return {
+      results: withRestaurantDisplayNames(intelFiltered.slice(0, limit)),
+      total: intelFiltered.length,
+      source: intel?.source ?? 'supabase',
+      hybridUsed: intel?.hybridUsed,
+      rankExplanation: intel?.rankExplanation,
+    };
+  }
+
+  return searchRestaurantsStructured(query);
 }
 
 export const searchRestaurantsTool = createTool({
   id: 'search-restaurants',
   description:
-    'Search Medellín restaurants from Supabase (public.restaurants). Falls back to a short curated list only when the DB returns no rows or Supabase is unavailable.',
+    'Search Medellín restaurants from Supabase (public.restaurants). Returns real catalog rows only; an unreadable catalog reports source "unavailable" instead of inventing businesses.',
   inputSchema: z.object({
     cuisine: cuisineEnum.optional(),
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado, Centro'),
-    maxPricePerPerson: z.number().positive().optional().describe('USD'),
     minRating: z.number().min(0).max(5).optional(),
     limit: z.number().int().min(1).max(20).default(5),
     queryText: z
@@ -447,7 +496,7 @@ export const searchRestaurantsTool = createTool({
       }),
     ),
     total: z.number(),
-    source: z.enum(['supabase', 'fallback']),
+    source: z.enum(['supabase', 'fallback', 'unavailable']),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(
@@ -461,15 +510,13 @@ export const searchRestaurantsTool = createTool({
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RestaurantQuery, context?: any) => {
-    const { cuisine, neighborhood, maxPricePerPerson, minRating, limit = 5, queryText } =
-      inputData;
+    const { cuisine, neighborhood, minRating, limit = 5, queryText } = inputData;
     const { results, total, source, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-restaurants',
       searchRestaurants,
       {
         cuisine,
         neighborhood,
-        maxPricePerPerson,
         minRating,
         limit,
         queryText,

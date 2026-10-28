@@ -1,0 +1,350 @@
+[
+  {
+    "name": "events",
+    "width": 390,
+    "route": "/events",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events",
+    "title": "Events in Medellín · mdeai",
+    "h1": [
+      "Events in Medellín"
+    ],
+    "body": "Skip to main content Events in Medellín Real published events — 2 upcoming events Date Tonight This weekend This week Next week Any date Category Music Food Culture Sport Nightlife Neighborhood Laureles El Poblado Envigado Provenza Price Free Paid Avenida El Poblado Feria de las Flores Preview Parade Culture See tickets Avenida El Poblado, Medellín · Sun, Dec 6, 9:00 AM Details Event Hotel Intercontinental Reina de Antioquia 2026 F",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 1374
+    }
+  },
+  {
+    "name": "reina",
+    "width": 390,
+    "route": "/events/reina-de-antioquia-2026-finals",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/reina-de-antioquia-2026-finals",
+    "title": "Reina de Antioquia 2026 Finals · mdeai",
+    "h1": [
+      "Reina de Antioquia 2026 Finals",
+      "Reina de Antioquia 2026 Finals"
+    ],
+    "body": "Skip to main content Back to chat mdeai Share Event photo Reina de Antioquia 2026 Finals Tue, Feb 23, 8:00 PM – 2/24/2027, 12:30:00 AM Hotel Intercontinental, Calle 16 #28-51, El Poblado, Medellín · Medellín Hosted by Ana Martinez About Final stage of Miss Elegance Colombia 2026 — Certamen Nacional de Elegancia, Liderazgo y Autenticidad. Live broadcast from Hotel Intercontinental. From $40,000 COP Tickets GA $40,000 COP 1 Buy GA VIP ",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 1512
+    }
+  },
+  {
+    "name": "feria",
+    "width": 390,
+    "route": "/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "title": "Feria de las Flores Preview Parade · mdeai",
+    "h1": [
+      "Feria de las Flores Preview Parade",
+      "Feria de las Flores Preview Parade"
+    ],
+    "body": "Skip to main content Back to chat mdeai Share Feria de las Flores Preview Parade Sun, Dec 6, 9:00 AM – 1:00 PM Avenida El Poblado, Medellín · Medellín About Medellín's iconic Flower Festival — silleteros carry massive floral arrangements through the city. Sold out Tickets Ticket tiers coming soon. Check back or ask the concierge in chat.",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "fake-payment",
+    "width": 390,
+    "route": "/events/reina-de-antioquia-2026-finals?checkout=success",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/reina-de-antioquia-2026-finals?checkout=success",
+    "title": "Reina de Antioquia 2026 Finals · mdeai",
+    "h1": [
+      "Reina de Antioquia 2026 Finals",
+      "Reina de Antioquia 2026 Finals"
+    ],
+    "body": "Skip to main content Payment received — check your email for tickets. Your order is processing. Your QR code will be ready shortly. My tickets → Back to chat mdeai Share Event photo Reina de Antioquia 2026 Finals Tue, Feb 23, 8:00 PM – 2/24/2027, 12:30:00 AM Hotel Intercontinental, Calle 16 #28-51, El Poblado, Medellín · Medellín Hosted by Ana Martinez About Final stage of Miss Elegance Colombia 2026 — Certamen Nacional de Elegancia, Lid",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 1662
+    }
+  },
+  {
+    "name": "chat",
+    "width": 390,
+    "route": "/chat",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/chat",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [
+      "mdeai",
+      "Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: \"1BR in Laureles under $80/night\" or \"salsa events this weekend\"."
+    ],
+    "body": "Skip to main content mdeai Sign in · Sign up Medellín · tap filters to scope your next message Laureles Poblado 2 BR Under $80/night Events Food & cafés Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: \"1BR in Laureles under $80/night\" or \"salsa events this weekend\". AI can make mistakes. Please verify important information. Open map",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-signup",
+    "width": 390,
+    "route": "/partners/signup?type=host",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/partners/signup?type=host",
+    "title": "Partner signup · mdeai",
+    "h1": [],
+    "body": "Skip to main content mde·ai All partner types Sign in Explore Medellín Event host Sign in to continue Create your event host partner profile after you sign in. We'll bring you back here. Sign in No account? Create one Need a different program? Choose another partner type",
+    "layout": {
+      "scrollWidth": 470,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-overview",
+    "width": 390,
+    "route": "/app/events/overview",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fevents%2Foverview",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-new",
+    "width": 390,
+    "route": "/app/events/new",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fevents%2Fnew",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "wallet",
+    "width": 390,
+    "route": "/app/me/tickets",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fme%2Ftickets",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "events",
+    "width": 768,
+    "route": "/events",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events",
+    "title": "Events in Medellín · mdeai",
+    "h1": [
+      "Events in Medellín"
+    ],
+    "body": "Skip to main content Events in Medellín Real published events — 2 upcoming events Ask concierge Date Tonight This weekend This week Next week Any date Category Music Food Culture Sport Nightlife Neighborhood Laureles El Poblado Envigado Provenza Price Free Paid Avenida El Poblado Feria de las Flores Preview Parade Culture See tickets Avenida El Poblado, Medellín · Sun, Dec 6, 9:00 AM Details Event Hotel Intercontinental Reina de A",
+    "layout": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "scrollHeight": 880
+    }
+  },
+  {
+    "name": "reina",
+    "width": 768,
+    "route": "/events/reina-de-antioquia-2026-finals",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/reina-de-antioquia-2026-finals",
+    "title": "Reina de Antioquia 2026 Finals · mdeai",
+    "h1": [
+      "Reina de Antioquia 2026 Finals",
+      "Reina de Antioquia 2026 Finals"
+    ],
+    "body": "Skip to main content Back to chat mdeai Share Event photo Hosted by Ana Martinez About Final stage of Miss Elegance Colombia 2026 — Certamen Nacional de Elegancia, Liderazgo y Autenticidad. Live broadcast from Hotel Intercontinental. Reina de Antioquia 2026 Finals Tue, Feb 23, 8:00 PM – 2/24/2027, 12:30:00 AM Hotel Intercontinental, Calle 16 #28-51, El Poblado, Medellín · Medellín From $40,000 COP Tickets GA $40,000 COP 1 Buy GA VIP ",
+    "layout": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "scrollHeight": 885
+    }
+  },
+  {
+    "name": "host-overview",
+    "width": 768,
+    "route": "/app/events/overview",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fevents%2Foverview",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "events",
+    "width": 1440,
+    "route": "/events",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events",
+    "title": "Events in Medellín · mdeai",
+    "h1": [
+      "Events in Medellín"
+    ],
+    "body": "Skip to main content Events in Medellín Real published events — 2 upcoming events Ask concierge Date Tonight This weekend This week Next week Any date Category Music Food Culture Sport Nightlife Neighborhood Laureles El Poblado Envigado Provenza Price Free Paid Avenida El Poblado Feria de las Flores Preview Parade Culture See tickets Avenida El Poblado, Medellín · Sun, Dec 6, 9:00 AM Details Event Hotel Intercontinental Reina de A",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 883
+    }
+  },
+  {
+    "name": "reina",
+    "width": 1440,
+    "route": "/events/reina-de-antioquia-2026-finals",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/reina-de-antioquia-2026-finals",
+    "title": "Reina de Antioquia 2026 Finals · mdeai",
+    "h1": [
+      "Reina de Antioquia 2026 Finals",
+      "Reina de Antioquia 2026 Finals"
+    ],
+    "body": "Skip to main content Back to chat mdeai Share Event photo Hosted by Ana Martinez About Final stage of Miss Elegance Colombia 2026 — Certamen Nacional de Elegancia, Liderazgo y Autenticidad. Live broadcast from Hotel Intercontinental. Reina de Antioquia 2026 Finals Tue, Feb 23, 8:00 PM – 2/24/2027, 12:30:00 AM Hotel Intercontinental, Calle 16 #28-51, El Poblado, Medellín · Medellín From $40,000 COP Tickets GA $40,000 COP 1 Buy GA VIP ",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 953
+    }
+  },
+  {
+    "name": "feria",
+    "width": 1440,
+    "route": "/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "title": "Feria de las Flores Preview Parade · mdeai",
+    "h1": [
+      "Feria de las Flores Preview Parade",
+      "Feria de las Flores Preview Parade"
+    ],
+    "body": "Skip to main content Back to chat mdeai Share About Medellín's iconic Flower Festival — silleteros carry massive floral arrangements through the city. Feria de las Flores Preview Parade Sun, Dec 6, 9:00 AM – 1:00 PM Avenida El Poblado, Medellín · Medellín Sold out Tickets Ticket tiers coming soon. Check back or ask the concierge in chat.",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "fake-payment",
+    "width": 1440,
+    "route": "/events/reina-de-antioquia-2026-finals?checkout=success",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/events/reina-de-antioquia-2026-finals?checkout=success",
+    "title": "Reina de Antioquia 2026 Finals · mdeai",
+    "h1": [
+      "Reina de Antioquia 2026 Finals",
+      "Reina de Antioquia 2026 Finals"
+    ],
+    "body": "Skip to main content Payment received — check your email for tickets. Your order is processing. Your QR code will be ready shortly. My tickets → Back to chat mdeai Share Event photo Hosted by Ana Martinez About Final stage of Miss Elegance Colombia 2026 — Certamen Nacional de Elegancia, Liderazgo y Autenticidad. Live broadcast from Hotel Intercontinental. Reina de Antioquia 2026 Finals Tue, Feb 23, 8:00 PM – 2/24/2027, 12:30:00 AM Hotel ",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 1063
+    }
+  },
+  {
+    "name": "chat",
+    "width": 1440,
+    "route": "/chat",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/chat",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [
+      "mdeai",
+      "Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: \"1BR in Laureles under $80/night\" or \"salsa events this weekend\"."
+    ],
+    "body": "Skip to main content mdeai Concierge — rentals, events, food, map Sign in · Sign up New chat No chats yet EXPLORE Restaurants Cafés Nightlife Rentals Events LIBRARY Saved Tickets Trips Profile Ask for rentals, events, cafés, or map pins in Laureles and Poblado. Skip to chat Skip to map Medellín · tap filters to scope your next message Laureles Poblado 2 BR Under $80/night Events Food & cafés Hi — I can help with rentals, events, restaurants",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-signup",
+    "width": 1440,
+    "route": "/partners/signup?type=host",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/partners/signup?type=host",
+    "title": "Partner signup · mdeai",
+    "h1": [],
+    "body": "Skip to main content mde·ai All partner types Event host signup Sign in Explore Medellín Event host Sign in to continue Create your event host partner profile after you sign in. We'll bring you back here. Sign in No account? Create one Need a different program? Choose another partner type",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-overview",
+    "width": 1440,
+    "route": "/app/events/overview",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fevents%2Foverview",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "host-new",
+    "width": 1440,
+    "route": "/app/events/new",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fevents%2Fnew",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  },
+  {
+    "name": "wallet",
+    "width": 1440,
+    "route": "/app/me/tickets",
+    "status": 200,
+    "finalUrl": "https://www.mdeai.co/login?next=%2Fapp%2Fme%2Ftickets",
+    "title": "mdeai — concierge for Medellín",
+    "h1": [],
+    "body": "Skip to main content Sign in Sign in with Google or a magic link — no password. Email Email magic link Continue with Google New to mdeai? Sign up Back to home",
+    "layout": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollHeight": 860
+    }
+  }
+]

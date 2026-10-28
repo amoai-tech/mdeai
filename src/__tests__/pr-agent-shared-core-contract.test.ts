@@ -4,17 +4,17 @@ import { parseDocument } from "yaml";
 
 const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
 const evidenceBuilder = readFileSync("scripts/pr-agent/build-evidence.mjs", "utf8");
-const sharedSha = "5517c46e706cc0d08d4a2301fa3870cb2f292971";
+const sharedSha = "75233d4cdd1e6b041b8bdb497450dee6fd513cb3";
 
 describe("IPI-1246 shared PR-Agent caller contract", () => {
   it("pins MDE to the immutable shared workflow", () => {
     expect(workflow).toContain(`amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@${sharedSha}`);
     expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(workflow).toContain("NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}");
-    expect(workflow).toContain("GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}");
+    expect(workflow).not.toContain("GOOGLE_GENERATIVE_AI_API_KEY");
   });
 
-  it("parses both provider secrets as children of the reusable workflow secrets mapping", () => {
+  it("parses only the NVIDIA secret under the reusable workflow secrets mapping", () => {
     const readNestedSecrets = (source: string) => {
       const parsed = parseDocument(source);
       expect(parsed.errors).toEqual([]);
@@ -26,15 +26,14 @@ describe("IPI-1246 shared PR-Agent caller contract", () => {
 
     expect(readNestedSecrets(workflow)).toEqual({
       NVIDIA_API_KEY: "${{ secrets.NVIDIA_API_KEY }}",
-      GOOGLE_GENERATIVE_AI_API_KEY: "${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}",
     });
 
-    // The bot suggested this incorrect indentation. Prove the test would reject it.
+    // Reject incorrectly indented NVIDIA secret mapping; Gemini must remain absent.
     const wrongIndent = workflow.replace(
-      /^      GOOGLE_GENERATIVE_AI_API_KEY:/m,
-      "    GOOGLE_GENERATIVE_AI_API_KEY:",
+      /^      NVIDIA_API_KEY:/m,
+      "    NVIDIA_API_KEY:",
     );
-    expect(readNestedSecrets(wrongIndent)).not.toHaveProperty("GOOGLE_GENERATIVE_AI_API_KEY");
+    expect(readNestedSecrets(wrongIndent)).toBeNull();
   });
 
   it("keeps the caller security boundary explicit", () => {

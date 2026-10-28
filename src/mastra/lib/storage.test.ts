@@ -5,6 +5,7 @@ import {
   POSTGRES_IDLE_TIMEOUT_MS,
   POSTGRES_POOL_MAX,
   resetMastraStorageForTests,
+  resolveDatabaseUrl,
   resolveRuntimeConnectionString,
   shouldUsePostgresStorage,
 } from "./storage";
@@ -47,6 +48,35 @@ describe("createMastraStorage", () => {
     );
     const store = createMastraStorage("test-pg");
     expect(store.constructor.name).toBe("PostgresStore");
+  });
+
+  it("prefers the primary SUPABASE_DB_URL for production writes", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgresql://app-readonly@example.test/db");
+    vi.stubEnv("SUPABASE_DB_URL", "postgresql://primary@example.test/db");
+    expect(resolveDatabaseUrl()).toBe("postgresql://primary@example.test/db");
+  });
+
+  it("prefers POSTGRES_URL over SUPABASE_DB_URL in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgresql://app@example.test/db");
+    vi.stubEnv("SUPABASE_DB_URL", "postgresql://stale@example.test/db");
+    vi.stubEnv("POSTGRES_URL", "postgresql://primary@example.test/db");
+    expect(resolveDatabaseUrl()).toBe("postgresql://primary@example.test/db");
+  });
+
+  it("falls back to DATABASE_URL when SUPABASE_DB_URL is whitespace-only", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgresql://app@example.test/db");
+    vi.stubEnv("SUPABASE_DB_URL", "   ");
+    expect(resolveDatabaseUrl()).toBe("postgresql://app@example.test/db");
+  });
+
+  it("uses DATABASE_URL for development even when SUPABASE_DB_URL is present", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DATABASE_URL", "postgresql://local@example.test/db");
+    vi.stubEnv("SUPABASE_DB_URL", "postgresql://primary@example.test/db");
+    expect(resolveDatabaseUrl()).toBe("postgresql://local@example.test/db");
   });
 
   it("uses in-memory LibSQL when DATABASE_URL is absent in development", () => {

@@ -9,7 +9,7 @@ import {
   type BookingCheckoutTarget,
 } from "@/components/modals/booking-checkout-modal";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
-import { formatEventSchedule } from "@/lib/events/format-event";
+import { EVENT_TIME_ZONE, formatEventCardPrice, formatEventSchedule } from "@/lib/events/format-event";
 import type { PublicEventDetail } from "@/lib/events/types";
 import type { EventVenueDetail } from "@/components/chat/rental-ui-context";
 import type { PublicEventLoadState } from "@/hooks/use-public-event-detail";
@@ -39,6 +39,10 @@ export function EventVenueDetailBody({
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
 
   const returnPath = `/events/${publicEvent?.slug ?? detail.eventId}`;
+  // Opened from chat: let the full page offer a way back (internal event paths only).
+  const fullPageHref = detail.ticketUrl.startsWith("/events/")
+    ? `${detail.ticketUrl}${detail.ticketUrl.includes("?") ? "&" : "?"}from=chat`
+    : detail.ticketUrl;
   const scheduleLabel = publicEvent
     ? formatEventSchedule(publicEvent.startsAt, publicEvent.endsAt)
     : null;
@@ -72,7 +76,7 @@ export function EventVenueDetailBody({
           <div className="space-y-3 text-sm" data-testid="event-sheet-load-error">
             <p className="text-destructive">{loadError ?? "Could not load tickets"}</p>
             <Link
-              href={detail.ticketUrl}
+              href={fullPageHref}
               className={cn(buttonVariants({ variant: "default" }))}
               data-testid="event-sheet-fallback-page"
             >
@@ -120,6 +124,7 @@ export function EventVenueDetailBody({
                 day: "numeric",
                 hour: "numeric",
                 minute: "2-digit",
+                timeZone: EVENT_TIME_ZONE,
               }).format(new Date(detail.startsAt))}
           </dd>
         </div>
@@ -129,7 +134,11 @@ export function EventVenueDetailBody({
         </div>
         <div>
           <dt className="text-muted-foreground">From</dt>
-          <dd>${detail.pricePerTicket.toLocaleString("en-US")}</dd>
+          <dd>{detail.pricePerTicket === null
+            ? "Price TBD"
+            : detail.pricePerTicket === 0
+              ? "Free"
+              : formatEventCardPrice(detail.pricePerTicket, detail.currency)}</dd>
         </div>
       </dl>
 
@@ -163,16 +172,18 @@ export function EventVenueDetailBody({
       ) : null}
 
       <div className="flex flex-col gap-2 pt-2">
-        <Button
-          type="button"
-          data-testid="venue-detail-buy-cta"
-          onClick={() => onStepChange("checkout")}
-        >
-          <Ticket className="size-4" aria-hidden />
-          Buy tickets
-        </Button>
+        {detail.canBuyTickets === true ? (
+          <Button
+            type="button"
+            data-testid="venue-detail-buy-cta"
+            onClick={() => onStepChange("checkout")}
+          >
+            <Ticket className="size-4" aria-hidden />
+            Buy tickets
+          </Button>
+        ) : null}
         <Link
-          href={detail.ticketUrl}
+          href={fullPageHref}
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
             "inline-flex gap-1.5",

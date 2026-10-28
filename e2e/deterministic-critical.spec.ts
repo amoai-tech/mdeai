@@ -91,6 +91,21 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(1);
   });
 
+  // SAN-1421 post-merge: the Details panel must expose the exact listing id, so the card,
+  // map pin and panel can be proven to refer to the same apartment.
+  test("rental Details opens the panel for the exact listing id", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await page.getByTestId("rental-details-cta").click();
+    const panel = page.getByTestId("rental-details-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute("data-listing-id", rental.id);
+  });
+
   // SAN-1349: an unowned / non-requestable listing stays browseable but must never expose a
   // viewing action, so the UI cannot advertise something the database would reject.
   test("unowned rental renders a card without a Schedule viewing CTA", async ({

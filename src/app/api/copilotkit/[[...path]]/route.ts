@@ -15,11 +15,18 @@ import { setAuditUserId } from "@/mastra/lib/tool-audit-context";
 import { HOST_SUPABASE_KEY } from "@/mastra/tools/hostops-read-tools";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { logAgentRunForTurn } from "@/mastra/lib/log-agent-run";
+import {
+  loadPartnerRuntimeContext,
+  setPartnerRuntimeContext,
+  type PartnerRuntimeContext,
+} from "@/mastra/lib/partner-request-context";
+import { isPartnerAgentRunOrConnect, isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
+import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
 import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 90;
 
 /** Keep ai_runs writes alive after the CopilotKit SSE response (Vercel serverless). */
 const persistTurnLog: PersistTurnLog = (opts) => {
@@ -178,10 +185,19 @@ async function handleCopilotKit(req: NextRequest) {
     //    a consumed body reaches the runtime empty, and an empty stop body is a
     //    thread-wide stop, which is exactly the escalation this ordering exists
     //    to prevent. See Step 11's STOP-4 assertions.
+    // Parse the untrusted business selector before any agent work. It is only
+    // a selector; the RLS-scoped membership lookup below authorizes it.
+    const selectedPartnerId = await readPartnerSelectionFromRun(req);
     const thread = await resolveRequestedThread(req);
     const auth = authorizeCopilotKitRequest(req, { userId, thread });
     if (!auth.allowed) return auth.response;
     const { resourceId } = auth;
+    const isPartnerRun = await isPartnerAgentRunOrConnect(req);
+    // Anonymous Concierge is allowed, but partnerAgent may never run without
+    // a server-authenticated owner even if no business selector was supplied.
+    if (isPartnerRun && !userId) {
+      return Response.json({ error: "Sign in to use the partner assistant" }, { status: 401 });
+    }
 
     const rateLimited = await checkCopilotKitDistributedRateLimit(req, userId);
     if (rateLimited) return rateLimited;
@@ -203,6 +219,56 @@ async function handleCopilotKit(req: NextRequest) {
       // SAN-1502 PR2 — rental search tools read this same user-scoped client,
       // so an authorized test actor's AI search is RLS-scoped to their grant.
       requestContext.set(RENTAL_SUPABASE_KEY, supabase);
+
+      // SAN-705: selection travels with this agent run (not a shared cookie).
+      // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
+      let partnerContext: PartnerRuntimeContext | null = null;
+      if (isPartnerRun) {
+        // A missing selector is allowed only when membership resolves exactly
+        // one business. Multi-business users must select explicitly.
+        partnerContext = await loadPartnerRuntimeContext(
+          supabase,
+          userId,
+          selectedPartnerId ?? undefined,
+        );
+        if (!partnerContext) {
+          // A newly signed-up user has no partner_members row yet. They must
+          // still be able to ask partnerAgent to suggest signup form fields.
+          // Keep all existing-business access fail-closed: a requested foreign
+          // business or an ambiguous membership must never enter the agent.
+          const { data: memberships, error: membershipsError } = await supabase
+            .from("partner_members")
+            .select("partner_id")
+            .eq("profile_id", userId)
+            .limit(1);
+          if (membershipsError || !Array.isArray(memberships)) {
+            throw new Error("partner_membership_lookup_failed");
+          }
+          if (selectedPartnerId !== null || memberships.length !== 0) {
+            return Response.json(
+              { error: "Select a business you can access" },
+              { status: 403 },
+            );
+          }
+          // No membership and no selector: a general, user-owned signup chat.
+          // Do not populate partner RequestContext or bind a business. The
+          // getPartnerProfile tool already returns found=false in this case.
+        }
+      }
+
+      // Stop carries no AG-UI business context in CopilotKit v2. The canonical
+      // authenticated thread-owner check has already authorized the caller,
+      // and Stop only cancels a run; it does not replay profile or chat data.
+      // Run/connect MUST still match the persisted selected-business binding.
+      if (!(await isPartnerStopRequest(req))) {
+        const bindingError = await enforcePartnerThreadBinding(
+          thread,
+          userId,
+          partnerContext?.partnerId ?? null,
+        );
+        if (bindingError) return bindingError;
+      }
+      if (partnerContext) setPartnerRuntimeContext(requestContext, partnerContext);
     }
 
     return await buildHandler({ resourceId, userId, requestContext })(req);

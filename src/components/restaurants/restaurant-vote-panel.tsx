@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { resolveSavedVote, type SavedVote } from "./vote-panel-recovery";
+import { contestDate, type ContestState } from "@/lib/restaurants/contest-state";
 
 // Hydration marker: server snapshot false, client snapshot true. Stable no-op subscription.
 // Declared AFTER every import: ES modules require imports to precede other statements.
@@ -23,6 +24,36 @@ const hydratedOnClient = () => true;
 const hydratedOnServer = () => false;
 
 export type VoteTarget = { contestId: string; entityId: string };
+
+/**
+ * The selected contest's real window, computed server-side from the existing contest-options
+ * read. A draft, upcoming or closed contest must never render a Vote button that the cast RPC
+ * is guaranteed to reject.
+ */
+export type ContestWindow = {
+  state: ContestState;
+  opensAt: string | null;
+  closesAt: string | null;
+};
+
+function notOpenCopy(window: ContestWindow): string {
+  switch (window.state) {
+    case "draft":
+      return "This contest is still a draft. Voting opens once the organizer publishes it.";
+    case "upcoming": {
+      const opens = contestDate(window.opensAt);
+      return opens ? "Voting opens on " + opens + "." : "Voting has not opened yet.";
+    }
+    case "closed": {
+      const closed = contestDate(window.closesAt);
+      return closed ? "Voting closed on " + closed + "." : "Voting is closed for this contest.";
+    }
+    case "archived":
+      return "This contest has ended and voting is closed.";
+    default:
+      return "Voting is not open for this contest.";
+  }
+}
 type Receipt = { voteId: string; createdAt: string | null; status: string; entityId: string };
 type PanelState =
   | "idle" | "checking" | "confirming" | "casting"
@@ -56,12 +87,22 @@ export function parseReceipt(body: VoteResponse, target: VoteTarget): Receipt | 
   return { voteId: data.vote_id, createdAt: data.created_at ?? null, status: data.status, entityId: data.entity_id };
 }
 
-export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurantName: string; voteTarget: VoteTarget | null }) {
+export function RestaurantVotePanel({
+  restaurantName,
+  voteTarget,
+  contestWindow = null,
+}: {
+  restaurantName: string;
+  voteTarget: VoteTarget | null;
+  contestWindow?: ContestWindow | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const inFlight = useRef(false);
   const retryAfter = useRef(0);
-  const [state, setState] = useState<PanelState>("idle");
+  // A remounted panel must not offer a second actionable Vote while the server
+  // checks whether this account already has a ballot (e.g. after login).
+  const [state, setState] = useState<PanelState>("checking");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [alreadyVotedName, setAlreadyVotedName] = useState<string | null>(null);
@@ -83,6 +124,9 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
   }, [pathname, router, contestId]);
   // Sign in BEFORE the confirm dialog: the dialog is only meaningful for a known account.
   const startVote = useCallback(async () => {
+    // Defence in depth: the CTA is not rendered for a non-open contest, but a stale render
+    // must not open a confirmation the cast RPC would reject.
+    if (contestWindow && contestWindow.state !== "open") return;
     setMessage(null);
     try {
       const supabase = createClient();
@@ -94,7 +138,7 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     }
     // No session, or we could not tell: ask the visitor to sign in. Never open blind.
     goToLogin();
-  }, [goToLogin]);
+  }, [goToLogin, contestWindow]);
   // Store only the idempotency key, not a vote receipt or auth credential.
   // On reload the server re-reads the committed ballot. This lookup has no nonce
   // and cannot create a new ballot; vote-cast checks the existing key first.
@@ -338,13 +382,34 @@ export function RestaurantVotePanel({ restaurantName, voteTarget }: { restaurant
     );
   }
 
+  // A saved ballot/receipt is checked above, so a returning voter still sees it after the
+  // contest closes. Everyone else gets an honest, non-actionable state instead of a dead button.
+  if (contestWindow && contestWindow.state !== "open") {
+    return (
+      <div
+        className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        data-state={contestWindow.state}
+        data-testid="vote-not-open"
+      >
+        <p className="font-medium">Voting is not open for this contest.</p>
+        <p className="mt-1">{notOpenCopy(contestWindow)}</p>
+        <Link
+          className="mt-3 inline-block min-h-11 text-sm font-medium underline"
+          href={"/contests/" + voteTarget.contestId}
+        >
+          Back to the contest
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div data-testid="vote-panel">
       <button
         className="min-h-11 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground disabled:opacity-60"
         data-testid="vote-cta"
         data-hydrated={hydrated ? "true" : "false"}
-        disabled={state === "casting" || state === "checking" || state === "closed"}
+        disabled={!hydrated || state === "casting" || state === "checking" || state === "closed"}
         onClick={() => { if (inFlight.current) return; void startVote(); }}
         type="button"
       >

@@ -36,6 +36,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
+import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
 // rather than crashing the function on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
@@ -102,16 +103,36 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // 2. Idempotency check — return cached response on replay (per skill
-  //    `supabase-edge-functions` §"Performance Tips" + `edge-function-patterns.md`).
+  // A reused checkout key must refer to the same cart and buyer.
   const service = getServiceClient();
-  {
-    const { data: cached } = await service.from("idempotency_keys").select(
-      "response",
-    ).eq("key", body.idempotency_key).eq("endpoint", ENDPOINT).maybeSingle();
-    if (cached?.response) {
+  const requestIdentity = JSON.stringify({
+    event_id: body.event_id, ticket_id: body.ticket_id,
+    quantity: body.quantity, buyer_email: body.buyer_email.toLowerCase(),
+    buyer_name: body.buyer_name, attendees: body.attendees,
+  });
+  const requestHash = Array.from(new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(requestIdentity)),
+  )).map((v) => v.toString(16).padStart(2, "0")).join("");
+  const { data: cached } = await service.from("idempotency_keys")
+    .select("response").eq("key", body.idempotency_key)
+    .eq("endpoint", ENDPOINT).maybeSingle();
+  if (cached?.response) {
+    if (cached.response.request_hash && cached.response.request_hash !== requestHash) {
+      return jsonResponse(errorBody("IDEMPOTENCY_KEY_REUSED", "Use a new key when checkout details change"), 409, req);
+    }
+    if (cached.response.success && cached.response.data?.stripe_session_url) {
+      const { data: previous, error: previousError } = await service
+        .from("event_orders").select("status")
+        .eq("id", cached.response.data.order_id).maybeSingle();
+      if (previousError || !previous) {
+        return jsonResponse(errorBody("CHECKOUT_ORDER_LOOKUP_FAILED", "Could not verify the existing checkout"), 503, req);
+      }
+      if (duplicateCheckoutCode(previous.status) === "CHECKOUT_KEY_CANCELLED") {
+        return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED", "This checkout was cancelled; start a new checkout with a new key"), 409, req);
+      }
       return jsonResponse(cached.response, 200, req);
     }
+    return jsonResponse(errorBody("CHECKOUT_IN_PROGRESS", "Checkout is still being prepared; retry shortly"), 409, req);
   }
   // 3. Pre-mint UUIDs + sign JWTs in JS BEFORE the RPC call.
   //    Each attendee gets its real PK now, so JWT.attendee_id == event_attendees.id always.
@@ -133,7 +154,10 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  const accessToken = crypto.randomUUID().replaceAll("-", ""); // 32-char hex
+  // One stable token per checkout key. The existing UNIQUE constraint on
+  // event_orders.access_token makes duplicate parallel reservations roll back
+  // entirely, including the pending capacity increment in the same RPC.
+  const accessToken = await deriveCheckoutAccessToken(qrSecret, body.idempotency_key);
   const nowSec = Math.floor(Date.now() / 1000);
   const attendeesWithJwts = await Promise.all(body.attendees.map(async (a) => {
     const id = crypto.randomUUID();
@@ -168,11 +192,37 @@ Deno.serve(async (req) => {
     // RPC raises EXCEPTION with a known code in the message; surface it verbatim.
     const msg = rpcError.message ?? "";
     const code = msg.match(/[A-Z][A-Z_]+/)?.[0] ?? "RPC_ERROR";
+    // The unique token constraint rejects a concurrent duplicate *inside*
+    // the reservation transaction; it never holds a second seat.
+    if (rpcError.code === "23505") {
+      const { data: previous, error: previousError } = await service
+        .from("event_orders").select("status")
+        .eq("access_token", accessToken).maybeSingle();
+      if (previousError) {
+        return jsonResponse(errorBody("CHECKOUT_ORDER_LOOKUP_FAILED", "Could not verify the existing checkout"), 503, req);
+      }
+      if (duplicateCheckoutCode(previous?.status) === "CHECKOUT_KEY_CANCELLED") {
+        return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED", "This checkout was cancelled; start a new checkout with a new key"), 409, req);
+      }
+      return jsonResponse(errorBody("CHECKOUT_IN_PROGRESS", "Existing checkout is being prepared; retry shortly"), 409, req);
+    }
     const httpStatus = code === "OUT_OF_STOCK" ? 409 : 400;
     console.error(`ticket-checkout RPC error: ${code}`, rpcError);
     return jsonResponse(errorBody(code, msg), httpStatus, req);
   }
   const rpcData = rpcDataRaw;
+  // Validate exact server-priced money before handing it to Stripe.
+  const { data: pricedOrder, error: pricedOrderError } = await service
+    .from("event_orders").select("total_cents,currency").eq("id", rpcData.order_id).single();
+  const chargeCurrency = pricedOrder?.currency?.toLowerCase();
+  if (pricedOrderError || chargeCurrency !== "cop" ||
+      !Number.isSafeInteger(Number(rpcData.price_cents)) ||
+      Number(rpcData.price_cents) <= 0 ||
+      Number(pricedOrder?.total_cents) !== Number(rpcData.price_cents) * body.quantity) {
+    const { error: releaseError } = await service.rpc("ticket_checkout_cancel", { p_order_id: rpcData.order_id });
+    if (releaseError) console.error("Invalid price reservation release failed:", releaseError);
+    return jsonResponse(errorBody("INVALID_TICKET_PRICE", "Ticket price or currency is invalid"), 409, req);
+  }
   // 5. Create Stripe Checkout Session.
   //    METADATA: only order_id on payment_intent_data. The webhook reads
   //    everything else from the DB via that order_id (audit B1 fix).
@@ -186,10 +236,10 @@ Deno.serve(async (req) => {
         line_items: [
           {
             price_data: {
-              // Phase 1 = COP only (CHECK constraint on event_tickets.currency
-              // enforces this). When we extend to USD/MXN, surface currency
-              // from the RPC return value and pass through here.
-              currency: "cop",
+              // Phase A paid checkout supports COP only; the persisted tier
+              // and order currency were checked server-side above. Do not
+              // silently convert or assume a browser-supplied currency.
+              currency: chargeCurrency,
               product_data: {
                 name: `${rpcData.ticket_name} — ${rpcData.event_name}`,
                 description: `${body.quantity} × ${rpcData.ticket_name}`,
@@ -235,12 +285,20 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // 6. Persist stripe_session_id (best-effort — webhook still works via metadata.order_id).
-  await service.from("event_orders").update({
-    stripe_session_id: session.id,
-  }).eq("id", rpcData.order_id);
+  // 6. Persist session identity BEFORE returning a payment URL.
+  // Stripe may deliver payment_intent.succeeded first; the webhook returns
+  // 500 and retries if this binding is not yet present, never issuing tickets.
+  const { data: savedSession, error: sessionSaveError } = await service
+    .from("event_orders").update({ stripe_session_id: session.id })
+    .eq("id", rpcData.order_id).is("stripe_session_id", null)
+    .select("stripe_session_id").maybeSingle();
+  if (sessionSaveError || savedSession?.stripe_session_id !== session.id) {
+    console.error("ticket-checkout: Stripe Session binding not persisted", sessionSaveError);
+    return jsonResponse(errorBody("CHECKOUT_SESSION_NOT_PERSISTED", "Could not finish preparing checkout; contact support"), 503, req);
+  }
   // 7. Cache idempotency response.
   const result = {
+    request_hash: requestHash,
     success: true,
     data: {
       stripe_session_url: session.url ?? "",

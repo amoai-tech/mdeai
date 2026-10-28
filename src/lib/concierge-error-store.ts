@@ -10,37 +10,113 @@
  * error can show Retry in a different chat and replay the wrong turn.
  */
 
+/**
+ * CopilotKit v2 reports a refused runtime-info probe via onError even when no
+ * assistant turn ran. A guest's 401 is expected; real connection and run
+ * failures (including authenticated 401s) must remain visible.
+ * Status comes from event.error.runtimeInfoStatus in our pinned CopilotKit
+ * 1.75 provider; some core paths also supply context.runtimeStatus.
+ */
+export function isExpectedGuestStartup401(
+  event: unknown,
+  isAuthenticated: boolean,
+  sessionLoading = false,
+): boolean {
+  // An unresolved session cannot be classified as a guest: a cold 401 may
+  // precede getUser(). The caller defers only the known runtime-info 401;
+  // genuine run failures stay visible immediately.
+  if (sessionLoading) return false;
+  if (isAuthenticated || !event || typeof event !== "object") return false;
+  const candidate = event as { code?: unknown; context?: unknown; error?: unknown };
+  if (candidate.code !== "runtime_info_fetch_failed") return false;
+  const context = candidate.context;
+  const cause = candidate.error;
+  // CopilotKit 1.75 emits the status on error.runtimeInfoStatus for the
+  // single-route /info probe; other pinned core paths put it in context.
+  const statusFromContext = typeof context === "object" && context !== null &&
+    "runtimeStatus" in context ? context.runtimeStatus : undefined;
+  const statusFromError = typeof cause === "object" && cause !== null &&
+    "runtimeInfoStatus" in cause ? cause.runtimeInfoStatus : undefined;
+  return statusFromContext === 401 || statusFromError === 401;
+}
+
+/**
+ * A guest's expected runtime-info 401 can arrive before getUser() finishes.
+ * Defer only that startup probe; once auth settles, discard it for a guest
+ * or report it for a signed-in user. Never defer a real agent-run failure.
+ */
+export function classifyConciergeStartupError(
+  event: unknown,
+  isAuthenticated: boolean,
+  sessionLoading: boolean,
+): "ignore" | "defer" | "report" {
+  if (sessionLoading && !isAuthenticated && isExpectedGuestStartup401(event, false)) {
+    return "defer";
+  }
+  return isExpectedGuestStartup401(event, isAuthenticated, sessionLoading) ? "ignore" : "report";
+}
+
 export type ConciergeErrorSnapshot = {
   version: number;
   threadId: string | null;
+  /** The failed operation to replay. Absent for legacy/provider-only errors. */
+  retry?: () => void | Promise<unknown>;
+};
+
+export type ConciergeErrorInput = {
+  threadId?: string | null;
+  retry?: () => void | Promise<unknown>;
 };
 
 const IDLE: ConciergeErrorSnapshot = { version: 0, threadId: null };
-let _error: ConciergeErrorSnapshot = IDLE;
+const GLOBAL_KEY = "__global__";
+const _errors = new Map<string, ConciergeErrorSnapshot>();
+let _last: ConciergeErrorSnapshot = IDLE;
+let _version = 0;
 const _listeners = new Set<() => void>();
+
+function keyFor(threadId?: string | null) {
+  return threadId ?? GLOBAL_KEY;
+}
 
 function notify() {
   _listeners.forEach((l) => l());
 }
 
-export function reportConciergeError(threadId?: string | null) {
-  _error = { version: _error.version + 1, threadId: threadId ?? null };
+export function reportConciergeError(
+  input?: string | null | ConciergeErrorInput,
+) {
+  const threadId =
+    typeof input === "string" || input === null ? input : input?.threadId;
+  const retry =
+    typeof input === "object" && input !== null ? input.retry : undefined;
+  _version += 1;
+  const snapshot: ConciergeErrorSnapshot = {
+    version: _version,
+    threadId: threadId ?? null,
+    retry,
+  };
+  // Keep a separate slot per conversation. A late failure from Chat A must
+  // not overwrite Chat B's newer notice.
+  _errors.set(keyFor(threadId), snapshot);
+  _last = snapshot;
   notify();
 }
 
 /** Clear the current failure. Pass a thread id to avoid clearing another chat's error. */
 export function clearConciergeError(threadId?: string | null) {
-  if (
-    threadId !== undefined &&
-    _error.threadId !== null &&
-    _error.threadId !== threadId
-  ) {
+  if (threadId === undefined) {
+    const hadError = _errors.size > 0;
+    _errors.clear();
+    _last = IDLE;
+    _version = 0;
+    if (hadError) notify();
     return;
   }
-  if (_error.version !== 0) {
-    _error = IDLE;
-    notify();
-  }
+  const key = keyFor(threadId);
+  if (!_errors.delete(key)) return;
+  if (_last.threadId === (threadId ?? null)) _last = IDLE;
+  notify();
 }
 
 export function subscribeConciergeError(listener: () => void) {
@@ -49,11 +125,21 @@ export function subscribeConciergeError(listener: () => void) {
 }
 
 export function getConciergeErrorSnapshot(): ConciergeErrorSnapshot {
-  return _error;
+  return _last;
+}
+
+/** The notice that belongs to one conversation, never another chat's late error. */
+export function getConciergeErrorForThread(
+  threadId?: string | null,
+): ConciergeErrorSnapshot {
+  // Named conversations must not inherit a legacy unscoped error: doing so
+  // could expose the wrong Retry action after switching chats.
+  // Unscoped callers still read the legacy global slot via keyFor(undefined).
+  return _errors.get(keyFor(threadId)) ?? IDLE;
 }
 
 export function getConciergeErrorVersion() {
-  return _error.version;
+  return _version;
 }
 
 export function getConciergeErrorVersionServer() {
@@ -61,5 +147,9 @@ export function getConciergeErrorVersionServer() {
 }
 
 export function getConciergeErrorSnapshotServer(): ConciergeErrorSnapshot {
+  return IDLE;
+}
+
+export function getConciergeErrorForThreadServer(): ConciergeErrorSnapshot {
   return IDLE;
 }

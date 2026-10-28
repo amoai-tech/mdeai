@@ -1,0 +1,46 @@
+[
+  {
+    "route": "cafes",
+    "width": 390,
+    "pass": false,
+    "error": "TimeoutError: locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-testid=\"map-pin\"]').first() to be visible\u001b[22m\n\u001b[2m    44 × locator resolved to hidden <div role=\"img\" data-testid=\"map-pin\" data-pin-dimmed=\"false\" data-pin-category=\"venue\" data-marker-glyph=\"venue\" data-marker-closed=\"false\" data-marker-selected=\"true\" aria-label=\"venue: Rituales Compañía de Café\" data-pin-id=\"venue-39dbcfad-8e46-4631-9b5d-0cdc67fd1774\" class=\"relative flex size-11 cursor-pointer items-center justify-center z-10\">…</div>\u001b[22m\n",
+    "errors": []
+  },
+  {
+    "route": "cafes",
+    "width": 1440,
+    "status": 200,
+    "cards": 17,
+    "mapButtons": 17,
+    "pins": 17,
+    "pinId": "venue-39dbcfad-8e46-4631-9b5d-0cdc67fd1774",
+    "selectedId": "venue-39dbcfad-8e46-4631-9b5d-0cdc67fd1774",
+    "selectedCard": "true",
+    "horizontalOverflow": 0,
+    "errors": [],
+    "screenshot": "docs/UIUX/evidence/san1146-map-20261028/cafes-1440.png",
+    "pass": true
+  },
+  {
+    "route": "nightlife",
+    "width": 390,
+    "pass": false,
+    "error": "TimeoutError: locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-testid=\"map-pin\"]').first() to be visible\u001b[22m\n\u001b[2m    44 × locator resolved to hidden <div role=\"img\" data-testid=\"map-pin\" data-pin-dimmed=\"false\" data-pin-category=\"venue\" data-marker-glyph=\"venue\" data-marker-closed=\"false\" data-marker-selected=\"true\" aria-label=\"venue: Dulce Jesús Mío\" data-pin-id=\"venue-4be2eb3e-4b24-4bdb-89a5-4b846c110b43\" class=\"relative flex size-11 cursor-pointer items-center justify-center z-10\">…</div>\u001b[22m\n",
+    "errors": []
+  },
+  {
+    "route": "nightlife",
+    "width": 1440,
+    "status": 200,
+    "cards": 13,
+    "mapButtons": 13,
+    "pins": 13,
+    "pinId": "venue-4be2eb3e-4b24-4bdb-89a5-4b846c110b43",
+    "selectedId": "venue-4be2eb3e-4b24-4bdb-89a5-4b846c110b43",
+    "selectedCard": "true",
+    "horizontalOverflow": 0,
+    "errors": [],
+    "screenshot": "docs/UIUX/evidence/san1146-map-20261028/nightlife-1440.png",
+    "pass": true
+  }
+]

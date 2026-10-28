@@ -114,8 +114,7 @@ export function RentalsDynamicWorkspace({
           data-testid="ctx-empty"
           className="text-xs text-muted-foreground"
         >
-          Ask the concierge and listing, lead, viewing, or map context appears here too. Chat
-          ships with <span className="font-medium text-foreground">brokerAgent</span> in Phase C.
+          Your broker viewing requests will appear here when renters submit them.
         </p>
       ) : null}
     </aside>

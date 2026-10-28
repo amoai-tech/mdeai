@@ -10,10 +10,17 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
+import { restaurantSearchDisplayName, rowToRestaurant, type Restaurant, type RestaurantRow } from "@/mastra/tools/search-restaurants";
+import {
+  listingImageSchema,
+  openingHoursSchema,
+  HOURS_DAYS,
+  type ListingImage,
+  type OpeningHours,
+} from "@/lib/restaurants/restaurant-owner-schema";
 
 const SELECT_FIELDS =
-  "id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary";
+  "id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary, description, website, phone, hours_of_operation, images";
 
 /**
  * UUID shape check for route and query values the visitor controls.
@@ -34,10 +41,55 @@ function isUuid(value: string): boolean {
  * A lookup result must distinguish "this restaurant does not exist" from "the catalog
  * could not be reached": showing a 404 during an outage tells the visitor the wrong story.
  */
+/** SAN-1541 — public facts the operator maintains, rendered on the Details page. */
+export type RestaurantListing = {
+  description: string | null;
+  website: string | null;
+  phone: string | null;
+  hours: { day: string; open: string; close: string }[];
+  images: ListingImage[];
+  menu: {
+    id: string;
+    section: string | null;
+    name: string;
+    description: string | null;
+    price: string | null;
+  }[];
+};
+
 export type RestaurantLookup =
-  | { status: "found"; restaurant: Restaurant }
+  | { status: "found"; restaurant: Restaurant; listing: RestaurantListing }
   | { status: "not_found" }
   | { status: "error" };
+
+function readHours(raw: unknown): { day: string; open: string; close: string }[] {
+  const parsed = openingHoursSchema.safeParse(raw ?? {});
+  if (!parsed.success) return [];
+  const hours: OpeningHours = parsed.data;
+  return HOURS_DAYS.flatMap((day) => {
+    const value = hours[day];
+    return value ? [{ day, open: value.open, close: value.close }] : [];
+  });
+}
+
+function readImages(raw: unknown): ListingImage[] {
+  const parsed = z.array(listingImageSchema).safeParse(raw ?? []);
+  return parsed.success ? parsed.data : [];
+}
+
+function formatMenuPrice(amount: number | null, currency: string): string | null {
+  if (amount === null) return null;
+  try {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    // An unknown ISO code from a manual import stays readable instead of failing the page.
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
 
 export async function fetchRestaurantById(id: string): Promise<RestaurantLookup> {
   // A non-uuid (legacy slug, typo) is a clean miss, not a PostgREST error.
@@ -58,7 +110,44 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantLookup>
 
   if (error) return { status: "error" };
   if (!data) return { status: "not_found" };
-  return { status: "found", restaurant: rowToRestaurant(data as unknown as RestaurantRow) };
+  const restaurant = rowToRestaurant(data as unknown as RestaurantRow);
+
+  // Owner-maintained menu rows. A failing read must never hide the restaurant itself.
+  const { data: menuRows, error: menuError } = await client
+    .from("restaurant_menu_items")
+    .select("id, section, name, description, price_amount, currency, position")
+    .eq("restaurant_id", id)
+    .order("section", { ascending: true, nullsFirst: true })
+    .order("position", { ascending: true });
+
+  if (menuError) {
+    console.error("[restaurant] menu read failed:", menuError.message);
+  }
+
+  const row = data as unknown as Record<string, unknown>;
+  return {
+    status: "found",
+    // Cards and Details must share the same location-qualified label. Supabase retains
+    // each venue's canonical name, ID, and Google place ID.
+    restaurant: {
+      ...restaurant,
+      name: restaurantSearchDisplayName(restaurant.name, restaurant.id),
+    },
+    listing: {
+      description: typeof row.description === "string" ? row.description : null,
+      website: typeof row.website === "string" ? row.website : null,
+      phone: typeof row.phone === "string" ? row.phone : null,
+      hours: readHours(row.hours_of_operation),
+      images: readImages(row.images),
+      menu: (menuError ? [] : (menuRows ?? [])).map((item) => ({
+        id: item.id,
+        section: item.section,
+        name: item.name,
+        description: item.description,
+        price: formatMenuPrice(item.price_amount, item.currency),
+      })),
+    },
+  };
 }
 
 /**
@@ -106,6 +195,9 @@ export type RestaurantContestOption = {
   entityId: string;
   contestTitle: string;
   status: string;
+  /** Real contest window. The vote panel uses it so a draft/closed contest never offers a vote. */
+  startsAt: string | null;
+  endsAt: string | null;
 };
 
 /**
@@ -133,7 +225,14 @@ export async function fetchRestaurantContestOptions(
 
   const options: RestaurantContestOption[] = [];
   for (const raw of data) {
-    const row = raw as { contest_id?: string; entity_id?: string; contest_title?: string; status?: string };
+    const row = raw as {
+      contest_id?: string;
+      entity_id?: string;
+      contest_title?: string;
+      status?: string;
+      starts_at?: unknown;
+      ends_at?: unknown;
+    };
     if (!row.contest_id || !row.entity_id) continue;
     if (!isUuid(row.contest_id) || !isUuid(row.entity_id)) continue;
     options.push({
@@ -141,6 +240,8 @@ export async function fetchRestaurantContestOptions(
       entityId: row.entity_id,
       contestTitle: row.contest_title ?? "Contest",
       status: row.status ?? "unknown",
+      startsAt: typeof row.starts_at === "string" ? row.starts_at : null,
+      endsAt: typeof row.ends_at === "string" ? row.ends_at : null,
     });
   }
   return options;

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useCopilotKit } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ensureThreadTitle } from "@/lib/chat/ensure-thread-title";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import {
   clearConciergeError,
+  getConciergeErrorForThread,
   getConciergeErrorSnapshot,
   reportConciergeError,
 } from "@/lib/concierge-error-store";
@@ -20,7 +21,28 @@ const retriesInFlight = new WeakSet<object>();
 function useLiveConciergeChat() {
   const { copilotkit } = useCopilotKit();
   const { agent } = useConciergeCoAgent();
-  const markThreadSaved = useOptionalThreadNav()?.markThreadSaved;
+  // A send can begin while the runtime is connecting. Keep the most recent
+  // agent after the connection changes instead of using a stale closure.
+  const currentAgentRef = useRef(agent);
+  const currentCopilotkitRef = useRef(copilotkit);
+  useEffect(() => {
+    currentAgentRef.current = agent;
+    currentCopilotkitRef.current = copilotkit;
+  }, [agent, copilotkit]);
+  const threadNav = useOptionalThreadNav();
+  const selectedThreadId = threadNav?.activeThreadId ?? threadNav?.sessionThreadId;
+  const currentSelectedThreadRef = useRef(selectedThreadId);
+  const mountedRef = useRef(true);
+  // The runtime handshake can outlive this chat subtree or its selected
+  // thread. React cleanup invalidates old sends before any agent write.
+  useEffect(() => {
+    currentSelectedThreadRef.current = selectedThreadId;
+  }, [selectedThreadId]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const markThreadSaved = threadNav?.markThreadSaved;
 
   const isLoading = Boolean(agent?.isRunning);
 
@@ -32,6 +54,33 @@ function useLiveConciergeChat() {
     () => String(copilotkit.runtimeConnectionStatus) !== "connected",
     [copilotkit],
   );
+
+  /**
+   * Await the existing CopilotKit handshake before a signed-in first send.
+   * A connecting runtime can take longer than six seconds on a cold serverless
+   * compile/handshake. Continue waiting for a bounded 15 seconds; an error or timeout
+   * fails closed without starting an agent run or retrying any action.
+   */
+  const waitForRuntimeReady = useCallback(async (maxWaitMs = 15_000): Promise<boolean> => {
+    const requestedThread = currentSelectedThreadRef.current;
+    const stillCurrent = () =>
+      mountedRef.current && currentSelectedThreadRef.current === requestedThread;
+    const ready = () =>
+      stillCurrent() &&
+      String(currentCopilotkitRef.current.runtimeConnectionStatus) === "connected" &&
+      Boolean(currentAgentRef.current);
+    if (ready()) return true;
+    if (!stillCurrent() ||
+        String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 125));
+      if (!stillCurrent()) return false;
+      if (ready()) return true;
+      if (String(currentCopilotkitRef.current.runtimeConnectionStatus) === "error") return false;
+    }
+    return ready();
+  }, []);
 
   // Stop a reply that is still streaming before switching conversation.
   // CopilotKit 1.75.0 clears the view on a thread switch but leaves an
@@ -62,15 +111,18 @@ function useLiveConciergeChat() {
     if (!agent || agent.isRunning || retriesInFlight.has(agent) ||
         !agent.messages.some((message) => message.role === "user")) return false;
     const retryThreadId = agent.threadId;
-    const priorError = getConciergeErrorSnapshot();
+    const priorError = getConciergeErrorForThread(retryThreadId);
+    const latestError = getConciergeErrorSnapshot();
     // A notice from another conversation must never replay this agent's turn.
     if (priorError.threadId && priorError.threadId !== retryThreadId) return false;
+    if (priorError.version === 0 && latestError.threadId &&
+        latestError.threadId !== retryThreadId) return false;
     retriesInFlight.add(agent);
     clearConciergeError(retryThreadId);
     try {
       await copilotkit.runAgent({ agent });
       // CopilotKit can surface a stream error via onError without rejecting.
-      const error = getConciergeErrorSnapshot();
+      const error = getConciergeErrorForThread(retryThreadId);
       if (error.version > 0) return false;
       // A thread change during retry must not save/title a different chat.
       if (agent.threadId === retryThreadId) {
@@ -89,23 +141,39 @@ function useLiveConciergeChat() {
 
   const appendMessage = useCallback(
     async (content: string) => {
-      if (!agent) return false;
-      agent.addMessage({
+      // A saved-thread switch or unmount during readiness must never
+      // run a queued question against the newly selected conversation.
+      if (!mountedRef.current || currentSelectedThreadRef.current !== selectedThreadId) return false;
+      const currentAgent = currentAgentRef.current;
+      if (!currentAgent) return false;
+      // CopilotKit v2 useAgent() only copies the configured thread ID when the
+      // configuration is explicit. Fresh threads are deliberately non-explicit,
+      // so otherwise the agent invents a different ID and /chat cannot adopt
+      // the saved conversation from this tab after a Rentals send.
+      // Pin only a fresh, authenticated tab before the FIRST run; never
+      // override an explicitly selected or previously persisted thread.
+      if (threadNav?.ready && !threadNav.activeThreadId && !threadNav.hasPersistedThread &&
+          threadNav.sessionThreadId) {
+        // AG-UI's AbstractAgent is a mutable SDK object (the installed useAgent
+        // assigns threadId directly too); this is not React render state.
+        currentAgent.threadId = threadNav.sessionThreadId;
+      }
+      currentAgent.addMessage({
         id: crypto.randomUUID(),
         role: "user",
         content,
       });
-      await copilotkit.runAgent({ agent });
+      await currentCopilotkitRef.current.runAgent({ agent: currentAgent });
       // Only completed turns are recorded as saved, never a freshly minted UUID.
-      markThreadSaved?.(agent.threadId);
+      markThreadSaved?.(currentAgent.threadId);
       // Title the persisted conversation without delaying the user or navigation.
-      if (agent.threadId) void ensureThreadTitle(agent.threadId);
+      if (currentAgent.threadId) void ensureThreadTitle(currentAgent.threadId);
       return true;
     },
-    [agent, copilotkit, markThreadSaved],
+    [markThreadSaved, selectedThreadId, threadNav],
   );
 
-  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable };
+  return { isLoading, reset, stopActiveRun, retryLastTurn, appendMessage, isRuntimeUnavailable, waitForRuntimeReady };
 }
 
 // The deterministic E2E surface answers fast paths locally; it must not mount
@@ -121,6 +189,7 @@ const deterministicChat = {
     return false;
   },
   isRuntimeUnavailable: () => true,
+  waitForRuntimeReady: async () => false,
 };
 function useDeterministicConciergeChat() {
   return deterministicChat;

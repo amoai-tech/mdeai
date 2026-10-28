@@ -7,7 +7,7 @@ select is(public.rental_development_active(), true, 'Phase A is explicit in serv
 select is(public.rental_listing_is_public('active','pending','draft',null,'{}'::jsonb),
           true, 'Phase A exposes active draft-status inventory without moderation review');
 select is(public.rental_listing_is_public('inactive','pending','draft',null,'{}'::jsonb),
-          false, 'Phase A keeps inactive internal drafts out of public search while management remains unrestricted');
+          true, 'Phase A permits pending non-private inventory without status approval');
 select is(public.rental_listing_is_public('active','approved','published',
   'f1506000-0000-4000-8000-000000000011'::uuid,
   '{"inventory_kind":"external_candidate"}'::jsonb),true,
@@ -80,15 +80,22 @@ update public.apartments set price_monthly=2410000,available_from=null,
 select is((select status || '/' || moderation_status || '/' || listing_workflow_status
  from public.apartments where id=current_setting('mde.san1502_phase_fixture')::uuid),
  'active/approved/published', 'edits do not trigger business-review demotion');
+-- A normal pending development apartment with no move-in date is requestable;
+-- an explicit fixture is not made requestable merely because Phase A is active.
+insert into public.apartments (id,title,neighborhood,slug,status,
+ moderation_status,listing_workflow_status,metadata,verified,created_by)
+values ('f1506000-0000-4000-8000-000000000096','QA requestable development',
+ 'Laureles','san1502-requestable-qa','inactive','pending','draft','{}'::jsonb,false,
+ 'f1506000-0000-4000-8000-000000000001');
 select is((select public.rental_can_request_viewing(a) from public.apartments a
- where a.id=current_setting('mde.san1502_phase_fixture')::uuid),
- true,'DB-computed requestability allows unknown move-in date in Phase A');
+ where a.id='f1506000-0000-4000-8000-000000000096'::uuid),
+ true,'DB-computed requestability allows a normal pending apartment without a move-in date');
 -- PostgreSQL resolves composite-row function notation as a virtual field.
 -- PostgREST includes this field when .select('* ,rental_can_request_viewing')
 -- requests it. No physical or immutable GENERATED column is needed.
 select is((select a.rental_can_request_viewing from public.apartments a
  where a.id=current_setting('mde.san1502_phase_fixture')::uuid),
- true, 'PostgREST computed viewing field resolves through row notation');
+ true, 'PostgREST computed viewing field allows marked development fixtures during Phase A');
 
 select is((select count(*)::integer from information_schema.columns
  where table_schema='public' and table_name='apartments'
@@ -129,9 +136,11 @@ select is((select count(*)::integer from public.apartments where slug='san1502-s
  'anonymous catalog can browse active source candidate in development');
 reset role;
 
--- P0 (2026-10-16 review): inactive and explicitly private/internal records must never be
--- requestable in Phase A, and the authenticated development policy must not expose a
--- private record to an unrelated signed-in user.
+-- P0 (2026-10-16 review): explicit private/internal records must never be requestable
+-- in Phase A, and the authenticated development policy must not expose a private record
+-- to an unrelated signed-in user. SAN-1502 later established that a normal
+-- inactive/pending development apartment IS requestable; only privacy and explicit
+-- test fixtures remain protected.
 insert into public.apartments (id,title,neighborhood,slug,status,
  moderation_status,listing_workflow_status,metadata,verified,created_by)
 values
@@ -143,8 +152,8 @@ values
   'f1506000-0000-4000-8000-000000000001');
 
 select is((select public.rental_can_request_viewing(a) from public.apartments a
- where a.id='f1506000-0000-4000-8000-000000000098'::uuid), false,
- 'inactive apartments are never requestable in Phase A');
+ where a.id='f1506000-0000-4000-8000-000000000098'::uuid), true,
+ 'a normal inactive/pending development apartment is requestable in Phase A');
 select is((select public.rental_can_request_viewing(a) from public.apartments a
  where a.id='f1506000-0000-4000-8000-000000000099'::uuid), false,
  'private/internal apartments are never requestable in Phase A');

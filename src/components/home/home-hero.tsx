@@ -29,14 +29,14 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
   return (
     <section
       aria-label="AI concierge search"
-      className="relative overflow-hidden bg-linear-to-b from-primary to-primary/90 px-4 pt-12 sm:px-6 md:pt-16 lg:px-8"
+      className="relative overflow-hidden bg-linear-to-b from-primary to-primary/90 pt-12 md:pt-16"
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.85_0.18_175/0.3),transparent)]"
         aria-hidden="true"
       />
 
-      <div className="relative mx-auto max-w-7xl">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)] lg:gap-10">
           {/* Left — headline + the one search */}
           <div className="min-w-0 lg:pb-16">
@@ -52,7 +52,7 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
             <form
               data-testid="home-concierge-search"
               data-hydrated={hydrated ? "true" : "false"}
-              className="mt-8 flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-background py-2 pl-5 pr-2 shadow-lg transition-shadow duration-200 focus-within:shadow-xl motion-reduce:transition-none"
+              className="mt-8 flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-background py-2 pl-5 pr-2 shadow-lg transition-shadow duration-200 focus-within:shadow-xl focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-primary motion-reduce:transition-none"
               onSubmit={(e) => {
                 e.preventDefault();
                 submit(query);
@@ -66,7 +66,7 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Try “furnished 2BR in Laureles under COP 4M”"
+                placeholder="2BR in Laureles, COP 4M"
                 aria-label="Ask the AI concierge"
                 className="min-h-[44px] min-w-0 flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
@@ -74,7 +74,7 @@ export function HomeHero({ initialQuery = "" }: HomeHeroProps) {
                 type="submit"
                 disabled={!query.trim()}
                 aria-label="Search"
-                className="flex min-h-[48px] items-center gap-2 rounded-full bg-accent px-6 text-base font-semibold text-accent-foreground transition-colors duration-150 hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-foreground focus-visible:ring-offset-2 motion-reduce:transition-none"
+                className="flex min-h-[48px] items-center gap-2 rounded-full bg-accent px-6 text-base font-semibold text-accent-foreground transition-colors duration-150 hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-foreground focus-visible:ring-offset-2 motion-reduce:transition-none"
               >
                 Ask
                 <ArrowRightIcon className="size-4" aria-hidden="true" />

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { submitDirectVenueBooking } from "@/components/chat/venue-booking-direct-hitl-core";
+import { clearVenueBookingReview } from "@/components/chat/venue-booking-draft-store";
 import { useHumanInTheLoop } from "@copilotkit/react-core/v2";
 import {
   VenueBookingHitlPanel,
@@ -12,6 +14,7 @@ import {
   MASTRA_COPILOT_TOOL_ACTIONS,
   MASTRA_TOOL_IDS,
 } from "@/platform/copilot/mastra-tool-action-names";
+import { readyVenueBookingHitlArgs } from "@/components/chat/venue-booking-hitl-input";
 import { venueBookingRequestSchema } from "@/lib/venues/venue-booking-form-schema";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -31,6 +34,7 @@ function VenueBookingResultBannerSync({
       success?: boolean;
       requestId?: string;
       message?: string;
+      venueTitle?: string;
     };
     if (!payload.success || !payload.requestId || !payload.message) return;
     if (syncedRef.current === payload.requestId) return;
@@ -38,7 +42,7 @@ function VenueBookingResultBannerSync({
     setVenueBookingConfirmation({
       requestId: payload.requestId,
       message: payload.message,
-      venueTitle,
+      venueTitle: payload.venueTitle ?? venueTitle,
     });
   }, [result, setVenueBookingConfirmation, venueTitle]);
 
@@ -52,19 +56,22 @@ type HitlRenderProps = {
   respond?: (result: unknown) => Promise<void>;
 };
 
-function createVenueBookingHitlRender() {
+export function createVenueBookingHitlRender() {
   return function VenueBookingHitlRender({
     args,
     status,
     result,
     respond,
   }: HitlRenderProps) {
-    const hitlArgs = args as VenueBookingHitlArgs;
-    if (!hitlArgs?.placeId || !hitlArgs?.requestedAt || !hitlArgs?.partySize) {
-      return null;
-    }
+    const { setVenueBookingConfirmation } = useRentalUi();
+    // CopilotKit streams tool arguments incrementally. Mount review only after
+    // the complete, validated proposal is available; normalize the model's
+    // venue-local/offset time to UTC before the first render and before Send.
+    // A partial argument object must never be captured as an editable draft.
+    const hitlArgs = readyVenueBookingHitlArgs(args, status);
+    if (!hitlArgs) return null;
 
-    const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId;
+    const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId || hitlArgs.restaurantId || "Restaurant";
 
     return (
       <>
@@ -77,7 +84,37 @@ function createVenueBookingHitlRender() {
         <VenueBookingHitlPanel
           args={hitlArgs}
           status={status}
-          respond={(decision) => respond?.(decision)}
+          respond={async (decision, draft) => {
+            if (!respond) throw new Error("Booking confirmation is unavailable. Try again.");
+            if (decision === "rejected") {
+              clearVenueBookingReview();
+              await respond({ success: false, message: "Customer cancelled the request; nothing saved." });
+              return;
+            }
+            // Only the explicit customer action invokes the authenticated writer.
+            // The Mastra tool by itself is proposal-only and cannot insert.
+            const saved = await submitDirectVenueBooking(draft);
+            if (!saved.ok) {
+              throw saved.error instanceof Error ? saved.error : new Error("Could not save the booking request.");
+            }
+            // The API returned a real persisted request ID: show that receipt
+            // immediately. CopilotKit may unmount the completed tool render,
+            // so relying on its later result event can lose the UI receipt.
+            setVenueBookingConfirmation(saved.confirmation);
+            clearVenueBookingReview();
+            try {
+              await respond({
+                success: true,
+                requestId: saved.confirmation.requestId,
+                message: saved.confirmation.message,
+                venueTitle: saved.confirmation.venueTitle,
+              });
+            } catch (error) {
+              // The request is already persisted. Do not turn a failed agent
+              // acknowledgement into a misleading 'Send failed' retry prompt.
+              console.warn('[venue-booking] saved request; agent acknowledgement failed', error);
+            }
+          }}
         />
       </>
     );

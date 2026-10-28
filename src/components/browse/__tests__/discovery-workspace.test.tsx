@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -6,15 +7,17 @@ vi.mock("@/components/auth/auth-status", () => ({ AuthStatus: () => <span data-t
 
 import { DiscoveryWorkspace } from "../DiscoveryWorkspace";
 
-function render() {
+function render(askComposer?: ReactNode) {
   return renderToStaticMarkup(
     <DiscoveryWorkspace
+      mobileMapTrigger={<button type="button" data-testid="map-trigger-stub">Map</button>}
       testId="rentals-browse"
       activeSlug="rentals"
       title="Rentals in Medellín"
       subtitle="9 apartments"
       filterBar={<div data-testid="filters" />}
       rightPanel={<div data-testid="right-panel" />}
+      askComposer={askComposer}
     >
       <section data-testid="results" />
     </DiscoveryWorkspace>,
@@ -51,7 +54,35 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
     expect(html).toContain("lg:h-dvh");
   });
 
+  it("places mobile Map inside the sticky header before filters and cards", () => {
+    const html = render();
+    const header = html.indexOf("<header ");
+    const map = html.indexOf('data-testid="map-trigger-stub"');
+    const filters = html.indexOf('data-testid="filters"');
+    expect(header).toBeGreaterThanOrEqual(0);
+    expect(map).toBeGreaterThan(header);
+    expect(map).toBeLessThan(filters);
+    expect(html).toContain('data-testid="workspace-mobile-map-trigger"');
+  });
+
   it("gives phones a menu button", () => {
     expect(render()).toContain('data-testid="nav-drawer-trigger"');
+  });
+
+  it("pins a page's own ask composer to the bottom of the results column, after the results", () => {
+    const html = render(<div data-testid="ask-composer" />);
+    const resultsAt = html.indexOf('data-testid="results"');
+    const composerAt = html.indexOf('data-testid="workspace-ask-composer"');
+
+    expect(composerAt).toBeGreaterThan(resultsAt);
+    expect(html).toContain('data-testid="ask-composer"');
+    // Sticky inside the results scroll area, so it stays reachable while the cards scroll.
+    expect(html).toMatch(/data-testid="workspace-ask-composer"[^>]*class="[^"]*sticky bottom-0/);
+    // The map column is still last on screen.
+    expect(html.indexOf('data-testid="workspace-right-column"')).toBeGreaterThan(composerAt);
+  });
+
+  it("renders no ask composer when the page has no conversation to show", () => {
+    expect(render()).not.toContain('data-testid="workspace-ask-composer"');
   });
 });
