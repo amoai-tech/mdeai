@@ -95,25 +95,17 @@ function RestaurantBrowseViewInner({
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
             : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
         }
-        filterBar={
-          <RestaurantBrowseFilters
-            neighborhood={neighborhood}
-            cuisine={cuisine}
-          />
-        }
+        mobileMapTrigger={<BrowseMapSheet inline />}
+        filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
       >
-        <aside className="mt-5 flex flex-col gap-4 rounded-2xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6" data-testid="restaurant-contests-entry">
-          <div className="flex items-start gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-background/80" aria-hidden="true">
-              <Trophy className="size-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="font-serif text-xl font-semibold tracking-tight">Medellín restaurant contests</h2>
-              <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">Explore the restaurants taking part and discover their voting options.</p>
-            </div>
+        <aside className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3" data-testid="restaurant-contests-entry">
+          <Trophy className="size-5 shrink-0 text-primary" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">Medellín restaurant contests</h2>
+            <p className="hidden text-xs text-muted-foreground sm:block">Explore participating restaurants and their voting options.</p>
           </div>
-          <Link className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
-            Explore restaurant contests <ArrowUpRight className="size-4" aria-hidden="true" />
+          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
+            Explore restaurant contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Link>
         </aside>
         <section className="mt-6" aria-label="Restaurant listings">
@@ -146,7 +138,7 @@ function RestaurantBrowseViewInner({
 
           {!error && shownResults.length > 0 ? (
             <div
-              className="grid auto-rows-fr gap-4 sm:grid-cols-2"
+              className="flex flex-col gap-3"
               aria-label={`${shownResults.length} restaurants`}
               data-testid="restaurants-grid"
             >
@@ -169,7 +161,7 @@ function RestaurantBrowseViewInner({
                     onSelect={() => setSelectedPinId(pinId)}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
-                    mediaLayout="cover"
+                    mediaLayout="inline"
                   />
                   <button type="button" data-testid="restaurant-ask-select" aria-pressed={selectedForAsk === r.id}
                     className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium"
@@ -191,7 +183,6 @@ function RestaurantBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet raised />
       {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
     </>
   );

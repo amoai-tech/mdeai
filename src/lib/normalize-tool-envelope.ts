@@ -60,10 +60,10 @@ function isAgUiContentPart(item: unknown): boolean {
 }
 
 /**
- * True once the tool output has actually arrived: the fully unwrapped payload is an object, not a
- * missing value, half-streamed JSON, an AG-UI message that is not a result yet, or an AG-UI wrapper
- * whose inner `result` is still empty. (An empty `results: []` is a finished answer; a
- * `{ result: null }` wrapper is not.)
+ * True only when the tool output has an actual result-row array: not a missing value,
+ * metadata-only error, half-streamed JSON, or an AG-UI wrapper without rows.
+ * An empty `results: []` is complete and should clear stale pins; missing or null
+ * results must never erase map state.
  *
  * `rowArray` accepts a bare array of result rows as a finished payload — only the grounded places
  * tool returns that shape (see `parseGroundedToolResult`).
@@ -76,9 +76,9 @@ export function isFinishedToolPayload(
   if (Array.isArray(value)) return rowArray && !value.some(isAgUiContentPart);
   if (!value || typeof value !== "object") return false;
   const payload = value as Record<string, unknown>;
-  return (
-    !("result" in payload) || "results" in payload || "total" in payload || "citations" in payload
-  );
+  // Only actual result rows (including a genuine empty array) may replace map pins.
+  // A malformed/error/metadata/citations-only envelope must not clear a prior search.
+  return Array.isArray(payload.results);
 }
 
 /** Normalize AG-UI / CopilotKit v2 tool payloads into card envelope fields. */

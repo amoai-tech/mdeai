@@ -50,6 +50,13 @@ describe("VenueBrowseCard", () => {
     expect(html).toContain('Clear selection');
   });
 
+  it.each(["cafe", "nightlife"] as const)("keeps %s compact in inline Nova feed", (kind) => {
+    const html = renderToStaticMarkup(<VenueBrowseCard kind={kind} listing={kind === "cafe" ? cafe : nightlife} mediaLayout="inline" />);
+    expect(html).toContain("w-24");
+    expect(html).toContain("aspect-[16/10]");
+    expect(html).not.toContain('px-3 pt-3');
+  });
+
   it("renders the nightlife contract with its own test ids", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind="nightlife" listing={nightlife} />,

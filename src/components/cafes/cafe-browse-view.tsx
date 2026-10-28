@@ -66,9 +66,8 @@ function CafeBrowseViewInner({
       testId="cafes-browse"
       title="Cafés"
       subtitle="Specialty coffee & workspace spots in Medellín"
-      filterBar={
-        <CafeBrowseFilters neighborhood={neighborhood} feature={feature} />
-      }
+      mobileMapTrigger={activeRows ? <BrowseMapSheet inline /> : null}
+      filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >
       <section className="mt-6" aria-label="Café listings">
         <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
@@ -101,7 +100,7 @@ function CafeBrowseViewInner({
 
         {!error && activeRows === null && results.length > 0 ? (
           <div
-            className="grid auto-rows-fr gap-4 sm:grid-cols-2"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3"
             aria-label={`${results.length} cafés`}
             data-testid="cafes-grid"
           >
@@ -113,14 +112,13 @@ function CafeBrowseViewInner({
                 selectedForAsk={selectedId === listing.id}
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
-                mediaLayout="cover"
+                mediaLayout="inline"
               />
             ))}
           </div>
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

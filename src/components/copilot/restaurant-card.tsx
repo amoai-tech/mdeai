@@ -290,7 +290,7 @@ export function RestaurantCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             {composition === "nova" ? (
-              <p className="min-h-[15px] text-[11px] font-medium text-muted-foreground">
+              <p className={cn("text-[11px] font-medium text-muted-foreground", mediaLayout === "cover" && "min-h-[15px]")}>
                 {neighborhood ?? "\u00A0"}
               </p>
             ) : neighborhood ? (
@@ -301,7 +301,7 @@ export function RestaurantCard({
             <h3
               className={cn(
                 "font-medium leading-snug",
-                composition === "nova" && "line-clamp-2 min-h-[2.5rem]",
+                composition === "nova" && mediaLayout === "cover" && "line-clamp-2 min-h-[2.5rem]",
               )}
             >
               {title}
@@ -322,7 +322,7 @@ export function RestaurantCard({
         <div
           className={cn(
             "mt-1.5 flex flex-wrap gap-1.5",
-            composition === "nova" && "min-h-6",
+            composition === "nova" && mediaLayout === "cover" && "min-h-6",
           )}
         >
           <Badge variant="secondary">{typeLabel}</Badge>
@@ -338,7 +338,7 @@ export function RestaurantCard({
         </div>
 
         {composition === "nova" ? (
-          <p className="mt-2 line-clamp-2 min-h-10 flex-1 text-xs leading-5 text-muted-foreground">
+          <p className={cn("mt-2 line-clamp-2 flex-1 text-xs leading-5 text-muted-foreground", mediaLayout === "cover" && "min-h-10")}>
             {summaryText ?? "\u00A0"}
           </p>
         ) : summaryText ? (

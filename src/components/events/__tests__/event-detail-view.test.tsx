@@ -35,7 +35,7 @@ describe("EventDetailView ticket truth", () => {
   it("does not claim sold out when an event has no ticket tiers", () => {
     const html = renderToStaticMarkup(<EventDetailView event={baseEvent} />);
     expect(html).toContain("Price TBD");
-    expect(html).toContain("Ticket tiers coming soon");
+    expect(html).toContain("No ticket tiers are listed for this event");
     expect(html).not.toContain("Sold out");
   });
   it("keeps paid and genuinely sold-out tier states distinct", () => {

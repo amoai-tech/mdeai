@@ -25,6 +25,7 @@ import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
@@ -293,6 +294,9 @@ export function RentalResults({
     () => new Set(normalizeToolOutput("rental", result).pins.map((pin) => pin.id)),
     [result],
   );
+  // SAN-1235 — the same duplicate rule the /rentals page uses. Two feeds for one home must not
+  // look like two apartments in a chat answer, which is exactly what the production envelope did.
+  const duplicateNotes = duplicateListingNotes(rows);
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -408,6 +412,7 @@ export function RentalResults({
               amenities={r.amenities}
               tags={r.tags}
               availability={r.availability}
+              duplicateNote={duplicateNotes.get(r.id)}
               featured={index === 0}
               searchParams={searchParams}
               selected={hasPin && selectedPinId === pinId}
